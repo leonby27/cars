@@ -192,21 +192,37 @@ function VehicleGallery({ car }) {
   const images = car.images?.length ? car.images : [car.image];
   const [active, setActive] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
-  const touchStart = useRef(null);
+  const swipe = useRef(null);
+  const suppressOpen = useRef(false);
   const thumbsRef = useRef(null);
   const move = (step) => setActive((current) => (current + step + images.length) % images.length);
   useEffect(() => {
     const thumb = thumbsRef.current?.children[active];
     thumb?.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
   }, [active]);
-  const onTouchStart = (event) => { touchStart.current = event.changedTouches[0]?.clientX ?? null; };
-  const onTouchEnd = (event) => {
-    if (touchStart.current === null) return;
-    const distance = (event.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current;
-    touchStart.current = null;
-    if (Math.abs(distance) >= 45) move(distance > 0 ? -1 : 1);
+  const onPointerDown = (event) => {
+    if (!event.isPrimary) return;
+    swipe.current = { id:event.pointerId, x:event.clientX, y:event.clientY };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
-  return <><section className="gallery-panel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}><button className="gallery-open" onClick={() => setModalOpen(true)} aria-label={`Открыть все фотографии ${car.title}`}><img src={images[active]} alt={`${car.title}, фото ${active + 1}`}/></button><span><Images size={17}/>{active + 1} из {images.length}</span><div className="gallery-badges"><b>Оригинал Guazi</b><b>Фото объявления</b></div>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs" ref={thumbsRef}>{images.map((image, index) => <button key={`${image}-${index}`} className={active === index ? "active" : ""} onClick={() => setActive(index)} aria-label={`Показать фото ${index + 1}`}><img src={image} alt="" loading="lazy"/></button>)}</div><button className="gallery-view-all" onClick={() => setModalOpen(true)}><Images size={18}/>Все фото</button></section>{modalOpen && <GalleryModal car={car} images={images} initialIndex={active} onClose={() => setModalOpen(false)}/>}</>;
+  const onPointerUp = (event) => {
+    const start = swipe.current;
+    swipe.current = null;
+    if (!start || start.id !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    const distanceX = event.clientX - start.x;
+    const distanceY = event.clientY - start.y;
+    if (Math.abs(distanceX) >= 45 && Math.abs(distanceX) > Math.abs(distanceY)) {
+      suppressOpen.current = true;
+      move(distanceX > 0 ? -1 : 1);
+      window.setTimeout(() => { suppressOpen.current = false; }, 0);
+    }
+  };
+  const openGallery = () => {
+    if (suppressOpen.current) { suppressOpen.current = false; return; }
+    setModalOpen(true);
+  };
+  return <><section className="gallery-panel"><button className="gallery-open" onClick={openGallery} onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { swipe.current = null; }} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}><img src={images[active]} alt={`${car.title}, фото ${active + 1}`} draggable="false"/></button><span aria-live="polite"><Images size={17}/>{active + 1} из {images.length}</span><div className="gallery-badges"><b>Оригинал Guazi</b><b>Фото объявления</b></div>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs" ref={thumbsRef}>{images.map((image, index) => <button key={`${image}-${index}`} className={active === index ? "active" : ""} onClick={() => setActive(index)} aria-label={`Показать фото ${index + 1}`}><img src={image} alt="" loading="lazy"/></button>)}</div><button className="gallery-view-all" onClick={() => setModalOpen(true)}><Images size={18}/>Все фото</button></section>{modalOpen && <GalleryModal car={car} images={images} initialIndex={active} onClose={() => setModalOpen(false)}/>}</>;
 }
 
 function Detail({ car, navigate, favorite, toggleFavorite, onOrder }) {

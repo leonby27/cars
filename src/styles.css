@@ -96,8 +96,8 @@ footer{font-size:13px}
 
 /* Immersive vehicle gallery */
 .gallery-panel{touch-action:pan-y}
-.gallery-open{width:100%;height:100%;display:block;padding:0;border:0;background:transparent;cursor:zoom-in}
-.gallery-open img{width:100%;height:100%;display:block;object-fit:cover}
+.gallery-open{width:100%;height:100%;display:block;padding:0;border:0;background:transparent;cursor:zoom-in;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.gallery-open img{width:100%;height:100%;display:block;object-fit:cover;pointer-events:none;-webkit-user-drag:none}
 .gallery-panel>span{top:14px;bottom:auto;pointer-events:none}
 .gallery-badges{pointer-events:none}
 .gallery-thumbs{right:124px;overflow-x:auto;padding:2px;scrollbar-width:none;overscroll-behavior-x:contain}
