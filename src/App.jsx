@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, Clock, CurrencyCny, Gauge, Heart, Images, Info, Lightning, ListChecks, MagnifyingGlass, MapPin, Scales, ShareNetwork, ShieldCheck, SlidersHorizontal, Sparkle, X } from "@phosphor-icons/react";
+import { matchesMinimumYear } from "./car-filters.js";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
@@ -49,17 +50,17 @@ function SelectField({ label, value, options, onChange }) {
 }
 
 function QuickSearch({ navigate, cars }) {
-  const [type, setType] = useState("Все"); const [brand, setBrand] = useState("Все марки"); const [model, setModel] = useState("Все модели");
+  const [type, setType] = useState("Все"); const [brand, setBrand] = useState("Все марки"); const [model, setModel] = useState("Все модели"); const [year, setYear] = useState("от 2022");
   const brands = ["Все марки", ...uniqueSorted(cars.map((car) => car.brand))];
   const normalizedType = type === "Электромобили" ? "Электромобиль" : type === "Гибриды" ? "Гибрид" : "Все";
   const modelCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand));
   const models = ["Все модели", ...uniqueSorted(modelCars.map((car) => car.model))];
-  const resultCount = modelCars.filter((car) => model === "Все модели" || car.model === model).length;
+  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && matchesMinimumYear(car, year)).length;
   const changeType = (value) => { setType(value); setModel("Все модели"); };
   const changeBrand = (value) => { setBrand(value); setModel("Все модели"); };
   return <section className="search-box"><div className="type-tabs">{["Все","Электромобили","Гибриды"].map((item) => <button key={item} className={type === item ? "active" : ""} onClick={() => changeType(item)}>{item}</button>)}</div><div className="quick-fields">
-    <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands}/><SelectField label="Модель" value={model} onChange={setModel} options={models}/><SelectField label="Год выпуска" value="от 2022" options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value="до 50 000 км" options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена в Минске" value="до $40 000" options={["до $40 000","до $30 000","до $25 000"]}/>
-    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {resultCount} авто</button>
+    <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands}/><SelectField label="Модель" value={model} onChange={setModel} options={models}/><SelectField label="Год выпуска" value={year} onChange={setYear} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value="до 50 000 км" options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена в Минске" value="до $40 000" options={["до $40 000","до $30 000","до $25 000"]}/>
+    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&year=${encodeURIComponent(year)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {resultCount} авто</button>
   </div></section>;
 }
 
@@ -90,12 +91,12 @@ function CarRow({ car, navigate, favorite, compare, toggleFavorite, toggleCompar
 }
 
 function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare, cars }) {
-  const params = new URLSearchParams(window.location.search); const rawType = params.get("type"); const rawBrand = params.get("brand"); const rawModel = params.get("model");
-  const [filters,setFilters] = useState({type:rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",brand:rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",model:rawModel && rawModel !== "Все модели" ? rawModel : "Все модели",year:"от 2022",price:"до $40 000"});
+  const params = new URLSearchParams(window.location.search); const rawType = params.get("type"); const rawBrand = params.get("brand"); const rawModel = params.get("model"); const rawYear = params.get("year");
+  const [filters,setFilters] = useState({type:rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",brand:rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",model:rawModel && rawModel !== "Все модели" ? rawModel : "Все модели",year:["от 2022","от 2023","от 2024"].includes(rawYear) ? rawYear : "от 2022",price:"до $40 000"});
   const brands = uniqueSorted(cars.map((car) => car.brand));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand));
   const models = ["Все модели", ...uniqueSorted(modelCars.map((car) => car.model))];
-  const filtered = useMemo(() => cars.filter((car) => { const cap = Number(filters.price.replace(/\D/g,""))*1000; return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && estimateLandedCost(car).totalUsd <= cap; }), [filters, cars]);
+  const filtered = useMemo(() => cars.filter((car) => { const cap = Number(filters.price.replace(/\D/g,""))*1000; return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && matchesMinimumYear(car, filters.year) && estimateLandedCost(car).totalUsd <= cap; }), [filters, cars]);
   return <main className="catalog page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/>Автомобили из Китая</div><div className="catalog-heading"><div><h1>Автомобили из Китая</h1><p>Реальные объявления Guazi · закрытый пилот</p></div><span>{filtered.length} из {cars.length} импортированных</span></div><FilterPanel filters={filters} setFilters={setFilters} resultCount={filtered.length} brands={brands} models={models}/><div className="catalog-layout"><section className="results-list"><div className="result-tools"><b>Подходящие варианты</b><button>Сначала новые <CaretDown size={14}/></button></div>{filtered.length ? filtered.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} compare={compares.has(car.id)} toggleFavorite={toggleFavorite} toggleCompare={toggleCompare}/>) : <div className="empty-state"><MagnifyingGlass size={34}/><h3>Ничего не нашли</h3><p>Попробуйте сбросить один из фильтров.</p></div>}</section><aside className="side-card"><div className="side-icon"><ShieldCheck size={26} weight="duotone"/></div><h3>Проверим выбранный автомобиль</h3><p>Свяжемся с продавцом, запросим оригинальный отчёт и подтвердим возможность экспорта.</p><ul><li><Check size={15}/>VIN и история</li><li><Check size={15}/>Состояние батареи</li><li><Check size={15}/>Итоговая смета</li></ul>{cars[0] && <button className="secondary" onClick={() => navigate(`/cars/${cars[0].id}`)}>Как выглядит проверка</button>}</aside></div></main>;
 }
 
