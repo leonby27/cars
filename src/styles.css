@@ -23,73 +23,73 @@
 .filter-grid{grid-template-columns:repeat(5,minmax(0,1fr)) 1.1fr}
 @media(max-width:980px){.filter-grid{grid-template-columns:repeat(2,1fr)}.filter-submit{grid-column:span 2}}
 .custom-select{display:block;overflow:visible;padding:0;isolation:isolate}.custom-select.open{z-index:25;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px #fff0ec}.custom-select>span{position:absolute;z-index:1;top:9px;left:13px;pointer-events:none}.select-trigger{position:absolute;inset:0;width:100%;height:100%;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding:22px 11px 8px 13px;border:0;border-radius:inherit;background:transparent;text-align:left}.select-trigger b{min-width:0;overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}.custom-select .select-trigger svg,.custom-select .select-menu svg{position:static;flex:0 0 auto;transition:transform .18s ease}.custom-select.open .select-trigger>svg{transform:rotate(180deg)}
-.select-menu{position:absolute;z-index:40;top:calc(100% + 8px);left:-1px;width:max-content;min-width:calc(100% + 2px);max-width:260px;max-height:286px;overflow-y:auto;padding:6px;border:1px solid #dfe2e6;border-radius:12px;background:#fff;box-shadow:0 18px 45px rgba(18,21,25,.16);scrollbar-width:thin}.select-menu button{width:100%;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 10px;border:0;border-radius:8px;background:#fff;color:var(--ink);font-size:12px;font-weight:650;text-align:left;white-space:nowrap}.select-menu button:hover,.select-menu button.active{background:#f4f5f6}.select-menu button.selected{background:#fff0ec;color:var(--accent-dark)!important}.select-menu button span{overflow:hidden;text-overflow:ellipsis}
+.select-menu{position:absolute;z-index:40;top:calc(100% + 8px);left:-1px;width:max-content;min-width:calc(100% + 2px);max-width:280px;padding:6px;border:1px solid #dfe2e6;border-radius:12px;background:#fff;box-shadow:0 18px 45px rgba(18,21,25,.16)}.select-options{max-height:240px;overflow-y:auto;scrollbar-width:thin}.select-menu .select-options button{width:100%;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 10px;border:0;border-radius:8px;background:#fff;color:var(--ink);font-size:12px;font-weight:650;text-align:left;white-space:nowrap}.select-menu .select-options button:hover,.select-menu .select-options button.active{background:#f4f5f6}.select-menu .select-options button.selected{background:#fff0ec;color:var(--accent-dark)!important}.select-menu .select-options button span{overflow:hidden;text-overflow:ellipsis}.select-search{position:relative;display:flex;align-items:center;margin:2px 2px 6px;border:1px solid #dfe2e6;border-radius:9px;background:#f8f9fa}.select-search:focus-within{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px #fff0ec}.select-search>svg{margin-left:10px;color:var(--muted)}.select-search input{width:100%;min-width:150px;padding:9px 32px 9px 8px;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:13px}.select-search input::-webkit-search-cancel-button{display:none}.select-search-clear{position:absolute;right:4px;width:28px!important;height:28px;padding:0!important;display:grid!important;place-items:center;border:0;border-radius:7px;background:transparent!important;color:var(--muted)!important}.select-search-clear:hover{background:#eceef0!important;color:var(--ink)!important}.select-empty{margin:0;padding:14px 10px;color:var(--muted);font-size:13px;text-align:center}
 @media(max-width:700px){.select-menu{max-width:min(260px,calc(100vw - 38px))}}
 
 /* Readability pass: keep supporting copy compact without dropping below a
    comfortable reading size on desktop or mobile. */
-.desktop-nav button,.header-actions button{font-size:14px}
-.icon-label b{font-size:11px}
-.eyebrow{font-size:13px}
-.type-tabs button{font-size:14px}
-.select-field>span,.custom-select>span{font-size:12px}
-.select-field select,.select-trigger b{font-size:14px}
-.primary,.secondary{font-size:14px}
-.popular-row,.popular-row button{font-size:13px}
-.trust-strip b{font-size:14px}
-.trust-strip small{font-size:12px;line-height:1.4}
-.section-heading span{font-size:12px}
-.section-heading>button,.text-button{font-size:14px}
-.featured-body>p{font-size:13px;line-height:1.5}
-.featured-body span{font-size:12px}
-.breadcrumbs{font-size:12px}
-.catalog-heading p{font-size:14px}
-.catalog-heading>span{font-size:13px}
-.filter-title{font-size:14px}
-.filter-title button{font-size:12px}
-.result-tools{font-size:14px}
-.result-tools button{font-size:12px}
-.car-row-image>span{font-size:11px}
-.status{font-size:11px}
-.summary{font-size:13px;line-height:1.5}
-.mini-specs span{font-size:12px}
-.source-line{font-size:11px;line-height:1.45}
-.car-row-price span,.car-row-price small{font-size:11px}
-.car-row-price button{font-size:12px}
-.side-card p{font-size:13px;line-height:1.6}
-.side-card ul{font-size:12px;line-height:1.45}
-.side-card .secondary{font-size:12px}
-.detail-kicker{font-size:12px}
-.detail-title p{font-size:14px}
-.gallery-panel>span{font-size:12px}
-.gallery-badges b{font-size:11px}
-.china-price span,.minsk-price span{font-size:12px}
-.minsk-price small{font-size:11px;line-height:1.4}
-.order-note b{font-size:12px}
-.order-note span{font-size:11px;line-height:1.45}
-.spec-grid span{font-size:11px}
-.spec-grid b{font-size:13px}
-.report-badge{font-size:12px}
-.condition-list>div{font-size:13px}
-.source-card>p{font-size:13px}
-.source-card>div{font-size:12px;line-height:1.45}
-.source-card small{font-size:11px;line-height:1.55}
-.simple-page>span{font-size:12px}
-.lead-modal>span{font-size:12px}
-.lead-modal>p,.success-state p{font-size:13px}
-.lead-modal label{font-size:12px}
-.lead-modal input{font-size:14px}
-.lead-modal>small{font-size:11px;line-height:1.55}
-footer{font-size:12px}
-.price-card-header span{font-size:12px}
-.price-card-header b{font-size:14px}
-.price-breakdown b{font-size:13px}
-.price-breakdown small{font-size:11px;line-height:1.4}
-.price-total span{font-size:13px}
-.price-total small{font-size:11px}
-.price-assumption{font-size:11px;line-height:1.5}
-.select-menu button{font-size:13px}
+.desktop-nav button,.header-actions button{font-size:15px}
+.icon-label b{font-size:12px}
+.eyebrow{font-size:14px}
+.type-tabs button{font-size:15px}
+.select-field>span,.custom-select>span{font-size:13px}
+.select-field select,.select-trigger b{font-size:15px}
+.primary,.secondary{font-size:15px}
+.popular-row,.popular-row button{font-size:14px}
+.trust-strip b{font-size:15px}
+.trust-strip small{font-size:13px;line-height:1.4}
+.section-heading span{font-size:13px}
+.section-heading>button,.text-button{font-size:15px}
+.featured-body>p{font-size:14px;line-height:1.5}
+.featured-body span{font-size:13px}
+.breadcrumbs{font-size:13px}
+.catalog-heading p{font-size:15px}
+.catalog-heading>span{font-size:14px}
+.filter-title{font-size:15px}
+.filter-title button{font-size:13px}
+.result-tools{font-size:15px}
+.result-tools button{font-size:13px}
+.car-row-image>span{font-size:12px}
+.status{font-size:12px}
+.summary{font-size:14px;line-height:1.5}
+.mini-specs span{font-size:13px}
+.source-line{font-size:12px;line-height:1.45}
+.car-row-price span,.car-row-price small{font-size:12px}
+.car-row-price button{font-size:13px}
+.side-card p{font-size:14px;line-height:1.6}
+.side-card ul{font-size:13px;line-height:1.45}
+.side-card .secondary{font-size:13px}
+.detail-kicker{font-size:13px}
+.detail-title p{font-size:15px}
+.gallery-panel>span{font-size:13px}
+.gallery-badges b{font-size:12px}
+.china-price span,.minsk-price span{font-size:13px}
+.minsk-price small{font-size:12px;line-height:1.4}
+.order-note b{font-size:13px}
+.order-note span{font-size:12px;line-height:1.45}
+.spec-grid span{font-size:12px}
+.spec-grid b{font-size:14px}
+.report-badge{font-size:13px}
+.condition-list>div{font-size:14px}
+.source-card>p{font-size:14px}
+.source-card>div{font-size:13px;line-height:1.45}
+.source-card small{font-size:12px;line-height:1.55}
+.simple-page>span{font-size:13px}
+.lead-modal>span{font-size:13px}
+.lead-modal>p,.success-state p{font-size:14px}
+.lead-modal label{font-size:13px}
+.lead-modal input{font-size:15px}
+.lead-modal>small{font-size:12px;line-height:1.55}
+footer{font-size:13px}
+.price-card-header span{font-size:13px}
+.price-card-header b{font-size:15px}
+.price-breakdown b{font-size:14px}
+.price-breakdown small{font-size:12px;line-height:1.4}
+.price-total span{font-size:14px}
+.price-total small{font-size:12px}
+.price-assumption{font-size:12px;line-height:1.5}
+.select-menu button{font-size:14px}
 
-@media(max-width:700px){.filter-title b{font-size:13px}.back-mobile{font-size:13px}}
+@media(max-width:700px){.filter-title b{font-size:14px}.back-mobile{font-size:14px}}
 .filter-grid{grid-template-columns:repeat(6,minmax(0,1fr)) 1.15fr}
 @media(max-width:980px){.filter-grid{grid-template-columns:repeat(2,1fr)}}
