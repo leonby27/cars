@@ -175,11 +175,38 @@ function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare,
   return <main className="catalog page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/>Автомобили из Китая</div><div className="catalog-heading"><div><h1>Автомобили из Китая</h1><p>Реальные объявления Guazi · закрытый пилот</p></div><span>{filtered.length} из {cars.length} импортированных</span></div><FilterPanel filters={filters} setFilters={setFilters} resultCount={filtered.length} brands={brands} models={models}/><div className="catalog-layout"><section className="results-list"><div className="result-tools"><b>Подходящие варианты</b><button>Сначала новые <CaretDown size={14}/></button></div>{filtered.length ? filtered.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} compare={compares.has(car.id)} toggleFavorite={toggleFavorite} toggleCompare={toggleCompare}/>) : <div className="empty-state"><MagnifyingGlass size={34}/><h3>Ничего не нашли</h3><p>Попробуйте сбросить один из фильтров.</p></div>}</section><aside className="side-card"><div className="side-icon"><ShieldCheck size={26} weight="duotone"/></div><h3>Проверим выбранный автомобиль</h3><p>Свяжемся с продавцом, запросим оригинальный отчёт и подтвердим возможность экспорта.</p><ul><li><Check size={15}/>VIN и история</li><li><Check size={15}/>Состояние батареи</li><li><Check size={15}/>Итоговая смета</li></ul>{cars[0] && <button className="secondary" onClick={() => navigate(`/cars/${cars[0].id}`)}>Как выглядит проверка</button>}</aside></div></main>;
 }
 
+function GalleryModal({ car, images, initialIndex, onClose }) {
+  const imageRefs = useRef([]);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => imageRefs.current[initialIndex]?.scrollIntoView({ block:"start" }));
+    const onKeyDown = (event) => event.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKeyDown);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", onKeyDown); };
+  }, [initialIndex, onClose]);
+  return <div className="gallery-modal" role="dialog" aria-modal="true" aria-label={`Фотографии ${car.title}`} onMouseDown={(event) => event.target === event.currentTarget && onClose()}><header><div><b>{car.title}</b><span>{images.length} фотографий</span></div><button aria-label="Закрыть галерею" onClick={onClose}><X size={24}/></button></header><div className="gallery-modal-list">{images.map((image, index) => <figure key={`${image}-${index}`} ref={(node) => { imageRefs.current[index] = node; }}><img src={image} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"}/><figcaption>{index + 1} из {images.length}</figcaption></figure>)}</div></div>;
+}
+
 function VehicleGallery({ car }) {
   const images = car.images?.length ? car.images : [car.image];
   const [active, setActive] = useState(0);
+  const [modalOpen, setModalOpen] = useState(false);
+  const touchStart = useRef(null);
+  const thumbsRef = useRef(null);
   const move = (step) => setActive((current) => (current + step + images.length) % images.length);
-  return <section className="gallery-panel"><img src={images[active]} alt={`${car.title}, фото ${active + 1}`}/><span><Images size={17}/>{active + 1} из {images.length}</span><div className="gallery-badges"><b>Оригинал Guazi</b><b>Фото объявления</b></div>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs">{images.slice(0, 6).map((image, index) => <button key={image} className={active === index ? "active" : ""} onClick={() => setActive(index)} aria-label={`Открыть фото ${index + 1}`}><img src={image} alt=""/></button>)}</div></section>;
+  useEffect(() => {
+    const thumb = thumbsRef.current?.children[active];
+    thumb?.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+  }, [active]);
+  const onTouchStart = (event) => { touchStart.current = event.changedTouches[0]?.clientX ?? null; };
+  const onTouchEnd = (event) => {
+    if (touchStart.current === null) return;
+    const distance = (event.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current;
+    touchStart.current = null;
+    if (Math.abs(distance) >= 45) move(distance > 0 ? -1 : 1);
+  };
+  return <><section className="gallery-panel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}><button className="gallery-open" onClick={() => setModalOpen(true)} aria-label={`Открыть все фотографии ${car.title}`}><img src={images[active]} alt={`${car.title}, фото ${active + 1}`}/></button><span><Images size={17}/>{active + 1} из {images.length}</span><div className="gallery-badges"><b>Оригинал Guazi</b><b>Фото объявления</b></div>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs" ref={thumbsRef}>{images.map((image, index) => <button key={`${image}-${index}`} className={active === index ? "active" : ""} onClick={() => setActive(index)} aria-label={`Показать фото ${index + 1}`}><img src={image} alt="" loading="lazy"/></button>)}</div><button className="gallery-view-all" onClick={() => setModalOpen(true)}><Images size={18}/>Все фото</button></section>{modalOpen && <GalleryModal car={car} images={images} initialIndex={active} onClose={() => setModalOpen(false)}/>}</>;
 }
 
 function Detail({ car, navigate, favorite, toggleFavorite, onOrder }) {
