@@ -17,6 +17,16 @@ test("parses a Guazi markdown vehicle", () => {
   assert.equal(car.owners, 2);
 });
 
+test("normalizes priority-market Galaxy and Dongfeng brands", () => {
+  const base = `id:c168848183157611\nfull_payment:81700元\nfirst_register:2025-05\nmileage:1.25万公里\ntransfer_times:0次\ncity:杭州\ntype:新能源`;
+  const galaxy = parseGuaziMarkdown(`${base}\nmanufacturer:吉利汽车\nbrand:吉利\nseries:银河E5\nmodel:2024款 530km`, "https://www.guazi.com/car-detail/c168848183157611.md");
+  const dongfeng = parseGuaziMarkdown(`${base.replace("c168848183157611", "c168848183157612")}\nmanufacturer:东风风神\nbrand:东风风神\nseries:东风风神E70\nmodel:2023款 PRO`, "https://www.guazi.com/car-detail/c168848183157612.md");
+  assert.equal(galaxy.brand, "Geely Galaxy");
+  assert.equal(galaxy.model, "E5");
+  assert.equal(dongfeng.brand, "Dongfeng");
+  assert.equal(dongfeng.model, "E70");
+});
+
 test("extracts original gallery and EV fields from HTML", () => {
   const html = `<link rel="preload" as="image" href="https://image-public.guazistatic.com/car.jpg?x-bce-process=image/quality,q_88/resize,m_fill,w_750,h_500"><script>\\"label\\":\\"能源类型\\",\\"value\\":\\"纯电动\\",\\"label\\":\\"电池容量\\",\\"value\\":\\"71.7kWh\\",\\"label\\":\\"新车续航\\",\\"value\\":\\"500km\\"</script>`;
   const detail = parseGuaziHtml(html);

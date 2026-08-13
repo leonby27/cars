@@ -8,6 +8,8 @@ const OUTPUT_DIR = path.join(ROOT, "public", "data");
 const CARS_PATH = path.join(OUTPUT_DIR, "cars.json");
 const REPORT_PATH = path.join(OUTPUT_DIR, "import-report.json");
 const TARGETS_PATH = path.join(ROOT, "config", "guazi-targets.json");
+const targetConfig = JSON.parse(await fs.readFile(TARGETS_PATH, "utf8"));
+const priorityByBrand = new Map(targetConfig.targets.map((target) => [target.brand, target.priority || 1]));
 const INDEX_URL = "https://www.guazi.com/guazisou/cardetail/pc_cardetail_md_index.xml";
 const args = new Map(process.argv.slice(2).map((item) => item.split("=").length > 1 ? item.split(/=(.*)/s).slice(0, 2) : [item, true]));
 const limit = Number(args.get("--limit") || 18);
@@ -47,14 +49,13 @@ async function discoverMarkdownUrls(maximum) {
 }
 
 async function discoverTargetMarkdownUrls(maximum) {
-  const config = JSON.parse(await fs.readFile(TARGETS_PATH, "utf8"));
-  const brandResults = await mapConcurrent(config.targets, async (target) => {
+  const brandResults = await mapConcurrent(targetConfig.targets, async (target) => {
     const html = await fetchText(target.url, { ...commonHeaders, accept: "text/html", "user-agent": htmlUserAgent });
     return { ...target, series: parseGuaziSeriesLinks(html, target.url, target.includeSeries) };
   }, Math.min(concurrency, 6));
   const usableBrands = brandResults.filter((item) => !item.error);
-  const groupedSeries = usableBrands.flatMap((target) => target.series.map((item) => ({ ...item, brand: target.brand })));
-  const series = takeRoundRobin(groupedSeries, Number.MAX_SAFE_INTEGER, (item) => item.brand);
+  const groupedSeries = usableBrands.flatMap((target) => target.series.map((item) => ({ ...item, brand: target.brand, priority: target.priority || 1 })));
+  const series = takeWeightedRoundRobin(groupedSeries, Number.MAX_SAFE_INTEGER, (item) => item.brand, (item) => item.priority);
   const discovered = new Map();
   const byTarget = new Map(series.map((item) => [item.name, 0]));
   let listingRequests = 0;
@@ -87,8 +88,9 @@ async function discoverTargetMarkdownUrls(maximum) {
   return {
     urls: [...discovered.keys()],
     stats: {
-      configuredBrands: config.targets.length,
+      configuredBrands: targetConfig.targets.length,
       availableBrands: usableBrands.length,
+      priorityByBrand: Object.fromEntries(priorityByBrand),
       series: series.length,
       listingRequests,
       bySeries: Object.fromEntries([...byTarget].filter(([, count]) => count > 0)),
@@ -119,6 +121,25 @@ function takeRoundRobin(items, maximum, groupBy) {
       const item = groups[index].shift();
       if (item) selected.push(item);
       if (groups[index].length === 0) groups.splice(index, 1);
+    }
+  }
+  return selected;
+}
+
+function takeWeightedRoundRobin(items, maximum, groupBy, weightOf) {
+  const groups = [...Map.groupBy(items, groupBy).values()].map((itemsInGroup) => ({
+    items: [...itemsInGroup],
+    weight: Math.max(1, Number(weightOf(itemsInGroup[0])) || 1),
+  }));
+  const selected = [];
+  while (groups.length && selected.length < maximum) {
+    for (let index = groups.length - 1; index >= 0 && selected.length < maximum; index -= 1) {
+      for (let turn = 0; turn < groups[index].weight && selected.length < maximum; turn += 1) {
+        const item = groups[index].items.shift();
+        if (!item) break;
+        selected.push(item);
+      }
+      if (groups[index].items.length === 0) groups.splice(index, 1);
     }
   }
   return selected;
@@ -167,7 +188,7 @@ const parsed = await mapConcurrent(markdownUrls, async (url) => {
 }, concurrency);
 const matching = parsed.filter((item) => item && !item.error);
 const enrichmentBuffer = Math.max(12, Math.ceil(limit * 0.1));
-const candidates = takeRoundRobin(matching, limit + enrichmentBuffer, (car) => car.brand);
+const candidates = takeWeightedRoundRobin(matching, limit + enrichmentBuffer, (car) => car.brand, (car) => priorityByBrand.get(car.brand) || 1);
 const enriched = await mapConcurrent(candidates, enrichCar, Math.min(concurrency, 5));
 const cars = enriched.filter((item) => item && !item.error).slice(0, limit).map((car) => {
   const old = previousById.get(car.id);
@@ -193,7 +214,10 @@ const report = {
   matchingCars: matching.length,
   matchingByBrand: Object.fromEntries([...Map.groupBy(matching, (car) => car.brand)].map(([brand, items]) => [brand, items.length])),
   enrichmentCandidates: candidates.length,
+  requested: limit,
   imported: cars.length,
+  importedByBrand: Object.fromEntries([...Map.groupBy(cars, (car) => car.brand)].map(([brand, items]) => [brand, items.length])),
+  shortfall: Math.max(0, limit - cars.length),
   errors: errors.slice(0, 20),
 };
 await fs.writeFile(CARS_PATH, `${JSON.stringify(payload, null, 2)}\n`);

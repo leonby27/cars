@@ -8,6 +8,7 @@ const BRAND_MAP = new Map([
   ["腾势", "Denza"], ["小米汽车", "Xiaomi"], ["小米", "Xiaomi"],
   ["岚图汽车", "Voyah"], ["岚图", "Voyah"], ["智界", "Luxeed"],
   ["享界", "Stelato"], ["尚界", "Shangjie"], ["鸿蒙智行", "HIMA"],
+  ["吉利银河", "Geely Galaxy"], ["东风风神", "Dongfeng"],
 ]);
 
 const SERIES_MAP = new Map([
@@ -17,6 +18,8 @@ const SERIES_MAP = new Map([
   ["宋PLUS新能源", "Song Plus"], ["宋Pro新能源", "Song Pro"],
   ["秦PLUS", "Qin Plus"], ["秦L", "Qin L"], ["理想L6", "L6"],
   ["理想L7", "L7"], ["理想L8", "L8"], ["理想L9", "L9"],
+  ["银河E5", "E5"], ["银河L7", "L7"], ["银河E8", "E8"],
+  ["东风风神E70", "E70"], ["风神L7新能源", "L7"], ["东风风神L8", "L8"],
 ]);
 
 const field = (text, name) => text.match(new RegExp(`^${name}:\\s*(.+)$`, "m"))?.[1]?.trim() ?? null;
@@ -33,8 +36,9 @@ export function parseGuaziMarkdown(markdown, sourceUrl) {
   const id = field(markdown, "id")?.replace(/^c/, "") ?? sourceUrl.match(/c(\d+)/)?.[1];
   const manufacturer = field(markdown, "manufacturer");
   const rawBrand = field(markdown, "brand") || manufacturer;
-  const brand = BRAND_MAP.get(rawBrand) || BRAND_MAP.get(manufacturer) || null;
   const rawSeries = field(markdown, "series") || "";
+  const mappedBrand = BRAND_MAP.get(rawBrand) || BRAND_MAP.get(manufacturer) || null;
+  const brand = /银河/.test(`${rawBrand || ""} ${manufacturer || ""} ${rawSeries}`) ? "Geely Galaxy" : mappedBrand;
   const rawModel = field(markdown, "model") || "";
   const priceCny = numeric(field(markdown, "full_payment"));
   const register = field(markdown, "first_register");

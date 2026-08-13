@@ -4,18 +4,21 @@
     {
       "brand": "BYD",
       "url": "https://www.guazi.com/bj/byd/",
-      "includeSeries": "新能源|PLUS|UP|海鸥|海豚|海豹|海狮|秦L|宋L|元Pro|汉|夏|e[0-9]|D1|S2"
+      "includeSeries": "宋PLUS新能源|宋Pro新能源|秦PLUS|秦L|元PLUS|元UP|海豹|汉|唐新能源|海狮|海豚|海鸥",
+      "priority": 4
     },
-    { "brand": "XPeng", "url": "https://www.guazi.com/bj/xpqc/" },
-    { "brand": "NIO", "url": "https://www.guazi.com/bj/weilai/" },
-    { "brand": "Li Auto", "url": "https://www.guazi.com/bj/lixiang/" },
-    { "brand": "Zeekr", "url": "https://www.guazi.com/bj/jike/" },
-    { "brand": "Leapmotor", "url": "https://www.guazi.com/bj/lpqc/" },
-    { "brand": "Voyah", "url": "https://www.guazi.com/bj/lt-qc/" },
-    { "brand": "Deepal", "url": "https://www.guazi.com/bj/slqc/" },
-    { "brand": "Denza", "url": "https://www.guazi.com/bj/tengshi/" },
-    { "brand": "Avatr", "url": "https://www.guazi.com/bj/aweita/" },
-    { "brand": "Xiaomi", "url": "https://www.guazi.com/bj/xiaomiqiche/" },
-    { "brand": "AITO / Luxeed", "url": "https://www.guazi.com/bj/aito/" }
+    { "brand": "Zeekr", "url": "https://www.guazi.com/bj/jike/", "includeSeries": "极氪001|极氪X|极氪007|极氪7X", "priority": 3 },
+    { "brand": "Li Auto", "url": "https://www.guazi.com/bj/lixiang/", "includeSeries": "理想L6|理想L7|理想L8|理想L9", "priority": 3 },
+    { "brand": "Voyah", "url": "https://www.guazi.com/bj/lt-qc/", "includeSeries": "岚图FREE|岚图梦想家", "priority": 3 },
+    { "brand": "Deepal", "url": "https://www.guazi.com/bj/slqc/", "includeSeries": "深蓝SL03|深蓝S07|深蓝S05", "priority": 3 },
+    { "brand": "Geely Galaxy", "url": "https://www.guazi.com/bj/jlyh/", "includeSeries": "银河E5|银河L7|银河E8", "priority": 3 },
+    { "brand": "Dongfeng", "url": "https://www.guazi.com/bj/dongfengfengshen/", "includeSeries": "东风风神E70|风神L7新能源|东风风神L8|SKY EV01", "priority": 2 },
+    { "brand": "Avatr", "url": "https://www.guazi.com/bj/aweita/", "includeSeries": "阿维塔06|阿维塔07|阿维塔11|阿维塔12", "priority": 2 },
+    { "brand": "HIMA", "url": "https://www.guazi.com/bj/aito/", "includeSeries": "问界M5|问界M7|问界M8|问界M9", "priority": 2 },
+    { "brand": "Xiaomi", "url": "https://www.guazi.com/bj/xiaomiqiche/", "includeSeries": "小米SU7|小米YU7", "priority": 2 },
+    { "brand": "Leapmotor", "url": "https://www.guazi.com/bj/lpqc/", "priority": 1 },
+    { "brand": "XPeng", "url": "https://www.guazi.com/bj/xpqc/", "priority": 1 },
+    { "brand": "NIO", "url": "https://www.guazi.com/bj/weilai/", "priority": 1 },
+    { "brand": "Denza", "url": "https://www.guazi.com/bj/tengshi/", "priority": 1 }
   ]
 }
