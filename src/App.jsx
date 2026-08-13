@@ -47,23 +47,51 @@ function Header({ navigate, favoritesCount, compareCount }) {
   </div></header>;
 }
 
-function SelectField({ label, value, options, onChange }) {
+function SelectField({ label, value, options, onChange, searchable = false }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(Math.max(0, options.indexOf(value)));
+  const [query, setQuery] = useState("");
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
+  const searchRef = useRef(null);
   const listId = useId();
   const selectedIndex = Math.max(0, options.indexOf(value));
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("ru");
+    if (!searchable || !normalizedQuery) return options;
+    return options.filter((item) => item.toLocaleLowerCase("ru").includes(normalizedQuery));
+  }, [options, query, searchable]);
+
+  const close = (restoreFocus = false) => {
+    setOpen(false);
+    setQuery("");
+    if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+  };
 
   useEffect(() => {
-    const closeOutside = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
+    const closeOutside = (event) => { if (!rootRef.current?.contains(event.target)) close(); };
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
 
-  useEffect(() => { if (open) setActiveIndex(selectedIndex); }, [open, selectedIndex]);
+  useEffect(() => {
+    if (!open) return;
+    const index = filteredOptions.indexOf(value);
+    setActiveIndex(index >= 0 ? index : 0);
+  }, [open, query, value, filteredOptions]);
 
-  const choose = (item) => { onChange?.(item); setOpen(false); triggerRef.current?.focus(); };
+  useEffect(() => {
+    if (open && searchable) requestAnimationFrame(() => searchRef.current?.focus());
+  }, [open, searchable]);
+
+  const choose = (item) => { onChange?.(item); close(true); };
+  const moveActive = (key) => {
+    if (!filteredOptions.length) return;
+    if (key === "ArrowDown") setActiveIndex((index) => Math.min(filteredOptions.length - 1, index + 1));
+    if (key === "ArrowUp") setActiveIndex((index) => Math.max(0, index - 1));
+    if (key === "Home") setActiveIndex(0);
+    if (key === "End") setActiveIndex(filteredOptions.length - 1);
+  };
   const handleKeyDown = (event) => {
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
       event.preventDefault();
@@ -72,18 +100,27 @@ function SelectField({ label, value, options, onChange }) {
         setActiveIndex(event.key === "ArrowUp" || event.key === "End" ? options.length - 1 : selectedIndex);
         return;
       }
-      if (event.key === "ArrowDown") setActiveIndex((index) => Math.min(options.length - 1, index + 1));
-      if (event.key === "ArrowUp") setActiveIndex((index) => Math.max(0, index - 1));
-      if (event.key === "Home") setActiveIndex(0);
-      if (event.key === "End") setActiveIndex(options.length - 1);
+      moveActive(event.key);
     } else if ((event.key === "Enter" || event.key === " ") && open) {
-      event.preventDefault(); choose(options[activeIndex]);
+      event.preventDefault();
+      if (filteredOptions[activeIndex]) choose(filteredOptions[activeIndex]);
     } else if (event.key === "Escape") {
-      event.preventDefault(); setOpen(false);
-    } else if (event.key === "Tab") setOpen(false);
+      event.preventDefault(); close();
+    } else if (event.key === "Tab") close();
   };
 
-  return <div className={`select-field custom-select${open ? " open" : ""}`} ref={rootRef}><span>{label}</span><button ref={triggerRef} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-activedescendant={open ? `${listId}-${activeIndex}` : undefined} onClick={() => setOpen((current) => !current)} onKeyDown={handleKeyDown}><b>{value}</b><CaretDown size={16} weight="bold"/></button>{open && <div className="select-menu" id={listId} role="listbox" aria-label={label}>{options.map((item, index) => <button type="button" id={`${listId}-${index}`} role="option" aria-selected={item === value} className={`${item === value ? "selected" : ""}${index === activeIndex ? " active" : ""}`} key={item} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(item)}><span>{item}</span>{item === value && <Check size={16} weight="bold"/>}</button>)}</div>}</div>;
+  const handleSearchKeyDown = (event) => {
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      event.preventDefault(); moveActive(event.key);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (filteredOptions[activeIndex]) choose(filteredOptions[activeIndex]);
+    } else if (event.key === "Escape") {
+      event.preventDefault(); close(true);
+    } else if (event.key === "Tab") close();
+  };
+
+  return <div className={`select-field custom-select${open ? " open" : ""}`} ref={rootRef}><span>{label}</span><button ref={triggerRef} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} onClick={() => open ? close() : setOpen(true)} onKeyDown={handleKeyDown}><b>{value}</b><CaretDown size={16} weight="bold"/></button>{open && <div className="select-menu">{searchable && <div className="select-search"><MagnifyingGlass size={16}/><input ref={searchRef} type="search" value={query} placeholder={`Поиск: ${label.toLocaleLowerCase("ru")}`} aria-label={`Поиск: ${label.toLocaleLowerCase("ru")}`} role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls={listId} aria-activedescendant={filteredOptions[activeIndex] ? `${listId}-${activeIndex}` : undefined} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown}/>{query && <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => { setQuery(""); searchRef.current?.focus(); }}><X size={14} weight="bold"/></button>}</div>}<div className="select-options" id={listId} role="listbox" aria-label={label}>{filteredOptions.length ? filteredOptions.map((item, index) => <button type="button" id={`${listId}-${index}`} role="option" aria-selected={item === value} className={`${item === value ? "selected" : ""}${index === activeIndex ? " active" : ""}`} key={item} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(item)}><span>{item}</span>{item === value && <Check size={16} weight="bold"/>}</button>) : <p className="select-empty">Ничего не найдено</p>}</div></div>}</div>;
 }
 
 function QuickSearch({ navigate, cars }) {
@@ -97,7 +134,7 @@ function QuickSearch({ navigate, cars }) {
   const changeType = (value) => { setType(value); setModel("Все модели"); };
   const changeBrand = (value) => { setBrand(value); setModel("Все модели"); };
   return <section className="search-box"><div className="type-tabs">{["Все","Электромобили","Гибриды"].map((item) => <button key={item} className={type === item ? "active" : ""} onClick={() => changeType(item)}>{item}</button>)}</div><div className="quick-fields">
-    <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands}/><SelectField label="Модель" value={model} onChange={setModel} options={models}/><SelectField label="Год выпуска" value={year} onChange={setYear} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={mileage} onChange={setMileage} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена в Минске" value={priceLimit} onChange={setPriceLimit} options={["до $40 000","до $30 000","до $25 000"]}/>
+    <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands} searchable/><SelectField label="Модель" value={model} onChange={setModel} options={models} searchable/><SelectField label="Год выпуска" value={year} onChange={setYear} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={mileage} onChange={setMileage} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена в Минске" value={priceLimit} onChange={setPriceLimit} options={["до $40 000","до $30 000","до $25 000"]}/>
     <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {resultCount} авто</button>
   </div></section>;
 }
@@ -119,7 +156,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models }) {
   const update = (key) => (value) => setFilters((old) => ({...old, [key]:value}));
   const changeType = (value) => setFilters((old) => ({...old, type:value, model:"Все модели"}));
   const changeBrand = (value) => setFilters((old) => ({...old, brand:value, model:"Все модели"}));
-  return <section className="filter-panel"><div className="filter-title"><SlidersHorizontal size={20} weight="bold"/><b>Параметры поиска</b><button onClick={() => setFilters({type:"Все",brand:"Все марки",model:"Все модели",year:"от 2022",mileage:"до 50 000 км",price:"до $40 000"})}>Сбросить</button></div><div className="filter-grid"><SelectField label="Тип двигателя" value={filters.type} onChange={changeType} options={["Все","Электромобиль","Гибрид"]}/><SelectField label="Марка" value={filters.brand} onChange={changeBrand} options={["Все марки", ...brands]}/><SelectField label="Модель" value={filters.model} onChange={update("model")} options={models}/><SelectField label="Год выпуска" value={filters.year} onChange={update("year")} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={filters.mileage} onChange={update("mileage")} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена до Минска" value={filters.price} onChange={update("price")} options={["до $40 000","до $30 000","до $25 000"]}/><button className="primary filter-submit"><MagnifyingGlass size={19} weight="bold"/>Показать {resultCount} авто</button></div></section>;
+  return <section className="filter-panel"><div className="filter-title"><SlidersHorizontal size={20} weight="bold"/><b>Параметры поиска</b><button onClick={() => setFilters({type:"Все",brand:"Все марки",model:"Все модели",year:"от 2022",mileage:"до 50 000 км",price:"до $40 000"})}>Сбросить</button></div><div className="filter-grid"><SelectField label="Тип двигателя" value={filters.type} onChange={changeType} options={["Все","Электромобиль","Гибрид"]}/><SelectField label="Марка" value={filters.brand} onChange={changeBrand} options={["Все марки", ...brands]} searchable/><SelectField label="Модель" value={filters.model} onChange={update("model")} options={models} searchable/><SelectField label="Год выпуска" value={filters.year} onChange={update("year")} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={filters.mileage} onChange={update("mileage")} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена до Минска" value={filters.price} onChange={update("price")} options={["до $40 000","до $30 000","до $25 000"]}/><button className="primary filter-submit"><MagnifyingGlass size={19} weight="bold"/>Показать {resultCount} авто</button></div></section>;
 }
 
 function CarRow({ car, navigate, favorite, compare, toggleFavorite, toggleCompare }) {
