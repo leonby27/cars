@@ -177,33 +177,103 @@ function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare,
 
 function GalleryModal({ car, images, initialIndex, onClose }) {
   const imageRefs = useRef([]);
+  const thumbRefs = useRef([]);
+  const modalRef = useRef(null);
+  const scrollFrame = useRef(null);
+  const navigationFrame = useRef(null);
+  const navigating = useRef(false);
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     requestAnimationFrame(() => imageRefs.current[initialIndex]?.scrollIntoView({ block:"start" }));
     const onKeyDown = (event) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", onKeyDown);
-    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", onKeyDown); };
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", onKeyDown); if (scrollFrame.current) cancelAnimationFrame(scrollFrame.current); if (navigationFrame.current) cancelAnimationFrame(navigationFrame.current); };
   }, [initialIndex, onClose]);
-  return <div className="gallery-modal" role="dialog" aria-modal="true" aria-label={`Фотографии ${car.title}`} onMouseDown={(event) => event.target === event.currentTarget && onClose()}><header><div><b>{car.title}</b><span>{images.length} фотографий</span></div><button aria-label="Закрыть галерею" onClick={onClose}><X size={24}/></button></header><div className="gallery-modal-list">{images.map((image, index) => <figure key={`${image}-${index}`} ref={(node) => { imageRefs.current[index] = node; }}><img src={image} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"}/><figcaption>{index + 1} из {images.length}</figcaption></figure>)}</div></div>;
+  useEffect(() => {
+    const thumb = thumbRefs.current[activeIndex];
+    const rail = thumb?.parentElement;
+    if (!thumb || !rail) return;
+    const thumbTop = thumb.offsetTop;
+    const thumbBottom = thumbTop + thumb.offsetHeight;
+    if (thumbTop < rail.scrollTop) rail.scrollTop = thumbTop;
+    else if (thumbBottom > rail.scrollTop + rail.clientHeight) rail.scrollTop = thumbBottom - rail.clientHeight;
+  }, [activeIndex]);
+  const jumpTo = (index) => {
+    const modal = modalRef.current;
+    const targetImage = imageRefs.current[index];
+    if (!modal || !targetImage) return;
+    if (navigationFrame.current) cancelAnimationFrame(navigationFrame.current);
+    setActiveIndex(index);
+    const start = modal.scrollTop;
+    const target = start + targetImage.getBoundingClientRect().top - modal.getBoundingClientRect().top - 88;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { modal.scrollTop = target; return; }
+    navigating.current = true;
+    const startedAt = performance.now();
+    const animate = (now) => {
+      const progress = Math.min(1, (now - startedAt) / 180);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      modal.scrollTop = start + (target - start) * eased;
+      if (progress < 1) navigationFrame.current = requestAnimationFrame(animate);
+      else { navigationFrame.current = null; navigating.current = false; setActiveIndex(index); }
+    };
+    navigationFrame.current = requestAnimationFrame(animate);
+  };
+  const trackActiveImage = (event) => {
+    if (event.target !== event.currentTarget) return;
+    if (navigating.current) return;
+    if (scrollFrame.current) return;
+    scrollFrame.current = requestAnimationFrame(() => {
+      scrollFrame.current = null;
+      const marker = 96;
+      let closestIndex = 0;
+      let closestDistance = Infinity;
+      imageRefs.current.forEach((node, index) => {
+        if (!node) return;
+        const distance = Math.abs(node.getBoundingClientRect().top - marker);
+        if (distance < closestDistance) { closestDistance = distance; closestIndex = index; }
+      });
+      setActiveIndex((current) => current === closestIndex ? current : closestIndex);
+    });
+  };
+  return <div ref={modalRef} className="gallery-modal" role="dialog" aria-modal="true" aria-label={`Фотографии ${car.title}`} onScroll={trackActiveImage} onMouseDown={(event) => event.target === event.currentTarget && onClose()}><header><div><b>{car.title}</b><span>{activeIndex + 1} из {images.length}</span></div><button aria-label="Закрыть галерею" onClick={onClose}><X size={24}/></button></header><div className="gallery-modal-content"><aside className="gallery-modal-rail" aria-label="Миниатюры фотографий">{images.map((image, index) => <button key={`${image}-thumb-${index}`} ref={(node) => { thumbRefs.current[index] = node; }} className={activeIndex === index ? "active" : ""} onClick={() => jumpTo(index)} aria-label={`Перейти к фото ${index + 1}`} aria-current={activeIndex === index ? "true" : undefined}><img src={image} alt="" loading={index > 8 ? "lazy" : "eager"}/></button>)}</aside><div className="gallery-modal-list">{images.map((image, index) => <figure key={`${image}-${index}`} ref={(node) => { imageRefs.current[index] = node; }}><img src={image} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"}/><figcaption>{index + 1} из {images.length}</figcaption></figure>)}</div></div></div>;
 }
 
 function VehicleGallery({ car }) {
   const images = car.images?.length ? car.images : [car.image];
   const [active, setActive] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [slideDirection, setSlideDirection] = useState("idle");
   const swipe = useRef(null);
   const suppressOpen = useRef(false);
   const thumbsRef = useRef(null);
-  const move = (step) => setActive((current) => (current + step + images.length) % images.length);
+  const move = (step) => { setSlideDirection(step > 0 ? "next" : "prev"); setActive((current) => (current + step + images.length) % images.length); };
+  const selectImage = (index) => { if (index === active) return; setSlideDirection(index > active ? "next" : "prev"); setActive(index); };
   useEffect(() => {
     const thumb = thumbsRef.current?.children[active];
-    thumb?.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+    const rail = thumbsRef.current;
+    if (!thumb || !rail) return;
+    const thumbLeft = thumb.offsetLeft;
+    const thumbRight = thumbLeft + thumb.offsetWidth;
+    if (thumbLeft < rail.scrollLeft) rail.scrollTo({ left:thumbLeft, behavior:"smooth" });
+    else if (thumbRight > rail.scrollLeft + rail.clientWidth) rail.scrollTo({ left:thumbRight - rail.clientWidth, behavior:"smooth" });
   }, [active]);
   const onPointerDown = (event) => {
     if (!event.isPrimary) return;
     swipe.current = { id:event.pointerId, x:event.clientX, y:event.clientY };
+    setDragging(true);
+    setDragOffset(0);
     event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const onPointerMove = (event) => {
+    const start = swipe.current;
+    if (!start || start.id !== event.pointerId) return;
+    const distanceX = event.clientX - start.x;
+    const distanceY = event.clientY - start.y;
+    if (Math.abs(distanceX) > Math.abs(distanceY)) setDragOffset(distanceX);
   };
   const onPointerUp = (event) => {
     const start = swipe.current;
@@ -212,17 +282,20 @@ function VehicleGallery({ car }) {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     const distanceX = event.clientX - start.x;
     const distanceY = event.clientY - start.y;
+    setDragging(false);
+    setDragOffset(0);
+    if (Math.abs(distanceX) > 8) suppressOpen.current = true;
     if (Math.abs(distanceX) >= 45 && Math.abs(distanceX) > Math.abs(distanceY)) {
-      suppressOpen.current = true;
       move(distanceX > 0 ? -1 : 1);
-      window.setTimeout(() => { suppressOpen.current = false; }, 0);
     }
+    window.setTimeout(() => { suppressOpen.current = false; }, 0);
   };
   const openGallery = () => {
     if (suppressOpen.current) { suppressOpen.current = false; return; }
     setModalOpen(true);
   };
-  return <><section className="gallery-panel"><button className="gallery-open" onClick={openGallery} onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { swipe.current = null; }} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}><img src={images[active]} alt={`${car.title}, фото ${active + 1}`} draggable="false"/></button><span aria-live="polite"><Images size={17}/>{active + 1} из {images.length}</span><div className="gallery-badges"><b>Оригинал Guazi</b><b>Фото объявления</b></div>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs" ref={thumbsRef}>{images.map((image, index) => <button key={`${image}-${index}`} className={active === index ? "active" : ""} onClick={() => setActive(index)} aria-label={`Показать фото ${index + 1}`}><img src={image} alt="" loading="lazy"/></button>)}</div><button className="gallery-view-all" onClick={() => setModalOpen(true)}><Images size={18}/>Все фото</button></section>{modalOpen && <GalleryModal car={car} images={images} initialIndex={active} onClose={() => setModalOpen(false)}/>}</>;
+  const cancelSwipe = () => { swipe.current = null; setDragging(false); setDragOffset(0); };
+  return <><section className="gallery-panel"><button className={`gallery-open${dragging ? " dragging" : ""}`} style={{"--gallery-drag-x":`${dragOffset}px`}} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}><img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={images[active]} alt={`${car.title}, фото ${active + 1}`} draggable="false"/></button><span aria-live="polite"><Images size={17}/>{active + 1} из {images.length}</span><div className="gallery-badges"><b>Оригинал Guazi</b><b>Фото объявления</b></div>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs" ref={thumbsRef}>{images.map((image, index) => <button key={`${image}-${index}`} className={active === index ? "active" : ""} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}><img src={image} alt="" loading="lazy"/></button>)}</div><button className="gallery-view-all" onClick={() => setModalOpen(true)}><Images size={18}/>Все фото</button></section>{modalOpen && <GalleryModal car={car} images={images} initialIndex={active} onClose={() => setModalOpen(false)}/>}</>;
 }
 
 function Detail({ car, navigate, favorite, toggleFavorite, onOrder }) {

@@ -10,4 +10,6 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 Typography preference: prioritize comfortable readability over ultra-compact UI. Keep non-heading text at 12px or larger; use roughly 13–15px for supporting copy and controls where layout permits.
 
-Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. Always expose the full thumbnail set on desktop and support horizontal swipe navigation on mobile.
+Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. On desktop, keep a sticky left-side thumbnail rail for quick navigation and expose the full thumbnail set; on mobile, support horizontal swipe navigation directly on the main gallery.
+
+Visual QA preference: do not run browser-based visual checks, take implementation screenshots, or perform design-QA comparisons unless the user explicitly asks. The user reviews visual changes manually. Validate changes with build, tests, and non-visual checks only.
