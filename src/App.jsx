@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, Clock, CurrencyCny, Gauge, Heart, Images, Info, Lightning, ListChecks, MagnifyingGlass, MapPin, Scales, ShareNetwork, ShieldCheck, SlidersHorizontal, Sparkle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear } from "./car-filters.js";
 
@@ -48,21 +48,57 @@ function Header({ navigate, favoritesCount, compareCount }) {
 }
 
 function SelectField({ label, value, options, onChange }) {
-  return <label className="select-field"><span>{label}</span><select value={value} onChange={(e) => onChange?.(e.target.value)}>{options.map((item) => <option key={item}>{item}</option>)}</select><CaretDown size={16} weight="bold"/></label>;
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(Math.max(0, options.indexOf(value)));
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const listId = useId();
+  const selectedIndex = Math.max(0, options.indexOf(value));
+
+  useEffect(() => {
+    const closeOutside = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, []);
+
+  useEffect(() => { if (open) setActiveIndex(selectedIndex); }, [open, selectedIndex]);
+
+  const choose = (item) => { onChange?.(item); setOpen(false); triggerRef.current?.focus(); };
+  const handleKeyDown = (event) => {
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      if (!open) {
+        setOpen(true);
+        setActiveIndex(event.key === "ArrowUp" || event.key === "End" ? options.length - 1 : selectedIndex);
+        return;
+      }
+      if (event.key === "ArrowDown") setActiveIndex((index) => Math.min(options.length - 1, index + 1));
+      if (event.key === "ArrowUp") setActiveIndex((index) => Math.max(0, index - 1));
+      if (event.key === "Home") setActiveIndex(0);
+      if (event.key === "End") setActiveIndex(options.length - 1);
+    } else if ((event.key === "Enter" || event.key === " ") && open) {
+      event.preventDefault(); choose(options[activeIndex]);
+    } else if (event.key === "Escape") {
+      event.preventDefault(); setOpen(false);
+    } else if (event.key === "Tab") setOpen(false);
+  };
+
+  return <div className={`select-field custom-select${open ? " open" : ""}`} ref={rootRef}><span>{label}</span><button ref={triggerRef} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-activedescendant={open ? `${listId}-${activeIndex}` : undefined} onClick={() => setOpen((current) => !current)} onKeyDown={handleKeyDown}><b>{value}</b><CaretDown size={16} weight="bold"/></button>{open && <div className="select-menu" id={listId} role="listbox" aria-label={label}>{options.map((item, index) => <button type="button" id={`${listId}-${index}`} role="option" aria-selected={item === value} className={`${item === value ? "selected" : ""}${index === activeIndex ? " active" : ""}`} key={item} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(item)}><span>{item}</span>{item === value && <Check size={16} weight="bold"/>}</button>)}</div>}</div>;
 }
 
 function QuickSearch({ navigate, cars }) {
-  const [type, setType] = useState("Все"); const [brand, setBrand] = useState("Все марки"); const [model, setModel] = useState("Все модели"); const [year, setYear] = useState("от 2022");
+  const [type, setType] = useState("Все"); const [brand, setBrand] = useState("Все марки"); const [model, setModel] = useState("Все модели"); const [year, setYear] = useState("от 2022"); const [mileage, setMileage] = useState("до 50 000 км"); const [priceLimit, setPriceLimit] = useState("до $40 000");
   const brands = ["Все марки", ...uniqueSorted(cars.map((car) => car.brand))];
   const normalizedType = type === "Электромобили" ? "Электромобиль" : type === "Гибриды" ? "Гибрид" : "Все";
   const modelCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand));
   const models = ["Все модели", ...uniqueSorted(modelCars.map((car) => car.model))];
-  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && matchesMinimumYear(car, year)).length;
+  const mileageCap = Number(mileage.replace(/\D/g, "")); const priceCap = Number(priceLimit.replace(/\D/g, ""));
+  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && matchesMinimumYear(car, year) && car.mileage <= mileageCap && estimateLandedCost(car).totalUsd <= priceCap).length;
   const changeType = (value) => { setType(value); setModel("Все модели"); };
   const changeBrand = (value) => { setBrand(value); setModel("Все модели"); };
   return <section className="search-box"><div className="type-tabs">{["Все","Электромобили","Гибриды"].map((item) => <button key={item} className={type === item ? "active" : ""} onClick={() => changeType(item)}>{item}</button>)}</div><div className="quick-fields">
-    <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands}/><SelectField label="Модель" value={model} onChange={setModel} options={models}/><SelectField label="Год выпуска" value={year} onChange={setYear} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value="до 50 000 км" options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена в Минске" value="до $40 000" options={["до $40 000","до $30 000","до $25 000"]}/>
-    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&year=${encodeURIComponent(year)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {resultCount} авто</button>
+    <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands}/><SelectField label="Модель" value={model} onChange={setModel} options={models}/><SelectField label="Год выпуска" value={year} onChange={setYear} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={mileage} onChange={setMileage} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена в Минске" value={priceLimit} onChange={setPriceLimit} options={["до $40 000","до $30 000","до $25 000"]}/>
+    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {resultCount} авто</button>
   </div></section>;
 }
 
@@ -83,7 +119,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models }) {
   const update = (key) => (value) => setFilters((old) => ({...old, [key]:value}));
   const changeType = (value) => setFilters((old) => ({...old, type:value, model:"Все модели"}));
   const changeBrand = (value) => setFilters((old) => ({...old, brand:value, model:"Все модели"}));
-  return <section className="filter-panel"><div className="filter-title"><SlidersHorizontal size={20} weight="bold"/><b>Параметры поиска</b><button onClick={() => setFilters({type:"Все",brand:"Все марки",model:"Все модели",year:"от 2022",price:"до $40 000"})}>Сбросить</button></div><div className="filter-grid"><SelectField label="Тип двигателя" value={filters.type} onChange={changeType} options={["Все","Электромобиль","Гибрид"]}/><SelectField label="Марка" value={filters.brand} onChange={changeBrand} options={["Все марки", ...brands]}/><SelectField label="Модель" value={filters.model} onChange={update("model")} options={models}/><SelectField label="Год выпуска" value={filters.year} onChange={update("year")} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Цена до Минска" value={filters.price} onChange={update("price")} options={["до $40 000","до $30 000","до $25 000"]}/><button className="primary filter-submit"><MagnifyingGlass size={19} weight="bold"/>Показать {resultCount} авто</button></div></section>;
+  return <section className="filter-panel"><div className="filter-title"><SlidersHorizontal size={20} weight="bold"/><b>Параметры поиска</b><button onClick={() => setFilters({type:"Все",brand:"Все марки",model:"Все модели",year:"от 2022",mileage:"до 50 000 км",price:"до $40 000"})}>Сбросить</button></div><div className="filter-grid"><SelectField label="Тип двигателя" value={filters.type} onChange={changeType} options={["Все","Электромобиль","Гибрид"]}/><SelectField label="Марка" value={filters.brand} onChange={changeBrand} options={["Все марки", ...brands]}/><SelectField label="Модель" value={filters.model} onChange={update("model")} options={models}/><SelectField label="Год выпуска" value={filters.year} onChange={update("year")} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={filters.mileage} onChange={update("mileage")} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена до Минска" value={filters.price} onChange={update("price")} options={["до $40 000","до $30 000","до $25 000"]}/><button className="primary filter-submit"><MagnifyingGlass size={19} weight="bold"/>Показать {resultCount} авто</button></div></section>;
 }
 
 function CarRow({ car, navigate, favorite, compare, toggleFavorite, toggleCompare }) {
@@ -93,12 +129,12 @@ function CarRow({ car, navigate, favorite, compare, toggleFavorite, toggleCompar
 }
 
 function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare, cars }) {
-  const params = new URLSearchParams(window.location.search); const rawType = params.get("type"); const rawBrand = params.get("brand"); const rawModel = params.get("model"); const rawYear = params.get("year");
-  const [filters,setFilters] = useState({type:rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",brand:rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",model:rawModel && rawModel !== "Все модели" ? rawModel : "Все модели",year:["от 2022","от 2023","от 2024"].includes(rawYear) ? rawYear : "от 2022",price:"до $40 000"});
+  const params = new URLSearchParams(window.location.search); const rawType = params.get("type"); const rawBrand = params.get("brand"); const rawModel = params.get("model"); const rawYear = params.get("year"); const rawMileage = params.get("mileage"); const rawPrice = params.get("price");
+  const [filters,setFilters] = useState({type:rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",brand:rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",model:rawModel && rawModel !== "Все модели" ? rawModel : "Все модели",year:["от 2022","от 2023","от 2024"].includes(rawYear) ? rawYear : "от 2022",mileage:["до 50 000 км","до 30 000 км","до 15 000 км"].includes(rawMileage) ? rawMileage : "до 50 000 км",price:["до $40 000","до $30 000","до $25 000"].includes(rawPrice) ? rawPrice : "до $40 000"});
   const brands = uniqueSorted(cars.map((car) => car.brand));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand));
   const models = ["Все модели", ...uniqueSorted(modelCars.map((car) => car.model))];
-  const filtered = useMemo(() => cars.filter((car) => { const cap = Number(filters.price.replace(/\D/g,""))*1000; return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && matchesMinimumYear(car, filters.year) && estimateLandedCost(car).totalUsd <= cap; }), [filters, cars]);
+  const filtered = useMemo(() => cars.filter((car) => { const cap = Number(filters.price.replace(/\D/g,"")); const mileageCap = Number(filters.mileage.replace(/\D/g,"")); return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && matchesMinimumYear(car, filters.year) && car.mileage <= mileageCap && estimateLandedCost(car).totalUsd <= cap; }), [filters, cars]);
   return <main className="catalog page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/>Автомобили из Китая</div><div className="catalog-heading"><div><h1>Автомобили из Китая</h1><p>Реальные объявления Guazi · закрытый пилот</p></div><span>{filtered.length} из {cars.length} импортированных</span></div><FilterPanel filters={filters} setFilters={setFilters} resultCount={filtered.length} brands={brands} models={models}/><div className="catalog-layout"><section className="results-list"><div className="result-tools"><b>Подходящие варианты</b><button>Сначала новые <CaretDown size={14}/></button></div>{filtered.length ? filtered.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} compare={compares.has(car.id)} toggleFavorite={toggleFavorite} toggleCompare={toggleCompare}/>) : <div className="empty-state"><MagnifyingGlass size={34}/><h3>Ничего не нашли</h3><p>Попробуйте сбросить один из фильтров.</p></div>}</section><aside className="side-card"><div className="side-icon"><ShieldCheck size={26} weight="duotone"/></div><h3>Проверим выбранный автомобиль</h3><p>Свяжемся с продавцом, запросим оригинальный отчёт и подтвердим возможность экспорта.</p><ul><li><Check size={15}/>VIN и история</li><li><Check size={15}/>Состояние батареи</li><li><Check size={15}/>Итоговая смета</li></ul>{cars[0] && <button className="secondary" onClick={() => navigate(`/cars/${cars[0].id}`)}>Как выглядит проверка</button>}</aside></div></main>;
 }
 
