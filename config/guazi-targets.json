@@ -1,0 +1,21 @@
+{
+  "description": "Адресные страницы Guazi для EV, PHEV и последовательных гибридов",
+  "targets": [
+    {
+      "brand": "BYD",
+      "url": "https://www.guazi.com/bj/byd/",
+      "includeSeries": "新能源|PLUS|UP|海鸥|海豚|海豹|海狮|秦L|宋L|元Pro|汉|夏|e[0-9]|D1|S2"
+    },
+    { "brand": "XPeng", "url": "https://www.guazi.com/bj/xpqc/" },
+    { "brand": "NIO", "url": "https://www.guazi.com/bj/weilai/" },
+    { "brand": "Li Auto", "url": "https://www.guazi.com/bj/lixiang/" },
+    { "brand": "Zeekr", "url": "https://www.guazi.com/bj/jike/" },
+    { "brand": "Leapmotor", "url": "https://www.guazi.com/bj/lpqc/" },
+    { "brand": "Voyah", "url": "https://www.guazi.com/bj/lt-qc/" },
+    { "brand": "Deepal", "url": "https://www.guazi.com/bj/slqc/" },
+    { "brand": "Denza", "url": "https://www.guazi.com/bj/tengshi/" },
+    { "brand": "Avatr", "url": "https://www.guazi.com/bj/aweita/" },
+    { "brand": "Xiaomi", "url": "https://www.guazi.com/bj/xiaomiqiche/" },
+    { "brand": "AITO / Luxeed", "url": "https://www.guazi.com/bj/aito/" }
+  ]
+}
