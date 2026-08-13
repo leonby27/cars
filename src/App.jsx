@@ -31,9 +31,11 @@ function estimateLandedCost(car) {
 }
 
 function useRoute() {
-  const [path, setPath] = useState(window.location.pathname);
-  useEffect(() => { const onPop = () => setPath(window.location.pathname); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
-  const navigate = (next) => { window.history.pushState({}, "", next); setPath(new URL(next, window.location.origin).pathname); window.scrollTo({ top:0, behavior:"smooth" }); };
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const appPath = (pathname) => basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) || "/" : pathname;
+  const [path, setPath] = useState(appPath(window.location.pathname));
+  useEffect(() => { const onPop = () => setPath(appPath(window.location.pathname)); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
+  const navigate = (next) => { const target = new URL(next, window.location.origin); window.history.pushState({}, "", `${basePath}${target.pathname}${target.search}${target.hash}`); setPath(target.pathname); window.scrollTo({ top:0, behavior:"smooth" }); };
   return { path, navigate };
 }
 
@@ -129,7 +131,7 @@ function LeadModal({ car, onClose }) {
 
 export function App() {
   const {path,navigate}=useRoute(); const [favorites,setFavorites]=useState(new Set()); const [compares,setCompares]=useState(new Set()); const [leadCar,setLeadCar]=useState(null); const [cars,setCars]=useState([]); const [importedAt,setImportedAt]=useState(null); const [loading,setLoading]=useState(true); const [loadError,setLoadError]=useState(false);
-  useEffect(() => { fetch("/data/cars.json", { cache:"no-store" }).then((response) => { if (!response.ok) throw new Error("import unavailable"); return response.json(); }).then((payload) => { if (!payload.cars?.length) throw new Error("empty import"); setCars(payload.cars); setImportedAt(payload.generatedAt); }).catch(() => setLoadError(true)).finally(() => setLoading(false)); }, []);
+  useEffect(() => { fetch(`${import.meta.env.BASE_URL}data/cars.json`, { cache:"no-store" }).then((response) => { if (!response.ok) throw new Error("import unavailable"); return response.json(); }).then((payload) => { if (!payload.cars?.length) throw new Error("empty import"); setCars(payload.cars); setImportedAt(payload.generatedAt); }).catch(() => setLoadError(true)).finally(() => setLoading(false)); }, []);
   const toggleSet=(setter)=>(id)=>setter((current)=>{const next=new Set(current);next.has(id)?next.delete(id):next.add(id);return next;}); const detailId=path.startsWith("/cars/")?path.split("/")[2]:null;
   const page=loading?<main className="simple-page page-width"><span>Guazi</span><h1>Загружаем реальные объявления…</h1></main>:loadError?<main className="simple-page page-width"><span>Импорт временно недоступен</span><h1>Не удалось загрузить каталог</h1><p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p></main>:path==="/"?<Home navigate={navigate} cars={cars}/>:path==="/catalog"?<Catalog navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} compares={compares} toggleCompare={toggleSet(setCompares)}/>:detailId?<Detail car={cars.find((item)=>item.id===detailId)} navigate={navigate} favorite={favorites.has(detailId)} toggleFavorite={toggleSet(setFavorites)} onOrder={setLeadCar}/>:path==="/how-it-works"?<InfoPage navigate={navigate} type="how"/>:path==="/about"?<InfoPage navigate={navigate} type="about"/>:<NotFound navigate={navigate}/>;
   return <><Header navigate={navigate} favoritesCount={favorites.size} compareCount={compares.size}/>{page}<footer><div className="page-width"><b>chinacar.by</b><span>{importedAt ? `Guazi · ${cars.length} реальных объявлений · импорт ${new Date(importedAt).toLocaleString("ru-RU")}` : "Загружаем актуальные объявления"}</span></div></footer>{leadCar&&<LeadModal car={leadCar} onClose={()=>setLeadCar(null)}/>}</>;
