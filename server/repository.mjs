@@ -55,6 +55,9 @@ export function buildCarFilters(searchParams) {
   if (searchParams.get("brand") && searchParams.get("brand") !== "Все марки") add("v.brand=?", searchParams.get("brand"));
   if (searchParams.get("model") && searchParams.get("model") !== "Все модели") add("v.model=?", searchParams.get("model"));
   if (searchParams.get("bodyType") && searchParams.get("bodyType") !== "Все кузова") add("v.specifications->>'bodyType'=?", searchParams.get("bodyType"));
+  if (searchParams.get("drive") && searchParams.get("drive") !== "Любой привод") add("v.drivetrain=?", searchParams.get("drive"));
+  if (Number(searchParams.get("ownersMax"))) add("l.owners<=?", Number(searchParams.get("ownersMax")));
+  if (searchParams.get("noClaims") === "1") clauses.push("COALESCE(l.claims, l.source_payload->>'claims', l.source_payload->>'incident') ~ '(0\\s*次理赔|理赔\\s*0\\s*次)'");
   if (Number(searchParams.get("yearMin"))) add("v.model_year>=?", Number(searchParams.get("yearMin")));
   if (Number(searchParams.get("mileageMax"))) add("l.mileage_km<=?", Number(searchParams.get("mileageMax")));
   if (Number(searchParams.get("priceCnyMax"))) add("l.price_cny<=?", Number(searchParams.get("priceCnyMax")));
@@ -105,13 +108,15 @@ export async function getCatalogMeta(type, brand, bodyType) {
   if (bodyType && bodyType !== "Все кузова") { bodyValues.push(bodyType); bodyFilters.push(`v.specifications->>'bodyType'=$${bodyValues.length}`); }
   const where = `WHERE ${filters.join(" AND ")}`;
   const bodyWhere = `WHERE ${bodyFilters.join(" AND ")}`;
-  const [count, brands, models, bodyTypes] = await Promise.all([
+  const [count, brands, models, bodyTypes, drives, availability] = await Promise.all([
     pool.query(`SELECT count(*)::int total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere}`, bodyValues),
     pool.query("SELECT v.brand, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' GROUP BY v.brand ORDER BY v.brand"),
     pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
     pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
+    pool.query("SELECT v.drivetrain drive, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
+    pool.query("SELECT count(v.drivetrain)::int drive, count(l.owners)::int owners, count(l.claims)::int claims FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'"),
   ]);
-  return { total:count.rows[0].total, brands:brands.rows, models:models.rows, bodyTypes:bodyTypes.rows };
+  return { total:count.rows[0].total, brands:brands.rows, models:models.rows, bodyTypes:bodyTypes.rows, drives:drives.rows, availability:availability.rows[0] };
 }
 
 export async function createOrderDraft({ listingId, name = null, contact, calculation = {} }) {

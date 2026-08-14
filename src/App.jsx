@@ -1,12 +1,17 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, Clock, CurrencyCny, Gauge, Heart, Images, Info, Lightning, ListChecks, MagnifyingGlass, MapPin, Scales, ShareNetwork, ShieldCheck, SlidersHorizontal, Sparkle, X } from "@phosphor-icons/react";
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, Clock, CurrencyCny, Gauge, Heart, Images, Info, Lightning, ListChecks, MagnifyingGlass, MapPin, ShareNetwork, ShieldCheck, SlidersHorizontal, Sparkle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
-const moneyRange = (low, high) => low === high ? `$${number(low)}` : `$${number(low)}–${number(high)}`;
+const CurrencyContext = createContext("USD");
+const toDisplayCurrency = (usd, currency) => currency === "BYN" ? Math.round(usd * PRICING.usdByn) : usd;
+const money = (usd, currency) => currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`;
+const moneyRange = (low, high, currency) => low === high ? money(low, currency) : currency === "BYN" ? `${number(toDisplayCurrency(low, currency))}–${number(toDisplayCurrency(high, currency))} BYN` : `$${number(low)}–${number(high)}`;
+const priceLimitLabel = (value, currency) => `до ${money(filterNumber(value), currency)}`;
+const useCurrency = () => useContext(CurrencyContext);
 
 function formatCheckedAt(value) {
   const checked = new Date(value);
@@ -42,6 +47,17 @@ const translateClaims = (value) => {
   const word = count % 10 === 1 && count % 100 !== 11 ? "случай" : [2,3,4].includes(count % 10) && ![12,13,14].includes(count % 100) ? "случая" : "случаев";
   return `${count} страховой ${word}`;
 };
+const claimCount = (car) => {
+  const match = String(car.claims || car.incident || "").match(/(\d+)\s*次理赔|理赔\s*(\d+)\s*次/);
+  return match ? Number(match[1] ?? match[2]) : null;
+};
+const filterNumber = (value) => Number(String(value).replace(/\D/g, "")) || 0;
+const matchesAdvancedFilters = (car, { drive, owners, history }) =>
+  (drive === "Любой привод" || car.drive === drive)
+  && (owners === "Любое количество" || Number(car.owners) <= filterNumber(owners))
+  && (history === "Любая история" || claimCount(car) === 0);
+const ownerOptions = ["Любое количество","1 владелец","До 2 владельцев"];
+const historyOptions = ["Любая история","Без страховых случаев"];
 
 function normalizeImportedCar(car) {
   const description = car.description || "";
@@ -63,15 +79,15 @@ function useRoute() {
   return { path, navigate };
 }
 
-function Header({ navigate, favoritesCount, compareCount }) {
+function Header({ navigate, favoritesCount, currency, setCurrency }) {
   return <header className="site-header"><div className="header-inner">
     <button className="wordmark" onClick={() => navigate("/")} aria-label="На главную">Na<span>Vostok</span><small>.by</small></button>
     <nav className="desktop-nav"><button onClick={() => navigate("/catalog")}>Автомобили</button><button onClick={() => navigate("/how-it-works")}>Как это работает</button><button onClick={() => navigate("/about")}>О сервисе</button></nav>
-    <div className="header-actions"><button className="icon-label"><Scales size={21} weight="bold"/><span>Сравнение</span>{compareCount > 0 && <b>{compareCount}</b>}</button><button className="icon-label"><Heart size={21} weight={favoritesCount ? "fill" : "bold"}/><span>Избранное</span>{favoritesCount > 0 && <b>{favoritesCount}</b>}</button></div>
+    <div className="header-actions"><div className="currency-switch" role="group" aria-label="Валюта цен"><button type="button" className={currency === "USD" ? "active" : ""} aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>$</button><button type="button" className={currency === "BYN" ? "active" : ""} aria-pressed={currency === "BYN"} onClick={() => setCurrency("BYN")}>BYN</button></div><button className="icon-label"><Heart size={21} weight={favoritesCount ? "fill" : "bold"}/><span>Избранное</span>{favoritesCount > 0 && <b>{favoritesCount}</b>}</button></div>
   </div></header>;
 }
 
-function SelectField({ label, value, options, onChange, searchable = false, className = "" }) {
+function SelectField({ label, value, options, onChange, searchable = false, className = "", disabled = false, formatOption = (item) => item }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(Math.max(0, options.indexOf(value)));
   const [query, setQuery] = useState("");
@@ -97,6 +113,8 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
+
+  useEffect(() => { if (disabled && open) close(); }, [disabled, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -144,20 +162,24 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
     } else if (event.key === "Tab") close();
   };
 
-  return <div className={`select-field custom-select${className ? ` ${className}` : ""}${open ? " open" : ""}`} ref={rootRef}><span>{label}</span><button ref={triggerRef} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} onClick={() => open ? close() : setOpen(true)} onKeyDown={handleKeyDown}><b>{value}</b><CaretDown size={16} weight="bold"/></button>{open && <div className="select-menu">{searchable && <div className="select-search"><MagnifyingGlass size={16}/><input ref={searchRef} type="search" value={query} placeholder={`Поиск: ${label.toLocaleLowerCase("ru")}`} aria-label={`Поиск: ${label.toLocaleLowerCase("ru")}`} role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls={listId} aria-activedescendant={filteredOptions[activeIndex] ? `${listId}-${activeIndex}` : undefined} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown}/>{query && <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => { setQuery(""); searchRef.current?.focus(); }}><X size={14} weight="bold"/></button>}</div>}<div className="select-options" id={listId} role="listbox" aria-label={label}>{filteredOptions.length ? filteredOptions.map((item, index) => <button type="button" id={`${listId}-${index}`} role="option" aria-selected={item === value} className={`${item === value ? "selected" : ""}${index === activeIndex ? " active" : ""}`} key={item} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(item)}><span>{item}</span>{item === value && <Check size={16} weight="bold"/>}</button>) : <p className="select-empty">Ничего не найдено</p>}</div></div>}</div>;
+  return <div className={`select-field custom-select${className ? ` ${className}` : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}><span>{label}</span><button ref={triggerRef} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => open ? close() : setOpen(true)} onKeyDown={handleKeyDown}><b>{formatOption(value)}</b><CaretDown size={16} weight="bold"/></button>{open && !disabled && <div className="select-menu">{searchable && <div className="select-search"><MagnifyingGlass size={16}/><input ref={searchRef} type="search" value={query} placeholder={`Поиск: ${label.toLocaleLowerCase("ru")}`} aria-label={`Поиск: ${label.toLocaleLowerCase("ru")}`} role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls={listId} aria-activedescendant={filteredOptions[activeIndex] ? `${listId}-${activeIndex}` : undefined} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown}/>{query && <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => { setQuery(""); searchRef.current?.focus(); }}><X size={14} weight="bold"/></button>}</div>}<div className="select-options" id={listId} role="listbox" aria-label={label}>{filteredOptions.length ? filteredOptions.map((item, index) => <button type="button" id={`${listId}-${index}`} role="option" aria-selected={item === value} className={`${item === value ? "selected" : ""}${index === activeIndex ? " active" : ""}`} key={item} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(item)}><span>{formatOption(item)}</span>{item === value && <Check size={16} weight="bold"/>}</button>) : <p className="select-empty">Ничего не найдено</p>}</div></div>}</div>;
 }
 
 function QuickSearch({ navigate, cars, apiMode }) {
   const [type, setType] = useState("Все"); const [brand, setBrand] = useState("Все марки"); const [model, setModel] = useState("Все модели"); const [bodyType, setBodyType] = useState("Все кузова"); const [year, setYear] = useState("от 2022"); const [mileage, setMileage] = useState("до 50 000 км"); const [priceLimit, setPriceLimit] = useState("до $40 000");
-  const [remoteMeta,setRemoteMeta] = useState({ brands:[], models:[], bodyTypes:[] });
+  const [drive,setDrive] = useState("Любой привод"); const [owners,setOwners] = useState("Любое количество"); const [history,setHistory] = useState("Любая история");
+  const [moreFiltersOpen,setMoreFiltersOpen] = useState(false);
+  const [remoteMeta,setRemoteMeta] = useState({ brands:[], models:[], bodyTypes:[], drives:[], availability:{} });
   const [remoteCount,setRemoteCount] = useState(0);
   const normalizedType = type === "Электромобили" ? "Электромобиль" : type === "Гибриды" ? "Гибрид" : "Все";
   const modelCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand) && (bodyType === "Все кузова" || car.bodyType === bodyType));
   const brands = ["Все марки", ...(apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand)))];
   const models = ["Все модели", ...(apiMode ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
   const bodyTypes = ["Все кузова", ...(apiMode ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
+  const drives = ["Любой привод", ...(apiMode ? remoteMeta.drives.map((item) => item.drive) : uniqueSorted(cars.map((car) => car.drive).filter((value) => value && value !== "Не указан")))];
+  const availability = apiMode ? remoteMeta.availability : { drive:cars.filter((car) => car.drive && car.drive !== "Не указан").length, owners:cars.filter((car) => Number(car.owners)).length, claims:cars.filter((car) => claimCount(car) !== null).length };
   const mileageCap = Number(mileage.replace(/\D/g, "")); const priceCap = Number(priceLimit.replace(/\D/g, ""));
-  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && matchesMinimumYear(car, year) && car.mileage <= mileageCap && estimateLandedCost(car).totalUsd <= priceCap).length;
+  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && matchesMinimumYear(car, year) && car.mileage <= mileageCap && estimateLandedCost(car).totalUsd <= priceCap && matchesAdvancedFilters(car, { drive, owners, history })).length;
   useEffect(() => {
     if (!apiMode) return;
     const controller = new AbortController();
@@ -168,6 +190,9 @@ function QuickSearch({ navigate, cars, apiMode }) {
       if (brand !== "Все марки") { metaQuery.set("brand", brand); carsQuery.set("brand", brand); }
       if (bodyType !== "Все кузова") { metaQuery.set("bodyType", bodyType); carsQuery.set("bodyType", bodyType); }
       if (model !== "Все модели") carsQuery.set("model", model);
+      if (drive !== "Любой привод") carsQuery.set("drive", drive);
+      if (owners !== "Любое количество") carsQuery.set("ownersMax", String(filterNumber(owners)));
+      if (history === "Без страховых случаев") carsQuery.set("noClaims", "1");
       try {
         const [metaResponse,carsResponse] = await Promise.all([fetch(`/api/catalog/meta?${metaQuery}`, { signal:controller.signal }), fetch(`/api/cars?${carsQuery}`, { signal:controller.signal })]);
         if (!metaResponse.ok || !carsResponse.ok) throw new Error("search unavailable");
@@ -175,13 +200,13 @@ function QuickSearch({ navigate, cars, apiMode }) {
       } catch {}
     }, 120);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [apiMode, normalizedType, brand, model, bodyType, year, mileageCap, priceCap]);
+  }, [apiMode, normalizedType, brand, model, bodyType, year, mileageCap, priceCap, drive, owners, history]);
   const changeType = (value) => { setType(value); setModel("Все модели"); };
   const changeBrand = (value) => { setBrand(value); setModel("Все модели"); };
-  return <section className="search-box"><div className="type-tabs">{["Все","Электромобили","Гибриды"].map((item) => <button key={item} className={type === item ? "active" : ""} onClick={() => changeType(item)}>{item}</button>)}</div><div className="quick-fields">
-    <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands} searchable/><SelectField label="Модель" value={model} onChange={setModel} options={models} searchable/><SelectField label="Кузов" value={bodyType} onChange={(value) => { setBodyType(value); setModel("Все модели"); }} options={bodyTypes}/><SelectField label="Год выпуска" value={year} onChange={setYear} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={mileage} onChange={setMileage} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена в Минске" value={priceLimit} onChange={setPriceLimit} options={["до $40 000","до $30 000","до $25 000"]}/>
-    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&body=${encodeURIComponent(bodyType)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {apiMode ? remoteCount : resultCount} авто</button>
-  </div></section>;
+  return <section className="search-box"><div className="type-tabs">{["Все","Электромобили","Гибриды"].map((item) => <button type="button" key={item} className={type === item ? "active" : ""} onClick={() => changeType(item)}>{item}</button>)}</div><div className="filter-primary-row unified-filter-primary">
+    <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands} searchable/><SelectField label="Модель" value={model} onChange={setModel} options={models} searchable disabled={brand === "Все марки"}/><SelectField label="Год выпуска" value={year} onChange={setYear} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Цена до Минска" value={priceLimit} onChange={setPriceLimit} options={["до $40 000","до $30 000","до $25 000"]}/>
+    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&body=${encodeURIComponent(bodyType)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&history=${encodeURIComponent(history)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {apiMode ? remoteCount : resultCount} авто</button>
+  </div>{moreFiltersOpen && <div className="filter-extra-row" id="quick-extra-filters"><SelectField label="Кузов" value={bodyType} onChange={(value) => { setBodyType(value); setModel("Все модели"); }} options={bodyTypes}/><SelectField label="Пробег" value={mileage} onChange={setMileage} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/>{Number(availability.drive) > 0 && <SelectField label="Привод" value={drive} onChange={setDrive} options={drives}/>} {Number(availability.owners) > 0 && <SelectField label="Владельцы" value={owners} onChange={setOwners} options={ownerOptions}/>} {Number(availability.claims) > 0 && <SelectField label="История" value={history} onChange={setHistory} options={historyOptions}/>}</div>}<button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls="quick-extra-filters" onClick={() => setMoreFiltersOpen((open) => !open)}><SlidersHorizontal size={17}/>{moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}<CaretDown size={15} weight="bold"/></button></section>;
 }
 
 function HoverImagePreview({ car, className }) {
@@ -310,11 +335,14 @@ function Home({ navigate, cars, apiMode }) {
   </main>;
 }
 
-function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes }) {
+function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, availability }) {
+  const [moreFiltersOpen,setMoreFiltersOpen] = useState(filters.bodyType !== "Все кузова" || filters.mileage !== "до 50 000 км" || filters.drive !== "Любой привод" || filters.owners !== "Любое количество" || filters.history !== "Любая история");
   const update = (key) => (value) => setFilters((old) => ({...old, [key]:value}));
   const changeType = (value) => setFilters((old) => ({...old, type:value, model:"Все модели"}));
   const changeBrand = (value) => setFilters((old) => ({...old, brand:value, model:"Все модели"}));
-  return <section className="filter-panel"><div className="filter-title"><SlidersHorizontal size={20} weight="bold"/><b>Параметры поиска</b><button onClick={() => setFilters({type:"Все",brand:"Все марки",model:"Все модели",bodyType:"Все кузова",year:"от 2022",mileage:"до 50 000 км",price:"до $40 000"})}>Сбросить</button></div><div className="filter-grid"><SelectField label="Тип двигателя" value={filters.type} onChange={changeType} options={["Все","Электромобиль","Гибрид"]}/><SelectField label="Марка" value={filters.brand} onChange={changeBrand} options={["Все марки", ...brands]} searchable/><SelectField label="Модель" value={filters.model} onChange={update("model")} options={models} searchable/><SelectField label="Кузов" value={filters.bodyType} onChange={(value) => setFilters((old) => ({ ...old, bodyType:value, model:"Все модели" }))} options={bodyTypes}/><SelectField label="Год выпуска" value={filters.year} onChange={update("year")} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={filters.mileage} onChange={update("mileage")} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена до Минска" value={filters.price} onChange={update("price")} options={["до $40 000","до $30 000","до $25 000"]}/><button className="primary filter-submit"><MagnifyingGlass size={19} weight="bold"/>Показать {resultCount} авто</button></div></section>;
+  const selectedType = filters.type === "Электромобиль" ? "Электромобили" : filters.type === "Гибрид" ? "Гибриды" : "Все";
+  const selectType = (value) => changeType(value === "Электромобили" ? "Электромобиль" : value === "Гибриды" ? "Гибрид" : "Все");
+  return <section className="filter-panel unified-search-panel"><div className="type-tabs">{["Все","Электромобили","Гибриды"].map((item) => <button type="button" key={item} className={selectedType === item ? "active" : ""} onClick={() => selectType(item)}>{item}</button>)}</div><div className="filter-primary-row unified-filter-primary"><SelectField label="Марка" value={filters.brand} onChange={changeBrand} options={["Все марки", ...brands]} searchable/><SelectField label="Модель" value={filters.model} onChange={update("model")} options={models} searchable disabled={filters.brand === "Все марки"}/><SelectField label="Год выпуска" value={filters.year} onChange={update("year")} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Цена до Минска" value={filters.price} onChange={update("price")} options={["до $40 000","до $30 000","до $25 000"]}/><button className="primary filter-submit"><MagnifyingGlass size={19} weight="bold"/>Показать {resultCount} авто</button></div>{moreFiltersOpen && <div className="filter-extra-row" id="catalog-extra-filters"><SelectField label="Кузов" value={filters.bodyType} onChange={(value) => setFilters((old) => ({ ...old, bodyType:value, model:"Все модели" }))} options={bodyTypes}/><SelectField label="Пробег" value={filters.mileage} onChange={update("mileage")} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/>{Number(availability.drive) > 0 && <SelectField label="Привод" value={filters.drive} onChange={update("drive")} options={drives}/>} {Number(availability.owners) > 0 && <SelectField label="Владельцы" value={filters.owners} onChange={update("owners")} options={ownerOptions}/>} {Number(availability.claims) > 0 && <SelectField label="История" value={filters.history} onChange={update("history")} options={historyOptions}/>}</div>}<button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls="catalog-extra-filters" onClick={() => setMoreFiltersOpen((open) => !open)}><SlidersHorizontal size={17}/>{moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}<CaretDown size={15} weight="bold"/></button></section>;
 }
 
 function CarRow({ car, navigate, favorite, compare, toggleFavorite, toggleCompare }) {
@@ -331,11 +359,11 @@ function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare,
     { value:"price_desc", label:"Сначала дороже" },
     { value:"mileage_asc", label:"С меньшим пробегом" },
   ];
-  const params = new URLSearchParams(window.location.search); const rawType = params.get("type"); const rawBrand = params.get("brand"); const rawModel = params.get("model"); const rawBodyType = params.get("body"); const rawYear = params.get("year"); const rawMileage = params.get("mileage"); const rawPrice = params.get("price");
-  const [filters,setFilters] = useState({type:rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",brand:rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",model:rawModel && rawModel !== "Все модели" ? rawModel : "Все модели",bodyType:BODY_TYPES.includes(rawBodyType) ? rawBodyType : "Все кузова",year:["от 2022","от 2023","от 2024"].includes(rawYear) ? rawYear : "от 2022",mileage:["до 50 000 км","до 30 000 км","до 15 000 км"].includes(rawMileage) ? rawMileage : "до 50 000 км",price:["до $40 000","до $30 000","до $25 000"].includes(rawPrice) ? rawPrice : "до $40 000"});
+  const params = new URLSearchParams(window.location.search); const rawType = params.get("type"); const rawBrand = params.get("brand"); const rawModel = params.get("model"); const rawBodyType = params.get("body"); const rawYear = params.get("year"); const rawMileage = params.get("mileage"); const rawPrice = params.get("price"); const rawDrive = params.get("drive"); const rawOwners = params.get("owners"); const rawHistory = params.get("history");
+  const [filters,setFilters] = useState({type:rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",brand:rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",model:rawModel && rawModel !== "Все модели" ? rawModel : "Все модели",bodyType:BODY_TYPES.includes(rawBodyType) ? rawBodyType : "Все кузова",year:["от 2022","от 2023","от 2024"].includes(rawYear) ? rawYear : "от 2022",mileage:["до 50 000 км","до 30 000 км","до 15 000 км"].includes(rawMileage) ? rawMileage : "до 50 000 км",price:["до $40 000","до $30 000","до $25 000"].includes(rawPrice) ? rawPrice : "до $40 000",drive:["Передний","Задний","Полный"].includes(rawDrive) ? rawDrive : "Любой привод",owners:ownerOptions.includes(rawOwners) ? rawOwners : "Любое количество",history:historyOptions.includes(rawHistory) ? rawHistory : "Любая история"});
   const [remoteCars,setRemoteCars] = useState([]);
   const [remoteTotal,setRemoteTotal] = useState(0);
-  const [remoteMeta,setRemoteMeta] = useState({ brands:[], models:[], bodyTypes:[] });
+  const [remoteMeta,setRemoteMeta] = useState({ brands:[], models:[], bodyTypes:[], drives:[], availability:{} });
   const [remoteLoading,setRemoteLoading] = useState(apiMode);
   const [remoteError,setRemoteError] = useState(false);
   const [sort,setSort] = useState("newest");
@@ -343,7 +371,9 @@ function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare,
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType));
   const models = ["Все модели", ...(apiMode ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
   const bodyTypes = ["Все кузова", ...(apiMode ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
-  const filtered = useMemo(() => sortCars(cars.filter((car) => { const cap = Number(filters.price.replace(/\D/g,"")); const mileageCap = Number(filters.mileage.replace(/\D/g,"")); return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType) && matchesMinimumYear(car, filters.year) && car.mileage <= mileageCap && estimateLandedCost(car).totalUsd <= cap; }).map((car) => ({ ...car, estimatedTotalUsd:estimateLandedCost(car).totalUsd })), sort), [filters, cars, sort]);
+  const drives = ["Любой привод", ...(apiMode ? remoteMeta.drives.map((item) => item.drive) : uniqueSorted(cars.map((car) => car.drive).filter((value) => value && value !== "Не указан")))];
+  const availability = apiMode ? remoteMeta.availability : { drive:cars.filter((car) => car.drive && car.drive !== "Не указан").length, owners:cars.filter((car) => Number(car.owners)).length, claims:cars.filter((car) => claimCount(car) !== null).length };
+  const filtered = useMemo(() => sortCars(cars.filter((car) => { const cap = Number(filters.price.replace(/\D/g,"")); const mileageCap = Number(filters.mileage.replace(/\D/g,"")); return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType) && matchesMinimumYear(car, filters.year) && car.mileage <= mileageCap && estimateLandedCost(car).totalUsd <= cap && matchesAdvancedFilters(car, filters); }).map((car) => ({ ...car, estimatedTotalUsd:estimateLandedCost(car).totalUsd })), sort), [filters, cars, sort]);
   const requestParams = () => {
     const query = new URLSearchParams({ limit:String(pageSize), offset:"0" });
     query.set("sort", sort);
@@ -351,6 +381,9 @@ function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare,
     if (filters.brand !== "Все марки") query.set("brand", filters.brand);
     if (filters.model !== "Все модели") query.set("model", filters.model);
     if (filters.bodyType !== "Все кузова") query.set("bodyType", filters.bodyType);
+    if (filters.drive !== "Любой привод") query.set("drive", filters.drive);
+    if (filters.owners !== "Любое количество") query.set("ownersMax", String(filterNumber(filters.owners)));
+    if (filters.history === "Без страховых случаев") query.set("noClaims", "1");
     query.set("yearMin", filters.year.replace(/\D/g,""));
     query.set("mileageMax", filters.mileage.replace(/\D/g,""));
     query.set("landedMax", filters.price.replace(/\D/g,""));
@@ -381,7 +414,7 @@ function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare,
   const displayed = apiMode ? remoteCars : filtered;
   const resultCount = apiMode ? remoteTotal : filtered.length;
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
-  return <main className="catalog page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/>Автомобили из Китая</div><div className="catalog-heading"><div><h1>Автомобили из Китая</h1><p>Реальные объявления Guazi · закрытый пилот</p></div><span>{displayed.length} из {resultCount} найденных</span></div><FilterPanel filters={filters} setFilters={setFilters} resultCount={resultCount} brands={brands} models={models} bodyTypes={bodyTypes}/><div className="catalog-layout"><section className="results-list"><div className="result-tools"><b>Подходящие варианты</b><SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => setSort(sortOptions.find((option) => option.label === label)?.value || "newest")}/></div>{remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}{displayed.length ? displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} compare={compares.has(car.id)} toggleFavorite={toggleFavorite} toggleCompare={toggleCompare}/>) : !remoteLoading && <div className="empty-state"><MagnifyingGlass size={34}/><h3>Ничего не нашли</h3><p>Попробуйте сбросить один из фильтров.</p></div>}{remoteLoading && <div className="catalog-message">Загружаем объявления…</div>}{apiMode && displayed.length < resultCount && !remoteLoading && <button className="load-more" onClick={loadMore}>Показать ещё {Math.min(pageSize, resultCount - displayed.length)} авто</button>}</section><aside className="side-card"><div className="side-icon"><ShieldCheck size={26} weight="duotone"/></div><h3>Проверим выбранный автомобиль</h3><p>Свяжемся с продавцом, запросим оригинальный отчёт и подтвердим возможность экспорта.</p><ul><li><Check size={15}/>VIN и история</li><li><Check size={15}/>Состояние батареи</li><li><Check size={15}/>Итоговая смета</li></ul>{displayed[0] && <button className="secondary" onClick={() => navigate(`/cars/${displayed[0].id}`)}>Как выглядит проверка</button>}</aside></div></main>;
+  return <main className="catalog page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/>Автомобили из Китая</div><div className="catalog-heading"><h1>Автомобили из Китая</h1></div><FilterPanel filters={filters} setFilters={setFilters} resultCount={resultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} availability={availability}/><div className="catalog-layout"><section className="results-list"><div className="result-tools"><div className="result-summary"><b>Подходящие варианты</b><span>{displayed.length} из {resultCount} найденных</span></div><SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => setSort(sortOptions.find((option) => option.label === label)?.value || "newest")}/></div>{remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}{displayed.length ? displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} compare={compares.has(car.id)} toggleFavorite={toggleFavorite} toggleCompare={toggleCompare}/>) : !remoteLoading && <div className="empty-state"><MagnifyingGlass size={34}/><h3>Ничего не нашли</h3><p>Попробуйте сбросить один из фильтров.</p></div>}{remoteLoading && <div className="catalog-message">Загружаем объявления…</div>}{apiMode && displayed.length < resultCount && !remoteLoading && <button className="load-more" onClick={loadMore}>Показать ещё {Math.min(pageSize, resultCount - displayed.length)} авто</button>}</section><aside className="side-card"><div className="side-icon"><ShieldCheck size={26} weight="duotone"/></div><h3>Проверим выбранный автомобиль</h3><p>Свяжемся с продавцом, запросим оригинальный отчёт и подтвердим возможность экспорта.</p><ul><li><Check size={15}/>VIN и история</li><li><Check size={15}/>Состояние батареи</li><li><Check size={15}/>Итоговая смета</li></ul>{displayed[0] && <button className="secondary" onClick={() => navigate(`/cars/${displayed[0].id}`)}>Как выглядит проверка</button>}</aside></div></main>;
 }
 
 function GalleryModal({ car, images, initialIndex, onClose }) {
@@ -504,7 +537,7 @@ function VehicleGallery({ car }) {
     setModalOpen(true);
   };
   const cancelSwipe = () => { swipe.current = null; setDragging(false); setDragOffset(0); };
-  return <><section className="gallery-panel"><button className={`gallery-open${dragging ? " dragging" : ""}`} style={{"--gallery-drag-x":`${dragOffset}px`}} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}><img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={images[active]} alt={`${car.title}, фото ${active + 1}`} draggable="false"/></button><span aria-live="polite"><Images size={17}/>{active + 1} из {images.length}</span><div className="gallery-badges"><b>Оригинал Guazi</b><b>Фото объявления</b></div>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs" ref={thumbsRef}>{images.map((image, index) => <button key={`${image}-${index}`} className={active === index ? "active" : ""} onMouseEnter={() => selectImage(index)} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}><img src={image} alt="" loading="lazy"/></button>)}</div><button className="gallery-view-all" onClick={() => setModalOpen(true)}><Images size={18}/>Все фото</button></section>{modalOpen && <GalleryModal car={car} images={images} initialIndex={active} onClose={() => setModalOpen(false)}/>}</>;
+  return <><section className="gallery-panel"><button className={`gallery-open${dragging ? " dragging" : ""}`} style={{"--gallery-drag-x":`${dragOffset}px`}} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}><img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={images[active]} alt={`${car.title}, фото ${active + 1}`} draggable="false"/></button><span aria-live="polite"><Images size={17}/>{active + 1} из {images.length}</span>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs" ref={thumbsRef}>{images.map((image, index) => <button key={`${image}-${index}`} className={active === index ? "active" : ""} onMouseEnter={() => selectImage(index)} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}><img src={image} alt="" loading="lazy"/></button>)}</div><button className="gallery-view-all" onClick={() => setModalOpen(true)}><Images size={18}/>Все фото</button></section>{modalOpen && <GalleryModal car={car} images={images} initialIndex={active} onClose={() => setModalOpen(false)}/>}</>;
 }
 
 function FactList({ items }) {

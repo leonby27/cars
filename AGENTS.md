@@ -16,6 +16,10 @@ Visual QA preference: do not run browser-based visual checks, take implementatio
 
 Home vehicle feed preference: show an endless randomized feed, 4 cards per row on desktop, with automatic loading on scroll. Do not show the “Карточка доступна” status label anywhere in the product.
 
+Search filter preference: use the home-page filter as the shared pattern across home and catalog. Keep the “Все / Электромобили / Гибриды” tabs plus brand, model, year, price, and the CTA in the primary area. Place body type, mileage, and optional advanced fields in the collapsible section below. Align the “Ещё фильтры” control left and use the orange accent color.
+
+Advanced catalog filter preference: show drive, owners, and insurance-history filters only when those fields are present in the returned dataset. Do not offer a range filter while range coverage is incomplete. Disable model selection until a brand is selected.
+
 Vehicle card preview preference: on pointer-hover desktop layouts, split the image into 4–5 horizontal cursor zones that switch among the first listing photos, with a compact segmented position indicator similar to Auto.ru. Keep touch previews stable.
 
 Featured card pricing preference: label the estimated USD amount as “под ключ до Минска” so it is clearly distinguished from the source price in China.

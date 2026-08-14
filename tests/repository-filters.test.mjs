@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import { buildCarFilters, buildCarOrder } from "../server/repository.mjs";
 
 test("parameterizes all catalog filters", () => {
-  const params = new URLSearchParams({ type:"Гибрид", brand:"Deepal", model:"S07", bodyType:"SUV / кроссовер", yearMin:"2024", mileageMax:"50000", landedMax:"40000" });
+  const params = new URLSearchParams({ type:"Гибрид", brand:"Deepal", model:"S07", bodyType:"SUV / кроссовер", drive:"Полный", ownersMax:"2", noClaims:"1", yearMin:"2024", mileageMax:"50000", landedMax:"40000" });
   const result = buildCarFilters(params);
-  assert.deepEqual(result.values, ["Гибрид", "Deepal", "S07", "SUV / кроссовер", 2024, 50000, 40000]);
-  assert.match(result.where, /v\.model_year>=\$5/);
-  assert.match(result.where, /l\.estimated_total_usd<=\$7/);
+  assert.deepEqual(result.values, ["Гибрид", "Deepal", "S07", "SUV / кроссовер", "Полный", 2, 2024, 50000, 40000]);
+  assert.match(result.where, /v\.drivetrain=\$5/);
+  assert.match(result.where, /l\.owners<=\$6/);
+  assert.match(result.where, /0\\s\*次理赔/);
+  assert.match(result.where, /v\.model_year>=\$7/);
+  assert.match(result.where, /l\.estimated_total_usd<=\$9/);
 });
 
 test("ignores selector defaults and invalid numbers", () => {
