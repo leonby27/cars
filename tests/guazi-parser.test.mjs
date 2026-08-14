@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeEnergy, parseGuaziHtml, parseGuaziListing, parseGuaziMarkdown, parseGuaziSeriesLinks, parseMileage } from "../scripts/lib/guazi-parser.mjs";
+import { normalizeEnergy, parseGuaziGlobalListing, parseGuaziGlobalProduct, parseGuaziHtml, parseGuaziListing, parseGuaziMarkdown, parseGuaziSeriesLinks, parseMileage } from "../scripts/lib/guazi-parser.mjs";
 
 test("parses Chinese mileage units", () => {
   assert.equal(parseMileage("0.25万公里"), 2500);
@@ -8,7 +8,7 @@ test("parses Chinese mileage units", () => {
 });
 
 test("parses a Guazi markdown vehicle", () => {
-  const markdown = `id:c168848183157610\nmanufacturer:比亚迪\nbrand:比亚迪\nseries:比亚迪e6\nmodel:2023款 出租版\nfull_payment:81700元\nfirst_register:2024-05\nmileage:2500公里\ntransfer_times:1次\ncity:西安\ntype:新能源\ncondition_grade:S\ncondition_desc:理赔0次/过户1次\nappearance_score:95分(满分100分)`;
+  const markdown = `id:c168848183157610\nmanufacturer:比亚迪\nbrand:比亚迪\nseries:比亚迪e6\nmodel:2023款 出租版\nfull_payment:81700元\nfirst_register:2024-05\nmileage:2500公里\ntransfer_times:1次\ncity:西安\ntype:新能源\ncondition_grade:S\ncondition_desc:理赔0次/过户1次\nappearance_score:95分(满分100分)\npublish_time:2026-07-20 10:30:00`;
   const car = parseGuaziMarkdown(markdown, "https://www.guazi.com/car-detail/c168848183157610.md");
   assert.equal(car.brand, "BYD");
   assert.equal(car.model, "e6");
@@ -16,6 +16,7 @@ test("parses a Guazi markdown vehicle", () => {
   assert.equal(car.mileage, 2500);
   assert.equal(car.owners, 2);
   assert.equal(car.appearanceScore, 95);
+  assert.equal(car.sourceListedAt, "2026-07-20T02:30:00.000Z");
 });
 
 test("normalizes priority-market Galaxy and Dongfeng brands", () => {
@@ -52,9 +53,10 @@ test("extracts original gallery and detailed EV fields from HTML", () => {
 });
 
 test("extracts vehicle class and body structure from HTML", () => {
-  const detail = parseGuaziHtml(`<script>"label":"车辆级别","value":"中型SUV","label":"车身结构","value":"5门5座SUV"</script>`);
+  const detail = parseGuaziHtml(`<script>"label":"车辆级别","value":"中型SUV","label":"车身结构","value":"5门5座SUV","publishTime":"2026-07-20T10:30:00Z"</script>`);
   assert.equal(detail.vehicleClass, "中型SUV");
   assert.equal(detail.bodyStructure, "5门5座SUV");
+  assert.equal(detail.sourceListedAt, "2026-07-20T10:30:00.000Z");
 });
 
 test("discovers only selected EV/PHEV series on a mixed brand page", () => {
@@ -66,4 +68,30 @@ test("discovers only selected EV/PHEV series on a mixed brand page", () => {
 test("extracts listing IDs and pagination", () => {
   const html = `<a href="/car-detail/c170580306182112.html">car</a><script>{\\"totalPage\\":8}</script>`;
   assert.deepEqual(parseGuaziListing(html), { ids: ["170580306182112"], totalPages: 8 });
+});
+
+test("parses Guazi Global listing links", () => {
+  const markdown = `[Grade S Used Xiaomi](https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-23800km-at-4wd-5-seats-45nkzqv325.html)\n[duplicate](https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-23800km-at-4wd-5-seats-45nkzqv325.html)`;
+  assert.deepEqual(parseGuaziGlobalListing(markdown), ["https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-23800km-at-4wd-5-seats-45nkzqv325.html"]);
+});
+
+test("parses a Guazi Global EV product and its original gallery", () => {
+  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[Xiaomi Auto](https://en.guazi.com/used-cars/xiaomi-auto/)/[YU7](https://en.guazi.com/used-cars/xiaomi-auto/yu7/)/Used Xiaomi Auto YU7 2025 Max\nGrade S\n# Used Xiaomi Auto YU7 2025 Max\nElectric\n![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/yu7-front.jpg)\n![Rear](https://image-oversea.guazistatic-global.com/ovp/product/prod/yu7-rear.jpg)\nDownload all\nVehicle Details\nItem No 45nkzqv325\n1st Reg. Date 2025.09\nModel Year 2025\nMileage (km)23,800\nFuel Type BEV\nTransmission AT\nCLTC Electric Range (km)760\nBattery Capacity (kWh)101.7\nBattery Type NCM Battery\nDrive Train Dual Motor AWD\nBody Style SUV\nSeats 5\nDoors 5\nExterior Color Dark grey\nLocation Zhengzhou, China\nNo Accident Damage\nFOB Price\n$41,347`;
+  const car = parseGuaziGlobalProduct(markdown, "https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-23800km-at-4wd-5-seats-45nkzqv325.html");
+  assert.equal(car.id, "guazi-global-45nkzqv325");
+  assert.equal(car.brand, "Xiaomi Auto");
+  assert.equal(car.model, "YU7");
+  assert.equal(car.mileage, 23800);
+  assert.equal(car.sourcePriceUsd, 41347);
+  assert.equal(car.battery, 101.7);
+  assert.equal(car.range, 760);
+  assert.equal(car.drive, "Полный");
+  assert.equal(car.images.length, 2);
+});
+
+test("classifies Guazi Global range extenders as hybrids", () => {
+  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[Li Auto](https://en.guazi.com/used-cars/li-auto/)/[L7](https://en.guazi.com/used-cars/li-auto/l7/)/Used Li Auto L7 2024 Max\nGrade A\n# Used Li Auto L7 2024 Max\n![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/l7-front.jpg)\nDownload all\nItem No abcdef1234\nModel Year 2024\nMileage (km)20,000\nFuel Type REEV\nFOB Price\n$20,000`;
+  const car = parseGuaziGlobalProduct(markdown, "https://en.guazi.com/products/li-auto-l7-2024-15l-gray-20000km-at-4wd-5-seats-abcdef1234.html");
+  assert.equal(car.type, "Гибрид");
+  assert.equal(car.sourceFuelType, "REEV");
 });

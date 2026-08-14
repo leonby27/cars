@@ -38,6 +38,32 @@ const numeric = (value) => {
   return match ? Number(match[0]) : null;
 };
 
+function parseSourceDate(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const normalized = raw.replace(/\//g, "-");
+  const chineseLocalDate = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/.test(normalized)
+    ? `${normalized.replace(" ", "T")}${normalized.length === 10 ? "T00:00:00" : ""}+08:00`
+    : normalized;
+  const timestamp = /^\d{10,13}$/.test(raw) ? Number(raw) * (raw.length === 10 ? 1000 : 1) : Date.parse(chineseLocalDate);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
+}
+
+const markdownListedAt = (markdown) => ["listed_at", "publish_time", "on_sale_time", "listing_date", "shelf_time", "car_publish_time"]
+  .map((name) => field(markdown, name))
+  .map(parseSourceDate)
+  .find(Boolean) || null;
+
+const htmlListedAt = (html) => {
+  const keys = ["sourceListedAt", "publishTime", "onSaleTime", "onShelfTime", "listingTime", "firstPublishTime", "shelfTime"];
+  for (const key of keys) {
+    const match = html.match(new RegExp(`(?:\\\\"|\")${key}(?:\\\\"|\")\\s*:\\s*(?:\\\\"|\")?([^\"\\\\,}]+)`));
+    const parsed = parseSourceDate(match?.[1]);
+    if (parsed) return parsed;
+  }
+  return null;
+};
+
 export function parseMileage(value) {
   if (!value) return null;
   const amount = numeric(value);
@@ -94,6 +120,7 @@ export function parseGuaziMarkdown(markdown, sourceUrl) {
     appearanceScore,
     incident: condition || "Состояние указано в отчёте Guazi",
     description,
+    sourceListedAt: markdownListedAt(markdown),
   };
 }
 
@@ -150,6 +177,7 @@ export function parseGuaziHtml(html) {
     batteryProtection: jsonValue(html, "电池保障"),
     conditionProtection: jsonValue(html, "车况保障"),
     buybackProtection: jsonValue(html, "回购保障"),
+    sourceListedAt: htmlListedAt(html),
   };
 }
 
@@ -161,10 +189,98 @@ export function normalizeEnergy(value, title = "") {
 
 export function normalizeDrive(value) {
   if (!value) return "Не указан";
-  if (/四驱|全驱/.test(value)) return "Полный";
-  if (/后驱/.test(value)) return "Задний";
-  if (/前驱/.test(value)) return "Передний";
+  if (/四驱|全驱|AWD|4WD|dual motor/i.test(value)) return "Полный";
+  if (/后驱|RWD|rear[- ]wheel/i.test(value)) return "Задний";
+  if (/前驱|FWD|front[- ]wheel/i.test(value)) return "Передний";
   return value;
+}
+
+const globalLineValue = (markdown, label) => markdown.match(new RegExp(`^${label}\\s*([^\\n]+)$`, "mi"))?.[1]?.trim() || null;
+const globalNumber = (value) => {
+  const match = String(value || "").replaceAll(",", "").match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+};
+
+export function parseGuaziGlobalListing(markdown) {
+  return [...new Set([...String(markdown || "").matchAll(/\((https:\/\/en\.guazi\.com\/products\/[^)]+\.html)\)/g)].map((match) => match[1]))];
+}
+
+export function parseGuaziGlobalProduct(markdown, sourceUrl) {
+  if (!markdown || /Security Verification/i.test(markdown)) return null;
+  const itemNo = globalLineValue(markdown, "Item No") || sourceUrl.match(/-([a-z0-9]{10})\.html/i)?.[1];
+  const heading = markdown.match(/^# Used (.+)$/m)?.[1]?.trim();
+  const breadcrumb = markdown.match(/\[Home\][^\n]*\/\[Used Cars\][^\n]*\/\[([^\]]+)\]\(https:\/\/en\.guazi\.com\/used-cars\/[^/)]+\/\)\/\[([^\]]+)\]/);
+  const brand = breadcrumb?.[1]?.trim();
+  const model = breadcrumb?.[2]?.trim();
+  const modelYear = globalNumber(globalLineValue(markdown, "Model Year")) || globalNumber(heading);
+  const firstRegistration = globalLineValue(markdown, "1st Reg\\. Date");
+  const mileage = globalNumber(globalLineValue(markdown, "Mileage \\(km\\)"));
+  const fuelType = globalLineValue(markdown, "Fuel Type");
+  const fobUsd = globalNumber(markdown.match(/^FOB Price\s*\n\s*\$([\d,]+)/m)?.[1] || markdown.match(/FOB Price:\s*\$([\d,]+)/i)?.[1]);
+  const gallerySection = markdown.split(/\nDownload all\n|\nVehicle Details\n/)[0];
+  const images = [...new Set([...gallerySection.matchAll(/!\[[^\]]*\]\((https:\/\/image-oversea\.guazistatic-global\.com\/ovp\/product\/prod\/[^)]+)\)/g)]
+    .map((match) => match[1].replace(/\?.*$/, "")))].slice(0, 48);
+  if (!itemNo || !heading || !brand || !model || !modelYear || !mileage || !fobUsd || images.length === 0) return null;
+
+  const importedAt = new Date().toISOString();
+  const driveRaw = globalLineValue(markdown, "Drive Train");
+  const electricRange = globalNumber(globalLineValue(markdown, "CLTC Electric Range \\(km\\)"));
+  const battery = globalNumber(globalLineValue(markdown, "Battery Capacity \\(kWh\\)"));
+  const conditionGrade = markdown.match(/^Grade\s+([A-Z])$/m)?.[1] || null;
+  const conditionFlags = ["No Accident Damage", "No Water Damage", "No Fire Damage"].filter((flag) => markdown.includes(flag));
+  const city = globalLineValue(markdown, "Location")?.replace(/,\s*China$/i, "") || "Китай";
+  const type = /PHEV|HEV|REEV|Hybrid|Range.Extended/i.test(`${fuelType} ${heading}`) ? "Гибрид" : "Электромобиль";
+  const chinaPrice = Math.round((fobUsd * 7.15) / 100) * 100;
+
+  return {
+    id: `guazi-global-${itemNo}`,
+    externalId: itemNo,
+    source: "Guazi",
+    sourceUrl,
+    sourceMarket: "Guazi Global",
+    priceBasis: "FOB",
+    sourcePriceUsd: fobUsd,
+    brand,
+    model,
+    rawBrand: brand,
+    rawSeries: model,
+    rawModel: heading,
+    year: modelYear,
+    firstRegistration,
+    mileage,
+    chinaPrice,
+    usdPrice: fobUsd,
+    city,
+    owners: null,
+    transfers: null,
+    conditionGrade,
+    incident: conditionFlags.length ? conditionFlags.join(" · ") : "Состояние указано в отчёте Guazi",
+    description: heading,
+    title: `${brand} ${model} ${modelYear}`,
+    type,
+    sourceFuelType: fuelType,
+    drive: normalizeDrive(driveRaw),
+    battery,
+    batteryType: globalLineValue(markdown, "Battery Type"),
+    electricRange,
+    range: electricRange,
+    transmission: globalLineValue(markdown, "Transmission"),
+    bodyColor: globalLineValue(markdown, "Exterior Color"),
+    vehicleClass: globalLineValue(markdown, "Body Style"),
+    bodyStructure: globalLineValue(markdown, "Body Style"),
+    seats: globalNumber(globalLineValue(markdown, "Seats")),
+    doors: globalNumber(globalLineValue(markdown, "Doors")),
+    inspectionGrade: conditionGrade,
+    image: images[0],
+    images,
+    status: "Объявление активно",
+    statusTone: "green",
+    importedAt,
+    checkedAt: importedAt,
+    sourceId: `GZG-${itemNo}`,
+    originalLanguage: "en",
+    priceHistory: [{ at: importedAt, priceCny: chinaPrice }],
+  };
 }
 
 const absoluteGuaziUrl = (value, baseUrl) => new URL(value.replaceAll("\\/", "/"), baseUrl).href;

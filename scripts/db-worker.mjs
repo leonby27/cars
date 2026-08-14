@@ -117,6 +117,7 @@ async function refreshGuazi(job) {
     structureInspection:detail.structureInspection ?? existing?.structureInspection,
     engineBayInspection:detail.engineBayInspection ?? existing?.engineBayInspection,
     batteryProtection:detail.batteryProtection ?? existing?.batteryProtection,
+    sourceListedAt:parsed.sourceListedAt ?? detail.sourceListedAt ?? existing?.sourceListedAt,
     images:detail.images.length ? detail.images : existing?.images,
     image:detail.images[0] || existing?.image,
     checkedAt:importedAt,

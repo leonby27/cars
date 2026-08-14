@@ -21,6 +21,7 @@ const concurrency = Number(args.get("--concurrency") || 8);
 const discoveryMode = args.get("--discovery") || "targeted";
 const databaseMode = args.has("--database") || args.has("--database-only");
 const databaseOnly = args.has("--database-only");
+const appendNew = args.has("--append-new");
 const htmlUserAgent = process.env.GUAZI_HTML_USER_AGENT || "OAI-SearchBot/1.0";
 const commonHeaders = { accept: "text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", "user-agent": "NaVostokBY-Importer/0.1" };
 
@@ -189,6 +190,7 @@ async function enrichCar(car) {
     batteryProtection: detail.batteryProtection ?? old?.batteryProtection,
     conditionProtection: detail.conditionProtection ?? old?.conditionProtection,
     buybackProtection: detail.buybackProtection ?? old?.buybackProtection,
+    sourceListedAt: car.sourceListedAt ?? detail.sourceListedAt ?? old?.sourceListedAt,
     image: detail.images[0] || old.image,
     images: detail.images.length ? detail.images : old.images,
     status: "Карточка доступна",
@@ -215,7 +217,10 @@ const parsed = await mapConcurrent(markdownUrls, async (url) => {
   const markdown = await fetchText(url);
   return parseGuaziMarkdown(markdown, url);
 }, concurrency);
-const matching = parsed.filter((item) => item && !item.error);
+const matchingAll = parsed.filter((item) => item && !item.error);
+const matching = appendNew
+  ? matchingAll.filter((car) => !previousById.has(car.id))
+  : matchingAll;
 const enrichmentBuffer = Math.max(12, Math.ceil(limit * 0.1));
 const candidates = takeWeightedRoundRobin(matching, limit + enrichmentBuffer, (car) => car.brand, (car) => priorityByBrand.get(car.brand) || 1);
 const enriched = await mapConcurrent(candidates, enrichCar, Math.min(concurrency, 5));
@@ -226,12 +231,15 @@ const cars = enriched.filter((item) => item && !item.error).slice(0, limit).map(
   return { ...car, priceHistory: history.slice(-30) };
 });
 
+const mergedCars = appendNew
+  ? [...new Map([...(previous.cars || []), ...cars].map((car) => [car.id, car])).values()]
+  : cars;
 const payload = {
   source: "Guazi",
   mode: "closed-pilot",
   generatedAt: new Date().toISOString(),
-  count: cars.length,
-  cars,
+  count: mergedCars.length,
+  cars: mergedCars,
 };
 const errors = [...parsed, ...enriched].filter((item) => item?.error);
 const report = {
@@ -241,6 +249,7 @@ const report = {
   discoveryMode,
   discovery: discovery.stats,
   matchingCars: matching.length,
+  matchingCarsIncludingExisting: matchingAll.length,
   matchingByBrand: Object.fromEntries([...Map.groupBy(matching, (car) => car.brand)].map(([brand, items]) => [brand, items.length])),
   enrichmentCandidates: candidates.length,
   requested: limit,
@@ -249,10 +258,13 @@ const report = {
   shortfall: Math.max(0, limit - cars.length),
   errors: errors.slice(0, 20),
 };
-const minimumSafeCount = Math.max(1, Math.floor(limit * 0.8));
+const minimumSafeCount = appendNew ? 1 : Math.max(1, Math.floor(limit * 0.8));
 const safeToReplaceCatalog = cars.length >= minimumSafeCount;
 report.catalogReplaced = safeToReplaceCatalog;
 report.minimumSafeCount = minimumSafeCount;
+report.appendNew = appendNew;
+report.previousCount = previous.cars?.length || 0;
+report.resultingCount = safeToReplaceCatalog ? mergedCars.length : (previous.cars?.length || 0);
 await fs.writeFile(ATTEMPT_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));
 if (!safeToReplaceCatalog) process.exitCode = 1;

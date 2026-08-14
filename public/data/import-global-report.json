@@ -1,0 +1,174 @@
+{
+  "startedAt": "2026-08-14T13:40:59.097Z",
+  "finishedAt": "2026-08-14T13:41:36.332Z",
+  "source": "Guazi Global",
+  "pureEv": true,
+  "replaceGlobalPilot": true,
+  "requested": 6,
+  "pagesScanned": 12,
+  "discovered": 75,
+  "imported": 6,
+  "importedByBrand": {
+    "Nio": 1,
+    "Tesla": 1,
+    "Hima": 1,
+    "XPeng": 1,
+    "Li Auto": 1,
+    "Zeekr": 1
+  },
+  "previousCount": 1100,
+  "resultingCount": 1100,
+  "listErrors": [],
+  "detailErrors": [
+    {
+      "url": "https://en.guazi.com/products/lotus-eletre-2023-00l-green-46500km-at-4wd-5-seats-7yyv8rmxpz.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/tesla-model-y-2022-00l-black-133100km-at-2wd-5-seats-s8hjc9mnbx.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-23800km-at-4wd-5-seats-45nkzqv325.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/lotus-emeya-2024-00l-blue-21200km-at-5-seats-vcfgzn5knx.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/zeekr-009-2022-00l-black-133300km-at-4wd-6-seats-pmsqnf53yp.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/nio-es7-2022-00l-black-88900km-at-4wd-5-seats-5ug3h2fgs6.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/nio-es6-2022-00l-black-223500km-at-4wd-5-seats-hdgk2ej7jx.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/lotus-eletre-2023-00l-yellow-65100km-at-4wd-5-seats-ed5g3f2t8f.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/mercedes-benz-eqe-suv-2024-00l-black-11900km-at-4wd-5-seats-vu2autzrfb.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/tesla-model-y-2022-00l-black-192200km-at-2wd-5-seats-jdmnr3s5md.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/hongqi-e-hs9-2022-00l-black-56100km-at-4wd-6-seats-dzb8nryse5.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/byd-sealion-07-ev-2024-00l-gray-3000km-at-2wd-5-seats-6rzpqaw73g.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/xiaomi-auto-su7-ultra-2025-00l-yellow-20000km-at-4wd-5-seats-c9k8vwbd6n.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/volvo-c40-2022-00l-blue-27200km-at-2wd-5-seats-b379f75gdm.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/zeekr-7x-2025-00l-white-13600km-at-2wd-5-seats-f7bh9tfm68.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/xpeng-p7-2020-00l-red-119600km-at-2wd-5-seats-gjlvg7ssxt.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/nissan-ariya-2022-00l-white-42300km-at-4wd-5-seats-7u4453atrk.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/avatr-06-2025-00l-purple-12400km-at-4wd-5-seats-vryab6ru79.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/xiaomi-auto-su7-ultra-2025-00l-black-7600km-at-4wd-5-seats-9uvg4fcuu2.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-11500km-at-4wd-5-seats-f6qg29gk49.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-silver-11300km-at-4wd-5-seats-qrpgngumq6.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/bmw-ix3-2024-00l-black-15200km-at-2wd-5-seats-4jqnh5zqf4.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/byd-han-2020-00l-blue-75700km-at-4wd-5-seats-3mqzgpnpvq.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-green-1900km-at-4wd-5-seats-eflny5wl3l.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/lotus-eletre-2023-00l-black-8500km-at-4wd-5-seats-35fwmyc8qz.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/nio-ec6-2024-00l-blue-15800km-at-4wd-5-seats-xg8kqshg7c.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/porsche-taycan-2022-00l-50400km-at-2wd-5-seats-7nx9bw79pp.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/nio-es6-2023-00l-purple-51400km-at-4wd-5-seats-aq3qse9yjt.html",
+      "workerId": 1,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/toyota-bz-3x-2025-00l-gray-7500km-at-2wd-5-seats-27dse6x4lg.html",
+      "workerId": 2,
+      "error": "Incomplete product page"
+    },
+    {
+      "url": "https://en.guazi.com/products/saic-maxus-eg10-2021-00l-gray-14600km-at-2wd-7-seats-4tkvrr5ttt.html",
+      "workerId": 3,
+      "error": "Incomplete product page"
+    }
+  ]
+}
