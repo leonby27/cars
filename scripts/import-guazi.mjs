@@ -6,8 +6,10 @@ import { fetchSourceText } from "./lib/source-client.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUTPUT_DIR = path.join(ROOT, "public", "data");
+const RUNTIME_DIR = path.join(ROOT, "runtime");
 const CARS_PATH = path.join(OUTPUT_DIR, "cars.json");
 const REPORT_PATH = path.join(OUTPUT_DIR, "import-report.json");
+const ATTEMPT_REPORT_PATH = path.join(RUNTIME_DIR, "import-report-latest.json");
 const TARGETS_PATH = path.join(ROOT, "config", "guazi-targets.json");
 const targetConfig = JSON.parse(await fs.readFile(TARGETS_PATH, "utf8"));
 const priorityByBrand = new Map(targetConfig.targets.map((target) => [target.brand, target.priority || 1]));
@@ -198,6 +200,7 @@ async function enrichCar(car) {
 }
 
 await fs.mkdir(OUTPUT_DIR, { recursive: true });
+await fs.mkdir(RUNTIME_DIR, { recursive: true });
 let previous = { cars: [] };
 try { previous = JSON.parse(await fs.readFile(CARS_PATH, "utf8")); } catch {}
 const previousById = new Map((previous.cars || []).map((car) => [car.id, car]));
@@ -249,10 +252,11 @@ const minimumSafeCount = Math.max(1, Math.floor(limit * 0.8));
 const safeToReplaceCatalog = cars.length >= minimumSafeCount;
 report.catalogReplaced = safeToReplaceCatalog;
 report.minimumSafeCount = minimumSafeCount;
-await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
+await fs.writeFile(ATTEMPT_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));
 if (!safeToReplaceCatalog) process.exitCode = 1;
 else {
+  await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
   if (!databaseOnly) await fs.writeFile(CARS_PATH, `${JSON.stringify(payload, null, 2)}\n`);
   if (databaseMode) {
     const { importCars } = await import("../server/repository.mjs");
