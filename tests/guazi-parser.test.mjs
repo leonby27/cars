@@ -51,6 +51,12 @@ test("extracts original gallery and detailed EV fields from HTML", () => {
   assert.equal(normalizeEnergy(detail.energy), "Гибрид");
 });
 
+test("extracts vehicle class and body structure from HTML", () => {
+  const detail = parseGuaziHtml(`<script>"label":"车辆级别","value":"中型SUV","label":"车身结构","value":"5门5座SUV"</script>`);
+  assert.equal(detail.vehicleClass, "中型SUV");
+  assert.equal(detail.bodyStructure, "5门5座SUV");
+});
+
 test("discovers only selected EV/PHEV series on a mixed brand page", () => {
   const html = `<a href="/bj/byd/qplus/">秦PLUS</a><a href="/bj/byd/byd-f3/">比亚迪F3</a><a href="/bj/byd/sproxny/">宋Pro新能源</a>`;
   const links = parseGuaziSeriesLinks(html, "https://www.guazi.com/bj/byd/", "新能源|PLUS");

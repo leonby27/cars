@@ -62,6 +62,17 @@ export function buildCarFilters(searchParams) {
   return { where:`WHERE ${clauses.join(" AND ")}`, values };
 }
 
+export function buildCarOrder(searchParams) {
+  const orders = {
+    newest:"l.last_checked_at DESC NULLS LAST, l.id",
+    price:"l.estimated_total_usd ASC NULLS LAST, l.id",
+    price_asc:"l.estimated_total_usd ASC NULLS LAST, l.id",
+    price_desc:"l.estimated_total_usd DESC NULLS LAST, l.id",
+    mileage_asc:"l.mileage_km ASC NULLS LAST, l.id",
+  };
+  return orders[searchParams.get("sort")] || orders.newest;
+}
+
 export function rowToCar(row) {
   const raw = row.source_payload || {};
   return normalizeCar({ ...raw, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:"Карточка доступна", statusTone:"green", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, sourceId:`GZ-${row.external_id}`, ...row.specifications });
@@ -71,7 +82,7 @@ export async function listCars(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 24));
   const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
-  const order = searchParams.get("sort") === "price" ? "l.price_cny ASC" : "l.last_checked_at DESC NULLS LAST, l.id";
+  const order = buildCarOrder(searchParams);
   const [itemsResult, countResult] = await Promise.all([
     pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
     pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
