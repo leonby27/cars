@@ -147,26 +147,58 @@ function takeWeightedRoundRobin(items, maximum, groupBy, weightOf) {
 
 async function enrichCar(car) {
   const htmlUrl = car.sourceUrl.replace(/\.md$/, ".html");
-  const html = await fetchText(htmlUrl, { ...commonHeaders, accept: "text/html", "user-agent": htmlUserAgent });
-  const detail = parseGuaziHtml(html);
-  if (detail.blocked || detail.images.length === 0) throw new Error("gallery unavailable");
+  const old = previousById.get(car.id);
+  let detail = { blocked: true, images: [] };
+  try {
+    const html = await fetchText(htmlUrl, { ...commonHeaders, accept: "text/html", "user-agent": htmlUserAgent });
+    detail = parseGuaziHtml(html);
+  } catch (error) {
+    if (!old?.images?.length) throw error;
+  }
+  if ((detail.blocked || detail.images.length === 0) && !old?.images?.length) throw new Error("gallery unavailable");
   const type = normalizeEnergy(detail.energy, `${car.rawModel} ${car.rawSeries}`);
   const importedAt = new Date().toISOString();
   return {
+    ...old,
     ...car,
     title: `${car.brand} ${car.model} ${car.year}`,
     type,
-    drive: normalizeDrive(detail.driveRaw),
-    battery: detail.battery,
-    batteryType: detail.batteryType,
-    range: detail.range,
-    claims: detail.claims,
-    image: detail.images[0],
-    images: detail.images,
-    status: "Объявление активно",
+    drive: detail.driveRaw ? normalizeDrive(detail.driveRaw) : old?.drive || "Не указан",
+    battery: detail.battery ?? old?.battery,
+    batteryType: detail.batteryType ?? old?.batteryType,
+    batteryBrand: detail.batteryBrand ?? old?.batteryBrand,
+    batteryHealth: detail.batteryHealth ?? old?.batteryHealth,
+    electricRange: detail.electricRange ?? old?.electricRange,
+    combinedRange: detail.combinedRange ?? old?.combinedRange,
+    range: detail.range ?? old?.range,
+    claims: detail.claims ?? old?.claims,
+    engine: detail.engine ?? old?.engine,
+    transmission: detail.transmission ?? old?.transmission,
+    bodyColor: detail.bodyColor ?? old?.bodyColor,
+    vehicleClass: detail.vehicleClass ?? old?.vehicleClass,
+    driverAssistance: detail.driverAssistance ?? old?.driverAssistance,
+    infotainmentChip: detail.infotainmentChip ?? old?.infotainmentChip,
+    assistanceLevel: detail.assistanceLevel ?? old?.assistanceLevel,
+    radarCount: detail.radarCount ?? old?.radarCount,
+    cameraCount: detail.cameraCount ?? old?.cameraCount,
+    ultrasonicCount: detail.ultrasonicCount ?? old?.ultrasonicCount,
+    comfort: detail.comfort ?? old?.comfort,
+    warranty: detail.warranty ?? old?.warranty,
+    inspectionGrade: detail.inspectionGrade ?? old?.inspectionGrade,
+    powertrainInspection: detail.powertrainInspection ?? old?.powertrainInspection,
+    bodyInspection: detail.bodyInspection ?? old?.bodyInspection,
+    interiorInspection: detail.interiorInspection ?? old?.interiorInspection,
+    structureInspection: detail.structureInspection ?? old?.structureInspection,
+    engineBayInspection: detail.engineBayInspection ?? old?.engineBayInspection,
+    batteryProtection: detail.batteryProtection ?? old?.batteryProtection,
+    conditionProtection: detail.conditionProtection ?? old?.conditionProtection,
+    buybackProtection: detail.buybackProtection ?? old?.buybackProtection,
+    image: detail.images[0] || old.image,
+    images: detail.images.length ? detail.images : old.images,
+    status: "Карточка доступна",
     statusTone: "green",
     importedAt,
-    updated: "только что",
+    checkedAt: importedAt,
     sourceId: `GZ-${car.externalId}`,
     originalLanguage: "zh-CN",
   };
@@ -220,7 +252,11 @@ const report = {
   shortfall: Math.max(0, limit - cars.length),
   errors: errors.slice(0, 20),
 };
-await fs.writeFile(CARS_PATH, `${JSON.stringify(payload, null, 2)}\n`);
+const minimumSafeCount = Math.max(1, Math.floor(limit * 0.8));
+const safeToReplaceCatalog = cars.length >= minimumSafeCount;
+report.catalogReplaced = safeToReplaceCatalog;
+report.minimumSafeCount = minimumSafeCount;
 await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));
-if (cars.length === 0) process.exitCode = 1;
+if (!safeToReplaceCatalog) process.exitCode = 1;
+else await fs.writeFile(CARS_PATH, `${JSON.stringify(payload, null, 2)}\n`);

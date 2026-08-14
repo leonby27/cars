@@ -4,8 +4,35 @@ import { matchesMinimumYear } from "./car-filters.js";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
-const PRICING = { usdByn: 2.9564, cnyBynPer10: 4.4231, eurByn: 3.4105, deliveryUsd: 3500, serviceUsd: 800, evCustomsUsd: 350, rateDate: "13.08.2026" };
+const PRICING = { usdByn: 2.9564, cnyBynPer10: 4.4231, eurByn: 3.4105, deliveryUsd: 3500, serviceUsd: 800, evCustomsUsd: 350, rateDate: "13.08.2026", chinaHandling: [450, 800], delivery: [3200, 3900], reserve: [300, 700] };
 const round50 = (value) => Math.round(value / 50) * 50;
+const moneyRange = (low, high) => low === high ? `$${number(low)}` : `$${number(low)}–${number(high)}`;
+
+function formatCheckedAt(value) {
+  const checked = new Date(value);
+  if (!value || Number.isNaN(checked.getTime())) return "время не указано";
+  const minutes = Math.max(0, Math.floor((Date.now() - checked.getTime()) / 60000));
+  if (minutes < 1) return "меньше минуты назад";
+  if (minutes < 60) return `${minutes} мин назад`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ч назад`;
+  return checked.toLocaleString("ru-RU", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+}
+
+const displayValue = (value, fallback = "Не указано") => value === null || value === undefined || value === "" ? fallback : value;
+const translateBattery = (value) => ({ "磷酸铁锂":"LFP · литий-железо-фосфатная", "三元锂":"NMC · тройная литиевая" }[value] || displayValue(value));
+const translateSourceValue = (value) => value ? ({ "优秀":"Отлично", "在保中":"Гарантия действует", "非常好":"Очень хорошо", "衰减保修":"Гарантия на деградацию", "每车必检":"Обязательная проверка", "终身包退":"Пожизненный возврат по условиям Guazi" }[value] || value) : null;
+
+function normalizeImportedCar(car) {
+  const description = car.description || "";
+  const legacyScore = Number(car.appearanceScore);
+  const appearanceScore = legacyScore > 100 ? Number(String(legacyScore).slice(0, 2)) : legacyScore || null;
+  const model = car.brand === "Deepal" ? String(car.model).replace(/^深蓝/, "") : car.brand === "Voyah" ? String(car.model).replace(/^岚图/, "") : car.model;
+  const electricRange = car.electricRange ?? (Number(description.match(/纯电续航\s*(\d+)/)?.[1]) || null);
+  const combinedRange = car.combinedRange ?? (Number(description.match(/综合续航\s*(\d+)/)?.[1]) || null);
+  const batteryHealth = car.batteryHealth ?? (Number(description.match(/电池健康度\s*(\d+)%/)?.[1]) || null);
+  return { ...car, model, title:`${car.brand} ${model} ${car.year}`, appearanceScore, electricRange, combinedRange, batteryHealth, range:car.range || electricRange || combinedRange, checkedAt:car.checkedAt || car.importedAt, status:"Карточка доступна" };
+}
 
 function estimateLandedCost(car) {
   const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
@@ -14,8 +41,11 @@ function estimateLandedCost(car) {
   const age = 2026 - car.year;
   let customsUsd = PRICING.evCustomsUsd;
   let customsNote = "Пошлина 0% по льготе; оформление и сборы";
+  let engineAssumed = false;
   if (car.type !== "Электромобиль") {
-    const engineCc = 1500;
+    const parsedEngine = Number(String(car.engine || "").match(/\d+(?:\.\d+)?/)?.[0]);
+    const engineCc = parsedEngine ? Math.round(parsedEngine * 1000) : 1500;
+    engineAssumed = !parsedEngine;
     const chinaEur = chinaUsd / eurUsd;
     let dutyEur;
     if (age < 3) {
@@ -25,9 +55,14 @@ function estimateLandedCost(car) {
     } else if (age <= 5) dutyEur = engineCc * 1.7;
     else dutyEur = engineCc * 3.2;
     customsUsd = round50(dutyEur * eurUsd + 300);
-    customsNote = "Оценка для физлица и ДВС 1,5 л";
+    customsNote = `Оценка для физлица и ДВС ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (предположение)" : ""}`;
   }
-  return { chinaUsd, deliveryUsd: PRICING.deliveryUsd, customsUsd, customsNote, serviceUsd: PRICING.serviceUsd, totalUsd: chinaUsd + PRICING.deliveryUsd + customsUsd + PRICING.serviceUsd };
+  const customsSpread = car.type === "Электромобиль" ? 150 : Math.max(300, round50(customsUsd * .08));
+  const customsLow = Math.max(0, customsUsd - customsSpread);
+  const customsHigh = customsUsd + customsSpread;
+  const totalLow = round50(chinaUsd + PRICING.chinaHandling[0] + PRICING.delivery[0] + customsLow + PRICING.serviceUsd + PRICING.reserve[0]);
+  const totalHigh = round50(chinaUsd + PRICING.chinaHandling[1] + PRICING.delivery[1] + customsHigh + PRICING.serviceUsd + PRICING.reserve[1]);
+  return { chinaUsd, deliveryUsd: PRICING.deliveryUsd, deliveryLow: PRICING.delivery[0], deliveryHigh: PRICING.delivery[1], chinaHandlingLow: PRICING.chinaHandling[0], chinaHandlingHigh: PRICING.chinaHandling[1], customsUsd, customsLow, customsHigh, customsNote, serviceUsd: PRICING.serviceUsd, reserveLow: PRICING.reserve[0], reserveHigh: PRICING.reserve[1], totalLow, totalHigh, totalUsd: round50((totalLow + totalHigh) / 2) };
 }
 
 function useRoute() {
@@ -162,7 +197,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models }) {
 function CarRow({ car, navigate, favorite, compare, toggleFavorite, toggleCompare }) {
   const open = () => navigate(`/cars/${car.id}`);
   const price = estimateLandedCost(car);
-  return <article className="car-row" onClick={open} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && open()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}><div className="car-row-image"><img src={car.image} alt={car.title}/><span><Images size={15}/>{car.images?.length || 1}</span></div><div className="car-row-info"><div className="row-title"><div><h2>{car.title}</h2><span className={`status ${car.statusTone}`}>{car.status}</span></div><div className="row-actions"><button aria-label="Добавить в сравнение" className={compare ? "selected" : ""} onClick={(e) => {e.stopPropagation();toggleCompare(car.id);}}><Scales size={20} weight={compare ? "fill" : "regular"}/></button><button aria-label="Добавить в избранное" className={favorite ? "selected" : ""} onClick={(e) => {e.stopPropagation();toggleFavorite(car.id);}}><Heart size={21} weight={favorite ? "fill" : "regular"}/></button></div></div><p className="summary">{number(car.mileage)} км · {car.type} · {car.drive} привод</p><div className="mini-specs">{car.battery && <span><BatteryHigh size={17}/>{car.battery} кВт·ч</span>}{car.range && <span><Gauge size={17}/>{car.range} км</span>}<span><ShieldCheck size={17}/>Класс {car.conditionGrade || "—"}</span></div><div className="source-line"><MapPin size={15}/>{car.city}<span>•</span><Clock size={15}/>Обновлено {car.updated}<span>•</span>{car.source}</div></div><div className="car-row-price"><strong>≈ ${number(price.totalUsd)}</strong><span>ориентир до Минска</span><b>{number(car.chinaPrice)} ¥</b><small>цена в Китае</small><button>Подробнее <ArrowRight size={16}/></button></div></article>;
+  return <article className="car-row" onClick={open} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && open()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}><div className="car-row-image"><img src={car.image} alt={car.title}/><span><Images size={15}/>{car.images?.length || 1}</span></div><div className="car-row-info"><div className="row-title"><div><h2>{car.title}</h2><span className={`status ${car.statusTone}`}>{car.status}</span></div><div className="row-actions"><button aria-label="Добавить в сравнение" className={compare ? "selected" : ""} onClick={(e) => {e.stopPropagation();toggleCompare(car.id);}}><Scales size={20} weight={compare ? "fill" : "regular"}/></button><button aria-label="Добавить в избранное" className={favorite ? "selected" : ""} onClick={(e) => {e.stopPropagation();toggleFavorite(car.id);}}><Heart size={21} weight={favorite ? "fill" : "regular"}/></button></div></div><p className="summary">{number(car.mileage)} км · {car.type} · {car.drive} привод</p><div className="mini-specs">{car.battery && <span><BatteryHigh size={17}/>{car.battery} кВт·ч</span>}{car.range && <span><Gauge size={17}/>{car.range} км</span>}<span><ShieldCheck size={17}/>Класс {car.conditionGrade || "—"}</span></div><div className="source-line"><MapPin size={15}/>{car.city}<span>•</span><Clock size={15}/>Проверено {formatCheckedAt(car.checkedAt || car.importedAt)}<span>•</span>{car.source}</div></div><div className="car-row-price"><strong>≈ ${number(price.totalUsd)}</strong><span>середина диапазона до Минска</span><b>{number(car.chinaPrice)} ¥</b><small>цена в Китае</small><button>Подробнее <ArrowRight size={16}/></button></div></article>;
 }
 
 function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare, cars }) {
@@ -298,30 +333,83 @@ function VehicleGallery({ car }) {
   return <><section className="gallery-panel"><button className={`gallery-open${dragging ? " dragging" : ""}`} style={{"--gallery-drag-x":`${dragOffset}px`}} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}><img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={images[active]} alt={`${car.title}, фото ${active + 1}`} draggable="false"/></button><span aria-live="polite"><Images size={17}/>{active + 1} из {images.length}</span><div className="gallery-badges"><b>Оригинал Guazi</b><b>Фото объявления</b></div>{images.length > 1 && <div className="gallery-controls"><button aria-label="Предыдущее фото" onClick={() => move(-1)}><ArrowLeft size={20}/></button><button aria-label="Следующее фото" onClick={() => move(1)}><ArrowRight size={20}/></button></div>}<div className="gallery-thumbs" ref={thumbsRef}>{images.map((image, index) => <button key={`${image}-${index}`} className={active === index ? "active" : ""} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}><img src={image} alt="" loading="lazy"/></button>)}</div><button className="gallery-view-all" onClick={() => setModalOpen(true)}><Images size={18}/>Все фото</button></section>{modalOpen && <GalleryModal car={car} images={images} initialIndex={active} onClose={() => setModalOpen(false)}/>}</>;
 }
 
-function Detail({ car, navigate, favorite, toggleFavorite, onOrder }) {
+function Detail({ car, navigate, favorite, toggleFavorite }) {
   if (!car) return <NotFound navigate={navigate}/>;
   const price = estimateLandedCost(car);
   const specs = [[CalendarBlank,"Год",car.year],[Gauge,"Пробег",`${number(car.mileage)} км`],[Lightning,"Тип",car.type],[CarProfile,"Привод",car.drive],[BatteryHigh,"Батарея",car.battery ? `${car.battery} кВт·ч` : "Не указана"],[ShieldCheck,"Класс Guazi",car.conditionGrade || "Не указан"]];
-  return <main className="detail page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/><button onClick={() => navigate("/catalog")}>Автомобили</button><CaretRight size={13}/>{car.title}</div><button className="back-mobile" onClick={() => navigate("/catalog")}><ArrowLeft size={18}/>Назад к каталогу</button><div className="detail-title"><div><div className="detail-kicker"><span className={`status ${car.statusTone}`}>{car.status}</span><span>Обновлено {car.updated}</span></div><h1>{car.title}</h1><p>{car.type} · {car.drive} привод · {number(car.mileage)} км</p></div><div className="detail-actions"><button aria-label="Поделиться"><ShareNetwork size={21}/></button><button aria-label="Добавить в избранное" className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}><Heart size={21} weight={favorite ? "fill" : "regular"}/></button></div></div>
-    <div className="detail-main"><VehicleGallery car={car}/><aside className="order-card"><div className="price-card-header"><span>Расчёт стоимости</span><b>До Минска</b></div><div className="price-breakdown"><div><p><b>Автомобиль в Китае</b><small>{number(car.chinaPrice)} ¥ по курсу НБРБ</small></p><strong>${number(price.chinaUsd)}</strong></div><div><p><b>Доставка до Минска</b><small>Автовоз, маршрут через Хоргос</small></p><strong>${number(price.deliveryUsd)}</strong></div><div><p><b>Растаможка и сборы</b><small>{price.customsNote}</small></p><strong>≈ ${number(price.customsUsd)}</strong></div><div><p><b>Услуги ChinaCar</b><small>Проверка, выкуп и документы</small></p><strong>${number(price.serviceUsd)}</strong></div></div><div className="price-total"><span>Итого до Минска</span><strong>≈ ${number(price.totalUsd)}</strong><small>без постановки на учёт и страховки</small></div><div className="price-assumption"><Info size={16}/><span>Расчёт предварительный. Курс НБРБ на {PRICING.rateDate}; точную сумму подтвердим после проверки инвойса и документов.</span></div><button className="primary" onClick={() => onOrder(car)}>Получить точный расчёт</button><button className="secondary" onClick={() => onOrder(car)}>Проверить автомобиль</button><div className="order-note"><CheckCircle size={19} weight="fill"/><p><b>Сначала проверка — потом оплата</b><span>Зафиксируем все расходы в договоре</span></p></div></aside></div>
+  return <main className="detail page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/><button onClick={() => navigate("/catalog")}>Автомобили</button><CaretRight size={13}/>{car.title}</div><button className="back-mobile" onClick={() => navigate("/catalog")}><ArrowLeft size={18}/>Назад к каталогу</button><div className="detail-title"><div><div className="detail-kicker"><span className={`status ${car.statusTone}`}>{car.status}</span><span>Проверено {formatCheckedAt(car.checkedAt || car.importedAt)}</span></div><h1>{car.title}</h1><p>{car.type} · {car.drive} привод · {number(car.mileage)} км</p></div><div className="detail-actions"><button aria-label="Поделиться"><ShareNetwork size={21}/></button><button aria-label="Добавить в избранное" className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}><Heart size={21} weight={favorite ? "fill" : "regular"}/></button></div></div>
+    <div className="detail-main"><VehicleGallery car={car}/><aside className="order-card"><div className="price-card-header"><span>Предварительный расчёт</span><b>До Минска</b></div><div className="price-breakdown"><div><p><b>Автомобиль в Китае</b><small>{number(car.chinaPrice)} ¥ · данные Guazi</small></p><strong>${number(price.chinaUsd)}</strong></div><div><p><b>Расходы в Китае</b><small>Выкуп, банк и экспортные документы</small></p><strong>{moneyRange(price.chinaHandlingLow, price.chinaHandlingHigh)}</strong></div><div><p><b>Доставка до Минска</b><small>Предварительный диапазон логистики</small></p><strong>{moneyRange(price.deliveryLow, price.deliveryHigh)}</strong></div><div><p><b>Растаможка и сборы</b><small>{price.customsNote}</small></p><strong>{moneyRange(price.customsLow, price.customsHigh)}</strong></div><div><p><b>Услуги ChinaCar</b><small>Проверка, выкуп и документы</small></p><strong>${number(price.serviceUsd)}</strong></div></div><div className="price-total"><span>Диапазон до Минска</span><strong>{moneyRange(price.totalLow, price.totalHigh)}</strong><small>включая резерв, без постановки на учёт и страховки</small></div><div className="price-assumption"><Info size={16}/><span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span></div><button className="primary" onClick={() => navigate(`/orders/draft/${car.id}`)}>Рассчитать заказ</button><div className="order-note"><CheckCircle size={19} weight="fill"/><p><b>Сначала видите весь черновик</b><span>Контакт понадобится только при запуске проверки</span></p></div></aside></div>
     <section className="spec-section"><h2>Характеристики</h2><div className="spec-grid">{specs.map(([Icon,label,value]) => <div key={label}><Icon size={21} weight="duotone"/><p><span>{label}</span><b>{value}</b></p></div>)}</div></section>
-    <div className="detail-columns"><section className="condition-card"><div className="section-heading small"><div><span>Состояние автомобиля</span><h2>Что известно из объявления</h2></div><b className="report-badge"><ShieldCheck size={18}/>Отчёт Guazi</b></div><div className="condition-list"><div><span>Владельцы в Китае</span><b>{car.owners}</b></div><div><span>Страховые случаи</span><b>{car.claims || car.incident}</b></div><div><span>Класс состояния</span><b>{car.conditionGrade || "Не указан"}</b></div><div><span>Оценка внешнего вида</span><b>{car.appearanceScore ? `${car.appearanceScore}/100` : "Не указана"}</b></div><div><span>Тип батареи</span><b>{car.batteryType || "Не указан"}</b></div></div>{car.sourceUrl && <a className="text-button" href={car.sourceUrl.replace(/\.md$/, ".html")} target="_blank" rel="noreferrer">Открыть оригинал Guazi <ArrowRight size={17}/></a>}</section><aside className="source-card"><h3>Источник объявления</h3><p><b>{car.source}</b><span>ID {car.sourceId}</span></p><div><Clock size={18}/><span>Последняя синхронизация<br/><b>{car.updated}</b></span></div><div><CheckCircle size={18}/><span>Статус источника<br/><b>Карточка доступна</b></span></div><small>Перевод и цена до Минска расчётные. Перед заказом менеджер повторно проверит автомобиль.</small></aside></div>
+    <div className="detail-columns"><section className="condition-card"><div className="section-heading small"><div><span>Состояние автомобиля</span><h2>Что указано в объявлении</h2></div><b className="report-badge"><ShieldCheck size={18}/>Данные Guazi</b></div><div className="condition-list"><div><span>Владельцы в Китае</span><b>{car.owners}</b></div><div><span>Страховые случаи</span><b>{car.claims || car.incident}</b></div><div><span>Класс состояния</span><b>{car.conditionGrade || "Не указан"}</b></div><div><span>Оценка внешнего вида</span><b>{car.appearanceScore ? `${car.appearanceScore}/100` : "Не указана"}</b></div><div><span>Тип батареи</span><b>{translateBattery(car.batteryType)}</b></div><div><span>Здоровье батареи</span><b>{car.batteryHealth ? `${car.batteryHealth}%` : "Не указано"}</b></div></div>{car.sourceUrl && <a className="text-button" href={car.sourceUrl.replace(/\.md$/, ".html")} target="_blank" rel="noreferrer">Открыть оригинал Guazi <ArrowRight size={17}/></a>}</section><aside className="source-card"><h3>Источник объявления</h3><p><b>{car.source}</b><span>ID {car.sourceId}</span></p><div><Clock size={18}/><span>Последняя синхронизация<br/><b>{formatCheckedAt(car.checkedAt || car.importedAt)}</b></span></div><div><CheckCircle size={18}/><span>Статус источника<br/><b>Карточка доступна</b></span></div><small>Это сведения продавца и Guazi, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</small></aside></div>
+  </main>;
+}
+
+function DataTag({ type }) {
+  const labels = { source:"Guazi", calculated:"Расчёт", pending:"Нужно подтвердить" };
+  return <span className={`data-tag ${type}`}>{labels[type]}</span>;
+}
+
+function SourceGrid({ rows }) {
+  const visible = rows.filter(([, value]) => value !== null && value !== undefined && value !== "");
+  if (!visible.length) return <p className="order-empty">Источник не передал эти данные.</p>;
+  return <div className="order-facts">{visible.map(([label, value]) => <div key={label}><span>{label}</span><b>{value}</b></div>)}</div>;
+}
+
+function OrderDraft({ car, navigate }) {
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [contact, setContact] = useState("");
+  const [saved, setSaved] = useState(false);
+  if (!car) return <NotFound navigate={navigate}/>;
+  const price = estimateLandedCost(car);
+  const sourceLink = car.sourceUrl?.replace(/\.md$/, ".html");
+  const saveDraft = (event) => {
+    event.preventDefault();
+    const draft = { carId:car.id, sourceId:car.sourceId, contact:contact.trim(), savedAt:new Date().toISOString() };
+    localStorage.setItem(`chinacar-order-${car.id}`, JSON.stringify(draft));
+    setSaved(true);
+  };
+  const vehicleRows = [
+    ["Первая регистрация", car.firstRegistration], ["Пробег", `${number(car.mileage)} км`], ["Город", car.city],
+    ["Владельцы", car.owners], ["Двигатель", car.engine], ["Коробка", car.transmission],
+    ["Привод", car.drive], ["Цвет", car.bodyColor], ["Класс", car.vehicleClass],
+  ];
+  const batteryRows = [
+    ["Ёмкость", car.battery ? `${car.battery} кВт·ч` : null], ["Тип", car.batteryType ? translateBattery(car.batteryType) : null],
+    ["Производитель", car.batteryBrand], ["Здоровье батареи", car.batteryHealth ? `${car.batteryHealth}%` : null],
+    ["Запас хода на электротяге", car.electricRange ? `${car.electricRange} км` : null], ["Суммарный запас хода", car.combinedRange ? `${car.combinedRange} км` : null],
+    ["Гарантия на силовую установку", translateSourceValue(car.warranty)], ["Защита батареи", translateSourceValue(car.batteryProtection)],
+  ];
+  const conditionRows = [
+    ["Оценка Guazi", translateSourceValue(car.inspectionGrade || car.conditionGrade)], ["Внешний вид", car.appearanceScore ? `${car.appearanceScore}/100` : null],
+    ["Страховые выплаты", car.claims || car.incident], ["Силовая установка", car.powertrainInspection],
+    ["Кузов", car.bodyInspection], ["Каркас кузова", car.structureInspection], ["Интерьер", car.interiorInspection], ["Подкапотное пространство", car.engineBayInspection],
+  ];
+  const assistanceRows = [
+    ["Система помощи", car.driverAssistance], ["Уровень", car.assistanceLevel], ["Чип мультимедиа", car.infotainmentChip],
+    ["Радары", car.radarCount ? `${car.radarCount} шт.` : null], ["Камеры", car.cameraCount ? `${car.cameraCount} шт.` : null], ["Ультразвуковые датчики", car.ultrasonicCount ? `${car.ultrasonicCount} шт.` : null],
+  ];
+  return <main className="order-page page-width">
+    <div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/><button onClick={() => navigate(`/cars/${car.id}`)}>{car.title}</button><CaretRight size={13}/>Предварительный заказ</div>
+    <button className="back-mobile" onClick={() => navigate(`/cars/${car.id}`)}><ArrowLeft size={18}/>Назад к автомобилю</button>
+    <div className="order-heading"><div><span>Черновик заказа · {car.sourceId}</span><h1>Предварительный заказ</h1><p>Мы собрали всё, что уже известно, и отдельно отметили расчёты и данные, требующие подтверждения.</p></div><DataTag type="pending"/></div>
+    <section className="order-car-summary"><img src={car.image} alt={car.title}/><div><span className={`status ${car.statusTone}`}>{car.status}</span><h2>{car.title}</h2><p>{number(car.mileage)} км · {car.type} · {car.drive} привод</p><small>Источник проверен {formatCheckedAt(car.checkedAt || car.importedAt)}</small></div><div className="order-source-price"><span>Цена в Китае <DataTag type="source"/></span><b>{number(car.chinaPrice)} ¥</b><small>≈ ${number(price.chinaUsd)} по расчётному курсу</small></div></section>
+    <div className="order-layout"><div className="order-content">
+      <section className="order-section"><div className="order-section-title"><div><span>01</span><h2>Предварительная стоимость</h2></div><DataTag type="calculated"/></div><div className="order-cost-list"><div><span>Автомобиль в Китае<small>{number(car.chinaPrice)} ¥ · Guazi</small></span><b>${number(price.chinaUsd)}</b></div><div><span>Расходы в Китае<small>Выкуп, банк, экспортные документы</small></span><b>{moneyRange(price.chinaHandlingLow, price.chinaHandlingHigh)}</b></div><div><span>Доставка до Минска<small>Диапазон зависит от маршрута и перевозчика</small></span><b>{moneyRange(price.deliveryLow, price.deliveryHigh)}</b></div><div><span>Таможня и сборы<small>{price.customsNote}</small></span><b>{moneyRange(price.customsLow, price.customsHigh)}</b></div><div><span>Услуги ChinaCar<small>Проверка, выкуп и документы</small></span><b>${number(price.serviceUsd)}</b></div><div><span>Резерв на изменение расходов<small>Курс, хранение и дополнительные сборы</small></span><b>{moneyRange(price.reserveLow, price.reserveHigh)}</b></div></div><div className="order-grand-total"><span>Ожидаемый диапазон до Минска<small>без постановки на учёт и страховки</small></span><b>{moneyRange(price.totalLow, price.totalHigh)}</b></div><div className="order-disclaimer"><Info size={18}/><p>Курс НБРБ на {PRICING.rateDate}. Это предварительная модель, а не оферта. Итог меняется после подтверждения цены продавцом, VIN, маршрута и таможенных параметров.</p></div></section>
+      <section className="order-section"><div className="order-section-title"><div><span>02</span><h2>Автомобиль</h2></div><DataTag type="source"/></div><SourceGrid rows={vehicleRows}/></section>
+      <section className="order-section"><div className="order-section-title"><div><span>03</span><h2>Батарея и запас хода</h2></div><DataTag type="source"/></div><SourceGrid rows={batteryRows}/></section>
+      <section className="order-section"><div className="order-section-title"><div><span>04</span><h2>Состояние по отчёту Guazi</h2></div><DataTag type="source"/></div><SourceGrid rows={conditionRows}/>{car.description && <div className="source-description"><b>Комментарий из объявления</b><p>{car.description}</p></div>}<p className="source-warning"><Info size={17}/>Это заявление площадки и продавца, не независимая проверка ChinaCar.</p></section>
+      <section className="order-section"><div className="order-section-title"><div><span>05</span><h2>Оснащение и ассистенты</h2></div><DataTag type="source"/></div><SourceGrid rows={assistanceRows}/></section>
+    </div><aside className="order-progress"><div className="progress-card"><span>Статус заказа</span><h3>Можно запускать проверку</h3><ol><li className="done"><Check size={15}/><p><b>Карточка Guazi найдена</b><small>{formatCheckedAt(car.checkedAt || car.importedAt)}</small></p></li><li className="done"><Check size={15}/><p><b>Данные и фото загружены</b><small>{car.images?.length || 1} оригинальных фото</small></p></li><li><span>3</span><p><b>Подтверждение продавца</b><small>Наличие и актуальная цена</small></p></li><li><span>4</span><p><b>VIN и экспорт</b><small>Документы и ограничения</small></p></li><li><span>5</span><p><b>Независимая проверка</b><small>Кузов, батарея и диагностика</small></p></li></ol>{!verificationOpen && <button className="primary" onClick={() => setVerificationOpen(true)}>Запустить проверку <ArrowRight size={18}/></button>}{verificationOpen && !saved && <form className="verification-form" onSubmit={saveDraft}><div className="modal-icon"><ChatCircleText size={24} weight="duotone"/></div><h4>Куда прислать результат?</h4><p>Оставьте телефон или Telegram. Имя и другие данные сейчас не нужны.</p><label>Телефон или @username<input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="+375 … или @telegram" required autoFocus/></label><button className="primary" type="submit">Сохранить и продолжить</button><small>В MVP черновик сохраняется только на этом устройстве.</small></form>}{saved && <div className="verification-saved"><CheckCircle size={42} weight="fill"/><h4>Черновик сохранён</h4><p>Демо-режим: данные сохранены локально. Для реального запроса продавцу потребуется подключить CRM и канал связи.</p></div>}<div className="progress-links">{sourceLink && <a href={sourceLink} target="_blank" rel="noreferrer">Оригинал Guazi <ArrowRight size={16}/></a>}<button onClick={() => navigate(`/cars/${car.id}`)}>Вернуться к автомобилю</button></div></div></aside></div>
   </main>;
 }
 
 function InfoPage({ navigate, type }) { const how = type === "how"; return <main className="simple-page page-width"><button className="back-mobile" onClick={() => navigate("/")}><ArrowLeft size={18}/>На главную</button><span>{how ? "Путь автомобиля" : "О проекте"}</span><h1>{how ? "От объявления в Китае до выдачи в Минске" : "Понятный способ выбрать авто из Китая"}</h1><p>{how ? "Мы проверяем актуальность объявления, запрашиваем отчёт, согласовываем итоговую смету и только после этого оформляем заказ." : "ChinaCar.by собирает предложения китайского вторичного рынка в привычном для белорусов формате. Это демонстрационный MVP продукта."}</p><button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог <ArrowRight size={18}/></button></main>; }
 function NotFound({ navigate }) { return <main className="simple-page page-width"><span>404</span><h1>Такой страницы нет</h1><button className="primary" onClick={() => navigate("/")}>Вернуться на главную</button></main>; }
 
-function LeadModal({ car, onClose }) {
-  const [sent,setSent] = useState(false); const [name,setName] = useState(""); const [phone,setPhone] = useState("");
-  useEffect(() => { const onKey=(e) => e.key === "Escape" && onClose(); window.addEventListener("keydown",onKey); return () => window.removeEventListener("keydown",onKey); },[onClose]);
-  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><div className="lead-modal" role="dialog" aria-modal="true"><button className="modal-close" aria-label="Закрыть" onClick={onClose}><X size={22}/></button>{!sent ? <><div className="modal-icon"><ChatCircleText size={28} weight="duotone"/></div><span>Бесплатная проверка наличия</span><h2>{car.title}</h2><p>Оставьте контакт — уточним статус у продавца и вернёмся с ответом и ориентировочной сметой.</p><form onSubmit={(e) => {e.preventDefault();if(name && phone)setSent(true);}}><label>Как к вам обращаться<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше имя" required autoFocus/></label><label>Номер телефона<input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+375 29 000-00-00" required/></label><button className="primary" type="submit">Отправить заявку</button></form><small>Нажимая кнопку, вы соглашаетесь на обработку контактных данных.</small></> : <div className="success-state"><CheckCircle size={54} weight="fill"/><h2>Заявка отправлена</h2><p>Мы проверим {car.title} и свяжемся с вами в рабочее время.</p><button className="secondary" onClick={onClose}>Готово</button></div>}</div></div>;
-}
-
 export function App() {
-  const {path,navigate}=useRoute(); const [favorites,setFavorites]=useState(new Set()); const [compares,setCompares]=useState(new Set()); const [leadCar,setLeadCar]=useState(null); const [cars,setCars]=useState([]); const [importedAt,setImportedAt]=useState(null); const [loading,setLoading]=useState(true); const [loadError,setLoadError]=useState(false);
-  useEffect(() => { fetch(`${import.meta.env.BASE_URL}data/cars.json`, { cache:"no-store" }).then((response) => { if (!response.ok) throw new Error("import unavailable"); return response.json(); }).then((payload) => { if (!payload.cars?.length) throw new Error("empty import"); setCars(payload.cars); setImportedAt(payload.generatedAt); }).catch(() => setLoadError(true)).finally(() => setLoading(false)); }, []);
-  const toggleSet=(setter)=>(id)=>setter((current)=>{const next=new Set(current);next.has(id)?next.delete(id):next.add(id);return next;}); const detailId=path.startsWith("/cars/")?path.split("/")[2]:null;
-  const page=loading?<main className="simple-page page-width"><span>Guazi</span><h1>Загружаем реальные объявления…</h1></main>:loadError?<main className="simple-page page-width"><span>Импорт временно недоступен</span><h1>Не удалось загрузить каталог</h1><p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p></main>:path==="/"?<Home navigate={navigate} cars={cars}/>:path==="/catalog"?<Catalog navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} compares={compares} toggleCompare={toggleSet(setCompares)}/>:detailId?<Detail car={cars.find((item)=>item.id===detailId)} navigate={navigate} favorite={favorites.has(detailId)} toggleFavorite={toggleSet(setFavorites)} onOrder={setLeadCar}/>:path==="/how-it-works"?<InfoPage navigate={navigate} type="how"/>:path==="/about"?<InfoPage navigate={navigate} type="about"/>:<NotFound navigate={navigate}/>;
-  return <><Header navigate={navigate} favoritesCount={favorites.size} compareCount={compares.size}/>{page}<footer><div className="page-width"><b>chinacar.by</b><span>{importedAt ? `Guazi · ${cars.length} реальных объявлений · импорт ${new Date(importedAt).toLocaleString("ru-RU")}` : "Загружаем актуальные объявления"}</span></div></footer>{leadCar&&<LeadModal car={leadCar} onClose={()=>setLeadCar(null)}/>}</>;
+  const {path,navigate}=useRoute(); const [favorites,setFavorites]=useState(new Set()); const [compares,setCompares]=useState(new Set()); const [cars,setCars]=useState([]); const [importedAt,setImportedAt]=useState(null); const [loading,setLoading]=useState(true); const [loadError,setLoadError]=useState(false);
+  useEffect(() => { fetch(`${import.meta.env.BASE_URL}data/cars.json`, { cache:"no-store" }).then((response) => { if (!response.ok) throw new Error("import unavailable"); return response.json(); }).then((payload) => { if (!payload.cars?.length) throw new Error("empty import"); setCars(payload.cars.map(normalizeImportedCar)); setImportedAt(payload.generatedAt); }).catch(() => setLoadError(true)).finally(() => setLoading(false)); }, []);
+  const toggleSet=(setter)=>(id)=>setter((current)=>{const next=new Set(current);next.has(id)?next.delete(id):next.add(id);return next;}); const detailId=path.startsWith("/cars/")?path.split("/")[2]:null; const orderId=path.startsWith("/orders/draft/")?path.split("/")[3]:null;
+  const page=loading?<main className="simple-page page-width"><span>Guazi</span><h1>Загружаем реальные объявления…</h1></main>:loadError?<main className="simple-page page-width"><span>Импорт временно недоступен</span><h1>Не удалось загрузить каталог</h1><p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p></main>:path==="/"?<Home navigate={navigate} cars={cars}/>:path==="/catalog"?<Catalog navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} compares={compares} toggleCompare={toggleSet(setCompares)}/>:orderId?<OrderDraft car={cars.find((item)=>item.id===orderId)} navigate={navigate}/>:detailId?<Detail car={cars.find((item)=>item.id===detailId)} navigate={navigate} favorite={favorites.has(detailId)} toggleFavorite={toggleSet(setFavorites)}/>:path==="/how-it-works"?<InfoPage navigate={navigate} type="how"/>:path==="/about"?<InfoPage navigate={navigate} type="about"/>:<NotFound navigate={navigate}/>;
+  return <><Header navigate={navigate} favoritesCount={favorites.size} compareCount={compares.size}/>{page}<footer><div className="page-width"><b>chinacar.by</b><span>{importedAt ? `Guazi · ${cars.length} реальных объявлений · импорт ${new Date(importedAt).toLocaleString("ru-RU")}` : "Загружаем актуальные объявления"}</span></div></footer></>;
 }

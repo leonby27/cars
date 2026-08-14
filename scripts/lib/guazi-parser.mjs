@@ -20,10 +20,15 @@ const SERIES_MAP = new Map([
   ["理想L7", "L7"], ["理想L8", "L8"], ["理想L9", "L9"],
   ["银河E5", "E5"], ["银河L7", "L7"], ["银河E8", "E8"],
   ["东风风神E70", "E70"], ["风神L7新能源", "L7"], ["东风风神L8", "L8"],
+  ["深蓝S05", "S05"], ["深蓝S07", "S07"], ["深蓝SL03", "SL03"],
+  ["岚图FREE", "Free"], ["岚图梦想家", "Dream"],
 ]);
 
 const field = (text, name) => text.match(new RegExp(`^${name}:\\s*(.+)$`, "m"))?.[1]?.trim() ?? null;
-const numeric = (value) => value ? Number(value.replace(/[^\d.]/g, "")) : null;
+const numeric = (value) => {
+  const match = String(value || "").match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+};
 
 export function parseMileage(value) {
   if (!value) return null;
@@ -41,6 +46,7 @@ export function parseGuaziMarkdown(markdown, sourceUrl) {
   const brand = /银河/.test(`${rawBrand || ""} ${manufacturer || ""} ${rawSeries}`) ? "Geely Galaxy" : mappedBrand;
   const rawModel = field(markdown, "model") || "";
   const priceCny = numeric(field(markdown, "full_payment"));
+  const guidePriceCny = numeric(field(markdown, "guide_price"));
   const register = field(markdown, "first_register");
   const year = numeric(register?.slice(0, 4));
   const mileage = parseMileage(field(markdown, "mileage"));
@@ -71,6 +77,7 @@ export function parseGuaziMarkdown(markdown, sourceUrl) {
     firstRegistration: register,
     mileage,
     chinaPrice: priceCny,
+    guidePriceCny,
     usdPrice: Math.round((priceCny / 7.15 + 5800) / 100) * 100,
     city: field(markdown, "city") || "Китай",
     owners: transfers + 1,
@@ -95,19 +102,45 @@ export function parseGuaziHtml(html) {
     .map((match) => decodeUrl(match[0]));
   const gallery = [...new Set(allImages.filter((url) => url.includes("image/quality,q_88/resize,m_fill,w_750,h_500")))].slice(0, 32);
   const batteryValue = jsonValue(html, "电池容量");
-  const rangeValue = jsonValue(html, "新车续航");
+  const electricRangeValue = jsonValue(html, "纯电续航") || jsonValue(html, "新车续航");
+  const combinedRangeValue = jsonValue(html, "综合续航");
   const energyValue = jsonValue(html, "能源类型") || jsonValue(html, "能源形式");
-  const driveValue = jsonValue(html, "驱动电机") || jsonValue(html, "驱动类型");
+  const driveValue = jsonValue(html, "驱动电机") || jsonValue(html, "驱动方式") || jsonValue(html, "驱动类型");
   const claimValue = jsonValue(html, "保险理赔");
   return {
     blocked: false,
     images: gallery,
     battery: numeric(batteryValue),
     batteryType: jsonValue(html, "电池类型"),
-    range: numeric(rangeValue),
+    batteryBrand: jsonValue(html, "电池品牌"),
+    batteryHealth: numeric(jsonValue(html, "电池健康度")),
+    electricRange: numeric(electricRangeValue),
+    combinedRange: numeric(combinedRangeValue),
+    range: numeric(electricRangeValue) || numeric(combinedRangeValue),
     energy: energyValue,
     driveRaw: driveValue,
     claims: claimValue,
+    engine: jsonValue(html, "发动机"),
+    transmission: jsonValue(html, "变速箱"),
+    bodyColor: jsonValue(html, "车身颜色"),
+    vehicleClass: jsonValue(html, "车辆级别"),
+    driverAssistance: jsonValue(html, "智能驾驶"),
+    infotainmentChip: jsonValue(html, "车机芯片"),
+    assistanceLevel: jsonValue(html, "辅驾级别"),
+    radarCount: numeric(jsonValue(html, "毫米波雷达")),
+    cameraCount: numeric(jsonValue(html, "辅助摄像头")),
+    ultrasonicCount: numeric(jsonValue(html, "超声传感")),
+    comfort: jsonValue(html, "空间舒适性"),
+    warranty: jsonValue(html, "三电质保"),
+    inspectionGrade: jsonValue(html, "检测等级"),
+    powertrainInspection: jsonValue(html, "三电附件检测"),
+    bodyInspection: jsonValue(html, "车身外观"),
+    interiorInspection: jsonValue(html, "内饰及配置"),
+    structureInspection: jsonValue(html, "车身骨架"),
+    engineBayInspection: jsonValue(html, "机舱工况"),
+    batteryProtection: jsonValue(html, "电池保障"),
+    conditionProtection: jsonValue(html, "车况保障"),
+    buybackProtection: jsonValue(html, "回购保障"),
   };
 }
 

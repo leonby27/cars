@@ -15,6 +15,7 @@ test("parses a Guazi markdown vehicle", () => {
   assert.equal(car.chinaPrice, 81700);
   assert.equal(car.mileage, 2500);
   assert.equal(car.owners, 2);
+  assert.equal(car.appearanceScore, 95);
 });
 
 test("normalizes priority-market Galaxy and Dongfeng brands", () => {
@@ -27,13 +28,17 @@ test("normalizes priority-market Galaxy and Dongfeng brands", () => {
   assert.equal(dongfeng.model, "E70");
 });
 
-test("extracts original gallery and EV fields from HTML", () => {
-  const html = `<link rel="preload" as="image" href="https://image-public.guazistatic.com/car.jpg?x-bce-process=image/quality,q_88/resize,m_fill,w_750,h_500"><script>\\"label\\":\\"能源类型\\",\\"value\\":\\"纯电动\\",\\"label\\":\\"电池容量\\",\\"value\\":\\"71.7kWh\\",\\"label\\":\\"新车续航\\",\\"value\\":\\"500km\\"</script>`;
+test("extracts original gallery and detailed EV fields from HTML", () => {
+  const html = `<link rel="preload" as="image" href="https://image-public.guazistatic.com/car.jpg?x-bce-process=image/quality,q_88/resize,m_fill,w_750,h_500"><script>\\"label\\":\\"能源类型\\",\\"value\\":\\"增程式\\",\\"label\\":\\"电池容量\\",\\"value\\":\\"31.73kWh\\",\\"label\\":\\"纯电续航\\",\\"value\\":\\"215km\\",\\"label\\":\\"综合续航\\",\\"value\\":\\"1130km\\",\\"label\\":\\"电池健康度\\",\\"value\\":\\"94%\\",\\"label\\":\\"发动机\\",\\"value\\":\\"1.5L\\",\\"label\\":\\"检测等级\\",\\"value\\":\\"优秀\\"</script>`;
   const detail = parseGuaziHtml(html);
   assert.equal(detail.images.length, 1);
-  assert.equal(detail.battery, 71.7);
-  assert.equal(detail.range, 500);
-  assert.equal(normalizeEnergy(detail.energy), "Электромобиль");
+  assert.equal(detail.battery, 31.73);
+  assert.equal(detail.electricRange, 215);
+  assert.equal(detail.combinedRange, 1130);
+  assert.equal(detail.batteryHealth, 94);
+  assert.equal(detail.engine, "1.5L");
+  assert.equal(detail.inspectionGrade, "优秀");
+  assert.equal(normalizeEnergy(detail.energy), "Гибрид");
 });
 
 test("discovers only selected EV/PHEV series on a mixed brand page", () => {
