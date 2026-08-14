@@ -28,15 +28,15 @@ When the API is available, the website reads paginated data from PostgreSQL. `pu
 ## Local database and API
 
 1. Run `npm run db:setup` to start PostgreSQL, apply migrations, and seed the current JSON snapshot.
-2. Run `npm run dev:all` to start the API on port 8787 and Vite on port 4173.
+2. Run `npm run dev:all` to start the API, autonomous crawler, and Vite together.
 3. Run `npm run db:discover -- --limit=500 --scan=3000` periodically to add targeted EV/PHEV listings.
-4. Run `npm run db:schedule` every 10–15 minutes, `npm run db:expire` daily, and keep one or more `npm run worker` processes active.
+4. The crawler automatically schedules stale listings every 15 minutes and expires unseen listings daily. The standalone maintenance commands remain available for manual operations.
 
 The database stores normalized vehicles, listings, photo URLs, price history, crawl runs/jobs, limited source snapshots, and order drafts. The catalog API filters and paginates in SQL, so the browser never downloads 200,000 cards. A saved order draft raises that listing to priority 100 in the refresh queue.
 
 For a larger catalog, discovery and refresh are separate workloads: discovery adds new IDs in batches; workers recheck only stale or user-requested cards. Run multiple workers against the same database—jobs are claimed with `FOR UPDATE SKIP LOCKED`, so they do not duplicate work. Source payloads over 1 MB are not retained and only the three newest snapshots per listing/format remain.
 
-Guazi may redirect a datacenter IP to a verification page. Set `GUAZI_PROXY_URL` to an approved egress URL and, if required, `GUAZI_COOKIE` to a valid source session. The source client detects CAPTCHA/403/429 responses and pauses affected jobs for six hours without consuming their retry budget; it does not attempt to bypass verification.
+Guazi may redirect a datacenter IP to a verification page. With no external channel configured, a database-backed circuit breaker probes recovery every ten minutes and prevents the whole queue from hammering the blocked source. Set `GUAZI_PROXY_URLS` or `GUAZI_CHANNELS_JSON` when approved channels become available; the source client keeps a listing on a stable channel and immediately fails over to the next one. CAPTCHA/403/429 responses do not consume a listing's retry budget.
 
 The target catalog is in `config/guazi-targets.json`. Each target can have a series-name allowlist and a numeric priority. Higher-priority brands receive proportionally more discovery and enrichment slots. A detail card still has to contain `type:新能源`, so an ICE variant cannot enter the public snapshot merely because its series name matched.
 

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import os from "node:os";
 import { pool, withTransaction } from "../server/db.mjs";
 import { getCar, upsertCar } from "../server/repository.mjs";
+import { expireUnseenListings, scheduleStaleListings } from "../server/crawler-maintenance.mjs";
 import { normalizeDrive, normalizeEnergy, parseGuaziHtml, parseGuaziMarkdown } from "./lib/guazi-parser.mjs";
 import { fetchSourceText } from "./lib/source-client.mjs";
 
@@ -10,6 +11,16 @@ const runOnce = process.argv.includes("--once");
 const userAgent = process.env.GUAZI_HTML_USER_AGENT || "ChinaCarBY-Worker/0.2";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
+const scheduleIntervalMs = Math.max(60_000, Number(process.env.CRAWL_SCHEDULE_INTERVAL_MS || 15 * 60_000));
+const expireIntervalMs = Math.max(60_000, Number(process.env.CRAWL_EXPIRE_INTERVAL_MS || 24 * 60 * 60_000));
+let nextScheduleAt=0;
+let nextExpireAt=0;
+
+async function runMaintenance() {
+  const now=Date.now();
+  if (now >= nextScheduleAt) { const queued=await scheduleStaleListings(1000); if (queued) console.log(`Scheduled ${queued} stale listings`); nextScheduleAt=now + scheduleIntervalMs; }
+  if (now >= nextExpireAt) { const expired=await expireUnseenListings(30); if (expired) console.log(`Expired ${expired} unseen listings`); nextExpireAt=now + expireIntervalMs; }
+}
 
 async function fetchText(url, accept) {
   return fetchSourceText(url, { accept, userAgent, attempts:2 });
@@ -17,13 +28,36 @@ async function fetchText(url, accept) {
 
 async function claimJob() {
   return withTransaction(async (client) => {
+    const sourceResult = await client.query(`SELECT h.* FROM source_health h
+      WHERE EXISTS (SELECT 1 FROM crawl_jobs j WHERE j.source=h.source AND j.status='queued' AND j.available_at<=now())
+        AND (h.blocked_until IS NULL OR h.blocked_until<=now())
+        AND (h.status<>'probing' OR h.probe_until IS NULL OR h.probe_until<=now())
+      ORDER BY h.blocked_until NULLS FIRST, h.updated_at FOR UPDATE SKIP LOCKED LIMIT 1`);
+    const source = sourceResult.rows[0];
+    if (!source) return null;
+    if (source.status === "blocked" || source.status === "probing") {
+      await client.query("UPDATE source_health SET status='probing', probe_until=now() + interval '2 minutes', updated_at=now() WHERE source=$1", [source.source]);
+    }
     const result = await client.query(`WITH candidate AS (
-      SELECT id FROM crawl_jobs WHERE status='queued' AND available_at<=now()
+      SELECT id FROM crawl_jobs WHERE source=$2 AND status='queued' AND available_at<=now()
       ORDER BY priority DESC, available_at, id FOR UPDATE SKIP LOCKED LIMIT 1
     ) UPDATE crawl_jobs j SET status='running', locked_at=now(), locked_by=$1, attempts=attempts+1
-      FROM candidate WHERE j.id=candidate.id RETURNING j.*`, [workerId]);
+      FROM candidate WHERE j.id=candidate.id RETURNING j.*`, [workerId,source.source]);
     return result.rows[0] || null;
   });
+}
+
+async function markSourceHealthy(source) {
+  await pool.query(`INSERT INTO source_health (source,status,last_success_at,updated_at)
+    VALUES ($1,'healthy',now(),now()) ON CONFLICT (source) DO UPDATE SET status='healthy', blocked_until=NULL, probe_until=NULL,
+    consecutive_failures=0, last_success_at=now(), last_error=NULL, updated_at=now()`, [source]);
+}
+
+async function blockSource(source, error) {
+  await pool.query(`INSERT INTO source_health (source,status,blocked_until,consecutive_failures,last_failure_at,last_error,updated_at)
+    VALUES ($1,'blocked',now() + interval '10 minutes',1,now(),$2,now()) ON CONFLICT (source) DO UPDATE SET status='blocked',
+    blocked_until=now() + interval '10 minutes', probe_until=NULL, consecutive_failures=source_health.consecutive_failures+1,
+    last_failure_at=now(), last_error=$2, updated_at=now()`, [source,String(error.message || error).slice(0,1000)]);
 }
 
 async function saveSnapshot({ source, externalId, url, format, response }) {
@@ -38,6 +72,7 @@ async function saveSnapshot({ source, externalId, url, format, response }) {
 async function refreshGuazi(job) {
   const markdownUrl = job.url.endsWith(".md") ? job.url : job.url.replace(/\.html$/, ".md");
   const markdownResponse = await fetchText(markdownUrl, "text/markdown,text/plain;q=0.9,*/*;q=0.5");
+  await markSourceHealthy(job.source);
   const parsed = parseGuaziMarkdown(markdownResponse.text, markdownUrl);
   if (!parsed) throw new Error("Guazi markdown no longer contains a supported EV/PHEV listing");
   await saveSnapshot({ source:"Guazi", externalId:parsed.externalId, url:markdownUrl, format:"markdown", response:markdownResponse });
@@ -48,7 +83,7 @@ async function refreshGuazi(job) {
     const htmlResponse = await fetchText(htmlUrl, "text/html,*/*;q=0.5");
     detail = parseGuaziHtml(htmlResponse.text);
     await saveSnapshot({ source:"Guazi", externalId:parsed.externalId, url:htmlUrl, format:"html", response:htmlResponse });
-  } catch {}
+  } catch (error) { if (error.code === "source_blocked") throw error; }
   const importedAt = new Date().toISOString();
   const car = {
     ...existing,
@@ -98,12 +133,18 @@ async function processJob(job) {
 }
 
 async function complete(job) {
-  await pool.query("UPDATE crawl_jobs SET status='done', completed_at=now(), locked_at=NULL, locked_by=NULL, last_error=NULL WHERE id=$1", [job.id]);
+  await Promise.all([
+    pool.query("UPDATE crawl_jobs SET status='done', completed_at=now(), locked_at=NULL, locked_by=NULL, last_error=NULL WHERE id=$1", [job.id]),
+    markSourceHealthy(job.source),
+  ]);
 }
 
 async function fail(job, error) {
   if (error.code === "source_blocked") {
-    await pool.query("UPDATE crawl_jobs SET status='queued', attempts=GREATEST(0,attempts-1), available_at=now() + interval '6 hours', locked_at=NULL, locked_by=NULL, last_error=$2 WHERE id=$1", [job.id,String(error.message).slice(0,1000)]);
+    await Promise.all([
+      blockSource(job.source,error),
+      pool.query("UPDATE crawl_jobs SET status='queued', attempts=GREATEST(0,attempts-1), available_at=now(), locked_at=NULL, locked_by=NULL, last_error=$2 WHERE id=$1", [job.id,String(error.message).slice(0,1000)]),
+    ]);
     return;
   }
   const retry = job.attempts < job.max_attempts;
@@ -115,6 +156,7 @@ process.on("SIGINT", () => { stopping=true; });
 process.on("SIGTERM", () => { stopping=true; });
 
 do {
+  await runMaintenance();
   const job = await claimJob();
   if (!job) { if (runOnce) break; await sleep(2000); continue; }
   try { await processJob(job); await complete(job); console.log(`Completed job ${job.id} ${job.listing_id}`); }

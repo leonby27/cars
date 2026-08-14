@@ -15,11 +15,12 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
   try {
     if (request.method === "GET" && url.pathname === "/api/health") {
-      const [cars,jobs] = await Promise.all([
+      const [cars,jobs,sources] = await Promise.all([
         pool.query("SELECT count(*)::int AS cars FROM listings WHERE status='active'"),
         pool.query("SELECT count(*) FILTER (WHERE status='queued')::int queued, count(*) FILTER (WHERE status='running')::int running, count(*) FILTER (WHERE status='failed')::int failed FROM crawl_jobs"),
+        pool.query("SELECT source,status,blocked_until,last_success_at,last_failure_at,consecutive_failures,last_error FROM source_health ORDER BY source"),
       ]);
-      return json(response, 200, { ok:true, database:"postgresql", cars:cars.rows[0].cars, jobs:jobs.rows[0] });
+      return json(response, 200, { ok:true, database:"postgresql", cars:cars.rows[0].cars, jobs:jobs.rows[0], sources:sources.rows });
     }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams));
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand")));
