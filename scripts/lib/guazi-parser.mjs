@@ -9,6 +9,9 @@ const BRAND_MAP = new Map([
   ["岚图汽车", "Voyah"], ["岚图", "Voyah"], ["智界", "Luxeed"],
   ["享界", "Stelato"], ["尚界", "Shangjie"], ["鸿蒙智行", "HIMA"],
   ["吉利银河", "Geely Galaxy"], ["东风风神", "Dongfeng"],
+  ["宝马", "BMW"], ["华晨宝马", "BMW"], ["宝马汽车", "BMW"],
+  ["大众", "Volkswagen"], ["上汽大众", "Volkswagen"], ["一汽-大众", "Volkswagen"],
+  ["奥迪", "Audi"], ["一汽奥迪", "Audi"], ["上汽奥迪", "Audi"],
 ]);
 
 const SERIES_MAP = new Map([
@@ -22,6 +25,11 @@ const SERIES_MAP = new Map([
   ["东风风神E70", "E70"], ["风神L7新能源", "L7"], ["东风风神L8", "L8"],
   ["深蓝S05", "S05"], ["深蓝S07", "S07"], ["深蓝SL03", "SL03"],
   ["岚图FREE", "Free"], ["岚图梦想家", "Dream"],
+  ["宝马i3", "i3"], ["宝马iX3", "iX3"], ["宝马iX1", "iX1"],
+  ["宝马i5", "i5"], ["宝马i4", "i4"], ["宝马iX", "iX"],
+  ["大众ID.3", "ID.3"], ["大众ID.4", "ID.4"], ["大众ID.6", "ID.6"],
+  ["奥迪Q4 e-tron", "Q4 e-tron"], ["奥迪Q5 e-tron", "Q5 e-tron"],
+  ["奥迪e-tron", "e-tron"],
 ]);
 
 const field = (text, name) => text.match(new RegExp(`^${name}:\\s*(.+)$`, "m"))?.[1]?.trim() ?? null;
@@ -123,7 +131,8 @@ export function parseGuaziHtml(html) {
     engine: jsonValue(html, "发动机"),
     transmission: jsonValue(html, "变速箱"),
     bodyColor: jsonValue(html, "车身颜色"),
-    vehicleClass: jsonValue(html, "车辆级别"),
+    vehicleClass: jsonValue(html, "车辆级别") || jsonValue(html, "级别"),
+    bodyStructure: jsonValue(html, "车身结构"),
     driverAssistance: jsonValue(html, "智能驾驶"),
     infotainmentChip: jsonValue(html, "车机芯片"),
     assistanceLevel: jsonValue(html, "辅驾级别"),

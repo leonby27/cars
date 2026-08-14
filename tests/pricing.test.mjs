@@ -6,7 +6,7 @@ test("keeps the landed estimate internally consistent", () => {
   const price = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль" });
   assert.ok(price.totalLow < price.totalUsd);
   assert.ok(price.totalUsd < price.totalHigh);
-  assert.equal(price.customsNote, "Пошлина 0% по льготе; оформление и сборы");
+  assert.equal(price.customsNote, "Льгота 0% · оформление и сборы");
 });
 
 test("includes engine-based customs for a PHEV", () => {

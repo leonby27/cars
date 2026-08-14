@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { pool, withTransaction } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
+import { normalizeBodyType } from "../src/body-types.js";
 
 const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).slice(0, 2)) : Number(value) || null;
 const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({ price:car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images })).digest("hex");
@@ -9,7 +10,7 @@ export function normalizeCar(car) {
   const electricRange = car.electricRange ?? (Number(car.description?.match(/纯电续航\s*(\d+)/)?.[1]) || null);
   const combinedRange = car.combinedRange ?? (Number(car.description?.match(/综合续航\s*(\d+)/)?.[1]) || null);
   const model = car.brand === "Deepal" ? String(car.model).replace(/^深蓝/, "") : car.model;
-  return { ...car, model, title:`${car.brand} ${model} ${car.year}`, appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
+  return { ...car, model, title:`${car.brand} ${model} ${car.year}`, bodyType:normalizeBodyType({ ...car, model }), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
 }
 
 export async function upsertCar(car, client = pool) {
@@ -19,7 +20,7 @@ export async function upsertCar(car, client = pool) {
   await client.query(`INSERT INTO vehicles (id, brand, model, model_year, powertrain, drivetrain, battery_kwh, electric_range_km, combined_range_km, specifications, updated_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
     ON CONFLICT (id) DO UPDATE SET brand=EXCLUDED.brand, model=EXCLUDED.model, model_year=EXCLUDED.model_year, powertrain=EXCLUDED.powertrain, drivetrain=EXCLUDED.drivetrain, battery_kwh=EXCLUDED.battery_kwh, electric_range_km=EXCLUDED.electric_range_km, combined_range_km=EXCLUDED.combined_range_km, specifications=EXCLUDED.specifications, updated_at=now()`,
-    [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify({ batteryType:item.batteryType,batteryBrand:item.batteryBrand,batteryHealth:item.batteryHealth,engine:item.engine,transmission:item.transmission,bodyColor:item.bodyColor,vehicleClass:item.vehicleClass,driverAssistance:item.driverAssistance,infotainmentChip:item.infotainmentChip,assistanceLevel:item.assistanceLevel,radarCount:item.radarCount,cameraCount:item.cameraCount,ultrasonicCount:item.ultrasonicCount,warranty:item.warranty,inspectionGrade:item.inspectionGrade,powertrainInspection:item.powertrainInspection,bodyInspection:item.bodyInspection,interiorInspection:item.interiorInspection,structureInspection:item.structureInspection,engineBayInspection:item.engineBayInspection,batteryProtection:item.batteryProtection })]);
+    [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify({ bodyType:item.bodyType,bodyStructure:item.bodyStructure,batteryType:item.batteryType,batteryBrand:item.batteryBrand,batteryHealth:item.batteryHealth,engine:item.engine,transmission:item.transmission,bodyColor:item.bodyColor,vehicleClass:item.vehicleClass,driverAssistance:item.driverAssistance,infotainmentChip:item.infotainmentChip,assistanceLevel:item.assistanceLevel,radarCount:item.radarCount,cameraCount:item.cameraCount,ultrasonicCount:item.ultrasonicCount,warranty:item.warranty,inspectionGrade:item.inspectionGrade,powertrainInspection:item.powertrainInspection,bodyInspection:item.bodyInspection,interiorInspection:item.interiorInspection,structureInspection:item.structureInspection,engineBayInspection:item.engineBayInspection,batteryProtection:item.batteryProtection })]);
   await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd)
     VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21)
     ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd`,
@@ -53,6 +54,7 @@ export function buildCarFilters(searchParams) {
   if (searchParams.get("type") && searchParams.get("type") !== "Все") add("v.powertrain=?", searchParams.get("type"));
   if (searchParams.get("brand") && searchParams.get("brand") !== "Все марки") add("v.brand=?", searchParams.get("brand"));
   if (searchParams.get("model") && searchParams.get("model") !== "Все модели") add("v.model=?", searchParams.get("model"));
+  if (searchParams.get("bodyType") && searchParams.get("bodyType") !== "Все кузова") add("v.specifications->>'bodyType'=?", searchParams.get("bodyType"));
   if (Number(searchParams.get("yearMin"))) add("v.model_year>=?", Number(searchParams.get("yearMin")));
   if (Number(searchParams.get("mileageMax"))) add("l.mileage_km<=?", Number(searchParams.get("mileageMax")));
   if (Number(searchParams.get("priceCnyMax"))) add("l.price_cny<=?", Number(searchParams.get("priceCnyMax")));
@@ -82,22 +84,27 @@ export async function getCar(id) {
   return result.rows[0] ? { ...rowToCar(result.rows[0]), priceHistory:result.rows[0].price_history } : null;
 }
 
-export async function getCatalogMeta(type, brand) {
+export async function getCatalogMeta(type, brand, bodyType) {
   const values = [];
   const filters = ["l.status='active'"];
   if (type && type !== "Все") { values.push(type); filters.push(`v.powertrain=$${values.length}`); }
   if (brand && brand !== "Все марки") { values.push(brand); filters.push(`v.brand=$${values.length}`); }
+  const bodyFilters = [...filters];
+  const bodyValues = [...values];
+  if (bodyType && bodyType !== "Все кузова") { bodyValues.push(bodyType); bodyFilters.push(`v.specifications->>'bodyType'=$${bodyValues.length}`); }
   const where = `WHERE ${filters.join(" AND ")}`;
-  const [count, brands, models] = await Promise.all([
-    pool.query(`SELECT count(*)::int total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+  const bodyWhere = `WHERE ${bodyFilters.join(" AND ")}`;
+  const [count, brands, models, bodyTypes] = await Promise.all([
+    pool.query(`SELECT count(*)::int total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere}`, bodyValues),
     pool.query("SELECT v.brand, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' GROUP BY v.brand ORDER BY v.brand"),
-    pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} GROUP BY v.model ORDER BY v.model`, values),
+    pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
+    pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
   ]);
-  return { total:count.rows[0].total, brands:brands.rows, models:models.rows };
+  return { total:count.rows[0].total, brands:brands.rows, models:models.rows, bodyTypes:bodyTypes.rows };
 }
 
-export async function createOrderDraft({ listingId, contact, calculation = {} }) {
-  const result = await pool.query("INSERT INTO order_drafts (listing_id, contact, calculation) VALUES ($1,$2,$3) RETURNING id, listing_id, status, created_at", [listingId,contact,JSON.stringify(calculation)]);
+export async function createOrderDraft({ listingId, name = null, contact, calculation = {} }) {
+  const result = await pool.query("INSERT INTO order_drafts (listing_id, customer_name, contact, calculation) VALUES ($1,$2,$3,$4) RETURNING id, listing_id, status, created_at", [listingId,name,contact,JSON.stringify(calculation)]);
   await pool.query(`INSERT INTO crawl_jobs (source, listing_id, job_type, url, priority)
     SELECT source, id, 'refresh_listing', source_url, 100 FROM listings WHERE id=$1
     ON CONFLICT (job_type, listing_id) WHERE status IN ('queued','running') DO UPDATE SET priority=GREATEST(crawl_jobs.priority,100), available_at=LEAST(crawl_jobs.available_at,now())`, [listingId]);

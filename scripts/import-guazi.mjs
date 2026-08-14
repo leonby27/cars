@@ -22,7 +22,7 @@ const discoveryMode = args.get("--discovery") || "targeted";
 const databaseMode = args.has("--database") || args.has("--database-only");
 const databaseOnly = args.has("--database-only");
 const htmlUserAgent = process.env.GUAZI_HTML_USER_AGENT || "OAI-SearchBot/1.0";
-const commonHeaders = { accept: "text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", "user-agent": "ChinaCarBY-Importer/0.1" };
+const commonHeaders = { accept: "text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", "user-agent": "NaVostokBY-Importer/0.1" };
 
 async function fetchText(url, headers = commonHeaders, attempts = 3) {
   const response = await fetchSourceText(url, { accept:headers.accept, userAgent:headers["user-agent"], attempts });
@@ -171,6 +171,7 @@ async function enrichCar(car) {
     transmission: detail.transmission ?? old?.transmission,
     bodyColor: detail.bodyColor ?? old?.bodyColor,
     vehicleClass: detail.vehicleClass ?? old?.vehicleClass,
+    bodyStructure: detail.bodyStructure ?? old?.bodyStructure,
     driverAssistance: detail.driverAssistance ?? old?.driverAssistance,
     infotainmentChip: detail.infotainmentChip ?? old?.infotainmentChip,
     assistanceLevel: detail.assistanceLevel ?? old?.assistanceLevel,

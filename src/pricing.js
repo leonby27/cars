@@ -7,7 +7,7 @@ export function estimateLandedCost(car) {
   const chinaUsd = round50(car.chinaPrice * cnyUsd);
   const age = 2026 - car.year;
   let customsUsd = PRICING.evCustomsUsd;
-  let customsNote = "Пошлина 0% по льготе; оформление и сборы";
+  let customsNote = "Льгота 0% · оформление и сборы";
   let engineAssumed = false;
   if (car.type !== "Электромобиль") {
     const parsedEngine = Number(String(car.engine || "").match(/\d+(?:\.\d+)?/)?.[0]);
@@ -22,7 +22,7 @@ export function estimateLandedCost(car) {
     } else if (age <= 5) dutyEur = engineCc * 1.7;
     else dutyEur = engineCc * 3.2;
     customsUsd = round50(dutyEur * eurUsd + 300);
-    customsNote = `Оценка для физлица и ДВС ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (предположение)" : ""}`;
+    customsNote = `Физлицо · ДВС ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (оценка)" : ""}`;
   }
   const customsSpread = car.type === "Электромобиль" ? 150 : Math.max(300, round50(customsUsd * .08));
   const customsLow = Math.max(0, customsUsd - customsSpread);

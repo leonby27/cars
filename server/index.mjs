@@ -23,15 +23,17 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { ok:true, database:"postgresql", cars:cars.rows[0].cars, jobs:jobs.rows[0], sources:sources.rows });
     }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams));
-    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand")));
+    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.get("bodyType")));
     const carMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)$/);
     if (carMatch) { const car = await getCar(decodeURIComponent(carMatch[1])); return car ? json(response, 200, car) : json(response, 404, { error:"car_not_found" }); }
     if (request.method === "POST" && url.pathname === "/api/order-drafts") {
       const body = await readJson(request);
+      const name = String(body.name || "").trim();
       const contact = String(body.contact || "").trim();
       if (!body.listingId || !contact) return json(response, 400, { error:"listing_and_contact_required" });
+      if (name.length > 120) return json(response, 400, { error:"name_too_long" });
       if (contact.length > 200) return json(response, 400, { error:"contact_too_long" });
-      return json(response, 201, await createOrderDraft({ listingId:body.listingId, contact, calculation:body.calculation }));
+      return json(response, 201, await createOrderDraft({ listingId:body.listingId, name:name || null, contact, calculation:body.calculation }));
     }
     return json(response, 404, { error:"not_found" });
   } catch (error) {
@@ -40,7 +42,7 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, "0.0.0.0", () => console.log(`ChinaCar API: http://127.0.0.1:${port}`));
+server.listen(port, "0.0.0.0", () => console.log(`NaVostok API: http://127.0.0.1:${port}`));
 
 const shutdown = async () => { server.close(); await pool.end(); };
 process.on("SIGINT", shutdown);

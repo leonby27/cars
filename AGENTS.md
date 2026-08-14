@@ -13,3 +13,13 @@ Typography preference: prioritize comfortable readability over ultra-compact UI.
 Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. On desktop, keep a sticky left-side thumbnail rail for quick navigation and expose the full thumbnail set; on mobile, support horizontal swipe navigation directly on the main gallery.
 
 Visual QA preference: do not run browser-based visual checks, take implementation screenshots, or perform design-QA comparisons unless the user explicitly asks. The user reviews visual changes manually. Validate changes with build, tests, and non-visual checks only.
+
+Home vehicle feed preference: show an endless randomized feed, 4 cards per row on desktop, with automatic loading on scroll. Do not show the “Карточка доступна” status label anywhere in the product.
+
+Featured card pricing preference: label the estimated USD amount as “под ключ до Минска” so it is clearly distinguished from the source price in China.
+
+Featured card content preference: do not show the source price in Chinese yuan on home-page vehicle cards.
+
+Vehicle detail facts preference: place characteristics in a single vertical icon-led list directly below the gallery, followed by “Что указано в объявлении” in the same row-based layout.
+
+Localization preference: show Chinese listing cities in Russian. Present source letter grades as plain-language vehicle-condition labels; do not expose the source name in catalog result metadata.

@@ -28,6 +28,16 @@ test("normalizes priority-market Galaxy and Dongfeng brands", () => {
   assert.equal(dongfeng.model, "E70");
 });
 
+test("normalizes international EV brands from the Chinese market", () => {
+  const base = `full_payment:158000元\nfirst_register:2024-05\nmileage:1.25万公里\ntransfer_times:0次\ncity:杭州\ntype:新能源`;
+  const bmw = parseGuaziMarkdown(`id:c168848183157620\n${base}\nmanufacturer:华晨宝马\nbrand:宝马\nseries:宝马i3\nmodel:2024款 eDrive 35 L`, "https://www.guazi.com/car-detail/c168848183157620.md");
+  const volkswagen = parseGuaziMarkdown(`id:c168848183157621\n${base}\nmanufacturer:上汽大众\nbrand:大众\nseries:大众ID.3\nmodel:2024款 纯净智享版`, "https://www.guazi.com/car-detail/c168848183157621.md");
+  const audi = parseGuaziMarkdown(`id:c168848183157622\n${base}\nmanufacturer:一汽奥迪\nbrand:奥迪\nseries:奥迪Q4 e-tron\nmodel:2024款 40 e-tron`, "https://www.guazi.com/car-detail/c168848183157622.md");
+  assert.deepEqual([bmw.brand, bmw.model], ["BMW", "i3"]);
+  assert.deepEqual([volkswagen.brand, volkswagen.model], ["Volkswagen", "ID.3"]);
+  assert.deepEqual([audi.brand, audi.model], ["Audi", "Q4 e-tron"]);
+});
+
 test("extracts original gallery and detailed EV fields from HTML", () => {
   const html = `<link rel="preload" as="image" href="https://image-public.guazistatic.com/car.jpg?x-bce-process=image/quality,q_88/resize,m_fill,w_750,h_500"><script>\\"label\\":\\"能源类型\\",\\"value\\":\\"增程式\\",\\"label\\":\\"电池容量\\",\\"value\\":\\"31.73kWh\\",\\"label\\":\\"纯电续航\\",\\"value\\":\\"215km\\",\\"label\\":\\"综合续航\\",\\"value\\":\\"1130km\\",\\"label\\":\\"电池健康度\\",\\"value\\":\\"94%\\",\\"label\\":\\"发动机\\",\\"value\\":\\"1.5L\\",\\"label\\":\\"检测等级\\",\\"value\\":\\"优秀\\"</script>`;
   const detail = parseGuaziHtml(html);

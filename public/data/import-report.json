@@ -1,150 +1,98 @@
 {
-  "startedAt": "2026-08-13T21:07:46.932Z",
-  "finishedAt": "2026-08-13T21:13:38.277Z",
-  "discovered": 4000,
-  "discoveryMode": "targeted",
-  "discovery": {
-    "configuredBrands": 14,
-    "availableBrands": 14,
-    "priorityByBrand": {
-      "BYD": 4,
-      "Zeekr": 3,
-      "Li Auto": 3,
-      "Voyah": 3,
-      "Deepal": 3,
-      "Geely Galaxy": 3,
-      "Dongfeng": 2,
-      "Avatr": 2,
-      "HIMA": 2,
-      "Xiaomi": 2,
-      "Leapmotor": 1,
-      "XPeng": 1,
-      "NIO": 1,
-      "Denza": 1
-    },
-    "series": 92,
-    "listingRequests": 182,
-    "bySeries": {
-      "腾势D9": 70,
-      "蔚来ES6": 70,
-      "小鹏P7": 70,
-      "小米SU7": 70,
-      "小米YU7": 70,
-      "问界M7": 70,
-      "问界M9": 70,
-      "阿维塔06": 66,
-      "阿维塔11": 40,
-      "东风风神E70": 31,
-      "SKY EV01": 20,
-      "银河L7": 41,
-      "银河E5": 64,
-      "银河E8": 23,
-      "深蓝SL03": 57,
-      "深蓝S07": 51,
-      "深蓝S05": 66,
-      "岚图梦想家": 70,
-      "岚图FREE": 70,
-      "理想L9": 70,
-      "理想L7": 70,
-      "理想L8": 70,
-      "极氪001": 70,
-      "极氪007": 66,
-      "极氪X": 59,
-      "宋Pro新能源": 70,
-      "秦PLUS": 70,
-      "海鸥": 70,
-      "汉": 70,
-      "蔚来ET5T": 70,
-      "小鹏MONA M03": 70,
-      "小米SU7 Ultra": 51,
-      "问界M5": 70,
-      "问界M8": 70,
-      "阿维塔07": 57,
-      "阿维塔12": 46,
-      "风神L7新能源": 13,
-      "东风风神L8": 6,
-      "理想L6": 70,
-      "极氪007GT": 51,
-      "极氪7X": 17,
-      "极氪001 FR": 4,
-      "海豚": 70,
-      "唐新能源": 70,
-      "宋PLUS新能源": 70,
-      "秦L": 70,
-      "腾势N9": 18,
-      "蔚来ES8": 70,
-      "小鹏G3": 64,
-      "阿维塔06T": 3,
-      "元PLUS": 70,
-      "海豹06新能源": 70,
-      "海豹": 70,
-      "汉L": 67,
-      "腾势N8L": 17,
-      "蔚来EC6": 70,
-      "小鹏G9": 70,
-      "海豹05 DM-i": 58,
-      "元UP": 55,
-      "海狮06新能源": 39,
-      "海豹07 DM-i": 24,
-      "腾势Z9GT": 15,
-      "蔚来ET5": 66,
-      "小鹏G6": 66,
-      "海狮05 EV": 27,
-      "海豹06GT": 22,
-      "海狮07 EV": 15,
-      "海狮05 DM-i": 11,
-      "腾势Z9": 5,
-      "蔚来ET7": 66,
-      "小鹏P5": 57,
-      "海豹06 DM-i旅行版": 12,
-      "海狮07 DM-i": 1,
-      "腾势": 2,
-      "蔚来ES7": 63,
-      "小鹏P7+": 45,
-      "腾势N7": 3,
-      "蔚来EC7": 34,
-      "小鹏G7": 35,
-      "腾势N8": 1,
-      "蔚来ET9": 7,
-      "小鹏X9": 29,
-      "小鹏GX": 4
-    },
-    "brandErrors": []
-  },
-  "matchingCars": 3969,
-  "matchingByBrand": {
-    "Denza": 131,
-    "NIO": 516,
-    "XPeng": 506,
-    "Xiaomi": 191,
-    "HIMA": 280,
-    "Avatr": 208,
-    "Dongfeng": 53,
-    "Geely Galaxy": 125,
-    "Deepal": 174,
-    "Voyah": 140,
-    "Li Auto": 280,
-    "Zeekr": 267,
-    "BYD": 1098
-  },
-  "enrichmentCandidates": 1100,
+  "startedAt": "2026-08-14T06:26:04.090Z",
+  "finishedAt": "2026-08-14T06:31:00.685Z",
+  "discovered": 8000,
+  "discoveryMode": "sitemap",
+  "discovery": null,
+  "matchingCars": 0,
+  "matchingByBrand": {},
+  "enrichmentCandidates": 0,
   "requested": 1000,
-  "imported": 1000,
-  "importedByBrand": {
-    "BYD": 136,
-    "Zeekr": 102,
-    "Li Auto": 102,
-    "Voyah": 102,
-    "Deepal": 102,
-    "Geely Galaxy": 102,
-    "Dongfeng": 53,
-    "Avatr": 68,
-    "HIMA": 68,
-    "Xiaomi": 66,
-    "XPeng": 33,
-    "NIO": 33,
-    "Denza": 33
-  },
-  "shortfall": 0,
-  "errors": []
+  "imported": 0,
+  "importedByBrand": {},
+  "shortfall": 1000,
+  "errors": [
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171042894301469.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c170995425419053.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c170999976322597.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171017292219039.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171055897281655.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171014872846008.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171010271544636.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171046440841968.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171055427319858.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171034658170771.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171028140857020.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171021547129984.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171054857155708.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171054836623661.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171054724209075.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171054036248697.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171054570326358.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171001213340085.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171054696214291.md"
+    },
+    {
+      "error": "All 1 source channels require verification",
+      "item": "https://www.guazi.com/car-detail/c171029449394732.md"
+    }
+  ],
+  "catalogReplaced": false,
+  "minimumSafeCount": 800
 }
