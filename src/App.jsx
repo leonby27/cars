@@ -1,11 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, Clock, CurrencyCny, Gauge, Heart, Images, Info, Lightning, ListChecks, MagnifyingGlass, MapPin, Scales, ShareNetwork, ShieldCheck, SlidersHorizontal, Sparkle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear } from "./car-filters.js";
+import { estimateLandedCost, PRICING } from "./pricing.js";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
-const PRICING = { usdByn: 2.9564, cnyBynPer10: 4.4231, eurByn: 3.4105, deliveryUsd: 3500, serviceUsd: 800, evCustomsUsd: 350, rateDate: "13.08.2026", chinaHandling: [450, 800], delivery: [3200, 3900], reserve: [300, 700] };
-const round50 = (value) => Math.round(value / 50) * 50;
 const moneyRange = (low, high) => low === high ? `$${number(low)}` : `$${number(low)}–${number(high)}`;
 
 function formatCheckedAt(value) {
@@ -32,37 +31,6 @@ function normalizeImportedCar(car) {
   const combinedRange = car.combinedRange ?? (Number(description.match(/综合续航\s*(\d+)/)?.[1]) || null);
   const batteryHealth = car.batteryHealth ?? (Number(description.match(/电池健康度\s*(\d+)%/)?.[1]) || null);
   return { ...car, model, title:`${car.brand} ${model} ${car.year}`, appearanceScore, electricRange, combinedRange, batteryHealth, range:car.range || electricRange || combinedRange, checkedAt:car.checkedAt || car.importedAt, status:"Карточка доступна" };
-}
-
-function estimateLandedCost(car) {
-  const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
-  const eurUsd = PRICING.eurByn / PRICING.usdByn;
-  const chinaUsd = round50(car.chinaPrice * cnyUsd);
-  const age = 2026 - car.year;
-  let customsUsd = PRICING.evCustomsUsd;
-  let customsNote = "Пошлина 0% по льготе; оформление и сборы";
-  let engineAssumed = false;
-  if (car.type !== "Электромобиль") {
-    const parsedEngine = Number(String(car.engine || "").match(/\d+(?:\.\d+)?/)?.[0]);
-    const engineCc = parsedEngine ? Math.round(parsedEngine * 1000) : 1500;
-    engineAssumed = !parsedEngine;
-    const chinaEur = chinaUsd / eurUsd;
-    let dutyEur;
-    if (age < 3) {
-      const percent = chinaEur <= 8500 ? 0.54 : 0.48;
-      const minRate = chinaEur <= 8500 ? 2.5 : chinaEur <= 16700 ? 3.5 : chinaEur <= 42300 ? 5.5 : 7.5;
-      dutyEur = Math.max(chinaEur * percent, engineCc * minRate);
-    } else if (age <= 5) dutyEur = engineCc * 1.7;
-    else dutyEur = engineCc * 3.2;
-    customsUsd = round50(dutyEur * eurUsd + 300);
-    customsNote = `Оценка для физлица и ДВС ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (предположение)" : ""}`;
-  }
-  const customsSpread = car.type === "Электромобиль" ? 150 : Math.max(300, round50(customsUsd * .08));
-  const customsLow = Math.max(0, customsUsd - customsSpread);
-  const customsHigh = customsUsd + customsSpread;
-  const totalLow = round50(chinaUsd + PRICING.chinaHandling[0] + PRICING.delivery[0] + customsLow + PRICING.serviceUsd + PRICING.reserve[0]);
-  const totalHigh = round50(chinaUsd + PRICING.chinaHandling[1] + PRICING.delivery[1] + customsHigh + PRICING.serviceUsd + PRICING.reserve[1]);
-  return { chinaUsd, deliveryUsd: PRICING.deliveryUsd, deliveryLow: PRICING.delivery[0], deliveryHigh: PRICING.delivery[1], chinaHandlingLow: PRICING.chinaHandling[0], chinaHandlingHigh: PRICING.chinaHandling[1], customsUsd, customsLow, customsHigh, customsNote, serviceUsd: PRICING.serviceUsd, reserveLow: PRICING.reserve[0], reserveHigh: PRICING.reserve[1], totalLow, totalHigh, totalUsd: round50((totalLow + totalHigh) / 2) };
 }
 
 function useRoute() {
@@ -158,19 +126,38 @@ function SelectField({ label, value, options, onChange, searchable = false }) {
   return <div className={`select-field custom-select${open ? " open" : ""}`} ref={rootRef}><span>{label}</span><button ref={triggerRef} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} onClick={() => open ? close() : setOpen(true)} onKeyDown={handleKeyDown}><b>{value}</b><CaretDown size={16} weight="bold"/></button>{open && <div className="select-menu">{searchable && <div className="select-search"><MagnifyingGlass size={16}/><input ref={searchRef} type="search" value={query} placeholder={`Поиск: ${label.toLocaleLowerCase("ru")}`} aria-label={`Поиск: ${label.toLocaleLowerCase("ru")}`} role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls={listId} aria-activedescendant={filteredOptions[activeIndex] ? `${listId}-${activeIndex}` : undefined} onChange={(event) => setQuery(event.target.value)} onKeyDown={handleSearchKeyDown}/>{query && <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => { setQuery(""); searchRef.current?.focus(); }}><X size={14} weight="bold"/></button>}</div>}<div className="select-options" id={listId} role="listbox" aria-label={label}>{filteredOptions.length ? filteredOptions.map((item, index) => <button type="button" id={`${listId}-${index}`} role="option" aria-selected={item === value} className={`${item === value ? "selected" : ""}${index === activeIndex ? " active" : ""}`} key={item} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(item)}><span>{item}</span>{item === value && <Check size={16} weight="bold"/>}</button>) : <p className="select-empty">Ничего не найдено</p>}</div></div>}</div>;
 }
 
-function QuickSearch({ navigate, cars }) {
+function QuickSearch({ navigate, cars, apiMode }) {
   const [type, setType] = useState("Все"); const [brand, setBrand] = useState("Все марки"); const [model, setModel] = useState("Все модели"); const [year, setYear] = useState("от 2022"); const [mileage, setMileage] = useState("до 50 000 км"); const [priceLimit, setPriceLimit] = useState("до $40 000");
-  const brands = ["Все марки", ...uniqueSorted(cars.map((car) => car.brand))];
+  const [remoteMeta,setRemoteMeta] = useState({ brands:[], models:[] });
+  const [remoteCount,setRemoteCount] = useState(0);
   const normalizedType = type === "Электромобили" ? "Электромобиль" : type === "Гибриды" ? "Гибрид" : "Все";
   const modelCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand));
-  const models = ["Все модели", ...uniqueSorted(modelCars.map((car) => car.model))];
+  const brands = ["Все марки", ...(apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand)))];
+  const models = ["Все модели", ...(apiMode ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
   const mileageCap = Number(mileage.replace(/\D/g, "")); const priceCap = Number(priceLimit.replace(/\D/g, ""));
   const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && matchesMinimumYear(car, year) && car.mileage <= mileageCap && estimateLandedCost(car).totalUsd <= priceCap).length;
+  useEffect(() => {
+    if (!apiMode) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      const metaQuery = new URLSearchParams();
+      const carsQuery = new URLSearchParams({ limit:"1", yearMin:year.replace(/\D/g,""), mileageMax:String(mileageCap), landedMax:String(priceCap) });
+      if (normalizedType !== "Все") { metaQuery.set("type", normalizedType); carsQuery.set("type", normalizedType); }
+      if (brand !== "Все марки") { metaQuery.set("brand", brand); carsQuery.set("brand", brand); }
+      if (model !== "Все модели") carsQuery.set("model", model);
+      try {
+        const [metaResponse,carsResponse] = await Promise.all([fetch(`/api/catalog/meta?${metaQuery}`, { signal:controller.signal }), fetch(`/api/cars?${carsQuery}`, { signal:controller.signal })]);
+        if (!metaResponse.ok || !carsResponse.ok) throw new Error("search unavailable");
+        const [meta,catalog] = await Promise.all([metaResponse.json(),carsResponse.json()]); setRemoteMeta(meta); setRemoteCount(catalog.total);
+      } catch {}
+    }, 120);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [apiMode, normalizedType, brand, model, year, mileageCap, priceCap]);
   const changeType = (value) => { setType(value); setModel("Все модели"); };
   const changeBrand = (value) => { setBrand(value); setModel("Все модели"); };
   return <section className="search-box"><div className="type-tabs">{["Все","Электромобили","Гибриды"].map((item) => <button key={item} className={type === item ? "active" : ""} onClick={() => changeType(item)}>{item}</button>)}</div><div className="quick-fields">
     <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands} searchable/><SelectField label="Модель" value={model} onChange={setModel} options={models} searchable/><SelectField label="Год выпуска" value={year} onChange={setYear} options={["от 2022","от 2023","от 2024"]}/><SelectField label="Пробег" value={mileage} onChange={setMileage} options={["до 50 000 км","до 30 000 км","до 15 000 км"]}/><SelectField label="Цена в Минске" value={priceLimit} onChange={setPriceLimit} options={["до $40 000","до $30 000","до $25 000"]}/>
-    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {resultCount} авто</button>
+    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}`)}><MagnifyingGlass size={20} weight="bold"/>Показать {apiMode ? remoteCount : resultCount} авто</button>
   </div></section>;
 }
 
@@ -179,9 +166,9 @@ function FeaturedCard({ car, onClick }) {
   return <article className="featured-card" onClick={onClick} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}><div className="featured-image"><img src={car.image} alt={car.title}/><span className={`status ${car.statusTone}`}>{car.status}</span></div><div className="featured-body"><h3>{car.title}</h3><p>{number(car.mileage)} км · {car.type} · {car.drive}</p><div><strong>≈ ${number(price.totalUsd)}</strong><span>{number(car.chinaPrice)} ¥ в Китае</span></div></div></article>;
 }
 
-function Home({ navigate, cars }) {
+function Home({ navigate, cars, apiMode }) {
   const brands = [...new Set(cars.map((car) => car.brand))].slice(0, 6);
-  return <main><section className="hero"><div className="eyebrow"><Sparkle size={16} weight="fill"/>Автомобили из Китая под заказ</div><h1>Найдите свой автомобиль<br/>на китайском рынке</h1><p>Реальные объявления Guazi, оригинальные фотографии и ориентировочная цена с доставкой в Минск.</p><QuickSearch navigate={navigate} cars={cars}/><div className="popular-row"><span>В текущем импорте:</span>{brands.map((brand) => <button key={brand} onClick={() => navigate(`/catalog?brand=${encodeURIComponent(brand)}`)}>{brand}</button>)}</div></section>
+  return <main><section className="hero"><div className="eyebrow"><Sparkle size={16} weight="fill"/>Автомобили из Китая под заказ</div><h1>Найдите свой автомобиль<br/>на китайском рынке</h1><p>Реальные объявления Guazi, оригинальные фотографии и ориентировочная цена с доставкой в Минск.</p><QuickSearch navigate={navigate} cars={cars} apiMode={apiMode}/><div className="popular-row"><span>В текущем импорте:</span>{brands.map((brand) => <button key={brand} onClick={() => navigate(`/catalog?brand=${encodeURIComponent(brand)}`)}>{brand}</button>)}</div></section>
     <section className="trust-strip page-width"><div><span><ListChecks size={22} weight="duotone"/></span><p><b>Данные обновляются автоматически</b><small>Цена, пробег и статус наличия</small></p></div><div><span><ShieldCheck size={22} weight="duotone"/></span><p><b>Проверяем до оплаты</b><small>История, батарея и документы</small></p></div><div><span><CurrencyCny size={22} weight="duotone"/></span><p><b>Показываем обе цены</b><small>В Китае и ориентир до Минска</small></p></div></section>
     <section className="featured page-width"><div className="section-heading"><div><span>Импортировано из Guazi</span><h2>Свежие реальные предложения</h2></div><button onClick={() => navigate("/catalog")}>Все автомобили <ArrowRight size={18}/></button></div><div className="featured-grid">{cars.slice(0, 3).map((car) => <FeaturedCard key={car.id} car={car} onClick={() => navigate(`/cars/${car.id}`)}/>)}</div></section>
   </main>;
@@ -200,14 +187,53 @@ function CarRow({ car, navigate, favorite, compare, toggleFavorite, toggleCompar
   return <article className="car-row" onClick={open} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && open()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}><div className="car-row-image"><img src={car.image} alt={car.title}/><span><Images size={15}/>{car.images?.length || 1}</span></div><div className="car-row-info"><div className="row-title"><div><h2>{car.title}</h2><span className={`status ${car.statusTone}`}>{car.status}</span></div><div className="row-actions"><button aria-label="Добавить в сравнение" className={compare ? "selected" : ""} onClick={(e) => {e.stopPropagation();toggleCompare(car.id);}}><Scales size={20} weight={compare ? "fill" : "regular"}/></button><button aria-label="Добавить в избранное" className={favorite ? "selected" : ""} onClick={(e) => {e.stopPropagation();toggleFavorite(car.id);}}><Heart size={21} weight={favorite ? "fill" : "regular"}/></button></div></div><p className="summary">{number(car.mileage)} км · {car.type} · {car.drive} привод</p><div className="mini-specs">{car.battery && <span><BatteryHigh size={17}/>{car.battery} кВт·ч</span>}{car.range && <span><Gauge size={17}/>{car.range} км</span>}<span><ShieldCheck size={17}/>Класс {car.conditionGrade || "—"}</span></div><div className="source-line"><MapPin size={15}/>{car.city}<span>•</span><Clock size={15}/>Проверено {formatCheckedAt(car.checkedAt || car.importedAt)}<span>•</span>{car.source}</div></div><div className="car-row-price"><strong>≈ ${number(price.totalUsd)}</strong><span>середина диапазона до Минска</span><b>{number(car.chinaPrice)} ¥</b><small>цена в Китае</small><button>Подробнее <ArrowRight size={16}/></button></div></article>;
 }
 
-function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare, cars }) {
+function Catalog({ navigate, favorites, toggleFavorite, compares, toggleCompare, cars, apiMode }) {
+  const pageSize = 24;
   const params = new URLSearchParams(window.location.search); const rawType = params.get("type"); const rawBrand = params.get("brand"); const rawModel = params.get("model"); const rawYear = params.get("year"); const rawMileage = params.get("mileage"); const rawPrice = params.get("price");
   const [filters,setFilters] = useState({type:rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",brand:rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",model:rawModel && rawModel !== "Все модели" ? rawModel : "Все модели",year:["от 2022","от 2023","от 2024"].includes(rawYear) ? rawYear : "от 2022",mileage:["до 50 000 км","до 30 000 км","до 15 000 км"].includes(rawMileage) ? rawMileage : "до 50 000 км",price:["до $40 000","до $30 000","до $25 000"].includes(rawPrice) ? rawPrice : "до $40 000"});
-  const brands = uniqueSorted(cars.map((car) => car.brand));
+  const [remoteCars,setRemoteCars] = useState([]);
+  const [remoteTotal,setRemoteTotal] = useState(0);
+  const [remoteMeta,setRemoteMeta] = useState({ brands:[], models:[] });
+  const [remoteLoading,setRemoteLoading] = useState(apiMode);
+  const [remoteError,setRemoteError] = useState(false);
+  const brands = apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand));
-  const models = ["Все модели", ...uniqueSorted(modelCars.map((car) => car.model))];
+  const models = ["Все модели", ...(apiMode ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
   const filtered = useMemo(() => cars.filter((car) => { const cap = Number(filters.price.replace(/\D/g,"")); const mileageCap = Number(filters.mileage.replace(/\D/g,"")); return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && matchesMinimumYear(car, filters.year) && car.mileage <= mileageCap && estimateLandedCost(car).totalUsd <= cap; }), [filters, cars]);
-  return <main className="catalog page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/>Автомобили из Китая</div><div className="catalog-heading"><div><h1>Автомобили из Китая</h1><p>Реальные объявления Guazi · закрытый пилот</p></div><span>{filtered.length} из {cars.length} импортированных</span></div><FilterPanel filters={filters} setFilters={setFilters} resultCount={filtered.length} brands={brands} models={models}/><div className="catalog-layout"><section className="results-list"><div className="result-tools"><b>Подходящие варианты</b><button>Сначала новые <CaretDown size={14}/></button></div>{filtered.length ? filtered.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} compare={compares.has(car.id)} toggleFavorite={toggleFavorite} toggleCompare={toggleCompare}/>) : <div className="empty-state"><MagnifyingGlass size={34}/><h3>Ничего не нашли</h3><p>Попробуйте сбросить один из фильтров.</p></div>}</section><aside className="side-card"><div className="side-icon"><ShieldCheck size={26} weight="duotone"/></div><h3>Проверим выбранный автомобиль</h3><p>Свяжемся с продавцом, запросим оригинальный отчёт и подтвердим возможность экспорта.</p><ul><li><Check size={15}/>VIN и история</li><li><Check size={15}/>Состояние батареи</li><li><Check size={15}/>Итоговая смета</li></ul>{cars[0] && <button className="secondary" onClick={() => navigate(`/cars/${cars[0].id}`)}>Как выглядит проверка</button>}</aside></div></main>;
+  const requestParams = () => {
+    const query = new URLSearchParams({ limit:String(pageSize), offset:"0" });
+    if (filters.type !== "Все") query.set("type", filters.type);
+    if (filters.brand !== "Все марки") query.set("brand", filters.brand);
+    if (filters.model !== "Все модели") query.set("model", filters.model);
+    query.set("yearMin", filters.year.replace(/\D/g,""));
+    query.set("mileageMax", filters.mileage.replace(/\D/g,""));
+    query.set("landedMax", filters.price.replace(/\D/g,""));
+    return query;
+  };
+  useEffect(() => {
+    if (!apiMode) return;
+    const controller = new AbortController();
+    setRemoteLoading(true); setRemoteError(false);
+    const query = requestParams();
+    const metaQuery = new URLSearchParams();
+    if (filters.type !== "Все") metaQuery.set("type", filters.type);
+    if (filters.brand !== "Все марки") metaQuery.set("brand", filters.brand);
+    Promise.all([
+      fetch(`/api/cars?${query}`, { signal:controller.signal }).then((response) => response.ok ? response.json() : Promise.reject(new Error("catalog unavailable"))),
+      fetch(`/api/catalog/meta?${metaQuery}`, { signal:controller.signal }).then((response) => response.ok ? response.json() : Promise.reject(new Error("catalog meta unavailable"))),
+    ]).then(([catalog,meta]) => { setRemoteCars(catalog.items.map(normalizeImportedCar)); setRemoteTotal(catalog.total); setRemoteMeta(meta); }).catch((error) => { if (error.name !== "AbortError") setRemoteError(true); }).finally(() => { if (!controller.signal.aborted) setRemoteLoading(false); });
+    return () => controller.abort();
+  }, [apiMode, filters]);
+  const loadMore = async () => {
+    const query = requestParams(); query.set("offset", String(remoteCars.length));
+    setRemoteLoading(true); setRemoteError(false);
+    try { const response = await fetch(`/api/cars?${query}`); if (!response.ok) throw new Error("catalog unavailable"); const catalog = await response.json(); setRemoteCars((current) => [...current, ...catalog.items.map(normalizeImportedCar)]); setRemoteTotal(catalog.total); }
+    catch { setRemoteError(true); }
+    finally { setRemoteLoading(false); }
+  };
+  const displayed = apiMode ? remoteCars : filtered;
+  const resultCount = apiMode ? remoteTotal : filtered.length;
+  return <main className="catalog page-width"><div className="breadcrumbs"><button onClick={() => navigate("/")}>Главная</button><CaretRight size={13}/>Автомобили из Китая</div><div className="catalog-heading"><div><h1>Автомобили из Китая</h1><p>Реальные объявления Guazi · закрытый пилот</p></div><span>{displayed.length} из {resultCount} найденных</span></div><FilterPanel filters={filters} setFilters={setFilters} resultCount={resultCount} brands={brands} models={models}/><div className="catalog-layout"><section className="results-list"><div className="result-tools"><b>Подходящие варианты</b><button>Сначала новые <CaretDown size={14}/></button></div>{remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}{displayed.length ? displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} compare={compares.has(car.id)} toggleFavorite={toggleFavorite} toggleCompare={toggleCompare}/>) : !remoteLoading && <div className="empty-state"><MagnifyingGlass size={34}/><h3>Ничего не нашли</h3><p>Попробуйте сбросить один из фильтров.</p></div>}{remoteLoading && <div className="catalog-message">Загружаем объявления…</div>}{apiMode && displayed.length < resultCount && !remoteLoading && <button className="load-more" onClick={loadMore}>Показать ещё {Math.min(pageSize, resultCount - displayed.length)} авто</button>}</section><aside className="side-card"><div className="side-icon"><ShieldCheck size={26} weight="duotone"/></div><h3>Проверим выбранный автомобиль</h3><p>Свяжемся с продавцом, запросим оригинальный отчёт и подтвердим возможность экспорта.</p><ul><li><Check size={15}/>VIN и история</li><li><Check size={15}/>Состояние батареи</li><li><Check size={15}/>Итоговая смета</li></ul>{displayed[0] && <button className="secondary" onClick={() => navigate(`/cars/${displayed[0].id}`)}>Как выглядит проверка</button>}</aside></div></main>;
 }
 
 function GalleryModal({ car, images, initialIndex, onClose }) {
@@ -358,15 +384,21 @@ function SourceGrid({ rows }) {
 function OrderDraft({ car, navigate }) {
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [contact, setContact] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   if (!car) return <NotFound navigate={navigate}/>;
   const price = estimateLandedCost(car);
   const sourceLink = car.sourceUrl?.replace(/\.md$/, ".html");
-  const saveDraft = (event) => {
+  const saveDraft = async (event) => {
     event.preventDefault();
-    const draft = { carId:car.id, sourceId:car.sourceId, contact:contact.trim(), savedAt:new Date().toISOString() };
-    localStorage.setItem(`chinacar-order-${car.id}`, JSON.stringify(draft));
-    setSaved(true);
+    setSaving(true); setSaveError("");
+    try {
+      const response = await fetch("/api/order-drafts", { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify({ listingId:car.id, contact:contact.trim(), calculation:{ chinaPriceCny:car.chinaPrice, chinaUsd:price.chinaUsd, totalLow:price.totalLow, totalHigh:price.totalHigh, totalUsd:price.totalUsd, rateDate:PRICING.rateDate } }) });
+      if (!response.ok) throw new Error("save unavailable");
+      setSaved(await response.json());
+    } catch { setSaveError("Не удалось сохранить черновик. Проверьте подключение к серверу и попробуйте ещё раз."); }
+    finally { setSaving(false); }
   };
   const vehicleRows = [
     ["Первая регистрация", car.firstRegistration], ["Пробег", `${number(car.mileage)} км`], ["Город", car.city],
@@ -399,7 +431,7 @@ function OrderDraft({ car, navigate }) {
       <section className="order-section"><div className="order-section-title"><div><span>03</span><h2>Батарея и запас хода</h2></div><DataTag type="source"/></div><SourceGrid rows={batteryRows}/></section>
       <section className="order-section"><div className="order-section-title"><div><span>04</span><h2>Состояние по отчёту Guazi</h2></div><DataTag type="source"/></div><SourceGrid rows={conditionRows}/>{car.description && <div className="source-description"><b>Комментарий из объявления</b><p>{car.description}</p></div>}<p className="source-warning"><Info size={17}/>Это заявление площадки и продавца, не независимая проверка ChinaCar.</p></section>
       <section className="order-section"><div className="order-section-title"><div><span>05</span><h2>Оснащение и ассистенты</h2></div><DataTag type="source"/></div><SourceGrid rows={assistanceRows}/></section>
-    </div><aside className="order-progress"><div className="progress-card"><span>Статус заказа</span><h3>Можно запускать проверку</h3><ol><li className="done"><Check size={15}/><p><b>Карточка Guazi найдена</b><small>{formatCheckedAt(car.checkedAt || car.importedAt)}</small></p></li><li className="done"><Check size={15}/><p><b>Данные и фото загружены</b><small>{car.images?.length || 1} оригинальных фото</small></p></li><li><span>3</span><p><b>Подтверждение продавца</b><small>Наличие и актуальная цена</small></p></li><li><span>4</span><p><b>VIN и экспорт</b><small>Документы и ограничения</small></p></li><li><span>5</span><p><b>Независимая проверка</b><small>Кузов, батарея и диагностика</small></p></li></ol>{!verificationOpen && <button className="primary" onClick={() => setVerificationOpen(true)}>Запустить проверку <ArrowRight size={18}/></button>}{verificationOpen && !saved && <form className="verification-form" onSubmit={saveDraft}><div className="modal-icon"><ChatCircleText size={24} weight="duotone"/></div><h4>Куда прислать результат?</h4><p>Оставьте телефон или Telegram. Имя и другие данные сейчас не нужны.</p><label>Телефон или @username<input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="+375 … или @telegram" required autoFocus/></label><button className="primary" type="submit">Сохранить и продолжить</button><small>В MVP черновик сохраняется только на этом устройстве.</small></form>}{saved && <div className="verification-saved"><CheckCircle size={42} weight="fill"/><h4>Черновик сохранён</h4><p>Демо-режим: данные сохранены локально. Для реального запроса продавцу потребуется подключить CRM и канал связи.</p></div>}<div className="progress-links">{sourceLink && <a href={sourceLink} target="_blank" rel="noreferrer">Оригинал Guazi <ArrowRight size={16}/></a>}<button onClick={() => navigate(`/cars/${car.id}`)}>Вернуться к автомобилю</button></div></div></aside></div>
+    </div><aside className="order-progress"><div className="progress-card"><span>Статус заказа</span><h3>Можно запускать проверку</h3><ol><li className="done"><Check size={15}/><p><b>Карточка Guazi найдена</b><small>{formatCheckedAt(car.checkedAt || car.importedAt)}</small></p></li><li className="done"><Check size={15}/><p><b>Данные и фото загружены</b><small>{car.images?.length || 1} оригинальных фото</small></p></li><li><span>3</span><p><b>Подтверждение продавца</b><small>Наличие и актуальная цена</small></p></li><li><span>4</span><p><b>VIN и экспорт</b><small>Документы и ограничения</small></p></li><li><span>5</span><p><b>Независимая проверка</b><small>Кузов, батарея и диагностика</small></p></li></ol>{!verificationOpen && <button className="primary" onClick={() => setVerificationOpen(true)}>Запустить проверку <ArrowRight size={18}/></button>}{verificationOpen && !saved && <form className="verification-form" onSubmit={saveDraft}><div className="modal-icon"><ChatCircleText size={24} weight="duotone"/></div><h4>Куда прислать результат?</h4><p>Оставьте телефон или Telegram. Имя и другие данные сейчас не нужны.</p><label>Телефон или @username<input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="+375 … или @telegram" required autoFocus/></label><button className="primary" type="submit" disabled={saving}>{saving ? "Сохраняем…" : "Сохранить и продолжить"}</button>{saveError && <small className="form-error">{saveError}</small>}<small>Черновик и расчёт сохранятся в базе; объявление попадёт в приоритетную очередь перепроверки.</small></form>}{saved && <div className="verification-saved"><CheckCircle size={42} weight="fill"/><h4>Черновик №{saved.id} сохранён</h4><p>Заявка записана в базе, а актуальность объявления будет перепроверена в приоритетном порядке.</p></div>}<div className="progress-links">{sourceLink && <a href={sourceLink} target="_blank" rel="noreferrer">Оригинал Guazi <ArrowRight size={16}/></a>}<button onClick={() => navigate(`/cars/${car.id}`)}>Вернуться к автомобилю</button></div></div></aside></div>
   </main>;
 }
 
@@ -407,9 +439,38 @@ function InfoPage({ navigate, type }) { const how = type === "how"; return <main
 function NotFound({ navigate }) { return <main className="simple-page page-width"><span>404</span><h1>Такой страницы нет</h1><button className="primary" onClick={() => navigate("/")}>Вернуться на главную</button></main>; }
 
 export function App() {
-  const {path,navigate}=useRoute(); const [favorites,setFavorites]=useState(new Set()); const [compares,setCompares]=useState(new Set()); const [cars,setCars]=useState([]); const [importedAt,setImportedAt]=useState(null); const [loading,setLoading]=useState(true); const [loadError,setLoadError]=useState(false);
-  useEffect(() => { fetch(`${import.meta.env.BASE_URL}data/cars.json`, { cache:"no-store" }).then((response) => { if (!response.ok) throw new Error("import unavailable"); return response.json(); }).then((payload) => { if (!payload.cars?.length) throw new Error("empty import"); setCars(payload.cars.map(normalizeImportedCar)); setImportedAt(payload.generatedAt); }).catch(() => setLoadError(true)).finally(() => setLoading(false)); }, []);
-  const toggleSet=(setter)=>(id)=>setter((current)=>{const next=new Set(current);next.has(id)?next.delete(id):next.add(id);return next;}); const detailId=path.startsWith("/cars/")?path.split("/")[2]:null; const orderId=path.startsWith("/orders/draft/")?path.split("/")[3]:null;
-  const page=loading?<main className="simple-page page-width"><span>Guazi</span><h1>Загружаем реальные объявления…</h1></main>:loadError?<main className="simple-page page-width"><span>Импорт временно недоступен</span><h1>Не удалось загрузить каталог</h1><p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p></main>:path==="/"?<Home navigate={navigate} cars={cars}/>:path==="/catalog"?<Catalog navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} compares={compares} toggleCompare={toggleSet(setCompares)}/>:orderId?<OrderDraft car={cars.find((item)=>item.id===orderId)} navigate={navigate}/>:detailId?<Detail car={cars.find((item)=>item.id===detailId)} navigate={navigate} favorite={favorites.has(detailId)} toggleFavorite={toggleSet(setFavorites)}/>:path==="/how-it-works"?<InfoPage navigate={navigate} type="how"/>:path==="/about"?<InfoPage navigate={navigate} type="about"/>:<NotFound navigate={navigate}/>;
-  return <><Header navigate={navigate} favoritesCount={favorites.size} compareCount={compares.size}/>{page}<footer><div className="page-width"><b>chinacar.by</b><span>{importedAt ? `Guazi · ${cars.length} реальных объявлений · импорт ${new Date(importedAt).toLocaleString("ru-RU")}` : "Загружаем актуальные объявления"}</span></div></footer></>;
+  const {path,navigate}=useRoute();
+  const detailId=path.startsWith("/cars/")?path.split("/")[2]:null; const orderId=path.startsWith("/orders/draft/")?path.split("/")[3]:null; const targetId=detailId || orderId;
+  const [favorites,setFavorites]=useState(new Set()); const [compares,setCompares]=useState(new Set()); const [cars,setCars]=useState([]); const [catalogTotal,setCatalogTotal]=useState(0); const [importedAt,setImportedAt]=useState(null); const [apiMode,setApiMode]=useState(false); const [loading,setLoading]=useState(true); const [routeLoading,setRouteLoading]=useState(Boolean(targetId)); const [loadError,setLoadError]=useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/cars?limit=60", { cache:"no-store" });
+        if (!response.ok) throw new Error("api unavailable");
+        const payload = await response.json();
+        let initialCars = payload.items || [];
+        if (targetId && !initialCars.some((car) => car.id === targetId)) { const detailResponse = await fetch(`/api/cars/${encodeURIComponent(targetId)}`, { cache:"no-store" }); if (detailResponse.ok) initialCars = [...initialCars, await detailResponse.json()]; }
+        if (!cancelled) { setCars(initialCars.map(normalizeImportedCar)); setCatalogTotal(payload.total); setImportedAt(initialCars[0]?.checkedAt || new Date().toISOString()); setApiMode(true); }
+      } catch {
+        try {
+          const response = await fetch(`${import.meta.env.BASE_URL}data/cars.json`, { cache:"no-store" });
+          if (!response.ok) throw new Error("import unavailable");
+          const payload = await response.json();
+          if (!payload.cars?.length) throw new Error("empty import");
+          if (!cancelled) { setCars(payload.cars.map(normalizeImportedCar)); setCatalogTotal(payload.cars.length); setImportedAt(payload.generatedAt); setApiMode(false); }
+        } catch { if (!cancelled) setLoadError(true); }
+      } finally { if (!cancelled) { setLoading(false); setRouteLoading(false); } }
+    };
+    load(); return () => { cancelled=true; };
+  }, []);
+  useEffect(() => {
+    if (!apiMode || !targetId || cars.some((item) => item.id === targetId)) return;
+    const controller = new AbortController(); setRouteLoading(true);
+    fetch(`/api/cars/${encodeURIComponent(targetId)}`, { signal:controller.signal }).then((response) => response.ok ? response.json() : Promise.reject(new Error("not found"))).then((car) => setCars((current) => [...current, normalizeImportedCar(car)])).catch(() => {}).finally(() => { if (!controller.signal.aborted) setRouteLoading(false); });
+    return () => controller.abort();
+  }, [apiMode, targetId, cars]);
+  const toggleSet=(setter)=>(id)=>setter((current)=>{const next=new Set(current);next.has(id)?next.delete(id):next.add(id);return next;});
+  const page=loading || routeLoading?<main className="simple-page page-width"><span>Guazi</span><h1>Загружаем реальные объявления…</h1></main>:loadError?<main className="simple-page page-width"><span>Импорт временно недоступен</span><h1>Не удалось загрузить каталог</h1><p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p></main>:path==="/"?<Home navigate={navigate} cars={cars} apiMode={apiMode}/>:path==="/catalog"?<Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} compares={compares} toggleCompare={toggleSet(setCompares)}/>:orderId?<OrderDraft car={cars.find((item)=>item.id===orderId)} navigate={navigate}/>:detailId?<Detail car={cars.find((item)=>item.id===detailId)} navigate={navigate} favorite={favorites.has(detailId)} toggleFavorite={toggleSet(setFavorites)}/>:path==="/how-it-works"?<InfoPage navigate={navigate} type="how"/>:path==="/about"?<InfoPage navigate={navigate} type="about"/>:<NotFound navigate={navigate}/>;
+  return <><Header navigate={navigate} favoritesCount={favorites.size} compareCount={compares.size}/>{page}<footer><div className="page-width"><b>chinacar.by</b><span>{importedAt ? `Guazi · ${catalogTotal} реальных объявлений · проверка ${new Date(importedAt).toLocaleString("ru-RU")}` : "Загружаем актуальные объявления"}</span></div></footer></>;
 }

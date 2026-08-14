@@ -45,6 +45,7 @@
 .breadcrumbs{font-size:13px}
 .catalog-heading p{font-size:15px}
 .catalog-heading>span{font-size:14px}
+.catalog-message{padding:22px;text-align:center;color:var(--muted);font-size:13px}.load-more{display:block;width:min(100%,360px);margin:22px auto 0;padding:13px 18px;border:1px solid var(--line);border-radius:10px;background:#fff;font-weight:750}.load-more:hover{border-color:#b9bdc2;background:#fafafa}.form-error{color:#b42318!important}
 .filter-title{font-size:15px}
 .filter-title button{font-size:13px}
 .result-tools{font-size:15px}

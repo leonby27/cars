@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeDrive, normalizeEnergy, parseGuaziHtml, parseGuaziListing, parseGuaziMarkdown, parseGuaziSeriesLinks } from "./lib/guazi-parser.mjs";
+import { fetchSourceText } from "./lib/source-client.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUTPUT_DIR = path.join(ROOT, "public", "data");
@@ -16,22 +17,14 @@ const limit = Number(args.get("--limit") || 18);
 const scanLimit = Number(args.get("--scan") || 600);
 const concurrency = Number(args.get("--concurrency") || 8);
 const discoveryMode = args.get("--discovery") || "targeted";
+const databaseMode = args.has("--database") || args.has("--database-only");
+const databaseOnly = args.has("--database-only");
 const htmlUserAgent = process.env.GUAZI_HTML_USER_AGENT || "OAI-SearchBot/1.0";
 const commonHeaders = { accept: "text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", "user-agent": "ChinaCarBY-Importer/0.1" };
 
 async function fetchText(url, headers = commonHeaders, attempts = 3) {
-  let lastError;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      const response = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      return await response.text();
-    } catch (error) {
-      lastError = error;
-      if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, attempt * 500));
-    }
-  }
-  throw lastError;
+  const response = await fetchSourceText(url, { accept:headers.accept, userAgent:headers["user-agent"], attempts });
+  return response.text;
 }
 
 const xmlLocations = (xml) => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
@@ -259,4 +252,19 @@ report.minimumSafeCount = minimumSafeCount;
 await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));
 if (!safeToReplaceCatalog) process.exitCode = 1;
-else await fs.writeFile(CARS_PATH, `${JSON.stringify(payload, null, 2)}\n`);
+else {
+  if (!databaseOnly) await fs.writeFile(CARS_PATH, `${JSON.stringify(payload, null, 2)}\n`);
+  if (databaseMode) {
+    const { importCars } = await import("../server/repository.mjs");
+    const { pool } = await import("../server/db.mjs");
+    const run = await pool.query("INSERT INTO crawl_runs (source,mode,discovered,details) VALUES ('Guazi',$1,$2,$3) RETURNING id", [discoveryMode,markdownUrls.length,JSON.stringify({ requested:limit, scanLimit, concurrency })]);
+    try {
+      const importedToDatabase = await importCars(cars);
+      await pool.query("UPDATE crawl_runs SET status='completed', imported=$2, failed=$3, finished_at=now() WHERE id=$1", [run.rows[0].id,importedToDatabase,errors.length]);
+      console.log(`Imported ${importedToDatabase} listings into PostgreSQL`);
+    } catch (error) {
+      await pool.query("UPDATE crawl_runs SET status='failed', failed=$2, details=details || $3::jsonb, finished_at=now() WHERE id=$1", [run.rows[0].id,errors.length + 1,JSON.stringify({ error:String(error.message || error) })]);
+      throw error;
+    } finally { await pool.end(); }
+  }
+}
