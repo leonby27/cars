@@ -5291,6 +5291,35 @@ footer {
   background: #fff;
   box-shadow: 0 0 0 3px #fff0ec;
 }
+.password-input {
+  position: relative;
+}
+.password-input input {
+  padding-right: 50px;
+}
+.password-input > button {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+.password-input > button:hover {
+  background: #eceef0;
+  color: var(--ink);
+}
+.password-input > button:focus-visible {
+  outline: 3px solid rgba(235, 62, 31, 0.2);
+  outline-offset: 1px;
+}
 .auth-consent {
   display: grid;
   grid-template-columns: 18px 1fr;

@@ -61,6 +61,30 @@ test("does not turn missing API or write requests into the app shell", async () 
   }
 });
 
+test("proxies allowlisted catalog images with cache headers", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwardedUrl = "";
+  globalThis.fetch = async (request) => {
+    forwardedUrl = String(request);
+    return new Response(new Uint8Array([1, 2, 3]), { status:200, headers:{ "content-type":"image/jpeg" } });
+  };
+  try {
+    const source = "https://image-oversea.guazistatic-global.com/ovp/product/car.jpg";
+    const response = await worker.fetch(new Request(`https://example.test/api/image?src=${encodeURIComponent(source)}`), { ASSETS:{ fetch:async () => new Response("missing", { status:404 }) } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/jpeg");
+    assert.match(response.headers.get("cache-control"), /max-age=21600/);
+    assert.equal(forwardedUrl, source);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("rejects image proxy requests to untrusted hosts", async () => {
+  const response = await worker.fetch(new Request(`https://example.test/api/image?src=${encodeURIComponent("https://example.com/private.jpg")}`), { ASSETS:{ fetch:async () => new Response("missing", { status:404 }) } });
+  assert.equal(response.status, 403);
+});
+
 test("emits the files required by Sites packaging", async () => {
   await access(new URL("../dist/client/index.html", import.meta.url));
   await access(new URL("../dist/server/index.js", import.meta.url));

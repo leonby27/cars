@@ -1,9 +1,11 @@
 import http from "node:http";
-import { pool } from "./db.mjs";
-import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, normalizePhone, normalizeProfile, sessionCookie, updateAccountProfile } from "./auth.mjs";
+import { Readable } from "node:stream";
+import { isDatabaseUnavailable, pool } from "./db.mjs";
+import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
 
 const port = Number(process.env.API_PORT || 8787);
+const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 const json = (response, status, payload, headers = {}) => { response.writeHead(status, { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "access-control-allow-origin":"*", "access-control-allow-headers":"content-type", ...headers }); response.end(JSON.stringify(payload)); };
 const readJson = async (request) => {
   const chunks=[]; let size=0;
@@ -15,6 +17,16 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "OPTIONS") return json(response, 204, null);
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
   try {
+    if (request.method === "GET" && url.pathname === "/api/image") {
+      let source;
+      try { source = new URL(url.searchParams.get("src") || ""); } catch { return json(response, 400, { error:"invalid_image_url" }); }
+      if (source.protocol !== "https:" || !imageHosts.has(source.hostname)) return json(response, 403, { error:"image_host_not_allowed" });
+      const upstream = await fetch(source, { redirect:"follow", headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"NaVostok-image-proxy/1.0" } });
+      const contentType = upstream.headers.get("content-type") || "";
+      if (!upstream.ok || !contentType.startsWith("image/") || !upstream.body) return json(response, 502, { error:"image_unavailable" });
+      response.writeHead(200, { "content-type":contentType, "cache-control":"public, max-age=21600, stale-while-revalidate=86400", "x-content-type-options":"nosniff" });
+      return Readable.fromWeb(upstream.body).pipe(response);
+    }
     if (request.method === "GET" && url.pathname === "/api/health") {
       const [cars,jobs,sources] = await Promise.all([
         pool.query("SELECT count(*)::int AS cars FROM listings WHERE status='active'"),
@@ -69,6 +81,17 @@ const server = http.createServer(async (request, response) => {
       if (result.error) return json(response, 400, result);
       return json(response, 200, result, { "set-cookie":clearSessionCookie(request) });
     }
+    if (request.method === "GET" && url.pathname === "/api/account/favorites") {
+      const result = await listAccountFavorites(request);
+      return result.error ? json(response, 401, result) : json(response, 200, result);
+    }
+    const favoriteMatch = ["PUT", "DELETE"].includes(request.method) && url.pathname.match(/^\/api\/account\/favorites\/([^/]+)$/);
+    if (favoriteMatch) {
+      const listingId = decodeURIComponent(favoriteMatch[1]);
+      if (!listingId || listingId.length > 200) return json(response, 400, { error:"invalid_listing_id" });
+      const result = await setAccountFavorite(request, listingId, request.method === "PUT");
+      return result.error ? json(response, 401, result) : json(response, 200, result);
+    }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams));
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.get("bodyType")));
     const carMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)$/);
@@ -85,6 +108,7 @@ const server = http.createServer(async (request, response) => {
     return json(response, 404, { error:"not_found" });
   } catch (error) {
     console.error(error);
+    if (isDatabaseUnavailable(error)) return json(response, 503, { error:"service_unavailable" });
     return json(response, 500, { error:"internal_error" });
   }
 });

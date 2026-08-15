@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, EnvelopeSimple, Gauge, Heart, Images, Info, InstagramLogo, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, EnvelopeSimple, Eye, EyeSlash, Gauge, Heart, Images, Info, InstagramLogo, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -126,6 +126,16 @@ const filterNumber = (value) => Number(String(value).replace(/\D/g, "")) || 0;
 const matchesAdvancedFilters = (car, { drive, owners, history }) => (drive === "Любой привод" || car.drive === drive) && (owners === "Любое количество" || Number(car.owners) <= filterNumber(owners)) && (history === "Любая история" || claimCount(car) === 0);
 const ownerOptions = ["Любое количество", "1 владелец", "До 2 владельцев"];
 const historyOptions = ["Любая история", "Без страховых случаев"];
+const proxiedImageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
+const imageSource = (source) => {
+  if (!source) return source;
+  try {
+    const url = new URL(source);
+    return proxiedImageHosts.has(url.hostname) ? `/api/image?src=${encodeURIComponent(url.href)}` : source;
+  } catch {
+    return source;
+  }
+};
 
 function normalizeImportedCar(car) {
   const description = car.description || "";
@@ -557,7 +567,7 @@ function HoverImagePreview({ car, className }) {
     preloadStarted.current = true;
     images.slice(1).forEach((src) => {
       const image = new Image();
-      image.src = src;
+      image.src = imageSource(src);
     });
   };
   const selectByCursor = (event) => {
@@ -569,7 +579,7 @@ function HoverImagePreview({ car, className }) {
 
   return (
     <div className={`${className} hover-image-preview`} onMouseEnter={preload} onMouseMove={selectByCursor} onMouseLeave={() => setActive(0)}>
-      <img src={images[active]} alt={car.title} draggable="false" />
+      <img src={imageSource(images[active])} alt={car.title} draggable="false" />
       {images.length > 1 && (
         <div className="hover-image-segments" aria-hidden="true">
           {images.map((image, index) => (
@@ -1275,7 +1285,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
               aria-label={`Перейти к фото ${index + 1}`}
               aria-current={activeIndex === index ? "true" : undefined}
             >
-              <img src={image} alt="" loading={index > 8 ? "lazy" : "eager"} />
+              <img src={imageSource(image)} alt="" loading={index > 8 ? "lazy" : "eager"} />
             </button>
           ))}
         </aside>
@@ -1287,7 +1297,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
                 imageRefs.current[index] = node;
               }}
             >
-              <img src={image} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"} />
+              <img src={imageSource(image)} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"} />
               <figcaption>
                 {index + 1} из {images.length}
               </figcaption>
@@ -1378,7 +1388,7 @@ function VehicleGallery({ car }) {
     <>
       <section className="gallery-panel">
         <button className={`gallery-open${dragging ? " dragging" : ""}`} style={{ "--gallery-drag-x": `${dragOffset}px` }} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}>
-          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={images[active]} alt={`${car.title}, фото ${active + 1}`} draggable="false" />
+          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active])} alt={`${car.title}, фото ${active + 1}`} draggable="false" />
         </button>
         <span aria-live="polite">
           <Images size={17} />
@@ -1397,7 +1407,7 @@ function VehicleGallery({ car }) {
         <div className="gallery-thumbs" ref={thumbsRef}>
           {images.map((image, index) => (
             <button key={`${image}-${index}`} className={active === index ? "active" : ""} onMouseEnter={() => selectImage(index)} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}>
-              <img src={image} alt="" loading="lazy" />
+              <img src={imageSource(image)} alt="" loading="lazy" />
             </button>
           ))}
         </div>
@@ -1837,7 +1847,7 @@ function OrderDraft({ car, navigate }) {
         <DataTag type="pending" />
       </div>
       <section className="order-car-summary">
-        <img src={car.image} alt={car.title} />
+        <img src={imageSource(car.image)} alt={car.title} />
         <div>
           <h2>{car.title}</h2>
           <p>
@@ -2651,6 +2661,26 @@ function NotFound({ navigate }) {
 
 const localAuthKey = "navostok-local-auth";
 const localAccountsKey = "navostok-local-accounts";
+const localAccountResetKey = "navostok-account-reset-2026-08-15";
+const guestFavoritesKey = "navostok-favorites";
+const favoritesMigrationKey = "navostok-favorites-account-migration";
+const accountFavoritesKey = (userId) => `navostok-account-favorites:${userId}`;
+const readFavorites = (key) => {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(key) || "[]");
+    return new Set(Array.isArray(saved) ? saved : []);
+  } catch {
+    return new Set();
+  }
+};
+const storeFavorites = (key, values) => window.localStorage.setItem(key, JSON.stringify([...values]));
+try {
+  if (!window.localStorage.getItem(localAccountResetKey)) {
+    window.localStorage.removeItem(localAuthKey);
+    window.localStorage.removeItem(localAccountsKey);
+    window.localStorage.setItem(localAccountResetKey, "complete");
+  }
+} catch {}
 const authMessages = {
   invalid_name: "Укажите имя — от 2 до 80 символов.",
   invalid_phone: "Проверьте номер телефона.",
@@ -2669,9 +2699,14 @@ const normalizeLocalPhone = (value) => {
   const digits = String(value || "").replace(/\D/g, "");
   return digits.length === 9 ? `375${digits}` : digits;
 };
+const sanitizePhoneInput = (value) => {
+  const source = String(value || "");
+  const prefix = source.trimStart().startsWith("+") ? "+" : "";
+  return `${prefix}${source.replace(/\D/g, "")}`;
+};
 const formatAccountPhone = (value) => {
   const digits = normalizeLocalPhone(value);
-  return digits.length === 12 && digits.startsWith("375") ? `+375 ${digits.slice(3, 5)} ${digits.slice(5, 8)}-${digits.slice(8, 10)}-${digits.slice(10)}` : `+${digits}`;
+  return digits ? `+${digits}` : "";
 };
 const readLocalAccounts = () => {
   try {
@@ -2731,13 +2766,33 @@ async function localDeleteAccount(userId, password) {
   if (!account || (await localPasswordHash(password, account.salt)) !== account.passwordHash) throw new Error("invalid_credentials");
   window.localStorage.setItem(localAccountsKey, JSON.stringify(accounts.filter((item) => item.id !== userId)));
   window.localStorage.removeItem(localAuthKey);
+  window.localStorage.removeItem(accountFavoritesKey(userId));
+}
+
+function PasswordField({ label, value, onChange, autoComplete, placeholder = "", required = false }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <label className="auth-field">
+      <span>{label}</span>
+      <div className="password-input">
+        <input type={visible ? "text" : "password"} autoComplete={autoComplete} value={value} onChange={onChange} placeholder={placeholder} required={required} />
+        <button type="button" aria-label={visible ? "Скрыть пароль" : "Показать пароль"} aria-pressed={visible} onClick={() => setVisible((current) => !current)}>
+          {visible ? <EyeSlash size={20} /> : <Eye size={20} />}
+        </button>
+      </div>
+    </label>
+  );
 }
 
 function AuthPage({ mode, navigate, onAuthenticate, pending }) {
   const registering = mode === "register";
-  const [values, setValues] = useState({ name:"", phone:"+375 ", password:"", confirm:"", consent:false });
+  const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:false });
   const [error, setError] = useState("");
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
+  const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
+  const blockPhoneWhitespace = (event) => {
+    if (/\s/.test(event.key)) event.preventDefault();
+  };
   const submit = async (event) => {
     event.preventDefault();
     setError("");
@@ -2773,9 +2828,9 @@ function AuthPage({ mode, navigate, onAuthenticate, pending }) {
             <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register")}>Регистрация</button>
           </div>
           {registering && <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required /></label>}
-          <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={update("phone")} placeholder="+375 29 123-45-67" required /></label>
-          <label className="auth-field"><span>Пароль</span><input type="password" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder="Минимум 8 символов" required /></label>
-          {registering && <label className="auth-field"><span>Повторите пароль</span><input type="password" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required /></label>}
+          <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder="+375291234567" maxLength={16} required /></label>
+          <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder="Минимум 8 символов" required />
+          {registering && <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required />}
           {registering && <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} /><span>Согласен с <button type="button" onClick={() => navigate("/terms")}>условиями</button> и <button type="button" onClick={() => navigate("/privacy")}>политикой конфиденциальности</button></span></label>}
           {error && <div className="auth-error" role="alert">{error}</div>}
           <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : registering ? "Создать аккаунт" : "Войти"}<ArrowRight size={18} /></button>
@@ -2870,7 +2925,7 @@ function AccountPage({ user, favoritesCount, navigate, onLogout, onSaveProfile, 
           <form className="delete-account-form" onSubmit={removeAccount}>
             <div className="delete-warning"><WarningCircle size={23} weight="fill" /><p><b>Это действие необратимо.</b> Для подтверждения введите пароль и слово «УДАЛИТЬ».</p></div>
             <div className="delete-fields">
-              <label className="auth-field"><span>Текущий пароль</span><input type="password" autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} required /></label>
+              <PasswordField label="Текущий пароль" autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} required />
               <label className="auth-field"><span>Подтверждение</span><input value={deletePhrase} onChange={(event) => setDeletePhrase(event.target.value)} placeholder="УДАЛИТЬ" required /></label>
             </div>
             {deleteError && <div className="auth-error" role="alert">{deleteError}</div>}
@@ -2903,14 +2958,7 @@ export function App() {
   const detailId = path.startsWith("/cars/") ? path.split("/")[2] : null;
   const orderId = path.startsWith("/orders/draft/") ? path.split("/")[3] : null;
   const targetId = detailId || orderId;
-  const [favorites, setFavorites] = useState(() => {
-    try {
-      const saved = JSON.parse(window.localStorage.getItem("navostok-favorites") || "[]");
-      return new Set(Array.isArray(saved) ? saved : []);
-    } catch {
-      return new Set();
-    }
-  });
+  const [favorites, setFavorites] = useState(() => readFavorites(guestFavoritesKey));
   const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "BYN" ? "BYN" : "USD"));
   const [cars, setCars] = useState([]);
   const [apiMode, setApiMode] = useState(false);
@@ -2925,9 +2973,6 @@ export function App() {
     window.localStorage.setItem("navostok-currency", currency);
   }, [currency]);
   useEffect(() => {
-    window.localStorage.setItem("navostok-favorites", JSON.stringify([...favorites]));
-  }, [favorites]);
-  useEffect(() => {
     fetch("/api/auth/me", { cache:"no-store", credentials:"same-origin" })
       .then(async (response) => {
         if (response.ok) return response.json();
@@ -2938,6 +2983,44 @@ export function App() {
       .catch(() => { setAuthBackend("local"); setUser(readLocalSession()); })
       .finally(() => setAuthLoading(false));
   }, []);
+  useEffect(() => {
+    if (authLoading) return undefined;
+    let cancelled = false;
+    if (!user) {
+      setFavorites(readFavorites(guestFavoritesKey));
+      return undefined;
+    }
+    const localKey = accountFavoritesKey(user.id);
+    const loadLocalFavorites = () => {
+      let values = readFavorites(localKey);
+      try {
+        if (window.localStorage.getItem(localKey) === null && !window.localStorage.getItem(favoritesMigrationKey)) {
+          values = readFavorites(guestFavoritesKey);
+          storeFavorites(localKey, values);
+          window.localStorage.setItem(favoritesMigrationKey, user.id);
+        }
+      } catch {}
+      if (!cancelled) setFavorites(values);
+    };
+    if (authBackend === "local") {
+      loadLocalFavorites();
+      return () => { cancelled = true; };
+    }
+    fetch("/api/account/favorites", { cache:"no-store", credentials:"same-origin" })
+      .then(async (response) => {
+        if ([404, 502, 503].includes(response.status)) throw new Error("favorites_api_unavailable");
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "favorites_load_failed");
+        return payload;
+      })
+      .then((payload) => { if (!cancelled) setFavorites(new Set(Array.isArray(payload.ids) ? payload.ids : [])); })
+      .catch(() => {
+        if (cancelled) return;
+        setAuthBackend("local");
+        loadLocalFavorites();
+      });
+    return () => { cancelled = true; };
+  }, [authBackend, authLoading, user]);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -2994,12 +3077,32 @@ export function App() {
       });
     return () => controller.abort();
   }, [apiMode, targetId, cars]);
-  const toggleSet = (setter) => (id) =>
-    setter((current) => {
-      const next = new Set(current);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const toggleFavorite = (id) => {
+    const previous = new Set(favorites);
+    const next = new Set(favorites);
+    const adding = !next.has(id);
+    adding ? next.add(id) : next.delete(id);
+    setFavorites(next);
+    if (!user) {
+      storeFavorites(guestFavoritesKey, next);
+      return;
+    }
+    const localKey = accountFavoritesKey(user.id);
+    if (authBackend === "local") {
+      storeFavorites(localKey, next);
+      return;
+    }
+    fetch(`/api/account/favorites/${encodeURIComponent(id)}`, { method:adding ? "PUT" : "DELETE", credentials:"same-origin" })
+      .then(async (response) => {
+        if ([404, 502, 503].includes(response.status)) {
+          storeFavorites(localKey, next);
+          setAuthBackend("local");
+          return;
+        }
+        if (!response.ok) throw new Error("favorite_save_failed");
+      })
+      .catch(() => setFavorites(previous));
+  };
   const authenticate = async (mode, values) => {
     setAuthPending(true);
     try {
@@ -3115,9 +3218,9 @@ export function App() {
     ) : path === "/" ? (
       <Home navigate={navigate} cars={cars} apiMode={apiMode} />
     ) : path === "/catalog" ? (
-      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} />
+      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : path === "/favorites" ? (
-      <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} />
+      <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : path === "/login" || path === "/register" ? (
       authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} favoritesCount={favorites.size} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode={path === "/register" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
     ) : path === "/account" ? (
@@ -3125,7 +3228,7 @@ export function App() {
     ) : orderId ? (
       <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
     ) : detailId ? (
-      <Detail car={cars.find((item) => item.id === detailId)} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleSet(setFavorites)} />
+      <Detail car={cars.find((item) => item.id === detailId)} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} />
     ) : path === "/how-it-works" ? (
       <HowItWorksPage navigate={navigate} />
     ) : path === "/about" ? (

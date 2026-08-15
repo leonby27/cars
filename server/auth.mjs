@@ -122,6 +122,24 @@ export async function deleteAccount(request, password) {
   return { ok:true };
 }
 
+export async function listAccountFavorites(request) {
+  const account = await getSessionAccount(request);
+  if (!account) return { error:"unauthorized" };
+  const result = await pool.query("SELECT listing_id FROM customer_favorites WHERE customer_id=$1 ORDER BY created_at", [account.id]);
+  return { ids:result.rows.map((row) => row.listing_id) };
+}
+
+export async function setAccountFavorite(request, listingId, favorite) {
+  const account = await getSessionAccount(request);
+  if (!account) return { error:"unauthorized" };
+  if (favorite) {
+    await pool.query("INSERT INTO customer_favorites (customer_id,listing_id) VALUES ($1,$2) ON CONFLICT DO NOTHING", [account.id, listingId]);
+  } else {
+    await pool.query("DELETE FROM customer_favorites WHERE customer_id=$1 AND listing_id=$2", [account.id, listingId]);
+  }
+  return { ok:true };
+}
+
 export async function deleteSession(request) {
   const token = readCookie(request.headers.cookie, SESSION_COOKIE);
   if (token) await pool.query("DELETE FROM customer_sessions WHERE token_hash=$1", [hashToken(token)]);
