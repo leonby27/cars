@@ -1,9 +1,10 @@
 import http from "node:http";
 import { pool } from "./db.mjs";
+import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, normalizePhone, normalizeProfile, sessionCookie, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
 
 const port = Number(process.env.API_PORT || 8787);
-const json = (response, status, payload) => { response.writeHead(status, { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "access-control-allow-origin":"*", "access-control-allow-headers":"content-type" }); response.end(JSON.stringify(payload)); };
+const json = (response, status, payload, headers = {}) => { response.writeHead(status, { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "access-control-allow-origin":"*", "access-control-allow-headers":"content-type", ...headers }); response.end(JSON.stringify(payload)); };
 const readJson = async (request) => {
   const chunks=[]; let size=0;
   for await (const chunk of request) { size += chunk.length; if (size > 65_536) throw new Error("request_too_large"); chunks.push(chunk); }
@@ -21,6 +22,52 @@ const server = http.createServer(async (request, response) => {
         pool.query("SELECT source,status,blocked_until,last_success_at,last_failure_at,consecutive_failures,last_error FROM source_health ORDER BY source"),
       ]);
       return json(response, 200, { ok:true, database:"postgresql", cars:cars.rows[0].cars, jobs:jobs.rows[0], sources:sources.rows });
+    }
+    if (request.method === "POST" && url.pathname === "/api/auth/register") {
+      const body = await readJson(request);
+      const name = String(body.name || "").trim();
+      const phone = normalizePhone(body.phone);
+      const password = String(body.password || "");
+      if (name.length < 2 || name.length > 80) return json(response, 400, { error:"invalid_name" });
+      if (phone.length < 11 || phone.length > 15) return json(response, 400, { error:"invalid_phone" });
+      if (password.length < 8 || password.length > 128) return json(response, 400, { error:"invalid_password" });
+      const result = await createAccount({ name, phone, password });
+      if (result.error) return json(response, 409, result);
+      const token = await createSession(result.user.id);
+      return json(response, 201, { user:result.user }, { "set-cookie":sessionCookie(token, request) });
+    }
+    if (request.method === "POST" && url.pathname === "/api/auth/login") {
+      const body = await readJson(request);
+      const user = await authenticateAccount({ phone:body.phone, password:String(body.password || "") });
+      if (!user) return json(response, 401, { error:"invalid_credentials" });
+      const token = await createSession(user.id);
+      return json(response, 200, { user }, { "set-cookie":sessionCookie(token, request) });
+    }
+    if (request.method === "GET" && url.pathname === "/api/auth/me") {
+      const user = await getSessionUser(request);
+      return user ? json(response, 200, { user }) : json(response, 401, { error:"unauthorized" });
+    }
+    if (request.method === "POST" && url.pathname === "/api/auth/logout") {
+      await deleteSession(request);
+      return json(response, 200, { ok:true }, { "set-cookie":clearSessionCookie(request) });
+    }
+    if (request.method === "PATCH" && url.pathname === "/api/account") {
+      const body = normalizeProfile(await readJson(request));
+      if (body.name.length < 2 || body.name.length > 80) return json(response, 400, { error:"invalid_name" });
+      if (body.email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email) || body.email.length > 160)) return json(response, 400, { error:"invalid_email" });
+      if (body.telegram.length > 80) return json(response, 400, { error:"invalid_telegram" });
+      if (body.city.length > 120) return json(response, 400, { error:"invalid_city" });
+      if (body.preferredContact === "email" && !body.email) return json(response, 400, { error:"email_required" });
+      if (body.preferredContact === "telegram" && !body.telegram) return json(response, 400, { error:"telegram_required" });
+      const result = await updateAccountProfile(request, body);
+      return result.error ? json(response, 401, result) : json(response, 200, result);
+    }
+    if (request.method === "DELETE" && url.pathname === "/api/account") {
+      const body = await readJson(request);
+      const result = await deleteAccount(request, String(body.password || ""));
+      if (result.error === "unauthorized") return json(response, 401, result);
+      if (result.error) return json(response, 400, result);
+      return json(response, 200, result, { "set-cookie":clearSessionCookie(request) });
     }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams));
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.get("bodyType")));

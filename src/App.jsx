@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, Clock, CurrencyCny, EnvelopeSimple, Gauge, Heart, Images, Info, InstagramLogo, Lightning, ListChecks, MagnifyingGlass, MapPin, Phone, ShareNetwork, ShieldCheck, SlidersHorizontal, Sparkle, TelegramLogo, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, EnvelopeSimple, Gauge, Heart, Images, Info, InstagramLogo, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -222,7 +222,7 @@ function useRoute() {
   return { path: route.path, navigate, backToCatalog };
 }
 
-function Header({ navigate, favoritesCount, path, currency, setCurrency }) {
+function Header({ navigate, favoritesCount, path, currency, setCurrency, user }) {
   const catalogActive = path === "/catalog" || path.startsWith("/cars/") || path.startsWith("/orders/");
   return (
     <header className="site-header">
@@ -265,6 +265,14 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency }) {
             <Heart size={21} weight={favoritesCount ? "fill" : "bold"} />
             <span>Избранное</span>
             {favoritesCount > 0 && <b>{favoritesCount}</b>}
+          </button>
+          <button
+            className={`icon-label account-link${path === "/account" || path === "/login" || path === "/register" ? " selected" : ""}`}
+            aria-current={path === "/account" ? "page" : undefined}
+            onClick={() => navigate(user ? "/account" : "/login")}
+          >
+            <UserCircle size={22} weight={user ? "fill" : "bold"} />
+            <span>{user ? user.name.split(" ")[0] : "Войти"}</span>
           </button>
         </div>
       </div>
@@ -2641,6 +2649,239 @@ function NotFound({ navigate }) {
   );
 }
 
+const localAuthKey = "navostok-local-auth";
+const localAccountsKey = "navostok-local-accounts";
+const authMessages = {
+  invalid_name: "Укажите имя — от 2 до 80 символов.",
+  invalid_phone: "Проверьте номер телефона.",
+  invalid_password: "Пароль должен содержать минимум 8 символов.",
+  phone_already_registered: "Аккаунт с таким телефоном уже существует.",
+  invalid_credentials: "Неверный телефон или пароль.",
+  invalid_email: "Проверьте адрес электронной почты.",
+  invalid_telegram: "Проверьте имя пользователя Telegram.",
+  invalid_city: "Название города слишком длинное.",
+  email_required: "Укажите email или выберите другой способ связи.",
+  telegram_required: "Укажите Telegram или выберите другой способ связи.",
+  unauthorized: "Сессия завершилась. Войдите ещё раз.",
+};
+
+const normalizeLocalPhone = (value) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length === 9 ? `375${digits}` : digits;
+};
+const formatAccountPhone = (value) => {
+  const digits = normalizeLocalPhone(value);
+  return digits.length === 12 && digits.startsWith("375") ? `+375 ${digits.slice(3, 5)} ${digits.slice(5, 8)}-${digits.slice(8, 10)}-${digits.slice(10)}` : `+${digits}`;
+};
+const readLocalAccounts = () => {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(localAccountsKey) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+};
+const localPasswordHash = async (password, salt) => {
+  const bytes = new TextEncoder().encode(`${salt}:${password}`);
+  const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+const saveLocalSession = (user) => window.localStorage.setItem(localAuthKey, JSON.stringify(user));
+const readLocalSession = () => {
+  try {
+    return JSON.parse(window.localStorage.getItem(localAuthKey) || "null");
+  } catch {
+    return null;
+  }
+};
+
+async function localAuthenticate(mode, values) {
+  const phone = normalizeLocalPhone(values.phone);
+  const accounts = readLocalAccounts();
+  if (mode === "register") {
+    if (accounts.some((item) => item.phone === phone)) throw new Error("phone_already_registered");
+    const salt = window.crypto.randomUUID();
+    const account = { id:window.crypto.randomUUID(), name:values.name.trim(), phone, email:"", telegram:"", city:"", preferredContact:"phone", salt, passwordHash:await localPasswordHash(values.password, salt), createdAt:new Date().toISOString() };
+    window.localStorage.setItem(localAccountsKey, JSON.stringify([...accounts, account]));
+    const user = { id:account.id, name:account.name, phone:account.phone, email:account.email, telegram:account.telegram, city:account.city, preferredContact:account.preferredContact, createdAt:account.createdAt };
+    saveLocalSession(user);
+    return user;
+  }
+  const account = accounts.find((item) => item.phone === phone);
+  if (!account || (await localPasswordHash(values.password, account.salt)) !== account.passwordHash) throw new Error("invalid_credentials");
+  const user = { id:account.id, name:account.name, phone:account.phone, email:account.email || "", telegram:account.telegram || "", city:account.city || "", preferredContact:account.preferredContact || "phone", createdAt:account.createdAt };
+  saveLocalSession(user);
+  return user;
+}
+
+function localUpdateProfile(userId, profile) {
+  const accounts = readLocalAccounts();
+  const index = accounts.findIndex((item) => item.id === userId);
+  if (index < 0) throw new Error("unauthorized");
+  accounts[index] = { ...accounts[index], ...profile };
+  window.localStorage.setItem(localAccountsKey, JSON.stringify(accounts));
+  const { salt, passwordHash, ...user } = accounts[index];
+  saveLocalSession(user);
+  return user;
+}
+
+async function localDeleteAccount(userId, password) {
+  const accounts = readLocalAccounts();
+  const account = accounts.find((item) => item.id === userId);
+  if (!account || (await localPasswordHash(password, account.salt)) !== account.passwordHash) throw new Error("invalid_credentials");
+  window.localStorage.setItem(localAccountsKey, JSON.stringify(accounts.filter((item) => item.id !== userId)));
+  window.localStorage.removeItem(localAuthKey);
+}
+
+function AuthPage({ mode, navigate, onAuthenticate, pending }) {
+  const registering = mode === "register";
+  const [values, setValues] = useState({ name:"", phone:"+375 ", password:"", confirm:"", consent:false });
+  const [error, setError] = useState("");
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
+  const submit = async (event) => {
+    event.preventDefault();
+    setError("");
+    const phone = normalizeLocalPhone(values.phone);
+    if (registering && values.name.trim().length < 2) return setError(authMessages.invalid_name);
+    if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (values.password.length < 8) return setError(authMessages.invalid_password);
+    if (registering && values.password !== values.confirm) return setError("Пароли не совпадают.");
+    if (registering && !values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
+    try {
+      await onAuthenticate(mode, values);
+      navigate("/account");
+    } catch (authError) {
+      setError(authMessages[authError.message] || "Не удалось продолжить. Попробуйте ещё раз.");
+    }
+  };
+  return (
+    <main className="auth-page">
+      <section className="auth-shell page-width">
+        <div className="auth-intro">
+          <span className="info-eyebrow"><LockKey size={18} weight="duotone" /> Личный кабинет</span>
+          <h1>{registering ? "Создайте аккаунт" : "С возвращением"}</h1>
+          <p>{registering ? "Сохраняйте автомобили, следите за заявками и общайтесь с менеджером в одном месте." : "Войдите, чтобы вернуться к избранным автомобилям и своим заявкам."}</p>
+          <div className="auth-benefits">
+            <p><CheckCircle size={21} weight="fill" /> Избранные автомобили всегда под рукой</p>
+            <p><CheckCircle size={21} weight="fill" /> История заявок и расчётов</p>
+            <p><CheckCircle size={21} weight="fill" /> Статусы доставки в следующих версиях</p>
+          </div>
+        </div>
+        <form className="auth-card" onSubmit={submit}>
+          <div className="auth-switch" role="tablist" aria-label="Тип формы">
+            <button type="button" role="tab" aria-selected={!registering} className={!registering ? "active" : ""} onClick={() => navigate("/login")}>Вход</button>
+            <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register")}>Регистрация</button>
+          </div>
+          {registering && <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required /></label>}
+          <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={update("phone")} placeholder="+375 29 123-45-67" required /></label>
+          <label className="auth-field"><span>Пароль</span><input type="password" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder="Минимум 8 символов" required /></label>
+          {registering && <label className="auth-field"><span>Повторите пароль</span><input type="password" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required /></label>}
+          {registering && <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} /><span>Согласен с <button type="button" onClick={() => navigate("/terms")}>условиями</button> и <button type="button" onClick={() => navigate("/privacy")}>политикой конфиденциальности</button></span></label>}
+          {error && <div className="auth-error" role="alert">{error}</div>}
+          <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : registering ? "Создать аккаунт" : "Войти"}<ArrowRight size={18} /></button>
+          <p className="auth-help">{registering ? "Уже есть аккаунт?" : "Ещё нет аккаунта?"} <button type="button" onClick={() => navigate(registering ? "/login" : "/register")}>{registering ? "Войти" : "Зарегистрироваться"}</button></p>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function AccountPage({ user, favoritesCount, navigate, onLogout, onSaveProfile, onDeleteAccount, pending }) {
+  const [profile, setProfile] = useState({ name:user.name, email:user.email || "", telegram:user.telegram || "", city:user.city || "", preferredContact:user.preferredContact || "phone" });
+  const [profileError, setProfileError] = useState("");
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletePhrase, setDeletePhrase] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  useEffect(() => {
+    setProfile({ name:user.name, email:user.email || "", telegram:user.telegram || "", city:user.city || "", preferredContact:user.preferredContact || "phone" });
+  }, [user]);
+  const updateProfileField = (field) => (event) => {
+    setProfile((current) => ({ ...current, [field]:event.target.value }));
+    setProfileSaved(false);
+  };
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    setProfileError("");
+    setProfileSaved(false);
+    if (profile.name.trim().length < 2) return setProfileError(authMessages.invalid_name);
+    if (profile.preferredContact === "email" && !profile.email.trim()) return setProfileError(authMessages.email_required);
+    if (profile.preferredContact === "telegram" && !profile.telegram.trim()) return setProfileError(authMessages.telegram_required);
+    try {
+      await onSaveProfile(profile);
+      setProfileSaved(true);
+    } catch (error) {
+      setProfileError(authMessages[error.message] || "Не удалось сохранить данные.");
+    }
+  };
+  const removeAccount = async (event) => {
+    event.preventDefault();
+    setDeleteError("");
+    if (deletePhrase !== "УДАЛИТЬ") return setDeleteError("Введите слово «УДАЛИТЬ» заглавными буквами.");
+    try {
+      await onDeleteAccount(deletePassword);
+    } catch (error) {
+      setDeleteError(authMessages[error.message] || "Не удалось удалить аккаунт.");
+    }
+  };
+  return (
+    <main className="account-page page-width">
+      <header className="account-heading">
+        <div><span className="info-eyebrow">Личный кабинет</span><h1>Здравствуйте, {user.name.split(" ")[0]}</h1><p>Здесь будут собраны ваши автомобили, заявки и документы.</p></div>
+        <button className="secondary account-logout" onClick={onLogout} disabled={pending}><SignOut size={18} /> Выйти</button>
+      </header>
+      <section className="account-summary" aria-label="Сводка">
+        <article><span><Heart size={23} weight="duotone" /></span><div><strong>{favoritesCount}</strong><p>В избранном</p></div><button onClick={() => navigate("/favorites")} aria-label="Открыть избранное"><CaretRight size={20} /></button></article>
+        <article><span><ClipboardText size={23} weight="duotone" /></span><div><strong>0</strong><p>Активных заявок</p></div><button disabled aria-label="Заявок пока нет"><CaretRight size={20} /></button></article>
+        <article><span><CarProfile size={23} weight="duotone" /></span><div><strong>—</strong><p>Авто в доставке</p></div><button disabled aria-label="Автомобилей в доставке пока нет"><CaretRight size={20} /></button></article>
+      </section>
+      <div className="account-grid">
+        <section className="account-panel account-empty">
+          <div className="account-panel-title"><div><span>Мои заявки</span><h2>Начните с подходящего автомобиля</h2></div><ClipboardText size={27} weight="duotone" /></div>
+          <p>Выберите автомобиль в каталоге и оставьте заявку на расчёт. Она появится здесь после подтверждения менеджером.</p>
+          <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог <ArrowRight size={18} /></button>
+        </section>
+        <aside className="account-panel account-profile">
+          <div className="account-avatar">{user.name.trim().slice(0, 1).toUpperCase()}</div>
+          <div><span>Профиль</span><h2>{user.name}</h2><p>{formatAccountPhone(user.phone)}</p></div>
+          <div className="account-note"><ShieldCheck size={20} weight="duotone" /><p>Контактные данные видны только вам и команде NaVostok.</p></div>
+        </aside>
+      </div>
+      <form className="account-panel profile-editor" onSubmit={saveProfile}>
+        <div className="profile-editor-heading">
+          <div><span>Личные данные</span><h2>Контактная информация</h2><p>Заполним эти данные автоматически при следующей заявке.</p></div>
+          <UserCircle size={30} weight="duotone" />
+        </div>
+        <div className="profile-fields">
+          <label className="auth-field"><span>Имя и фамилия</span><input autoComplete="name" value={profile.name} onChange={updateProfileField("name")} maxLength={80} required /></label>
+          <label className="auth-field profile-phone"><span>Телефон для входа</span><input value={formatAccountPhone(user.phone)} disabled /><small>Смену номера добавим с подтверждением по SMS.</small></label>
+          <label className="auth-field"><span>Email</span><input type="email" autoComplete="email" value={profile.email} onChange={updateProfileField("email")} placeholder="name@example.com" maxLength={160} /></label>
+          <label className="auth-field"><span>Telegram</span><div className="profile-input-prefix"><b>@</b><input value={profile.telegram} onChange={updateProfileField("telegram")} placeholder="username" maxLength={80} /></div></label>
+          <label className="auth-field"><span>Город</span><input autoComplete="address-level2" value={profile.city} onChange={updateProfileField("city")} placeholder="Например, Минск" maxLength={120} /></label>
+          <label className="auth-field"><span>Как удобнее связаться</span><select value={profile.preferredContact} onChange={updateProfileField("preferredContact")}><option value="phone">Позвонить</option><option value="telegram">Написать в Telegram</option><option value="email">Написать на email</option></select></label>
+        </div>
+        {profileError && <div className="auth-error" role="alert">{profileError}</div>}
+        <div className="profile-actions"><button className="primary" type="submit" disabled={pending}>Сохранить изменения</button>{profileSaved && <p role="status"><CheckCircle size={18} weight="fill" /> Данные сохранены</p>}</div>
+      </form>
+      <section className="account-danger">
+        <div><span>Управление аккаунтом</span><h2>Удаление аккаунта</h2><p>Профиль и все активные сессии будут удалены без возможности восстановления.</p></div>
+        {!deleteOpen ? <button className="danger-button" type="button" onClick={() => setDeleteOpen(true)}><Trash size={18} /> Удалить аккаунт</button> : (
+          <form className="delete-account-form" onSubmit={removeAccount}>
+            <div className="delete-warning"><WarningCircle size={23} weight="fill" /><p><b>Это действие необратимо.</b> Для подтверждения введите пароль и слово «УДАЛИТЬ».</p></div>
+            <div className="delete-fields">
+              <label className="auth-field"><span>Текущий пароль</span><input type="password" autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} required /></label>
+              <label className="auth-field"><span>Подтверждение</span><input value={deletePhrase} onChange={(event) => setDeletePhrase(event.target.value)} placeholder="УДАЛИТЬ" required /></label>
+            </div>
+            {deleteError && <div className="auth-error" role="alert">{deleteError}</div>}
+            <div className="delete-actions"><button className="secondary" type="button" onClick={() => { setDeleteOpen(false); setDeleteError(""); }}>Отмена</button><button className="danger-button solid" type="submit" disabled={pending || !deletePassword || deletePhrase !== "УДАЛИТЬ"}><Trash size={18} /> Удалить навсегда</button></div>
+          </form>
+        )}
+      </section>
+    </main>
+  );
+}
+
 async function loadStaticCatalog() {
   if (typeof DecompressionStream !== "undefined") {
     try {
@@ -2676,12 +2917,27 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(Boolean(targetId));
   const [loadError, setLoadError] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authPending, setAuthPending] = useState(false);
+  const [authBackend, setAuthBackend] = useState("server");
   useEffect(() => {
     window.localStorage.setItem("navostok-currency", currency);
   }, [currency]);
   useEffect(() => {
     window.localStorage.setItem("navostok-favorites", JSON.stringify([...favorites]));
   }, [favorites]);
+  useEffect(() => {
+    fetch("/api/auth/me", { cache:"no-store", credentials:"same-origin" })
+      .then(async (response) => {
+        if (response.ok) return response.json();
+        if (response.status === 401) return { user:null };
+        throw new Error("api_unavailable");
+      })
+      .then((payload) => setUser(payload.user || null))
+      .catch(() => { setAuthBackend("local"); setUser(readLocalSession()); })
+      .finally(() => setAuthLoading(false));
+  }, []);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -2744,6 +3000,106 @@ export function App() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  const authenticate = async (mode, values) => {
+    setAuthPending(true);
+    try {
+      if (authBackend === "local") {
+        const localUser = await localAuthenticate(mode, values);
+        setUser(localUser);
+        return;
+      }
+      let response;
+      try {
+        response = await fetch(`/api/auth/${mode === "register" ? "register" : "login"}`, { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify(values) });
+      } catch {
+        setAuthBackend("local");
+        const localUser = await localAuthenticate(mode, values);
+        setUser(localUser);
+        return;
+      }
+      if ([404, 502, 503].includes(response.status)) {
+        setAuthBackend("local");
+        const localUser = await localAuthenticate(mode, values);
+        setUser(localUser);
+        return;
+      }
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "auth_failed");
+      setUser(payload.user);
+    } finally {
+      setAuthPending(false);
+    }
+  };
+  const logout = async () => {
+    setAuthPending(true);
+    try {
+      if (authBackend === "server") await fetch("/api/auth/logout", { method:"POST", credentials:"same-origin" }).catch(() => {});
+      window.localStorage.removeItem(localAuthKey);
+      setUser(null);
+      navigate("/");
+    } finally {
+      setAuthPending(false);
+    }
+  };
+  const saveProfile = async (profile) => {
+    setAuthPending(true);
+    const normalized = { ...profile, name:profile.name.trim(), email:profile.email.trim().toLowerCase(), telegram:profile.telegram.trim().replace(/^@+/, ""), city:profile.city.trim() };
+    try {
+      if (authBackend === "local") {
+        setUser(localUpdateProfile(user.id, normalized));
+        return;
+      }
+      let response;
+      try {
+        response = await fetch("/api/account", { method:"PATCH", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify(normalized) });
+      } catch {
+        setAuthBackend("local");
+        setUser(localUpdateProfile(user.id, normalized));
+        return;
+      }
+      if ([404, 502, 503].includes(response.status)) {
+        setAuthBackend("local");
+        setUser(localUpdateProfile(user.id, normalized));
+        return;
+      }
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "profile_update_failed");
+      setUser(payload.user);
+    } finally {
+      setAuthPending(false);
+    }
+  };
+  const removeAccount = async (password) => {
+    setAuthPending(true);
+    try {
+      if (authBackend === "local") {
+        await localDeleteAccount(user.id, password);
+      } else {
+        let response;
+        try {
+          response = await fetch("/api/account", { method:"DELETE", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ password }) });
+        } catch {
+          setAuthBackend("local");
+          await localDeleteAccount(user.id, password);
+          response = null;
+        }
+        if (response && [404, 502, 503].includes(response.status)) {
+          setAuthBackend("local");
+          await localDeleteAccount(user.id, password);
+          response = null;
+        }
+        if (response) {
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || "account_delete_failed");
+        }
+      }
+      window.localStorage.removeItem(localAuthKey);
+      setUser(null);
+      navigate("/");
+    } finally {
+      setAuthPending(false);
+    }
+  };
   const page =
     loading || routeLoading ? (
       <main className="simple-page page-width">
@@ -2762,6 +3118,10 @@ export function App() {
       <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} />
     ) : path === "/favorites" ? (
       <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleSet(setFavorites)} />
+    ) : path === "/login" || path === "/register" ? (
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} favoritesCount={favorites.size} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode={path === "/register" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
+    ) : path === "/account" ? (
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} favoritesCount={favorites.size} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode="login" navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
     ) : orderId ? (
       <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
     ) : detailId ? (
@@ -2789,7 +3149,7 @@ export function App() {
     );
   return (
     <CurrencyContext.Provider value={currency}>
-      <Header navigate={navigate} favoritesCount={favorites.size} path={path} currency={currency} setCurrency={setCurrency} />
+      <Header navigate={navigate} favoritesCount={favorites.size} path={path} currency={currency} setCurrency={setCurrency} user={user} />
       {page}
       <SiteFooter navigate={navigate} />
     </CurrencyContext.Provider>
