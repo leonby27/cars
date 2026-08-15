@@ -1,9 +1,12 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, Clock, CurrencyCny, Gauge, Heart, Images, Info, Lightning, ListChecks, MagnifyingGlass, MapPin, ShareNetwork, ShieldCheck, SlidersHorizontal, Sparkle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, Clock, CurrencyCny, EnvelopeSimple, Gauge, Heart, Images, Info, InstagramLogo, Lightning, ListChecks, MagnifyingGlass, MapPin, Phone, ShareNetwork, ShieldCheck, SlidersHorizontal, Sparkle, TelegramLogo, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
+import { COMPANY } from "./company-data.js";
+import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
+import { FAQ_GROUPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
@@ -235,8 +238,14 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency }) {
           <button className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined} onClick={() => navigate("/how-it-works")}>
             Как это работает
           </button>
+          <button className={path === "/delivered" ? "active" : ""} aria-current={path === "/delivered" ? "page" : undefined} onClick={() => navigate("/delivered")}>
+            Доставленные авто
+          </button>
           <button className={path === "/about" ? "active" : ""} aria-current={path === "/about" ? "page" : undefined} onClick={() => navigate("/about")}>
-            О сервисе
+            О компании
+          </button>
+          <button className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined} onClick={() => navigate("/contacts")}>
+            Контакты
           </button>
         </nav>
         <div className="header-actions">
@@ -672,10 +681,9 @@ function PopularBrands({ navigate, cars, apiMode }) {
 }
 
 function Home({ navigate, cars, apiMode }) {
-  const batchSize = 12;
+  const batchSize = 20;
   const randomPool = useRef([]);
   const nextItemKey = useRef(0);
-  const feedSentinel = useRef(null);
   const feedSource = useRef(cars);
   const takeRandomBatch = () => {
     const batch = [];
@@ -698,24 +706,7 @@ function Home({ navigate, cars, apiMode }) {
     setFeedCars(takeRandomBatch());
   }, [cars]);
 
-  useEffect(() => {
-    const sentinel = feedSentinel.current;
-    if (!sentinel || typeof IntersectionObserver === "undefined") return undefined;
-    let appending = false;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting || appending) return;
-        appending = true;
-        setFeedCars((current) => [...current, ...takeRandomBatch()]);
-        requestAnimationFrame(() => {
-          appending = false;
-        });
-      },
-      { rootMargin: "500px 0px" },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [cars]);
+  const loadMore = () => setFeedCars((current) => [...current, ...takeRandomBatch()]);
 
   return (
     <main>
@@ -772,7 +763,9 @@ function Home({ navigate, cars, apiMode }) {
             <FeaturedCard key={key} car={car} onClick={() => navigate(`/cars/${car.id}`)} />
           ))}
         </div>
-        <div ref={feedSentinel} className="featured-feed-sentinel" aria-hidden="true" />
+        <button type="button" className="load-more featured-load-more" onClick={loadMore}>
+          Показать ещё
+        </button>
       </section>
     </main>
   );
@@ -1438,12 +1431,30 @@ function PriceLabel({ label, description }) {
   );
 }
 
+function ConsentField({ checked, onChange, error }) {
+  const consentId = useId();
+  const errorId = `${consentId}-error`;
+  return (
+    <div className="consent-block">
+      <label className="consent-field" htmlFor={consentId}>
+        <input id={consentId} type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} aria-describedby={error ? errorId : undefined} />
+        <span>
+          Я соглашаюсь на обработку персональных данных и принимаю <a href={`${import.meta.env.BASE_URL}privacy`}>политику конфиденциальности</a> и <a href={`${import.meta.env.BASE_URL}terms`}>условия использования</a>.
+        </span>
+      </label>
+      {error && <small className="consent-error" id={errorId}>{error}</small>}
+    </div>
+  );
+}
+
 function ReportOrderModal({ car, price, onClose }) {
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(null);
   const [error, setError] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [consentError, setConsentError] = useState("");
   useEffect(() => {
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -1457,6 +1468,10 @@ function ReportOrderModal({ car, price, onClose }) {
   }, [onClose]);
   const submit = async (event) => {
     event.preventDefault();
+    if (!consent) {
+      setConsentError("Подтвердите согласие, чтобы отправить заявку.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -1509,6 +1524,7 @@ function ReportOrderModal({ car, price, onClose }) {
                 Telegram, Viber или телефон
                 <input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="@username или +375 …" autoComplete="tel" maxLength={200} required />
               </label>
+              <ConsentField checked={consent} onChange={(value) => { setConsent(value); if (value) setConsentError(""); }} error={consentError} />
               <button className="primary" type="submit" disabled={saving}>
                 {saving ? "Отправляем…" : "Заказать отчёт"}
               </button>
@@ -1714,11 +1730,17 @@ function OrderDraft({ car, navigate }) {
   const [saved, setSaved] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [consentError, setConsentError] = useState("");
   if (!car) return <NotFound navigate={navigate} />;
   const price = estimateLandedCost(car);
   const sourceLink = car.sourceUrl?.replace(/\.md$/, ".html");
   const saveDraft = async (event) => {
     event.preventDefault();
+    if (!consent) {
+      setConsentError("Подтвердите согласие, чтобы сохранить заявку.");
+      return;
+    }
     setSaving(true);
     setSaveError("");
     try {
@@ -1974,6 +1996,7 @@ function OrderDraft({ car, navigate }) {
                   Телефон или @username
                   <input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="+375 … или @telegram" required autoFocus />
                 </label>
+                <ConsentField checked={consent} onChange={(value) => { setConsent(value); if (value) setConsentError(""); }} error={consentError} />
                 <button className="primary" type="submit" disabled={saving}>
                   {saving ? "Сохраняем…" : "Сохранить и продолжить"}
                 </button>
@@ -2286,6 +2309,312 @@ function AboutPage({ navigate }) {
   );
 }
 
+function DeliveredCarsPage({ navigate }) {
+  return (
+    <main className="delivered-page">
+      <section className="delivered-hero page-width">
+        <div>
+          <button className="back-mobile" onClick={() => navigate("/")}><ArrowLeft size={18} />На главную</button>
+          <span className="info-eyebrow">Доставленные автомобили</span>
+          <h1>Истории, в которых виден весь путь автомобиля</h1>
+          <p>Показываем не только результат, но и сроки, маршрут, итоговую стоимость и решения, принятые после проверки.</p>
+          <button className="primary" onClick={() => navigate("/catalog")}>Подобрать автомобиль <ArrowRight size={18} /></button>
+        </div>
+        <aside className="delivered-summary" aria-label="Результаты работы компании">
+          {DELIVERY_STATS.map((item) => <div key={item.label}><b>{item.value}</b><span>{item.label}</span></div>)}
+        </aside>
+      </section>
+
+      <section className="delivery-cases page-width">
+        <div className="delivery-cases-heading">
+          <span className="info-eyebrow">Последние выдачи</span>
+          <h2>От выбора объявления до ключей</h2>
+          <p>Каждый кейс показывает, что было важно клиенту и как выглядел результат.</p>
+        </div>
+        <div className="delivery-case-list">
+          {DELIVERY_CASES.map((item, index) => (
+            <article className="delivery-case" key={item.id}>
+              <div className="delivery-case-image">
+                <img src={`${import.meta.env.BASE_URL}cars/${item.image}`} alt={item.vehicle} />
+                <span>{item.delivered}</span>
+              </div>
+              <div className="delivery-case-content">
+                <span className="delivery-case-number">Кейс {String(index + 1).padStart(2, "0")}</span>
+                <h3>{item.vehicle}</h3>
+                <p>{item.summary}</p>
+                <div className="delivery-case-facts">
+                  <div><MapPin size={19} weight="duotone" /><span>Маршрут<b>{item.route}</b></span></div>
+                  <div><Clock size={19} weight="duotone" /><span>До выдачи<b>{item.duration} дня</b></span></div>
+                  <div><Gauge size={19} weight="duotone" /><span>Пробег<b>{item.mileage}</b></span></div>
+                  <div><CurrencyCny size={19} weight="duotone" /><span>Итого до Минска<b>{item.total}</b></span></div>
+                </div>
+                <blockquote>«{item.quote}»<footer>{item.client}</footer></blockquote>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="case-proof-section">
+        <div className="page-width case-proof-grid">
+          <div><CheckCircle size={23} weight="fill" /><span><b>Смета до договора</b><small>Расходы разбиты по этапам</small></span></div>
+          <div><ShieldCheck size={23} weight="fill" /><span><b>Проверка до оплаты</b><small>Состояние, история и батарея</small></span></div>
+          <div><CarProfile size={23} weight="fill" /><span><b>Выдача в Минске</b><small>Документы и сопровождение</small></span></div>
+        </div>
+      </section>
+      <InfoCta navigate={navigate} title="Подберём автомобиль под ваш запрос" text="Начните с каталога или свяжитесь с нами — обсудим бюджет, кузов и желаемые сроки." />
+    </main>
+  );
+}
+
+function PaymentAndContractPage({ navigate }) {
+  return (
+    <main className="purchase-info-page">
+      <section className="purchase-info-hero page-width">
+        <div>
+          <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
+          <span className="info-eyebrow">Оплата и договор</span>
+          <h1>Сначала понятные условия, затем деньги</h1>
+          <p>Разбиваем расчёт на этапы и отделяем стоимость автомобиля от услуг, логистики и обязательных платежей.</p>
+        </div>
+        <aside className="agreement-preview">
+          <span><ListChecks size={25} weight="duotone" /></span>
+          <small>До первой крупной оплаты</small>
+          <h2>В договоре уже зафиксировано</h2>
+          <ul>
+            <li><Check size={17} weight="bold" />Конкретный автомобиль и VIN</li>
+            <li><Check size={17} weight="bold" />Состав и стоимость услуг</li>
+            <li><Check size={17} weight="bold" />Порядок платежей и отказа</li>
+            <li><Check size={17} weight="bold" />Ответственность каждой стороны</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section className="payment-stages page-width">
+        <div className="purchase-section-heading">
+          <span className="info-eyebrow">Четыре платежных этапа</span>
+          <h2>Вы платите по мере выполнения работы</h2>
+          <p>Следующий платёж появляется только после подтверждения предыдущего этапа документами и согласования с вами.</p>
+        </div>
+        <div className="payment-stage-list">
+          {PAYMENT_STAGES.map((stage) => (
+            <article key={stage.number}>
+              <b className="payment-stage-number">{stage.number}</b>
+              <div><h3>{stage.title}</h3><p>{stage.description}</p></div>
+              <dl><div><dt>Оплата</dt><dd>{stage.payment}</dd></div><div><dt>Когда</dt><dd>{stage.timing}</dd></div></dl>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="purchase-notice-section">
+        <div className="page-width purchase-notice">
+          <Info size={24} weight="duotone" />
+          <div><h2>Предварительный расчёт на сайте — не счёт на оплату</h2><p>Финальная смета формируется после подтверждения объявления, комплектации, маршрута и курса. Любое изменение согласуется до платежа.</p></div>
+          <button className="secondary" onClick={() => navigate("/faq")}>Частые вопросы <ArrowRight size={17} /></button>
+        </div>
+      </section>
+      <InfoCta navigate={navigate} title="Начните с предварительного расчёта" text="Выберите автомобиль — покажем структуру цены и объясним каждый платёж до договора." />
+    </main>
+  );
+}
+
+function GuaranteesPage({ navigate }) {
+  return (
+    <main className="purchase-info-page">
+      <section className="guarantees-hero page-width">
+        <div>
+          <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
+          <span className="info-eyebrow">Гарантии и ответственность</span>
+          <h1>Не обещаем невозможного. Фиксируем то, за что отвечаем</h1>
+          <p>Подержанный автомобиль нельзя сделать новым обещанием. Поэтому мы разделяем проверку, риски продавца, перевозку и собственную ответственность.</p>
+        </div>
+        <aside className="guarantee-principle-card">
+          <ShieldCheck size={34} weight="duotone" />
+          <h2>Главный принцип</h2>
+          <p>Если важный факт не подтверждён документом, диагностикой или договором, мы не называем его гарантией.</p>
+        </aside>
+      </section>
+
+      <section className="responsibility-section page-width">
+        <div className="purchase-section-heading">
+          <span className="info-eyebrow">Карта ответственности</span>
+          <h2>Что происходит в спорной ситуации</h2>
+          <p>Заранее показываем, кто отвечает за следующий шаг и какой результат получает клиент.</p>
+        </div>
+        <div className="responsibility-table">
+          <div className="responsibility-head"><span>Ситуация</span><span>Ответственная сторона</span><span>Что делаем</span></div>
+          {RESPONSIBILITY_ITEMS.map((item) => <div className="responsibility-row" key={item.title}><b>{item.title}</b><span>{item.owner}</span><p>{item.result}</p></div>)}
+        </div>
+      </section>
+
+      <section className="guarantee-boundaries">
+        <div className="page-width guarantee-boundaries-grid">
+          <div><CheckCircle size={24} weight="fill" /><h3>Что гарантируем</h3><p>Выполнение согласованной проверки, корректное оформление документов, прозрачность платежей и сопровождение на всём маршруте.</p></div>
+          <div><X size={24} weight="bold" /><h3>Чего не обещаем</h3><p>Будущее техническое состояние подержанного автомобиля, неизменность внешних тарифов и отсутствие задержек на границе.</p></div>
+        </div>
+      </section>
+      <InfoCta navigate={navigate} title="Обсудим риски до выбора автомобиля" text="Покажем пример проверки, договора и сметы — без обязательства оформлять заказ." />
+    </main>
+  );
+}
+
+function FaqPage({ navigate }) {
+  const [openItem, setOpenItem] = useState("0-0");
+  return (
+    <main className="faq-page page-width">
+      <section className="faq-hero">
+        <div>
+          <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
+          <span className="info-eyebrow">Вопросы и ответы</span>
+          <h1>Коротко о важном до заказа</h1>
+          <p>Собрали ответы о проверке, цене, оплате, доставке и ответственности.</p>
+        </div>
+        <aside><ChatCircleText size={28} weight="duotone" /><b>Не нашли ответ?</b><p>Напишите нам — разберём вашу ситуацию без обязательства оформлять заказ.</p><button className="secondary" onClick={() => navigate("/contacts")}>Связаться с нами</button></aside>
+      </section>
+      <section className="faq-groups">
+        {FAQ_GROUPS.map((group, groupIndex) => (
+          <div className="faq-group" key={group.title}>
+            <h2>{group.title}</h2>
+            <div>
+              {group.items.map((item, itemIndex) => {
+                const itemKey = `${groupIndex}-${itemIndex}`;
+                const open = openItem === itemKey;
+                return <article className={open ? "open" : ""} key={item.question}><button type="button" aria-expanded={open} onClick={() => setOpenItem(open ? null : itemKey)}><span>{item.question}</span><b aria-hidden="true">{open ? "−" : "+"}</b></button>{open && <p>{item.answer}</p>}</article>;
+              })}
+            </div>
+          </div>
+        ))}
+      </section>
+    </main>
+  );
+}
+
+function ContactsPage({ navigate }) {
+  return (
+    <main className="contact-page">
+      <section className="contact-hero page-width">
+        <div>
+          <button className="back-mobile" onClick={() => navigate("/")}>
+            <ArrowLeft size={18} />
+            На главную
+          </button>
+          <span className="info-eyebrow">Контакты</span>
+          <h1>Давайте обсудим ваш автомобиль лично</h1>
+          <p>Ответим на вопросы, покажем договор и расчёт, объясним проверку и доставку. Можно написать онлайн или встретиться в офисе в Минске.</p>
+        </div>
+        <aside className="contact-office-card">
+          <span className="contact-card-icon"><MapPin size={26} weight="duotone" /></span>
+          <small>Офис в Минске</small>
+          <h2>{COMPANY.address}</h2>
+          <p><Clock size={18} /> {COMPANY.hours}</p>
+          <a className="primary" href="https://maps.google.com/?q=Минск+улица+Тимирязева+65Б" target="_blank" rel="noreferrer">
+            Открыть на карте <ArrowRight size={17} />
+          </a>
+        </aside>
+      </section>
+
+      <section className="contact-options page-width" aria-label="Способы связи">
+        <a href={COMPANY.phoneHref}>
+          <Phone size={24} weight="duotone" />
+          <span><small>Позвонить</small><b>{COMPANY.phone}</b><em>Будни с 09:00 до 19:00</em></span>
+        </a>
+        <a href={COMPANY.telegramUrl} target="_blank" rel="noreferrer">
+          <TelegramLogo size={24} weight="duotone" />
+          <span><small>Написать в Telegram</small><b>{COMPANY.telegram}</b><em>Обычно отвечаем за 10 минут</em></span>
+        </a>
+        <a href={`mailto:${COMPANY.email}`}>
+          <EnvelopeSimple size={24} weight="duotone" />
+          <span><small>Электронная почта</small><b>{COMPANY.email}</b><em>Документы и деловые вопросы</em></span>
+        </a>
+      </section>
+
+      <section className="company-details-section">
+        <div className="page-width company-details-grid">
+          <div>
+            <span className="info-eyebrow">Реквизиты</span>
+            <h2>Работаем по договору от белорусского юридического лица</h2>
+            <p>Перед оплатой фиксируем выбранный автомобиль, состав услуг, порядок расчётов и ответственность сторон.</p>
+          </div>
+          <dl className="company-details" id="details">
+            <div><dt>Юридическое лицо</dt><dd>{COMPANY.legalName}</dd></div>
+            <div><dt>УНП</dt><dd>{COMPANY.unp}</dd></div>
+            <div><dt>Юридический адрес</dt><dd>{COMPANY.address}</dd></div>
+            <div><dt>Расчётный счёт</dt><dd>{COMPANY.iban}</dd></div>
+            <div><dt>Банк</dt><dd>{COMPANY.bank}</dd></div>
+            <div><dt>BIC</dt><dd>{COMPANY.bic}</dd></div>
+          </dl>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const legalContent = {
+  privacy: {
+    eyebrow: "Защита данных",
+    title: "Политика конфиденциальности",
+    intro: `${COMPANY.legalName} использует персональные данные только для ответа на обращение, подготовки расчёта и сопровождения сделки.`,
+    sections: [
+      ["Какие данные мы получаем", "Имя, телефон, адрес электронной почты или имя пользователя в мессенджере, а также сведения, которые вы добровольно указываете в обращении."],
+      ["Зачем они нужны", "Чтобы связаться с вами, подобрать автомобиль, подготовить расчёт, оформить договор и сообщать о ходе заказа."],
+      ["Передача и хранение", "Мы не продаём персональные данные. Доступ получают только сотрудники и подрядчики, которым информация необходима для оказания согласованной услуги."],
+      ["Ваши права", `Вы можете уточнить, изменить или удалить свои данные, написав на ${COMPANY.email}.`],
+    ],
+  },
+  terms: {
+    eyebrow: "Правовая информация",
+    title: "Условия использования сайта",
+    intro: "Каталог помогает предварительно оценить варианты автомобилей и расходы. Финальные условия фиксируются только после проверки объявления и подписания договора.",
+    sections: [
+      ["Информация в каталоге", "Характеристики и фотографии поступают из объявлений продавцов. Мы уточняем наличие, состояние, VIN и возможность экспорта перед оформлением."],
+      ["Предварительный расчёт", "Цена до Минска является ориентировочной и может измениться из-за курса валют, логистики, таможенных платежей и фактической комплектации автомобиля."],
+      ["Оформление сделки", `Услуги оказывает ${COMPANY.legalName}. Состав услуг, стоимость, сроки и ответственность сторон определяются индивидуальным договором.`],
+      ["Обратная связь", `Вопросы по работе сайта и условиям услуг можно направить на ${COMPANY.email}.`],
+    ],
+  },
+};
+
+function LegalPage({ navigate, kind }) {
+  const content = legalContent[kind];
+  return (
+    <main className="legal-page page-width">
+      <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
+      <span className="info-eyebrow">{content.eyebrow}</span>
+      <h1>{content.title}</h1>
+      <p className="legal-intro">{content.intro}</p>
+      <div className="legal-sections">
+        {content.sections.map(([title, text]) => <section key={title}><h2>{title}</h2><p>{text}</p></section>)}
+      </div>
+      <p className="legal-updated">Редакция от 15 августа 2026 года</p>
+    </main>
+  );
+}
+
+function SiteFooter({ navigate }) {
+  return (
+    <footer className="site-footer">
+      <div className="page-width footer-main">
+        <div className="footer-brand">
+          <button className="wordmark footer-wordmark" onClick={() => navigate("/")} aria-label="На главную">Na<span>Vostok</span><small>.by</small></button>
+          <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
+          <div className="footer-socials">
+            <a href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramLogo size={20} /></a>
+            <a href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramLogo size={20} /></a>
+          </div>
+        </div>
+        <div className="footer-column"><b>Компания</b><button onClick={() => navigate("/about")}>О компании</button><button onClick={() => navigate("/delivered")}>Доставленные авто</button><button onClick={() => navigate("/contacts")}>Контакты и офис</button><button onClick={() => navigate("/contacts")}>Реквизиты</button></div>
+        <div className="footer-column"><b>Покупателю</b><button onClick={() => navigate("/catalog")}>Автомобили</button><button onClick={() => navigate("/how-it-works")}>Как это работает</button><button onClick={() => navigate("/payment-and-contract")}>Оплата и договор</button><button onClick={() => navigate("/guarantees")}>Гарантии</button><button onClick={() => navigate("/faq")}>Вопросы и ответы</button></div>
+        <div className="footer-column footer-contacts"><b>Связаться</b><a href={COMPANY.phoneHref}>{COMPANY.phone}</a><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><span>{COMPANY.address}</span></div>
+      </div>
+      <div className="page-width footer-bottom">
+        <span>© 2026 {COMPANY.legalName} · УНП {COMPANY.unp}</span>
+        <div><button onClick={() => navigate("/privacy")}>Политика конфиденциальности</button><button onClick={() => navigate("/terms")}>Условия использования</button></div>
+      </div>
+    </footer>
+  );
+}
+
 function InfoCta({ navigate, title, text }) {
   return (
     <section className="info-cta page-width">
@@ -2343,8 +2672,6 @@ export function App() {
   });
   const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "BYN" ? "BYN" : "USD"));
   const [cars, setCars] = useState([]);
-  const [catalogTotal, setCatalogTotal] = useState(0);
-  const [importedAt, setImportedAt] = useState(null);
   const [apiMode, setApiMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(Boolean(targetId));
@@ -2371,8 +2698,6 @@ export function App() {
         }
         if (!cancelled) {
           setCars(initialCars.map(normalizeImportedCar));
-          setCatalogTotal(payload.total);
-          setImportedAt(initialCars[0]?.checkedAt || new Date().toISOString());
           setApiMode(true);
         }
       } catch {
@@ -2381,8 +2706,6 @@ export function App() {
           if (!payload.cars?.length) throw new Error("empty import");
           if (!cancelled) {
             setCars(payload.cars.map(normalizeImportedCar));
-            setCatalogTotal(payload.cars.length);
-            setImportedAt(payload.generatedAt);
             setApiMode(false);
           }
         } catch {
@@ -2447,6 +2770,20 @@ export function App() {
       <HowItWorksPage navigate={navigate} />
     ) : path === "/about" ? (
       <AboutPage navigate={navigate} />
+    ) : path === "/delivered" ? (
+      <DeliveredCarsPage navigate={navigate} />
+    ) : path === "/payment-and-contract" ? (
+      <PaymentAndContractPage navigate={navigate} />
+    ) : path === "/guarantees" ? (
+      <GuaranteesPage navigate={navigate} />
+    ) : path === "/faq" ? (
+      <FaqPage navigate={navigate} />
+    ) : path === "/contacts" ? (
+      <ContactsPage navigate={navigate} />
+    ) : path === "/privacy" ? (
+      <LegalPage navigate={navigate} kind="privacy" />
+    ) : path === "/terms" ? (
+      <LegalPage navigate={navigate} kind="terms" />
     ) : (
       <NotFound navigate={navigate} />
     );
@@ -2454,12 +2791,7 @@ export function App() {
     <CurrencyContext.Provider value={currency}>
       <Header navigate={navigate} favoritesCount={favorites.size} path={path} currency={currency} setCurrency={setCurrency} />
       {page}
-      <footer>
-        <div className="page-width">
-          <b>NaVostok.by</b>
-          <span>{importedAt ? `Guazi · ${catalogTotal} реальных объявлений · проверка ${new Date(importedAt).toLocaleString("ru-RU")}` : "Загружаем актуальные объявления"}</span>
-        </div>
-      </footer>
+      <SiteFooter navigate={navigate} />
     </CurrencyContext.Provider>
   );
 }
