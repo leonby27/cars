@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { CheckCircle, Phone } from "@phosphor-icons/react";
+import { CheckCircle } from "@phosphor-icons/react";
 
 const contactOptions = [
   ["phone", "Телефон"],
@@ -74,26 +74,30 @@ export function OrderContactCard({ order, user, saving, onSave }) {
   return (
     <section className="order-contact-card" aria-labelledby={titleId}>
       <div className="order-contact-heading">
-        <span className="order-contact-icon"><Phone size={24} weight="duotone" /></span>
-        <div><span>Связь по заказу</span><h2 id={titleId}>Контакт для связи</h2><p>Подтвердите, кому и каким способом сообщить результат проверки объявления.</p></div>
+        <h2 id={titleId}>Контакт для связи</h2>
+        <p>Кому сообщить результат проверки объявления</p>
       </div>
       <form onSubmit={submit}>
-        <div className="order-contact-fields">
-          <label><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} maxLength={80} required /></label>
-          <label><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} maxLength={16} placeholder="+375291234567" required /></label>
+        <div className="order-contact-main-row">
+          <div className="order-contact-fields">
+            <label><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} maxLength={80} required /></label>
+            <label><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} maxLength={16} placeholder="+375291234567" required /></label>
+          </div>
+          <fieldset className="order-contact-methods">
+            <legend>Как связаться</legend>
+            <div>{contactOptions.map(([value,label]) => <label key={value} className={values.methods.includes(value) ? "selected" : ""}><input type="checkbox" checked={values.methods.includes(value)} onChange={() => toggleMethod(value)} /><span>{label}</span></label>)}</div>
+          </fieldset>
         </div>
-        <fieldset className="order-contact-methods">
-          <legend>Как можно связаться</legend>
-          <div>{contactOptions.map(([value,label]) => <label key={value} className={values.methods.includes(value) ? "selected" : ""}><input type="checkbox" checked={values.methods.includes(value)} onChange={() => toggleMethod(value)} /><span>{label}</span></label>)}</div>
-        </fieldset>
-        <label className="order-contact-consent">
-          <input type="checkbox" checked={values.consent} onChange={(event) => { setSaved(false); setError(""); setValues((current) => ({ ...current, consent:event.target.checked })); }} />
-          <span>Согласен на обработку персональных данных, с <a href="/privacy">политикой конфиденциальности</a> и <a href="/terms">условиями использования</a>.</span>
-        </label>
         {error ? <div className="order-contact-error" role="alert">{error}</div> : null}
-        <div className="order-contact-actions">
-          <button className="primary" type="submit" disabled={saving}>{saving ? "Сохраняем…" : "Сохранить"}</button>
-          {saved ? <p role="status"><CheckCircle size={20} weight="fill" /> Контакт сохранён</p> : null}
+        <div className="order-contact-footer">
+          <label className="order-contact-consent">
+            <input type="checkbox" checked={values.consent} onChange={(event) => { setSaved(false); setError(""); setValues((current) => ({ ...current, consent:event.target.checked })); }} />
+            <span>Согласен на обработку данных, с <a href="/privacy">политикой</a> и <a href="/terms">условиями</a>.</span>
+          </label>
+          <div className="order-contact-actions">
+            {saved ? <p role="status"><CheckCircle size={20} weight="fill" /> Сохранено</p> : null}
+            <button className="primary" type="submit" disabled={saving}>{saving ? "Сохраняем…" : "Сохранить"}</button>
+          </div>
         </div>
       </form>
     </section>

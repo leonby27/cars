@@ -1,57 +1,46 @@
 .order-contact-card {
-  margin-bottom: 16px;
-  padding: 26px 30px;
+  margin-bottom: 12px;
+  padding: 17px 20px;
   border: 1px solid var(--line);
-  border-radius: 15px;
+  border-radius: 13px;
   background: var(--panel);
 }
 .order-contact-heading {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 15px;
-  align-items: start;
-}
-.order-contact-icon {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 13px;
-  background: var(--accent-soft);
-  color: var(--accent-dark);
-}
-.order-contact-heading > div > span {
-  color: var(--accent-dark);
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
 }
 .order-contact-heading h2 {
-  margin: 5px 0 0;
-  font-size: 23px;
-  letter-spacing: -0.55px;
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+  white-space: nowrap;
 }
 .order-contact-heading p {
-  margin: 7px 0 0;
+  margin: 0;
   color: var(--muted);
   font-size: 16px;
-  line-height: 1.55;
+  line-height: 1.4;
 }
 .order-contact-card form {
   display: grid;
-  gap: 19px;
-  margin-top: 23px;
-  padding-left: 63px;
+  gap: 11px;
+  margin-top: 13px;
+}
+.order-contact-main-row {
+  display: grid;
+  grid-template-columns: minmax(330px, 1fr) minmax(320px, auto);
+  gap: 14px;
+  align-items: end;
 }
 .order-contact-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 10px;
 }
 .order-contact-fields label {
   display: grid;
-  gap: 8px;
+  gap: 5px;
 }
 .order-contact-fields label > span,
 .order-contact-methods legend {
@@ -61,10 +50,10 @@
 }
 .order-contact-fields input {
   width: 100%;
-  min-height: 50px;
-  padding: 0 14px;
+  height: 42px;
+  padding: 0 11px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: 9px;
   outline: 0;
   background: var(--panel-soft);
   color: var(--ink);
@@ -83,21 +72,20 @@
   border: 0;
 }
 .order-contact-methods legend {
-  margin-bottom: 10px;
+  margin-bottom: 5px;
 }
 .order-contact-methods > div {
   display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
+  gap: 6px;
 }
 .order-contact-methods label {
-  min-height: 46px;
+  height: 42px;
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 0 15px;
+  gap: 6px;
+  padding: 0 10px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--panel-soft);
   color: var(--muted);
   font-size: 16px;
@@ -111,19 +99,26 @@
 }
 .order-contact-methods input,
 .order-contact-consent input {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   margin: 0;
   accent-color: var(--accent);
 }
+.order-contact-footer {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
 .order-contact-consent {
   display: grid;
-  grid-template-columns: 18px 1fr;
-  gap: 10px;
+  grid-template-columns: 17px 1fr;
+  gap: 8px;
   align-items: start;
   color: var(--muted);
   font-size: 16px;
-  line-height: 1.55;
+  line-height: 1.4;
 }
 .order-contact-consent input {
   margin-top: 3px;
@@ -134,53 +129,54 @@
   text-underline-offset: 3px;
 }
 .order-contact-error {
-  padding: 11px 13px;
-  border-radius: 9px;
+  padding: 9px 11px;
+  border-radius: 8px;
   background: #fff0ed;
   color: #a83220;
   font-size: 16px;
   font-weight: 650;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 .order-contact-actions {
   display: flex;
   align-items: center;
-  gap: 18px;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 0 0 auto;
 }
 .order-contact-actions .primary {
-  min-width: 160px;
-  padding-inline: 24px;
+  min-width: 138px;
+  min-height: 42px;
+  padding-inline: 18px;
 }
 .order-contact-actions p {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   margin: 0;
   color: var(--green);
   font-size: 16px;
   font-weight: 700;
+  white-space: nowrap;
+}
+@media (max-width: 980px) {
+  .order-contact-main-row {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 700px) {
   .order-contact-card {
-    padding: 21px 19px;
-    border-radius: 13px;
+    padding: 15px;
   }
   .order-contact-heading {
-    grid-template-columns: 42px minmax(0, 1fr);
-    gap: 12px;
+    display: grid;
+    gap: 3px;
   }
-  .order-contact-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 11px;
-  }
-  .order-contact-heading h2 {
-    font-size: 20px;
+  .order-contact-heading p {
+    line-height: 1.35;
   }
   .order-contact-card form {
-    gap: 17px;
-    margin-top: 21px;
-    padding-left: 0;
+    margin-top: 11px;
   }
   .order-contact-fields {
     grid-template-columns: 1fr;
@@ -191,14 +187,18 @@
   }
   .order-contact-methods label {
     justify-content: center;
-    padding-inline: 9px;
+    padding-inline: 7px;
   }
-  .order-contact-actions {
+  .order-contact-footer {
     align-items: stretch;
     flex-direction: column;
+    gap: 10px;
+  }
+  .order-contact-actions {
+    justify-content: space-between;
   }
   .order-contact-actions .primary {
-    width: 100%;
+    min-width: 132px;
   }
 }
 @media (max-width: 430px) {
