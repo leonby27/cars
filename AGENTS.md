@@ -8,7 +8,7 @@ When implementing from a selected generated mock, treat that image as the source
 
 Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
 
-Typography preference: prioritize comfortable readability over ultra-compact UI. Keep non-heading text at 12px or larger; use roughly 13–15px for supporting copy and controls where layout permits.
+Typography preference: prioritize comfortable readability over ultra-compact UI. Keep every rendered text size at 16px or larger across the project, including supporting copy, controls, labels, badges, and mobile layouts. Do not introduce a smaller size unless the user explicitly requests that exception.
 
 Brand color preference: use red `#EE1C25` for brand accents, links, icons, and active states instead of orange. Use yellow `#F4D90E` with dark text for all regular primary CTA buttons. Preserve red for destructive actions where it communicates danger.
 
@@ -22,7 +22,11 @@ Home conversion content preference: use the space between the vehicle feed and f
 
 Popular-brands preference: keep the home-page brand list in stable alphabetical order by its displayed Latin-script name; do not reorder it by listing count.
 
+Product brand preference: use `evcars.by` as the customer-facing product name and keep brand-aligned demo contact handles on the `evcars.by` identity.
+
 Header-navigation preference: do not show the “Доставленные авто” link in the main header navigation; keep delivered cases accessible elsewhere in the site.
+
+Theme preference: support both light and dark themes with a compact theme toggle in the main header. Remember the explicit device-local choice, otherwise follow the operating-system preference. Preserve the red brand accent and yellow primary CTAs in both themes.
 
 Company-presence preference: the prototype should feel like a real Minsk-based company, with a substantial footer, office/contact page, legal entity details, social links, and policy pages. Keep temporary company details centralized in `src/company-data.js` so they can be replaced before publication.
 
@@ -37,6 +41,8 @@ Commercial-information preference: explain payment stages, contract timing, resp
 Lead-form consent preference: every form that collects a name, phone number, email, or messenger handle must require explicit consent before submission and link directly to the privacy policy and site terms. Reuse one consent component so wording and validation remain consistent.
 
 Vehicle-report entry preference: the vehicle-detail “Заказать отчёт о состоянии авто” CTA must not open a report-order lead form. Guests should see only a registration form in a modal and then continue to the account; signed-in users should go directly to the account, where report ordering belongs.
+
+Account preference: the vehicle order is one section of a complete customer account, not the whole account. Use a left sidebar—not top tabs—for the current order, favorites, personal data, and account settings. The order itself stays simple and lightweight, with one visible vehicle and three sequential stages only—optional inspection, delivery agreement, then payment and purchase. Keep the first inspection stage permanently expanded rather than making it a disclosure. Use the same rounded container treatment as the rest of the product. Present the selected vehicle as a compact but informative mini card with real metadata and a prominent approximate landed price; do not add an “Ориентировочно” caption beside that price. Make the vehicle name a link that opens its catalog detail page in a new tab, and make the arrow link use the same target. Hide the “Убрать автомобиль” action inside a kebab menu, keep it available at every order stage, and require confirmation in a modal that warns about deleting the order progress. Keep the mini-card supporting typography comfortably readable rather than tiny. Avoid multi-field forms inside the stages; use the saved account details and one clear action per decision.
 
 Catalog custom-search preference: when catalog filters return no cars and when a user reaches the end of the results, show a light, white-background CTA offering individual vehicle sourcing, including cars not currently in the catalog. The CTA opens a modal with a vehicle-preferences textarea and phone input; do not use a dark or inverted treatment.
 

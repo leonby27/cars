@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, EnvelopeSimple, Eye, EyeSlash, Gauge, Heart, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -260,13 +260,13 @@ function useRoute() {
   return { path: route.path, navigate, backToCatalog };
 }
 
-function Header({ navigate, favoritesCount, path, currency, setCurrency, user }) {
+function Header({ navigate, favoritesCount, path, currency, setCurrency, user, theme, toggleTheme }) {
   const catalogActive = path === "/catalog" || path.startsWith("/cars/") || path.startsWith("/orders/");
   return (
     <header className="site-header">
       <div className="header-inner">
         <button className="wordmark" onClick={() => navigate("/")} aria-label="На главную">
-          Na<span>Vostok</span>
+          ev<span>cars</span>
           <small>.by</small>
         </button>
         <nav className="desktop-nav" aria-label="Основная навигация">
@@ -292,6 +292,15 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user })
               BYN
             </button>
           </div>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
+            title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+          >
+            {theme === "dark" ? <Sun size={20} weight="bold" /> : <Moon size={20} weight="bold" />}
+          </button>
           <button
             className={`icon-label${path === "/favorites" ? " selected" : ""}`}
             aria-current={path === "/favorites" ? "page" : undefined}
@@ -1727,6 +1736,11 @@ function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite, user, 
   const currency = useCurrency();
   const [registrationOpen, setRegistrationOpen] = useState(false);
   if (!car) return <NotFound navigate={navigate} />;
+  const beginOrder = () => {
+    window.localStorage.setItem(pendingOrderKey, car.id);
+    if (user) navigate("/account");
+    else setRegistrationOpen(true);
+  };
   const price = estimateLandedCost(car);
   const specs = [
     [CalendarBlank, "Год", car.year],
@@ -1814,7 +1828,7 @@ function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite, user, 
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
               <div>
-                <PriceLabel label="Услуги NaVostok" description="Проверка, выкуп и документы" />
+                <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
                 <strong>{money(price.serviceUsd, currency)}</strong>
               </div>
             </div>
@@ -1868,7 +1882,7 @@ function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite, user, 
                 </div>
               </div>
             </details>
-            <button className="primary report-order-cta" disabled={authLoading} onClick={() => (user ? navigate("/account") : setRegistrationOpen(true))}>
+            <button className="primary report-order-cta" disabled={authLoading} onClick={beginOrder}>
               Заказать отчёт о состоянии авто
             </button>
           </aside>
@@ -2052,7 +2066,7 @@ function OrderDraft({ car, navigate }) {
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Услуги NaVostok" description="Проверка, выкуп и документы" />
+                <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
                 <b>{money(price.serviceUsd, currency)}</b>
               </div>
               <div>
@@ -2106,7 +2120,7 @@ function OrderDraft({ car, navigate }) {
             )}
             <p className="source-warning">
               <Info size={17} />
-              Это заявление площадки и продавца, не независимая проверка NaVostok.
+              Это заявление площадки и продавца, не независимая проверка evcars.by.
             </p>
           </section>
           <section className="order-section">
@@ -2390,7 +2404,7 @@ function AboutPage({ navigate }) {
             На главную
           </button>
           <span className="info-eyebrow">О сервисе</span>
-          <h1>NaVostok помогает осознанно выбрать автомобиль из Китая</h1>
+          <h1>evcars.by помогает осознанно выбрать автомобиль из Китая</h1>
           <p>Мы собираем объявления китайского вторичного рынка, приводим данные к понятному виду и сопровождаем путь от первой проверки до доставки в Минск.</p>
           <button className="primary" onClick={() => navigate("/catalog")}>
             Открыть каталог <ArrowRight size={18} />
@@ -2399,7 +2413,7 @@ function AboutPage({ navigate }) {
         <aside className="about-statement">
           <span>Наша роль</span>
           <blockquote>Не просто показать объявление, а дать достаточно проверяемой информации для спокойного решения.</blockquote>
-          <small>Команда NaVostok.by</small>
+          <small>Команда evcars.by</small>
         </aside>
       </section>
       <section className="info-section page-width">
@@ -2776,7 +2790,7 @@ function SiteFooter({ navigate }) {
     <footer className="site-footer">
       <div className="page-width footer-main">
         <div className="footer-brand">
-          <button className="wordmark footer-wordmark" onClick={() => navigate("/")} aria-label="На главную">Na<span>Vostok</span><small>.by</small></button>
+          <button className="wordmark footer-wordmark" onClick={() => navigate("/")} aria-label="На главную">ev<span>cars</span><small>.by</small></button>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
           <div className="footer-socials">
             <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramBrandIcon /></a>
@@ -2799,7 +2813,7 @@ function InfoCta({ navigate, title, text }) {
   return (
     <section className="info-cta page-width">
       <div>
-        <span>Каталог NaVostok.by</span>
+        <span>Каталог evcars.by</span>
         <h2>{title}</h2>
         <p>{text}</p>
       </div>
@@ -2827,6 +2841,8 @@ const localAccountResetKey = "navostok-account-reset-2026-08-15";
 const guestFavoritesKey = "navostok-favorites";
 const favoritesMigrationKey = "navostok-favorites-account-migration";
 const accountFavoritesKey = (userId) => `navostok-account-favorites:${userId}`;
+const pendingOrderKey = "evcars-pending-order-listing";
+const accountOrdersKey = (userId) => `evcars-account-orders:${userId}`;
 const readFavorites = (key) => {
   try {
     const saved = JSON.parse(window.localStorage.getItem(key) || "[]");
@@ -2836,6 +2852,61 @@ const readFavorites = (key) => {
   }
 };
 const storeFavorites = (key, values) => window.localStorage.setItem(key, JSON.stringify([...values]));
+const readLocalOrders = (userId) => {
+  try {
+    const orders = JSON.parse(window.localStorage.getItem(accountOrdersKey(userId)) || "[]");
+    return Array.isArray(orders) ? orders : [];
+  } catch {
+    return [];
+  }
+};
+const storeLocalOrders = (userId, orders) => window.localStorage.setItem(accountOrdersKey(userId), JSON.stringify(orders));
+const localOrderNumber = (id, createdAt) => `EV-${new Date(createdAt).getFullYear()}-${String(id).padStart(6, "0")}`;
+const createLocalOrder = (userId, car) => {
+  const orders = readLocalOrders(userId);
+  const existing = orders.find((order) => order.listingId === car.id);
+  if (existing) return { order:existing, orders };
+  const createdAt = new Date().toISOString();
+  const id = Math.max(0, ...orders.map((order) => Number(order.id) || 0)) + 1;
+  const estimate = estimateLandedCost(car);
+  const order = {
+    id,
+    orderNumber:localOrderNumber(id, createdAt),
+    listingId:car.id,
+    inspectionStatus:"decision",
+    contractStatus:"locked",
+    paymentStatus:"locked",
+    createdAt,
+    updatedAt:createdAt,
+    car:{ id:car.id, title:car.title, brand:car.brand, model:car.model, year:car.year, type:car.type, mileage:car.mileage, city:car.city, drive:car.drive, battery:car.battery, range:car.electricRange || car.range, image:car.image, estimatedTotalUsd:Math.round((estimate.totalLow + estimate.totalHigh) / 2) },
+  };
+  const next = [order,...orders];
+  storeLocalOrders(userId, next);
+  return { order, orders:next };
+};
+const updateLocalOrder = (userId, orderId, action) => {
+  const orders = readLocalOrders(userId);
+  const index = orders.findIndex((order) => order.id === orderId);
+  if (index < 0) throw new Error("order_not_found");
+  const order = { ...orders[index], updatedAt:new Date().toISOString() };
+  if (action === "order_inspection" && order.inspectionStatus === "decision") order.inspectionStatus = "requested";
+  else if (action === "skip_inspection" && order.inspectionStatus === "decision") { order.inspectionStatus = "skipped"; order.contractStatus = "available"; }
+  else if (action === "confirm_contract" && order.contractStatus === "available") { order.contractStatus = "confirmed"; order.paymentStatus = "available"; order.contractConfirmedAt = order.updatedAt; }
+  else if (action === "request_invoice" && order.paymentStatus === "available") { order.paymentStatus = "invoice_requested"; order.invoiceRequestedAt = order.updatedAt; }
+  else throw new Error("order_action_unavailable");
+  const next = [...orders];
+  next[index] = order;
+  storeLocalOrders(userId, next);
+  return { order, orders:next };
+};
+const deleteLocalOrder = (userId, orderId) => {
+  const orders = readLocalOrders(userId);
+  const order = orders.find((item) => item.id === orderId);
+  if (!order) throw new Error("order_not_found");
+  const next = orders.filter((item) => item.id !== orderId);
+  storeLocalOrders(userId, next);
+  return next;
+};
 try {
   if (!window.localStorage.getItem(localAccountResetKey)) {
     window.localStorage.removeItem(localAuthKey);
@@ -2929,6 +3000,8 @@ async function localDeleteAccount(userId, password) {
   window.localStorage.setItem(localAccountsKey, JSON.stringify(accounts.filter((item) => item.id !== userId)));
   window.localStorage.removeItem(localAuthKey);
   window.localStorage.removeItem(accountFavoritesKey(userId));
+  window.localStorage.removeItem(accountOrdersKey(userId));
+  window.localStorage.removeItem(pendingOrderKey);
 }
 
 function PasswordField({ label, value, onChange, autoComplete, placeholder = "", required = false }) {
@@ -3077,7 +3150,298 @@ function AuthPage({ mode, navigate, onAuthenticate, pending }) {
   );
 }
 
-function AccountPage({ user, favoritesCount, navigate, onLogout, onSaveProfile, onDeleteAccount, pending }) {
+const activeOrderStage = (order) => {
+  if (order.contractStatus === "locked") return 1;
+  if (order.paymentStatus === "locked") return 2;
+  return 3;
+};
+
+function OrderStageRow({ number:stageNumber, title, description, open, locked, done, fixed = false, onToggle, children }) {
+  const heading = (
+    <>
+      <b>{done ? <Check size={20} weight="bold" /> : `${stageNumber}.`}</b>
+      <span><strong>{title}</strong><small>{description}</small></span>
+      {!fixed ? locked ? <LockKey size={20} /> : <CaretDown size={21} className="customer-order-stage-caret" /> : null}
+    </>
+  );
+  return (
+    <section className={`customer-order-stage${open ? " open" : ""}${locked ? " locked" : ""}${done ? " done" : ""}${fixed ? " fixed" : ""}`}>
+      {fixed ? <div className="customer-order-stage-heading">{heading}</div> : <button className="customer-order-stage-heading" type="button" onClick={onToggle} disabled={locked} aria-expanded={open}>{heading}</button>}
+      {open && !locked && <div className="customer-order-stage-body">{children}</div>}
+    </section>
+  );
+}
+
+function OrderRemovalModal({ carTitle, orderNumber, saving, error, onCancel, onConfirm }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape" && !saving) onCancel();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onCancel, saving]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !saving && onCancel()}>
+      <section className="lead-modal order-removal-modal" role="dialog" aria-modal="true" aria-labelledby="order-removal-title" aria-describedby="order-removal-description">
+        <button className="modal-close" type="button" onClick={onCancel} disabled={saving} aria-label="Закрыть"><X size={19} /></button>
+        <div className="order-removal-icon"><Trash size={25} weight="duotone" /></div>
+        <span>Удаление из заказа</span>
+        <h2 id="order-removal-title">Убрать автомобиль?</h2>
+        <p id="order-removal-description"><b>{carTitle}</b> будет удалён из заказа № {orderNumber}. Прогресс по осмотру, договору и оплате также будет удалён.</p>
+        {error && <div className="auth-error order-removal-error" role="alert">{error}</div>}
+        <form className="order-removal-actions" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}>
+          <button className="secondary" type="button" onClick={onCancel} disabled={saving}>Отмена</button>
+          <button className="danger-button solid" type="submit" disabled={saving}><Trash size={18} /> {saving ? "Удаляем…" : "Убрать автомобиль"}</button>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [localMode, setLocalMode] = useState(authBackend === "local");
+  const [expandedStage, setExpandedStage] = useState(1);
+  const [removalOpen, setRemovalOpen] = useState(false);
+  const [removalError, setRemovalError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadLocal = () => {
+      const pendingListingId = window.localStorage.getItem(pendingOrderKey);
+      if (pendingListingId) {
+        const car = cars.find((item) => item.id === pendingListingId);
+        if (car) {
+          createLocalOrder(user.id, car);
+          window.localStorage.removeItem(pendingOrderKey);
+        }
+      }
+      const values = readLocalOrders(user.id);
+      if (!cancelled) {
+        setLocalMode(true);
+        setOrders(values);
+        if (values[0]) setExpandedStage(activeOrderStage(values[0]));
+      }
+    };
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        if (authBackend === "local") {
+          loadLocal();
+          return;
+        }
+        const pendingListingId = window.localStorage.getItem(pendingOrderKey);
+        if (pendingListingId) {
+          const createResponse = await fetch("/api/account/orders", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ listingId:pendingListingId }) });
+          if (!createResponse.ok) throw new Error("order_create_failed");
+          window.localStorage.removeItem(pendingOrderKey);
+        }
+        const response = await fetch("/api/account/orders", { cache:"no-store", credentials:"same-origin" });
+        if (!response.ok) throw new Error("orders_load_failed");
+        const payload = await response.json();
+        const values = Array.isArray(payload.orders) ? payload.orders : [];
+        if (!cancelled) {
+          setOrders(values);
+          if (values[0]) setExpandedStage(activeOrderStage(values[0]));
+        }
+      } catch {
+        loadLocal();
+        if (!readLocalOrders(user.id).length && !cancelled) setError("Не удалось загрузить заказ. Попробуйте обновить страницу.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [authBackend, cars, user.id]);
+
+  const applyAction = async (action) => {
+    const current = orders[0];
+    if (!current || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      let updated;
+      if (localMode) {
+        updated = updateLocalOrder(user.id, current.id, action).order;
+      } else {
+        const response = await fetch(`/api/account/orders/${current.id}`, { method:"PATCH", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ action }) });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "order_update_failed");
+        updated = payload.order;
+      }
+      setOrders((values) => values.map((order) => order.id === updated.id ? updated : order));
+      setExpandedStage(activeOrderStage(updated));
+    } catch {
+      setError("Не удалось сохранить действие. Попробуйте ещё раз.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeOrder = async () => {
+    const current = orders[0];
+    if (!current || saving) return;
+    setSaving(true);
+    setError("");
+    setRemovalError("");
+    try {
+      if (localMode) {
+        try {
+          setOrders(deleteLocalOrder(user.id, current.id));
+        } catch (localError) {
+          if (localError.message !== "order_not_found" || authBackend === "local") throw localError;
+          const response = await fetch(`/api/account/orders/${current.id}`, { method:"DELETE", credentials:"same-origin" });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || "order_remove_failed");
+          setLocalMode(false);
+          setOrders((values) => values.filter((order) => order.id !== current.id));
+        }
+      } else {
+        const response = await fetch(`/api/account/orders/${current.id}`, { method:"DELETE", credentials:"same-origin" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "order_remove_failed");
+        setOrders((values) => values.filter((order) => order.id !== current.id));
+      }
+      setExpandedStage(1);
+      setRemovalOpen(false);
+    } catch (removeError) {
+      console.error("[customer-order] removal failed", { orderId:current.id, source:localMode ? "local" : "server", error:removeError.message });
+      setRemovalError(removeError.message === "unauthorized" ? "Сессия истекла. Обновите страницу и войдите снова." : "Не удалось убрать автомиль. Попробуйте ещё раз.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <section className="account-order-loading" aria-live="polite">Загружаем ваш заказ…</section>;
+  const order = orders[0];
+  if (!order) return (
+    <section className="account-panel account-empty">
+      <div className="account-panel-title"><div><span>Мои заказы</span><h2>Начните с подходящего автомобиля</h2></div><ClipboardText size={27} weight="duotone" /></div>
+      <p>{error || "Выберите автомобиль в каталоге — после этого здесь появятся осмотр, договор и оплата."}</p>
+      <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог <ArrowRight size={18} /></button>
+    </section>
+  );
+
+  const inspectionDone = order.inspectionStatus === "skipped";
+  const contractUnlocked = order.contractStatus !== "locked";
+  const contractDone = order.contractStatus === "confirmed";
+  const paymentUnlocked = order.paymentStatus !== "locked";
+  const requestOrderRemoval = (event) => {
+    event.currentTarget.closest("details")?.removeAttribute("open");
+    setRemovalError("");
+    setRemovalOpen(true);
+  };
+  return (
+    <section className="customer-order" aria-label={`Заказ ${order.orderNumber}`}>
+      <div className="customer-order-car">
+        <img src={order.car.image} alt={order.car.title} />
+        <div className="customer-order-car-copy">
+          <div className="customer-order-car-heading"><span>Выбранный автомобиль</span><h2><a href={`/cars/${encodeURIComponent(order.listingId)}`} target="_blank" rel="noopener noreferrer">{order.car.title}</a></h2><p>Заказ № {order.orderNumber}</p></div>
+          <div className="customer-order-car-meta">
+            {order.car.year ? <span>{order.car.year} год</span> : null}
+            {Number.isFinite(order.car.mileage) ? <span>{number(order.car.mileage)} км</span> : null}
+            {order.car.type ? <span>{order.car.type}</span> : null}
+          </div>
+          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b>≈ {number(order.car.estimatedTotalUsd)} USD</b></div> : null}
+        </div>
+        <div className="customer-order-card-controls">
+          <details className="order-car-menu">
+            <summary aria-label="Действия с автомобилем"><DotsThreeVertical size={23} weight="bold" /></summary>
+            <div><button type="button" disabled={saving} onClick={requestOrderRemoval}><Trash size={17} /> Убрать автомобиль</button></div>
+          </details>
+          <a className="customer-order-card-open" href={`/cars/${encodeURIComponent(order.listingId)}`} target="_blank" rel="noopener noreferrer" aria-label={`Открыть карточку ${order.car.title} в новой вкладке`}><span>Карточка автомобиля</span><ArrowRight size={24} /></a>
+        </div>
+      </div>
+      <div className="customer-order-stages">
+        <OrderStageRow number={1} title="Осмотр автомобиля" description="Проверим состояние автомобиля перед покупкой." open fixed done={inspectionDone}>
+          {order.inspectionStatus === "decision" ? (
+            <><p>Заказать осмотр перед покупкой?</p><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("order_inspection")}>Заказать осмотр</button><button className="order-text-action" type="button" disabled={saving} onClick={() => applyAction("skip_inspection")}>Пропустить</button></div></>
+          ) : order.inspectionStatus === "requested" ? (
+            <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Осмотр заказан.</b><span>Подтвердим стоимость и срок в выбранном вами канале связи.</span></p></div>
+          ) : (
+            <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Осмотр пропущен.</b><span>Решение сохранено, можно перейти к договору.</span></p></div>
+          )}
+        </OrderStageRow>
+        <OrderStageRow number={2} title="Договор" description="Подготовим и согласуем договор доставки." open={expandedStage === 2} locked={!contractUnlocked} done={contractDone} onToggle={() => setExpandedStage(expandedStage === 2 ? 0 : 2)}>
+          {contractDone ? (
+            <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Договор согласован.</b><span>Переходим к счёту и выкупу автомобиля.</span></p></div>
+          ) : (
+            <><p>Данные уже заполнены из профиля. Подтвердите автомобиль и условия.</p><div className="contract-summary"><span>{user.name}</span><span>{formatAccountPhone(user.phone)}</span><span>{order.car.title}</span></div><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("confirm_contract")}>Согласовать договор</button><button className="order-text-action" type="button" onClick={() => navigate("/payment-and-contract")}>Посмотреть условия</button></div></>
+          )}
+        </OrderStageRow>
+        <OrderStageRow number={3} title="Оплата и выкуп" description="Сформируем счёт и подтвердим выкуп автомобиля." open={expandedStage === 3} locked={!paymentUnlocked} done={order.paymentStatus === "invoice_requested"} onToggle={() => setExpandedStage(expandedStage === 3 ? 0 : 3)}>
+          {order.paymentStatus === "invoice_requested" ? (
+            <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос на счёт получен.</b><span>После проверки цены продавца счёт появится здесь.</span></p></div>
+          ) : (
+            <><p>Сначала подтвердим актуальную цену продавца, затем подготовим счёт.</p>{order.car.estimatedTotalUsd && <div className="order-estimate"><span>Ориентировочно до Минска</span><b>≈ {number(order.car.estimatedTotalUsd)} USD</b></div>}<button className="primary" type="button" disabled={saving} onClick={() => applyAction("request_invoice")}>Запросить счёт</button></>
+          )}
+        </OrderStageRow>
+      </div>
+      {error && <div className="auth-error" role="alert">{error}</div>}
+      {removalOpen && <OrderRemovalModal carTitle={order.car.title} orderNumber={order.orderNumber} saving={saving} error={removalError} onCancel={() => { setRemovalOpen(false); setRemovalError(""); }} onConfirm={removeOrder} />}
+    </section>
+  );
+}
+
+function AccountFavoritesPanel({ cars, favorites, navigate, toggleFavorite }) {
+  const [loadedCars, setLoadedCars] = useState([]);
+  const favoriteKey = [...favorites].sort().join("|");
+  const allCars = useMemo(() => {
+    const values = new Map(cars.map((car) => [car.id,car]));
+    loadedCars.forEach((car) => values.set(car.id,car));
+    return [...values.values()];
+  }, [cars,loadedCars]);
+  const favoriteCars = allCars.filter((car) => favorites.has(car.id));
+
+  useEffect(() => {
+    const knownIds = new Set(cars.map((car) => car.id));
+    loadedCars.forEach((car) => knownIds.add(car.id));
+    const missingIds = [...favorites].filter((id) => !knownIds.has(id));
+    if (!missingIds.length) return undefined;
+    const controller = new AbortController();
+    Promise.all(missingIds.map((id) => fetch(`/api/cars/${encodeURIComponent(id)}`, { cache:"no-store", signal:controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((car) => car ? normalizeImportedCar(car) : null)
+      .catch(() => null)))
+      .then((values) => {
+        const resolved = values.filter(Boolean);
+        if (!controller.signal.aborted && resolved.length) setLoadedCars((current) => [...current,...resolved]);
+      });
+    return () => controller.abort();
+  }, [cars,favoriteKey,loadedCars]);
+
+  return (
+    <section className="account-section account-favorites-section">
+      <div className="account-section-heading">
+        <div><span>Избранное</span><h2>Сохранённые автомобили</h2><p>Вернитесь к сравнению или откройте карточку автомобиля.</p></div>
+        <b>{favorites.size}</b>
+      </div>
+      {favoriteCars.length ? (
+        <div className="car-list account-favorites-list">
+          {favoriteCars.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite toggleFavorite={toggleFavorite} />)}
+        </div>
+      ) : favorites.size ? (
+        <div className="account-section-loading" aria-live="polite">Загружаем сохранённые автомобили…</div>
+      ) : (
+        <div className="empty-state account-favorites-empty">
+          <Heart size={34} />
+          <h3>В избранном пока ничего нет</h3>
+          <p>Сохраняйте автомобили сердцем в каталоге — они появятся в этом разделе.</p>
+          <button className="primary" type="button" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navigate, onLogout, onSaveProfile, onDeleteAccount, pending }) {
+  const [section, setSection] = useState("order");
   const [profile, setProfile] = useState({ name:user.name, email:user.email || "", telegram:user.telegram || "", city:user.city || "", preferredContact:user.preferredContact || "phone" });
   const [profileError, setProfileError] = useState("");
   const [profileSaved, setProfileSaved] = useState(false);
@@ -3119,56 +3483,65 @@ function AccountPage({ user, favoritesCount, navigate, onLogout, onSaveProfile, 
   return (
     <main className="account-page page-width">
       <header className="account-heading">
-        <div><span className="info-eyebrow">Личный кабинет</span><h1>Здравствуйте, {user.name.split(" ")[0]}</h1><p>Здесь будут собраны ваши автомобили, заявки и документы.</p></div>
+        <div><span className="info-eyebrow">Личный кабинет</span><h1>Здравствуйте, {user.name.split(" ")[0]}</h1><p>Заказ, избранные автомобили и ваши данные собраны в одном месте.</p></div>
         <button className="secondary account-logout" onClick={onLogout} disabled={pending}><SignOut size={18} /> Выйти</button>
       </header>
-      <section className="account-summary" aria-label="Сводка">
-        <article><span><Heart size={23} weight="duotone" /></span><div><strong>{favoritesCount}</strong><p>В избранном</p></div><button onClick={() => navigate("/favorites")} aria-label="Открыть избранное"><CaretRight size={20} /></button></article>
-        <article><span><ClipboardText size={23} weight="duotone" /></span><div><strong>0</strong><p>Активных заявок</p></div><button disabled aria-label="Заявок пока нет"><CaretRight size={20} /></button></article>
-        <article><span><CarProfile size={23} weight="duotone" /></span><div><strong>—</strong><p>Авто в доставке</p></div><button disabled aria-label="Автомобилей в доставке пока нет"><CaretRight size={20} /></button></article>
-      </section>
-      <div className="account-grid">
-        <section className="account-panel account-empty">
-          <div className="account-panel-title"><div><span>Мои заявки</span><h2>Начните с подходящего автомобиля</h2></div><ClipboardText size={27} weight="duotone" /></div>
-          <p>Выберите автомобиль в каталоге и оставьте заявку на расчёт. Она появится здесь после подтверждения менеджером.</p>
-          <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог <ArrowRight size={18} /></button>
-        </section>
-        <aside className="account-panel account-profile">
-          <div className="account-avatar">{user.name.trim().slice(0, 1).toUpperCase()}</div>
-          <div><span>Профиль</span><h2>{user.name}</h2><p>{formatAccountPhone(user.phone)}</p></div>
-          <div className="account-note"><ShieldCheck size={20} weight="duotone" /><p>Контактные данные видны только вам и команде NaVostok.</p></div>
+      <div className="account-layout">
+        <aside className="account-sidebar">
+          <div className="account-sidebar-user"><b>{user.name.slice(0,1).toUpperCase()}</b><div><strong>{user.name}</strong><span>{formatAccountPhone(user.phone)}</span></div></div>
+          <nav className="account-navigation" aria-label="Разделы личного кабинета">
+            <button type="button" className={section === "order" ? "active" : ""} aria-current={section === "order" ? "page" : undefined} onClick={() => setSection("order")}><ClipboardText size={21} weight="duotone" /><span>Заказ</span></button>
+            <button type="button" className={section === "favorites" ? "active" : ""} aria-current={section === "favorites" ? "page" : undefined} onClick={() => setSection("favorites")}><Heart size={21} weight={favorites.size ? "fill" : "duotone"} /><span>Избранное</span>{favorites.size > 0 && <b>{favorites.size}</b>}</button>
+            <button type="button" className={section === "profile" ? "active" : ""} aria-current={section === "profile" ? "page" : undefined} onClick={() => setSection("profile")}><UserCircle size={21} weight="duotone" /><span>Личные данные</span></button>
+            <button type="button" className={section === "settings" ? "active" : ""} aria-current={section === "settings" ? "page" : undefined} onClick={() => setSection("settings")}><GearSix size={21} weight="duotone" /><span>Настройки</span></button>
+          </nav>
         </aside>
-      </div>
-      <form className="account-panel profile-editor" onSubmit={saveProfile}>
-        <div className="profile-editor-heading">
-          <div><span>Личные данные</span><h2>Контактная информация</h2><p>Заполним эти данные автоматически при следующей заявке.</p></div>
-          <UserCircle size={30} weight="duotone" />
-        </div>
-        <div className="profile-fields">
-          <label className="auth-field"><span>Имя и фамилия</span><input autoComplete="name" value={profile.name} onChange={updateProfileField("name")} maxLength={80} required /></label>
-          <label className="auth-field profile-phone"><span>Телефон для входа</span><input value={formatAccountPhone(user.phone)} disabled /><small>Смену номера добавим с подтверждением по SMS.</small></label>
-          <label className="auth-field"><span>Email</span><input type="email" autoComplete="email" value={profile.email} onChange={updateProfileField("email")} placeholder="name@example.com" maxLength={160} /></label>
-          <label className="auth-field"><span>Telegram</span><div className="profile-input-prefix"><b>@</b><input value={profile.telegram} onChange={updateProfileField("telegram")} placeholder="username" maxLength={80} /></div></label>
-          <label className="auth-field"><span>Город</span><input autoComplete="address-level2" value={profile.city} onChange={updateProfileField("city")} placeholder="Например, Минск" maxLength={120} /></label>
-          <label className="auth-field"><span>Как удобнее связаться</span><select value={profile.preferredContact} onChange={updateProfileField("preferredContact")}><option value="phone">Позвонить</option><option value="telegram">Написать в Telegram</option><option value="email">Написать на email</option></select></label>
-        </div>
-        {profileError && <div className="auth-error" role="alert">{profileError}</div>}
-        <div className="profile-actions"><button className="primary" type="submit" disabled={pending}>Сохранить изменения</button>{profileSaved && <p role="status"><CheckCircle size={18} weight="fill" /> Данные сохранены</p>}</div>
-      </form>
-      <section className="account-danger">
-        <div><span>Управление аккаунтом</span><h2>Удаление аккаунта</h2><p>Профиль и все активные сессии будут удалены без возможности восстановления.</p></div>
-        {!deleteOpen ? <button className="danger-button" type="button" onClick={() => setDeleteOpen(true)}><Trash size={18} /> Удалить аккаунт</button> : (
-          <form className="delete-account-form" onSubmit={removeAccount}>
-            <div className="delete-warning"><WarningCircle size={23} weight="fill" /><p><b>Это действие необратимо.</b> Для подтверждения введите пароль и слово «УДАЛИТЬ».</p></div>
-            <div className="delete-fields">
-              <PasswordField label="Текущий пароль" autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} required />
-              <label className="auth-field"><span>Подтверждение</span><input value={deletePhrase} onChange={(event) => setDeletePhrase(event.target.value)} placeholder="УДАЛИТЬ" required /></label>
+        <div className="account-content">
+        {section === "order" && <CustomerOrdersPanel user={user} cars={cars} authBackend={authBackend} navigate={navigate} />}
+        {section === "favorites" && <AccountFavoritesPanel cars={cars} favorites={favorites} navigate={navigate} toggleFavorite={toggleFavorite} />}
+        {section === "profile" && (
+          <form className="account-panel profile-editor account-profile-section" onSubmit={saveProfile}>
+            <div className="profile-editor-heading">
+              <div><span>Личные данные</span><h2>Контактная информация</h2><p>Используем эти данные для договора и связи по заказу.</p></div>
+              <UserCircle size={30} weight="duotone" />
             </div>
-            {deleteError && <div className="auth-error" role="alert">{deleteError}</div>}
-            <div className="delete-actions"><button className="secondary" type="button" onClick={() => { setDeleteOpen(false); setDeleteError(""); }}>Отмена</button><button className="danger-button solid" type="submit" disabled={pending || !deletePassword || deletePhrase !== "УДАЛИТЬ"}><Trash size={18} /> Удалить навсегда</button></div>
+            <div className="profile-fields">
+              <label className="auth-field"><span>Имя и фамилия</span><input autoComplete="name" value={profile.name} onChange={updateProfileField("name")} maxLength={80} required /></label>
+              <label className="auth-field profile-phone"><span>Телефон для входа</span><input value={formatAccountPhone(user.phone)} disabled /><small>Смену номера добавим с подтверждением по SMS.</small></label>
+              <label className="auth-field"><span>Email</span><input type="email" autoComplete="email" value={profile.email} onChange={updateProfileField("email")} placeholder="name@example.com" maxLength={160} /></label>
+              <label className="auth-field"><span>Telegram</span><div className="profile-input-prefix"><b>@</b><input value={profile.telegram} onChange={updateProfileField("telegram")} placeholder="username" maxLength={80} /></div></label>
+              <label className="auth-field"><span>Город</span><input autoComplete="address-level2" value={profile.city} onChange={updateProfileField("city")} placeholder="Например, Минск" maxLength={120} /></label>
+              <label className="auth-field"><span>Как удобнее связаться</span><select value={profile.preferredContact} onChange={updateProfileField("preferredContact")}><option value="phone">Позвонить</option><option value="telegram">Написать в Telegram</option><option value="email">Написать на email</option></select></label>
+            </div>
+            {profileError && <div className="auth-error" role="alert">{profileError}</div>}
+            <div className="profile-actions"><button className="primary" type="submit" disabled={pending}>Сохранить изменения</button>{profileSaved && <p role="status"><CheckCircle size={18} weight="fill" /> Данные сохранены</p>}</div>
           </form>
         )}
-      </section>
+        {section === "settings" && (
+          <div className="account-settings-section">
+            <section className="account-panel account-security">
+              <div className="account-panel-title"><div><span>Настройки</span><h2>Аккаунт и вход</h2></div><GearSix size={28} weight="duotone" /></div>
+              <div className="account-security-row"><div><b>Телефон для входа</b><span>{formatAccountPhone(user.phone)}</span></div><CheckCircle size={21} weight="fill" /></div>
+              <div className="account-security-row"><div><b>Статус аккаунта</b><span>Активен</span></div><CheckCircle size={21} weight="fill" /></div>
+            </section>
+            <section className="account-danger">
+              <div><span>Управление аккаунтом</span><h2>Удаление аккаунта</h2><p>Профиль и все активные сессии будут удалены без возможности восстановления.</p></div>
+              {!deleteOpen ? <button className="danger-button" type="button" onClick={() => setDeleteOpen(true)}><Trash size={18} /> Удалить аккаунт</button> : (
+                <form className="delete-account-form" onSubmit={removeAccount}>
+                  <div className="delete-warning"><WarningCircle size={23} weight="fill" /><p><b>Это действие необратимо.</b> Для подтверждения введите пароль и слово «УДАЛИТЬ».</p></div>
+                  <div className="delete-fields">
+                    <PasswordField label="Текущий пароль" autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} required />
+                    <label className="auth-field"><span>Подтверждение</span><input value={deletePhrase} onChange={(event) => setDeletePhrase(event.target.value)} placeholder="УДАЛИТЬ" required /></label>
+                  </div>
+                  {deleteError && <div className="auth-error" role="alert">{deleteError}</div>}
+                  <div className="delete-actions"><button className="secondary" type="button" onClick={() => { setDeleteOpen(false); setDeleteError(""); }}>Отмена</button><button className="danger-button solid" type="submit" disabled={pending || !deletePassword || deletePhrase !== "УДАЛИТЬ"}><Trash size={18} /> Удалить навсегда</button></div>
+                </form>
+              )}
+            </section>
+          </div>
+        )}
+        </div>
+      </div>
     </main>
   );
 }
@@ -3196,6 +3569,13 @@ export function App() {
   const targetId = detailId || orderId;
   const [favorites, setFavorites] = useState(() => readFavorites(guestFavoritesKey));
   const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "BYN" ? "BYN" : "USD"));
+  const [themeMode, setThemeMode] = useState(() => {
+    const savedTheme = window.localStorage.getItem("evcars-theme");
+    if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+    return "system";
+  });
+  const [systemTheme, setSystemTheme] = useState(() => (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  const theme = themeMode === "system" ? systemTheme : themeMode;
   const [cars, setCars] = useState([]);
   const [apiMode, setApiMode] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -3208,6 +3588,17 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("navostok-currency", currency);
   }, [currency]);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#111315" : "#ffffff");
+  }, [theme]);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncSystemTheme = (event) => setSystemTheme(event.matches ? "dark" : "light");
+    media.addEventListener("change", syncSystemTheme);
+    return () => media.removeEventListener("change", syncSystemTheme);
+  }, []);
   useEffect(() => {
     fetch("/api/auth/me", { cache:"no-store", credentials:"same-origin" })
       .then(async (response) => {
@@ -3458,9 +3849,9 @@ export function App() {
     ) : path === "/favorites" ? (
       <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : path === "/login" || path === "/register" ? (
-      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} favoritesCount={favorites.size} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode={path === "/register" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode={path === "/register" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
     ) : path === "/account" ? (
-      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} favoritesCount={favorites.size} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode="login" navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode="login" navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
     ) : orderId ? (
       <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
     ) : detailId ? (
@@ -3488,7 +3879,20 @@ export function App() {
     );
   return (
     <CurrencyContext.Provider value={currency}>
-      <Header navigate={navigate} favoritesCount={favorites.size} path={path} currency={currency} setCurrency={setCurrency} user={user} />
+      <Header
+        navigate={navigate}
+        favoritesCount={favorites.size}
+        path={path}
+        currency={currency}
+        setCurrency={setCurrency}
+        user={user}
+        theme={theme}
+        toggleTheme={() => {
+          const nextTheme = theme === "dark" ? "light" : "dark";
+          window.localStorage.setItem("evcars-theme", nextTheme);
+          setThemeMode(nextTheme);
+        }}
+      />
       {page}
       <SiteFooter navigate={navigate} />
     </CurrencyContext.Provider>

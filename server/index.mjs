@@ -5,7 +5,7 @@ import { handleApiRequest } from "./handler.mjs";
 const port = Number(process.env.API_PORT || 8787);
 const server = http.createServer(handleApiRequest);
 
-server.listen(port, "0.0.0.0", () => console.log(`cncar.by API: http://127.0.0.1:${port}`));
+server.listen(port, "0.0.0.0", () => console.log(`evcars.by API: http://127.0.0.1:${port}`));
 
 const shutdown = async () => {
   server.close();

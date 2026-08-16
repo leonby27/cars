@@ -56,7 +56,7 @@ async function requestThrough(channel, url, { accept, userAgent }) {
   throw new Error(`${channel.name}: too many redirects`);
 }
 
-export async function fetchSourceText(url, { accept="text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", userAgent="NaVostokBY-Importer/0.2", attempts=3 } = {}) {
+export async function fetchSourceText(url, { accept="text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", userAgent="evcars.by-Importer/0.2", attempts=3 } = {}) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     let blocked=0;

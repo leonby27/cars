@@ -25,7 +25,7 @@ const databaseOnly = args.has("--database-only");
 // Import policy is append-only: a regular crawl must never replace or clean the catalog.
 const appendNew = true;
 const htmlUserAgent = process.env.GUAZI_HTML_USER_AGENT || "OAI-SearchBot/1.0";
-const commonHeaders = { accept: "text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", "user-agent": "NaVostokBY-Importer/0.1" };
+const commonHeaders = { accept: "text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", "user-agent": "evcars.by-Importer/0.1" };
 
 async function fetchText(url, headers = commonHeaders, attempts = 3) {
   const response = await fetchSourceText(url, { accept:headers.accept, userAgent:headers["user-agent"], attempts });

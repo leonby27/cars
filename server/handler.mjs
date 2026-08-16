@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
+import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 const json = (response, status, payload, headers = {}) => {
@@ -32,7 +33,7 @@ export async function handleApiRequest(request, response) {
       let source;
       try { source = new URL(url.searchParams.get("src") || ""); } catch { return json(response, 400, { error:"invalid_image_url" }); }
       if (source.protocol !== "https:" || !imageHosts.has(source.hostname)) return json(response, 403, { error:"image_host_not_allowed" });
-      const upstream = await fetch(source, { redirect:"follow", headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"cncar.by-image-proxy/1.0" } });
+      const upstream = await fetch(source, { redirect:"follow", headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"evcars.by-image-proxy/1.0" } });
       const contentType = upstream.headers.get("content-type") || "";
       if (!upstream.ok || !contentType.startsWith("image/") || !upstream.body) return json(response, 502, { error:"image_unavailable" });
       response.writeHead(200, { "content-type":contentType, "cache-control":"public, max-age=21600, stale-while-revalidate=86400", "x-content-type-options":"nosniff" });
@@ -95,6 +96,36 @@ export async function handleApiRequest(request, response) {
     if (request.method === "GET" && url.pathname === "/api/account/favorites") {
       const result = await listAccountFavorites(request);
       return result.error ? json(response, 401, result) : json(response, 200, result);
+    }
+    if (request.method === "GET" && url.pathname === "/api/account/orders") {
+      const result = await listCustomerOrders(request);
+      return result.error ? json(response, 401, result) : json(response, 200, result);
+    }
+    if (request.method === "POST" && url.pathname === "/api/account/orders") {
+      const body = await readJson(request);
+      const listingId = String(body.listingId || "").trim();
+      if (!listingId || listingId.length > 200) return json(response, 400, { error:"invalid_listing_id" });
+      const result = await createCustomerOrder(request, listingId);
+      if (result.error === "unauthorized") return json(response, 401, result);
+      if (result.error) return json(response, 404, result);
+      return json(response, 201, result);
+    }
+    const orderMatch = request.method === "PATCH" && url.pathname.match(/^\/api\/account\/orders\/(\d+)$/);
+    if (orderMatch) {
+      const body = await readJson(request);
+      const result = await updateCustomerOrder(request, Number(orderMatch[1]), String(body.action || ""));
+      if (result.error === "unauthorized") return json(response, 401, result);
+      if (result.error === "order_not_found") return json(response, 404, result);
+      if (result.error) return json(response, 409, result);
+      return json(response, 200, result);
+    }
+    const orderDeleteMatch = request.method === "DELETE" && url.pathname.match(/^\/api\/account\/orders\/(\d+)$/);
+    if (orderDeleteMatch) {
+      const result = await deleteCustomerOrder(request, Number(orderDeleteMatch[1]));
+      if (result.error === "unauthorized") return json(response, 401, result);
+      if (result.error === "order_not_found") return json(response, 404, result);
+      if (result.error) return json(response, 409, result);
+      return json(response, 200, result);
     }
     const favoriteMatch = ["PUT", "DELETE"].includes(request.method) && url.pathname.match(/^\/api\/account\/favorites\/([^/]+)$/);
     if (favoriteMatch) {

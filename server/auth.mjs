@@ -87,7 +87,7 @@ export async function getSessionUser(request) {
   return result.rows[0] ? safeUser(result.rows[0]) : null;
 }
 
-async function getSessionAccount(request) {
+export async function getSessionAccount(request) {
   const token = readCookie(request.headers.cookie, SESSION_COOKIE);
   if (!token) return null;
   const result = await pool.query(

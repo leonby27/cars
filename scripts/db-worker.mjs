@@ -8,7 +8,7 @@ import { fetchSourceText } from "./lib/source-client.mjs";
 
 const workerId = `${os.hostname()}-${process.pid}`;
 const runOnce = process.argv.includes("--once");
-const userAgent = process.env.GUAZI_HTML_USER_AGENT || "NaVostokBY-Worker/0.2";
+const userAgent = process.env.GUAZI_HTML_USER_AGENT || "evcars.by-Worker/0.2";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const hash = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const scheduleIntervalMs = Math.max(60_000, Number(process.env.CRAWL_SCHEDULE_INTERVAL_MS || 15 * 60_000));
