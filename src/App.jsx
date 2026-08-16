@@ -7,7 +7,7 @@ import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { COMPANY } from "./company-data.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
-import { OrderContactCard } from "./order-contact.jsx";
+import { OrderContactModal } from "./order-contact.jsx";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
@@ -3234,6 +3234,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   const [removalOpen, setRemovalOpen] = useState(false);
   const [removalError, setRemovalError] = useState("");
   const [availabilityComment, setAvailabilityComment] = useState("");
+  const [contactModalOpen, setContactModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -3318,6 +3319,14 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
     }
   };
 
+  const submitAvailabilityRequest = async (contactValues) => {
+    const contactSaved = await applyAction("save_order_contact", contactValues);
+    if (!contactSaved) return false;
+    const requestSaved = await applyAction("request_availability_check", { comment:availabilityComment.trim() });
+    if (requestSaved) setContactModalOpen(false);
+    return requestSaved;
+  };
+
   const removeOrder = async () => {
     const current = orders[0];
     if (!current || saving) return;
@@ -3368,6 +3377,11 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   const contractUnlocked = order.contractStatus !== "locked";
   const contractDone = order.contractStatus === "confirmed";
   const paymentUnlocked = order.paymentStatus !== "locked";
+  const responseMethods = Array.isArray(order.contactMethods) && order.contactMethods.length ? order.contactMethods : user.preferredContact === "telegram" ? ["telegram"] : ["phone"];
+  const responsePhone = order.contactPhone || formatAccountPhone(user.phone);
+  const responseLabels = responseMethods.map((method) => ({ phone:"по телефону", viber:"в Viber", telegram:"в Telegram" })[method]).filter(Boolean);
+  const responseDestination = responseLabels.length > 1 ? `${responseLabels.slice(0,-1).join(", ")} или ${responseLabels.at(-1)}` : responseLabels[0] || "по телефону";
+  const responseText = `Ответим ${responseDestination} — ${responsePhone}.`;
   const requestOrderRemoval = (event) => {
     event.currentTarget.closest("details")?.removeAttribute("open");
     setRemovalError("");
@@ -3394,11 +3408,10 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
           <a className="customer-order-card-open" href={`/cars/${encodeURIComponent(order.listingId)}`} target="_blank" rel="noopener noreferrer" aria-label={`Открыть карточку ${order.car.title} в новой вкладке`}><span>Карточка автомобиля</span><ArrowRight size={24} /></a>
         </div>
       </div>
-      <OrderContactCard order={order} user={user} saving={saving} onSave={(values) => applyAction("save_order_contact", values)} />
       <div className="customer-order-stages">
         <OrderStageRow number={1} title="Проверка объявления" description="Уточним у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
           {!availabilityRequested ? (
-            <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); applyAction("request_availability_check", { comment:availabilityComment.trim() }); }}>
+            <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); setContactModalOpen(true); }}>
               <p>Перед осмотром свяжемся с продавцом и подтвердим:</p>
               <ul className="availability-check-list">
                 <li><CheckCircle size={20} weight="fill" /> автомобиль ещё в продаже;</li>
@@ -3410,11 +3423,11 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
                 <textarea value={availabilityComment} onChange={(event) => setAvailabilityComment(event.target.value)} maxLength={600} placeholder="Например: уточнить возможность торга, состояние батареи или комплект зимних колёс" />
                 <small>Можно оставить поле пустым — базовые вопросы мы зададим в любом случае.</small>
               </label>
-              <button className="primary" type="submit" disabled={saving}>{saving ? "Отправляем…" : "Уточнить актуальность"}</button>
+              <div><button className="primary" type="submit" disabled={saving}>Уточнить актуальность</button><small className="availability-contact-hint">{responseText}</small></div>
             </form>
           ) : (
             <div className="availability-requested">
-              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос отправлен.</b><span>Свяжемся с продавцом и сообщим результат в выбранном вами канале связи.</span></p></div>
+              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос отправлен.</b><span>{responseText}</span></p></div>
               {order.availabilityComment ? <p><b>Ваш комментарий:</b> {order.availabilityComment}</p> : null}
             </div>
           )}
@@ -3445,6 +3458,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
       {removalOpen && <OrderRemovalModal carTitle={order.car.title} orderNumber={order.orderNumber} saving={saving} error={removalError} onCancel={() => { setRemovalOpen(false); setRemovalError(""); }} onConfirm={removeOrder} />}
+      {contactModalOpen && <OrderContactModal order={order} user={user} saving={saving} onSubmit={submitAvailabilityRequest} onClose={() => setContactModalOpen(false)} />}
     </section>
   );
 }

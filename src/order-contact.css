@@ -1,57 +1,33 @@
-.order-contact-card {
-  margin-bottom: 12px;
-  padding: 17px 20px;
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  background: var(--panel);
+.order-contact-modal {
+  width: min(650px, 100%);
+  padding: 28px;
 }
-.order-contact-heading {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
+.order-contact-modal > span {
+  margin-top: 0;
 }
-.order-contact-heading h2 {
-  margin: 0;
-  font-size: 20px;
-  letter-spacing: -0.4px;
-  white-space: nowrap;
+.order-contact-modal > p {
+  margin: 8px 0 0;
 }
-.order-contact-heading p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.4;
-}
-.order-contact-card form {
+.order-contact-modal form {
   display: grid;
-  gap: 11px;
-  margin-top: 13px;
-}
-.order-contact-main-row {
-  display: grid;
-  grid-template-columns: minmax(330px, 1fr) minmax(320px, auto);
-  gap: 14px;
-  align-items: end;
+  gap: 17px;
+  margin-top: 21px;
 }
 .order-contact-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 .order-contact-fields label {
   display: grid;
-  gap: 5px;
-}
-.order-contact-fields label > span,
-.order-contact-methods legend {
-  color: var(--ink);
+  gap: 6px;
   font-size: 16px;
   font-weight: 750;
 }
 .order-contact-fields input {
   width: 100%;
-  height: 42px;
-  padding: 0 11px;
+  height: 46px;
+  padding: 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: 9px;
   outline: 0;
@@ -72,17 +48,22 @@
   border: 0;
 }
 .order-contact-methods legend {
-  margin-bottom: 5px;
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 750;
 }
 .order-contact-methods > div {
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 .order-contact-methods label {
-  height: 42px;
-  display: inline-flex;
+  min-height: 44px;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 7px;
   padding: 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: 9px;
@@ -99,29 +80,23 @@
 }
 .order-contact-methods input,
 .order-contact-consent input {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
   margin: 0;
   accent-color: var(--accent);
 }
-.order-contact-footer {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-}
 .order-contact-consent {
-  display: grid;
-  grid-template-columns: 17px 1fr;
-  gap: 8px;
+  display: grid !important;
+  grid-template-columns: 18px 1fr;
+  gap: 9px !important;
   align-items: start;
   color: var(--muted);
-  font-size: 16px;
-  line-height: 1.4;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  line-height: 1.45;
 }
 .order-contact-consent input {
-  margin-top: 3px;
+  margin-top: 2px;
 }
 .order-contact-consent a {
   color: var(--ink);
@@ -129,7 +104,7 @@
   text-underline-offset: 3px;
 }
 .order-contact-error {
-  padding: 9px 11px;
+  padding: 10px 12px;
   border-radius: 8px;
   background: #fff0ed;
   color: #a83220;
@@ -137,68 +112,23 @@
   font-weight: 650;
   line-height: 1.4;
 }
-.order-contact-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  flex: 0 0 auto;
+.order-contact-submit {
+  width: 100%;
+  min-height: 48px;
 }
-.order-contact-actions .primary {
-  min-width: 138px;
-  min-height: 42px;
-  padding-inline: 18px;
-}
-.order-contact-actions p {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  color: var(--green);
+.availability-contact-hint {
+  display: block;
+  margin-top: 9px;
+  color: var(--muted);
   font-size: 16px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-@media (max-width: 980px) {
-  .order-contact-main-row {
-    grid-template-columns: 1fr;
-  }
+  line-height: 1.4;
 }
 @media (max-width: 700px) {
-  .order-contact-card {
-    padding: 15px;
-  }
-  .order-contact-heading {
-    display: grid;
-    gap: 3px;
-  }
-  .order-contact-heading p {
-    line-height: 1.35;
-  }
-  .order-contact-card form {
-    margin-top: 11px;
+  .order-contact-modal {
+    padding: 25px 19px 20px;
   }
   .order-contact-fields {
     grid-template-columns: 1fr;
-  }
-  .order-contact-methods > div {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .order-contact-methods label {
-    justify-content: center;
-    padding-inline: 7px;
-  }
-  .order-contact-footer {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .order-contact-actions {
-    justify-content: space-between;
-  }
-  .order-contact-actions .primary {
-    min-width: 132px;
   }
 }
 @media (max-width: 430px) {
