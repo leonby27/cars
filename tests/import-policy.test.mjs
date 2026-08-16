@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   IMPORT_MIN_YEAR,
+  IMPORT_BRAND_SLUGS,
   canonicalImportBrand,
   importPolicyViolation,
   isAllowedImportBrand,
@@ -20,6 +21,8 @@ test("allows the Belarus import brands including Leapmotor", () => {
     assert.equal(isAllowedImportBrand(brand), true, brand);
   }
   assert.equal(isAllowedImportBrand("Haima"), false);
+  assert.equal(IMPORT_BRAND_SLUGS.includes("zeekr"), true);
+  assert.equal(IMPORT_BRAND_SLUGS.includes("haima"), false);
 });
 
 test("accepts only 2023+ electric cars for future imports", () => {

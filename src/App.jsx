@@ -13,7 +13,7 @@ const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCom
 const CurrencyContext = createContext("USD");
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? Math.round(usd * PRICING.usdByn) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
-const moneyRange = (low, high, currency) => (low === high ? money(low, currency) : currency === "BYN" ? `${number(toDisplayCurrency(low, currency))}–${number(toDisplayCurrency(high, currency))} BYN` : `$${number(low)}–${number(high)}`);
+const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
 const ANY_YEAR = "Любой год";
 const ANY_PRICE = "Любая цена";
 const ANY_MILEAGE = "Любой пробег";
@@ -1001,6 +1001,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   });
   const [remoteLoading, setRemoteLoading] = useState(apiMode);
   const [remoteError, setRemoteError] = useState(false);
+  const [customSearchOpen, setCustomSearchOpen] = useState(false);
   const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : "newest"));
   const [loadedLimit, setLoadedLimit] = useState(() => Math.max(pageSize, Number(restoredCatalog?.loadedCount) || pageSize));
   const brands = apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand));
@@ -1140,17 +1141,16 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
           {displayed.length
             ? displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} />)
             : !remoteLoading && (
-                <div className="empty-state">
-                  <MagnifyingGlass size={34} />
-                  <h3>Ничего не нашли</h3>
-                  <p>Попробуйте сбросить один из фильтров.</p>
-                </div>
+                <CustomSearchCta variant="empty" onOpen={() => setCustomSearchOpen(true)} />
               )}
           {remoteLoading && <div className="catalog-message">Загружаем объявления…</div>}
           {apiMode && displayed.length < resultCount && !remoteLoading && (
             <button className="load-more" onClick={loadMore}>
               Показать ещё {Math.min(pageSize, resultCount - displayed.length)} авто
             </button>
+          )}
+          {displayed.length > 0 && (!apiMode || displayed.length >= resultCount) && !remoteLoading && (
+            <CustomSearchCta variant="end" onOpen={() => setCustomSearchOpen(true)} />
           )}
         </section>
         <aside className="side-card">
@@ -1178,6 +1178,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
           </button>
         </aside>
       </div>
+      {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
     </main>
   );
 }
@@ -1465,6 +1466,126 @@ function ConsentField({ checked, onChange, error }) {
   );
 }
 
+function CustomSearchCta({ variant, onOpen }) {
+  const isEmpty = variant === "empty";
+  return (
+    <section className={`custom-search-cta ${isEmpty ? "is-empty" : "is-end"}`} aria-labelledby={`custom-search-${variant}-title`}>
+      <div className="custom-search-icon" aria-hidden="true">
+        <CarProfile size={28} weight="duotone" />
+      </div>
+      <div className="custom-search-copy">
+        <span>{isEmpty ? "По вашему запросу нет вариантов" : "Вы посмотрели все варианты"}</span>
+        <h2 id={`custom-search-${variant}-title`}>{isEmpty ? "Не нашли нужный автомобиль?" : "Не увидели подходящий автомобиль?"}</h2>
+        <p>Напишите, что ищете. Мы подберём автомобиль индивидуально — даже если его пока нет в каталоге.</p>
+      </div>
+      <button className="primary" type="button" onClick={onOpen}>
+        Описать желаемое авто <ArrowRight size={18} />
+      </button>
+    </section>
+  );
+}
+
+function CustomSearchModal({ filters, onClose }) {
+  const [description, setDescription] = useState("");
+  const [phone, setPhone] = useState("+375");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [consentError, setConsentError] = useState("");
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+  const submit = async (event) => {
+    event.preventDefault();
+    const normalizedPhone = normalizeLocalPhone(phone);
+    if (description.trim().length < 10) {
+      setError("Расскажите чуть подробнее, какой автомобиль вам нужен.");
+      return;
+    }
+    if (normalizedPhone.length < 11 || normalizedPhone.length > 15) {
+      setError("Проверьте номер телефона.");
+      return;
+    }
+    if (!consent) {
+      setConsentError("Подтвердите согласие, чтобы отправить заявку.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/order-drafts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          listingId: null,
+          contact: `+${normalizedPhone}`,
+          calculation: {
+            requestType: "catalog_search",
+            preferences: description.trim(),
+            catalogFilters: filters,
+          },
+        }),
+      });
+      if (!response.ok) throw new Error("save unavailable");
+      setSaved(true);
+    } catch {
+      setError("Не удалось отправить заявку. Проверьте подключение и попробуйте ещё раз.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="lead-modal custom-search-modal" role="dialog" aria-modal="true" aria-labelledby="custom-search-modal-title">
+        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть">
+          <X size={19} />
+        </button>
+        {!saved ? (
+          <>
+            <div className="modal-icon">
+              <ChatCircleText size={25} weight="duotone" />
+            </div>
+            <span>Индивидуальный подбор</span>
+            <h2 id="custom-search-modal-title">Опишите желаемое авто</h2>
+            <p>Укажите марку, модель, год, бюджет и другие важные пожелания. Менеджер изучит запрос и позвонит вам.</p>
+            <form onSubmit={submit}>
+              <label>
+                Какой автомобиль ищете
+                <textarea value={description} onChange={(event) => { setDescription(event.target.value); setError(""); }} placeholder="Например: Zeekr 001 от 2024 года, полный привод, до $45 000 под ключ…" maxLength={2000} required autoFocus />
+              </label>
+              <label>
+                Телефон
+                <input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(event) => { setPhone(sanitizePhoneInput(event.target.value)); setError(""); }} placeholder="+375 29 123-45-67" maxLength={16} required />
+              </label>
+              <ConsentField checked={consent} onChange={(value) => { setConsent(value); if (value) setConsentError(""); }} error={consentError} />
+              <button className="primary" type="submit" disabled={saving}>
+                {saving ? "Отправляем…" : "Отправить запрос"}
+              </button>
+              {error && <small className="form-error">{error}</small>}
+            </form>
+          </>
+        ) : (
+          <div className="success-state">
+            <CheckCircle size={48} weight="fill" />
+            <h2 id="custom-search-modal-title">Запрос отправлен</h2>
+            <p>Спасибо! Мы изучим пожелания, поищем варианты вне каталога и свяжемся с вами по телефону.</p>
+            <button className="secondary" type="button" onClick={onClose}>Готово</button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function ReportOrderModal({ car, price, onClose }) {
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
@@ -1644,15 +1765,15 @@ function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite }) {
               </div>
               <div>
                 <PriceLabel label="Расходы в Китае" description="Выкуп, банк и экспортные документы" />
-                <strong>{moneyRange(price.chinaHandlingLow, price.chinaHandlingHigh, currency)}</strong>
+                <strong>{approximateMoney(price.chinaHandlingLow, price.chinaHandlingHigh, currency)}</strong>
               </div>
               <div>
                 <PriceLabel label="Доставка до Минска" description="Оценка стоимости логистики" />
-                <strong>{moneyRange(price.deliveryLow, price.deliveryHigh, currency)}</strong>
+                <strong>{approximateMoney(price.deliveryLow, price.deliveryHigh, currency)}</strong>
               </div>
               <div>
                 <PriceLabel label="Растаможка и сборы" description={price.customsNote} />
-                <strong>{moneyRange(price.customsLow, price.customsHigh, currency)}</strong>
+                <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
               <div>
                 <PriceLabel label="Услуги NaVostok" description="Проверка, выкуп и документы" />
@@ -1661,55 +1782,58 @@ function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite }) {
             </div>
             <div className="price-total">
               <span>Итого</span>
-              <strong>{moneyRange(price.totalLow, price.totalHigh, currency)}</strong>
+              <strong>{approximateMoney(price.totalLow, price.totalHigh, currency)}</strong>
             </div>
             <div className="price-assumption">
               <Info size={16} />
               <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
             </div>
-            <button className="primary" onClick={() => setReportOrderOpen(true)}>
+            <details className="delivery-disclosure">
+              <summary className="delivery-card-heading">
+                <div className="delivery-card-icon">
+                  <Clock size={23} weight="duotone" />
+                </div>
+                <div>
+                  <span>Срок доставки до Минска</span>
+                  <h2>35–50 дней</h2>
+                </div>
+                <CaretDown className="disclosure-caret" size={20} weight="bold" />
+              </summary>
+              <div className="disclosure-content delivery-disclosure-content">
+                <p className="delivery-intro">Ориентировочный срок с момента подписания договора до прибытия автомобиля в Минск.</p>
+                <div className="delivery-stages">
+                  <div>
+                    <ListChecks size={20} />
+                    <p>
+                      <b>Выкуп и подготовка</b>
+                      <span>Проверяем автомобиль, проводим оплату и готовим экспортные документы.</span>
+                    </p>
+                  </div>
+                  <div>
+                    <MapPin size={20} />
+                    <p>
+                      <b>Логистика по Китаю</b>
+                      <span>Доставляем автомобиль до пункта отправки и оформляем вывоз.</span>
+                    </p>
+                  </div>
+                  <div>
+                    <CarProfile size={20} />
+                    <p>
+                      <b>Маршрут до Минска</b>
+                      <span>Международная перевозка, прохождение границы и прибытие в Минск.</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="delivery-note">
+                  <Info size={16} />
+                  <span>Срок зависит от города продавца, очередей на границе, маршрута и графика перевозчика.</span>
+                </div>
+              </div>
+            </details>
+            <button className="primary report-order-cta" onClick={() => setReportOrderOpen(true)}>
               Заказать отчёт по авто
             </button>
           </aside>
-          <section className="delivery-card" aria-labelledby="delivery-title">
-            <div className="delivery-card-heading">
-              <div className="delivery-card-icon">
-                <Clock size={23} weight="duotone" />
-              </div>
-              <div>
-                <span>Срок доставки до Минска</span>
-                <h2 id="delivery-title">35–50 дней</h2>
-              </div>
-            </div>
-            <p className="delivery-intro">Ориентировочный срок с момента подписания договора до прибытия автомобиля в Минск.</p>
-            <div className="delivery-stages">
-              <div>
-                <ListChecks size={20} />
-                <p>
-                  <b>Выкуп и подготовка</b>
-                  <span>Проверяем автомобиль, проводим оплату и готовим экспортные документы.</span>
-                </p>
-              </div>
-              <div>
-                <MapPin size={20} />
-                <p>
-                  <b>Логистика по Китаю</b>
-                  <span>Доставляем автомобиль до пункта отправки и оформляем вывоз.</span>
-                </p>
-              </div>
-              <div>
-                <CarProfile size={20} />
-                <p>
-                  <b>Маршрут до Минска</b>
-                  <span>Международная перевозка, прохождение границы и прибытие в Минск.</span>
-                </p>
-              </div>
-            </div>
-            <div className="delivery-note">
-              <Info size={16} />
-              <span>Срок зависит от города продавца, очередей на границе, маршрута и графика перевозчика.</span>
-            </div>
-          </section>
         </div>
       </div>
       {reportOrderOpen && <ReportOrderModal car={car} price={price} onClose={() => setReportOrderOpen(false)} />}
@@ -1879,15 +2003,15 @@ function OrderDraft({ car, navigate }) {
               </div>
               <div>
                 <PriceLabel label="Расходы в Китае" description="Выкуп, банк, экспортные документы" />
-                <b>{moneyRange(price.chinaHandlingLow, price.chinaHandlingHigh, currency)}</b>
+                <b>{approximateMoney(price.chinaHandlingLow, price.chinaHandlingHigh, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Доставка до Минска" description="Диапазон зависит от маршрута и перевозчика" />
-                <b>{moneyRange(price.deliveryLow, price.deliveryHigh, currency)}</b>
+                <PriceLabel label="Доставка до Минска" description="Оценка зависит от маршрута и перевозчика" />
+                <b>{approximateMoney(price.deliveryLow, price.deliveryHigh, currency)}</b>
               </div>
               <div>
                 <PriceLabel label="Таможня и сборы" description={price.customsNote} />
-                <b>{moneyRange(price.customsLow, price.customsHigh, currency)}</b>
+                <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
               <div>
                 <PriceLabel label="Услуги NaVostok" description="Проверка, выкуп и документы" />
@@ -1895,12 +2019,12 @@ function OrderDraft({ car, navigate }) {
               </div>
               <div>
                 <PriceLabel label="Резерв на изменение расходов" description="Курс, хранение и дополнительные сборы" />
-                <b>{moneyRange(price.reserveLow, price.reserveHigh, currency)}</b>
+                <b>{approximateMoney(price.reserveLow, price.reserveHigh, currency)}</b>
               </div>
             </div>
             <div className="order-grand-total">
-              <PriceLabel label="Ожидаемый диапазон до Минска" description="Без постановки на учёт и страховки" />
-              <b>{moneyRange(price.totalLow, price.totalHigh, currency)}</b>
+              <PriceLabel label="Ориентировочно до Минска" description="Без постановки на учёт и страховки" />
+              <b>{approximateMoney(price.totalLow, price.totalHigh, currency)}</b>
             </div>
             <div className="order-disclaimer">
               <Info size={18} />

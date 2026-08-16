@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeEnergy, parseGuaziGlobalListing, parseGuaziGlobalProduct, parseGuaziHtml, parseGuaziListing, parseGuaziMarkdown, parseGuaziSeriesLinks, parseMileage } from "../scripts/lib/guazi-parser.mjs";
+import { normalizeEnergy, parseGuaziGlobalListing, parseGuaziGlobalListingCars, parseGuaziGlobalProduct, parseGuaziHtml, parseGuaziListing, parseGuaziMarkdown, parseGuaziSeriesLinks, parseMileage } from "../scripts/lib/guazi-parser.mjs";
 
 test("parses Chinese mileage units", () => {
   assert.equal(parseMileage("0.25万公里"), 2500);
@@ -73,6 +73,27 @@ test("extracts listing IDs and pagination", () => {
 test("parses Guazi Global listing links", () => {
   const markdown = `[Grade S Used Xiaomi](https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-23800km-at-4wd-5-seats-45nkzqv325.html)\n[duplicate](https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-23800km-at-4wd-5-seats-45nkzqv325.html)`;
   assert.deepEqual(parseGuaziGlobalListing(markdown), ["https://en.guazi.com/products/xiaomi-auto-yu7-2025-00l-gray-23800km-at-4wd-5-seats-45nkzqv325.html"]);
+});
+
+test("builds a policy-safe fallback car from a Guazi Global result card", () => {
+  const markdown = `![Image: Used Zeekr 7X](https://image-oversea.guazistatic-global.com/ovp/product/prod/zeekr-7x-front.jpg?x-bce-process=image/resize,m_lfit,w_640)\n[Grade S Used Zeekr 7X 2025 100kWh Long-Range Rear-Wheel Drive](https://en.guazi.com/products/zeekr-7x-2025-00l-white-8200km-at-2wd-5-seats-qh4fyudzwt.html)\n2024.11 8,200km BEV 100kWh 705km(CLTC)\nElectric\nFOB Price:$37,479`;
+  const [car] = parseGuaziGlobalListingCars(markdown, { zeekr: "Zeekr" });
+  assert.equal(car.id, "guazi-global-qh4fyudzwt");
+  assert.equal(car.title, "Zeekr 7X 2025");
+  assert.equal(car.mileage, 8200);
+  assert.equal(car.battery, 100);
+  assert.equal(car.range, 705);
+  assert.equal(car.drive, "Задний");
+  assert.equal(car.sourcePriceUsd, 37479);
+  assert.equal(car.images.length, 1);
+});
+
+test("uses the heading model year and handles ampersands in listing brands", () => {
+  const markdown = `![Image: Used Lynk & Co Z10](https://image-oversea.guazistatic-global.com/ovp/product/prod/z10-front.jpg)\n[Grade S Used Lynk & Co Z10 2025 95 kWh Max](https://en.guazi.com/products/lynk-co-z10-2024-00l-white-8200km-at-2wd-5-seats-abcdefghij.html)\n2024.11 8,200km BEV 95kWh 766km(CLTC)\nFOB Price:$28,000`;
+  const [car] = parseGuaziGlobalListingCars(markdown, { "lynk-co": "Lynk & Co" });
+  assert.equal(car.model, "Z10");
+  assert.equal(car.year, 2025);
+  assert.equal(car.title, "Lynk & Co Z10 2025");
 });
 
 test("parses a Guazi Global EV product and its original gallery", () => {

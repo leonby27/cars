@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { IMPORT_BRANDS, IMPORT_MIN_YEAR, importPolicyViolation, isAllowedImportBrand } from "../config/import-policy.mjs";
-import { parseGuaziGlobalListing, parseGuaziGlobalProduct } from "./lib/guazi-parser.mjs";
+import { IMPORT_BRANDS, IMPORT_BRAND_BY_SLUG, IMPORT_BRAND_SLUGS, IMPORT_MIN_YEAR, canonicalImportBrand, importPolicyViolation, isAllowedImportBrand } from "../config/import-policy.mjs";
+import { parseGuaziGlobalListing, parseGuaziGlobalListingCars, parseGuaziGlobalProduct } from "./lib/guazi-parser.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
@@ -18,6 +18,11 @@ if (args.has("--replace-global-pilot")) throw new Error("Catalog cleanup is disa
 const replaceGlobalPilot = false;
 const relatedFeedLimit = Math.max(0, Number(args.get("--related-feeds") || 0));
 const relatedPageCount = Math.max(1, Number(args.get("--related-pages") || 2));
+const preferredBrand = args.get("--prefer-brand") ? canonicalImportBrand(args.get("--prefer-brand")) : null;
+const preferredPageCount = Math.max(relatedPageCount, Number(args.get("--prefer-pages") || relatedPageCount));
+const preferredBrandSlug = preferredBrand?.toLocaleLowerCase("en-US").replaceAll("&", "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const preferredModels = String(args.get("--prefer-models") || "").split(",").map((value) => value.trim()).filter(Boolean);
+const preferredModelsOnly = args.has("--prefer-models-only");
 const EV_LIST_URL = pureEv
   ? "https://en.guazi.com/used-cars/?fuelType=2"
   : "https://en.guazi.com/used-cars/?fuelType=2%2C3%2C4";
@@ -62,13 +67,20 @@ const current = JSON.parse(await fs.readFile(DATA_PATH, "utf8"));
 const existingIds = new Set((current.cars || []).map((car) => car.id));
 const startedAt = new Date().toISOString();
 const discovered = [];
+const listingCarsByUrl = new Map();
 const listErrors = [];
+
+function collectListing(markdown) {
+  const urls = parseGuaziGlobalListing(markdown);
+  for (const car of parseGuaziGlobalListingCars(markdown, IMPORT_BRAND_BY_SLUG)) listingCarsByUrl.set(car.sourceUrl, car);
+  return urls;
+}
 
 for (let page = 1; page <= pageCount; page += 1) {
   const url = `${EV_LIST_URL}&page=${page}`;
   try {
     const markdown = await fetchReader(url, `list-${pureEv ? "bev" : "new-energy"}-${page}`, "a[href*=\"/products/\"]");
-    const urls = parseGuaziGlobalListing(markdown);
+    const urls = collectListing(markdown);
     discovered.push(...urls);
     console.log(`Discovery ${page}/${pageCount}: ${urls.length} listings`);
   } catch (error) {
@@ -91,15 +103,27 @@ if (relatedFeedLimit > 0) {
     } catch {}
   }
 
-  relatedFeeds.push(...[...feedCounts]
+  const rankedFeeds = [...feedCounts]
     // Navigation links occur on every product page; real related-model links do not.
     .filter(([, count]) => count < globalCars.length)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, relatedFeedLimit)
-    .map(([url]) => url));
+    .filter(([url]) => {
+      const brandSlug = new URL(url).pathname.split("/").filter(Boolean)[1];
+      return IMPORT_BRAND_SLUGS.includes(brandSlug);
+    })
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const preferredFeeds = preferredBrandSlug
+    ? [...new Set([
+        ...preferredModels.map((model) => `https://en.guazi.com/used-cars/${preferredBrandSlug}/${model}/`),
+        ...(preferredModelsOnly ? [] : rankedFeeds.filter(([url]) => new URL(url).pathname.startsWith(`/used-cars/${preferredBrandSlug}/`)).map(([url]) => url)),
+      ])]
+    : [];
+  relatedFeeds.push(...new Set([
+    ...preferredFeeds,
+    ...rankedFeeds.slice(0, relatedFeedLimit).map(([url]) => url),
+  ]));
 
   const jobs = relatedFeeds.flatMap((feedUrl) => Array.from(
-    { length: relatedPageCount },
+    { length: preferredFeeds.includes(feedUrl) ? preferredPageCount : relatedPageCount },
     (_, index) => ({ feedUrl, page: index + 1 }),
   ));
   let relatedCursor = 0;
@@ -113,9 +137,10 @@ if (relatedFeedLimit > 0) {
           `related-${slug}-${page}`,
           "a[href*=\"/products/\"]",
         );
-        const urls = parseGuaziGlobalListing(markdown);
+        const urls = collectListing(markdown);
         discovered.push(...urls);
-        console.log(`Related ${slug} ${page}/${relatedPageCount}: ${urls.length} listings`);
+        const pagesForFeed = preferredFeeds.includes(feedUrl) ? preferredPageCount : relatedPageCount;
+        console.log(`Related ${slug} ${page}/${pagesForFeed}: ${urls.length} listings`);
       } catch (error) {
         listErrors.push({ feed: slug, page, error: error.message });
         console.log(`Related ${slug} ${page}/${relatedPageCount}: ${error.message}`);
@@ -125,9 +150,19 @@ if (relatedFeedLimit > 0) {
   await Promise.all(Array.from({ length: concurrency }, () => relatedWorker()));
 }
 
-const candidates = [...new Set(discovered)].filter((url) => {
+const discoveredUnique = [...new Set(discovered)];
+if (preferredBrandSlug) {
+  discoveredUnique.sort((a, b) => Number(!a.includes(`/products/${preferredBrandSlug}-`)) - Number(!b.includes(`/products/${preferredBrandSlug}-`)));
+}
+function matchesImportPolicyHints(url) {
+  const filename = new URL(url).pathname.split("/").pop() || "";
+  const hasAllowedBrand = IMPORT_BRAND_SLUGS.some((slug) => filename.startsWith(`${slug}-`));
+  const year = Number(filename.match(/-(20\d{2})-/)?.[1]);
+  return hasAllowedBrand && year >= IMPORT_MIN_YEAR;
+}
+const candidates = discoveredUnique.filter((url) => {
   const externalId = url.match(/-([a-z0-9]{10})\.html/i)?.[1];
-  return externalId && !existingIds.has(`guazi-global-${externalId}`);
+  return externalId && !existingIds.has(`guazi-global-${externalId}`) && matchesImportPolicyHints(url);
 });
 const imported = [];
 const detailErrors = [];
@@ -139,9 +174,19 @@ async function worker(workerId) {
     const url = candidates[index];
     const externalId = url.match(/-([a-z0-9]{10})\.html/i)?.[1] || `item-${index}`;
     try {
-      const markdown = await fetchReader(url, `product-${externalId}`, "img[src*=\"/ovp/product/prod/\"]");
-      const car = parseGuaziGlobalProduct(markdown, url);
+      let car = null;
+      try {
+        const cachedMarkdown = await fs.readFile(cachePath(`product-${externalId}`), "utf8");
+        car = parseGuaziGlobalProduct(cachedMarkdown, url);
+      } catch {}
+      car ||= listingCarsByUrl.get(url);
+      if (!car) {
+        const markdown = await fetchReader(url, `product-${externalId}`, "img[src*=\"/ovp/product/prod/\"]");
+        car = parseGuaziGlobalProduct(markdown, url);
+      }
       if (!car) throw new Error("Incomplete product page");
+      car.brand = canonicalImportBrand(car.brand);
+      car.title = `${car.brand} ${car.model} ${car.year}`;
       const policyViolation = importPolicyViolation(car);
       if (policyViolation) throw new Error(`Import policy: ${policyViolation}`);
       if (pureEv && car.sourceFuelType && car.sourceFuelType !== "BEV") throw new Error("Product is not a BEV");
@@ -169,6 +214,10 @@ const report = {
   pagesScanned: pageCount,
   relatedFeedsScanned: relatedFeeds.length,
   relatedPagesPerFeed: relatedFeedLimit > 0 ? relatedPageCount : 0,
+  preferredBrand,
+  preferredModels,
+  preferredModelsOnly,
+  preferredPagesPerFeed: preferredBrand ? preferredPageCount : 0,
   policy: { minYear: IMPORT_MIN_YEAR, brands: IMPORT_BRANDS, newImports: "electric-only", cleansExistingCatalog: false },
   discovered: candidates.length,
   imported: imported.length,

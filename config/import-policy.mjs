@@ -34,6 +34,33 @@ export const IMPORT_BRANDS = Object.freeze([
   ...EXTRA_IMPORT_BRANDS,
 ]);
 
+export const IMPORT_BRAND_BY_SLUG = Object.freeze({
+  byd: "BYD",
+  zeekr: "Zeekr",
+  "li-auto": "Li Auto",
+  voyah: "Voyah",
+  deepal: "Deepal",
+  "geely-galaxy": "Geely Galaxy",
+  dongfeng: "Dongfeng",
+  avatr: "Avatr",
+  hima: "HIMA",
+  "xiaomi-auto": "Xiaomi",
+  xpeng: "XPeng",
+  nio: "NIO",
+  denza: "Denza",
+  bmw: "BMW",
+  volkswagen: "Volkswagen",
+  audi: "Audi",
+  leapmotor: "Leapmotor",
+  tesla: "Tesla",
+  "mercedes-benz": "Mercedes-Benz",
+  "lynk-co": "Lynk & Co",
+  mazda: "Mazda",
+  toyota: "Toyota",
+});
+
+export const IMPORT_BRAND_SLUGS = Object.freeze(Object.keys(IMPORT_BRAND_BY_SLUG));
+
 const BRAND_ALIASES = new Map([
   ["hima", "HIMA"],
   ["aito", "HIMA"],

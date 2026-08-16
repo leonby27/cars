@@ -100,10 +100,14 @@ const server = http.createServer(async (request, response) => {
       const body = await readJson(request);
       const name = String(body.name || "").trim();
       const contact = String(body.contact || "").trim();
-      if (!body.listingId || !contact) return json(response, 400, { error:"listing_and_contact_required" });
+      const requestType = String(body.calculation?.requestType || "");
+      const preferences = String(body.calculation?.preferences || "").trim();
+      const isCatalogSearch = requestType === "catalog_search";
+      if ((!body.listingId && !isCatalogSearch) || !contact) return json(response, 400, { error:"listing_and_contact_required" });
+      if (isCatalogSearch && (preferences.length < 10 || preferences.length > 2000)) return json(response, 400, { error:"invalid_preferences" });
       if (name.length > 120) return json(response, 400, { error:"name_too_long" });
       if (contact.length > 200) return json(response, 400, { error:"contact_too_long" });
-      return json(response, 201, await createOrderDraft({ listingId:body.listingId, name:name || null, contact, calculation:body.calculation }));
+      return json(response, 201, await createOrderDraft({ listingId:body.listingId || null, name:name || null, contact, calculation:body.calculation }));
     }
     return json(response, 404, { error:"not_found" });
   } catch (error) {
