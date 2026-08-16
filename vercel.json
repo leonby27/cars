@@ -3,7 +3,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/client",
   "framework": "vite",
+  "regions": ["fra1"],
   "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api?path=:path"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

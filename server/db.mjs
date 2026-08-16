@@ -3,7 +3,7 @@ import pg from "pg";
 try { process.loadEnvFile?.(); } catch {}
 
 export const DATABASE_URL = process.env.DATABASE_URL || "postgres://chinacar:chinacar@127.0.0.1:54329/chinacar";
-export const pool = new pg.Pool({ connectionString: DATABASE_URL, max: Number(process.env.DB_POOL_SIZE || 12) });
+export const pool = new pg.Pool({ connectionString: DATABASE_URL, max: Number(process.env.DB_POOL_SIZE || (process.env.VERCEL ? 3 : 12)) });
 
 export const isDatabaseUnavailable = (error) => ["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "57P01", "57P02", "57P03"].includes(error?.code || error?.cause?.code);
 
