@@ -1,7 +1,8 @@
 import { pool } from "./db.mjs";
 import { getSessionAccount } from "./auth.mjs";
 
-const orderSelect = `SELECT o.id,o.listing_id,o.inspection_status,o.contract_status,o.payment_status,
+const orderSelect = `SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,
+  o.inspection_status,o.contract_status,o.payment_status,
   o.contract_confirmed_at,o.invoice_requested_at,o.created_at,o.updated_at,
   l.title,l.estimated_total_usd,l.mileage_km,l.city,
   v.brand,v.model,v.model_year,v.powertrain,v.drivetrain,v.battery_kwh,v.electric_range_km,
@@ -20,6 +21,9 @@ export function rowToCustomerOrder(row) {
     id:Number(row.id),
     orderNumber:orderNumber(row),
     listingId:row.listing_id,
+    availabilityStatus:row.availability_status,
+    availabilityComment:row.availability_comment || "",
+    availabilityRequestedAt:row.availability_requested_at,
     inspectionStatus:row.inspection_status,
     contractStatus:row.contract_status,
     paymentStatus:row.payment_status,
@@ -73,11 +77,11 @@ export async function createCustomerOrder(request, listingId) {
 
 const actionUpdates = {
   order_inspection:{
-    where:"inspection_status='decision'",
+    where:"availability_status='requested' AND inspection_status='decision'",
     set:"inspection_status='requested'",
   },
   skip_inspection:{
-    where:"inspection_status='decision'",
+    where:"availability_status='requested' AND inspection_status='decision'",
     set:"inspection_status='skipped',contract_status='available'",
   },
   confirm_contract:{
@@ -90,9 +94,25 @@ const actionUpdates = {
   },
 };
 
-export async function updateCustomerOrder(request, orderId, action) {
+export async function updateCustomerOrder(request, orderId, action, values = {}) {
   const account = await getSessionAccount(request);
   if (!account) return { error:"unauthorized" };
+  if (action === "request_availability_check") {
+    const comment = String(values.comment || "").trim();
+    if (comment.length > 600) return { error:"invalid_availability_comment" };
+    const result = await pool.query(
+      `UPDATE customer_orders
+        SET availability_status='requested',availability_comment=$3,availability_requested_at=now(),updated_at=now()
+        WHERE id=$1 AND customer_id=$2 AND availability_status='decision'
+        RETURNING id`,
+      [orderId,account.id,comment || null],
+    );
+    if (!result.rowCount) {
+      const existing = await getOrder(account.id, orderId);
+      return existing ? { error:"order_action_unavailable", order:existing } : { error:"order_not_found" };
+    }
+    return { order:await getOrder(account.id, orderId) };
+  }
   const transition = actionUpdates[action];
   if (!transition) return { error:"invalid_order_action" };
   const result = await pool.query(

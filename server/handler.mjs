@@ -113,7 +113,7 @@ export async function handleApiRequest(request, response) {
     const orderMatch = request.method === "PATCH" && url.pathname.match(/^\/api\/account\/orders\/(\d+)$/);
     if (orderMatch) {
       const body = await readJson(request);
-      const result = await updateCustomerOrder(request, Number(orderMatch[1]), String(body.action || ""));
+      const result = await updateCustomerOrder(request, Number(orderMatch[1]), String(body.action || ""), { comment:String(body.comment || "") });
       if (result.error === "unauthorized") return json(response, 401, result);
       if (result.error === "order_not_found") return json(response, 404, result);
       if (result.error) return json(response, 409, result);

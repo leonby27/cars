@@ -3182,8 +3182,9 @@ button {
 .custom-select > span {
   position: absolute;
   z-index: 1;
-  top: 9px;
+  top: 8px;
   left: 13px;
+  line-height: 1;
   pointer-events: none;
 }
 .select-trigger {
@@ -3195,7 +3196,7 @@ button {
   align-items: flex-end;
   justify-content: space-between;
   gap: 8px;
-  padding: 22px 11px 8px 13px;
+  padding: 25px 11px 7px 13px;
   border: 0;
   border-radius: inherit;
   background: transparent;
@@ -3205,6 +3206,7 @@ button {
   min-width: 0;
   overflow: hidden;
   font-size: 16px;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -6481,6 +6483,97 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   font-size: 16px;
   line-height: 1.55;
 }
+.availability-check-form {
+  width: min(100%, 650px);
+  display: grid;
+  gap: 20px;
+}
+.availability-check-form > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+.availability-check-list {
+  display: grid;
+  gap: 10px;
+  margin: -4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.availability-check-list li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.availability-check-list svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--green);
+}
+.availability-comment-field {
+  display: grid;
+  gap: 8px;
+}
+.availability-comment-field > span {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 750;
+}
+.availability-comment-field > span small {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 500;
+}
+.availability-comment-field textarea {
+  width: 100%;
+  min-height: 112px;
+  padding: 13px 14px;
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  outline: 0;
+  background: var(--panel-soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.availability-comment-field textarea:focus {
+  border-color: var(--accent);
+  background: var(--panel);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.availability-comment-field > small {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.45;
+}
+.availability-check-form > .primary {
+  width: max-content;
+  min-width: 230px;
+  padding-inline: 24px;
+}
+.availability-requested {
+  display: grid;
+  gap: 18px;
+}
+.availability-requested > p {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+.availability-requested > p b {
+  color: var(--ink);
+}
 .customer-order-actions {
   display: flex;
   align-items: center;
@@ -7202,6 +7295,16 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   }
   .customer-order-stage-body > p {
     font-size: 16px;
+  }
+  .availability-check-form {
+    gap: 17px;
+  }
+  .availability-comment-field textarea {
+    min-height: 126px;
+  }
+  .availability-check-form > .primary {
+    width: 100%;
+    min-width: 0;
   }
   .customer-order-actions {
     align-items: stretch;

@@ -6,6 +6,9 @@ test("maps a customer order to the account flow shape", () => {
   const order = rowToCustomerOrder({
     id:7,
     listing_id:"car-1",
+    availability_status:"requested",
+    availability_comment:"Уточнить остаточную ёмкость батареи",
+    availability_requested_at:"2026-08-16T10:00:30.000Z",
     inspection_status:"skipped",
     contract_status:"available",
     payment_status:"locked",
@@ -28,6 +31,8 @@ test("maps a customer order to the account flow shape", () => {
   });
 
   assert.equal(order.orderNumber, "EV-2026-000007");
+  assert.equal(order.availabilityStatus, "requested");
+  assert.equal(order.availabilityComment, "Уточнить остаточную ёмкость батареи");
   assert.equal(order.inspectionStatus, "skipped");
   assert.equal(order.contractStatus, "available");
   assert.equal(order.car.estimatedTotalUsd, 23900);

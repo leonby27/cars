@@ -945,9 +945,9 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
   );
 }
 
-function CarRow({ car, navigate, favorite, toggleFavorite }) {
+function CarRow({ car, navigate, favorite, toggleFavorite, onOpen }) {
   const currency = useCurrency();
-  const open = () => navigate(`/cars/${car.id}`);
+  const open = () => (onOpen ? onOpen(car) : navigate(`/cars/${car.id}`));
   const price = estimateLandedCost(car);
   const listingAge = formatListingAge(getSourceListedAt(car));
   return (
@@ -1104,6 +1104,25 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const loadMoreTarget = useRef(null);
   const loadMoreRequest = useRef(null);
   const loadingMore = useRef(false);
+  const persistCatalogState = () => {
+    window.history.replaceState(
+      {
+        ...window.history.state,
+        catalog: {
+          filters,
+          sort,
+          loadedCount: Math.max(loadedLimit, remoteCars.length),
+        },
+      },
+      "",
+    );
+  };
+  const openCar = (car) => {
+    // Save synchronously before leaving the catalog. The effect below is useful
+    // for regular updates, but can otherwise lag behind a quick filter + click.
+    persistCatalogState();
+    navigate(`/cars/${car.id}`);
+  };
   const updateFilters = (updater) => {
     loadMoreRequest.current?.abort();
     loadMoreRequest.current = null;
@@ -1195,17 +1214,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     return () => controller.abort();
   }, [apiMode, filters, sort]);
   useEffect(() => {
-    window.history.replaceState(
-      {
-        ...window.history.state,
-        catalog: {
-          filters,
-          sort,
-          loadedCount: Math.max(loadedLimit, remoteCars.length),
-        },
-      },
-      "",
-    );
+    persistCatalogState();
   }, [filters, sort, loadedLimit, remoteCars.length]);
   useEffect(
     () => () => {
@@ -1284,7 +1293,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
           </div>
           {remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}
           {displayed.length
-            ? displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} />)
+            ? displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpen={openCar} />)
             : !remoteLoading && (
                 <CustomSearchCta variant="empty" onOpen={() => setCustomSearchOpen(true)} />
               )}
@@ -2873,6 +2882,8 @@ const createLocalOrder = (userId, car) => {
     id,
     orderNumber:localOrderNumber(id, createdAt),
     listingId:car.id,
+    availabilityStatus:"decision",
+    availabilityComment:"",
     inspectionStatus:"decision",
     contractStatus:"locked",
     paymentStatus:"locked",
@@ -2884,12 +2895,17 @@ const createLocalOrder = (userId, car) => {
   storeLocalOrders(userId, next);
   return { order, orders:next };
 };
-const updateLocalOrder = (userId, orderId, action) => {
+const updateLocalOrder = (userId, orderId, action, values = {}) => {
   const orders = readLocalOrders(userId);
   const index = orders.findIndex((order) => order.id === orderId);
   if (index < 0) throw new Error("order_not_found");
-  const order = { ...orders[index], updatedAt:new Date().toISOString() };
-  if (action === "order_inspection" && order.inspectionStatus === "decision") order.inspectionStatus = "requested";
+  const order = { ...orders[index], availabilityStatus:orders[index].availabilityStatus || "decision", updatedAt:new Date().toISOString() };
+  if (action === "request_availability_check" && order.availabilityStatus === "decision") {
+    order.availabilityStatus = "requested";
+    order.availabilityComment = String(values.comment || "").trim().slice(0, 600);
+    order.availabilityRequestedAt = order.updatedAt;
+  }
+  else if (action === "order_inspection" && order.availabilityStatus === "requested" && order.inspectionStatus === "decision") order.inspectionStatus = "requested";
   else if (action === "skip_inspection" && order.inspectionStatus === "decision") { order.inspectionStatus = "skipped"; order.contractStatus = "available"; }
   else if (action === "confirm_contract" && order.contractStatus === "available") { order.contractStatus = "confirmed"; order.paymentStatus = "available"; order.contractConfirmedAt = order.updatedAt; }
   else if (action === "request_invoice" && order.paymentStatus === "available") { order.paymentStatus = "invoice_requested"; order.invoiceRequestedAt = order.updatedAt; }
@@ -3151,9 +3167,10 @@ function AuthPage({ mode, navigate, onAuthenticate, pending }) {
 }
 
 const activeOrderStage = (order) => {
-  if (order.contractStatus === "locked") return 1;
-  if (order.paymentStatus === "locked") return 2;
-  return 3;
+  if ((order.availabilityStatus || "decision") === "decision") return 1;
+  if (order.contractStatus === "locked") return 2;
+  if (order.paymentStatus === "locked") return 3;
+  return 4;
 };
 
 function OrderStageRow({ number:stageNumber, title, description, open, locked, done, fixed = false, onToggle, children }) {
@@ -3188,7 +3205,7 @@ function OrderRemovalModal({ carTitle, orderNumber, saving, error, onCancel, onC
         <div className="order-removal-icon"><Trash size={25} weight="duotone" /></div>
         <span>Удаление из заказа</span>
         <h2 id="order-removal-title">Убрать автомобиль?</h2>
-        <p id="order-removal-description"><b>{carTitle}</b> будет удалён из заказа № {orderNumber}. Прогресс по осмотру, договору и оплате также будет удалён.</p>
+        <p id="order-removal-description"><b>{carTitle}</b> будет удалён из заказа № {orderNumber}. Прогресс по проверке объявления, осмотру, договору и оплате также будет удалён.</p>
         {error && <div className="auth-error order-removal-error" role="alert">{error}</div>}
         <form className="order-removal-actions" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}>
           <button className="secondary" type="button" onClick={onCancel} disabled={saving}>Отмена</button>
@@ -3208,6 +3225,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   const [expandedStage, setExpandedStage] = useState(1);
   const [removalOpen, setRemovalOpen] = useState(false);
   const [removalError, setRemovalError] = useState("");
+  const [availabilityComment, setAvailabilityComment] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -3224,7 +3242,10 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
       if (!cancelled) {
         setLocalMode(true);
         setOrders(values);
-        if (values[0]) setExpandedStage(activeOrderStage(values[0]));
+        if (values[0]) {
+          setExpandedStage(activeOrderStage(values[0]));
+          setAvailabilityComment(values[0].availabilityComment || "");
+        }
       }
     };
     const load = async () => {
@@ -3247,7 +3268,10 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
         const values = Array.isArray(payload.orders) ? payload.orders : [];
         if (!cancelled) {
           setOrders(values);
-          if (values[0]) setExpandedStage(activeOrderStage(values[0]));
+          if (values[0]) {
+            setExpandedStage(activeOrderStage(values[0]));
+            setAvailabilityComment(values[0].availabilityComment || "");
+          }
         }
       } catch {
         loadLocal();
@@ -3260,7 +3284,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
     return () => { cancelled = true; };
   }, [authBackend, cars, user.id]);
 
-  const applyAction = async (action) => {
+  const applyAction = async (action, values = {}) => {
     const current = orders[0];
     if (!current || saving) return;
     setSaving(true);
@@ -3268,9 +3292,9 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
     try {
       let updated;
       if (localMode) {
-        updated = updateLocalOrder(user.id, current.id, action).order;
+        updated = updateLocalOrder(user.id, current.id, action, values).order;
       } else {
-        const response = await fetch(`/api/account/orders/${current.id}`, { method:"PATCH", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ action }) });
+        const response = await fetch(`/api/account/orders/${current.id}`, { method:"PATCH", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ action, ...values }) });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "order_update_failed");
         updated = payload.order;
@@ -3323,12 +3347,14 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   if (!order) return (
     <section className="account-panel account-empty">
       <div className="account-panel-title"><div><span>Мои заказы</span><h2>Начните с подходящего автомобиля</h2></div><ClipboardText size={27} weight="duotone" /></div>
-      <p>{error || "Выберите автомобиль в каталоге — после этого здесь появятся осмотр, договор и оплата."}</p>
+      <p>{error || "Выберите автомобиль в каталоге — после этого здесь появятся проверка объявления, осмотр, договор и оплата."}</p>
       <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог <ArrowRight size={18} /></button>
     </section>
   );
 
+  const availabilityRequested = (order.availabilityStatus || "decision") === "requested";
   const inspectionDone = order.inspectionStatus === "skipped";
+  const inspectionUnlocked = availabilityRequested;
   const contractUnlocked = order.contractStatus !== "locked";
   const contractDone = order.contractStatus === "confirmed";
   const paymentUnlocked = order.paymentStatus !== "locked";
@@ -3359,7 +3385,30 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
         </div>
       </div>
       <div className="customer-order-stages">
-        <OrderStageRow number={1} title="Осмотр автомобиля" description="Проверим состояние автомобиля перед покупкой." open fixed done={inspectionDone}>
+        <OrderStageRow number={1} title="Проверка объявления" description="Уточним у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
+          {!availabilityRequested ? (
+            <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); applyAction("request_availability_check", { comment:availabilityComment.trim() }); }}>
+              <p>Перед осмотром свяжемся с продавцом и подтвердим:</p>
+              <ul className="availability-check-list">
+                <li><CheckCircle size={20} weight="fill" /> автомобиль ещё в продаже;</li>
+                <li><CheckCircle size={20} weight="fill" /> цена и комплектация не изменились;</li>
+                <li><CheckCircle size={20} weight="fill" /> продавец готов к осмотру и оформлению сделки.</li>
+              </ul>
+              <label className="availability-comment-field">
+                <span>Комментарий менеджеру <small>необязательно</small></span>
+                <textarea value={availabilityComment} onChange={(event) => setAvailabilityComment(event.target.value)} maxLength={600} placeholder="Например: уточнить возможность торга, состояние батареи или комплект зимних колёс" />
+                <small>Можно оставить поле пустым — базовые вопросы мы зададим в любом случае.</small>
+              </label>
+              <button className="primary" type="submit" disabled={saving}>{saving ? "Отправляем…" : "Уточнить актуальность"}</button>
+            </form>
+          ) : (
+            <div className="availability-requested">
+              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос отправлен.</b><span>Свяжемся с продавцом и сообщим результат в выбранном вами канале связи.</span></p></div>
+              {order.availabilityComment ? <p><b>Ваш комментарий:</b> {order.availabilityComment}</p> : null}
+            </div>
+          )}
+        </OrderStageRow>
+        <OrderStageRow number={2} title="Осмотр автомобиля" description="Проверим состояние автомобиля перед покупкой." open={expandedStage === 2} locked={!inspectionUnlocked} done={inspectionDone} onToggle={() => setExpandedStage(expandedStage === 2 ? 0 : 2)}>
           {order.inspectionStatus === "decision" ? (
             <><p>Заказать осмотр перед покупкой?</p><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("order_inspection")}>Заказать осмотр</button><button className="order-text-action" type="button" disabled={saving} onClick={() => applyAction("skip_inspection")}>Пропустить</button></div></>
           ) : order.inspectionStatus === "requested" ? (
@@ -3368,14 +3417,14 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
             <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Осмотр пропущен.</b><span>Решение сохранено, можно перейти к договору.</span></p></div>
           )}
         </OrderStageRow>
-        <OrderStageRow number={2} title="Договор" description="Подготовим и согласуем договор доставки." open={expandedStage === 2} locked={!contractUnlocked} done={contractDone} onToggle={() => setExpandedStage(expandedStage === 2 ? 0 : 2)}>
+        <OrderStageRow number={3} title="Договор" description="Подготовим и согласуем договор доставки." open={expandedStage === 3} locked={!contractUnlocked} done={contractDone} onToggle={() => setExpandedStage(expandedStage === 3 ? 0 : 3)}>
           {contractDone ? (
             <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Договор согласован.</b><span>Переходим к счёту и выкупу автомобиля.</span></p></div>
           ) : (
             <><p>Данные уже заполнены из профиля. Подтвердите автомобиль и условия.</p><div className="contract-summary"><span>{user.name}</span><span>{formatAccountPhone(user.phone)}</span><span>{order.car.title}</span></div><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("confirm_contract")}>Согласовать договор</button><button className="order-text-action" type="button" onClick={() => navigate("/payment-and-contract")}>Посмотреть условия</button></div></>
           )}
         </OrderStageRow>
-        <OrderStageRow number={3} title="Оплата и выкуп" description="Сформируем счёт и подтвердим выкуп автомобиля." open={expandedStage === 3} locked={!paymentUnlocked} done={order.paymentStatus === "invoice_requested"} onToggle={() => setExpandedStage(expandedStage === 3 ? 0 : 3)}>
+        <OrderStageRow number={4} title="Оплата и выкуп" description="Сформируем счёт и подтвердим выкуп автомобиля." open={expandedStage === 4} locked={!paymentUnlocked} done={order.paymentStatus === "invoice_requested"} onToggle={() => setExpandedStage(expandedStage === 4 ? 0 : 4)}>
           {order.paymentStatus === "invoice_requested" ? (
             <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос на счёт получен.</b><span>После проверки цены продавца счёт появится здесь.</span></p></div>
           ) : (
