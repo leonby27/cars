@@ -3423,7 +3423,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
                 <textarea value={availabilityComment} onChange={(event) => setAvailabilityComment(event.target.value)} maxLength={600} placeholder="Например: уточнить возможность торга, состояние батареи или комплект зимних колёс" />
                 <small>Можно оставить поле пустым — базовые вопросы мы зададим в любом случае.</small>
               </label>
-              <div><button className="primary" type="submit" disabled={saving}>Уточнить актуальность</button><small className="availability-contact-hint">{responseText}</small></div>
+              <button className="primary" type="submit" disabled={saving}>Уточнить актуальность</button>
             </form>
           ) : (
             <div className="availability-requested">

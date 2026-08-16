@@ -116,13 +116,6 @@
   width: 100%;
   min-height: 48px;
 }
-.availability-contact-hint {
-  display: block;
-  margin-top: 9px;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.4;
-}
 @media (max-width: 700px) {
   .order-contact-modal {
     padding: 25px 19px 20px;
