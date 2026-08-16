@@ -110,15 +110,47 @@ test("parses a Guazi Global EV product and its original gallery", () => {
   assert.equal(car.images.length, 2);
 });
 
+test("parses current Guazi Global breadcrumbs with a plain-text model", () => {
+  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[BMW](https://en.guazi.com/used-cars/bmw/)/i5/Used BMW i5 2024 xDrive M60
+# Used BMW i5 2024 xDrive M60
+![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/i5-front.jpg)
+![Rear](https://image-oversea.guazistatic-global.com/ovp/product/prod/i5-rear.jpg)
+Download all
+Item No abcdef4321
+Model Year 2024
+Mileage (km)12,900
+Fuel Type BEV
+FOB Price
+$42,000`;
+  const car = parseGuaziGlobalProduct(markdown, "https://en.guazi.com/products/bmw-i5-2024-00l-black-12900km-at-4wd-5-seats-abcdef4321.html");
+  assert.equal(car.brand, "BMW");
+  assert.equal(car.model, "i5");
+  assert.equal(car.images.length, 2);
+});
+
+test("rejects a Guazi Global preview with only one image", () => {
+  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[BMW](https://en.guazi.com/used-cars/bmw/)/i5/Used BMW i5 2024 xDrive M60
+# Used BMW i5 2024 xDrive M60
+![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/i5-front.jpg)
+Download all
+Item No abcdef4321
+Model Year 2024
+Mileage (km)12,900
+Fuel Type BEV
+FOB Price
+$42,000`;
+  assert.equal(parseGuaziGlobalProduct(markdown, "https://en.guazi.com/products/bmw-i5-2024-00l-black-12900km-at-4wd-5-seats-abcdef4321.html"), null);
+});
+
 test("classifies Guazi Global range extenders as hybrids", () => {
-  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[Li Auto](https://en.guazi.com/used-cars/li-auto/)/[L7](https://en.guazi.com/used-cars/li-auto/l7/)/Used Li Auto L7 2024 Max\nGrade A\n# Used Li Auto L7 2024 Max\n![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/l7-front.jpg)\nDownload all\nItem No abcdef1234\nModel Year 2024\nMileage (km)20,000\nFuel Type REEV\nFOB Price\n$20,000`;
+  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[Li Auto](https://en.guazi.com/used-cars/li-auto/)/[L7](https://en.guazi.com/used-cars/li-auto/l7/)/Used Li Auto L7 2024 Max\nGrade A\n# Used Li Auto L7 2024 Max\n![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/l7-front.jpg)\n![Rear](https://image-oversea.guazistatic-global.com/ovp/product/prod/l7-rear.jpg)\nDownload all\nItem No abcdef1234\nModel Year 2024\nMileage (km)20,000\nFuel Type REEV\nFOB Price\n$20,000`;
   const car = parseGuaziGlobalProduct(markdown, "https://en.guazi.com/products/li-auto-l7-2024-15l-gray-20000km-at-4wd-5-seats-abcdef1234.html");
   assert.equal(car.type, "Гибрид");
   assert.equal(car.sourceFuelType, "REEV");
 });
 
 test("does not classify Guazi Global combustion cars as electric", () => {
-  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[Foton](https://en.guazi.com/used-cars/foton/)/[Scenic G7](https://en.guazi.com/used-cars/foton/scenic-g7/)/Used Foton Scenic G7 2017\n# Used Foton Scenic G7 2017\n![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/g7-front.jpg)\nDownload all\nItem No abcdef5678\nModel Year 2017\nMileage (km)98,000\nFuel Type Gasoline\nFOB Price\n$8,000`;
+  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[Foton](https://en.guazi.com/used-cars/foton/)/[Scenic G7](https://en.guazi.com/used-cars/foton/scenic-g7/)/Used Foton Scenic G7 2017\n# Used Foton Scenic G7 2017\n![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/g7-front.jpg)\n![Rear](https://image-oversea.guazistatic-global.com/ovp/product/prod/g7-rear.jpg)\nDownload all\nItem No abcdef5678\nModel Year 2017\nMileage (km)98,000\nFuel Type Gasoline\nFOB Price\n$8,000`;
   const car = parseGuaziGlobalProduct(markdown, "https://en.guazi.com/products/foton-scenic-g7-2017-20l-white-98000km-mt-2wd-5-seats-abcdef5678.html");
   assert.equal(car.type, "ДВС");
   assert.equal(car.sourceFuelType, "Gasoline");

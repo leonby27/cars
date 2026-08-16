@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -242,16 +242,26 @@ function useRoute() {
       if (timer) window.clearTimeout(timer);
     };
   }, [route.key, route.restoreY]);
-  const navigate = (next) => {
+  const navigate = (next, { replace = false } = {}) => {
     if (next === -1) {
       window.history.back();
       return;
     }
     const target = new URL(next, window.location.origin);
-    window.history.replaceState({ ...window.history.state, scrollY: window.scrollY }, "");
-    window.history.pushState({ fromPath: appPath(window.location.pathname), scrollY: 0 }, "", `${basePath}${target.pathname}${target.search}${target.hash}`);
+    const currentPath = appPath(window.location.pathname);
+    const targetUrl = `${basePath}${target.pathname}${target.search}${target.hash}`;
+    if (replace) {
+      window.history.replaceState(
+        { ...window.history.state, fromPath: window.history.state?.fromPath || currentPath, scrollY: 0 },
+        "",
+        targetUrl,
+      );
+    } else {
+      window.history.replaceState({ ...window.history.state, scrollY: window.scrollY }, "");
+      window.history.pushState({ fromPath: currentPath, scrollY: 0 }, "", targetUrl);
+    }
     setRoute((current) => ({
-      path: target.pathname,
+      path: appPath(target.pathname),
       restoreY: null,
       key: current.key + 1,
     }));
@@ -2947,6 +2957,7 @@ const authMessages = {
   invalid_email: "Проверьте адрес электронной почты.",
   invalid_telegram: "Проверьте имя пользователя Telegram.",
   invalid_city: "Название города слишком длинное.",
+  invalid_passport_data: "Проверьте паспортные данные.",
   email_required: "Укажите email или выберите другой способ связи.",
   telegram_required: "Укажите Telegram или выберите другой способ связи.",
   unauthorized: "Сессия завершилась. Войдите ещё раз.",
@@ -2965,6 +2976,18 @@ const formatAccountPhone = (value) => {
   const digits = normalizeLocalPhone(value);
   return digits ? `+${digits}` : "";
 };
+const profileFromUser = (user) => ({
+  name:user.name,
+  email:user.email || "",
+  telegram:user.telegram || "",
+  city:user.city || "",
+  preferredContact:user.preferredContact || "phone",
+  passportNumber:user.passportNumber || "",
+  personalNumber:user.personalNumber || "",
+  passportIssueDate:user.passportIssueDate || "",
+  passportIssuedBy:user.passportIssuedBy || "",
+  registrationAddress:user.registrationAddress || "",
+});
 const readLocalAccounts = () => {
   try {
     const value = JSON.parse(window.localStorage.getItem(localAccountsKey) || "[]");
@@ -2993,15 +3016,15 @@ async function localAuthenticate(mode, values) {
   if (mode === "register") {
     if (accounts.some((item) => item.phone === phone)) throw new Error("phone_already_registered");
     const salt = window.crypto.randomUUID();
-    const account = { id:window.crypto.randomUUID(), name:values.name.trim(), phone, email:"", telegram:"", city:"", preferredContact:"phone", salt, passwordHash:await localPasswordHash(values.password, salt), createdAt:new Date().toISOString() };
+    const account = { id:window.crypto.randomUUID(), name:values.name.trim(), phone, email:"", telegram:"", city:"", preferredContact:"phone", passportNumber:"", personalNumber:"", passportIssueDate:"", passportIssuedBy:"", registrationAddress:"", salt, passwordHash:await localPasswordHash(values.password, salt), createdAt:new Date().toISOString() };
     window.localStorage.setItem(localAccountsKey, JSON.stringify([...accounts, account]));
-    const user = { id:account.id, name:account.name, phone:account.phone, email:account.email, telegram:account.telegram, city:account.city, preferredContact:account.preferredContact, createdAt:account.createdAt };
+    const user = { id:account.id, name:account.name, phone:account.phone, email:account.email, telegram:account.telegram, city:account.city, preferredContact:account.preferredContact, passportNumber:account.passportNumber, personalNumber:account.personalNumber, passportIssueDate:account.passportIssueDate, passportIssuedBy:account.passportIssuedBy, registrationAddress:account.registrationAddress, createdAt:account.createdAt };
     saveLocalSession(user);
     return user;
   }
   const account = accounts.find((item) => item.phone === phone);
   if (!account || (await localPasswordHash(values.password, account.salt)) !== account.passwordHash) throw new Error("invalid_credentials");
-  const user = { id:account.id, name:account.name, phone:account.phone, email:account.email || "", telegram:account.telegram || "", city:account.city || "", preferredContact:account.preferredContact || "phone", createdAt:account.createdAt };
+  const user = { id:account.id, name:account.name, phone:account.phone, email:account.email || "", telegram:account.telegram || "", city:account.city || "", preferredContact:account.preferredContact || "phone", passportNumber:account.passportNumber || "", personalNumber:account.personalNumber || "", passportIssueDate:account.passportIssueDate || "", passportIssuedBy:account.passportIssuedBy || "", registrationAddress:account.registrationAddress || "", createdAt:account.createdAt };
   saveLocalSession(user);
   return user;
 }
@@ -3137,7 +3160,7 @@ function AuthPage({ mode, navigate, onAuthenticate, pending }) {
     if (registering && !values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
     try {
       await onAuthenticate(mode, values);
-      navigate("/account");
+      navigate("/account", { replace:true });
     } catch (authError) {
       setError(authMessages[authError.message] || "Не удалось продолжить. Попробуйте ещё раз.");
     }
@@ -3157,8 +3180,8 @@ function AuthPage({ mode, navigate, onAuthenticate, pending }) {
         </div>
         <form className="auth-card" onSubmit={submit}>
           <div className="auth-switch" role="tablist" aria-label="Тип формы">
-            <button type="button" role="tab" aria-selected={!registering} className={!registering ? "active" : ""} onClick={() => navigate("/login")}>Вход</button>
-            <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register")}>Регистрация</button>
+            <button type="button" role="tab" aria-selected={!registering} className={!registering ? "active" : ""} onClick={() => navigate("/login", { replace:true })}>Вход</button>
+            <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register", { replace:true })}>Регистрация</button>
           </div>
           {registering && <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required /></label>}
           <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder="+375291234567" maxLength={16} required /></label>
@@ -3516,7 +3539,7 @@ function AccountFavoritesPanel({ cars, favorites, navigate, toggleFavorite }) {
 
 function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navigate, onLogout, onSaveProfile, onDeleteAccount, pending }) {
   const [section, setSection] = useState("order");
-  const [profile, setProfile] = useState({ name:user.name, email:user.email || "", telegram:user.telegram || "", city:user.city || "", preferredContact:user.preferredContact || "phone" });
+  const [profile, setProfile] = useState(() => profileFromUser(user));
   const [profileError, setProfileError] = useState("");
   const [profileSaved, setProfileSaved] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -3524,7 +3547,7 @@ function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navig
   const [deletePhrase, setDeletePhrase] = useState("");
   const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
-    setProfile({ name:user.name, email:user.email || "", telegram:user.telegram || "", city:user.city || "", preferredContact:user.preferredContact || "phone" });
+    setProfile(profileFromUser(user));
   }, [user]);
   const updateProfileField = (field) => (event) => {
     setProfile((current) => ({ ...current, [field]:event.target.value }));
@@ -3581,12 +3604,27 @@ function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navig
             </div>
             <div className="profile-fields">
               <label className="auth-field"><span>Имя и фамилия</span><input autoComplete="name" value={profile.name} onChange={updateProfileField("name")} maxLength={80} required /></label>
-              <label className="auth-field profile-phone"><span>Телефон для входа</span><input value={formatAccountPhone(user.phone)} disabled /><small>Смену номера добавим с подтверждением по SMS.</small></label>
+              <label className="auth-field profile-phone"><span>Телефон для входа</span><input value={formatAccountPhone(user.phone)} disabled /></label>
               <label className="auth-field"><span>Email</span><input type="email" autoComplete="email" value={profile.email} onChange={updateProfileField("email")} placeholder="name@example.com" maxLength={160} /></label>
               <label className="auth-field"><span>Telegram</span><div className="profile-input-prefix"><b>@</b><input value={profile.telegram} onChange={updateProfileField("telegram")} placeholder="username" maxLength={80} /></div></label>
               <label className="auth-field"><span>Город</span><input autoComplete="address-level2" value={profile.city} onChange={updateProfileField("city")} placeholder="Например, Минск" maxLength={120} /></label>
               <label className="auth-field"><span>Как удобнее связаться</span><select value={profile.preferredContact} onChange={updateProfileField("preferredContact")}><option value="phone">Позвонить</option><option value="telegram">Написать в Telegram</option><option value="email">Написать на email</option></select></label>
             </div>
+            <details className="passport-disclosure">
+              <summary>
+                <span className="passport-summary-icon"><IdentificationCard size={24} weight="duotone" /></span>
+                <span className="passport-summary-copy"><strong>Паспортные данные для договора</strong><small>Можно заполнить заранее, чтобы позже не переносить их вручную.</small></span>
+                <em>Необязательно</em>
+                <CaretDown className="passport-summary-caret" size={21} />
+              </summary>
+              <div className="profile-fields passport-fields">
+                <label className="auth-field"><span>Серия и номер паспорта</span><input value={profile.passportNumber} onChange={updateProfileField("passportNumber")} placeholder="Например, MP1234567" maxLength={20} /></label>
+                <label className="auth-field"><span>Личный номер</span><input value={profile.personalNumber} onChange={updateProfileField("personalNumber")} placeholder="Например, 1234567A001PB1" maxLength={20} /></label>
+                <label className="auth-field"><span>Дата выдачи</span><input type="date" value={profile.passportIssueDate} onChange={updateProfileField("passportIssueDate")} /></label>
+                <label className="auth-field"><span>Кем выдан</span><input value={profile.passportIssuedBy} onChange={updateProfileField("passportIssuedBy")} placeholder="Наименование органа" maxLength={200} /></label>
+                <label className="auth-field passport-wide"><span>Адрес регистрации</span><input autoComplete="street-address" value={profile.registrationAddress} onChange={updateProfileField("registrationAddress")} placeholder="Населённый пункт, улица, дом, квартира" maxLength={240} /></label>
+              </div>
+            </details>
             {profileError && <div className="auth-error" role="alert">{profileError}</div>}
             <div className="profile-actions"><button className="primary" type="submit" disabled={pending}>Сохранить изменения</button>{profileSaved && <p role="status"><CheckCircle size={18} weight="fill" /> Данные сохранены</p>}</div>
           </form>
@@ -3847,7 +3885,18 @@ export function App() {
   };
   const saveProfile = async (profile) => {
     setAuthPending(true);
-    const normalized = { ...profile, name:profile.name.trim(), email:profile.email.trim().toLowerCase(), telegram:profile.telegram.trim().replace(/^@+/, ""), city:profile.city.trim() };
+    const normalized = {
+      ...profile,
+      name:profile.name.trim(),
+      email:profile.email.trim().toLowerCase(),
+      telegram:profile.telegram.trim().replace(/^@+/, ""),
+      city:profile.city.trim(),
+      passportNumber:profile.passportNumber.trim(),
+      personalNumber:profile.personalNumber.trim(),
+      passportIssueDate:profile.passportIssueDate.trim(),
+      passportIssuedBy:profile.passportIssuedBy.trim(),
+      registrationAddress:profile.registrationAddress.trim(),
+    };
     try {
       if (authBackend === "local") {
         setUser(localUpdateProfile(user.id, normalized));

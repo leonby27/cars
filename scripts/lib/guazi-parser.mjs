@@ -303,9 +303,9 @@ export function parseGuaziGlobalProduct(markdown, sourceUrl) {
   if (!markdown || /Security Verification/i.test(markdown)) return null;
   const itemNo = globalLineValue(markdown, "Item No") || sourceUrl.match(/-([a-z0-9]{10})\.html/i)?.[1];
   const heading = markdown.match(/^# Used (.+)$/m)?.[1]?.trim();
-  const breadcrumb = markdown.match(/\[Home\][^\n]*\/\[Used Cars\][^\n]*\/\[([^\]]+)\]\(https:\/\/en\.guazi\.com\/used-cars\/[^/)]+\/\)\/\[([^\]]+)\]/);
+  const breadcrumb = markdown.match(/\[Home\][^\n]*\/\[Used Cars\][^\n]*\/\[([^\]]+)\]\(https:\/\/en\.guazi\.com\/used-cars\/[^/)]+\/\)\/(?:\[([^\]]+)\]\([^)]+\)|([^/\n]+))\/Used /);
   const brand = breadcrumb?.[1]?.trim();
-  const model = breadcrumb?.[2]?.trim();
+  const model = (breadcrumb?.[2] || breadcrumb?.[3])?.trim();
   const modelYear = globalNumber(globalLineValue(markdown, "Model Year")) || globalNumber(heading);
   const firstRegistration = globalLineValue(markdown, "1st Reg\\. Date");
   const mileage = globalNumber(globalLineValue(markdown, "Mileage \\(km\\)"));
@@ -314,7 +314,9 @@ export function parseGuaziGlobalProduct(markdown, sourceUrl) {
   const gallerySection = markdown.split(/\nDownload all\n|\nVehicle Details\n/)[0];
   const images = [...new Set([...gallerySection.matchAll(/!\[[^\]]*\]\((https:\/\/image-oversea\.guazistatic-global\.com\/ovp\/product\/prod\/[^)]+)\)/g)]
     .map((match) => match[1].replace(/\?.*$/, "")))].slice(0, 48);
-  if (!itemNo || !heading || !brand || !model || !modelYear || !mileage || !fobUsd || images.length === 0) return null;
+  // A search-result preview has one image. Treat it as discovery metadata,
+  // never as a complete catalog card.
+  if (!itemNo || !heading || !brand || !model || !modelYear || !mileage || !fobUsd || images.length < 2) return null;
 
   const importedAt = new Date().toISOString();
   const driveRaw = globalLineValue(markdown, "Drive Train");

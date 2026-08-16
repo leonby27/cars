@@ -81,6 +81,9 @@ export async function handleApiRequest(request, response) {
       if (body.email && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email) || body.email.length > 160)) return json(response, 400, { error:"invalid_email" });
       if (body.telegram.length > 80) return json(response, 400, { error:"invalid_telegram" });
       if (body.city.length > 120) return json(response, 400, { error:"invalid_city" });
+      if (body.passportNumber.length > 20 || body.personalNumber.length > 20 || body.passportIssuedBy.length > 200 || body.registrationAddress.length > 240) return json(response, 400, { error:"invalid_passport_data" });
+      const parsedPassportIssueDate = body.passportIssueDate ? new Date(`${body.passportIssueDate}T00:00:00Z`) : null;
+      if (body.passportIssueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(body.passportIssueDate) || Number.isNaN(parsedPassportIssueDate.getTime()) || parsedPassportIssueDate.toISOString().slice(0,10) !== body.passportIssueDate)) return json(response, 400, { error:"invalid_passport_data" });
       if (body.preferredContact === "email" && !body.email) return json(response, 400, { error:"email_required" });
       if (body.preferredContact === "telegram" && !body.telegram) return json(response, 400, { error:"telegram_required" });
       const result = await updateAccountProfile(request, body);

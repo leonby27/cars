@@ -21,6 +21,11 @@ const safeUser = (row) => ({
   telegram: row.telegram || "",
   city: row.city || "",
   preferredContact: row.preferred_contact || "phone",
+  passportNumber: row.passport_number || "",
+  personalNumber: row.personal_number || "",
+  passportIssueDate: row.passport_issue_date || "",
+  passportIssuedBy: row.passport_issued_by || "",
+  registrationAddress: row.registration_address || "",
   createdAt: row.created_at,
 });
 
@@ -31,6 +36,11 @@ export function normalizeProfile(profile = {}) {
     telegram: String(profile.telegram || "").trim().replace(/^@+/, ""),
     city: String(profile.city || "").trim(),
     preferredContact: ["phone", "telegram", "email"].includes(profile.preferredContact) ? profile.preferredContact : "phone",
+    passportNumber: String(profile.passportNumber || "").trim(),
+    personalNumber: String(profile.personalNumber || "").trim(),
+    passportIssueDate: String(profile.passportIssueDate || "").trim(),
+    passportIssuedBy: String(profile.passportIssuedBy || "").trim(),
+    registrationAddress: String(profile.registrationAddress || "").trim(),
   };
 }
 
@@ -78,7 +88,7 @@ export async function getSessionUser(request) {
   const token = readCookie(request.headers.cookie, SESSION_COOKIE);
   if (!token) return null;
   const result = await pool.query(
-    `SELECT a.id,a.name,a.phone,a.email,a.telegram,a.city,a.preferred_contact,a.created_at
+    `SELECT a.id,a.name,a.phone,a.email,a.telegram,a.city,a.preferred_contact,a.passport_number,a.personal_number,a.passport_issue_date,a.passport_issued_by,a.registration_address,a.created_at
        FROM customer_sessions s
        JOIN customer_accounts a ON a.id=s.customer_id
       WHERE s.token_hash=$1 AND s.expires_at>now()`,
@@ -106,10 +116,12 @@ export async function updateAccountProfile(request, profile) {
   const value = normalizeProfile(profile);
   const result = await pool.query(
     `UPDATE customer_accounts
-        SET name=$2,email=NULLIF($3,''),telegram=NULLIF($4,''),city=NULLIF($5,''),preferred_contact=$6,updated_at=now()
+        SET name=$2,email=NULLIF($3,''),telegram=NULLIF($4,''),city=NULLIF($5,''),preferred_contact=$6,
+            passport_number=NULLIF($7,''),personal_number=NULLIF($8,''),passport_issue_date=NULLIF($9,'')::date,
+            passport_issued_by=NULLIF($10,''),registration_address=NULLIF($11,''),updated_at=now()
       WHERE id=$1
-      RETURNING id,name,phone,email,telegram,city,preferred_contact,created_at`,
-    [account.id, value.name, value.email, value.telegram, value.city, value.preferredContact],
+      RETURNING id,name,phone,email,telegram,city,preferred_contact,passport_number,personal_number,passport_issue_date,passport_issued_by,registration_address,created_at`,
+    [account.id, value.name, value.email, value.telegram, value.city, value.preferredContact, value.passportNumber, value.personalNumber, value.passportIssueDate, value.passportIssuedBy, value.registrationAddress],
   );
   return { user:safeUser(result.rows[0]) };
 }

@@ -16,6 +16,7 @@ This is a closed-pilot source adapter for Chinese EV and PHEV listings. Its defa
 - `npm run import:guazi -- --limit=18 --scan=600` — targeted import (default)
 - `npm run import:guazi -- --limit=1000 --scan=4000 --concurrency=10` — larger file snapshot with weighted priority brands
 - `npm run import:guazi -- --discovery=sitemap --limit=18 --scan=600` — broad audit/fallback
+- `npm run import:guazi-global -- --repair-fallbacks --limit=1000 --concurrency=5 --pure-ev` — re-fetch incomplete Guazi Global cards without adding new listings
 - `npm run import:watch` — import immediately and repeat every six hours
 - `npm run db:discover -- --limit=500 --scan=3000 --concurrency=8` — targeted discovery straight into PostgreSQL without replacing the static catalog
 - `npm run db:schedule -- --limit=1000` — enqueue stale cards for incremental refresh
@@ -24,6 +25,8 @@ This is a closed-pilot source adapter for Chinese EV and PHEV listings. Its defa
 - `npm test` — parser and site tests
 
 When the API is available, the website reads paginated data from PostgreSQL. `public/data/cars.json` remains a static fallback for GitHub Pages. Import diagnostics are written to `public/data/import-report.json`.
+
+Guazi Global result-page previews are used only for discovery. A card is written to the catalog only after its product page yields a gallery with at least two original photos; incomplete reader responses are neither cached nor imported.
 
 ## Local database and API
 

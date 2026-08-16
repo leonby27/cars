@@ -19,12 +19,17 @@ test("readCookie finds an encoded session token", () => {
 });
 
 test("normalizeProfile trims user details and allowlists contact preference", () => {
-  assert.deepEqual(normalizeProfile({ name:"  Анна Иванова ", email:" ANNA@EXAMPLE.COM ", telegram:"@@anna ", city:" Минск ", preferredContact:"telegram" }), {
+  assert.deepEqual(normalizeProfile({ name:"  Анна Иванова ", email:" ANNA@EXAMPLE.COM ", telegram:"@@anna ", city:" Минск ", preferredContact:"telegram", passportNumber:" MP1234567 ", personalNumber:" 1234567A001PB1 ", passportIssueDate:" 2024-05-12 ", passportIssuedBy:" МВД Первомайского района ", registrationAddress:" г. Минск, ул. Примерная, 1 " }), {
     name:"Анна Иванова",
     email:"anna@example.com",
     telegram:"anna",
     city:"Минск",
     preferredContact:"telegram",
+    passportNumber:"MP1234567",
+    personalNumber:"1234567A001PB1",
+    passportIssueDate:"2024-05-12",
+    passportIssuedBy:"МВД Первомайского района",
+    registrationAddress:"г. Минск, ул. Примерная, 1",
   });
   assert.equal(normalizeProfile({ preferredContact:"sms" }).preferredContact, "phone");
 });

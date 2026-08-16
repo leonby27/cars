@@ -1,19 +1,18 @@
 {
-  "finishedAt": "2026-08-16T15:31:36.670Z",
+  "startedAt": "2026-08-16T20:14:38.172Z",
+  "finishedAt": "2026-08-16T20:37:39.000Z",
   "source": "Guazi Global",
   "pureEv": true,
-  "requested": 400,
-  "imported": 400,
-  "previousCount": 2200,
-  "resultingCount": 2600,
-  "preferredBrand": "Zeekr",
-  "preferredModels": [
-    "7X",
-    "007GT",
-    "X",
-    "001",
-    "009"
-  ],
+  "repairFallbacks": true,
+  "replaceGlobalPilot": false,
+  "requested": 1000,
+  "pagesScanned": 0,
+  "relatedFeedsScanned": 0,
+  "relatedPagesPerFeed": 0,
+  "preferredBrand": null,
+  "preferredModels": [],
+  "preferredModelsOnly": false,
+  "preferredPagesPerFeed": 0,
   "policy": {
     "minYear": 2023,
     "brands": [
@@ -43,39 +42,43 @@
     "newImports": "electric-only",
     "cleansExistingCatalog": false
   },
+  "discovered": 103,
+  "imported": 102,
+  "repaired": 102,
+  "added": 0,
+  "incompleteBefore": 103,
+  "incompleteAfter": 0,
   "importedByBrand": {
-    "Zeekr": 89,
-    "NIO": 45,
-    "XPeng": 36,
-    "Avatr": 29,
-    "BMW": 27,
-    "Xiaomi": 24,
-    "Tesla": 23,
-    "Leapmotor": 21,
-    "HIMA": 21,
-    "Volkswagen": 20,
-    "BYD": 18,
-    "Mercedes-Benz": 14,
-    "Li Auto": 12,
-    "Toyota": 11,
-    "Lynk & Co": 5,
-    "Deepal": 2,
-    "Denza": 1,
+    "Xiaomi": 10,
+    "Mercedes-Benz": 2,
+    "NIO": 22,
+    "Tesla": 11,
+    "Li Auto": 7,
+    "Leapmotor": 4,
+    "Deepal": 1,
+    "XPeng": 7,
+    "BMW": 6,
+    "HIMA": 5,
+    "BYD": 9,
+    "Avatr": 5,
     "Audi": 1,
-    "Geely Galaxy": 1
+    "Toyota": 2,
+    "Volkswagen": 3,
+    "Zeekr": 4,
+    "Lynk & Co": 3
   },
-  "preferredBrandImported": 89,
-  "preferredBrandModels": {
-    "007GT": 23,
-    "7X": 21,
-    "X": 20,
-    "001": 16,
-    "009": 9
-  },
-  "listingFallbackImported": 251,
-  "validation": {
-    "allElectric": true,
-    "allYear2023Plus": true,
-    "duplicateIds": 0
-  }
+  "previousCount": 2600,
+  "resultingCount": 2599,
+  "listErrors": [],
+  "detailErrors": [
+    {
+      "url": "https://en.guazi.com/products/bmw-ix3-2024-00l-black-15200km-at-2wd-5-seats-4jqnh5zqf4.html",
+      "workerId": 1,
+      "error": "Reader returned an incomplete product page"
+    }
+  ],
+  "deletedIncomplete": 1,
+  "deletedIncompleteIds": [
+    "guazi-global-4jqnh5zqf4"
+  ]
 }
