@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { IMPORT_BRANDS, IMPORT_MIN_YEAR, importPolicyViolation, isAllowedImportBrand } from "../config/import-policy.mjs";
 import { parseGuaziGlobalListing, parseGuaziGlobalProduct } from "./lib/guazi-parser.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -13,7 +14,10 @@ const concurrency = Math.max(1, Math.min(5, Number(args.get("--concurrency") || 
 const pageCount = Math.max(1, Number(args.get("--pages") || Math.ceil((limit + 20) / 20)));
 const useCache = !args.has("--no-cache");
 const pureEv = args.has("--pure-ev");
-const replaceGlobalPilot = args.has("--replace-global-pilot");
+if (args.has("--replace-global-pilot")) throw new Error("Catalog cleanup is disabled by the import policy");
+const replaceGlobalPilot = false;
+const relatedFeedLimit = Math.max(0, Number(args.get("--related-feeds") || 0));
+const relatedPageCount = Math.max(1, Number(args.get("--related-pages") || 2));
 const EV_LIST_URL = pureEv
   ? "https://en.guazi.com/used-cars/?fuelType=2"
   : "https://en.guazi.com/used-cars/?fuelType=2%2C3%2C4";
@@ -73,6 +77,54 @@ for (let page = 1; page <= pageCount; page += 1) {
   }
 }
 
+const relatedFeeds = [];
+if (relatedFeedLimit > 0) {
+  const feedCounts = new Map();
+  const globalCars = (current.cars || []).filter((car) => car.id.startsWith("guazi-global-") && isAllowedImportBrand(car.brand));
+  for (const car of globalCars) {
+    const externalId = car.id.replace("guazi-global-", "");
+    try {
+      const markdown = await fs.readFile(cachePath(`product-${externalId}`), "utf8");
+      for (const match of markdown.matchAll(/https:\/\/en\.guazi\.com\/used-cars\/[a-z0-9-]+\/[a-z0-9-]+\//gi)) {
+        feedCounts.set(match[0], (feedCounts.get(match[0]) || 0) + 1);
+      }
+    } catch {}
+  }
+
+  relatedFeeds.push(...[...feedCounts]
+    // Navigation links occur on every product page; real related-model links do not.
+    .filter(([, count]) => count < globalCars.length)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, relatedFeedLimit)
+    .map(([url]) => url));
+
+  const jobs = relatedFeeds.flatMap((feedUrl) => Array.from(
+    { length: relatedPageCount },
+    (_, index) => ({ feedUrl, page: index + 1 }),
+  ));
+  let relatedCursor = 0;
+  async function relatedWorker() {
+    while (relatedCursor < jobs.length) {
+      const { feedUrl, page } = jobs[relatedCursor++];
+      const slug = new URL(feedUrl).pathname.replace(/^\/used-cars\//, "").replace(/\/$/, "");
+      try {
+        const markdown = await fetchReader(
+          `${feedUrl}?page=${page}`,
+          `related-${slug}-${page}`,
+          "a[href*=\"/products/\"]",
+        );
+        const urls = parseGuaziGlobalListing(markdown);
+        discovered.push(...urls);
+        console.log(`Related ${slug} ${page}/${relatedPageCount}: ${urls.length} listings`);
+      } catch (error) {
+        listErrors.push({ feed: slug, page, error: error.message });
+        console.log(`Related ${slug} ${page}/${relatedPageCount}: ${error.message}`);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, () => relatedWorker()));
+}
+
 const candidates = [...new Set(discovered)].filter((url) => {
   const externalId = url.match(/-([a-z0-9]{10})\.html/i)?.[1];
   return externalId && !existingIds.has(`guazi-global-${externalId}`);
@@ -90,7 +142,9 @@ async function worker(workerId) {
       const markdown = await fetchReader(url, `product-${externalId}`, "img[src*=\"/ovp/product/prod/\"]");
       const car = parseGuaziGlobalProduct(markdown, url);
       if (!car) throw new Error("Incomplete product page");
-      if (pureEv && car.type !== "Электромобиль") throw new Error("Product is not a BEV");
+      const policyViolation = importPolicyViolation(car);
+      if (policyViolation) throw new Error(`Import policy: ${policyViolation}`);
+      if (pureEv && car.sourceFuelType && car.sourceFuelType !== "BEV") throw new Error("Product is not a BEV");
       if (imported.length < limit) imported.push(car);
       if (imported.length % 10 === 0) console.log(`Parsed ${imported.length}/${limit}`);
     } catch (error) {
@@ -102,12 +156,7 @@ async function worker(workerId) {
 await Promise.all(Array.from({ length: concurrency }, (_, index) => worker(index + 1)));
 
 const importedByBrand = Object.fromEntries([...Map.groupBy(imported, (car) => car.brand)].map(([brand, cars]) => [brand, cars.length]));
-const baseCars = replaceGlobalPilot
-  ? (current.cars || []).filter((car) => !car.id.startsWith("guazi-global-") || (
-      car.type === "Электромобиль"
-      && (car.sourceFuelType ? car.sourceFuelType === "BEV" : /-00l-/i.test(car.sourceUrl || ""))
-    ))
-  : (current.cars || []);
+const baseCars = current.cars || [];
 const mergedCars = [...new Map([...baseCars, ...imported].map((car) => [car.id, car])).values()];
 const finishedAt = new Date().toISOString();
 const report = {
@@ -118,6 +167,9 @@ const report = {
   replaceGlobalPilot,
   requested: limit,
   pagesScanned: pageCount,
+  relatedFeedsScanned: relatedFeeds.length,
+  relatedPagesPerFeed: relatedFeedLimit > 0 ? relatedPageCount : 0,
+  policy: { minYear: IMPORT_MIN_YEAR, brands: IMPORT_BRANDS, newImports: "electric-only", cleansExistingCatalog: false },
   discovered: candidates.length,
   imported: imported.length,
   importedByBrand,

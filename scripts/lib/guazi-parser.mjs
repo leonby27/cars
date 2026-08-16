@@ -229,7 +229,12 @@ export function parseGuaziGlobalProduct(markdown, sourceUrl) {
   const conditionGrade = markdown.match(/^Grade\s+([A-Z])$/m)?.[1] || null;
   const conditionFlags = ["No Accident Damage", "No Water Damage", "No Fire Damage"].filter((flag) => markdown.includes(flag));
   const city = globalLineValue(markdown, "Location")?.replace(/,\s*China$/i, "") || "Китай";
-  const type = /PHEV|HEV|REEV|Hybrid|Range.Extended/i.test(`${fuelType} ${heading}`) ? "Гибрид" : "Электромобиль";
+  const fuelDescriptor = `${fuelType} ${heading}`;
+  const type = /PHEV|HEV|REEV|Hybrid|Range.Extended/i.test(fuelDescriptor)
+    ? "Гибрид"
+    : /Gasoline|Diesel|Petrol|LPG|CNG/i.test(fuelDescriptor)
+      ? "ДВС"
+      : "Электромобиль";
   const chinaPrice = Math.round((fobUsd * 7.15) / 100) * 100;
 
   return {

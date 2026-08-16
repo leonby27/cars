@@ -57,3 +57,5 @@ Catalog navigation preference: when returning from a vehicle page, preserve the 
 Vehicle estimate card preference: keep the “Итого” block light with dark text rather than using a dark inversion that competes with the orange CTA. Show the approximate delivery time to Minsk in a separate explanatory card below the estimate; use 35–50 days from signing the contract unless the business estimate changes.
 
 Estimate-description preference: keep explanatory copy for individual cost rows behind an info icon beside the row title. Show it only while the icon is hovered and hide it immediately when the pointer leaves; do not toggle it by click.
+
+Vehicle import policy: for future imports, import only model-year 2023+ electric vehicles from the home-page popular brands plus Leapmotor, Tesla, Mercedes-Benz, Lynk & Co, Mazda, and Toyota. Never use this policy to clean or remove existing catalog entries; existing hybrids and all other existing cars remain untouched. Keep the executable policy in `config/import-policy.mjs` and the human-readable rules in `IMPORT_POLICY.md` synchronized.

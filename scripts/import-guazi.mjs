@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { IMPORT_BRANDS, IMPORT_MIN_YEAR, isAllowedImportBrand, isEligibleNewImport } from "../config/import-policy.mjs";
 import { normalizeDrive, normalizeEnergy, parseGuaziHtml, parseGuaziListing, parseGuaziMarkdown, parseGuaziSeriesLinks } from "./lib/guazi-parser.mjs";
 import { fetchSourceText } from "./lib/source-client.mjs";
 
@@ -21,7 +22,8 @@ const concurrency = Number(args.get("--concurrency") || 8);
 const discoveryMode = args.get("--discovery") || "targeted";
 const databaseMode = args.has("--database") || args.has("--database-only");
 const databaseOnly = args.has("--database-only");
-const appendNew = args.has("--append-new");
+// Import policy is append-only: a regular crawl must never replace or clean the catalog.
+const appendNew = true;
 const htmlUserAgent = process.env.GUAZI_HTML_USER_AGENT || "OAI-SearchBot/1.0";
 const commonHeaders = { accept: "text/plain,text/markdown,text/html;q=0.9,*/*;q=0.5", "user-agent": "NaVostokBY-Importer/0.1" };
 
@@ -217,14 +219,15 @@ const parsed = await mapConcurrent(markdownUrls, async (url) => {
   const markdown = await fetchText(url);
   return parseGuaziMarkdown(markdown, url);
 }, concurrency);
-const matchingAll = parsed.filter((item) => item && !item.error);
+const matchingAll = parsed.filter((item) => item && !item.error && isAllowedImportBrand(item.brand) && Number(item.year) >= IMPORT_MIN_YEAR);
 const matching = appendNew
   ? matchingAll.filter((car) => !previousById.has(car.id))
   : matchingAll;
 const enrichmentBuffer = Math.max(12, Math.ceil(limit * 0.1));
 const candidates = takeWeightedRoundRobin(matching, limit + enrichmentBuffer, (car) => car.brand, (car) => priorityByBrand.get(car.brand) || 1);
 const enriched = await mapConcurrent(candidates, enrichCar, Math.min(concurrency, 5));
-const cars = enriched.filter((item) => item && !item.error).slice(0, limit).map((car) => {
+const policyRejected = enriched.filter((item) => item && !item.error && !isEligibleNewImport(item));
+const cars = enriched.filter((item) => item && !item.error && isEligibleNewImport(item)).slice(0, limit).map((car) => {
   const old = previousById.get(car.id);
   const history = [...(old?.priceHistory || [])];
   if (!history.length || history.at(-1).priceCny !== car.chinaPrice) history.push({ at: car.importedAt, priceCny: car.chinaPrice });
@@ -255,6 +258,8 @@ const report = {
   requested: limit,
   imported: cars.length,
   importedByBrand: Object.fromEntries([...Map.groupBy(cars, (car) => car.brand)].map(([brand, items]) => [brand, items.length])),
+  policy: { minYear: IMPORT_MIN_YEAR, brands: IMPORT_BRANDS, newImports: "electric-only", cleansExistingCatalog: false },
+  policyRejected: policyRejected.length,
   shortfall: Math.max(0, limit - cars.length),
   errors: errors.slice(0, 20),
 };

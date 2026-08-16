@@ -95,3 +95,10 @@ test("classifies Guazi Global range extenders as hybrids", () => {
   assert.equal(car.type, "Гибрид");
   assert.equal(car.sourceFuelType, "REEV");
 });
+
+test("does not classify Guazi Global combustion cars as electric", () => {
+  const markdown = `[Home](https://en.guazi.com/)/[Used Cars](https://en.guazi.com/used-cars/)/[Foton](https://en.guazi.com/used-cars/foton/)/[Scenic G7](https://en.guazi.com/used-cars/foton/scenic-g7/)/Used Foton Scenic G7 2017\n# Used Foton Scenic G7 2017\n![Front](https://image-oversea.guazistatic-global.com/ovp/product/prod/g7-front.jpg)\nDownload all\nItem No abcdef5678\nModel Year 2017\nMileage (km)98,000\nFuel Type Gasoline\nFOB Price\n$8,000`;
+  const car = parseGuaziGlobalProduct(markdown, "https://en.guazi.com/products/foton-scenic-g7-2017-20l-white-98000km-mt-2wd-5-seats-abcdef5678.html");
+  assert.equal(car.type, "ДВС");
+  assert.equal(car.sourceFuelType, "Gasoline");
+});
