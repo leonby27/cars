@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, EnvelopeSimple, Eye, EyeSlash, Gauge, Heart, Images, Info, InstagramLogo, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, EnvelopeSimple, Eye, EyeSlash, Gauge, Heart, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { COMPANY } from "./company-data.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
-import { FAQ_GROUPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
+import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
@@ -22,6 +22,34 @@ const priceOptions = [ANY_PRICE, "до $40 000", "до $30 000", "до $25 000"]
 const mileageOptions = [ANY_MILEAGE, "до 50 000 км", "до 30 000 км", "до 15 000 км"];
 const priceLimitLabel = (value, currency) => (value === ANY_PRICE ? value : `до ${money(filterNumber(value), currency)}`);
 const useCurrency = () => useContext(CurrencyContext);
+
+function TelegramBrandIcon() {
+  return (
+    <svg className="social-brand-icon telegram-brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21.79 3.27 18.6 19.13c-.24 1.12-.87 1.39-1.76.87l-4.86-3.58-2.35 2.26c-.26.26-.48.48-.98.48l.35-4.95 9-8.13c.39-.35-.09-.55-.61-.2L6.26 12.89l-4.79-1.5c-1.04-.33-1.06-1.04.22-1.54L20.42 2.63c.87-.32 1.63.2 1.37.64Z" />
+    </svg>
+  );
+}
+
+function InstagramBrandIcon() {
+  const gradientId = useId();
+  return (
+    <svg className="social-brand-icon instagram-brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="3" y1="21" x2="21" y2="3" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#ffdc80" />
+          <stop offset="0.28" stopColor="#fcaf45" />
+          <stop offset="0.52" stopColor="#f77737" />
+          <stop offset="0.72" stopColor="#e1306c" />
+          <stop offset="1" stopColor="#833ab4" />
+        </linearGradient>
+      </defs>
+      <rect x="2.75" y="2.75" width="18.5" height="18.5" rx="5.15" fill="none" stroke={`url(#${gradientId})`} strokeWidth="2.15" />
+      <circle cx="12" cy="12" r="4.15" fill="none" stroke={`url(#${gradientId})`} strokeWidth="2.15" />
+      <circle cx="17.35" cy="6.75" r="1.15" fill={`url(#${gradientId})`} />
+    </svg>
+  );
+}
 
 const displayValue = (value, fallback = "Не указано") => (value === null || value === undefined || value === "" ? fallback : value);
 const cityNames = {
@@ -247,9 +275,6 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user })
           </button>
           <button className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined} onClick={() => navigate("/how-it-works")}>
             Как это работает
-          </button>
-          <button className={path === "/delivered" ? "active" : ""} aria-current={path === "/delivered" ? "page" : undefined} onClick={() => navigate("/delivered")}>
-            Доставленные авто
           </button>
           <button className={path === "/about" ? "active" : ""} aria-current={path === "/about" ? "page" : undefined} onClick={() => navigate("/about")}>
             О компании
@@ -674,7 +699,7 @@ function PopularBrands({ navigate, cars, apiMode }) {
   const brandCounts = new Map(availableBrands.map((item) => [item.brand, Number(item.count) || 0]));
   const brands = Object.keys(brandLogos)
     .map((brand) => ({ brand, count: brandCounts.get(brand) || 0 }))
-    .sort((a, b) => Number(b.count) - Number(a.count) || a.brand.localeCompare(b.brand, "ru"));
+    .sort((a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }));
 
   return (
     <section className="popular-brands page-width" aria-labelledby="popular-brands-title">
@@ -695,6 +720,68 @@ function PopularBrands({ navigate, cars, apiMode }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function HomeConversionSections({ navigate }) {
+  const stepIcons = [MagnifyingGlass, ShieldCheck, ClipboardText, CarProfile];
+
+  return (
+    <div className="home-conversion page-width">
+      <section className="home-order" aria-labelledby="home-order-title">
+        <div className="home-order-intro">
+          <span className="home-section-kicker">Как проходит заказ</span>
+          <h2 id="home-order-title">Автомобиль из Китая — без неизвестности между заявкой и выдачей</h2>
+          <p>До каждого платежа вы понимаете, что уже проверено, сколько стоит следующий этап и какие документы получите.</p>
+          <div className="home-order-actions">
+            <button type="button" className="primary" onClick={() => navigate("/catalog")}>Подобрать автомобиль <ArrowRight size={18} weight="bold" /></button>
+            <button type="button" className="home-text-link" onClick={() => navigate("/how-it-works")}>Весь процесс <CaretRight size={17} weight="bold" /></button>
+          </div>
+        </div>
+        <ol className="home-order-steps">
+          {HOME_ORDER_STEPS.map((step, index) => {
+            const StepIcon = stepIcons[index];
+            return (
+              <li key={step.number}>
+                <div className="home-step-topline">
+                  <span className="home-step-icon"><StepIcon size={21} weight="duotone" /></span>
+                  <small>{step.number}</small>
+                </div>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      <section className="home-faq" aria-labelledby="home-faq-title">
+        <div className="home-faq-intro">
+          <span className="home-section-kicker">Коротко о главном</span>
+          <h2 id="home-faq-title">Что важно знать до заказа авто из Китая</h2>
+          <p>Подбор и доставка автомобиля из Китая в Беларусь состоят из нескольких отдельных этапов. Мы заранее объясняем цену, проверку, сроки и ответственность сторон — без обещаний, которые невозможно подтвердить.</p>
+          <button type="button" className="home-text-link" onClick={() => navigate("/faq")}>Все вопросы и ответы <ArrowRight size={17} weight="bold" /></button>
+        </div>
+        <div className="home-faq-list">
+          {HOME_FAQ.map((item, index) => (
+            <details key={item.question} open={index === 0}>
+              <summary>
+                <span>{item.question}</span>
+                <CaretDown size={20} weight="bold" aria-hidden="true" />
+              </summary>
+              <p>{item.answer}</p>
+            </details>
+          ))}
+          <div className="home-faq-cta">
+            <div>
+              <b>Нужна машина, которой нет в каталоге?</b>
+              <span>Опишите модель и бюджет — проверим варианты на китайском рынке.</span>
+            </div>
+            <button type="button" className="primary" onClick={() => navigate("/catalog")}>Начать подбор <ArrowRight size={18} weight="bold" /></button>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -785,6 +872,7 @@ function Home({ navigate, cars, apiMode }) {
           Показать ещё
         </button>
       </section>
+      <HomeConversionSections navigate={navigate} />
     </main>
   );
 }
@@ -1004,6 +1092,23 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const [customSearchOpen, setCustomSearchOpen] = useState(false);
   const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : "newest"));
   const [loadedLimit, setLoadedLimit] = useState(() => Math.max(pageSize, Number(restoredCatalog?.loadedCount) || pageSize));
+  const loadMoreTarget = useRef(null);
+  const loadMoreRequest = useRef(null);
+  const loadingMore = useRef(false);
+  const updateFilters = (updater) => {
+    loadMoreRequest.current?.abort();
+    loadMoreRequest.current = null;
+    loadingMore.current = false;
+    setLoadedLimit(pageSize);
+    setFilters(updater);
+  };
+  const updateSort = (value) => {
+    loadMoreRequest.current?.abort();
+    loadMoreRequest.current = null;
+    loadingMore.current = false;
+    setLoadedLimit(pageSize);
+    setSort(value);
+  };
   const brands = apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType));
   const models = ["Все модели", ...(apiMode ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
@@ -1093,27 +1198,60 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       "",
     );
   }, [filters, sort, loadedLimit, remoteCars.length]);
+  useEffect(
+    () => () => {
+      const controller = loadMoreRequest.current;
+      loadMoreRequest.current = null;
+      controller?.abort();
+    },
+    [],
+  );
   const loadMore = async () => {
+    if (!apiMode) {
+      setLoadedLimit((current) => Math.min(current + pageSize, filtered.length));
+      return;
+    }
+    if (loadingMore.current || remoteLoading || remoteCars.length >= remoteTotal) return;
+    const controller = new AbortController();
+    loadMoreRequest.current = controller;
+    loadingMore.current = true;
     const query = requestParams();
     query.set("limit", String(pageSize));
     query.set("offset", String(remoteCars.length));
     setRemoteLoading(true);
     setRemoteError(false);
     try {
-      const response = await fetch(`/api/cars?${query}`);
+      const response = await fetch(`/api/cars?${query}`, { signal: controller.signal });
       if (!response.ok) throw new Error("catalog unavailable");
       const catalog = await response.json();
       setRemoteCars((current) => [...current, ...catalog.items.map(normalizeImportedCar)]);
       setLoadedLimit((current) => current + catalog.items.length);
       setRemoteTotal(catalog.total);
-    } catch {
-      setRemoteError(true);
+    } catch (error) {
+      if (error.name !== "AbortError") setRemoteError(true);
     } finally {
-      setRemoteLoading(false);
+      if (loadMoreRequest.current === controller) {
+        loadMoreRequest.current = null;
+        loadingMore.current = false;
+        setRemoteLoading(false);
+      }
     }
   };
-  const displayed = apiMode ? remoteCars : filtered;
+  const displayed = apiMode ? remoteCars : filtered.slice(0, loadedLimit);
   const resultCount = apiMode ? remoteTotal : filtered.length;
+  const hasMore = displayed.length < resultCount;
+  useEffect(() => {
+    const target = loadMoreTarget.current;
+    if (!target || !hasMore || remoteLoading || remoteError) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadMore();
+      },
+      { rootMargin: "0px 0px 700px", threshold: 0 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [apiMode, filters, sort, displayed.length, resultCount, remoteLoading, remoteError]);
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
   return (
     <main className="catalog page-width">
@@ -1125,17 +1263,15 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       <div className="catalog-heading">
         <h1>Автомобили из Китая</h1>
       </div>
-      <FilterPanel filters={filters} setFilters={setFilters} resultCount={resultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} availability={availability} />
+      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={resultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} availability={availability} />
       <div className="catalog-layout">
         <section className="results-list">
           <div className="result-tools">
             <div className="result-summary">
               <b>Подходящие варианты</b>
-              <span>
-                {displayed.length} из {resultCount} найденных
-              </span>
+              <span>{resultCount} найденных</span>
             </div>
-            <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => setSort(sortOptions.find((option) => option.label === label)?.value || "newest")} />
+            <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => updateSort(sortOptions.find((option) => option.label === label)?.value || "newest")} />
           </div>
           {remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}
           {displayed.length
@@ -1144,12 +1280,13 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
                 <CustomSearchCta variant="empty" onOpen={() => setCustomSearchOpen(true)} />
               )}
           {remoteLoading && <div className="catalog-message">Загружаем объявления…</div>}
-          {apiMode && displayed.length < resultCount && !remoteLoading && (
+          {hasMore && !remoteLoading && !remoteError && <div ref={loadMoreTarget} className="catalog-scroll-sentinel" aria-hidden="true" />}
+          {apiMode && hasMore && !remoteLoading && remoteError && (
             <button className="load-more" onClick={loadMore}>
-              Показать ещё {Math.min(pageSize, resultCount - displayed.length)} авто
+              Повторить загрузку
             </button>
           )}
-          {displayed.length > 0 && (!apiMode || displayed.length >= resultCount) && !remoteLoading && (
+          {displayed.length > 0 && !hasMore && !remoteLoading && (
             <CustomSearchCta variant="end" onOpen={() => setCustomSearchOpen(true)} />
           )}
         </section>
@@ -1586,108 +1723,9 @@ function CustomSearchModal({ filters, onClose }) {
   );
 }
 
-function ReportOrderModal({ car, price, onClose }) {
-  const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(null);
-  const [error, setError] = useState("");
-  const [consent, setConsent] = useState(false);
-  const [consentError, setConsentError] = useState("");
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", closeOnEscape);
-      document.body.style.overflow = "";
-    };
-  }, [onClose]);
-  const submit = async (event) => {
-    event.preventDefault();
-    if (!consent) {
-      setConsentError("Подтвердите согласие, чтобы отправить заявку.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const response = await fetch("/api/order-drafts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          listingId: car.id,
-          name: name.trim(),
-          contact: contact.trim(),
-          calculation: {
-            chinaPriceCny: car.chinaPrice,
-            chinaUsd: price.chinaUsd,
-            totalLow: price.totalLow,
-            totalHigh: price.totalHigh,
-            totalUsd: price.totalUsd,
-            rateDate: PRICING.rateDate,
-            requestType: "vehicle_report",
-          },
-        }),
-      });
-      if (!response.ok) throw new Error("save unavailable");
-      setSaved(await response.json());
-    } catch {
-      setError("Не удалось отправить заявку. Проверьте подключение и попробуйте ещё раз.");
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="lead-modal" role="dialog" aria-modal="true" aria-labelledby="report-order-title">
-        <button className="modal-close" onClick={onClose} aria-label="Закрыть">
-          <X size={19} />
-        </button>
-        {!saved ? (
-          <>
-            <div className="modal-icon">
-              <ChatCircleText size={25} weight="duotone" />
-            </div>
-            <span>Отчёт по автомобилю</span>
-            <h2 id="report-order-title">Заказать отчёт</h2>
-            <p>Оставьте имя и удобный контакт. Мы свяжемся с вами, уточним детали и подготовим отчёт по {car.title}.</p>
-            <form onSubmit={submit}>
-              <label>
-                Имя
-                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Как к вам обращаться" autoComplete="name" maxLength={120} required autoFocus />
-              </label>
-              <label>
-                Telegram, Viber или телефон
-                <input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="@username или +375 …" autoComplete="tel" maxLength={200} required />
-              </label>
-              <ConsentField checked={consent} onChange={(value) => { setConsent(value); if (value) setConsentError(""); }} error={consentError} />
-              <button className="primary" type="submit" disabled={saving}>
-                {saving ? "Отправляем…" : "Заказать отчёт"}
-              </button>
-              {error && <small className="form-error">{error}</small>}
-            </form>
-          </>
-        ) : (
-          <div className="success-state">
-            <CheckCircle size={48} weight="fill" />
-            <h2 id="report-order-title">Заявка принята</h2>
-            <p>Спасибо, {name}. Мы свяжемся с вами по указанному контакту и уточним детали отчёта.</p>
-            <button className="secondary" onClick={onClose}>
-              Готово
-            </button>
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite }) {
+function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite, user, authLoading, onAuthenticate, authPending }) {
   const currency = useCurrency();
-  const [reportOrderOpen, setReportOrderOpen] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
   if (!car) return <NotFound navigate={navigate} />;
   const price = estimateLandedCost(car);
   const specs = [
@@ -1830,13 +1868,13 @@ function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite }) {
                 </div>
               </div>
             </details>
-            <button className="primary report-order-cta" onClick={() => setReportOrderOpen(true)}>
-              Заказать отчёт по авто
+            <button className="primary report-order-cta" disabled={authLoading} onClick={() => (user ? navigate("/account") : setRegistrationOpen(true))}>
+              Заказать отчёт о состоянии авто
             </button>
           </aside>
         </div>
       </div>
-      {reportOrderOpen && <ReportOrderModal car={car} price={price} onClose={() => setReportOrderOpen(false)} />}
+      {registrationOpen && <RegistrationModal car={car} navigate={navigate} onAuthenticate={onAuthenticate} pending={authPending} onClose={() => setRegistrationOpen(false)} />}
     </main>
   );
 }
@@ -2741,8 +2779,8 @@ function SiteFooter({ navigate }) {
           <button className="wordmark footer-wordmark" onClick={() => navigate("/")} aria-label="На главную">Na<span>Vostok</span><small>.by</small></button>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
           <div className="footer-socials">
-            <a href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramLogo size={20} /></a>
-            <a href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramLogo size={20} /></a>
+            <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramBrandIcon /></a>
+            <a className="instagram-social-link" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramBrandIcon /></a>
           </div>
         </div>
         <div className="footer-column"><b>Компания</b><button onClick={() => navigate("/about")}>О компании</button><button onClick={() => navigate("/delivered")}>Доставленные авто</button><button onClick={() => navigate("/contacts")}>Контакты и офис</button><button onClick={() => navigate("/contacts")}>Реквизиты</button></div>
@@ -2905,6 +2943,80 @@ function PasswordField({ label, value, onChange, autoComplete, placeholder = "",
         </button>
       </div>
     </label>
+  );
+}
+
+function RegistrationModal({ car, navigate, onAuthenticate, pending, onClose }) {
+  const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:false });
+  const [error, setError] = useState("");
+  const [consentError, setConsentError] = useState("");
+  const update = (field) => (event) => {
+    setError("");
+    setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
+  };
+  const updatePhone = (event) => {
+    setError("");
+    setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
+  };
+  const blockPhoneWhitespace = (event) => {
+    if (/\s/.test(event.key)) event.preventDefault();
+  };
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+  const submit = async (event) => {
+    event.preventDefault();
+    setError("");
+    const phone = normalizeLocalPhone(values.phone);
+    if (values.name.trim().length < 2) return setError(authMessages.invalid_name);
+    if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (values.password.length < 8) return setError(authMessages.invalid_password);
+    if (values.password !== values.confirm) return setError("Пароли не совпадают.");
+    if (!values.consent) return setConsentError("Подтвердите согласие, чтобы создать аккаунт.");
+    try {
+      await onAuthenticate("register", values);
+      onClose();
+      navigate("/account");
+    } catch (authError) {
+      setError(authMessages[authError.message] || "Не удалось продолжить. Попробуйте ещё раз.");
+    }
+  };
+  const leaveModal = (path) => {
+    onClose();
+    navigate(path);
+  };
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="lead-modal registration-modal" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title">
+        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть">
+          <X size={19} />
+        </button>
+        <div className="modal-icon">
+          <LockKey size={25} weight="duotone" />
+        </div>
+        <span>Личный кабинет</span>
+        <h2 id="registration-modal-title">Создайте аккаунт</h2>
+        <p>После регистрации вы перейдёте в кабинет, где сможете заказать отчёт по {car.title}.</p>
+        <form onSubmit={submit}>
+          <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required autoFocus /></label>
+          <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder="+375291234567" maxLength={16} required /></label>
+          <PasswordField label="Пароль" autoComplete="new-password" value={values.password} onChange={update("password")} placeholder="Минимум 8 символов" required />
+          <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required />
+          <ConsentField checked={values.consent} onChange={(consent) => { setValues((current) => ({ ...current, consent })); if (consent) setConsentError(""); }} error={consentError} />
+          {error && <div className="auth-error" role="alert">{error}</div>}
+          <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : "Создать аккаунт"}<ArrowRight size={18} /></button>
+          <p className="auth-help">Уже есть аккаунт? <button type="button" onClick={() => leaveModal("/login")}>Войти</button></p>
+        </form>
+      </section>
+    </div>
   );
 }
 
@@ -3352,7 +3464,7 @@ export function App() {
     ) : orderId ? (
       <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
     ) : detailId ? (
-      <Detail car={cars.find((item) => item.id === detailId)} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} />
+      <Detail car={cars.find((item) => item.id === detailId)} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} user={user} authLoading={authLoading} onAuthenticate={authenticate} authPending={authPending} />
     ) : path === "/how-it-works" ? (
       <HowItWorksPage navigate={navigate} />
     ) : path === "/about" ? (
