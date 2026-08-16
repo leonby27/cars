@@ -7,6 +7,7 @@ import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { COMPANY } from "./company-data.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
+import { OrderContactCard } from "./order-contact.jsx";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
@@ -2900,7 +2901,14 @@ const updateLocalOrder = (userId, orderId, action, values = {}) => {
   const index = orders.findIndex((order) => order.id === orderId);
   if (index < 0) throw new Error("order_not_found");
   const order = { ...orders[index], availabilityStatus:orders[index].availabilityStatus || "decision", updatedAt:new Date().toISOString() };
-  if (action === "request_availability_check" && order.availabilityStatus === "decision") {
+  if (action === "save_order_contact") {
+    order.contactName = String(values.contactName || "").trim().slice(0, 80);
+    order.contactPhone = String(values.contactPhone || "").trim().slice(0, 16);
+    order.contactMethods = Array.isArray(values.contactMethods) ? values.contactMethods.filter((value) => ["phone","viber","telegram"].includes(value)) : [];
+    order.contactSavedAt = order.updatedAt;
+    order.contactConsentAt = order.updatedAt;
+  }
+  else if (action === "request_availability_check" && order.availabilityStatus === "decision") {
     order.availabilityStatus = "requested";
     order.availabilityComment = String(values.comment || "").trim().slice(0, 600);
     order.availabilityRequestedAt = order.updatedAt;
@@ -3300,9 +3308,11 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
         updated = payload.order;
       }
       setOrders((values) => values.map((order) => order.id === updated.id ? updated : order));
-      setExpandedStage(activeOrderStage(updated));
+      if (action !== "save_order_contact") setExpandedStage(activeOrderStage(updated));
+      return true;
     } catch {
       setError("Не удалось сохранить действие. Попробуйте ещё раз.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -3384,6 +3394,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
           <a className="customer-order-card-open" href={`/cars/${encodeURIComponent(order.listingId)}`} target="_blank" rel="noopener noreferrer" aria-label={`Открыть карточку ${order.car.title} в новой вкладке`}><span>Карточка автомобиля</span><ArrowRight size={24} /></a>
         </div>
       </div>
+      <OrderContactCard order={order} user={user} saving={saving} onSave={(values) => applyAction("save_order_contact", values)} />
       <div className="customer-order-stages">
         <OrderStageRow number={1} title="Проверка объявления" description="Уточним у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
           {!availabilityRequested ? (

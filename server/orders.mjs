@@ -2,6 +2,7 @@ import { pool } from "./db.mjs";
 import { getSessionAccount } from "./auth.mjs";
 
 const orderSelect = `SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,
+  o.contact_name,o.contact_phone,o.contact_methods,o.contact_saved_at,o.contact_consent_at,
   o.inspection_status,o.contract_status,o.payment_status,
   o.contract_confirmed_at,o.invoice_requested_at,o.created_at,o.updated_at,
   l.title,l.estimated_total_usd,l.mileage_km,l.city,
@@ -24,6 +25,11 @@ export function rowToCustomerOrder(row) {
     availabilityStatus:row.availability_status,
     availabilityComment:row.availability_comment || "",
     availabilityRequestedAt:row.availability_requested_at,
+    contactName:row.contact_name || "",
+    contactPhone:row.contact_phone || "",
+    contactMethods:Array.isArray(row.contact_methods) ? row.contact_methods : [],
+    contactSavedAt:row.contact_saved_at,
+    contactConsentAt:row.contact_consent_at,
     inspectionStatus:row.inspection_status,
     contractStatus:row.contract_status,
     paymentStatus:row.payment_status,
@@ -97,6 +103,24 @@ const actionUpdates = {
 export async function updateCustomerOrder(request, orderId, action, values = {}) {
   const account = await getSessionAccount(request);
   if (!account) return { error:"unauthorized" };
+  if (action === "save_order_contact") {
+    const contactName = String(values.contactName || "").trim();
+    const phoneDigits = String(values.contactPhone || "").replace(/\D/g, "");
+    const requestedMethods = Array.isArray(values.contactMethods) ? values.contactMethods : [];
+    const contactMethods = [...new Set(requestedMethods)];
+    if (contactName.length < 2 || contactName.length > 80 || phoneDigits.length < 11 || phoneDigits.length > 15) return { error:"invalid_order_contact" };
+    if (!contactMethods.length || contactMethods.length !== requestedMethods.length || contactMethods.some((value) => !["phone","viber","telegram"].includes(value))) return { error:"invalid_contact_methods" };
+    if (values.consent !== true) return { error:"contact_consent_required" };
+    const result = await pool.query(
+      `UPDATE customer_orders
+        SET contact_name=$3,contact_phone=$4,contact_methods=$5,contact_saved_at=now(),contact_consent_at=now(),updated_at=now()
+        WHERE id=$1 AND customer_id=$2
+        RETURNING id`,
+      [orderId,account.id,contactName,`+${phoneDigits}`,contactMethods],
+    );
+    if (!result.rowCount) return { error:"order_not_found" };
+    return { order:await getOrder(account.id, orderId) };
+  }
   if (action === "request_availability_check") {
     const comment = String(values.comment || "").trim();
     if (comment.length > 600) return { error:"invalid_availability_comment" };
