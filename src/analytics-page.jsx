@@ -92,7 +92,7 @@ function ResetAnalyticsModal({ pending, error, onCancel, onConfirm }) {
   );
 }
 
-function Dashboard({ data, days, setDays, reload, logout, loading }) {
+function Dashboard({ data, days, setDays, reload, logout }) {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState("");
@@ -123,7 +123,7 @@ function Dashboard({ data, days, setDays, reload, logout, loading }) {
     <main className="analytics-page page-width">
       <header className="analytics-heading">
         <div><span>Закрытый раздел</span><h1>Аналитика MVP</h1><p>Срез обновлён {formatDate(data.generatedAt, true)}</p></div>
-        <div className="analytics-actions"><div className="analytics-range" aria-label="Период аналитики">{[7,30,90].map((value) => <button key={value} type="button" className={days === value ? "active" : ""} onClick={() => setDays(value)}>{value} дней</button>)}</div><button className="secondary analytics-refresh" type="button" onClick={reload} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button><button className="analytics-reset-button" type="button" onClick={() => { setResetError(""); setResetOpen(true); }}>Обнулить данные</button><button className="analytics-logout" type="button" onClick={logout}>Выйти</button></div>
+        <div className="analytics-actions"><div className="analytics-range" aria-label="Период аналитики">{[7,30,90].map((value) => <button key={value} type="button" className={days === value ? "active" : ""} onClick={() => setDays(value)}>{value} дней</button>)}</div><button className="analytics-reset-button" type="button" onClick={() => { setResetError(""); setResetOpen(true); }}>Обнулить данные</button><button className="analytics-logout" type="button" onClick={logout}>Выйти</button></div>
       </header>
 
       <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}</section>
@@ -187,5 +187,5 @@ export function AnalyticsPage() {
   if (authenticated === false) return <Login onSuccess={load} />;
   if (error && !data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика недоступна</h1><p>{error}</p><button className="primary" type="button" onClick={load}>Повторить</button></section></main>;
   if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
-  return <Dashboard data={data} days={days} setDays={setDays} reload={load} logout={logout} loading={loading} />;
+  return <Dashboard data={data} days={days} setDays={setDays} reload={load} logout={logout} />;
 }
