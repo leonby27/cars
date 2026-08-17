@@ -18,7 +18,7 @@
     "db:schedule": "node scripts/db-schedule.mjs",
     "worker": "node scripts/db-worker.mjs",
     "worker:once": "node scripts/db-worker.mjs --once",
-    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "build": "vite build && node scripts/generate-seo-pages.mjs && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "import:guazi": "node scripts/import-guazi.mjs",
     "import:guazi-global": "node scripts/import-guazi-global.mjs",

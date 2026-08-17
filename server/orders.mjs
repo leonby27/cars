@@ -1,7 +1,7 @@
 import { pool } from "./db.mjs";
 import { getSessionAccount } from "./auth.mjs";
 
-const orderSelect = `SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,
+const orderSelect = `SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,o.availability_confirmed_at,
   o.contact_name,o.contact_phone,o.contact_methods,o.contact_saved_at,o.contact_consent_at,
   o.inspection_status,o.contract_status,o.payment_status,
   o.contract_confirmed_at,o.invoice_requested_at,o.created_at,o.updated_at,
@@ -25,6 +25,7 @@ export function rowToCustomerOrder(row) {
     availabilityStatus:row.availability_status,
     availabilityComment:row.availability_comment || "",
     availabilityRequestedAt:row.availability_requested_at,
+    availabilityConfirmedAt:row.availability_confirmed_at,
     contactName:row.contact_name || "",
     contactPhone:row.contact_phone || "",
     contactMethods:Array.isArray(row.contact_methods) ? row.contact_methods : [],
@@ -83,11 +84,11 @@ export async function createCustomerOrder(request, listingId) {
 
 const actionUpdates = {
   order_inspection:{
-    where:"availability_status='requested' AND inspection_status='decision'",
+    where:"availability_status='confirmed' AND inspection_status='decision'",
     set:"inspection_status='requested'",
   },
   skip_inspection:{
-    where:"availability_status='requested' AND inspection_status='decision'",
+    where:"availability_status='confirmed' AND inspection_status='decision'",
     set:"inspection_status='skipped',contract_status='available'",
   },
   confirm_contract:{

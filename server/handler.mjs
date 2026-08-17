@@ -3,6 +3,7 @@ import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
+import { analyticsCookie, clearAnalyticsCookie, createAnalyticsToken, getAnalyticsDashboard, hasAnalyticsSession, recordAnalyticsEvent, verifyAnalyticsPassword } from "./analytics.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 const json = (response, status, payload, headers = {}) => {
@@ -29,6 +30,24 @@ export async function handleApiRequest(request, response) {
   if (request.method === "OPTIONS") return json(response, 204, null);
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
   try {
+    if (request.method === "POST" && url.pathname === "/api/analytics/events") {
+      const result = await recordAnalyticsEvent(await readJson(request));
+      return result.error ? json(response, 400, result) : json(response, 202, result);
+    }
+    if (request.method === "POST" && url.pathname === "/api/analytics/login") {
+      const body = await readJson(request);
+      const verification = verifyAnalyticsPassword(String(body.password || ""));
+      if (verification.error) return json(response, 503, { error:verification.error });
+      if (!verification.ok) return json(response, 401, { error:"invalid_password" });
+      return json(response, 200, { ok:true }, { "set-cookie":analyticsCookie(createAnalyticsToken(), request) });
+    }
+    if (request.method === "POST" && url.pathname === "/api/analytics/logout") {
+      return json(response, 200, { ok:true }, { "set-cookie":clearAnalyticsCookie(request) });
+    }
+    if (request.method === "GET" && url.pathname === "/api/analytics/dashboard") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("days")));
+    }
     if (request.method === "GET" && url.pathname === "/api/image") {
       let source;
       try { source = new URL(url.searchParams.get("src") || ""); } catch { return json(response, 400, { error:"invalid_image_url" }); }
@@ -152,16 +171,29 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "POST" && url.pathname === "/api/order-drafts") {
       const body = await readJson(request);
-      const name = String(body.name || "").trim();
-      const contact = String(body.contact || "").trim();
+      let name = String(body.name || "").trim();
+      let contact = String(body.contact || "").trim();
       const requestType = String(body.calculation?.requestType || "");
       const preferences = String(body.calculation?.preferences || "").trim();
       const isCatalogSearch = requestType === "catalog_search";
+      const isAvailabilityCheck = requestType === "availability_check";
+      let calculation = body.calculation && typeof body.calculation === "object" && !Array.isArray(body.calculation) ? body.calculation : {};
       if ((!body.listingId && !isCatalogSearch) || !contact) return json(response, 400, { error:"listing_and_contact_required" });
       if (isCatalogSearch && (preferences.length < 10 || preferences.length > 2000)) return json(response, 400, { error:"invalid_preferences" });
+      if (isAvailabilityCheck) {
+        const phoneDigits = contact.replace(/\D/g, "");
+        const requestedMethods = Array.isArray(calculation.contactMethods) ? calculation.contactMethods : [];
+        const contactMethods = [...new Set(requestedMethods)];
+        if (name.length < 2 || name.length > 80) return json(response, 400, { error:"invalid_name" });
+        if (phoneDigits.length < 11 || phoneDigits.length > 15) return json(response, 400, { error:"invalid_phone" });
+        if (!contactMethods.length || contactMethods.length !== requestedMethods.length || contactMethods.some((value) => !["phone","viber","telegram"].includes(value))) return json(response, 400, { error:"invalid_contact_methods" });
+        if (body.consent !== true) return json(response, 400, { error:"contact_consent_required" });
+        contact = `+${phoneDigits}`;
+        calculation = { ...calculation, contactMethods, consentAccepted:true };
+      }
       if (name.length > 120) return json(response, 400, { error:"name_too_long" });
       if (contact.length > 200) return json(response, 400, { error:"contact_too_long" });
-      return json(response, 201, await createOrderDraft({ listingId:body.listingId || null, name:name || null, contact, calculation:body.calculation }));
+      return json(response, 201, await createOrderDraft({ listingId:body.listingId || null, name:name || null, contact, calculation }));
     }
     return json(response, 404, { error:"not_found" });
   } catch (error) {

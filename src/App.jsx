@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -7,7 +7,8 @@ import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { COMPANY } from "./company-data.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
-import { OrderContactModal } from "./order-contact.jsx";
+import { trackEvent } from "./analytics.js";
+import { AnalyticsPage } from "./analytics-page.jsx";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
@@ -160,7 +161,9 @@ const imageSource = (source) => {
   if (!source) return source;
   try {
     const url = new URL(source);
-    return proxiedImageHosts.has(url.hostname) ? `/api/image?src=${encodeURIComponent(url.href)}` : source;
+    // Static preview hosts do not have the image-proxy API; use the original
+    // allowlisted source there so catalog images remain visible.
+    return proxiedImageHosts.has(url.hostname) && import.meta.env.BASE_URL === "/" ? `/api/image?src=${encodeURIComponent(url.href)}` : source;
   } catch {
     return source;
   }
@@ -190,7 +193,10 @@ function normalizeImportedCar(car) {
 
 function useRoute() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const appPath = (pathname) => (basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) || "/" : pathname);
+  const appPath = (pathname) => {
+    const unbased = basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) || "/" : pathname;
+    return unbased.length > 1 ? unbased.replace(/\/+$/, "") : unbased;
+  };
   const [route, setRoute] = useState({
     path: appPath(window.location.pathname),
     restoreY: null,
@@ -271,28 +277,111 @@ function useRoute() {
   return { path: route.path, navigate, backToCatalog };
 }
 
+const appHref = (path) => `${import.meta.env.BASE_URL.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+
+function AppLink({ href, navigate, onClick, children, ...props }) {
+  const handleClick = (event) => {
+    onClick?.(event);
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate(href);
+  };
+  return <a href={appHref(href)} onClick={handleClick} {...props}>{children}</a>;
+}
+
+const routeSeo = {
+  "/": ["Автомобили из Китая в Беларусь — evcars.by", "Автомобили с пробегом из Китая с проверкой, расчётом стоимости и доставкой в Минск и Беларусь."],
+  "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | evcars.by", "Каталог автомобилей с пробегом из Китая: электромобили и гибриды, характеристики, пробег и ориентировочная стоимость доставки в Беларусь."],
+  "/how-it-works": ["Как купить автомобиль из Китая в Беларуси | evcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
+  "/about": ["О сервисе доставки автомобилей из Китая | evcars.by", "evcars.by помогает выбрать, проверить, выкупить и доставить автомобиль с пробегом из Китая в Беларусь."],
+  "/delivered": ["Доставленные автомобили из Китая — примеры и цены | evcars.by", "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска."],
+  "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | evcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
+  "/guarantees": ["Гарантии при покупке автомобиля из Китая | evcars.by", "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает evcars.by и какие риски обсуждаются до договора."],
+  "/faq": ["Вопросы о покупке и доставке авто из Китая | evcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
+  "/contacts": ["Контакты evcars.by — автомобили из Китая в Минске", "Контакты сервиса evcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая."],
+  "/privacy": ["Политика конфиденциальности | evcars.by", "Политика обработки и защиты персональных данных пользователей сайта evcars.by."],
+  "/terms": ["Условия использования сайта | evcars.by", "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая."],
+};
+
+const privateRouteSeo = {
+  "/favorites": ["Избранные автомобили | evcars.by", "Сохранённые автомобили в вашем личном кабинете evcars.by."],
+  "/login": ["Вход в личный кабинет | evcars.by", "Вход в личный кабинет клиента evcars.by."],
+  "/register": ["Регистрация личного кабинета | evcars.by", "Создание личного кабинета клиента evcars.by."],
+  "/account": ["Личный кабинет | evcars.by", "Заказы, избранные автомобили и личные данные клиента evcars.by."],
+};
+
+function ClientSeo({ path, car, landing }) {
+  useEffect(() => {
+    const privatePage = ["/favorites", "/login", "/register", "/account", "/analytics"].includes(path) || path.startsWith("/orders/");
+    const detailTitle = car?.title || (car ? `${car.brand} ${car.model} ${car.year}` : null);
+    const landingSeo = landing
+      ? landing.model
+        ? [`${landing.brand} ${landing.model} с пробегом из Китая — цены | evcars.by`, `${landing.count} предложений ${landing.brand} ${landing.model} с пробегом: характеристики, цены и предварительный расчёт доставки до Минска.`]
+        : [`Автомобили ${landing.brand} из Китая — каталог и цены | evcars.by`, `${landing.count} автомобилей ${landing.brand} из Китая: модели, пробег, характеристики и ориентировочная стоимость доставки в Беларусь.`]
+      : null;
+    const [title, description] = detailTitle
+      ? [`${detailTitle}, ${number(car.mileage)} км — цена до Минска | evcars.by`, `${detailTitle}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены до Минска.`]
+      : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | evcars.by", "Оформление и статус заказа автомобиля в личном кабинете evcars.by."] : null) || routeSeo[path] || ["Страница не найдена | evcars.by", "Запрошенная страница не найдена."];
+    const canonicalRoot = document.querySelector('link[rel="canonical"]')?.href || `${window.location.origin}${import.meta.env.BASE_URL}`;
+    const canonicalBase = new URL(canonicalRoot);
+    canonicalBase.pathname = "/";
+    canonicalBase.search = "";
+    canonicalBase.hash = "";
+    const canonicalPath = detailTitle ? `/cars/${encodeURIComponent(car.id)}/` : path === "/" ? "/" : `${path}/`;
+    const canonical = new URL(canonicalPath, canonicalBase).href;
+    const indexingEnabled = document.documentElement.dataset.seoIndexing === "true";
+    const indexable = indexingEnabled && !privatePage && Boolean(routeSeo[path] || detailTitle || landingSeo);
+    const ensureMeta = (selector, attribute, value) => {
+      let element = document.head.querySelector(selector);
+      if (!element) {
+        element = document.createElement("meta");
+        const [key, name] = selector.includes("property=") ? ["property", selector.match(/property="([^"]+)/)?.[1]] : ["name", selector.match(/name="([^"]+)/)?.[1]];
+        element.setAttribute(key, name);
+        document.head.appendChild(element);
+      }
+      element.setAttribute(attribute, value);
+    };
+    document.title = title;
+    ensureMeta('meta[name="description"]', "content", description);
+    ensureMeta('meta[name="robots"]', "content", indexable ? "index, follow, max-image-preview:large" : "noindex, nofollow, noarchive");
+    ensureMeta('meta[property="og:title"]', "content", title);
+    ensureMeta('meta[property="og:description"]', "content", description);
+    ensureMeta('meta[property="og:url"]', "content", canonical);
+    ensureMeta('meta[name="twitter:title"]', "content", title);
+    ensureMeta('meta[name="twitter:description"]', "content", description);
+    let canonicalLink = document.head.querySelector('link[rel="canonical"]');
+    if (!canonicalLink) {
+      canonicalLink = document.createElement("link");
+      canonicalLink.rel = "canonical";
+      document.head.appendChild(canonicalLink);
+    }
+    canonicalLink.href = canonical;
+  }, [path, car, landing]);
+  return null;
+}
+
 function Header({ navigate, favoritesCount, path, currency, setCurrency, user, theme, toggleTheme }) {
-  const catalogActive = path === "/catalog" || path.startsWith("/cars/") || path.startsWith("/orders/");
+  const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
   return (
     <header className="site-header">
       <div className="header-inner">
-        <button className="wordmark" onClick={() => navigate("/")} aria-label="На главную">
+        <AppLink className="wordmark" href="/" navigate={navigate} aria-label="На главную">
           ev<span>cars</span>
           <small>.by</small>
-        </button>
+        </AppLink>
         <nav className="desktop-nav" aria-label="Основная навигация">
-          <button className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined} onClick={() => navigate("/catalog")}>
+          <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>
             Автомобили
-          </button>
-          <button className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined} onClick={() => navigate("/how-it-works")}>
+          </AppLink>
+          <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>
             Как это работает
-          </button>
-          <button className={path === "/about" ? "active" : ""} aria-current={path === "/about" ? "page" : undefined} onClick={() => navigate("/about")}>
+          </AppLink>
+          <AppLink href="/about" navigate={navigate} className={path === "/about" ? "active" : ""} aria-current={path === "/about" ? "page" : undefined}>
             О компании
-          </button>
-          <button className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined} onClick={() => navigate("/contacts")}>
+          </AppLink>
+          <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>
             Контакты
-          </button>
+          </AppLink>
         </nav>
         <div className="header-actions">
           <div className="currency-switch" role="group" aria-label="Валюта цен">
@@ -503,6 +592,7 @@ function QuickSearch({ navigate, cars, apiMode }) {
   const mileageCap = Number(mileage.replace(/\D/g, ""));
   const priceCap = Number(priceLimit.replace(/\D/g, ""));
   const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && (year === ANY_YEAR || matchesMinimumYear(car, year)) && (mileage === ANY_MILEAGE || car.mileage <= mileageCap) && (priceLimit === ANY_PRICE || estimateLandedCost(car).totalUsd <= priceCap) && matchesAdvancedFilters(car, { drive, owners, history })).length;
+  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || model !== "Все модели" || bodyType !== "Все кузова" || year !== ANY_YEAR || mileage !== ANY_MILEAGE || priceLimit !== ANY_PRICE || drive !== "Любой привод" || owners !== "Любое количество" || history !== "Любая история";
   useEffect(() => {
     if (!apiMode) return;
     const controller = new AbortController();
@@ -557,7 +647,7 @@ function QuickSearch({ navigate, cars, apiMode }) {
   const submit = (
     <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&body=${encodeURIComponent(bodyType)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&history=${encodeURIComponent(history)}`)}>
       <MagnifyingGlass size={20} weight="bold" />
-      Показать {apiMode ? remoteCount : resultCount} авто
+      Показать {hasActiveFilters ? (apiMode ? remoteCount : resultCount) : "2500+"} авто
     </button>
   );
   return (
@@ -640,7 +730,7 @@ function HoverImagePreview({ car, className }) {
   );
 }
 
-function FeaturedCard({ car, onClick }) {
+function FeaturedCard({ car, onClick, navigate }) {
   const currency = useCurrency();
   const price = estimateLandedCost(car);
   const listingAge = formatListingAge(getSourceListedAt(car));
@@ -648,7 +738,7 @@ function FeaturedCard({ car, onClick }) {
     <article className="featured-card" onClick={onClick} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}>
       <HoverImagePreview car={car} className="featured-image" />
       <div className="featured-body">
-        <h3>{car.title}</h3>
+        <h3><AppLink href={`/cars/${car.id}`} navigate={navigate} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
         <p>
           {number(car.mileage)} км · {car.type} · {car.drive}
         </p>
@@ -663,6 +753,91 @@ function FeaturedCard({ car, onClick }) {
         </div>
       </div>
     </article>
+  );
+}
+
+function similarCarScore(current, candidate) {
+  const currentPrice = Number(current.chinaPrice) || 0;
+  const candidatePrice = Number(candidate.chinaPrice) || 0;
+  const priceDifference = currentPrice && candidatePrice ? Math.abs(currentPrice - candidatePrice) / currentPrice : 1;
+  const yearDifference = Math.abs((Number(current.year) || 0) - (Number(candidate.year) || 0));
+  return (
+    (candidate.model === current.model ? 80 : 0) +
+    (candidate.brand === current.brand ? 42 : 0) +
+    (candidate.bodyType === current.bodyType ? 18 : 0) +
+    (candidate.type === current.type ? 14 : 0) +
+    (candidate.drive === current.drive ? 6 : 0) +
+    Math.max(0, 12 - yearDifference * 4) +
+    Math.max(0, 18 - priceDifference * 36)
+  );
+}
+
+function SimilarCarsSlider({ car, cars, navigate }) {
+  const trackRef = useRef(null);
+  const [controls, setControls] = useState({ previous: false, next: true });
+  const similarCars = useMemo(
+    () =>
+      cars
+        .filter((candidate) => candidate.id !== car.id)
+        .map((candidate) => ({ candidate, score: similarCarScore(car, candidate) }))
+        .sort((left, right) => right.score - left.score || String(left.candidate.id).localeCompare(String(right.candidate.id)))
+        .slice(0, 12)
+        .map(({ candidate }) => candidate),
+    [car, cars],
+  );
+
+  const updateControls = () => {
+    const track = trackRef.current;
+    if (!track) return;
+    const maximum = Math.max(0, track.scrollWidth - track.clientWidth);
+    const nextControls = {
+      previous: track.scrollLeft > 4,
+      next: track.scrollLeft < maximum - 4,
+    };
+    setControls((current) =>
+      current.previous === nextControls.previous && current.next === nextControls.next ? current : nextControls,
+    );
+  };
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return undefined;
+    track.scrollTo({ left: 0, behavior: "auto" });
+    const frame = window.requestAnimationFrame(updateControls);
+    window.addEventListener("resize", updateControls);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateControls);
+    };
+  }, [car.id, similarCars.length]);
+
+  if (!similarCars.length) return null;
+
+  const scroll = (direction) => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.scrollBy({ left: direction * track.clientWidth * 0.88, behavior: "smooth" });
+  };
+
+  return (
+    <section className="similar-cars" aria-labelledby="similar-cars-title">
+      <div className="similar-cars-heading">
+        <h2 id="similar-cars-title">Похожие автомобили</h2>
+        <div className="similar-cars-controls" aria-label="Навигация по похожим автомобилям">
+          <button type="button" onClick={() => scroll(-1)} disabled={!controls.previous} aria-label="Предыдущие автомобили">
+            <ArrowLeft size={20} weight="bold" />
+          </button>
+          <button type="button" onClick={() => scroll(1)} disabled={!controls.next} aria-label="Следующие автомобили">
+            <ArrowRight size={20} weight="bold" />
+          </button>
+        </div>
+      </div>
+      <div className="similar-cars-track" ref={trackRef} onScroll={updateControls}>
+        {similarCars.map((candidate) => (
+          <FeaturedCard key={candidate.id} car={candidate} navigate={navigate} onClick={() => navigate(`/cars/${candidate.id}`)} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -725,18 +900,18 @@ function PopularBrands({ navigate, cars, apiMode }) {
     <section className="popular-brands page-width" aria-labelledby="popular-brands-title">
       <div className="popular-brands-heading">
         <h2 id="popular-brands-title">Популярные марки</h2>
-        <button onClick={() => navigate("/catalog")}>
+        <AppLink className="popular-brands-all" href="/catalog" navigate={navigate}>
           Все предложения <CaretRight size={20} weight="bold" />
-        </button>
+        </AppLink>
       </div>
       <div className="popular-brands-grid">
         {brands.map(({ brand }) => (
-          <button className="brand-link" key={brand} onClick={() => navigate(`/catalog?brand=${encodeURIComponent(brand)}`)} aria-label={`Перейти к предложениям ${brand}`}>
+          <AppLink className="brand-link" key={brand} href={`/catalog?brand=${encodeURIComponent(brand)}`} navigate={navigate} aria-label={`Перейти к предложениям ${brand}`}>
             <span className="brand-logo" aria-hidden="true">
               <img src={`${import.meta.env.BASE_URL}brands/${brandLogos[brand]}`} alt="" />
             </span>
             <span>{brand}</span>
-          </button>
+          </AppLink>
         ))}
       </div>
     </section>
@@ -840,8 +1015,8 @@ function Home({ navigate, cars, apiMode }) {
           <Sparkle size={16} weight="fill" />
           Автомобили из Китая под заказ
         </div>
-        <h1>Авто из Китая с пробегом продаются здесь</h1>
-        <p>Платформа для поиска Б/У авто из Китая. Тысячи актуальных объявлений</p>
+        <h1>Автомобили с пробегом из Китая с доставкой в Беларусь</h1>
+        <p>Актуальные объявления, проверка перед покупкой и предварительный расчёт стоимости до Минска</p>
         <QuickSearch navigate={navigate} cars={cars} apiMode={apiMode} />
       </section>
       <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />
@@ -879,13 +1054,13 @@ function Home({ navigate, cars, apiMode }) {
           <div>
             <h2>Свежие реальные предложения</h2>
           </div>
-          <button onClick={() => navigate("/catalog")}>
+          <AppLink className="section-heading-link" href="/catalog" navigate={navigate}>
             Все автомобили <ArrowRight size={18} />
-          </button>
+          </AppLink>
         </div>
         <div className="featured-grid">
           {feedCars.map(({ car, key }) => (
-            <FeaturedCard key={key} car={car} onClick={() => navigate(`/cars/${car.id}`)} />
+            <FeaturedCard key={key} car={car} navigate={navigate} onClick={() => navigate(`/cars/${car.id}`)} />
           ))}
         </div>
         <button type="button" className="load-more featured-load-more" onClick={loadMore}>
@@ -967,7 +1142,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen }) {
       <div className="car-row-info">
         <div className="row-title">
           <div>
-            <h2>{car.title}</h2>
+            <h2><AppLink href={`/cars/${car.id}`} navigate={navigate} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
           </div>
           <div className="row-actions">
             <button
@@ -1290,7 +1465,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
         Автомобили из Китая
       </div>
       <div className="catalog-heading">
-        <h1>Автомобили из Китая</h1>
+        <h1>Автомобили с пробегом из Китая</h1>
       </div>
       <FilterPanel filters={filters} setFilters={updateFilters} resultCount={resultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} availability={availability} />
       <div className="catalog-layout">
@@ -1702,6 +1877,7 @@ function CustomSearchModal({ filters, onClose }) {
         }),
       });
       if (!response.ok) throw new Error("save unavailable");
+      trackEvent("custom_search_submitted", { properties:{ phone:`+${normalizedPhone}` } });
       setSaved(true);
     } catch {
       setError("Не удалось отправить заявку. Проверьте подключение и попробуйте ещё раз.");
@@ -1752,15 +1928,13 @@ function CustomSearchModal({ filters, onClose }) {
   );
 }
 
-function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite, user, authLoading, onAuthenticate, authPending }) {
+function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }) {
   const currency = useCurrency();
-  const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [availabilityUnavailableOpen, setAvailabilityUnavailableOpen] = useState(false);
+  useEffect(() => {
+    if (car) trackEvent("vehicle_view", { listingId:car.id, listingTitle:car.title });
+  }, [car?.id]);
   if (!car) return <NotFound navigate={navigate} />;
-  const beginOrder = () => {
-    window.localStorage.setItem(pendingOrderKey, car.id);
-    if (user) navigate("/account");
-    else setRegistrationOpen(true);
-  };
   const price = estimateLandedCost(car);
   const specs = [
     [CalendarBlank, "Год", car.year],
@@ -1902,13 +2076,14 @@ function Detail({ car, navigate, backToCatalog, favorite, toggleFavorite, user, 
                 </div>
               </div>
             </details>
-            <button className="primary report-order-cta" disabled={authLoading} onClick={beginOrder}>
-              Заказать отчёт о состоянии авто
+            <button className="primary report-order-cta" onClick={() => { trackEvent("availability_click", { listingId:car.id, listingTitle:car.title }); setAvailabilityUnavailableOpen(true); }}>
+              Уточнить актуальность авто
             </button>
           </aside>
         </div>
       </div>
-      {registrationOpen && <RegistrationModal car={car} navigate={navigate} onAuthenticate={onAuthenticate} pending={authPending} onClose={() => setRegistrationOpen(false)} />}
+      <SimilarCarsSlider car={car} cars={cars} navigate={navigate} />
+      {availabilityUnavailableOpen && <AvailabilityUnavailableModal onClose={() => setAvailabilityUnavailableOpen(false)} />}
     </main>
   );
 }
@@ -2729,10 +2904,6 @@ function ContactsPage({ navigate }) {
       </section>
 
       <section className="contact-options page-width" aria-label="Способы связи">
-        <a href={COMPANY.phoneHref}>
-          <Phone size={24} weight="duotone" />
-          <span><small>Позвонить</small><b>{COMPANY.phone}</b><em>Будни с 09:00 до 19:00</em></span>
-        </a>
         <a href={COMPANY.telegramUrl} target="_blank" rel="noreferrer">
           <TelegramLogo size={24} weight="duotone" />
           <span><small>Написать в Telegram</small><b>{COMPANY.telegram}</b><em>Обычно отвечаем за 10 минут</em></span>
@@ -2754,7 +2925,6 @@ function ContactsPage({ navigate }) {
             <div><dt>Юридическое лицо</dt><dd>{COMPANY.legalName}</dd></div>
             <div><dt>УНП</dt><dd>{COMPANY.unp}</dd></div>
             <div><dt>Юридический адрес</dt><dd>{COMPANY.address}</dd></div>
-            <div><dt>Расчётный счёт</dt><dd>{COMPANY.iban}</dd></div>
             <div><dt>Банк</dt><dd>{COMPANY.bank}</dd></div>
             <div><dt>BIC</dt><dd>{COMPANY.bic}</dd></div>
           </dl>
@@ -2810,20 +2980,20 @@ function SiteFooter({ navigate }) {
     <footer className="site-footer">
       <div className="page-width footer-main">
         <div className="footer-brand">
-          <button className="wordmark footer-wordmark" onClick={() => navigate("/")} aria-label="На главную">ev<span>cars</span><small>.by</small></button>
+          <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="На главную">ev<span>cars</span><small>.by</small></AppLink>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
           <div className="footer-socials">
             <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramBrandIcon /></a>
             <a className="instagram-social-link" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramBrandIcon /></a>
           </div>
         </div>
-        <div className="footer-column"><b>Компания</b><button onClick={() => navigate("/about")}>О компании</button><button onClick={() => navigate("/delivered")}>Доставленные авто</button><button onClick={() => navigate("/contacts")}>Контакты и офис</button><button onClick={() => navigate("/contacts")}>Реквизиты</button></div>
-        <div className="footer-column"><b>Покупателю</b><button onClick={() => navigate("/catalog")}>Автомобили</button><button onClick={() => navigate("/how-it-works")}>Как это работает</button><button onClick={() => navigate("/payment-and-contract")}>Оплата и договор</button><button onClick={() => navigate("/guarantees")}>Гарантии</button><button onClick={() => navigate("/faq")}>Вопросы и ответы</button></div>
-        <div className="footer-column footer-contacts"><b>Связаться</b><a href={COMPANY.phoneHref}>{COMPANY.phone}</a><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><span>{COMPANY.address}</span></div>
+        <div className="footer-column"><b>Компания</b><AppLink href="/about" navigate={navigate}>О компании</AppLink><AppLink href="/delivered" navigate={navigate}>Доставленные авто</AppLink><AppLink href="/contacts" navigate={navigate}>Контакты и офис</AppLink><AppLink href="/contacts" navigate={navigate}>Реквизиты</AppLink></div>
+        <div className="footer-column"><b>Покупателю</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>Как это работает</AppLink><AppLink href="/payment-and-contract" navigate={navigate}>Оплата и договор</AppLink><AppLink href="/guarantees" navigate={navigate}>Гарантии</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
+        <div className="footer-column footer-contacts"><b>Связаться</b><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><span>{COMPANY.address}</span></div>
       </div>
       <div className="page-width footer-bottom">
         <span>© 2026 {COMPANY.legalName} · УНП {COMPANY.unp}</span>
-        <div><button onClick={() => navigate("/privacy")}>Политика конфиденциальности</button><button onClick={() => navigate("/terms")}>Условия использования</button></div>
+        <div><AppLink href="/privacy" navigate={navigate}>Политика конфиденциальности</AppLink><AppLink href="/terms" navigate={navigate}>Условия использования</AppLink></div>
       </div>
     </footer>
   );
@@ -2923,8 +3093,8 @@ const updateLocalOrder = (userId, orderId, action, values = {}) => {
     order.availabilityComment = String(values.comment || "").trim().slice(0, 600);
     order.availabilityRequestedAt = order.updatedAt;
   }
-  else if (action === "order_inspection" && order.availabilityStatus === "requested" && order.inspectionStatus === "decision") order.inspectionStatus = "requested";
-  else if (action === "skip_inspection" && order.inspectionStatus === "decision") { order.inspectionStatus = "skipped"; order.contractStatus = "available"; }
+  else if (action === "order_inspection" && order.availabilityStatus === "confirmed" && order.inspectionStatus === "decision") order.inspectionStatus = "requested";
+  else if (action === "skip_inspection" && order.availabilityStatus === "confirmed" && order.inspectionStatus === "decision") { order.inspectionStatus = "skipped"; order.contractStatus = "available"; }
   else if (action === "confirm_contract" && order.contractStatus === "available") { order.contractStatus = "confirmed"; order.paymentStatus = "available"; order.contractConfirmedAt = order.updatedAt; }
   else if (action === "request_invoice" && order.paymentStatus === "available") { order.paymentStatus = "invoice_requested"; order.invoiceRequestedAt = order.updatedAt; }
   else throw new Error("order_action_unavailable");
@@ -3066,21 +3236,7 @@ function PasswordField({ label, value, onChange, autoComplete, placeholder = "",
   );
 }
 
-function RegistrationModal({ car, navigate, onAuthenticate, pending, onClose }) {
-  const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:false });
-  const [error, setError] = useState("");
-  const [consentError, setConsentError] = useState("");
-  const update = (field) => (event) => {
-    setError("");
-    setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
-  };
-  const updatePhone = (event) => {
-    setError("");
-    setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
-  };
-  const blockPhoneWhitespace = (event) => {
-    if (/\s/.test(event.key)) event.preventDefault();
-  };
+function AvailabilityUnavailableModal({ onClose }) {
   useEffect(() => {
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -3092,49 +3248,18 @@ function RegistrationModal({ car, navigate, onAuthenticate, pending, onClose }) 
       document.body.style.overflow = "";
     };
   }, [onClose]);
-  const submit = async (event) => {
-    event.preventDefault();
-    setError("");
-    const phone = normalizeLocalPhone(values.phone);
-    if (values.name.trim().length < 2) return setError(authMessages.invalid_name);
-    if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
-    if (values.password.length < 8) return setError(authMessages.invalid_password);
-    if (values.password !== values.confirm) return setError("Пароли не совпадают.");
-    if (!values.consent) return setConsentError("Подтвердите согласие, чтобы создать аккаунт.");
-    try {
-      await onAuthenticate("register", values);
-      onClose();
-      navigate("/account");
-    } catch (authError) {
-      setError(authMessages[authError.message] || "Не удалось продолжить. Попробуйте ещё раз.");
-    }
-  };
-  const leaveModal = (path) => {
-    onClose();
-    navigate(path);
-  };
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="lead-modal registration-modal" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title">
+      <section className="lead-modal availability-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="availability-unavailable-title" aria-describedby="availability-unavailable-description">
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть">
           <X size={19} />
         </button>
-        <div className="modal-icon">
-          <LockKey size={25} weight="duotone" />
+        <div className="availability-unavailable-icon" aria-hidden="true">
+          <CarProfile size={30} weight="duotone" />
         </div>
-        <span>Личный кабинет</span>
-        <h2 id="registration-modal-title">Создайте аккаунт</h2>
-        <p>После регистрации вы перейдёте в кабинет, где сможете заказать отчёт по {car.title}.</p>
-        <form onSubmit={submit}>
-          <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required autoFocus /></label>
-          <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder="+375291234567" maxLength={16} required /></label>
-          <PasswordField label="Пароль" autoComplete="new-password" value={values.password} onChange={update("password")} placeholder="Минимум 8 символов" required />
-          <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required />
-          <ConsentField checked={values.consent} onChange={(consent) => { setValues((current) => ({ ...current, consent })); if (consent) setConsentError(""); }} error={consentError} />
-          {error && <div className="auth-error" role="alert">{error}</div>}
-          <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : "Создать аккаунт"}<ArrowRight size={18} /></button>
-          <p className="auth-help">Уже есть аккаунт? <button type="button" onClick={() => leaveModal("/login")}>Войти</button></p>
-        </form>
+        <h2 id="availability-unavailable-title">Автомобиль временно недоступен</h2>
+        <p id="availability-unavailable-description">Сейчас мы не можем подтвердить наличие этого автомобиля. Попробуйте вернуться к объявлению позже или выберите похожий вариант в каталоге.</p>
+        <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
       </section>
     </div>
   );
@@ -3198,7 +3323,7 @@ function AuthPage({ mode, navigate, onAuthenticate, pending }) {
 }
 
 const activeOrderStage = (order) => {
-  if ((order.availabilityStatus || "decision") === "decision") return 1;
+  if (!["confirmed"].includes(order.availabilityStatus || "decision") && order.inspectionStatus === "decision") return 1;
   if (order.contractStatus === "locked") return 2;
   if (order.paymentStatus === "locked") return 3;
   return 4;
@@ -3257,7 +3382,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   const [removalOpen, setRemovalOpen] = useState(false);
   const [removalError, setRemovalError] = useState("");
   const [availabilityComment, setAvailabilityComment] = useState("");
-  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [availabilityUnavailableOpen, setAvailabilityUnavailableOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -3342,14 +3467,6 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
     }
   };
 
-  const submitAvailabilityRequest = async (contactValues) => {
-    const contactSaved = await applyAction("save_order_contact", contactValues);
-    if (!contactSaved) return false;
-    const requestSaved = await applyAction("request_availability_check", { comment:availabilityComment.trim() });
-    if (requestSaved) setContactModalOpen(false);
-    return requestSaved;
-  };
-
   const removeOrder = async () => {
     const current = orders[0];
     if (!current || saving) return;
@@ -3394,9 +3511,11 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
     </section>
   );
 
-  const availabilityRequested = (order.availabilityStatus || "decision") === "requested";
+  const availabilityStatus = order.availabilityStatus || "decision";
+  const availabilityRequested = availabilityStatus !== "decision";
+  const availabilityConfirmed = availabilityStatus === "confirmed";
   const inspectionDone = order.inspectionStatus === "skipped";
-  const inspectionUnlocked = availabilityRequested;
+  const inspectionUnlocked = availabilityConfirmed || order.inspectionStatus !== "decision";
   const contractUnlocked = order.contractStatus !== "locked";
   const contractDone = order.contractStatus === "confirmed";
   const paymentUnlocked = order.paymentStatus !== "locked";
@@ -3434,7 +3553,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
       <div className="customer-order-stages">
         <OrderStageRow number={1} title="Проверка объявления" description="Уточним у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
           {!availabilityRequested ? (
-            <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); setContactModalOpen(true); }}>
+            <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); setAvailabilityUnavailableOpen(true); }}>
               <p>Перед осмотром свяжемся с продавцом и подтвердим:</p>
               <ul className="availability-check-list">
                 <li><CheckCircle size={20} weight="fill" /> автомобиль ещё в продаже;</li>
@@ -3450,7 +3569,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
             </form>
           ) : (
             <div className="availability-requested">
-              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос отправлен.</b><span>{responseText}</span></p></div>
+              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>{availabilityConfirmed ? "Автомобиль актуален." : "Запрос отправлен."}</b><span>{availabilityConfirmed ? "Проверка завершена — теперь можно выбрать осмотр." : `Проверим объявление и сообщим результат. ${responseText}`}</span></p></div>
               {order.availabilityComment ? <p><b>Ваш комментарий:</b> {order.availabilityComment}</p> : null}
             </div>
           )}
@@ -3481,7 +3600,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
       {removalOpen && <OrderRemovalModal carTitle={order.car.title} orderNumber={order.orderNumber} saving={saving} error={removalError} onCancel={() => { setRemovalOpen(false); setRemovalError(""); }} onConfirm={removeOrder} />}
-      {contactModalOpen && <OrderContactModal order={order} user={user} saving={saving} onSubmit={submitAvailabilityRequest} onClose={() => setContactModalOpen(false)} />}
+      {availabilityUnavailableOpen && <AvailabilityUnavailableModal onClose={() => setAvailabilityUnavailableOpen(false)} />}
     </section>
   );
 }
@@ -3661,16 +3780,20 @@ function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navig
 async function loadStaticCatalog() {
   if (typeof DecompressionStream !== "undefined") {
     try {
-      const response = await fetch(`${import.meta.env.BASE_URL}data/cars.json.gz`, { cache: "no-store" });
+      const response = await fetch(`${import.meta.env.BASE_URL}data/catalog.json.gz`);
       if (!response.ok || !response.body) throw new Error("compressed import unavailable");
       const stream = response.body.pipeThrough(new DecompressionStream("gzip"));
       return JSON.parse(await new Response(stream).text());
     } catch {}
   }
-  const response = await fetch(`${import.meta.env.BASE_URL}data/cars.json`, {
-    cache: "no-store",
-  });
+  const response = await fetch(`${import.meta.env.BASE_URL}data/catalog.json`);
   if (!response.ok) throw new Error("import unavailable");
+  return response.json();
+}
+
+async function loadStaticCar(id, signal) {
+  const response = await fetch(`${import.meta.env.BASE_URL}data/cars/${encodeURIComponent(id)}.json`, { signal });
+  if (!response.ok) throw new Error("car unavailable");
   return response.json();
 }
 
@@ -3697,6 +3820,9 @@ export function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authPending, setAuthPending] = useState(false);
   const [authBackend, setAuthBackend] = useState("server");
+  useEffect(() => {
+    if (path !== "/analytics") trackEvent("page_view");
+  }, [path]);
   useEffect(() => {
     window.localStorage.setItem("navostok-currency", currency);
   }, [currency]);
@@ -3782,8 +3908,15 @@ export function App() {
         try {
           const payload = await loadStaticCatalog();
           if (!payload.cars?.length) throw new Error("empty import");
+          let initialCars = payload.cars;
+          if (targetId) {
+            try {
+              const detailCar = await loadStaticCar(targetId);
+              initialCars = initialCars.map((car) => (car.id === targetId ? detailCar : car));
+            } catch {}
+          }
           if (!cancelled) {
-            setCars(payload.cars.map(normalizeImportedCar));
+            setCars(initialCars.map(normalizeImportedCar));
             setApiMode(false);
           }
         } catch {
@@ -3802,26 +3935,40 @@ export function App() {
     };
   }, []);
   useEffect(() => {
-    if (!apiMode || !targetId || cars.some((item) => item.id === targetId)) return;
+    if (loading || !targetId) {
+      if (!targetId) setRouteLoading(false);
+      return;
+    }
+    const targetCar = cars.find((item) => item.id === targetId);
+    const needsApiDetail = apiMode && !targetCar;
+    const needsStaticDetail = !apiMode && (!targetCar || targetCar._summary);
+    if (!needsApiDetail && !needsStaticDetail) return;
     const controller = new AbortController();
     setRouteLoading(true);
-    fetch(`/api/cars/${encodeURIComponent(targetId)}`, {
-      signal: controller.signal,
-    })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("not found"))))
-      .then((car) => setCars((current) => [...current, normalizeImportedCar(car)]))
+    const request = apiMode
+      ? fetch(`/api/cars/${encodeURIComponent(targetId)}`, { signal:controller.signal }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("not found"))))
+      : loadStaticCar(targetId, controller.signal);
+    request
+      .then((car) => setCars((current) => {
+        const normalized = normalizeImportedCar(car);
+        return current.some((item) => item.id === car.id) ? current.map((item) => (item.id === car.id ? normalized : item)) : [...current, normalized];
+      }))
       .catch(() => {})
       .finally(() => {
         if (!controller.signal.aborted) setRouteLoading(false);
       });
     return () => controller.abort();
-  }, [apiMode, targetId, cars]);
+  }, [apiMode, targetId, cars, loading]);
   const toggleFavorite = (id) => {
     const previous = new Set(favorites);
     const next = new Set(favorites);
     const adding = !next.has(id);
     adding ? next.add(id) : next.delete(id);
     setFavorites(next);
+    if (adding) {
+      const car = cars.find((item) => item.id === id);
+      trackEvent("favorite_added", { listingId:id, listingTitle:car?.title });
+    }
     if (!user) {
       storeFavorites(guestFavoritesKey, next);
       return;
@@ -3844,10 +3991,14 @@ export function App() {
   };
   const authenticate = async (mode, values) => {
     setAuthPending(true);
+    const complete = (authenticatedUser, source) => {
+      setUser(authenticatedUser);
+      if (mode === "register") trackEvent("registration_completed", { properties:{ name:authenticatedUser.name, phone:formatAccountPhone(authenticatedUser.phone), source } });
+    };
     try {
       if (authBackend === "local") {
         const localUser = await localAuthenticate(mode, values);
-        setUser(localUser);
+        complete(localUser, "local");
         return;
       }
       let response;
@@ -3856,18 +4007,18 @@ export function App() {
       } catch {
         setAuthBackend("local");
         const localUser = await localAuthenticate(mode, values);
-        setUser(localUser);
+        complete(localUser, "local");
         return;
       }
       if ([404, 502, 503].includes(response.status)) {
         setAuthBackend("local");
         const localUser = await localAuthenticate(mode, values);
-        setUser(localUser);
+        complete(localUser, "local");
         return;
       }
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "auth_failed");
-      setUser(payload.user);
+      complete(payload.user, "server");
     } finally {
       setAuthPending(false);
     }
@@ -3954,7 +4105,9 @@ export function App() {
     }
   };
   const page =
-    loading || routeLoading ? (
+    path === "/analytics" ? (
+      <AnalyticsPage />
+    ) : loading || routeLoading ? (
       <main className="simple-page page-width">
         <span>Guazi</span>
         <h1>Загружаем реальные объявления…</h1>
@@ -3978,7 +4131,7 @@ export function App() {
     ) : orderId ? (
       <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
     ) : detailId ? (
-      <Detail car={cars.find((item) => item.id === detailId)} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} user={user} authLoading={authLoading} onAuthenticate={authenticate} authPending={authPending} />
+      <Detail car={cars.find((item) => item.id === detailId)} cars={cars} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} />
     ) : path === "/how-it-works" ? (
       <HowItWorksPage navigate={navigate} />
     ) : path === "/about" ? (
@@ -4002,6 +4155,7 @@ export function App() {
     );
   return (
     <CurrencyContext.Provider value={currency}>
+      <ClientSeo path={path} car={detailId ? cars.find((item) => item.id === detailId) : null} />
       <Header
         navigate={navigate}
         favoritesCount={favorites.size}

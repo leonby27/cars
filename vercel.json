@@ -3,6 +3,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/client",
   "framework": "vite",
+  "cleanUrls": true,
+  "trailingSlash": true,
   "regions": ["fra1"],
   "rewrites": [
     {
@@ -10,8 +12,12 @@
       "destination": "/api?path=:path"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "source": "/orders/:path*",
+      "destination": "/private.html"
+    },
+    {
+      "source": "/analytics",
+      "destination": "/analytics/index.html"
     }
   ]
 }

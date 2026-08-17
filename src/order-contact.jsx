@@ -23,7 +23,7 @@ export function OrderContactModal({ order, user, saving, onSubmit, onClose }) {
     name:order.contactName || user.name || "",
     phone:order.contactPhone || formatPhone(user.phone),
     methods:initialMethods(order, user),
-    consent:Boolean(order.contactConsentAt),
+    consent:true,
   }));
   const [error, setError] = useState("");
 

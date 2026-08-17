@@ -9,6 +9,7 @@ test("maps a customer order to the account flow shape", () => {
     availability_status:"requested",
     availability_comment:"Уточнить остаточную ёмкость батареи",
     availability_requested_at:"2026-08-16T10:00:30.000Z",
+    availability_confirmed_at:null,
     contact_name:"Анна Иванова",
     contact_phone:"+375291234567",
     contact_methods:["phone","telegram"],
@@ -37,6 +38,7 @@ test("maps a customer order to the account flow shape", () => {
 
   assert.equal(order.orderNumber, "EV-2026-000007");
   assert.equal(order.availabilityStatus, "requested");
+  assert.equal(order.availabilityConfirmedAt, null);
   assert.equal(order.availabilityComment, "Уточнить остаточную ёмкость батареи");
   assert.equal(order.contactName, "Анна Иванова");
   assert.equal(order.contactPhone, "+375291234567");

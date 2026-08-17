@@ -8,15 +8,21 @@ When implementing from a selected generated mock, treat that image as the source
 
 Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
 
-Typography preference: prioritize comfortable readability over ultra-compact UI. Keep every rendered text size at 16px or larger across the project, including supporting copy, controls, labels, badges, and mobile layouts. Do not introduce a smaller size unless the user explicitly requests that exception.
+Typography preference: prioritize comfortable readability over ultra-compact UI. Keep every rendered text size at 16px or larger across the project, including supporting copy, controls, labels, badges, and mobile layouts. The uppercase “Срок доставки до Минска” label and the non-offer disclaimer in the vehicle estimate card are explicit 14px exceptions; do not introduce other smaller sizes unless the user explicitly requests them.
 
 Brand color preference: use red `#EE1C25` for brand accents, links, icons, and active states instead of orange. Use yellow `#F4D90E` with dark text for all regular primary CTA buttons. Preserve red for destructive actions where it communicates danger.
+
+Favicon preference: use a compact red `#EE1C25` favicon with a simple white mark.
 
 Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. On desktop, keep a sticky left-side thumbnail rail for quick navigation and expose the full thumbnail set; on mobile, support horizontal swipe navigation directly on the main gallery.
 
 Visual QA preference: do not run browser-based visual checks, take implementation screenshots, or perform design-QA comparisons unless the user explicitly asks. The user reviews visual changes manually. Validate changes with build, tests, and non-visual checks only.
 
+SEO appearance preference: SEO work must not change the existing visual design, layout, spacing, typography, or visible component treatment. Semantic link and routing changes must preserve the previous computed appearance, and new indexable routes should reuse existing product UI rather than introduce new page designs.
+
 Home vehicle feed preference: show a randomized feed with 4 cards per row on desktop. Initially show 5 rows (20 cards), then append another 20 cards only when the user clicks “Показать ещё”; do not auto-load on scroll. Do not show the “Карточка доступна” status label anywhere in the product.
+
+Home quick-search count preference: when every quick-search filter is at its default, label the CTA “Показать 2500+ авто”; after any filter is selected, show the exact matching count.
 
 Home conversion content preference: use the space between the vehicle feed and footer for concise trust, objection-handling, and SEO content. Prioritize a transparent order journey and practical answers over generic promotional claims.
 
@@ -30,6 +36,12 @@ Theme preference: support both light and dark themes with a compact theme toggle
 
 Company-presence preference: the prototype should feel like a real Minsk-based company, with a substantial footer, office/contact page, legal entity details, social links, and policy pages. Keep temporary company details centralized in `src/company-data.js` so they can be replaced before publication.
 
+Company-address preference: show the Minsk street address without an office number.
+
+Company-details preference: do not show a settlement account number in the public company details.
+
+Company-phone preference: do not publish a company phone number; keep Telegram and email as the public contact methods.
+
 Footer appearance preference: keep the site footer light, using a pale neutral surface with dark headings and readable gray secondary text; do not use a dark inverted footer.
 
 Footer social-icon preference: place social icons in consistent white circular buttons; use a blue Telegram mark and a recognizable gradient-outline Instagram glyph rather than a filled Instagram tile.
@@ -40,11 +52,13 @@ Commercial-information preference: explain payment stages, contract timing, resp
 
 Lead-form consent preference: every form that collects a name, phone number, email, or messenger handle must require explicit consent before submission and link directly to the privacy policy and site terms. Reuse one consent component so wording and validation remain consistent.
 
-Vehicle-report entry preference: the vehicle-detail “Заказать отчёт о состоянии авто” CTA must not open a report-order lead form. Guests should see only a registration form in a modal and then continue to the account; signed-in users should go directly to the account, where report ordering belongs.
+Vehicle-report entry preference: availability CTAs on both the vehicle detail and the first account-order stage temporarily open the shared “Автомобиль временно недоступен” placeholder modal and do not submit a request.
 
 Account preference: the vehicle order is one section of a complete customer account, not the whole account. Use a left sidebar—not top tabs—for the current order, favorites, personal data, and account settings. The order itself stays simple and lightweight, with one visible vehicle and four sequential stages: listing availability check, optional inspection, delivery agreement, then payment and purchase. Keep the first availability-check stage permanently expanded rather than making it a disclosure, and allow one optional manager-comment field there. Use the same rounded container treatment as the rest of the product. Present the selected vehicle as a compact but informative mini card with real metadata and a prominent approximate landed price; do not add an “Ориентировочно” caption beside that price. Make the vehicle name a link that opens its catalog detail page in a new tab, and make the arrow link use the same target. Hide the “Убрать автомобиль” action inside a kebab menu, keep it available at every order stage, and require confirmation in a modal that warns about deleting the order progress. Keep the mini-card supporting typography comfortably readable rather than tiny. Avoid multi-field forms inside the stages; use the saved account details and one clear action per decision.
 
-Order-contact preference: do not show a persistent contact card between the vehicle and order stages. Open a compact contact modal only when the user clicks “Уточнить актуальность”, prefill it from the account, allow multiple Phone/Viber/Telegram methods, and submit the contact together with the availability request. Do not reveal the selected contact destination before consent; show exactly where the reply will be sent only after the user submits the modal.
+Order availability-gate preference: submitting the listing-availability request must not unlock the inspection stage. Keep inspection locked until an internal/admin workflow explicitly confirms that the vehicle is still available; the customer-facing API must not expose that confirmation transition.
+
+Order-contact preference: do not show a persistent contact card between the vehicle and order stages. While availability requests are disabled, do not collect or submit contact data from the “Уточнить актуальность” action.
 
 Personal-data preference: do not show placeholder copy about future phone-number changes or SMS confirmation under the login phone. Keep optional passport and registration details in a collapsed disclosure within personal data, persist them with the customer profile, and position them as advance preparation for future contract documents.
 
@@ -82,7 +96,7 @@ Catalog navigation preference: when returning from a vehicle page, preserve the 
 
 Catalog loading preference: render the catalog in batches of 24 vehicles and automatically load the next batch as the user approaches the end of the current results; do not render every matching vehicle initially or use a regular “Показать ещё” button. In the results summary, show the total number matching the active filters rather than the number of cards loaded so far.
 
-Vehicle estimate card preference: keep the landed-cost estimate fully expanded in the light sidebar card, including line items, total, and disclaimer. Show one approximate midpoint price instead of ranges in both the vehicle sidebar and order detail, and separate “Итого” with a simple line instead of a bordered surface. Keep the 35–50 day delivery section below it as a collapsed chevron disclosure, and place the yellow “Заказать отчёт” CTA at the bottom.
+Vehicle estimate card preference: keep the landed-cost estimate fully expanded in the light sidebar card, including line items, total, and disclaimer. Show one approximate midpoint price instead of ranges in both the vehicle sidebar and order detail, and separate “Итого” with a simple line instead of a bordered surface. Keep the 35–50 day delivery section below it as a collapsed chevron disclosure, and place the yellow “Уточнить актуальность объявления” CTA at the bottom.
 
 Estimate-description preference: keep explanatory copy for individual cost rows behind an info icon beside the row title. Show it only while the icon is hovered and hide it immediately when the pointer leaves; do not toggle it by click.
 
