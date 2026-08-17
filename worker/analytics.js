@@ -100,24 +100,24 @@ async function dashboard(db, days) {
       sum(CASE WHEN event_name='registration_completed' THEN 1 ELSE 0 END) AS registrations,
       sum(CASE WHEN event_name='custom_search_submitted' THEN 1 ELSE 0 END) AS custom_searches,
       sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites
-      FROM analytics_events WHERE created_at >= ?`).bind(cutoff).first(),
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?)`).bind(cutoff).first(),
     db.prepare(`SELECT date(created_at) AS day, count(DISTINCT visitor_id) AS visitors,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS vehicle_views,
       sum(CASE WHEN event_name='availability_click' THEN 1 ELSE 0 END) AS availability_clicks,
       sum(CASE WHEN event_name='registration_completed' THEN 1 ELSE 0 END) AS registrations,
       sum(CASE WHEN event_name='custom_search_submitted' THEN 1 ELSE 0 END) AS custom_searches
-      FROM analytics_events WHERE created_at >= ? GROUP BY date(created_at) ORDER BY date(created_at)`).bind(cutoff).all(),
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) GROUP BY date(created_at) ORDER BY date(created_at)`).bind(cutoff).all(),
     db.prepare(`SELECT listing_id, max(listing_title) AS listing_title,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS views,
       sum(CASE WHEN event_name='availability_click' THEN 1 ELSE 0 END) AS availability_clicks,
       sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites
-      FROM analytics_events WHERE created_at >= ? AND listing_id IS NOT NULL
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND listing_id IS NOT NULL
       GROUP BY listing_id ORDER BY availability_clicks DESC, views DESC LIMIT 30`).bind(cutoff).all(),
     db.prepare(`SELECT json_extract(properties,'$.name') AS name, json_extract(properties,'$.phone') AS phone, created_at, path
-      FROM analytics_events WHERE created_at >= ? AND event_name='registration_completed'
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND event_name='registration_completed'
       ORDER BY created_at DESC LIMIT 100`).bind(cutoff).all(),
     db.prepare(`SELECT event_name,listing_id,listing_title,path,created_at
-      FROM analytics_events WHERE created_at >= ? ORDER BY created_at DESC LIMIT 30`).bind(cutoff).all(),
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) ORDER BY created_at DESC LIMIT 30`).bind(cutoff).all(),
   ]);
   const safeSummary = Object.fromEntries(Object.entries(summary || {}).map(([key,value]) => [key,Number(value) || 0]));
   return {
@@ -159,6 +159,11 @@ export async function handleAnalyticsRequest(request, env, url) {
     if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
     return json(await dashboard(env.DB, daysValue(url)));
   }
+  if (request.method === "DELETE" && url.pathname === "/api/analytics/events") {
+    const token = decodeURIComponent(cookieValue(request.headers.get("cookie"), COOKIE_NAME));
+    if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
+    const result = await env.DB.prepare("DELETE FROM analytics_events").run();
+    return json({ ok:true, deleted:Number(result.meta?.changes) || 0 });
+  }
   return json({ error:"not_found" }, 404);
 }
-

@@ -13,6 +13,9 @@ test("analytics events are allowlisted and trim personal data", () => {
   });
   assert.deepEqual(event.properties, { name:"Анна", phone:"+375 29 123-45-67" });
   assert.equal(normalizeAnalyticsEvent({ eventName:"arbitrary" }).error, "invalid_event");
+  for (const eventName of ["page_view","vehicle_view","availability_click","registration_completed","favorite_added","custom_search_submitted"]) {
+    assert.equal(normalizeAnalyticsEvent({ eventId:`event-${eventName}`, visitorId:"visitor", sessionId:"session", eventName, path:"/" }).eventName, eventName);
+  }
 });
 
 test("analytics date range is restricted to dashboard presets", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 const formatDate = (value, withTime = false) => {
@@ -7,6 +7,7 @@ const formatDate = (value, withTime = false) => {
   return new Intl.DateTimeFormat("ru-RU", withTime ? { dateStyle:"short", timeStyle:"short" } : { day:"2-digit", month:"short" }).format(date);
 };
 const percent = (part, total) => total ? `${(Number(part || 0) / Number(total) * 100).toFixed(1).replace(".", ",")}%` : "0%";
+const average = (part, total) => total ? (Number(part || 0) / Number(total)).toFixed(1).replace(".", ",") : "0";
 const eventLabels = {
   page_view:"Просмотр страницы",
   vehicle_view:"Просмотр автомобиля",
@@ -71,22 +72,58 @@ function Viability({ summary }) {
   return <section className={`analytics-viability ${tone}`}><div><span>Автооценка</span><h2>{title}</h2><p>{text}</p></div><dl><div><dt>Клик в интерес</dt><dd>{clickRate.toFixed(1).replace(".", ",")}%</dd><small>ориентир от 8%</small></div><div><dt>Конверсия в лид</dt><dd>{leadRate.toFixed(1).replace(".", ",")}%</dd><small>ориентир от 3%</small></div></dl></section>;
 }
 
+function ResetAnalyticsModal({ pending, error, onCancel, onConfirm }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape" && !pending) onCancel();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onCancel, pending]);
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onCancel()}>
+      <section className="analytics-reset-modal" role="dialog" aria-modal="true" aria-labelledby="analytics-reset-title">
+        <h2 id="analytics-reset-title">Обнулить всю аналитику?</h2>
+        <p>Будут безвозвратно удалены просмотры, клики, регистрации и заявки из аналитики. Аккаунты пользователей, заказы и каталог останутся без изменений.</p>
+        {error && <div className="analytics-error" role="alert">{error}</div>}
+        <div><button className="secondary" type="button" onClick={onCancel} disabled={pending}>Отмена</button><button className="analytics-reset-confirm" type="button" onClick={onConfirm} disabled={pending}>{pending ? "Обнуляем…" : "Да, обнулить"}</button></div>
+      </section>
+    </div>
+  );
+}
+
 function Dashboard({ data, days, setDays, reload, logout, loading }) {
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
   const summary = data.summary || {};
   const daily = data.daily || [];
   const maxDaily = Math.max(1, ...daily.map((item) => Number(item.visitors) || 0));
   const leads = (Number(summary.registrations) || 0) + (Number(summary.custom_searches) || 0);
   const cards = [
     ["Уникальные посетители", summary.visitors, `${formatNumber(summary.sessions)} сессий`],
-    ["Просмотры автомобилей", summary.vehicle_views, `${percent(summary.vehicle_views, summary.visitors)} на посетителя`],
+    ["Просмотры автомобилей", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
     ["Уточнения актуальности", summary.availability_clicks, `${percent(summary.availability_clicks, summary.vehicle_views)} от просмотров авто`],
     ["Регистрации и заявки", leads, `${summary.registrations || 0} регистраций · ${summary.custom_searches || 0} заявок`],
   ];
+  const resetAnalytics = async () => {
+    setResetting(true);
+    setResetError("");
+    try {
+      const response = await fetch("/api/analytics/events", { method:"DELETE", credentials:"same-origin" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "reset_failed");
+      setResetOpen(false);
+      await reload();
+    } catch {
+      setResetError("Не удалось обнулить данные. Обновите страницу и попробуйте снова.");
+    } finally { setResetting(false); }
+  };
   return (
     <main className="analytics-page page-width">
       <header className="analytics-heading">
         <div><span>Закрытый раздел</span><h1>Аналитика MVP</h1><p>Срез обновлён {formatDate(data.generatedAt, true)}</p></div>
-        <div className="analytics-actions"><div className="analytics-range" aria-label="Период аналитики">{[7,30,90].map((value) => <button key={value} type="button" className={days === value ? "active" : ""} onClick={() => setDays(value)}>{value} дней</button>)}</div><button className="secondary analytics-refresh" type="button" onClick={reload} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button><button className="analytics-logout" type="button" onClick={logout}>Выйти</button></div>
+        <div className="analytics-actions"><div className="analytics-range" aria-label="Период аналитики">{[7,30,90].map((value) => <button key={value} type="button" className={days === value ? "active" : ""} onClick={() => setDays(value)}>{value} дней</button>)}</div><button className="secondary analytics-refresh" type="button" onClick={reload} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button><button className="analytics-reset-button" type="button" onClick={() => { setResetError(""); setResetOpen(true); }}>Обнулить данные</button><button className="analytics-logout" type="button" onClick={logout}>Выйти</button></div>
       </header>
 
       <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}</section>
@@ -116,6 +153,7 @@ function Dashboard({ data, days, setDays, reload, logout, loading }) {
           <ol className="analytics-activity">{data.recent?.length ? data.recent.slice(0, 12).map((item, index) => <li key={`${item.createdAt}-${index}`}><div><b>{eventLabels[item.eventName] || item.eventName}</b><span>{item.listingTitle || item.path}</span></div><time>{formatDate(item.createdAt, true)}</time></li>) : <li>Событий пока нет.</li>}</ol>
         </section>
       </div>
+      {resetOpen && <ResetAnalyticsModal pending={resetting} error={resetError} onCancel={() => setResetOpen(false)} onConfirm={resetAnalytics} />}
     </main>
   );
 }

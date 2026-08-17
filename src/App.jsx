@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, WarningCircle, X } from "@phosphor-icons/react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -1203,8 +1203,56 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen }) {
   );
 }
 
-function Favorites({ navigate, favorites, toggleFavorite, cars }) {
-  const favoriteCars = cars.filter((car) => favorites.has(car.id));
+function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
+  const [loadedCars, setLoadedCars] = useState([]);
+  const favoriteKey = [...favorites].sort().join("|");
+  const allCars = useMemo(() => {
+    const values = new Map(cars.map((car) => [car.id,car]));
+    loadedCars.forEach((car) => values.set(car.id,car));
+    return [...values.values()];
+  }, [cars,loadedCars]);
+  const favoriteCars = allCars.filter((car) => favorites.has(car.id));
+  const knownIds = new Set(allCars.map((car) => car.id));
+  const missingIds = [...favorites].filter((id) => !knownIds.has(id));
+  const missingKey = missingIds.sort().join("|");
+
+  useEffect(() => {
+    if (!missingIds.length) return undefined;
+    const controller = new AbortController();
+    Promise.all(missingIds.map(async (id) => {
+      try {
+        const url = apiMode
+          ? `/api/cars/${encodeURIComponent(id)}`
+          : `${import.meta.env.BASE_URL}data/cars/${encodeURIComponent(id)}.json`;
+        const response = await fetch(url, { cache:"no-store", signal:controller.signal });
+        if (response.status === 404) return { id, unavailable:true };
+        if (!response.ok) throw new Error("favorite_car_load_failed");
+        return { id, car:normalizeImportedCar(await response.json()) };
+      } catch (error) {
+        if (error?.name === "AbortError") return null;
+        return { id, unavailable:false };
+      }
+    })).then((results) => {
+      if (controller.signal.aborted) return;
+      const resolved = results.flatMap((result) => result?.car ? [result.car] : []);
+      const unavailable = results.flatMap((result) => result?.unavailable ? [result.id] : []);
+      if (resolved.length) {
+        setLoadedCars((current) => {
+          const values = new Map(current.map((car) => [car.id,car]));
+          resolved.forEach((car) => values.set(car.id,car));
+          return [...values.values()];
+        });
+      }
+      if (unavailable.length) onUnavailable(unavailable);
+    });
+    return () => controller.abort();
+  }, [apiMode,favoriteKey,missingKey,onUnavailable]);
+
+  return { favoriteCars, hasUnresolved:missingIds.length > 0 };
+}
+
+function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnavailableFavorites }) {
+  const { favoriteCars, hasUnresolved } = useFavoriteCars(cars, favorites, apiMode, onUnavailableFavorites);
   return (
     <main className="catalog favorites-page page-width">
       <div className="breadcrumbs">
@@ -1217,7 +1265,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars }) {
           <h1>Избранное</h1>
           <p>Сохранённые автомобили для быстрого сравнения</p>
         </div>
-        <span>{favoriteCars.length} авто</span>
+        <span>{hasUnresolved ? favorites.size : favoriteCars.length} авто</span>
       </div>
       {favoriteCars.length ? (
         <div className="car-list">
@@ -1225,6 +1273,8 @@ function Favorites({ navigate, favorites, toggleFavorite, cars }) {
             <CarRow key={car.id} car={car} navigate={navigate} favorite toggleFavorite={toggleFavorite} />
           ))}
         </div>
+      ) : hasUnresolved ? (
+        <div className="account-section-loading" aria-live="polite">Загружаем сохранённые автомобили…</div>
       ) : (
         <div className="empty-state favorites-empty">
           <Heart size={34} />
@@ -3605,32 +3655,8 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   );
 }
 
-function AccountFavoritesPanel({ cars, favorites, navigate, toggleFavorite }) {
-  const [loadedCars, setLoadedCars] = useState([]);
-  const favoriteKey = [...favorites].sort().join("|");
-  const allCars = useMemo(() => {
-    const values = new Map(cars.map((car) => [car.id,car]));
-    loadedCars.forEach((car) => values.set(car.id,car));
-    return [...values.values()];
-  }, [cars,loadedCars]);
-  const favoriteCars = allCars.filter((car) => favorites.has(car.id));
-
-  useEffect(() => {
-    const knownIds = new Set(cars.map((car) => car.id));
-    loadedCars.forEach((car) => knownIds.add(car.id));
-    const missingIds = [...favorites].filter((id) => !knownIds.has(id));
-    if (!missingIds.length) return undefined;
-    const controller = new AbortController();
-    Promise.all(missingIds.map((id) => fetch(`/api/cars/${encodeURIComponent(id)}`, { cache:"no-store", signal:controller.signal })
-      .then((response) => response.ok ? response.json() : null)
-      .then((car) => car ? normalizeImportedCar(car) : null)
-      .catch(() => null)))
-      .then((values) => {
-        const resolved = values.filter(Boolean);
-        if (!controller.signal.aborted && resolved.length) setLoadedCars((current) => [...current,...resolved]);
-      });
-    return () => controller.abort();
-  }, [cars,favoriteKey,loadedCars]);
+function AccountFavoritesPanel({ cars, favorites, navigate, toggleFavorite, apiMode, onUnavailableFavorites }) {
+  const { favoriteCars, hasUnresolved } = useFavoriteCars(cars, favorites, apiMode, onUnavailableFavorites);
 
   return (
     <section className="account-section account-favorites-section">
@@ -3642,7 +3668,7 @@ function AccountFavoritesPanel({ cars, favorites, navigate, toggleFavorite }) {
         <div className="car-list account-favorites-list">
           {favoriteCars.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite toggleFavorite={toggleFavorite} />)}
         </div>
-      ) : favorites.size ? (
+      ) : hasUnresolved ? (
         <div className="account-section-loading" aria-live="polite">Загружаем сохранённые автомобили…</div>
       ) : (
         <div className="empty-state account-favorites-empty">
@@ -3656,15 +3682,11 @@ function AccountFavoritesPanel({ cars, favorites, navigate, toggleFavorite }) {
   );
 }
 
-function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navigate, onLogout, onSaveProfile, onDeleteAccount, pending }) {
+function AccountPage({ user, cars, favorites, toggleFavorite, apiMode, onUnavailableFavorites, authBackend, navigate, onLogout, onSaveProfile, pending }) {
   const [section, setSection] = useState("order");
   const [profile, setProfile] = useState(() => profileFromUser(user));
   const [profileError, setProfileError] = useState("");
   const [profileSaved, setProfileSaved] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deletePassword, setDeletePassword] = useState("");
-  const [deletePhrase, setDeletePhrase] = useState("");
-  const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
     setProfile(profileFromUser(user));
   }, [user]);
@@ -3686,16 +3708,6 @@ function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navig
       setProfileError(authMessages[error.message] || "Не удалось сохранить данные.");
     }
   };
-  const removeAccount = async (event) => {
-    event.preventDefault();
-    setDeleteError("");
-    if (deletePhrase !== "УДАЛИТЬ") return setDeleteError("Введите слово «УДАЛИТЬ» заглавными буквами.");
-    try {
-      await onDeleteAccount(deletePassword);
-    } catch (error) {
-      setDeleteError(authMessages[error.message] || "Не удалось удалить аккаунт.");
-    }
-  };
   return (
     <main className="account-page page-width">
       <header className="account-heading">
@@ -3714,7 +3726,7 @@ function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navig
         </aside>
         <div className="account-content">
         {section === "order" && <CustomerOrdersPanel user={user} cars={cars} authBackend={authBackend} navigate={navigate} />}
-        {section === "favorites" && <AccountFavoritesPanel cars={cars} favorites={favorites} navigate={navigate} toggleFavorite={toggleFavorite} />}
+        {section === "favorites" && <AccountFavoritesPanel cars={cars} favorites={favorites} navigate={navigate} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={onUnavailableFavorites} />}
         {section === "profile" && (
           <form className="account-panel profile-editor account-profile-section" onSubmit={saveProfile}>
             <div className="profile-editor-heading">
@@ -3754,20 +3766,6 @@ function AccountPage({ user, cars, favorites, toggleFavorite, authBackend, navig
               <div className="account-panel-title"><div><span>Настройки</span><h2>Аккаунт и вход</h2></div><GearSix size={28} weight="duotone" /></div>
               <div className="account-security-row"><div><b>Телефон для входа</b><span>{formatAccountPhone(user.phone)}</span></div><CheckCircle size={21} weight="fill" /></div>
               <div className="account-security-row"><div><b>Статус аккаунта</b><span>Активен</span></div><CheckCircle size={21} weight="fill" /></div>
-            </section>
-            <section className="account-danger">
-              <div><span>Управление аккаунтом</span><h2>Удаление аккаунта</h2><p>Профиль и все активные сессии будут удалены без возможности восстановления.</p></div>
-              {!deleteOpen ? <button className="danger-button" type="button" onClick={() => setDeleteOpen(true)}><Trash size={18} /> Удалить аккаунт</button> : (
-                <form className="delete-account-form" onSubmit={removeAccount}>
-                  <div className="delete-warning"><WarningCircle size={23} weight="fill" /><p><b>Это действие необратимо.</b> Для подтверждения введите пароль и слово «УДАЛИТЬ».</p></div>
-                  <div className="delete-fields">
-                    <PasswordField label="Текущий пароль" autoComplete="current-password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} required />
-                    <label className="auth-field"><span>Подтверждение</span><input value={deletePhrase} onChange={(event) => setDeletePhrase(event.target.value)} placeholder="УДАЛИТЬ" required /></label>
-                  </div>
-                  {deleteError && <div className="auth-error" role="alert">{deleteError}</div>}
-                  <div className="delete-actions"><button className="secondary" type="button" onClick={() => { setDeleteOpen(false); setDeleteError(""); }}>Отмена</button><button className="danger-button solid" type="submit" disabled={pending || !deletePassword || deletePhrase !== "УДАЛИТЬ"}><Trash size={18} /> Удалить навсегда</button></div>
-                </form>
-              )}
             </section>
           </div>
         )}
@@ -3989,6 +3987,34 @@ export function App() {
       })
       .catch(() => setFavorites(previous));
   };
+  const pruneUnavailableFavorites = useCallback((ids) => {
+    const unavailable = ids.filter((id) => favorites.has(id));
+    if (!unavailable.length) return;
+    const previous = new Set(favorites);
+    const next = new Set(favorites);
+    unavailable.forEach((id) => next.delete(id));
+    setFavorites(next);
+    if (!user) {
+      storeFavorites(guestFavoritesKey, next);
+      return;
+    }
+    const localKey = accountFavoritesKey(user.id);
+    if (authBackend === "local") {
+      storeFavorites(localKey, next);
+      return;
+    }
+    Promise.all(unavailable.map((id) => fetch(`/api/account/favorites/${encodeURIComponent(id)}`, {
+      method:"DELETE",
+      credentials:"same-origin",
+    }))).then((responses) => {
+      if (responses.some((response) => [404, 502, 503].includes(response.status))) {
+        storeFavorites(localKey, next);
+        setAuthBackend("local");
+        return;
+      }
+      if (responses.some((response) => !response.ok)) throw new Error("favorite_prune_failed");
+    }).catch(() => setFavorites(previous));
+  }, [authBackend,favorites,user]);
   const authenticate = async (mode, values) => {
     setAuthPending(true);
     const complete = (authenticatedUser, source) => {
@@ -4123,11 +4149,11 @@ export function App() {
     ) : path === "/catalog" ? (
       <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : path === "/favorites" ? (
-      <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} />
+      <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} />
     ) : path === "/login" || path === "/register" ? (
-      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode={path === "/register" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} /> : <AuthPage mode={path === "/register" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
     ) : path === "/account" ? (
-      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : <AuthPage mode="login" navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} /> : <AuthPage mode="login" navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
     ) : orderId ? (
       <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
     ) : detailId ? (

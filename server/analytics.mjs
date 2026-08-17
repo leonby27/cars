@@ -55,6 +55,11 @@ export async function recordAnalyticsEvent(body) {
   return { ok:true };
 }
 
+export async function resetAnalyticsData() {
+  const result = await pool.query("DELETE FROM analytics_events");
+  return { ok:true, deleted:result.rowCount };
+}
+
 const analyticsPassword = () => String(process.env.ANALYTICS_PASSWORD || "");
 const analyticsSecret = () => String(process.env.ANALYTICS_SESSION_SECRET || analyticsPassword());
 const digest = (value) => crypto.createHash("sha256").update(String(value)).digest();
@@ -145,4 +150,3 @@ export async function getAnalyticsDashboard(daysValue) {
     recent:recentResult.rows.map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),
   };
 }
-

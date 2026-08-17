@@ -131,6 +131,37 @@ test("rejects image proxy requests to untrusted hosts", async () => {
   assert.equal(response.status, 403);
 });
 
+test("protects analytics reset and uses calendar-safe date filtering", async () => {
+  const executed = [];
+  const DB = {
+    prepare(sql) {
+      return {
+        bind() { return this; },
+        async run() { executed.push(sql); return { meta:{ changes:4 } }; },
+        async first() { executed.push(sql); return {}; },
+        async all() { executed.push(sql); return { results:[] }; },
+      };
+    },
+    async batch() { return []; },
+  };
+  const env = { DB, ANALYTICS_PASSWORD:"test-password", ANALYTICS_SESSION_SECRET:"test-secret", ASSETS:{ fetch:async () => new Response("missing", { status:404 }) } };
+  const unauthorized = await worker.fetch(new Request("https://example.test/api/analytics/events", { method:"DELETE" }), env);
+  assert.equal(unauthorized.status, 401);
+
+  const login = await worker.fetch(new Request("https://example.test/api/analytics/login", { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify({ password:"test-password" }) }), env);
+  assert.equal(login.status, 200);
+  const cookie = login.headers.get("set-cookie").split(";")[0];
+
+  const dashboard = await worker.fetch(new Request("https://example.test/api/analytics/dashboard?days=30", { headers:{ cookie } }), env);
+  assert.equal(dashboard.status, 200);
+  assert.equal(executed.filter((sql) => sql.startsWith("SELECT")).every((sql) => sql.includes("datetime(created_at) >= datetime(?)")), true);
+
+  const reset = await worker.fetch(new Request("https://example.test/api/analytics/events", { method:"DELETE", headers:{ cookie } }), env);
+  assert.equal(reset.status, 200);
+  assert.deepEqual(await reset.json(), { ok:true, deleted:4 });
+  assert.equal(executed.includes("DELETE FROM analytics_events"), true);
+});
+
 test("emits the files required by Sites packaging", async () => {
   await access(new URL("../dist/client/index.html", import.meta.url));
   await access(new URL("../dist/server/index.js", import.meta.url));

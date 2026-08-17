@@ -3,7 +3,7 @@ import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
-import { analyticsCookie, clearAnalyticsCookie, createAnalyticsToken, getAnalyticsDashboard, hasAnalyticsSession, recordAnalyticsEvent, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, createAnalyticsToken, getAnalyticsDashboard, hasAnalyticsSession, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 const json = (response, status, payload, headers = {}) => {
@@ -47,6 +47,10 @@ export async function handleApiRequest(request, response) {
     if (request.method === "GET" && url.pathname === "/api/analytics/dashboard") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
       return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("days")));
+    }
+    if (request.method === "DELETE" && url.pathname === "/api/analytics/events") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      return json(response, 200, await resetAnalyticsData());
     }
     if (request.method === "GET" && url.pathname === "/api/image") {
       let source;
