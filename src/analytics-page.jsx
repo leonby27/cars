@@ -35,10 +35,7 @@ function Login({ onSuccess }) {
   };
   return (
     <main className="analytics-login page-width">
-      <section className="analytics-login-card">
-        <span>evcars.by · закрытый раздел</span>
-        <h1>Аналитика MVP</h1>
-        <p>Введите пароль, чтобы открыть метрики и номера телефонов зарегистрированных пользователей.</p>
+      <section className="analytics-login-card" aria-label="Вход в аналитику">
         <form onSubmit={submit}>
           <label><span>Пароль</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} autoFocus required /></label>
           {error && <div className="analytics-error" role="alert">{error}</div>}
@@ -154,4 +151,3 @@ export function AnalyticsPage() {
   if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
   return <Dashboard data={data} days={days} setDays={setDays} reload={load} logout={logout} loading={loading} />;
 }
-
