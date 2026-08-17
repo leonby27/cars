@@ -86,7 +86,7 @@ function Dashboard({ data, days, setDays, reload, logout, loading }) {
     <main className="analytics-page page-width">
       <header className="analytics-heading">
         <div><span>Закрытый раздел</span><h1>Аналитика MVP</h1><p>Срез обновлён {formatDate(data.generatedAt, true)}</p></div>
-        <div className="analytics-actions"><div className="analytics-range" aria-label="Период аналитики">{[7,30,90].map((value) => <button key={value} type="button" className={days === value ? "active" : ""} onClick={() => setDays(value)}>{value} дней</button>)}</div><button className="secondary" type="button" onClick={reload} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button><button className="analytics-logout" type="button" onClick={logout}>Выйти</button></div>
+        <div className="analytics-actions"><div className="analytics-range" aria-label="Период аналитики">{[7,30,90].map((value) => <button key={value} type="button" className={days === value ? "active" : ""} onClick={() => setDays(value)}>{value} дней</button>)}</div><button className="secondary analytics-refresh" type="button" onClick={reload} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button><button className="analytics-logout" type="button" onClick={logout}>Выйти</button></div>
       </header>
 
       <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}</section>

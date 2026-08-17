@@ -4,6 +4,7 @@
 .analytics-heading h1, .analytics-login-card h1 { margin:8px 0 6px; font-size:clamp(32px,4vw,48px); letter-spacing:-1.5px; }
 .analytics-heading p, .analytics-login-card p, .analytics-panel-heading p { margin:0; color:var(--muted); line-height:1.55; }
 .analytics-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.analytics-refresh { display:inline-flex; align-items:center; justify-content:center; min-width:148px; padding:11px 18px; white-space:nowrap; }
 .analytics-range { display:flex; padding:4px; border:1px solid var(--line); border-radius:12px; background:var(--panel-soft); }
 .analytics-range button, .analytics-logout { border:0; border-radius:9px; padding:9px 12px; background:transparent; }
 .analytics-range button.active { background:var(--panel); color:var(--accent); box-shadow:0 1px 4px rgba(15,23,42,.08); font-weight:800; }
