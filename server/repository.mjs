@@ -58,6 +58,7 @@ export function buildCarFilters(searchParams) {
   if (searchParams.get("drive") && searchParams.get("drive") !== "Любой привод") add("v.drivetrain=?", searchParams.get("drive"));
   if (Number(searchParams.get("ownersMax"))) add("l.owners<=?", Number(searchParams.get("ownersMax")));
   if (searchParams.get("noClaims") === "1") clauses.push("COALESCE(l.claims, l.source_payload->>'claims', l.source_payload->>'incident') ~ '(0\\s*次理赔|理赔\\s*0\\s*次)'");
+  if (["S", "A", "B", "C", "D"].includes(searchParams.get("conditionGrade"))) add("l.condition_grade=?", searchParams.get("conditionGrade"));
   if (Number(searchParams.get("yearMin"))) add("v.model_year>=?", Number(searchParams.get("yearMin")));
   if (Number(searchParams.get("mileageMax"))) add("l.mileage_km<=?", Number(searchParams.get("mileageMax")));
   if (Number(searchParams.get("priceCnyMax"))) add("l.price_cny<=?", Number(searchParams.get("priceCnyMax")));
@@ -114,7 +115,7 @@ export async function getCatalogMeta(type, brand, bodyType) {
     pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
     pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
     pool.query("SELECT v.drivetrain drive, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
-    pool.query("SELECT count(v.drivetrain)::int drive, count(l.owners)::int owners, count(l.claims)::int claims FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'"),
+    pool.query("SELECT count(v.drivetrain)::int drive, count(l.owners)::int owners, count(l.claims)::int claims, count(l.condition_grade)::int condition FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'"),
   ]);
   return { total:count.rows[0].total, brands:brands.rows, models:models.rows, bodyTypes:bodyTypes.rows, drives:drives.rows, availability:availability.rows[0] };
 }

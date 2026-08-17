@@ -20,6 +20,7 @@ const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low +
 const ANY_YEAR = "Любой год";
 const ANY_PRICE = "Любая цена";
 const ANY_MILEAGE = "Любой пробег";
+const ANY_CONDITION = "Любое состояние";
 const yearOptions = [ANY_YEAR, "от 2022", "от 2023", "от 2024"];
 const priceOptions = [ANY_PRICE, "до $40 000", "до $30 000", "до $25 000"];
 const mileageOptions = [ANY_MILEAGE, "до 50 000 км", "до 30 000 км", "до 15 000 км"];
@@ -122,6 +123,8 @@ const conditionLabels = {
   C: "Удовлетворительное состояние",
   D: "Посредственное состояние",
 };
+const conditionGrades = Object.fromEntries(Object.entries(conditionLabels).map(([grade, label]) => [label, grade]));
+const conditionOptions = [ANY_CONDITION, ...Object.values(conditionLabels)];
 const translateCondition = (value) => conditionLabels[value] || displayValue(value, "Состояние не указано");
 const translateBattery = (value) =>
   ({
@@ -154,7 +157,7 @@ const claimCount = (car) => {
   return match ? Number(match[1] ?? match[2]) : null;
 };
 const filterNumber = (value) => Number(String(value).replace(/\D/g, "")) || 0;
-const matchesAdvancedFilters = (car, { drive, owners, history }) => (drive === "Любой привод" || car.drive === drive) && (owners === "Любое количество" || Number(car.owners) <= filterNumber(owners)) && (history === "Любая история" || claimCount(car) === 0);
+const matchesAdvancedFilters = (car, { drive, owners, history, condition = ANY_CONDITION }) => (drive === "Любой привод" || car.drive === drive) && (owners === "Любое количество" || Number(car.owners) <= filterNumber(owners)) && (history === "Любая история" || claimCount(car) === 0) && (condition === ANY_CONDITION || car.conditionGrade === conditionGrades[condition]);
 const ownerOptions = ["Любое количество", "1 владелец", "До 2 владельцев"];
 const historyOptions = ["Любая история", "Без страховых случаев"];
 const proxiedImageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
@@ -437,7 +440,7 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
             {theme === "dark" ? <Sun size={20} weight="bold" /> : <Moon size={20} weight="bold" />}
           </button>
           <button
-            className={`icon-label${path === "/favorites" ? " selected" : ""}`}
+            className={`icon-label favorites-link${path === "/favorites" ? " selected" : ""}`}
             aria-current={path === "/favorites" ? "page" : undefined}
             onClick={() => navigate("/favorites")}
           >
@@ -589,8 +592,52 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
   );
 }
 
-function QuickSearch({ navigate, cars, apiMode }) {
+function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, availability, resultCount, onSubmit, initiallyExpanded = false }) {
   const currency = useCurrency();
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(initiallyExpanded);
+  const extraFiltersId = useId();
+
+  return (
+    <section className={`search-box${constrained ? " search-box--constrained" : ""}`}>
+      <div className="type-tabs">
+        {["Все", "Электромобили", "Гибриды"].map((item) => (
+          <button type="button" key={item} className={selectedType === item ? "active" : ""} onClick={() => onTypeChange(item)}>
+            {item}
+          </button>
+        ))}
+      </div>
+      <div className="filter-primary-row unified-filter-primary">
+        <SelectField label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} searchable />
+        <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} searchable disabled={values.brand === "Все марки"} />
+        <SelectField label="Год выпуска" value={values.year} onChange={actions.year} options={yearOptions} />
+        <SelectField label="Цена до Минска" value={values.price} onChange={actions.price} options={priceOptions} formatOption={(value) => priceLimitLabel(value, currency)} />
+        <SelectField label="Пробег" value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
+      </div>
+      {moreFiltersOpen && (
+        <div className="filter-extra-row" id={extraFiltersId}>
+          <SelectField label="Кузов" value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} />
+          {Number(availability.drive) > 0 && <SelectField label="Привод" value={values.drive} onChange={actions.drive} options={options.drives} />}
+          {Number(availability.owners) > 0 && <SelectField label="Владельцы" value={values.owners} onChange={actions.owners} options={ownerOptions} />}
+          {Number(availability.claims) > 0 && <SelectField label="История" value={values.history} onChange={actions.history} options={historyOptions} />}
+          {Number(availability.condition) > 0 && <SelectField label="Состояние" value={values.condition} onChange={actions.condition} options={conditionOptions} />}
+        </div>
+      )}
+      <div className="filter-actions-row">
+        <button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls={extraFiltersId} onClick={() => setMoreFiltersOpen((open) => !open)}>
+          <SlidersHorizontal size={17} />
+          {moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}
+          <CaretDown size={15} weight="bold" />
+        </button>
+        <button type="button" className="primary search-submit" onClick={onSubmit}>
+          <MagnifyingGlass size={20} weight="bold" />
+          Показать {resultCount} авто
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function QuickSearch({ navigate, cars, apiMode }) {
   const [type, setType] = useState("Все");
   const [brand, setBrand] = useState("Все марки");
   const [model, setModel] = useState("Все модели");
@@ -601,7 +648,7 @@ function QuickSearch({ navigate, cars, apiMode }) {
   const [drive, setDrive] = useState("Любой привод");
   const [owners, setOwners] = useState("Любое количество");
   const [history, setHistory] = useState("Любая история");
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const [condition, setCondition] = useState(ANY_CONDITION);
   const [remoteMeta, setRemoteMeta] = useState({
     brands: [],
     models: [],
@@ -622,11 +669,12 @@ function QuickSearch({ navigate, cars, apiMode }) {
         drive: cars.filter((car) => car.drive && car.drive !== "Не указан").length,
         owners: cars.filter((car) => Number(car.owners)).length,
         claims: cars.filter((car) => claimCount(car) !== null).length,
+        condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
       };
   const mileageCap = Number(mileage.replace(/\D/g, ""));
   const priceCap = Number(priceLimit.replace(/\D/g, ""));
-  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && (year === ANY_YEAR || matchesMinimumYear(car, year)) && (mileage === ANY_MILEAGE || car.mileage <= mileageCap) && (priceLimit === ANY_PRICE || estimateLandedCost(car).totalUsd <= priceCap) && matchesAdvancedFilters(car, { drive, owners, history })).length;
-  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || model !== "Все модели" || bodyType !== "Все кузова" || year !== ANY_YEAR || mileage !== ANY_MILEAGE || priceLimit !== ANY_PRICE || drive !== "Любой привод" || owners !== "Любое количество" || history !== "Любая история";
+  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && (year === ANY_YEAR || matchesMinimumYear(car, year)) && (mileage === ANY_MILEAGE || car.mileage <= mileageCap) && (priceLimit === ANY_PRICE || estimateLandedCost(car).totalUsd <= priceCap) && matchesAdvancedFilters(car, { drive, owners, history, condition })).length;
+  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || model !== "Все модели" || bodyType !== "Все кузова" || year !== ANY_YEAR || mileage !== ANY_MILEAGE || priceLimit !== ANY_PRICE || drive !== "Любой привод" || owners !== "Любое количество" || history !== "Любая история" || condition !== ANY_CONDITION;
   useEffect(() => {
     if (!apiMode) return;
     const controller = new AbortController();
@@ -652,6 +700,7 @@ function QuickSearch({ navigate, cars, apiMode }) {
       if (drive !== "Любой привод") carsQuery.set("drive", drive);
       if (owners !== "Любое количество") carsQuery.set("ownersMax", String(filterNumber(owners)));
       if (history === "Без страховых случаев") carsQuery.set("noClaims", "1");
+      if (condition !== ANY_CONDITION) carsQuery.set("conditionGrade", conditionGrades[condition]);
       try {
         const [metaResponse, carsResponse] = await Promise.all([
           fetch(`/api/catalog/meta?${metaQuery}`, {
@@ -669,7 +718,7 @@ function QuickSearch({ navigate, cars, apiMode }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [apiMode, normalizedType, brand, model, bodyType, year, mileageCap, priceCap, drive, owners, history]);
+  }, [apiMode, normalizedType, brand, model, bodyType, year, mileageCap, priceCap, drive, owners, history, condition]);
   const changeType = (value) => {
     setType(value);
     setModel("Все модели");
@@ -678,51 +727,32 @@ function QuickSearch({ navigate, cars, apiMode }) {
     setBrand(value);
     setModel("Все модели");
   };
-  const submit = (
-    <button className="primary search-submit" onClick={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&body=${encodeURIComponent(bodyType)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&history=${encodeURIComponent(history)}`)}>
-      <MagnifyingGlass size={20} weight="bold" />
-      Показать {hasActiveFilters ? (apiMode ? remoteCount : resultCount) : "2500+"} авто
-    </button>
-  );
   return (
-    <section className="search-box">
-      <div className="type-tabs">
-        {["Все", "Электромобили", "Гибриды"].map((item) => (
-          <button type="button" key={item} className={type === item ? "active" : ""} onClick={() => changeType(item)}>
-            {item}
-          </button>
-        ))}
-      </div>
-      <div className="filter-primary-row unified-filter-primary">
-        <SelectField label="Марка" value={brand} onChange={changeBrand} options={brands} searchable />
-        <SelectField label="Модель" value={model} onChange={setModel} options={models} searchable disabled={brand === "Все марки"} />
-        <SelectField label="Год выпуска" value={year} onChange={setYear} options={yearOptions} />
-        <SelectField label="Цена до Минска" value={priceLimit} onChange={setPriceLimit} options={priceOptions} formatOption={(value) => priceLimitLabel(value, currency)} />
-        <SelectField label="Пробег" value={mileage} onChange={setMileage} options={mileageOptions} />
-      </div>
-      {moreFiltersOpen && (
-        <div className="filter-extra-row" id="quick-extra-filters">
-          <SelectField
-            label="Кузов"
-            value={bodyType}
-            onChange={(value) => {
-              setBodyType(value);
-              setModel("Все модели");
-            }}
-            options={bodyTypes}
-          />
-          {Number(availability.drive) > 0 && <SelectField label="Привод" value={drive} onChange={setDrive} options={drives} />} {Number(availability.owners) > 0 && <SelectField label="Владельцы" value={owners} onChange={setOwners} options={ownerOptions} />} {Number(availability.claims) > 0 && <SelectField label="История" value={history} onChange={setHistory} options={historyOptions} />}
-        </div>
-      )}
-      <div className="filter-actions-row">
-        <button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls="quick-extra-filters" onClick={() => setMoreFiltersOpen((open) => !open)}>
-          <SlidersHorizontal size={17} />
-          {moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}
-          <CaretDown size={15} weight="bold" />
-        </button>
-        {submit}
-      </div>
-    </section>
+    <VehicleSearch
+      constrained
+      selectedType={type}
+      onTypeChange={changeType}
+      values={{ brand, model, year, price: priceLimit, mileage, bodyType, drive, owners, history, condition }}
+      actions={{
+        brand: changeBrand,
+        model: setModel,
+        year: setYear,
+        price: setPriceLimit,
+        mileage: setMileage,
+        bodyType: (value) => {
+          setBodyType(value);
+          setModel("Все модели");
+        },
+        drive: setDrive,
+        owners: setOwners,
+        history: setHistory,
+        condition: setCondition,
+      }}
+      options={{ brands, models, bodyTypes, drives }}
+      availability={availability}
+      resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : "2500+"}
+      onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&body=${encodeURIComponent(bodyType)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&history=${encodeURIComponent(history)}&condition=${encodeURIComponent(condition)}`)}
+    />
   );
 }
 
@@ -988,10 +1018,10 @@ function HomeConversionSections({ navigate }) {
     <div className="home-conversion page-width">
       <section className="home-order" aria-labelledby="home-order-title">
         <div className="home-order-intro">
-          <h2 id="home-order-title">Автомобиль из Китая — без неизвестности</h2>
+          <h2 id="home-order-title">Понятный путь к автомобилю из Китая</h2>
           <p>До каждого платежа вы понимаете, что уже проверено, сколько стоит следующий этап и какие документы получите.</p>
           <div className="home-order-actions">
-            <button type="button" className="primary" onClick={() => navigate("/catalog")}>Подобрать автомобиль <ArrowRight size={18} weight="bold" /></button>
+            <button type="button" className="primary" onClick={() => navigate("/catalog")}>Выбрать автомобиль <ArrowRight size={18} weight="bold" /></button>
           </div>
         </div>
         <ol className="home-order-steps">
@@ -1015,8 +1045,8 @@ function HomeConversionSections({ navigate }) {
         <div className="home-faq-intro">
           <span className="home-section-kicker">Коротко о главном</span>
           <h2 id="home-faq-title">Что важно знать до заказа авто из Китая</h2>
-          <p>Подбор и доставка автомобиля из Китая в Беларусь состоят из нескольких отдельных этапов. Мы заранее объясняем цену, проверку, сроки и ответственность сторон — без обещаний, которые невозможно подтвердить.</p>
-          <button type="button" className="home-text-link" onClick={() => navigate("/faq")}>Все вопросы и ответы <ArrowRight size={17} weight="bold" /></button>
+          <p>Подбор и доставка автомобиля из Китая проходят в несколько этапов. Заранее объясняем цену, проверку, сроки и ответственность.</p>
+          <button type="button" className="primary home-faq-link" onClick={() => navigate("/faq")}>Все вопросы и ответы <ArrowRight size={18} weight="bold" /></button>
         </div>
         <div className="home-faq-list">
           {HOME_FAQ.map((item, index) => (
@@ -1028,13 +1058,6 @@ function HomeConversionSections({ navigate }) {
               <p>{item.answer}</p>
             </details>
           ))}
-          <div className="home-faq-cta">
-            <div>
-              <b>Нужна машина, которой нет в каталоге?</b>
-              <span>Опишите модель и бюджет — проверим варианты на китайском рынке.</span>
-            </div>
-            <button type="button" className="primary" onClick={() => navigate("/catalog")}>Начать подбор <ArrowRight size={18} weight="bold" /></button>
-          </div>
         </div>
       </section>
     </div>
@@ -1084,11 +1107,11 @@ function Home({ navigate, cars, apiMode }) {
       <section className="trust-strip page-width">
         <div>
           <span>
-            <ListChecks size={22} weight="duotone" />
+            <CarProfile size={22} weight="duotone" />
           </span>
           <p>
-            <b>Данные обновляются автоматически</b>
-            <small>Цена, пробег и статус наличия</small>
+            <b>Сопровождаем до выдачи</b>
+            <small>От подбора до получения в Минске</small>
           </p>
         </div>
         <div>
@@ -1134,61 +1157,33 @@ function Home({ navigate, cars, apiMode }) {
 }
 
 function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, availability }) {
-  const currency = useCurrency();
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(filters.bodyType !== "Все кузова" || filters.mileage !== ANY_MILEAGE || filters.drive !== "Любой привод" || filters.owners !== "Любое количество" || filters.history !== "Любая история");
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, model: "Все модели" }));
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: "Все модели" }));
   const selectedType = filters.type === "Электромобиль" ? "Электромобили" : filters.type === "Гибрид" ? "Гибриды" : "Все";
   const selectType = (value) => changeType(value === "Электромобили" ? "Электромобиль" : value === "Гибриды" ? "Гибрид" : "Все");
-  const submit = (
-    <button className="primary filter-submit">
-      <MagnifyingGlass size={19} weight="bold" />
-      Показать {resultCount} авто
-    </button>
-  );
   return (
-    <section className="filter-panel unified-search-panel">
-      <div className="type-tabs">
-        {["Все", "Электромобили", "Гибриды"].map((item) => (
-          <button type="button" key={item} className={selectedType === item ? "active" : ""} onClick={() => selectType(item)}>
-            {item}
-          </button>
-        ))}
-      </div>
-      <div className="filter-primary-row unified-filter-primary">
-        <SelectField label="Марка" value={filters.brand} onChange={changeBrand} options={["Все марки", ...brands]} searchable />
-        <SelectField label="Модель" value={filters.model} onChange={update("model")} options={models} searchable disabled={filters.brand === "Все марки"} />
-        <SelectField label="Год выпуска" value={filters.year} onChange={update("year")} options={yearOptions} />
-        <SelectField label="Цена до Минска" value={filters.price} onChange={update("price")} options={priceOptions} formatOption={(value) => priceLimitLabel(value, currency)} />
-        <SelectField label="Пробег" value={filters.mileage} onChange={update("mileage")} options={mileageOptions} />
-      </div>
-      {moreFiltersOpen && (
-        <div className="filter-extra-row" id="catalog-extra-filters">
-          <SelectField
-            label="Кузов"
-            value={filters.bodyType}
-            onChange={(value) =>
-              setFilters((old) => ({
-                ...old,
-                bodyType: value,
-                model: "Все модели",
-              }))
-            }
-            options={bodyTypes}
-          />
-          {Number(availability.drive) > 0 && <SelectField label="Привод" value={filters.drive} onChange={update("drive")} options={drives} />} {Number(availability.owners) > 0 && <SelectField label="Владельцы" value={filters.owners} onChange={update("owners")} options={ownerOptions} />} {Number(availability.claims) > 0 && <SelectField label="История" value={filters.history} onChange={update("history")} options={historyOptions} />}
-        </div>
-      )}
-      <div className="filter-actions-row">
-        <button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls="catalog-extra-filters" onClick={() => setMoreFiltersOpen((open) => !open)}>
-          <SlidersHorizontal size={17} />
-          {moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}
-          <CaretDown size={15} weight="bold" />
-        </button>
-        {submit}
-      </div>
-    </section>
+    <VehicleSearch
+      selectedType={selectedType}
+      onTypeChange={selectType}
+      values={filters}
+      actions={{
+        brand: changeBrand,
+        model: update("model"),
+        year: update("year"),
+        price: update("price"),
+        mileage: update("mileage"),
+        bodyType: (value) => setFilters((old) => ({ ...old, bodyType: value, model: "Все модели" })),
+        drive: update("drive"),
+        owners: update("owners"),
+        history: update("history"),
+        condition: update("condition"),
+      }}
+      options={{ brands: ["Все марки", ...brands], models, bodyTypes, drives }}
+      availability={availability}
+      resultCount={resultCount}
+      initiallyExpanded={filters.bodyType !== "Все кузова" || filters.mileage !== ANY_MILEAGE || filters.drive !== "Любой привод" || filters.owners !== "Любое количество" || filters.history !== "Любая история" || filters.condition !== ANY_CONDITION}
+    />
   );
 }
 
@@ -1367,6 +1362,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const rawDrive = params.get("drive");
   const rawOwners = params.get("owners");
   const rawHistory = params.get("history");
+  const rawCondition = params.get("condition");
   const initialFilters = {
     type: rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",
     brand: rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",
@@ -1378,6 +1374,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     drive: ["Передний", "Задний", "Полный"].includes(rawDrive) ? rawDrive : "Любой привод",
     owners: ownerOptions.includes(rawOwners) ? rawOwners : "Любое количество",
     history: historyOptions.includes(rawHistory) ? rawHistory : "Любая история",
+    condition: conditionOptions.includes(rawCondition) ? rawCondition : ANY_CONDITION,
   };
   const restoredCatalog = window.history.state?.catalog;
   const [filters, setFilters] = useState(() => ({
@@ -1445,6 +1442,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
         drive: cars.filter((car) => car.drive && car.drive !== "Не указан").length,
         owners: cars.filter((car) => Number(car.owners)).length,
         claims: cars.filter((car) => claimCount(car) !== null).length,
+        condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
       };
   const filtered = useMemo(
     () =>
@@ -1476,6 +1474,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     if (filters.drive !== "Любой привод") query.set("drive", filters.drive);
     if (filters.owners !== "Любое количество") query.set("ownersMax", String(filterNumber(filters.owners)));
     if (filters.history === "Без страховых случаев") query.set("noClaims", "1");
+    if (filters.condition !== ANY_CONDITION) query.set("conditionGrade", conditionGrades[filters.condition]);
     if (filters.year !== ANY_YEAR) query.set("yearMin", filters.year.replace(/\D/g, ""));
     if (filters.mileage !== ANY_MILEAGE) query.set("mileageMax", filters.mileage.replace(/\D/g, ""));
     if (filters.price !== ANY_PRICE) query.set("landedMax", filters.price.replace(/\D/g, ""));

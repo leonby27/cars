@@ -14,9 +14,15 @@ test("parameterizes all catalog filters", () => {
 });
 
 test("ignores selector defaults and invalid numbers", () => {
-  const result = buildCarFilters(new URLSearchParams({ type:"Все", brand:"Все марки", yearMin:"nope" }));
+  const result = buildCarFilters(new URLSearchParams({ type:"Все", brand:"Все марки", yearMin:"nope", conditionGrade:"DROP TABLE listings" }));
   assert.deepEqual(result.values, []);
   assert.equal(result.where, "WHERE l.status='active'");
+});
+
+test("filters by an allowlisted condition grade", () => {
+  const result = buildCarFilters(new URLSearchParams({ conditionGrade:"A" }));
+  assert.deepEqual(result.values, ["A"]);
+  assert.match(result.where, /l\.condition_grade=\$1/);
 });
 
 test("uses only allowlisted catalog sort orders", () => {

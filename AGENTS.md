@@ -10,9 +10,15 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 Typography preference: prioritize comfortable readability over ultra-compact UI. Keep every rendered text size at 16px or larger across the project, including supporting copy, controls, labels, badges, and mobile layouts. The uppercase “Срок доставки до Минска” label and the non-offer disclaimer in the vehicle estimate card are explicit 14px exceptions; do not introduce other smaller sizes unless the user explicitly requests them.
 
+Russian typography preference: prevent short Russian prepositions and conjunctions from hanging at the ends of lines throughout the rendered interface, including dynamic content. Keep the shared typography processor enabled instead of relying only on manually inserted non-breaking spaces.
+
 Brand color preference: use red `#EE1C25` for brand accents, links, icons, and active states instead of orange. Use yellow `#F4D90E` with dark text for all regular primary CTA buttons. Preserve red for destructive actions where it communicates danger.
 
-Favicon preference: use a compact red `#EE1C25` favicon with a simple white mark.
+Outline color preference: never use red for borders, outlines, focus rings, or selection rings anywhere in the product. Keep red for text, icons, fills, and semantic danger accents only; use the shared neutral `--focus-ring` token for accessible focus indication.
+
+Select-search focus preference: keep the search field inside an open select to one thin neutral 1px border only. Do not add an outer focus shadow or a second ring; use `--line-strong` for the focused border.
+
+Favicon preference: use a compact red `#EE1C25` favicon with a centered lowercase white `e` rendered as the Comfortaa 700 glyph from the customer-facing wordmark.
 
 Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. On desktop, keep a sticky left-side thumbnail rail for quick navigation and expose the full thumbnail set; on mobile, support horizontal swipe navigation directly on the main gallery.
 
@@ -26,6 +32,10 @@ Home quick-search count preference: when every quick-search filter is at its def
 
 Home conversion content preference: use the space between the vehicle feed and footer for concise trust, objection-handling, and SEO content. Prioritize a transparent order journey and practical answers over generic promotional claims.
 
+Home FAQ appearance preference: place the entire FAQ section inside a rounded light-gray container, use 18px question text, and present every question as a separate rounded white card instead of using divider lines. Keep the question summary at the same 62px minimum height and preserve identical top and bottom padding in both collapsed and expanded states so its title never jumps. Size FAQ grid rows to their content and align the list to the top so closed cards never stretch to fill the height of the intro column. Keep expanded answers inside their question card, render “Все вопросы и ответы” as a regular yellow primary CTA, and do not show a sourcing CTA below the questions.
+
+Home trust-strip preference: lead with “Сопровождаем до выдачи” and the supporting line “От подбора до получения в Минске”; use 18px headings and keep them short enough to remain on one line at desktop widths. Present the three trust points as separate rounded cards on a light-gray surface with each icon inside its own white tile.
+
 Home utility-service preference: place a compact Auto.ru-inspired row of automatic service shortcuts directly below the home search panel, with smaller illustrations and a reserved wide banner slot on the right at desktop widths. Keep the five labels short and on one line: “Таможня”, “Подбор”, “Сравнить”, “Разбор”, “Обслуживание”; size the adjacent banner to the resulting single-row card height. Use original, soft 3D automotive illustrations with borderless tiles; describe only calculations and catalog analysis the product can actually perform, and never claim automatic battery-health diagnostics without BMS or manufacturer data.
 
 Popular-brands preference: keep the home-page brand list in stable alphabetical order by its displayed Latin-script name; do not reorder it by listing count.
@@ -34,7 +44,9 @@ Product brand preference: use `evcars.by` as the customer-facing product name an
 
 Header-navigation preference: do not show the “Доставленные авто” link in the main header navigation; keep delivered cases accessible elsewhere in the site.
 
-Header appearance preference: keep the header minimalist and borderless, with a larger wordmark and primary navigation inside a burger menu instead of inline links. Avoid outlined controls in the header; prefer clean surfaces and filled soft backgrounds where separation is needed.
+Header appearance preference: keep the header container borderless and use the same solid background token as the page (`var(--page)`) in both themes so scrolling content does not show through. Do not use backdrop blur. Use a larger wordmark and keep primary navigation inside a burger menu instead of inline links. Avoid outlined controls in the header; prefer clean surfaces and filled soft backgrounds only for individual controls where separation is needed. Keep the burger-menu button on the same soft filled background as the other header controls in both themes.
+
+Neutral surface hierarchy preference: keep grouped gray surfaces low-contrast against the page. In the dark theme, use `#1b1e22` for grouped/soft surfaces and `#22262b` for cards that are white in the light theme, so nested cards are only slightly lighter than their container; use `#202329` for intermediate control surfaces. Give shared search selects their own higher-contrast `--filter-field-bg` token (`#292d34` in dark and `#f4f5f6` in light) instead of inheriting the generic surface token. Give disabled selects a separate, still-visible `--filter-field-disabled-bg` (`#24282e` in dark and `#eef0f2` in light) so they remain distinguishable from the grouped container without looking active. When a select opens, increase its surface contrast slightly via `--filter-field-open-bg` (`#30343c` in dark and white in light); never make the open trigger darker than its resting state. Dark search panels should be borderless. In the light theme, preserve the existing white-card-on-`#eff1f3` hierarchy.
 
 Logo preference: render the customer-facing `evcars.by` wordmark entirely in lowercase red Comfortaa, using one consistent type size and a visually heavy 700 weight across the full name.
 
@@ -70,7 +82,7 @@ Personal-data preference: do not show placeholder copy about future phone-number
 
 Catalog custom-search preference: when catalog filters return no cars and when a user reaches the end of the results, show a light, white-background CTA offering individual vehicle sourcing, including cars not currently in the catalog. The CTA opens a modal with a vehicle-preferences textarea and phone input; do not use a dark or inverted treatment.
 
-Search filter preference: use the home-page filter as the shared pattern across home and catalog. Keep the “Все / Электромобили / Гибриды” tabs plus brand, model, year, price, and mileage in the primary area. Place body type and optional advanced fields in the collapsible section below. In the lower action row, align the “Ещё фильтры” control left and the primary CTA right; use the red accent color.
+Search filter preference: use one shared `VehicleSearch` component for the home page and catalog so their markup, styling, controls, and behavior remain identical. Only the home-page instance may have a maximum-width constraint; the catalog instance fills its available width. Keep the “Все / Электромобили / Гибриды” tabs plus brand, model, year, price, and mileage in the primary area. Place body type and optional advanced fields in the collapsible section below. In the lower action row, align the “Ещё фильтры” control left and the primary CTA right; use the red accent color.
 
 Filter-field appearance preference: keep shared search fields minimal by hiding visible labels and showing only the bold selected value with its chevron. Preserve each hidden field name as an accessible label.
 
@@ -78,7 +90,7 @@ Expanded search grid preference: on desktop, keep the expanded filter fields in 
 
 Default search filter preference: initial year, price, and mileage values must be explicitly unbounded (“Любой …”), so the initial result count equals the full catalog total. Apply limits only after the user selects one.
 
-Advanced catalog filter preference: show drive, owners, and insurance-history filters only when those fields are present in the returned dataset. Do not offer a range filter while range coverage is incomplete. Disable model selection until a brand is selected.
+Advanced catalog filter preference: show drive, owners, insurance-history, and plain-language vehicle-condition filters only when those fields are present in the returned dataset. Do not offer a range filter while range coverage is incomplete. Disable model selection until a brand is selected.
 
 Expanded filter layout preference: keep the primary “Показать … авто” action in the lower action row both when “Ещё фильтры” is collapsed and expanded.
 

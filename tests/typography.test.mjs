@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { protectRussianShortWords } from "../src/typography.js";
 
 const STYLESHEET_URL = new URL("../src/styles.css", import.meta.url);
 const MINIMUM_FONT_SIZE_PX = 16;
@@ -32,4 +33,19 @@ test("CSS font sizes never fall below 16px outside explicit exceptions", async (
     [],
     `Found font sizes below ${MINIMUM_FONT_SIZE_PX}px:\n${violations.join("\n")}`,
   );
+});
+
+test("binds short Russian words to the following word", () => {
+  assert.equal(
+    protectRussianShortWords("Понятный путь к автомобилю из Китая"),
+    "Понятный путь к\u00a0автомобилю из\u00a0Китая",
+  );
+});
+
+test("binds consecutive short words without changing ordinary spaces", () => {
+  assert.equal(
+    protectRussianShortWords("Документы и оплата в одном месте"),
+    "Документы и\u00a0оплата в\u00a0одном месте",
+  );
+  assert.equal(protectRussianShortWords("Geely Galaxy"), "Geely Galaxy");
 });

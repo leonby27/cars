@@ -37,9 +37,9 @@
   font-size: 16px;
 }
 .order-contact-fields input:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
   background: var(--panel);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 34%, transparent);
 }
 .order-contact-methods {
   min-width: 0;
@@ -74,7 +74,7 @@
   cursor: pointer;
 }
 .order-contact-methods label.selected {
-  border-color: var(--accent);
+  border-color: var(--line-strong);
   background: var(--accent-soft);
   color: var(--ink);
 }
