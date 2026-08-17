@@ -32,12 +32,12 @@ export function normalizeSourceBodyType(value) {
   const source = String(value || "").trim();
   if (!source) return null;
   if (BODY_TYPES.includes(source)) return source;
-  if (/MPV|商务车|多用途/i.test(source)) return "Минивэн";
-  if (/SUV|越野/i.test(source)) return "SUV / кроссовер";
-  if (/旅行|猎装/i.test(source)) return "Универсал";
-  if (/掀背/i.test(source)) return "Лифтбек";
-  if (/两厢/i.test(source)) return "Хэтчбек";
-  if (/三厢|轿车/i.test(source)) return "Седан";
+  if (/MPV|Mini\s*Van|Minivan|商务车|多用途/i.test(source)) return "Минивэн";
+  if (/SUV|Crossover|越野/i.test(source)) return "SUV / кроссовер";
+  if (/Station\s*Wagon|Wagon|Touring|旅行|猎装/i.test(source)) return "Универсал";
+  if (/Liftback|掀背/i.test(source)) return "Лифтбек";
+  if (/Hatchback|两厢/i.test(source)) return "Хэтчбек";
+  if (/Sedan|Saloon|三厢|轿车/i.test(source)) return "Седан";
   return null;
 }
 

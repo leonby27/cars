@@ -230,7 +230,7 @@ button {
 }
 .hero h1 {
   margin: 0;
-  font-size: clamp(36px, 4.5vw, 52px);
+  font-size: clamp(36px, 4vw, 46px);
   font-weight: 800;
   line-height: 1.08;
   letter-spacing: -2.4px;
@@ -263,6 +263,17 @@ button {
 .hero-benefits svg {
   flex: 0 0 auto;
   color: var(--green);
+}
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 .search-box {
   width: min(1080px, 100%);
@@ -358,6 +369,76 @@ button {
 }
 .search-submit {
   min-height: 58px;
+}
+.useful-services {
+  width: min(1080px, 100%);
+  margin: 28px auto 0;
+  text-align: left;
+}
+.useful-services-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 620px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.useful-services-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.useful-service-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: transform 0.18s ease;
+}
+.useful-service-card:any-link {
+  color: var(--ink);
+  text-decoration: none;
+}
+.useful-service-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--surface);
+  transition: box-shadow 0.18s ease;
+}
+.useful-service-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.useful-service-title {
+  min-height: 20px;
+  padding: 0 3px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+}
+.useful-services-banner-slot {
+  align-self: stretch;
+  min-height: 0;
+  border-radius: 20px;
+  background: var(--surface);
+}
+.useful-service-card:hover {
+  transform: translateY(-3px);
+}
+.useful-service-card:hover .useful-service-art {
+  box-shadow: 0 12px 28px rgba(24, 27, 32, 0.12);
+}
+.useful-service-card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  outline-offset: 5px;
+  border-radius: 20px;
 }
 .popular-brands {
   width: min(1080px, calc(100% - 48px));
@@ -1977,6 +2058,9 @@ button {
 :root[data-theme="dark"] .hero {
   background: var(--page);
 }
+:root[data-theme="dark"] .useful-service-card:hover .useful-service-art {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
+}
 :root[data-theme="dark"] :where(
   .search-box,
   .featured-card,
@@ -2626,6 +2710,12 @@ button {
   .quick-fields {
     grid-template-columns: repeat(3, 1fr);
   }
+  .useful-services-layout {
+    grid-template-columns: 1fr;
+  }
+  .useful-services-banner-slot {
+    display: none;
+  }
   .popular-brands-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     column-gap: 24px;
@@ -2724,6 +2814,36 @@ button {
   .search-box {
     padding: 12px;
     border-radius: 14px;
+  }
+  .useful-services {
+    width: calc(100vw - 14px);
+    margin-top: 22px;
+    margin-left: 0;
+    overflow: hidden;
+  }
+  .useful-services-grid {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 132px;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 2px 14px 10px 0;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .useful-services-grid::-webkit-scrollbar {
+    display: none;
+  }
+  .useful-service-card {
+    scroll-snap-align: start;
+  }
+  .useful-service-art {
+    border-radius: 17px;
+  }
+  .useful-service-title {
+    min-height: 20px;
+    padding: 0 2px;
+    font-size: 16px;
   }
   .type-tabs {
     overflow-x: auto;

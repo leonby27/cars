@@ -14,3 +14,10 @@ test("uses the model dictionary when source body data is absent", () => {
   assert.equal(normalizeBodyType({ brand:"BYD", model:"Seagull" }), "Хэтчбек");
   assert.equal(normalizeBodyType({ brand:"Zeekr", model:"001" }), "Универсал");
 });
+
+test("normalizes English body types from global listings", () => {
+  assert.equal(normalizeBodyType({ bodyStructure:"Sedan" }), "Седан");
+  assert.equal(normalizeBodyType({ vehicleClass:"Hatchback" }), "Хэтчбек");
+  assert.equal(normalizeBodyType({ bodyStructure:"Wagon" }), "Универсал");
+  assert.equal(normalizeBodyType({ vehicleClass:"Mini Van" }), "Минивэн");
+});

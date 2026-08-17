@@ -4,6 +4,7 @@ import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
+import { selectSimilarCars } from "./similar-cars.js";
 import { COMPANY } from "./company-data.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
@@ -789,35 +790,10 @@ function FeaturedCard({ car, onClick, navigate }) {
   );
 }
 
-function similarCarScore(current, candidate) {
-  const currentPrice = Number(current.chinaPrice) || 0;
-  const candidatePrice = Number(candidate.chinaPrice) || 0;
-  const priceDifference = currentPrice && candidatePrice ? Math.abs(currentPrice - candidatePrice) / currentPrice : 1;
-  const yearDifference = Math.abs((Number(current.year) || 0) - (Number(candidate.year) || 0));
-  return (
-    (candidate.model === current.model ? 80 : 0) +
-    (candidate.brand === current.brand ? 42 : 0) +
-    (candidate.bodyType === current.bodyType ? 18 : 0) +
-    (candidate.type === current.type ? 14 : 0) +
-    (candidate.drive === current.drive ? 6 : 0) +
-    Math.max(0, 12 - yearDifference * 4) +
-    Math.max(0, 18 - priceDifference * 36)
-  );
-}
-
 function SimilarCarsSlider({ car, cars, navigate }) {
   const trackRef = useRef(null);
   const [controls, setControls] = useState({ previous: false, next: true });
-  const similarCars = useMemo(
-    () =>
-      cars
-        .filter((candidate) => candidate.id !== car.id)
-        .map((candidate) => ({ candidate, score: similarCarScore(car, candidate) }))
-        .sort((left, right) => right.score - left.score || String(left.candidate.id).localeCompare(String(right.candidate.id)))
-        .slice(0, 12)
-        .map(({ candidate }) => candidate),
-    [car, cars],
-  );
+  const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars]);
 
   const updateControls = () => {
     const track = trackRef.current;
@@ -946,6 +922,60 @@ function PopularBrands({ navigate, cars, apiMode }) {
             <span>{brand}</span>
           </AppLink>
         ))}
+      </div>
+    </section>
+  );
+}
+
+const HOME_SERVICES = [
+  {
+    id: "landed-cost",
+    title: "Таможня",
+    image: "services/landed-cost.png",
+    href: "/catalog",
+  },
+  {
+    id: "budget-match",
+    title: "Подбор",
+    image: "services/budget-match.png",
+    href: "/catalog",
+  },
+  {
+    id: "compare-cars",
+    title: "Сравнить",
+    image: "services/compare-cars.png",
+    href: "/catalog",
+  },
+  {
+    id: "listing-analysis",
+    title: "Разбор",
+    image: "services/listing-analysis.png",
+    href: "/catalog",
+  },
+  {
+    id: "charging-range",
+    title: "Обслуживание",
+    image: "services/charging-range.png",
+    href: `/catalog?type=${encodeURIComponent("Электромобили")}`,
+  },
+];
+
+function UsefulServices({ navigate }) {
+  return (
+    <section className="useful-services" aria-labelledby="useful-services-title">
+      <h2 className="visually-hidden" id="useful-services-title">Полезные сервисы</h2>
+      <div className="useful-services-layout">
+        <div className="useful-services-grid">
+          {HOME_SERVICES.map((service) => (
+            <AppLink className="useful-service-card" href={service.href} navigate={navigate} key={service.id}>
+              <span className="useful-service-art">
+                <img src={`${import.meta.env.BASE_URL}${service.image}`} alt="" loading="lazy" />
+              </span>
+              <span className="useful-service-title">{service.title}</span>
+            </AppLink>
+          ))}
+        </div>
+        <aside className="useful-services-banner-slot" aria-label="Место для баннера" />
       </div>
     </section>
   );
