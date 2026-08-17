@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, Lightning, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -362,6 +362,28 @@ function ClientSeo({ path, car, landing }) {
 
 function Header({ navigate, favoritesCount, path, currency, setCurrency, user, theme, toggleTheme }) {
   const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [path]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const closeMenu = (event) => {
+      if (event.key === "Escape" || (event.type === "pointerdown" && !menuRef.current?.contains(event.target))) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    document.addEventListener("keydown", closeMenu);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeMenu);
+    };
+  }, [menuOpen]);
+
   return (
     <header className="site-header">
       <div className="header-inner">
@@ -369,20 +391,32 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
           ev<span>cars</span>
           <small>.by</small>
         </AppLink>
-        <nav className="desktop-nav" aria-label="Основная навигация">
-          <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>
-            Автомобили
-          </AppLink>
-          <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>
-            Как это работает
-          </AppLink>
-          <AppLink href="/about" navigate={navigate} className={path === "/about" ? "active" : ""} aria-current={path === "/about" ? "page" : undefined}>
-            О компании
-          </AppLink>
-          <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>
-            Контакты
-          </AppLink>
-        </nav>
+        <div className="header-menu-shell" ref={menuRef}>
+          <button
+            type="button"
+            className={`header-menu-trigger${menuOpen ? " open" : ""}`}
+            aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"}
+            aria-expanded={menuOpen}
+            aria-controls="header-menu"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <X size={25} weight="bold" /> : <List size={27} weight="bold" />}
+          </button>
+          {menuOpen && (
+            <div className="header-menu" id="header-menu">
+              <nav aria-label="Основная навигация">
+                <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>Автомобили</AppLink>
+                <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>Как это работает</AppLink>
+                <AppLink href="/about" navigate={navigate} className={path === "/about" ? "active" : ""} aria-current={path === "/about" ? "page" : undefined}>О компании</AppLink>
+                <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
+              </nav>
+              <div className="header-menu-currency" role="group" aria-label="Валюта цен">
+                <button type="button" className={currency === "USD" ? "active" : ""} aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>$</button>
+                <button type="button" className={currency === "BYN" ? "active" : ""} aria-pressed={currency === "BYN"} onClick={() => setCurrency("BYN")}>BYN</button>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="header-actions">
           <div className="currency-switch" role="group" aria-label="Валюта цен">
             <button type="button" className={currency === "USD" ? "active" : ""} aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>
@@ -511,8 +545,7 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
 
   return (
     <div className={`select-field custom-select${className ? ` ${className}` : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
-      <span>{label}</span>
-      <button ref={triggerRef} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
+      <button ref={triggerRef} type="button" className="select-trigger" aria-label={label} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
         <b>{formatOption(value)}</b>
         <CaretDown size={16} weight="bold" />
       </button>
@@ -925,12 +958,10 @@ function HomeConversionSections({ navigate }) {
     <div className="home-conversion page-width">
       <section className="home-order" aria-labelledby="home-order-title">
         <div className="home-order-intro">
-          <span className="home-section-kicker">Как проходит заказ</span>
-          <h2 id="home-order-title">Автомобиль из Китая — без неизвестности между заявкой и выдачей</h2>
+          <h2 id="home-order-title">Автомобиль из Китая — без неизвестности</h2>
           <p>До каждого платежа вы понимаете, что уже проверено, сколько стоит следующий этап и какие документы получите.</p>
           <div className="home-order-actions">
             <button type="button" className="primary" onClick={() => navigate("/catalog")}>Подобрать автомобиль <ArrowRight size={18} weight="bold" /></button>
-            <button type="button" className="home-text-link" onClick={() => navigate("/how-it-works")}>Весь процесс <CaretRight size={17} weight="bold" /></button>
           </div>
         </div>
         <ol className="home-order-steps">
@@ -1011,12 +1042,12 @@ function Home({ navigate, cars, apiMode }) {
   return (
     <main>
       <section className="hero">
-        <div className="eyebrow">
-          <Sparkle size={16} weight="fill" />
-          Автомобили из Китая под заказ
-        </div>
-        <h1>Автомобили с пробегом из Китая с доставкой в Беларусь</h1>
-        <p>Актуальные объявления, проверка перед покупкой и предварительный расчёт стоимости до Минска</p>
+        <h1>Доставим б/у авто из Китая в Беларусь</h1>
+        <ul className="hero-benefits" aria-label="Преимущества заказа">
+          <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
+          <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
+          <li><CheckCircle size={21} weight="fill" />Оплата без посредников</li>
+        </ul>
         <QuickSearch navigate={navigate} cars={cars} apiMode={apiMode} />
       </section>
       <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />
