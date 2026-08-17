@@ -30,5 +30,9 @@ test("uses only allowlisted catalog sort orders", () => {
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"price_asc" })), "l.estimated_total_usd ASC NULLS LAST, l.id");
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"price_desc" })), "l.estimated_total_usd DESC NULLS LAST, l.id");
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"mileage_asc" })), "l.mileage_km ASC NULLS LAST, l.id");
-  assert.equal(buildCarOrder(new URLSearchParams({ sort:"DROP TABLE listings" })), "l.last_checked_at DESC NULLS LAST, l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"range_desc" })), "COALESCE(v.electric_range_km, v.combined_range_km) DESC NULLS LAST, l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"newest" })), "NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz DESC NULLS LAST, l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"year_desc" })), "v.model_year DESC NULLS LAST, l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"year_asc" })), "v.model_year ASC NULLS LAST, l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"DROP TABLE listings" })), "NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz DESC NULLS LAST, l.id");
 });

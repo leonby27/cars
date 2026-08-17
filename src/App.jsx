@@ -5,6 +5,7 @@ import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { selectSimilarCars } from "./similar-cars.js";
+import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
 import { COMPANY } from "./company-data.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
@@ -404,10 +405,15 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
             aria-controls="header-menu"
             onClick={() => setMenuOpen((open) => !open)}
           >
-            {menuOpen ? <X size={25} weight="bold" /> : <List size={27} weight="bold" />}
+            <span className="header-menu-icon header-menu-icon-list"><List size={27} weight="bold" /></span>
+            <span className="header-menu-icon header-menu-icon-close"><X size={25} weight="bold" /></span>
           </button>
-          {menuOpen && (
-            <div className="header-menu" id="header-menu">
+          <div
+            className={`header-menu${menuOpen ? " open" : ""}`}
+            id="header-menu"
+            aria-hidden={!menuOpen}
+            inert={menuOpen ? undefined : ""}
+          >
               <nav aria-label="Основная навигация">
                 <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>Автомобили</AppLink>
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>Как это работает</AppLink>
@@ -418,8 +424,7 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
                 <button type="button" className={currency === "USD" ? "active" : ""} aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>$</button>
                 <button type="button" className={currency === "BYN" ? "active" : ""} aria-pressed={currency === "BYN"} onClick={() => setCurrency("BYN")}>BYN</button>
               </div>
-            </div>
-          )}
+          </div>
         </div>
         <div className="header-actions">
           <div className="currency-switch" role="group" aria-label="Валюта цен">
@@ -462,7 +467,16 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
   );
 }
 
-function SelectField({ label, value, options, onChange, searchable = false, className = "", disabled = false, formatOption = (item) => item }) {
+function AppLoader() {
+  return (
+    <main className="app-loader" aria-live="polite" aria-busy="true">
+      <div className="app-loader-spinner" aria-hidden="true" />
+      <p>Загружаем объявления</p>
+    </main>
+  );
+}
+
+function SelectField({ label, value, options, onChange, searchable = false, className = "", disabled = false, formatOption = (item) => item, optionCounts }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(Math.max(0, options.indexOf(value)));
   const [query, setQuery] = useState("");
@@ -553,8 +567,8 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
         <b>{formatOption(value)}</b>
         <CaretDown size={16} weight="bold" />
       </button>
-      {open && !disabled && (
-        <div className="select-menu">
+      {!disabled && (
+        <div className={`select-menu${open ? " open" : ""}`} aria-hidden={!open} inert={open ? undefined : ""}>
           {searchable && (
             <div className="select-search">
               <MagnifyingGlass size={16} />
@@ -576,12 +590,18 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
           )}
           <div className="select-options" id={listId} role="listbox" aria-label={label}>
             {filteredOptions.length ? (
-              filteredOptions.map((item, index) => (
-                <button type="button" id={`${listId}-${index}`} role="option" aria-selected={item === value} className={`${item === value ? "selected" : ""}${index === activeIndex ? " active" : ""}`} key={item} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(item)}>
-                  <span>{formatOption(item)}</span>
-                  {item === value && <Check size={16} weight="bold" />}
-                </button>
-              ))
+              filteredOptions.map((item, index) => {
+                const optionCount = optionCounts?.get(item);
+                return (
+                  <button type="button" id={`${listId}-${index}`} role="option" aria-selected={item === value} className={`${item === value ? "selected" : ""}${index === activeIndex ? " active" : ""}`} key={item} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(item)}>
+                    <span className="select-option-label">
+                      <span>{formatOption(item)}</span>
+                      {Number.isFinite(optionCount) && <small className="select-option-count">{number(optionCount)}</small>}
+                    </span>
+                    {item === value && <Check size={16} weight="bold" />}
+                  </button>
+                );
+              })
             ) : (
               <p className="select-empty">Ничего не найдено</p>
             )}
@@ -592,7 +612,22 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
   );
 }
 
-function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, availability, resultCount, onSubmit, initiallyExpanded = false }) {
+function HomeFaqItem({ item, initiallyOpen = false }) {
+  const [open, setOpen] = useState(initiallyOpen);
+  return (
+    <article className={`home-faq-item${open ? " open" : ""}`}>
+      <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <span>{item.question}</span>
+        <CaretDown size={20} weight="bold" aria-hidden="true" />
+      </button>
+      <div className="animated-disclosure" aria-hidden={!open}>
+        <div><p>{item.answer}</p></div>
+      </div>
+    </article>
+  );
+}
+
+function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, hasActiveFilters = false, initiallyExpanded = false }) {
   const currency = useCurrency();
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(initiallyExpanded);
   const extraFiltersId = useId();
@@ -607,8 +642,8 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
         ))}
       </div>
       <div className="filter-primary-row unified-filter-primary">
-        <SelectField label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} searchable />
-        <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} searchable disabled={values.brand === "Все марки"} />
+        <SelectField label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} searchable />
+        <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} optionCounts={optionCounts?.models} searchable disabled={values.brand === "Все марки"} />
         <SelectField label="Год выпуска" value={values.year} onChange={actions.year} options={yearOptions} />
         <SelectField label="Цена до Минска" value={values.price} onChange={actions.price} options={priceOptions} formatOption={(value) => priceLimitLabel(value, currency)} />
         <SelectField label="Пробег" value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
@@ -628,6 +663,11 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           {moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}
           <CaretDown size={15} weight="bold" />
         </button>
+        {hasActiveFilters && (
+          <button type="button" className="search-reset" onClick={onReset}>
+            Сбросить
+          </button>
+        )}
         <button type="button" className="primary search-submit" onClick={onSubmit}>
           <MagnifyingGlass size={20} weight="bold" />
           Показать {resultCount} авто
@@ -658,9 +698,16 @@ function QuickSearch({ navigate, cars, apiMode }) {
   });
   const [remoteCount, setRemoteCount] = useState(0);
   const normalizedType = type === "Электромобили" ? "Электромобиль" : type === "Гибриды" ? "Гибрид" : "Все";
+  const brandCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (bodyType === "Все кузова" || car.bodyType === bodyType));
   const modelCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand) && (bodyType === "Все кузова" || car.bodyType === bodyType));
   const brands = ["Все марки", ...(apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand)))];
   const models = ["Все модели", ...(apiMode ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
+  const brandEntries = apiMode ? remoteMeta.brands : [...brandCars.reduce((counts, car) => counts.set(car.brand, (counts.get(car.brand) || 0) + 1), new Map())].map(([brandName, count]) => ({ brand:brandName, count }));
+  const modelEntries = apiMode ? remoteMeta.models : [...modelCars.reduce((counts, car) => counts.set(car.model, (counts.get(car.model) || 0) + 1), new Map())].map(([modelName, count]) => ({ model:modelName, count }));
+  const brandOptionCounts = new Map(brandEntries.map((item) => [item.brand, Number(item.count) || 0]));
+  const modelOptionCounts = new Map(modelEntries.map((item) => [item.model, Number(item.count) || 0]));
+  if (brandEntries.length) brandOptionCounts.set("Все марки", brandEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
+  if (modelEntries.length) modelOptionCounts.set("Все модели", modelEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
   const bodyTypes = ["Все кузова", ...(apiMode ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
   const drives = ["Любой привод", ...(apiMode ? remoteMeta.drives.map((item) => item.drive) : uniqueSorted(cars.map((car) => car.drive).filter((value) => value && value !== "Не указан")))];
   const availability = apiMode
@@ -727,6 +774,19 @@ function QuickSearch({ navigate, cars, apiMode }) {
     setBrand(value);
     setModel("Все модели");
   };
+  const resetFilters = () => {
+    setType("Все");
+    setBrand("Все марки");
+    setModel("Все модели");
+    setBodyType("Все кузова");
+    setYear(ANY_YEAR);
+    setMileage(ANY_MILEAGE);
+    setPriceLimit(ANY_PRICE);
+    setDrive("Любой привод");
+    setOwners("Любое количество");
+    setHistory("Любая история");
+    setCondition(ANY_CONDITION);
+  };
   return (
     <VehicleSearch
       constrained
@@ -749,8 +809,11 @@ function QuickSearch({ navigate, cars, apiMode }) {
         condition: setCondition,
       }}
       options={{ brands, models, bodyTypes, drives }}
+      optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }}
       availability={availability}
       resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : "2500+"}
+      hasActiveFilters={hasActiveFilters}
+      onReset={resetFilters}
       onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&body=${encodeURIComponent(bodyType)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&history=${encodeURIComponent(history)}&condition=${encodeURIComponent(condition)}`)}
     />
   );
@@ -944,12 +1007,13 @@ function PopularBrands({ navigate, cars, apiMode }) {
         </AppLink>
       </div>
       <div className="popular-brands-grid">
-        {brands.map(({ brand }) => (
-          <AppLink className="brand-link" key={brand} href={`/catalog?brand=${encodeURIComponent(brand)}`} navigate={navigate} aria-label={`Перейти к предложениям ${brand}`}>
+        {brands.map(({ brand, count }) => (
+          <AppLink className="brand-link" key={brand} href={`/catalog?brand=${encodeURIComponent(brand)}`} navigate={navigate} aria-label={`Перейти к предложениям ${brand}, объявлений: ${number(count)}`}>
             <span className="brand-logo" aria-hidden="true">
               <img src={`${import.meta.env.BASE_URL}brands/${brandLogos[brand]}`} alt="" />
             </span>
-            <span>{brand}</span>
+            <span className="brand-name">{brand}</span>
+            <span className="brand-count" aria-hidden="true">{number(count)}</span>
           </AppLink>
         ))}
       </div>
@@ -1050,13 +1114,7 @@ function HomeConversionSections({ navigate }) {
         </div>
         <div className="home-faq-list">
           {HOME_FAQ.map((item, index) => (
-            <details key={item.question} open={index === 0}>
-              <summary>
-                <span>{item.question}</span>
-                <CaretDown size={20} weight="bold" aria-hidden="true" />
-              </summary>
-              <p>{item.answer}</p>
-            </details>
+            <HomeFaqItem key={item.question} item={item} initiallyOpen={index === 0} />
           ))}
         </div>
       </section>
@@ -1156,12 +1214,26 @@ function Home({ navigate, cars, apiMode }) {
   );
 }
 
-function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, availability }) {
+function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, optionCounts, availability }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, model: "Все модели" }));
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: "Все модели" }));
   const selectedType = filters.type === "Электромобиль" ? "Электромобили" : filters.type === "Гибрид" ? "Гибриды" : "Все";
   const selectType = (value) => changeType(value === "Электромобили" ? "Электромобиль" : value === "Гибриды" ? "Гибрид" : "Все");
+  const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || filters.model !== "Все модели" || filters.bodyType !== "Все кузова" || filters.year !== ANY_YEAR || filters.mileage !== ANY_MILEAGE || filters.price !== ANY_PRICE || filters.drive !== "Любой привод" || filters.owners !== "Любое количество" || filters.history !== "Любая история" || filters.condition !== ANY_CONDITION;
+  const resetFilters = () => setFilters(() => ({
+    type: "Все",
+    brand: "Все марки",
+    model: "Все модели",
+    bodyType: "Все кузова",
+    year: ANY_YEAR,
+    mileage: ANY_MILEAGE,
+    price: ANY_PRICE,
+    drive: "Любой привод",
+    owners: "Любое количество",
+    history: "Любая история",
+    condition: ANY_CONDITION,
+  }));
   return (
     <VehicleSearch
       selectedType={selectedType}
@@ -1180,8 +1252,11 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
         condition: update("condition"),
       }}
       options={{ brands: ["Все марки", ...brands], models, bodyTypes, drives }}
+      optionCounts={optionCounts}
       availability={availability}
       resultCount={resultCount}
+      hasActiveFilters={hasActiveFilters}
+      onReset={resetFilters}
       initiallyExpanded={filters.bodyType !== "Все кузова" || filters.mileage !== ANY_MILEAGE || filters.drive !== "Любой привод" || filters.owners !== "Любое количество" || filters.history !== "Любая история" || filters.condition !== ANY_CONDITION}
     />
   );
@@ -1229,9 +1304,9 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen }) {
               {car.range} км
             </span>
           )}
-          <span>
+          <span className="body-type-spec" title={car.bodyType}>
             <CarProfile size={17} />
-            {car.bodyType}
+            <span>{car.bodyType}</span>
           </span>
         </div>
         <div className="source-line">
@@ -1251,9 +1326,6 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen }) {
         <span>Под ключ</span>
         <b>{number(car.chinaPrice)} ¥</b>
         <small>цена в Китае</small>
-        <button>
-          Подробнее <ArrowRight size={16} />
-        </button>
       </div>
     </article>
   );
@@ -1346,10 +1418,13 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
 function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const pageSize = 24;
   const sortOptions = [
-    { value: "newest", label: "Сначала новые" },
-    { value: "price_asc", label: "Сначала дешевле" },
-    { value: "price_desc", label: "Сначала дороже" },
-    { value: "mileage_asc", label: "С меньшим пробегом" },
+    { value: "price_asc", label: "Дешёвые" },
+    { value: "price_desc", label: "Дорогие" },
+    { value: "newest", label: "Новые объявления" },
+    { value: "mileage_asc", label: "С наименьшим пробегом" },
+    { value: "range_desc", label: "С наибольшим запасом хода" },
+    { value: "year_desc", label: "Новые по году" },
+    { value: "year_asc", label: "Старые по году" },
   ];
   const params = new URLSearchParams(window.location.search);
   const rawType = params.get("type");
@@ -1432,8 +1507,15 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     setSort(value);
   };
   const brands = apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand));
+  const brandCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType));
   const models = ["Все модели", ...(apiMode ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
+  const brandEntries = apiMode ? remoteMeta.brands : [...brandCars.reduce((counts, car) => counts.set(car.brand, (counts.get(car.brand) || 0) + 1), new Map())].map(([brandName, count]) => ({ brand:brandName, count }));
+  const modelEntries = apiMode ? remoteMeta.models : [...modelCars.reduce((counts, car) => counts.set(car.model, (counts.get(car.model) || 0) + 1), new Map())].map(([modelName, count]) => ({ model:modelName, count }));
+  const brandOptionCounts = new Map(brandEntries.map((item) => [item.brand, Number(item.count) || 0]));
+  const modelOptionCounts = new Map(modelEntries.map((item) => [item.model, Number(item.count) || 0]));
+  if (brandEntries.length) brandOptionCounts.set("Все марки", brandEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
+  if (modelEntries.length) modelOptionCounts.set("Все модели", modelEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
   const bodyTypes = ["Все кузова", ...(apiMode ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
   const drives = ["Любой привод", ...(apiMode ? remoteMeta.drives.map((item) => item.drive) : uniqueSorted(cars.map((car) => car.drive).filter((value) => value && value !== "Не указан")))];
   const availability = apiMode
@@ -1577,7 +1659,22 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       <div className="catalog-heading">
         <h1>Автомобили с пробегом из Китая</h1>
       </div>
-      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={resultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} availability={availability} />
+      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={resultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} />
+      {filters.brand !== "Все марки" && models.length > 1 && (
+        <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
+          {models.map((model) => (
+            <button
+              type="button"
+              key={model}
+              className={filters.model === model ? "active" : ""}
+              aria-pressed={filters.model === model}
+              onClick={() => updateFilters((current) => ({ ...current, model }))}
+            >
+              {model}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="catalog-layout">
         <section className="results-list">
           <div className="result-tools">
@@ -2041,11 +2138,13 @@ function CustomSearchModal({ filters, onClose }) {
 function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }) {
   const currency = useCurrency();
   const [availabilityUnavailableOpen, setAvailabilityUnavailableOpen] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   useEffect(() => {
     if (car) trackEvent("vehicle_view", { listingId:car.id, listingTitle:car.title });
   }, [car?.id]);
   if (!car) return <NotFound navigate={navigate} />;
   const price = estimateLandedCost(car);
+  const quickInfo = buildVehicleQuickInfo(car);
   const specs = [
     [CalendarBlank, "Год", car.year],
     [Gauge, "Пробег", `${number(car.mileage)} км`],
@@ -2066,9 +2165,11 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
       <div className="breadcrumbs">
         <button onClick={() => navigate("/")}>Главная</button>
         <CaretRight size={13} />
-        <button onClick={backToCatalog}>Автомобили</button>
+        <button onClick={backToCatalog}>Автомобили из Китая</button>
         <CaretRight size={13} />
-        {car.title}
+        <button onClick={() => navigate(`/catalog?brand=${encodeURIComponent(car.brand)}`)}>{car.brand}</button>
+        <CaretRight size={13} />
+        {car.model} {car.year}
       </div>
       <button className="back-mobile" onClick={backToCatalog}>
         <ArrowLeft size={18} />
@@ -2110,9 +2211,16 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
           </aside>
         </div>
         <div className="detail-sidebar">
+          {quickInfo.length > 0 && (
+            <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
+              <span className="vehicle-quick-info-label">Основная информация</span>
+              <p>{quickInfo.slice(0, 3).join(", ")}{quickInfo.length <= 3 ? "." : ""}</p>
+              {quickInfo.length > 3 && <p>{quickInfo.slice(3).join(", ")}.</p>}
+            </section>
+          )}
           <aside className="order-card">
-            <div className="price-card-header">
-              <span>Предварительный расчёт</span>
+            <div className="price-total" aria-label="Ориентировочная стоимость до Минска">
+              <strong>{approximateMoney(price.totalLow, price.totalHigh, currency)}</strong>
             </div>
             <div className="price-breakdown">
               <div>
@@ -2136,16 +2244,11 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
                 <strong>{money(price.serviceUsd, currency)}</strong>
               </div>
             </div>
-            <div className="price-total">
-              <span>Итого</span>
-              <strong>{approximateMoney(price.totalLow, price.totalHigh, currency)}</strong>
-            </div>
             <div className="price-assumption">
-              <Info size={16} />
               <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
             </div>
-            <details className="delivery-disclosure">
-              <summary className="delivery-card-heading">
+            <section className={`delivery-disclosure${deliveryOpen ? " open" : ""}`}>
+              <button type="button" className="delivery-card-heading" aria-expanded={deliveryOpen} onClick={() => setDeliveryOpen((open) => !open)}>
                 <div className="delivery-card-icon">
                   <Clock size={23} weight="duotone" />
                 </div>
@@ -2154,38 +2257,37 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
                   <h2>35–50 дней</h2>
                 </div>
                 <CaretDown className="disclosure-caret" size={20} weight="bold" />
-              </summary>
-              <div className="disclosure-content delivery-disclosure-content">
-                <p className="delivery-intro">Ориентировочный срок с момента подписания договора до прибытия автомобиля в Минск.</p>
+              </button>
+              <div className="animated-disclosure" aria-hidden={!deliveryOpen}>
+                <div className="disclosure-content delivery-disclosure-content">
+                <p className="delivery-intro">От договора до прибытия авто в Минск.</p>
                 <div className="delivery-stages">
                   <div>
                     <ListChecks size={20} />
                     <p>
-                      <b>Выкуп и подготовка</b>
-                      <span>Проверяем автомобиль, проводим оплату и готовим экспортные документы.</span>
+                      <b>Выкуп и подготовка — 2–4 дня</b>
                     </p>
                   </div>
                   <div>
                     <MapPin size={20} />
                     <p>
-                      <b>Логистика по Китаю</b>
-                      <span>Доставляем автомобиль до пункта отправки и оформляем вывоз.</span>
+                      <b>Логистика по Китаю — 3–6 дней</b>
                     </p>
                   </div>
                   <div>
                     <CarProfile size={20} />
                     <p>
-                      <b>Маршрут до Минска</b>
-                      <span>Международная перевозка, прохождение границы и прибытие в Минск.</span>
+                      <b>Маршрут до Минска — 30–40 дней</b>
                     </p>
                   </div>
                 </div>
                 <div className="delivery-note">
                   <Info size={16} />
-                  <span>Срок зависит от города продавца, очередей на границе, маршрута и графика перевозчика.</span>
+                  <span>Срок зависит от города продавца, границы и маршрута.</span>
+                </div>
                 </div>
               </div>
-            </details>
+            </section>
             <button className="primary report-order-cta" onClick={() => { trackEvent("availability_click", { listingId:car.id, listingTitle:car.title }); setAvailabilityUnavailableOpen(true); }}>
               Уточнить актуальность авто
             </button>
@@ -2979,7 +3081,7 @@ function FaqPage({ navigate }) {
               {group.items.map((item, itemIndex) => {
                 const itemKey = `${groupIndex}-${itemIndex}`;
                 const open = openItem === itemKey;
-                return <article className={open ? "open" : ""} key={item.question}><button type="button" aria-expanded={open} onClick={() => setOpenItem(open ? null : itemKey)}><span>{item.question}</span><b aria-hidden="true">{open ? "−" : "+"}</b></button>{open && <p>{item.answer}</p>}</article>;
+                return <article className={open ? "open" : ""} key={item.question}><button type="button" aria-expanded={open} onClick={() => setOpenItem(open ? null : itemKey)}><span>{item.question}</span><b aria-hidden="true">{open ? "−" : "+"}</b></button><div className="animated-disclosure" aria-hidden={!open}><div><p>{item.answer}</p></div></div></article>;
               })}
             </div>
           </div>
@@ -4194,10 +4296,7 @@ export function App() {
     path === "/analytics" ? (
       <AnalyticsPage />
     ) : loading || routeLoading ? (
-      <main className="simple-page page-width">
-        <span>Guazi</span>
-        <h1>Загружаем реальные объявления…</h1>
-      </main>
+      <AppLoader />
     ) : loadError ? (
       <main className="simple-page page-width">
         <span>Импорт временно недоступен</span>

@@ -8,7 +8,9 @@ When implementing from a selected generated mock, treat that image as the source
 
 Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
 
-Typography preference: prioritize comfortable readability over ultra-compact UI. Keep every rendered text size at 16px or larger across the project, including supporting copy, controls, labels, badges, and mobile layouts. The uppercase “Срок доставки до Минска” label and the non-offer disclaimer in the vehicle estimate card are explicit 14px exceptions; do not introduce other smaller sizes unless the user explicitly requests them.
+Typography preference: prioritize comfortable readability over ultra-compact UI. Keep every rendered text size at 16px or larger across the project, including supporting copy, controls, labels, badges, and mobile layouts. The muted “Срок доставки до Минска” label, the “Основная информация” label, and the non-offer disclaimer in the vehicle estimate card are explicit sub-16px exceptions; do not introduce other smaller sizes unless the user explicitly requests them. Match the delivery label typography to the “Основная информация” label instead of uppercasing it.
+
+Vehicle estimate density preference: in the detail sidebar, lead the estimate with the final landed-price figure aligned left and do not label it “Итого” or show a “Предварительный расчёт” heading. Keep intermediate labels and prices slightly smaller, omit dividers between them, and render the non-offer disclaimer as an extra-small plain text line without an icon.
 
 Russian typography preference: prevent short Russian prepositions and conjunctions from hanging at the ends of lines throughout the rendered interface, including dynamic content. Keep the shared typography processor enabled instead of relying only on manually inserted non-breaking spaces.
 
@@ -20,9 +22,15 @@ Select-search focus preference: keep the search field inside an open select to o
 
 Favicon preference: use a compact red `#EE1C25` favicon with a centered lowercase white `e` rendered as the Comfortaa 700 glyph from the customer-facing wordmark.
 
-Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. On desktop, keep a sticky left-side thumbnail rail for quick navigation and expose the full thumbnail set; on mobile, support horizontal swipe navigation directly on the main gallery.
+Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. On desktop, keep a sticky left-side thumbnail rail for quick navigation and expose the full thumbnail set; on mobile, support horizontal swipe navigation directly on the main gallery. Keep the inline gallery’s previous/next arrows dark on their translucent white circular buttons in both themes so the icons remain legible over photos.
+
+Gallery modal header preference: keep the vehicle title/count close to the left edge and the close control close to the right edge with a compact, symmetrical safe inset instead of centering them to the narrower gallery content width.
 
 Visual QA preference: do not run browser-based visual checks, take implementation screenshots, or perform design-QA comparisons unless the user explicitly asks. The user reviews visual changes manually. Validate changes with build, tests, and non-visual checks only.
+
+Interaction motion preference: use subtle, immediate microinteractions without delay. Keep select/dropdown, accordion, burger-menu, caret, and currency-switch motion in the 140–200ms range with gentle fade, short translate/scale, or rotation; avoid layout jumps and honor `prefers-reduced-motion`.
+
+Primary loading-state preference: use a compact spinner and short muted label centered in the available viewport instead of an oversized text-based loading hero.
 
 SEO appearance preference: SEO work must not change the existing visual design, layout, spacing, typography, or visible component treatment. Semantic link and routing changes must preserve the previous computed appearance, and new indexable routes should reuse existing product UI rather than introduce new page designs.
 
@@ -40,15 +48,21 @@ Home utility-service preference: place a compact Auto.ru-inspired row of automat
 
 Popular-brands preference: keep the home-page brand list in stable alphabetical order by its displayed Latin-script name; do not reorder it by listing count.
 
+Popular-brand count preference: show the current listing count immediately to the right of every brand name in the home-page popular-brands grid. Keep it secondary with smaller 16px typography, muted color, and regular weight; source counts from the same local/API brand metadata already used by the catalog.
+
 Product brand preference: use `evcars.by` as the customer-facing product name and keep brand-aligned demo contact handles on the `evcars.by` identity.
 
 Header-navigation preference: do not show the “Доставленные авто” link in the main header navigation; keep delivered cases accessible elsewhere in the site.
 
 Header appearance preference: keep the header container borderless and use the same solid background token as the page (`var(--page)`) in both themes so scrolling content does not show through. Do not use backdrop blur. Use a larger wordmark and keep primary navigation inside a burger menu instead of inline links. Avoid outlined controls in the header; prefer clean surfaces and filled soft backgrounds only for individual controls where separation is needed. Keep the burger-menu button on the same soft filled background as the other header controls in both themes.
 
+Header menu-surface preference: in the dark theme, render the opened burger-menu popover slightly lighter than the standard dark card surface so the floating menu remains clearly visible against the page; use a dedicated surface token rather than changing every panel.
+
 Neutral surface hierarchy preference: keep grouped gray surfaces low-contrast against the page. In the dark theme, use `#1b1e22` for grouped/soft surfaces and `#22262b` for cards that are white in the light theme, so nested cards are only slightly lighter than their container; use `#202329` for intermediate control surfaces. Give shared search selects their own higher-contrast `--filter-field-bg` token (`#292d34` in dark and `#f4f5f6` in light) instead of inheriting the generic surface token. Give disabled selects a separate, still-visible `--filter-field-disabled-bg` (`#24282e` in dark and `#eef0f2` in light) so they remain distinguishable from the grouped container without looking active. When a select opens, increase its surface contrast slightly via `--filter-field-open-bg` (`#30343c` in dark and white in light); never make the open trigger darker than its resting state. Dark search panels should be borderless. In the light theme, preserve the existing white-card-on-`#eff1f3` hierarchy.
 
-Logo preference: render the customer-facing `evcars.by` wordmark entirely in lowercase red Comfortaa, using one consistent type size and a visually heavy 700 weight across the full name.
+Dark card-border preference: keep featured vehicle cards, catalog information side cards, the vehicle quick-information card, and the estimate card borderless in the dark theme. Use surface contrast and spacing for separation; the outlined secondary action inside the catalog side card should also become a filled borderless control. Preserve their borders in the light theme.
+
+Logo preference: render the customer-facing `evcars.by` wordmark entirely in lowercase red Comfortaa, using one consistent type size and a visually heavy 700 weight across the full name. In the dark theme, use the adapted `--accent-dark` red used by other dark-theme accent text instead of the brighter base-red token.
 
 Theme preference: support both light and dark themes with a compact theme toggle in the main header. Remember the explicit device-local choice, otherwise follow the operating-system preference. Preserve the red brand accent and yellow primary CTAs in both themes.
 
@@ -84,7 +98,15 @@ Catalog custom-search preference: when catalog filters return no cars and when a
 
 Search filter preference: use one shared `VehicleSearch` component for the home page and catalog so their markup, styling, controls, and behavior remain identical. Only the home-page instance may have a maximum-width constraint; the catalog instance fills its available width. Keep the “Все / Электромобили / Гибриды” tabs plus brand, model, year, price, and mileage in the primary area. Place body type and optional advanced fields in the collapsible section below. In the lower action row, align the “Ещё фильтры” control left and the primary CTA right; use the red accent color.
 
+Search reset preference: whenever any primary, type, or advanced vehicle-search filter differs from its default, show a quiet borderless “Сбросить” action immediately before the primary CTA. Reset every filter, including hidden advanced values and the dependent model, on both the home page and catalog; hide the action when all defaults are active.
+
+Catalog model-chip preference: after a catalog brand is selected, show a single horizontally scrollable row of quick model chips between the shared search panel and results. Include “Все модели”, derive the remaining models from the same filtered local/API metadata as the model select, update results immediately, and use a soft filled active state without an outline. In the light theme, give inactive chips a dedicated medium-gray surface and make their hover surface visibly darker so neither state blends into the white page.
+
+Catalog result-card density preference: keep desktop listing photos compact enough for a shorter row and a wider information column. Size the body-type chip from its content instead of stretching it; truncate only when space is genuinely insufficient. Treat the China price as secondary muted information, and give the favorite control an immediate soft-red hover state without a delay or transition.
+
 Filter-field appearance preference: keep shared search fields minimal by hiding visible labels and showing only the bold selected value with its chevron. Preserve each hidden field name as an accessible label.
+
+Filter option-count preference: in the searchable brand and model dropdowns, show the matching listing count beside every option, including “Все марки” and “Все модели”. Keep counts small, muted, and visually secondary; do not append them to the closed select trigger or change the underlying filter value.
 
 Expanded search grid preference: on desktop, keep the expanded filter fields in the same five-column grid as the primary filters, leaving unused grid cells empty rather than redistributing fields into fewer, wider columns.
 
@@ -104,9 +126,29 @@ Featured card content preference: do not show the source price in Chinese yuan o
 
 Listing age preference: show how long a listing has been on Guazi only when Guazi supplies an actual publication/listing timestamp. Never substitute the local import, price-history, sitemap last-modified, or monitoring first-seen timestamp.
 
+Catalog sorting preference: offer the sort options “Дешёвые”, “Дорогие”, “Новые объявления”, “С наименьшим пробегом”, “С наибольшим запасом хода”, “Новые по году”, and “Старые по году” in that order. Do not show a “Старые объявления” option. New-listing sorting must use the actual source publication timestamp rather than an internal refresh timestamp; range sorting must place listings without range data last.
+
+Catalog sort-control sizing preference: size the visible sorting trigger to its selected label rather than the dropdown width. Keep the dropdown independently wide enough for the longest sorting option.
+
+Catalog sort-menu preference: show all sorting options at once without an internal scrollbar when the complete list fits comfortably in the menu.
+
+Catalog result-card layout preference: keep the desktop listing photo slightly narrower so the information column has enough room to keep the battery, range, and body-type chips on one row when the available catalog width permits it.
+
+Catalog result-card hover preference: treat the hovered result as one rounded surface, visually remove the divider immediately above and below it without shifting layout, and keep its specification and action chips distinct from the hover background with a contrasting surface token. Apply and remove the card-hover state immediately, without a delay or transition.
+
+Catalog result-card action preference: do not show a separate “Подробнее” button because the entire result card already opens the vehicle. On card hover, immediately color the vehicle-title link with the brand accent.
+
+Catalog result-card specification preference: keep the battery, range, and body-type chips in one row; allow only the body-type chip to shrink and truncate its label with an ellipsis when space is insufficient. Use slightly smaller 15px text inside these compact chips.
+
 Freshness-label preference: do not show internal refresh, import, check, or update timestamps in the customer-facing UI, including labels such as “Актуализировано”, “обновлено”, and “Источник проверен”.
 
 Vehicle detail facts preference: place characteristics in a single vertical icon-led list directly below the gallery, followed by “Что указано в объявлении” in the same row-based layout.
+
+Vehicle detail breadcrumb preference: use the trail “Главная → Автомобили из Китая → Марка → Модель и год”. Keep the brand as its own catalog-filtering level, do not repeat it in the final model crumb, and use a moderately dense weight across the breadcrumb trail.
+
+Vehicle quick-summary preference: above the estimate card in the detail sidebar, show a separate compact rounded card titled “Основная информация” in small muted text. Below it, use a slightly denser font weight and split the comma-separated summary into two paragraphs: year, mileage, and powertrain first; electric/combined range, drivetrain, battery capacity, and horsepower second. Do not show transmission or body type there. Translate common values into concise Russian wording and omit unavailable facts rather than inferring them.
+
+Vehicle fact-list typography preference: use slightly larger 17px text for both labels and values in the vehicle characteristics and source-facts lists on desktop and mobile.
 
 Vehicle fact typography preference: use larger, comfortably readable text for characteristic labels and values—16px on desktop and 15px on mobile.
 
@@ -117,6 +159,8 @@ Catalog navigation preference: when returning from a vehicle page, preserve the 
 Catalog loading preference: render the catalog in batches of 24 vehicles and automatically load the next batch as the user approaches the end of the current results; do not render every matching vehicle initially or use a regular “Показать ещё” button. In the results summary, show the total number matching the active filters rather than the number of cards loaded so far.
 
 Vehicle estimate card preference: keep the landed-cost estimate fully expanded in the light sidebar card, including line items, total, and disclaimer. Show one approximate midpoint price instead of ranges in both the vehicle sidebar and order detail, and separate “Итого” with a simple line instead of a bordered surface. Keep the 35–50 day delivery section below it as a collapsed chevron disclosure, and place the yellow “Уточнить актуальность объявления” CTA at the bottom.
+
+Vehicle delivery-detail preference: keep the expanded delivery disclosure concise. Do not show descriptive paragraphs beneath individual stages; put an approximate duration directly in each stage heading, using 2–4 days for purchase/preparation, 3–6 days for logistics within China, and 30–40 days for the route to Minsk. Keep the opening and variability notes to one short sentence each.
 
 Estimate-description preference: keep explanatory copy for individual cost rows behind an info icon beside the row title. Show it only while the icon is hovered and hide it immediately when the pointer leaves; do not toggle it by click.
 

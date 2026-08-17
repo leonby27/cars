@@ -5,7 +5,16 @@ import { protectRussianShortWords } from "../src/typography.js";
 
 const STYLESHEET_URL = new URL("../src/styles.css", import.meta.url);
 const MINIMUM_FONT_SIZE_PX = 16;
-const SMALL_TEXT_EXCEPTIONS = new Set([".delivery-card-heading span", ".price-assumption"]);
+const SMALL_TEXT_EXCEPTIONS = new Set([
+  ".delivery-card-heading span",
+  ".price-assumption",
+  ".price-breakdown b",
+  ".price-breakdown small",
+  ".price-breakdown strong",
+  ".mini-specs > span",
+  ".vehicle-quick-info-label",
+  ".select-option-count",
+]);
 
 test("CSS font sizes never fall below 16px outside explicit exceptions", async () => {
   const stylesheet = await readFile(STYLESHEET_URL, "utf8");

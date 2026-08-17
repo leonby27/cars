@@ -68,11 +68,14 @@ export function buildCarFilters(searchParams) {
 
 export function buildCarOrder(searchParams) {
   const orders = {
-    newest:"l.last_checked_at DESC NULLS LAST, l.id",
+    newest:"NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz DESC NULLS LAST, l.id",
     price:"l.estimated_total_usd ASC NULLS LAST, l.id",
     price_asc:"l.estimated_total_usd ASC NULLS LAST, l.id",
     price_desc:"l.estimated_total_usd DESC NULLS LAST, l.id",
     mileage_asc:"l.mileage_km ASC NULLS LAST, l.id",
+    range_desc:"COALESCE(v.electric_range_km, v.combined_range_km) DESC NULLS LAST, l.id",
+    year_desc:"v.model_year DESC NULLS LAST, l.id",
+    year_asc:"v.model_year ASC NULLS LAST, l.id",
   };
   return orders[searchParams.get("sort")] || orders.newest;
 }
@@ -103,15 +106,19 @@ export async function getCatalogMeta(type, brand, bodyType) {
   const values = [];
   const filters = ["l.status='active'"];
   if (type && type !== "Все") { values.push(type); filters.push(`v.powertrain=$${values.length}`); }
+  const brandValues = [...values];
+  const brandFilters = [...filters];
+  if (bodyType && bodyType !== "Все кузова") { brandValues.push(bodyType); brandFilters.push(`v.specifications->>'bodyType'=$${brandValues.length}`); }
   if (brand && brand !== "Все марки") { values.push(brand); filters.push(`v.brand=$${values.length}`); }
   const bodyFilters = [...filters];
   const bodyValues = [...values];
   if (bodyType && bodyType !== "Все кузова") { bodyValues.push(bodyType); bodyFilters.push(`v.specifications->>'bodyType'=$${bodyValues.length}`); }
   const where = `WHERE ${filters.join(" AND ")}`;
   const bodyWhere = `WHERE ${bodyFilters.join(" AND ")}`;
+  const brandWhere = `WHERE ${brandFilters.join(" AND ")}`;
   const [count, brands, models, bodyTypes, drives, availability] = await Promise.all([
     pool.query(`SELECT count(*)::int total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere}`, bodyValues),
-    pool.query("SELECT v.brand, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' GROUP BY v.brand ORDER BY v.brand"),
+    pool.query(`SELECT v.brand, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${brandWhere} GROUP BY v.brand ORDER BY v.brand`, brandValues),
     pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
     pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
     pool.query("SELECT v.drivetrain drive, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
