@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, InstagramLogo, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, InstagramLogo, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -267,6 +267,42 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
     navigate(href);
   };
   return <a href={appHref(href)} onClick={handleClick} {...props}>{children}</a>;
+}
+
+function ScrollToTopButton() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    let frame = null;
+    const updateVisibility = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        setVisible(window.scrollY > 360);
+        frame = null;
+      });
+    };
+    updateVisibility();
+    window.addEventListener("scroll", updateVisibility, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", updateVisibility);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+  const scrollToTop = () => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+  };
+  return (
+    <button
+      type="button"
+      className={`mobile-scroll-top${visible ? " is-visible" : ""}`}
+      aria-label="Наверх"
+      aria-hidden={!visible}
+      tabIndex={visible ? 0 : -1}
+      onClick={scrollToTop}
+    >
+      <ArrowUp size={22} weight="bold" />
+    </button>
+  );
 }
 
 const routeSeo = {
@@ -1201,7 +1237,7 @@ function Home({ navigate, cars, apiMode }) {
         <ul className="hero-benefits" aria-label="Преимущества заказа">
           <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
           <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
-          <li><CheckCircle size={21} weight="fill" />Оплата без посредников</li>
+          <li><CheckCircle size={21} weight="fill" />Полное сопровождение</li>
         </ul>
         <QuickSearch navigate={navigate} cars={cars} apiMode={apiMode} />
       </section>
@@ -1254,6 +1290,7 @@ function Home({ navigate, cars, apiMode }) {
         </button>
       </section>
       <HomeConversionSections navigate={navigate} />
+      <ScrollToTopButton />
     </main>
   );
 }
@@ -1787,6 +1824,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
           </button>
         </aside>
       </div>
+      <ScrollToTopButton />
       {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
     </main>
   );
@@ -3283,9 +3321,8 @@ function SiteFooter({ navigate }) {
             <a className="instagram-social-link" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramLogo size={27} weight="bold" /></a>
           </div>
         </div>
-        <div className="footer-column"><b>Компания</b><AppLink href="/about" navigate={navigate}>О компании</AppLink><AppLink href="/delivered" navigate={navigate}>Доставленные авто</AppLink><AppLink href="/contacts" navigate={navigate}>Контакты и офис</AppLink><AppLink href="/contacts" navigate={navigate}>Реквизиты</AppLink></div>
-        <div className="footer-column"><b>Покупателю</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>Как это работает</AppLink><AppLink href="/payment-and-contract" navigate={navigate}>Оплата и договор</AppLink><AppLink href="/guarantees" navigate={navigate}>Гарантии</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
-        <div className="footer-column footer-contacts"><b>Связаться</b><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><span>{COMPANY.address}</span></div>
+        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/about" navigate={navigate}>О компании</AppLink><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>Как это работает</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
+        <div className="footer-column footer-contacts"><b>Связаться</b><AppLink href="/contacts" navigate={navigate}>Контакты</AppLink><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><span>{COMPANY.address}</span></div>
       </div>
       <div className="page-width footer-bottom">
         <span>© 2026 {COMPANY.legalName} · УНП {COMPANY.unp}</span>

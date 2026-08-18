@@ -44,7 +44,9 @@ Home catalog-section preference: title the home vehicle-feed section “Ката
 
 Home quick-search count preference: when every quick-search filter is at its default, label the CTA “Показать 2500+ авто”; after any filter is selected, show the exact matching count.
 
-Mobile home-hero preference: center the main heading and render the benefits beneath it as centered regular-weight muted text separated by commas, without check icons or bullet styling.
+Mobile home-hero preference: center the main heading and render the benefits beneath it as centered regular-weight muted text separated into short sentences with periods, without check icons or bullet styling.
+
+Home hero-benefit copy preference: use “Полное сопровождение” as the third benefit instead of “Оплата без посредников” on both mobile and desktop.
 
 Mobile popular-brands preference: center the catalog arrow inside a compact square control aligned with the section heading, and keep generous vertical spacing between brand rows.
 
@@ -90,6 +92,14 @@ Company-phone preference: do not publish a company phone number; keep Telegram a
 
 Footer appearance preference: keep the site footer light, using a pale neutral surface with dark headings and readable gray secondary text; do not use a dark inverted footer. Keep the footer itself borderless.
 
+Footer navigation preference: omit “Доставленные авто”, “Контакты и офис”, “Реквизиты”, and “Гарантии” from the footer on both mobile and desktop. Keep their routes available elsewhere; this preference concerns only footer navigation.
+
+Footer grouping preference: combine the former “Компания” and “Покупателю” link groups into one “Навигация” column on mobile and desktop. Keep the combined navigation full-width within the mobile footer grid and remove the unused desktop column.
+
+Footer contact-link preference: omit “Оплата и договор” from the combined navigation column and place a “Контакты” link at the top of the “Связаться” column before the public email and address.
+
+Footer contact-link typography preference: style “Контакты” like an ordinary footer navigation item such as “О компании”; reserve the stronger primary-text treatment in the “Связаться” column for the email address only.
+
 Footer social-icon preference: place slightly enlarged, monochrome social icons in consistent white circular buttons without outlines.
 
 Delivered-case preference: use structured delivery stories as trust proof, including route, duration, mileage, final landed cost, decision context, and a customer quote. Keep all temporary case data centralized in `src/delivery-cases.js` for replacement with verified cases.
@@ -111,6 +121,12 @@ Personal-data preference: do not show placeholder copy about future phone-number
 Catalog custom-search preference: when catalog filters return no cars and when a user reaches the end of the results, show a light, white-background CTA offering individual vehicle sourcing, including cars not currently in the catalog. The CTA opens a modal with a vehicle-preferences textarea and phone input; do not use a dark or inverted treatment.
 
 Search filter preference: use one shared `VehicleSearch` component for the home page and catalog so their markup, styling, controls, and behavior remain identical. Only the home-page instance may have a maximum-width constraint; the catalog instance fills its available width. On desktop, keep the “Все / Электромобили / Гибриды” tabs plus brand, model, year, price, and mileage in the primary area, with body type and optional advanced fields in the collapsible section below. On mobile, keep only brand and model in the primary area and move year, price, mileage, body type, and available advanced fields into a bottom action sheet opened by “Ещё фильтры”. In the lower desktop action row, align the “Ещё фильтры” control left and the primary CTA right; use the red accent color.
+
+Mobile search action-layout preference: keep “Ещё фильтры” hug-content at the left instead of stretching it across the panel. When “Сбросить” is visible, align it to the far right of the same row at the same 40px control height. Keep the yellow search CTA on its own full-width row below with a 14px vertical gap.
+
+Mobile filter-sheet close-control preference: in the dark theme, keep the square close-button surface visibly lighter than the action-sheet background, with a slightly brighter hover state; preserve the current size and radius.
+
+Mobile filter-sheet action preference: when “Сбросить” is shown beside “Готово”, give both buttons equal half-row width and the same 52px height. Style “Сбросить” as a filled neutral secondary action with the shared 10px radius and equally strong label weight.
 
 Search reset preference: whenever any primary, type, or advanced vehicle-search filter differs from its default, show a quiet borderless “Сбросить” action immediately before the primary CTA. Reset every filter, including hidden advanced values and the dependent model, on both the home page and catalog; hide the action when all defaults are active.
 
@@ -150,7 +166,11 @@ Catalog sort-control sizing preference: size the visible sorting trigger to its 
 
 Catalog sort-menu preference: show all sorting options at once without an internal scrollbar when the complete list fits comfortably in the menu.
 
+Dark catalog sorting appearance preference: remove visible outlines from both the sorting trigger and its open dropdown menu in the dark theme; preserve the existing outlined treatment in the light theme.
+
 Mobile catalog result-tools preference: hide the “Подходящие варианты” label, promote “N найденных” to the same 16px/700 primary typography, and use compact 14px text in the sorting trigger and its options; the sorting text is an explicit sub-16px mobile exception.
+
+Mobile scroll-to-top preference: after the user scrolls more than 360px down the home page or catalog, smoothly reveal a compact soft-gray square arrow button fixed to the lower-right safe inset. It should smoothly scroll to the page top, remain hidden on desktop, and honor reduced-motion preferences.
 
 Catalog result-card layout preference: keep the desktop listing photo slightly narrower so the information column has enough room to keep the battery, range, and body-type chips on one row when the available catalog width permits it.
 

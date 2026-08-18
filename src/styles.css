@@ -1262,6 +1262,9 @@ button {
 .detail-floating-availability {
   display: none;
 }
+.mobile-scroll-top {
+  display: none;
+}
 .detail-title p {
   margin: 0;
   color: var(--muted);
@@ -2494,7 +2497,7 @@ button {
 }
 .footer-main {
   display: grid;
-  grid-template-columns: minmax(260px, 1.35fr) repeat(3, minmax(150px, 0.75fr));
+  grid-template-columns: minmax(260px, 1.35fr) minmax(190px, 0.85fr) minmax(190px, 0.85fr);
   gap: 52px;
   padding-top: 58px;
   padding-bottom: 52px;
@@ -2582,7 +2585,7 @@ button {
   border-radius: 14px;
 }
 
-.footer-contacts a:first-of-type {
+.footer-contacts a[href^="mailto:"] {
   color: var(--ink);
   font-size: 16px;
   font-weight: 750;
@@ -2922,7 +2925,10 @@ button {
     white-space: normal;
   }
   .hero-benefits li:not(:last-child)::after {
-    content: ", ";
+    content: ". ";
+  }
+  .hero-benefits li:last-child::after {
+    content: ".";
   }
   .hero-benefits svg {
     display: none;
@@ -4152,6 +4158,31 @@ button {
   font-size: 16px;
 }
 @media (max-width: 700px) {
+  .mobile-scroll-top {
+    position: fixed;
+    z-index: 40;
+    right: 14px;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 13px;
+    background: var(--header-control-bg);
+    color: var(--ink);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+  .mobile-scroll-top.is-visible {
+    pointer-events: auto;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
   .result-summary {
     display: block;
   }
@@ -5534,7 +5565,18 @@ footer {
     background: var(--panel);
   }
   .mobile-filter-sheet-actions .search-reset {
+    min-height: 52px;
+    flex: 1;
     margin: 0;
+    padding: 0 16px;
+    border-radius: 10px;
+    background: var(--filter-field-bg);
+    color: var(--ink);
+    font-weight: 800;
+  }
+  .mobile-filter-sheet-actions .search-reset:hover {
+    background: var(--filter-field-open-bg);
+    color: var(--ink);
   }
   .mobile-filter-sheet-actions .primary {
     min-height: 52px;
@@ -5551,21 +5593,32 @@ footer {
     }
   }
   .filter-actions-row {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px 12px;
   }
   .filter-actions-row .primary {
-    order: 2;
+    grid-column: 1 / -1;
+    grid-row: 2;
     width: 100%;
     margin-left: 0;
   }
-  .search-reset {
-    align-self: flex-start;
+  .filter-actions-row > .search-reset {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 40px;
+    justify-self: end;
+    align-self: center;
     margin-left: 0;
   }
   .more-filters-toggle {
+    grid-column: 1;
+    grid-row: 1;
+    width: fit-content;
     min-height: 40px;
+    justify-self: start;
+    align-self: center;
     font-size: 16px;
   }
 }
@@ -5709,11 +5762,11 @@ footer {
 
 @media (max-width: 980px) {
   .footer-main {
-    grid-template-columns: 1.25fr repeat(2, 1fr);
+    grid-template-columns: 1.25fr 1fr 1fr;
     gap: 42px 28px;
   }
   .footer-contacts {
-    grid-column: 2 / -1;
+    grid-column: auto;
   }
   .contact-hero,
   .company-details-grid {
@@ -5791,6 +5844,7 @@ footer {
     padding-bottom: 40px;
   }
   .footer-brand,
+  .footer-navigation,
   .footer-contacts {
     grid-column: 1 / -1;
   }
@@ -8422,6 +8476,12 @@ html[data-theme="dark"] .auth-modal .modal-close {
 html[data-theme="dark"] .auth-modal .modal-close:hover {
   background: #454c56;
 }
+html[data-theme="dark"] .mobile-filter-sheet-header button {
+  background: #30343c;
+}
+html[data-theme="dark"] .mobile-filter-sheet-header button:hover {
+  background: #383d45;
+}
 html[data-theme="dark"] .popular-brands-heading button:hover,
 html[data-theme="dark"] .popular-brands-heading .popular-brands-all:hover {
   background: #383e47;
@@ -8458,6 +8518,11 @@ html[data-theme="dark"] body #root .select-menu {
   background: #1b1e22;
   border-color: var(--line-strong);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+}
+html[data-theme="dark"] body #root .sort-custom-select,
+html[data-theme="dark"] body #root .sort-custom-select.open,
+html[data-theme="dark"] body #root .sort-custom-select .select-menu {
+  border-color: transparent;
 }
 html[data-theme="dark"] body #root .select-menu .select-options button {
   background: transparent;
