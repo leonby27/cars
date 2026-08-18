@@ -21,6 +21,27 @@
         document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#111315" : "#ffffff";
       })();
     </script>
+    <script>
+      // Start the catalog requests before the application bundle is downloaded and parsed.
+      // Waiting for React to mount first put the whole bundle on the critical path of the
+      // very first request, which is what the boot loader was mostly waiting for.
+      (() => {
+        const start = (url) => {
+          const request = fetch(url, { cache: "no-store" }).then((response) => (response.ok ? response.json() : Promise.reject(new Error(url))));
+          // Nothing awaits these until the bundle boots; keep rejections from going unhandled.
+          request.catch(() => {});
+          return request;
+        };
+        const detail = location.pathname.match(/^\/(?:cars|orders\/draft)\/([^/]+)/);
+        let id = null;
+        try { id = detail ? decodeURIComponent(detail[1]) : null; } catch { id = detail[1]; }
+        window.__boot = {
+          catalog: start("/api/cars?limit=60&sort=variety"),
+          carId: id,
+          car: id ? start(`/api/cars/${encodeURIComponent(id)}`) : null,
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

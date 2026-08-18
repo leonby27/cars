@@ -27,7 +27,9 @@ export function assertImportSourceEnabled(source) {
   throw new Error(`${source} is retired from the catalog (config/import-policy.mjs). Re-run with IMPORT_ALLOW_DISABLED_SOURCE=1 if this is intentional.`);
 }
 
-// This list mirrors the "Популярные марки" block on the home page.
+// The core brand set. The home page's "Популярные марки" block shows the allowed
+// brands minus the ones hidden from the showcase, so the two are not the same
+// list: hiding a brand there never stops its import.
 export const HOMEPAGE_POPULAR_BRANDS = Object.freeze([
   "BYD",
   "Zeekr",
@@ -54,6 +56,9 @@ export const EXTRA_IMPORT_BRANDS = Object.freeze([
   "Lynk & Co",
   "Mazda",
   "Toyota",
+  "AION",
+  "ORA",
+  "Hongqi",
 ]);
 
 export const IMPORT_BRANDS = Object.freeze([
@@ -84,6 +89,9 @@ export const IMPORT_BRAND_BY_SLUG = Object.freeze({
   "lynk-co": "Lynk & Co",
   mazda: "Mazda",
   toyota: "Toyota",
+  aion: "AION",
+  ora: "ORA",
+  hongqi: "Hongqi",
 });
 
 export const IMPORT_BRAND_SLUGS = Object.freeze(Object.keys(IMPORT_BRAND_BY_SLUG));

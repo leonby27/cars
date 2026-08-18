@@ -32,7 +32,7 @@ test("treats the HIMA marques and Voyah Auto as their policy brands", () => {
 });
 
 test("allows the Belarus import brands including Leapmotor", () => {
-  for (const brand of ["BYD", "Leapmotor", "Tesla", "Mercedes-Benz", "Lynk & Co", "Mazda", "Toyota"]) {
+  for (const brand of ["BYD", "Leapmotor", "Tesla", "Mercedes-Benz", "Lynk & Co", "Mazda", "Toyota", "AION", "ORA", "Hongqi"]) {
     assert.equal(isAllowedImportBrand(brand), true, brand);
   }
   assert.equal(isAllowedImportBrand("Haima"), false);

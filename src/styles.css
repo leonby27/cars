@@ -491,13 +491,17 @@ button {
 .popular-brands-heading .popular-brands-all:hover {
   background: #e3e5e8;
 }
+/* Multi-column, not grid: the alphabet has to run down each column and
+   continue in the next one. A grid fills rows first, which reads the list
+   sideways. Column count changes per breakpoint; the row count follows from it,
+   so the layout needs no knowledge of how many brands there are. */
 .popular-brands-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  columns: 4;
   column-gap: 36px;
-  row-gap: 2px;
 }
 .brand-link {
+  break-inside: avoid;
+  margin-bottom: 2px;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -521,6 +525,8 @@ button {
   background: var(--surface);
   color: var(--accent-dark);
 }
+/* Long marks such as Mercedes-Benz stay on one line and clip: an even row rhythm
+   matters more here than the tail of the name. */
 .brand-name {
   min-width: 0;
   overflow: hidden;
@@ -548,6 +554,16 @@ button {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+/* Stands in for a brand whose mark is not in public/brands yet. Deliberately a
+   monogram rather than an approximated logo: a wrong mark reads as a mistake. */
+.brand-logo-fallback {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--muted);
 }
 .catalog-scroll-sentinel {
   height: 1px;
@@ -647,6 +663,27 @@ button {
 .featured-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 16px 35px rgba(26, 29, 34, 0.09);
+}
+.featured-card {
+  position: relative;
+}
+.featured-favorite {
+  position: absolute;
+  z-index: 2;
+  right: 12px;
+  top: 12px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(14, 16, 19, 0.62);
+  color: #fff;
+}
+.featured-favorite:hover {
+  background: rgba(14, 16, 19, 0.8);
 }
 .featured-image {
   position: relative;
@@ -1543,6 +1580,50 @@ button {
   font-size: 16px;
   font-weight: 600;
 }
+/* Boot skeletons: the home feed holds its real geometry while the catalog request is in
+   flight, so the page fills in instead of swapping a full-route spinner for content. */
+.skeleton-card {
+  cursor: default;
+  pointer-events: none;
+}
+.skeleton-card .featured-image,
+.skeleton-card .car-row-image,
+.skeleton-line {
+  background: linear-gradient(90deg, var(--surface) 30%, var(--header-control-bg) 50%, var(--surface) 70%);
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+.skeleton-body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+.skeleton-line {
+  height: 17px;
+  border-radius: 6px;
+}
+.skeleton-line-title {
+  height: 22px;
+  width: 68%;
+}
+.skeleton-line-short {
+  width: 42%;
+}
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-card .featured-image,
+  .skeleton-card .car-row-image,
+  .skeleton-line {
+    animation: none;
+  }
+}
 @keyframes app-loader-spin {
   to { transform: rotate(360deg); }
 }
@@ -2357,7 +2438,10 @@ button {
   background: var(--panel);
   color: #17191c;
 }
-:root[data-theme="dark"] .brand-logo img {
+/* Black artwork needs inverting to stay readable on the dark surface, but a mark
+   that carries its own colours keeps them: repainting BYD's red or Xiaomi's
+   orange white would strip the brand out of the logo. */
+:root[data-theme="dark"] .brand-logo:not(.brand-logo-colored) img {
   filter: grayscale(1) brightness(0) invert(1);
   opacity: 0.88;
 }
@@ -2741,7 +2825,7 @@ button {
 }
 .contact-options {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin-bottom: 32px;
   border: 1px solid var(--line);
   border-radius: 17px;
@@ -2905,7 +2989,7 @@ button {
     display: none;
   }
   .popular-brands-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    columns: 3;
     column-gap: 24px;
   }
   .filter-grid {
@@ -3090,10 +3174,11 @@ button {
     font-size: 0;
   }
   .popular-brands-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 8px;
+    columns: 2;
+    column-gap: 8px;
   }
   .brand-link {
+    margin-bottom: 10px;
     gap: 8px;
     padding: 8px 2px;
     font-size: 16px;
@@ -4204,11 +4289,6 @@ button {
   align-items: baseline;
   gap: 8px;
 }
-.result-summary span {
-  color: var(--muted);
-  font-size: 16px;
-  font-weight: 400;
-}
 .sort-custom-select {
   width: fit-content;
   max-width: 100%;
@@ -4251,6 +4331,70 @@ button {
 .sort-custom-select .select-options button {
   font-size: 16px;
 }
+.result-controls {
+  --result-pill-bg: var(--model-chip-bg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+:root[data-theme="dark"] .result-controls {
+  --result-pill-bg: var(--surface);
+}
+/* Borderless pill pair, with the active view marked the way the currency switch is. */
+#root .sort-custom-select .select-trigger {
+  border: 0;
+}
+html body #root .result-controls .sort-custom-select,
+html body #root .result-controls .sort-custom-select .select-trigger {
+  background: var(--result-pill-bg);
+}
+html body #root .result-controls .sort-custom-select.open,
+html body #root .result-controls .sort-custom-select.open .select-trigger {
+  background: var(--filter-field-open-bg);
+}
+#root .result-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 3px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--result-pill-bg);
+}
+#root .result-view-toggle button {
+  width: 34px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+#root .result-view-toggle button:hover {
+  color: var(--ink);
+}
+#root .result-view-toggle button.active {
+  background: var(--panel);
+  color: var(--accent-dark);
+  box-shadow: 0 1px 4px rgba(23, 25, 28, 0.14);
+}
+#root .result-view-toggle button:active {
+  transform: scale(0.96);
+}
+:root[data-theme="dark"] #root .result-view-toggle button.active {
+  background: #383d45;
+  color: #ff7a81;
+  box-shadow: none;
+}
 @media (max-width: 700px) {
   .mobile-scroll-top {
     position: fixed;
@@ -4281,9 +4425,6 @@ button {
     display: block;
   }
   .result-summary b {
-    display: none;
-  }
-  .result-summary span {
     color: var(--ink);
     font-size: 16px;
     font-weight: 700;
@@ -9028,5 +9169,21 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .mobile-filter-sheet {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* Catalog card view: three per row, since the sidebar takes the fourth column. */
+.catalog-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 4px;
+}
+@media (max-width: 1180px) {
+  .catalog-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .catalog-card-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,4 +1,6 @@
 import { Readable } from "node:stream";
+import { gzip } from "node:zlib";
+import { promisify } from "node:util";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
@@ -6,9 +8,28 @@ import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCus
 import { analyticsCookie, clearAnalyticsCookie, createAnalyticsToken, getAnalyticsDashboard, hasAnalyticsSession, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
-const json = (response, status, payload, headers = {}) => {
-  response.writeHead(status, { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "access-control-allow-origin":"*", "access-control-allow-headers":"content-type", ...headers });
-  response.end(status === 204 ? undefined : JSON.stringify(payload));
+const gzipAsync = promisify(gzip);
+// Catalog payloads are a few hundred KB of highly repetitive JSON, so gzip cuts them ~7x.
+// Below this size the header overhead outweighs the saving.
+const compressFromBytes = 1024;
+// Vercel's edge compresses on its own and may not expose the request here; skipping
+// compression in that case only costs the local API server, never correctness.
+const acceptsGzip = (response) => /\bgzip\b/.test(String(response.req?.headers?.["accept-encoding"] || ""));
+
+const json = async (response, status, payload, headers = {}) => {
+  const responseHeaders = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "access-control-allow-origin":"*", "access-control-allow-headers":"content-type", ...headers };
+  if (status === 204) {
+    response.writeHead(status, responseHeaders);
+    return response.end();
+  }
+  let body = Buffer.from(JSON.stringify(payload), "utf8");
+  if (body.length >= compressFromBytes && acceptsGzip(response)) {
+    body = await gzipAsync(body);
+    responseHeaders["content-encoding"] = "gzip";
+    responseHeaders.vary = responseHeaders.vary ? `${responseHeaders.vary}, accept-encoding` : "accept-encoding";
+  }
+  response.writeHead(status, { ...responseHeaders, "content-length":String(body.length) });
+  return response.end(body);
 };
 const readJson = async (request) => {
   if (request.body !== undefined) {

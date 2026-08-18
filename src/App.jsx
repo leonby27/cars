@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, InstagramLogo, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, InstagramLogo, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, Rows, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
+import { FEED_CANDIDATE_WINDOW, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
@@ -23,10 +24,13 @@ const ANY_YEAR = "Любой год";
 const ANY_PRICE = "Любая цена";
 const ANY_MILEAGE = "Любой пробег";
 const ANY_CONDITION = "Любое состояние";
-const yearOptions = [ANY_YEAR, "от 2020", "от 2021", "от 2022", "от 2023", "от 2024", "от 2025", "от 2026"];
-const priceOptions = [ANY_PRICE, "до $40 000", "до $30 000", "до $25 000"];
+const yearOptions = [ANY_YEAR, "от 2026", "от 2025", "от 2024", "от 2023", "от 2022", "от 2021", "от 2020"];
+const PRICE_FLOOR_USD = 100000;
+const PRICE_FLOOR = `$${number(PRICE_FLOOR_USD)}+`;
+// $5 000 steps from $15 000 up to $100 000, plus one bucket for everything above it.
+const priceOptions = [ANY_PRICE, ...Array.from({ length: 18 }, (_, step) => `до $${number(15000 + step * 5000)}`), PRICE_FLOOR];
 const mileageOptions = [ANY_MILEAGE, "до 50 000 км", "до 30 000 км", "до 15 000 км"];
-const priceLimitLabel = (value, currency) => (value === ANY_PRICE ? value : `до ${money(filterNumber(value), currency)}`);
+const priceLimitLabel = (value, currency) => (value === ANY_PRICE ? value : value === PRICE_FLOOR ? `${money(PRICE_FLOOR_USD, currency)}+` : `до ${money(filterNumber(value), currency)}`);
 const useCurrency = () => useContext(CurrencyContext);
 
 const displayValue = (value, fallback = "Не указано") => (value === null || value === undefined || value === "" ? fallback : value);
@@ -131,6 +135,8 @@ const claimCount = (car) => {
   return match ? Number(match[1] ?? match[2]) : null;
 };
 const filterNumber = (value) => Number(String(value).replace(/\D/g, "")) || 0;
+const matchesPriceLimit = (car, price) => price === ANY_PRICE || (price === PRICE_FLOOR ? estimateLandedCost(car).totalUsd >= PRICE_FLOOR_USD : estimateLandedCost(car).totalUsd <= filterNumber(price));
+const priceQueryParam = (price) => (price === PRICE_FLOOR ? ["landedMin", String(PRICE_FLOOR_USD)] : ["landedMax", String(filterNumber(price))]);
 const matchesAdvancedFilters = (car, { drive, owners, history, condition = ANY_CONDITION }) => (drive === "Любой привод" || car.drive === drive) && (owners === "Любое количество" || Number(car.owners) <= filterNumber(owners)) && (history === "Любая история" || claimCount(car) === 0) && (condition === ANY_CONDITION || car.conditionGrade === conditionGrades[condition]);
 const ownerOptions = ["Любое количество", "1 владелец", "До 2 владельцев"];
 const historyOptions = ["Любая история", "Без страховых случаев"];
@@ -489,6 +495,35 @@ function AppLoader() {
   );
 }
 
+// Two rows of the desktop grid, which also more than fills a phone viewport.
+const skeletonCards = ["a", "b", "c", "d", "e", "f"];
+
+// Reuses the real card classes so the placeholder occupies the exact geometry the loaded
+// card will, which keeps the feed from shifting once the catalog request resolves.
+function CardSkeleton({ row }) {
+  const body = (
+    <>
+      <div className="skeleton-line skeleton-line-title" />
+      <div className="skeleton-line" />
+      <div className="skeleton-line skeleton-line-short" />
+    </>
+  );
+  if (row) {
+    return (
+      <article className="car-row skeleton-card" aria-hidden="true">
+        <div className="car-row-image" />
+        <div className="skeleton-body">{body}</div>
+      </article>
+    );
+  }
+  return (
+    <div className="featured-card skeleton-card" aria-hidden="true">
+      <div className="featured-image" />
+      <div className="featured-body skeleton-body">{body}</div>
+    </div>
+  );
+}
+
 function SelectField({ label, value, options, onChange, searchable = false, className = "", disabled = false, formatOption = (item) => item, optionCounts }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(Math.max(0, options.indexOf(value)));
@@ -496,6 +531,7 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
   const searchRef = useRef(null);
+  const optionsRef = useRef(null);
   const listId = useId();
   const selectedIndex = Math.max(0, options.indexOf(value));
   const filteredOptions = useMemo(() => {
@@ -527,6 +563,13 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
     const index = filteredOptions.indexOf(value);
     setActiveIndex(index >= 0 ? index : 0);
   }, [open, query, value, filteredOptions]);
+
+  // Long lists (price steps, brands) scroll inside the menu, so the highlighted
+  // option has to be pulled into view instead of leaving the list at the top.
+  useEffect(() => {
+    if (!open) return;
+    optionsRef.current?.querySelector('[role="option"].active')?.scrollIntoView({ block: "nearest" });
+  }, [open, activeIndex]);
 
   const choose = (item) => {
     onChange?.(item);
@@ -597,7 +640,7 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
               )}
             </div>
           )}
-          <div className="select-options" id={listId} role="listbox" aria-label={label}>
+          <div className="select-options" id={listId} role="listbox" aria-label={label} ref={optionsRef}>
             {filteredOptions.length ? (
               filteredOptions.map((item, index) => {
                 const optionCount = optionCounts?.get(item);
@@ -721,7 +764,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
         )}
         <button type="button" className="primary search-submit" onClick={onSubmit}>
           <MagnifyingGlass size={20} weight="bold" />
-          Показать {resultCount} авто
+          {resultCount == null ? "Показать авто" : `Показать ${resultCount} авто`}
         </button>
       </div>
     </section>
@@ -770,8 +813,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
       };
   const mileageCap = Number(mileage.replace(/\D/g, ""));
-  const priceCap = Number(priceLimit.replace(/\D/g, ""));
-  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && (year === ANY_YEAR || matchesMinimumYear(car, year)) && (mileage === ANY_MILEAGE || car.mileage <= mileageCap) && (priceLimit === ANY_PRICE || estimateLandedCost(car).totalUsd <= priceCap) && matchesAdvancedFilters(car, { drive, owners, history, condition })).length;
+  const resultCount = modelCars.filter((car) => (model === "Все модели" || car.model === model) && (year === ANY_YEAR || matchesMinimumYear(car, year)) && (mileage === ANY_MILEAGE || car.mileage <= mileageCap) && matchesPriceLimit(car, priceLimit) && matchesAdvancedFilters(car, { drive, owners, history, condition })).length;
   const hasActiveFilters = type !== "Все" || brand !== "Все марки" || model !== "Все модели" || bodyType !== "Все кузова" || year !== ANY_YEAR || mileage !== ANY_MILEAGE || priceLimit !== ANY_PRICE || drive !== "Любой привод" || owners !== "Любое количество" || history !== "Любая история" || condition !== ANY_CONDITION;
   useEffect(() => {
     if (!apiMode) return;
@@ -794,7 +836,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       if (model !== "Все модели") carsQuery.set("model", model);
       if (year !== ANY_YEAR) carsQuery.set("yearMin", year.replace(/\D/g, ""));
       if (mileage !== ANY_MILEAGE) carsQuery.set("mileageMax", String(mileageCap));
-      if (priceLimit !== ANY_PRICE) carsQuery.set("landedMax", String(priceCap));
+      if (priceLimit !== ANY_PRICE) carsQuery.set(...priceQueryParam(priceLimit));
       if (drive !== "Любой привод") carsQuery.set("drive", drive);
       if (owners !== "Любое количество") carsQuery.set("ownersMax", String(filterNumber(owners)));
       if (history === "Без страховых случаев") carsQuery.set("noClaims", "1");
@@ -816,7 +858,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [apiMode, normalizedType, brand, model, bodyType, year, mileageCap, priceCap, drive, owners, history, condition]);
+  }, [apiMode, normalizedType, brand, model, bodyType, year, mileageCap, priceLimit, drive, owners, history, condition]);
   const changeType = (value) => {
     setType(value);
     setModel("Все модели");
@@ -862,7 +904,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       options={{ brands, models, bodyTypes, drives }}
       optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }}
       availability={availability}
-      resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : formatRoundedListingCount(totalCount || cars.length)}
+      resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : (totalCount || cars.length) ? formatRoundedListingCount(totalCount || cars.length) : null}
       hasActiveFilters={hasActiveFilters}
       onReset={resetFilters}
       onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&body=${encodeURIComponent(bodyType)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&history=${encodeURIComponent(history)}&condition=${encodeURIComponent(condition)}`)}
@@ -939,13 +981,26 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
   );
 }
 
-function FeaturedCard({ car, onClick, navigate }) {
+function FeaturedCard({ car, onClick, navigate, favorite, toggleFavorite }) {
   const currency = useCurrency();
   const price = estimateLandedCost(car);
   const listingAge = formatListingAge(getSourceListedAt(car));
   return (
     <article className="featured-card" onClick={onClick} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}>
       <HoverImagePreview car={car} className="featured-image" />
+      {toggleFavorite && (
+        <button
+          type="button"
+          className={`featured-favorite${favorite ? " selected" : ""}`}
+          aria-label={favorite ? "Удалить из избранного" : "Добавить в избранное"}
+          onClick={(event) => {
+            event.stopPropagation();
+            toggleFavorite(car.id);
+          }}
+        >
+          <Heart size={20} weight={favorite ? "fill" : "regular"} />
+        </button>
+      )}
       <div className="featured-body">
         <h3><AppLink href={`/cars/${car.id}`} navigate={navigate} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
         <p>
@@ -1025,15 +1080,6 @@ function SimilarCarsSlider({ car, cars, navigate }) {
   );
 }
 
-function shuffleCars(cars) {
-  const shuffled = [...cars];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-  }
-  return shuffled;
-}
-
 const brandLogos = {
   BYD: "byd.svg",
   Zeekr: "zeekr.svg",
@@ -1051,7 +1097,42 @@ const brandLogos = {
   BMW: "bmw.svg",
   Volkswagen: "volkswagen.svg",
   Audi: "audi.svg",
+  Leapmotor: "leapmotor.svg",
+  Tesla: "tesla.svg",
+  "Mercedes-Benz": "mercedes-benz.svg",
+  "Lynk & Co": "lynk-co.svg",
+  Mazda: "mazda.svg",
+  Toyota: "toyota.svg",
+  AION: "aion.svg",
+  ORA: "ora.svg",
+  Hongqi: "hongqi.svg",
 };
+
+// Brands the importer keeps supplying, but the home page showcase leaves out.
+// A showcase decision only: the import policy still allows them and their cards
+// stay in the catalog, the brand filter, and search.
+const showcaseHiddenBrands = new Set(["AION", "Denza", "Dongfeng", "Hongqi", "ORA"]);
+
+// Marks whose own colours are part of the brand. The dark theme inverts logos so
+// black artwork stays readable on a dark surface; running that over a red BYD or
+// an orange Xiaomi would repaint the brand, so these opt out.
+const coloredBrandLogos = new Set(["BMW", "BYD", "Denza", "Dongfeng", "Geely Galaxy", "Hongqi", "Tesla", "Toyota", "Voyah", "Xiaomi"]);
+
+// Two letters, so brands sharing an initial stay apart (Tesla/Toyota).
+function brandInitials(brand) {
+  const words = String(brand).split(/[\s&-]+/).filter(Boolean);
+  return (words.length > 1 ? words.slice(0, 2).map((word) => word[0]).join("") : String(brand).slice(0, 2)).toLocaleUpperCase("en-US");
+}
+
+function BrandMark({ brand }) {
+  const file = brandLogos[brand];
+  if (!file) return <span className="brand-logo brand-logo-fallback" aria-hidden="true">{brandInitials(brand)}</span>;
+  return (
+    <span className={`brand-logo${coloredBrandLogos.has(brand) ? " brand-logo-colored" : ""}`} aria-hidden="true">
+      <img src={`${import.meta.env.BASE_URL}brands/${file}`} alt="" />
+    </span>
+  );
+}
 
 function PopularBrands({ navigate, cars, apiMode }) {
   const [remoteBrands, setRemoteBrands] = useState([]);
@@ -1076,7 +1157,13 @@ function PopularBrands({ navigate, cars, apiMode }) {
 
   const availableBrands = apiMode && remoteBrands.length ? remoteBrands : localBrands;
   const brandCounts = new Map(availableBrands.map((item) => [item.brand, Number(item.count) || 0]));
-  const brands = Object.keys(brandLogos)
+  // Before the catalog answers there are no counts at all, and rendering every brand as "0"
+  // reads as an empty catalog rather than a pending one.
+  const countsKnown = brandCounts.size > 0;
+  // Every brand the catalog can show, plus the configured marks that currently
+  // have no listings, so the block is the full inventory rather than a preview.
+  const brands = [...new Set([...Object.keys(brandLogos), ...availableBrands.map((item) => item.brand)])]
+    .filter((brand) => !showcaseHiddenBrands.has(brand))
     .map((brand) => ({ brand, count: brandCounts.get(brand) || 0 }))
     .sort((a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }));
 
@@ -1090,12 +1177,10 @@ function PopularBrands({ navigate, cars, apiMode }) {
       </div>
       <div className="popular-brands-grid">
         {brands.map(({ brand, count }) => (
-          <AppLink className="brand-link" key={brand} href={`/catalog?brand=${encodeURIComponent(brand)}`} navigate={navigate} aria-label={`Перейти к предложениям ${brand}, объявлений: ${number(count)}`}>
-            <span className="brand-logo" aria-hidden="true">
-              <img src={`${import.meta.env.BASE_URL}brands/${brandLogos[brand]}`} alt="" />
-            </span>
-            <span className="brand-name">{brand}</span>
-            <span className="brand-count" aria-hidden="true">{number(count)}</span>
+          <AppLink className="brand-link" key={brand} href={`/catalog?brand=${encodeURIComponent(brand)}`} navigate={navigate} aria-label={countsKnown ? `Перейти к предложениям ${brand}, объявлений: ${number(count)}` : `Перейти к предложениям ${brand}`}>
+            <BrandMark brand={brand} />
+            <span className="brand-name" title={brand}>{brand}</span>
+            <span className="brand-count" aria-hidden="true">{countsKnown ? number(count) : ""}</span>
           </AppLink>
         ))}
       </div>
@@ -1204,21 +1289,42 @@ function HomeConversionSections({ navigate }) {
   );
 }
 
-function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite }) {
+function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite, loading }) {
   const batchSize = 20;
   const randomPool = useRef([]);
   const nextItemKey = useRef(0);
   const feedSource = useRef(cars);
   const [useCatalogCards, setUseCatalogCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
-  const takeRandomBatch = () => {
+  const takeRandomBatch = (precedingCars = []) => {
     const batch = [];
     if (!cars.length) return batch;
+    const candidates = [];
+    const refill = () => {
+      while (candidates.length < FEED_CANDIDATE_WINDOW) {
+        if (!randomPool.current.length) randomPool.current = shuffleCars(cars);
+        candidates.push(randomPool.current.pop());
+      }
+    };
     while (batch.length < batchSize) {
-      if (!randomPool.current.length) randomPool.current = shuffleCars(cars);
-      const car = randomPool.current.pop();
+      refill();
+      // Compare against the three cards before this slot, including the tail of
+      // the previous batch so "Показать ещё" does not seam two similar cards.
+      const recent = [...precedingCars, ...batch.map((item) => item.car)].slice(-3);
+      let bestIndex = 0;
+      let bestScore = -Infinity;
+      candidates.forEach((car, index) => {
+        const score = varietyScore(car, recent);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = index;
+        }
+      });
+      const [car] = candidates.splice(bestIndex, 1);
       batch.push({ car, key: `${car.id}-${nextItemKey.current}` });
       nextItemKey.current += 1;
     }
+    // Candidates that lost stay available for later batches.
+    randomPool.current.push(...candidates);
     return batch;
   };
   const [feedCars, setFeedCars] = useState(() => takeRandomBatch());
@@ -1238,7 +1344,8 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
     setFeedCars(takeRandomBatch());
   }, [cars]);
 
-  const loadMore = () => setFeedCars((current) => [...current, ...takeRandomBatch()]);
+  const loadMore = () => setFeedCars((current) => [...current, ...takeRandomBatch(current.slice(-3).map((item) => item.car))]);
+  const showSkeletons = loading && !feedCars.length;
 
   return (
     <main>
@@ -1291,27 +1398,33 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
           </AppLink>
         </div>
         {useCatalogCards ? (
-          <div className="car-list home-car-list">
-            {feedCars.map(({ car, key }) => (
-              <CarRow
-                key={key}
-                car={car}
-                navigate={navigate}
-                favorite={favorites.has(car.id)}
-                toggleFavorite={toggleFavorite}
-              />
-            ))}
+          <div className="car-list home-car-list" aria-busy={showSkeletons ? "true" : undefined}>
+            {showSkeletons
+              ? skeletonCards.map((key) => <CardSkeleton key={key} row />)
+              : feedCars.map(({ car, key }) => (
+                  <CarRow
+                    key={key}
+                    car={car}
+                    navigate={navigate}
+                    favorite={favorites.has(car.id)}
+                    toggleFavorite={toggleFavorite}
+                  />
+                ))}
           </div>
         ) : (
-          <div className="featured-grid">
-            {feedCars.map(({ car, key }) => (
-              <FeaturedCard key={key} car={car} navigate={navigate} onClick={() => navigate(`/cars/${car.id}`)} />
-            ))}
+          <div className="featured-grid" aria-busy={showSkeletons ? "true" : undefined}>
+            {showSkeletons
+              ? skeletonCards.map((key) => <CardSkeleton key={key} />)
+              : feedCars.map(({ car, key }) => (
+                  <FeaturedCard key={key} car={car} navigate={navigate} onClick={() => navigate(`/cars/${car.id}`)} />
+                ))}
           </div>
         )}
-        <button type="button" className="load-more featured-load-more" onClick={loadMore}>
-          Показать ещё
-        </button>
+        {!showSkeletons && (
+          <button type="button" className="load-more featured-load-more" onClick={loadMore}>
+            Показать ещё
+          </button>
+        )}
       </section>
       <HomeConversionSections navigate={navigate} />
       <ScrollToTopButton />
@@ -1537,9 +1650,16 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
   );
 }
 
+const catalogViewKey = "navostok-catalog-view";
+const readCatalogView = () => (window.localStorage.getItem(catalogViewKey) === "grid" ? "grid" : "list");
+
 function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const pageSize = 24;
+  // Pending and api resolve to the same value, so the boot request answering does not
+  // retrigger the query this component already issued at mount.
+  const useApi = apiMode !== false;
   const sortOptions = [
+    { value: "default", label: "По умолчанию" },
     { value: "price_asc", label: "Дешёвые" },
     { value: "price_desc", label: "Дорогие" },
     { value: "newest", label: "Новые объявления" },
@@ -1587,11 +1707,15 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     drives: [],
     availability: {},
   });
-  const [remoteLoading, setRemoteLoading] = useState(apiMode);
+  const [remoteLoading, setRemoteLoading] = useState(useApi);
   const [remoteError, setRemoteError] = useState(false);
   const [customSearchOpen, setCustomSearchOpen] = useState(false);
-  const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : "newest"));
+  const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : "default"));
+  // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
+  // mix in place while paging and when a visitor comes back from a vehicle page.
+  const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || Math.random().toString(36).slice(2, 12));
   const [loadedLimit, setLoadedLimit] = useState(() => Math.max(pageSize, Number(restoredCatalog?.loadedCount) || pageSize));
+  const [view, setView] = useState(readCatalogView);
   const loadMoreTarget = useRef(null);
   const loadMoreRequest = useRef(null);
   const loadingMore = useRef(false);
@@ -1602,6 +1726,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
         catalog: {
           filters,
           sort,
+          shuffleSeed,
           loadedCount: Math.max(loadedLimit, remoteCars.length),
         },
       },
@@ -1621,6 +1746,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     setLoadedLimit(pageSize);
     setFilters(updater);
   };
+  const updateView = (value) => {
+    setView(value);
+    window.localStorage.setItem(catalogViewKey, value);
+  };
   const updateSort = (value) => {
     loadMoreRequest.current?.abort();
     loadMoreRequest.current = null;
@@ -1628,19 +1757,19 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     setLoadedLimit(pageSize);
     setSort(value);
   };
-  const brands = apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand));
+  const brands = useApi ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand));
   const brandCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType));
-  const models = ["Все модели", ...(apiMode ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
-  const brandEntries = apiMode ? remoteMeta.brands : [...brandCars.reduce((counts, car) => counts.set(car.brand, (counts.get(car.brand) || 0) + 1), new Map())].map(([brandName, count]) => ({ brand:brandName, count }));
-  const modelEntries = apiMode ? remoteMeta.models : [...modelCars.reduce((counts, car) => counts.set(car.model, (counts.get(car.model) || 0) + 1), new Map())].map(([modelName, count]) => ({ model:modelName, count }));
+  const models = ["Все модели", ...(useApi ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
+  const brandEntries = useApi ? remoteMeta.brands : [...brandCars.reduce((counts, car) => counts.set(car.brand, (counts.get(car.brand) || 0) + 1), new Map())].map(([brandName, count]) => ({ brand:brandName, count }));
+  const modelEntries = useApi ? remoteMeta.models : [...modelCars.reduce((counts, car) => counts.set(car.model, (counts.get(car.model) || 0) + 1), new Map())].map(([modelName, count]) => ({ model:modelName, count }));
   const brandOptionCounts = new Map(brandEntries.map((item) => [item.brand, Number(item.count) || 0]));
   const modelOptionCounts = new Map(modelEntries.map((item) => [item.model, Number(item.count) || 0]));
   if (brandEntries.length) brandOptionCounts.set("Все марки", brandEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
   if (modelEntries.length) modelOptionCounts.set("Все модели", modelEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
-  const bodyTypes = ["Все кузова", ...(apiMode ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
-  const drives = ["Любой привод", ...(apiMode ? remoteMeta.drives.map((item) => item.drive) : uniqueSorted(cars.map((car) => car.drive).filter((value) => value && value !== "Не указан")))];
-  const availability = apiMode
+  const bodyTypes = ["Все кузова", ...(useApi ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
+  const drives = ["Любой привод", ...(useApi ? remoteMeta.drives.map((item) => item.drive) : uniqueSorted(cars.map((car) => car.drive).filter((value) => value && value !== "Не указан")))];
+  const availability = useApi
     ? remoteMeta.availability
     : {
         drive: cars.filter((car) => car.drive && car.drive !== "Не указан").length,
@@ -1653,24 +1782,28 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       sortCars(
         cars
           .filter((car) => {
-            const cap = Number(filters.price.replace(/\D/g, ""));
             const mileageCap = Number(filters.mileage.replace(/\D/g, ""));
-            return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType) && (filters.year === ANY_YEAR || matchesMinimumYear(car, filters.year)) && (filters.mileage === ANY_MILEAGE || car.mileage <= mileageCap) && (filters.price === ANY_PRICE || estimateLandedCost(car).totalUsd <= cap) && matchesAdvancedFilters(car, filters);
+            return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && (filters.model === "Все модели" || car.model === filters.model) && (filters.bodyType === "Все кузова" || car.bodyType === filters.bodyType) && (filters.year === ANY_YEAR || matchesMinimumYear(car, filters.year)) && (filters.mileage === ANY_MILEAGE || car.mileage <= mileageCap) && matchesPriceLimit(car, filters.price) && matchesAdvancedFilters(car, filters);
           })
           .map((car) => ({
             ...car,
             estimatedTotalUsd: estimateLandedCost(car).totalUsd,
           })),
         sort,
+        shuffleSeed,
       ),
-    [filters, cars, sort],
+    [filters, cars, sort, shuffleSeed],
   );
+  // The API returns the default order already shuffled, but only the client knows what
+  // is on screen, so the variety pass that spaces out similar cards runs on each batch.
+  const orderRemoteBatch = (items, preceding = []) => (sort === "default" ? varietyOrder(items, Math.random, preceding) : items);
   const requestParams = () => {
     const query = new URLSearchParams({
       limit: String(loadedLimit),
       offset: "0",
     });
     query.set("sort", sort);
+    if (sort === "default") query.set("seed", shuffleSeed);
     if (filters.type !== "Все") query.set("type", filters.type);
     if (filters.brand !== "Все марки") query.set("brand", filters.brand);
     if (filters.model !== "Все модели") query.set("model", filters.model);
@@ -1681,11 +1814,11 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     if (filters.condition !== ANY_CONDITION) query.set("conditionGrade", conditionGrades[filters.condition]);
     if (filters.year !== ANY_YEAR) query.set("yearMin", filters.year.replace(/\D/g, ""));
     if (filters.mileage !== ANY_MILEAGE) query.set("mileageMax", filters.mileage.replace(/\D/g, ""));
-    if (filters.price !== ANY_PRICE) query.set("landedMax", filters.price.replace(/\D/g, ""));
+    if (filters.price !== ANY_PRICE) query.set(...priceQueryParam(filters.price));
     return query;
   };
   useEffect(() => {
-    if (!apiMode) return;
+    if (!useApi) return;
     const controller = new AbortController();
     setRemoteLoading(true);
     setRemoteError(false);
@@ -1701,7 +1834,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("catalog meta unavailable")))),
     ])
       .then(([catalog, meta]) => {
-        setRemoteCars(catalog.items.map(normalizeImportedCar));
+        setRemoteCars(orderRemoteBatch(catalog.items.map(normalizeImportedCar)));
         setRemoteTotal(catalog.total);
         setRemoteMeta(meta);
       })
@@ -1712,7 +1845,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
         if (!controller.signal.aborted) setRemoteLoading(false);
       });
     return () => controller.abort();
-  }, [apiMode, filters, sort]);
+  }, [useApi, filters, sort]);
   useEffect(() => {
     persistCatalogState();
   }, [filters, sort, loadedLimit, remoteCars.length]);
@@ -1725,7 +1858,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     [],
   );
   const loadMore = async () => {
-    if (!apiMode) {
+    if (!useApi) {
       setLoadedLimit((current) => Math.min(current + pageSize, filtered.length));
       return;
     }
@@ -1742,7 +1875,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       const response = await fetch(`/api/cars?${query}`, { signal: controller.signal });
       if (!response.ok) throw new Error("catalog unavailable");
       const catalog = await response.json();
-      setRemoteCars((current) => [...current, ...catalog.items.map(normalizeImportedCar)]);
+      setRemoteCars((current) => [...current, ...orderRemoteBatch(catalog.items.map(normalizeImportedCar), current)]);
       setLoadedLimit((current) => current + catalog.items.length);
       setRemoteTotal(catalog.total);
     } catch (error) {
@@ -1755,8 +1888,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       }
     }
   };
-  const displayed = apiMode ? remoteCars : filtered.slice(0, loadedLimit);
-  const resultCount = apiMode ? remoteTotal : filtered.length;
+  const displayed = useApi ? remoteCars : filtered.slice(0, loadedLimit);
+  const resultCount = useApi ? remoteTotal : filtered.length;
+  // Until the first page answers there is no count yet, and "0" reads as an empty result.
+  const knownResultCount = remoteLoading && !remoteCars.length ? null : resultCount;
   const hasMore = displayed.length < resultCount;
   useEffect(() => {
     const target = loadMoreTarget.current;
@@ -1769,7 +1904,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [apiMode, filters, sort, displayed.length, resultCount, remoteLoading, remoteError]);
+  }, [useApi, filters, sort, displayed.length, resultCount, remoteLoading, remoteError]);
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
   return (
     <main className="catalog page-width">
@@ -1781,7 +1916,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       <div className="catalog-heading">
         <h1>Автомобили с пробегом из Китая</h1>
       </div>
-      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={resultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} />
+      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} />
       {filters.brand !== "Все марки" && models.length > 1 && (
         <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
           {models.map((model) => (
@@ -1798,23 +1933,62 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
         </div>
       )}
       <div className="catalog-layout">
-        <section className="results-list">
+        <section className="results-list" aria-busy={remoteLoading && !displayed.length ? "true" : undefined}>
           <div className="result-tools">
             <div className="result-summary">
-              <b>Подходящие варианты</b>
-              <span>{resultCount} найденных</span>
+              <b>{knownResultCount == null ? "Загружаем" : `${knownResultCount} найдено`}</b>
             </div>
-            <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => updateSort(sortOptions.find((option) => option.label === label)?.value || "newest")} />
+            <div className="result-controls">
+              <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => updateSort(sortOptions.find((option) => option.label === label)?.value || "default")} />
+              <div className="result-view-toggle" role="group" aria-label="Вид выдачи">
+                <button
+                  type="button"
+                  className={view === "list" ? "active" : ""}
+                  aria-pressed={view === "list"}
+                  aria-label="Показать списком"
+                  title="Списком"
+                  onClick={() => updateView("list")}
+                >
+                  <Rows size={19} />
+                </button>
+                <button
+                  type="button"
+                  className={view === "grid" ? "active" : ""}
+                  aria-pressed={view === "grid"}
+                  aria-label="Показать карточками"
+                  title="Карточками"
+                  onClick={() => updateView("grid")}
+                >
+                  <SquaresFour size={19} />
+                </button>
+              </div>
+            </div>
           </div>
           {remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}
-          {displayed.length
-            ? displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpen={openCar} />)
-            : !remoteLoading && (
-                <CustomSearchCta variant="empty" onOpen={() => setCustomSearchOpen(true)} />
-              )}
-          {remoteLoading && <div className="catalog-message">Загружаем объявления…</div>}
+          {displayed.length ? (
+            view === "grid" ? (
+              <div className="featured-grid catalog-card-grid">
+                {displayed.map((car) => (
+                  <FeaturedCard key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
+                ))}
+              </div>
+            ) : (
+              displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpen={openCar} />)
+            )
+          ) : remoteLoading ? (
+            view === "grid" ? (
+              <div className="featured-grid catalog-card-grid">
+                {skeletonCards.map((key) => <CardSkeleton key={key} />)}
+              </div>
+            ) : (
+              skeletonCards.map((key) => <CardSkeleton key={key} row />)
+            )
+          ) : (
+            <CustomSearchCta variant="empty" onOpen={() => setCustomSearchOpen(true)} />
+          )}
+          {remoteLoading && displayed.length > 0 && <div className="catalog-message">Загружаем объявления…</div>}
           {hasMore && !remoteLoading && !remoteError && <div ref={loadMoreTarget} className="catalog-scroll-sentinel" aria-hidden="true" />}
-          {apiMode && hasMore && !remoteLoading && remoteError && (
+          {useApi && hasMore && !remoteLoading && remoteError && (
             <button className="load-more" onClick={loadMore}>
               Повторить загрузку
             </button>
@@ -3209,7 +3383,8 @@ function FaqPage({ navigate }) {
   );
 }
 
-function ContactsPage({ navigate }) {
+function ContactsPage({ navigate, theme }) {
+  const mapSrc = `https://yandex.ru/map-widget/v1/?ll=27.512217%2C53.922078&pt=27.512217%2C53.922078%2Cpmrdm&z=16${theme === "dark" ? "&theme=dark" : ""}`;
   return (
     <main className="contact-page">
       <section className="contact-hero page-width">
@@ -3244,15 +3419,12 @@ function ContactsPage({ navigate }) {
           <EnvelopeSimple size={24} weight="duotone" />
           <span><small>Электронная почта</small><b>{COMPANY.email}</b><em>Документы и деловые вопросы</em></span>
         </a>
-        <a href={`tel:${COMPANY.phoneHref}`}>
-          <Phone size={24} weight="duotone" />
-          <span><small>Позвонить нам</small><b>{COMPANY.phone}</b><em>В рабочее время офиса</em></span>
-        </a>
       </section>
 
       <section className="contact-map page-width" aria-label="Офис evcars.by на карте">
         <iframe
-          src="https://yandex.ru/map-widget/v1/?ll=27.512217%2C53.922078&pt=27.512217%2C53.922078%2Cpmrdm&z=16"
+          key={theme}
+          src={mapSrc}
           title="Офис evcars.by на Яндекс Картах"
           loading="lazy"
           allowFullScreen
@@ -3268,7 +3440,6 @@ function ContactsPage({ navigate }) {
           </div>
           <dl className="company-details" id="details">
             <div><dt>Юридическое лицо</dt><dd>{COMPANY.legalName}</dd></div>
-            <div><dt>УНП</dt><dd>{COMPANY.unp}</dd></div>
             <div><dt>Юридический адрес</dt><dd>{COMPANY.address}</dd></div>
             <div><dt>Банк</dt><dd>{COMPANY.bank}</dd></div>
             <div><dt>BIC</dt><dd>{COMPANY.bic}</dd></div>
@@ -3333,10 +3504,10 @@ function SiteFooter({ navigate }) {
           </div>
         </div>
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
-        <div className="footer-column footer-contacts"><b>Связаться</b><AppLink href="/contacts" navigate={navigate}>Контакты</AppLink><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><a href={`tel:${COMPANY.phoneHref}`}>{COMPANY.phone}</a><span>{COMPANY.address}</span></div>
+        <div className="footer-column footer-contacts"><b>Связаться</b><AppLink href="/contacts" navigate={navigate}>Контакты</AppLink><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><span>{COMPANY.address}</span></div>
       </div>
       <div className="page-width footer-bottom">
-        <span>© 2026 {COMPANY.legalName} · УНП {COMPANY.unp}</span>
+        <span>© 2026 {COMPANY.legalName}</span>
         <div><AppLink href="/privacy" navigate={navigate}>Политика конфиденциальности</AppLink><AppLink href="/terms" navigate={navigate}>Условия использования</AppLink></div>
       </div>
     </footer>
@@ -3372,6 +3543,7 @@ function NotFound({ navigate }) {
 const localAuthKey = "navostok-local-auth";
 const localAccountsKey = "navostok-local-accounts";
 const localAccountResetKey = "navostok-account-reset-2026-08-15";
+const catalogTotalKey = "evcars-catalog-total";
 const guestFavoritesKey = "navostok-favorites";
 const favoritesMigrationKey = "navostok-favorites-account-migration";
 const accountFavoritesKey = (userId) => `navostok-account-favorites:${userId}`;
@@ -4101,6 +4273,15 @@ async function loadStaticCar(id, signal) {
   return response.json();
 }
 
+// index.html starts the boot requests before this bundle is downloaded, so the network is
+// already busy while React mounts. Falling back to a plain fetch keeps the app working
+// wherever that inline script did not run.
+const fetchCarsJson = (url) => fetch(url, { cache:"no-store" }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("api unavailable"))));
+let catalogRequest = null;
+// Memoised so StrictMode's double effect invocation does not fire the request twice.
+const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || fetchCarsJson("/api/cars?limit=60&sort=variety"));
+const requestBootCar = (id) => (window.__boot?.carId === id && window.__boot.car) || fetchCarsJson(`/api/cars/${encodeURIComponent(id)}`);
+
 export function App() {
   const { path, navigate, backToCatalog } = useRoute();
   const authRoute = path === "/login" || path === "/register";
@@ -4126,8 +4307,12 @@ export function App() {
   const [systemTheme, setSystemTheme] = useState(() => (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
   const theme = themeMode === "system" ? systemTheme : themeMode;
   const [cars, setCars] = useState([]);
-  const [apiMode, setApiMode] = useState(false);
-  const [catalogTotal, setCatalogTotal] = useState(0);
+  // Three states, not two: null means the boot request has not answered yet. Routes that can
+  // fetch on their own must not be forced down the static-catalog path while it is pending.
+  const [apiMode, setApiMode] = useState(null);
+  // The total only moves when an import runs, so the last known value is a sound placeholder
+  // while the catalog request is in flight and keeps the search button from reading "0+".
+  const [catalogTotal, setCatalogTotal] = useState(() => Number(window.localStorage.getItem(catalogTotalKey)) || 0);
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(Boolean(targetId));
   const [loadError, setLoadError] = useState(false);
@@ -4141,6 +4326,9 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("navostok-currency", currency);
   }, [currency]);
+  useEffect(() => {
+    if (catalogTotal) window.localStorage.setItem(catalogTotalKey, String(catalogTotal));
+  }, [catalogTotal]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -4205,15 +4393,12 @@ export function App() {
     let cancelled = false;
     const load = async () => {
       try {
-        const response = await fetch("/api/cars?limit=60", {
-          cache: "no-store",
-        });
-        if (!response.ok) throw new Error("api unavailable");
-        const payload = await response.json();
+        const payload = await requestBootCatalog();
         let initialCars = payload.items || [];
         if (targetId && !initialCars.some((car) => car.id === targetId)) {
-          const detailResponse = await fetch(`/api/cars/${encodeURIComponent(targetId)}`, { cache: "no-store" });
-          if (detailResponse.ok) initialCars = [...initialCars, await detailResponse.json()];
+          // Already in flight since index.html on a deep link, so this does not queue behind the list.
+          const detailCar = await requestBootCar(targetId).catch(() => null);
+          if (detailCar) initialCars = [...initialCars, detailCar];
         }
         if (!cancelled) {
           setCars(initialCars.map(normalizeImportedCar));
@@ -4455,32 +4640,10 @@ export function App() {
   const closeAuthModal = () => {
     navigate(authBackgroundPath, { replace:true, preserveScroll:true });
   };
-  const page =
-    contentPath === "/analytics" ? (
-      <AnalyticsPage />
-    ) : loading || routeLoading ? (
-      <AppLoader />
-    ) : loadError ? (
-      <main className="simple-page page-width">
-        <span>Импорт временно недоступен</span>
-        <h1>Не удалось загрузить каталог</h1>
-        <p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p>
-      </main>
-    ) : showAccountFromAuthRoute ? (
-      <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} />
-    ) : contentPath === "/" ? (
-      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} favorites={favorites} toggleFavorite={toggleFavorite} />
-    ) : contentPath === "/catalog" ? (
-      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
-    ) : contentPath === "/favorites" ? (
-      <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} />
-    ) : contentPath === "/account" ? (
-      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} /> : null
-    ) : orderId ? (
-      <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
-    ) : detailId ? (
-      <Detail car={cars.find((item) => item.id === detailId)} cars={cars} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} />
-    ) : contentPath === "/how-it-works" ? (
+  // Pages built entirely from static content must never wait on the catalog request, and the
+  // home page renders its own feed skeletons instead of blocking the whole route on it.
+  const staticPage =
+    contentPath === "/how-it-works" ? (
       <HowItWorksPage navigate={navigate} />
     ) : contentPath === "/about" ? (
       <AboutPage navigate={navigate} />
@@ -4493,11 +4656,41 @@ export function App() {
     ) : contentPath === "/faq" ? (
       <FaqPage navigate={navigate} />
     ) : contentPath === "/contacts" ? (
-      <ContactsPage navigate={navigate} />
+      <ContactsPage navigate={navigate} theme={theme} />
     ) : contentPath === "/privacy" ? (
       <LegalPage navigate={navigate} kind="privacy" />
     ) : contentPath === "/terms" ? (
       <LegalPage navigate={navigate} kind="terms" />
+    ) : null;
+  const page =
+    contentPath === "/analytics" ? (
+      <AnalyticsPage />
+    ) : staticPage ? (
+      staticPage
+    ) : !showAccountFromAuthRoute && contentPath === "/" && !loadError ? (
+      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} />
+    ) : !showAccountFromAuthRoute && contentPath === "/catalog" && !loadError ? (
+      // Catalog issues its own filtered query, so it starts at mount rather than queueing
+      // behind the boot request it never reads.
+      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
+    ) : loading || routeLoading ? (
+      <AppLoader />
+    ) : loadError ? (
+      <main className="simple-page page-width">
+        <span>Импорт временно недоступен</span>
+        <h1>Не удалось загрузить каталог</h1>
+        <p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p>
+      </main>
+    ) : showAccountFromAuthRoute ? (
+      <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} />
+    ) : contentPath === "/favorites" ? (
+      <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} />
+    ) : contentPath === "/account" ? (
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} /> : null
+    ) : orderId ? (
+      <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
+    ) : detailId ? (
+      <Detail car={cars.find((item) => item.id === detailId)} cars={cars} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} />
     ) : (
       <NotFound navigate={navigate} />
     );

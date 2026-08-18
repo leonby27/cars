@@ -50,6 +50,12 @@ const mapOnly = args.get("map-only") === "true";
 const repairField = args.get("repair") || null;
 const refreshMap = args.get("refresh-map") === "true";
 const writeDatabase = args.get("database") !== "0";
+// `--static=0` keeps the run out of public/data/cars.json. Two importers cannot
+// share that file: each rewrites it whole from its own snapshot, so the second
+// writer drops the first one's cards. The accepted cards are parked in a sidecar
+// instead, ready to be merged once the other run is done — no refetching.
+const writeStatic = args.get("static") !== "0";
+const PENDING_PATH = path.join(ROOT, "runtime", "che168-pending.json");
 const maxBrandId = Number(args.get("max-brand-id") || 999);
 const fuelTypes = String(args.get("fueltype") || ELECTRIC_FUEL_TYPE)
   .split(",")
@@ -160,6 +166,20 @@ async function loadBrandMap(page) {
 
 const catalog = JSON.parse(await fs.readFile(DATA_PATH, "utf8"));
 const catalogById = new Map((catalog.cars || []).map((car) => [car.id, car]));
+// Listings can be in the database without being in the static file yet — that is
+// exactly what `--static=0` produces. Skipping those ids too keeps a follow-up
+// run from spending detail requests on cards it already has.
+const knownIds = new Set(catalogById.keys());
+if (writeDatabase) {
+  try {
+    const { pool } = await import("../server/db.mjs");
+    const { rows } = await pool.query("SELECT id FROM listings");
+    for (const row of rows) knownIds.add(row.id);
+    console.log(`[skip] ${knownIds.size} listings already known (static + database)`);
+  } catch (error) {
+    console.warn(`[skip] database ids unavailable: ${error.message}`);
+  }
+}
 const accepted = [];
 const rejected = new Map();
 const rejectionExamples = [];
@@ -212,7 +232,11 @@ async function writeBatch(final = false) {
   if (!fresh.length && !final) return;
   const cars = [...catalogById.values()];
   const finishedAt = new Date().toISOString();
-  await fs.writeFile(DATA_PATH, `${JSON.stringify({ ...catalog, generatedAt: finishedAt, count: cars.length, cars }, null, 2)}\n`);
+  if (writeStatic) {
+    await fs.writeFile(DATA_PATH, `${JSON.stringify({ ...catalog, generatedAt: finishedAt, count: cars.length, cars }, null, 2)}\n`);
+  } else {
+    await fs.writeFile(PENDING_PATH, `${JSON.stringify({ generatedAt: finishedAt, count: accepted.length, cars: accepted }, null, 2)}\n`);
+  }
   let databaseRows = null;
   if (writeDatabase && fresh.length) {
     const { importCars } = await import("../server/repository.mjs");
@@ -284,7 +308,7 @@ try {
           for (const item of payload.items) {
             const externalId = String(item.infoid || "");
             if (!externalId || seen.has(externalId)) continue;
-            if (catalogById.has(`che168-${externalId}`)) { known += 1; continue; }
+            if (knownIds.has(`che168-${externalId}`)) { known += 1; continue; }
             if (skipHybridCandidates && HYBRID_FUEL.test(`${item.fuelname} ${item.specname} ${item.carname}`)) { skippedHybrid += 1; continue; }
             const year = Number(`${item.specname} ${item.carname}`.match(/\b(20\d{2})\b/)?.[1]);
             if (!year || year < 2020) { skippedOld += 1; continue; }
@@ -332,7 +356,7 @@ try {
             continue;
           }
           const existing = catalogById.get(car.id);
-          if (existing && !repairField) {
+          if (!repairField && knownIds.has(car.id)) {
             reject("already in catalog", candidate.externalId);
             continue;
           }

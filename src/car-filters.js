@@ -1,3 +1,5 @@
+import { seededRandom, varietyOrder } from "./car-variety.js";
+
 export function minimumYear(value) {
   return Number(String(value || "").match(/\d{4}/)?.[0] || 0);
 }
@@ -6,7 +8,7 @@ export function matchesMinimumYear(car, value) {
   return Number(car.year) >= minimumYear(value);
 }
 
-export function sortCars(cars, sort = "newest") {
+export function sortCars(cars, sort = "newest", seed = "") {
   const sorted = [...cars];
   const listedAt = (car) => {
     const value = car.sourceListedAt || car.firstSeenAt || car.importedAt;
@@ -23,6 +25,7 @@ export function sortCars(cars, sort = "newest") {
     return (a - b) * direction;
   };
 
+  if (sort === "default") return varietyOrder(sorted, seededRandom(seed));
   if (sort === "price_asc") return sorted.sort((a, b) => landedPrice(a) - landedPrice(b));
   if (sort === "price_desc") return sorted.sort((a, b) => landedPrice(b) - landedPrice(a));
   if (sort === "mileage_asc") return sorted.sort((a, b) => Number(a.mileage) - Number(b.mileage));

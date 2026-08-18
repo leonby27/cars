@@ -51,7 +51,10 @@ Commands:
 - `npm run importv2 -- --limit=500 --brands=Deepal,Zeekr` — selected brands only
 - `npm run importv2 -- --map-only --refresh-map` — rebuild the brand-id map
 - `npm run importv2 -- --repair=range` — re-read cards already in the catalog whose named field never parsed, and fill it in place; nothing new is added
+- `npm run importv2 -- --brands=AION,ORA --static=0` — write only to PostgreSQL, for when another importer is already running
 - `--database=0` skips the PostgreSQL write; `--concurrency` above 6 starts drawing HTTP 429 from the source
+
+Two importers must not share `public/data/cars.json`: each rewrites it whole from its own snapshot, so the second writer drops the first one's cards. `--static=0` keeps a run out of that file and parks its accepted cards in `runtime/che168-pending.json`, ready to be merged into the catalog once the other run finishes. A run always seeds its skip list from both the static file and the `listings` table, so cards that reached only the database are not fetched twice.
 
 Keep concurrency modest: the source rate-limits, and the runner backs off on 429 rather than dropping a listing.
 

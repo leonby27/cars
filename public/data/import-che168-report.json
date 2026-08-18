@@ -1,148 +1,87 @@
 {
-  "startedAt": "2026-08-18T17:27:27.047Z",
+  "startedAt": "2026-08-18T19:28:35.691Z",
   "source": "Che168 Global",
   "layer": "Incomplete Reports",
   "discoveryMode": "flight-list",
-  "requested": 5000,
-  "batchSize": 200,
-  "concurrency": 4,
-  "detailReads": 2634,
-  "imported": 2593,
+  "requested": 20000,
+  "batchSize": 100,
+  "concurrency": 3,
+  "detailReads": 3453,
+  "imported": 3441,
   "importedByBrand": {
-    "Audi": 9,
-    "Volkswagen": 9,
-    "Xiaomi": 107,
-    "Zeekr": 83,
-    "Tesla": 1281,
-    "BYD": 496,
-    "NIO": 550,
-    "Leapmotor": 58
+    "BYD": 1,
+    "HIMA": 377,
+    "Voyah": 1,
+    "Denza": 158,
+    "Geely Galaxy": 495,
+    "Leapmotor": 414,
+    "Lynk & Co": 343,
+    "BMW": 259,
+    "Deepal": 338,
+    "Hongqi": 288,
+    "Volkswagen": 262,
+    "Mercedes-Benz": 181,
+    "Avatr": 126,
+    "Zeekr": 80,
+    "XPeng": 51,
+    "Toyota": 21,
+    "Audi": 33,
+    "AION": 7,
+    "Mazda": 4,
+    "Dongfeng": 2
   },
-  "rejected": 41,
+  "rejected": 12,
   "rejectedByReason": {
-    "source still has no range": 28,
-    "detail page lacks required structured fields or gallery": 13
+    "detail page lacks required structured fields or gallery": 12
   },
   "rejectionExamples": [
     {
-      "externalId": "59291030",
+      "externalId": "59291119",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59227365",
+      "externalId": "59042423",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59281164",
+      "externalId": "59345065",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59287962",
+      "externalId": "59141232",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "58905780",
+      "externalId": "59344974",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59282124",
+      "externalId": "59316385",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59202322",
+      "externalId": "59335291",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59254457",
+      "externalId": "59323218",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59136815",
+      "externalId": "59340645",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59088893",
+      "externalId": "59374129",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "59088914",
+      "externalId": "59369484",
       "reason": "detail page lacks required structured fields or gallery"
     },
     {
-      "externalId": "58907950",
+      "externalId": "59361985",
       "reason": "detail page lacks required structured fields or gallery"
-    },
-    {
-      "externalId": "59371987",
-      "reason": "detail page lacks required structured fields or gallery"
-    },
-    {
-      "externalId": "58963656",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59223443",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "58923784",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59322048",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59321575",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59323849",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59205606",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "58963551",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59010511",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59130110",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59073204",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59329547",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "58986969",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "58652665",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "58985956",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "59059231",
-      "reason": "source still has no range"
-    },
-    {
-      "externalId": "57827974",
-      "reason": "source still has no range"
     }
   ],
   "policy": {
@@ -169,14 +108,17 @@
       "Mercedes-Benz",
       "Lynk & Co",
       "Mazda",
-      "Toyota"
+      "Toyota",
+      "AION",
+      "ORA",
+      "Hongqi"
     ],
     "newImports": "electric-only",
     "cleansExistingCatalog": false
   },
-  "previousCount": 21954,
-  "finishedAt": "2026-08-18T17:46:56.102Z",
+  "previousCount": 30260,
+  "finishedAt": "2026-08-18T19:58:26.585Z",
   "final": true,
-  "resultingCount": 21954,
-  "databaseRows": 144
+  "resultingCount": 33701,
+  "databaseRows": 63
 }

@@ -21,9 +21,9 @@ export async function upsertCar(car, client = pool) {
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
     ON CONFLICT (id) DO UPDATE SET brand=EXCLUDED.brand, model=EXCLUDED.model, model_year=EXCLUDED.model_year, powertrain=EXCLUDED.powertrain, drivetrain=EXCLUDED.drivetrain, battery_kwh=EXCLUDED.battery_kwh, electric_range_km=EXCLUDED.electric_range_km, combined_range_km=EXCLUDED.combined_range_km, specifications=EXCLUDED.specifications, updated_at=now()`,
     [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify({ bodyType:item.bodyType,bodyStructure:item.bodyStructure,batteryType:item.batteryType,batteryBrand:item.batteryBrand,batteryHealth:item.batteryHealth,engine:item.engine,transmission:item.transmission,bodyColor:item.bodyColor,vehicleClass:item.vehicleClass,driverAssistance:item.driverAssistance,infotainmentChip:item.infotainmentChip,assistanceLevel:item.assistanceLevel,radarCount:item.radarCount,cameraCount:item.cameraCount,ultrasonicCount:item.ultrasonicCount,warranty:item.warranty,inspectionGrade:item.inspectionGrade,powertrainInspection:item.powertrainInspection,bodyInspection:item.bodyInspection,interiorInspection:item.interiorInspection,structureInspection:item.structureInspection,engineBayInspection:item.engineBayInspection,batteryProtection:item.batteryProtection })]);
-  await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd)
-    VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21)
-    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd`,
+  await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at)
+    VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()))
+    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at)`,
     [item.id,item.source,item.externalId,item.sourceUrl,item.title,item.city,item.firstRegistration,item.mileage,item.chinaPrice,item.guidePriceCny,item.owners,item.transfers,item.conditionGrade,item.appearanceScore,item.claims || item.incident,item.description,contentHash(item),JSON.stringify(item),checkedAt,item.importedAt || checkedAt,estimatedTotalUsd]);
   await client.query("DELETE FROM listing_media WHERE listing_id=$1", [item.id]);
   const images = (item.images || [item.image]).filter(Boolean);
@@ -63,12 +63,13 @@ export function buildCarFilters(searchParams) {
   if (Number(searchParams.get("mileageMax"))) add("l.mileage_km<=?", Number(searchParams.get("mileageMax")));
   if (Number(searchParams.get("priceCnyMax"))) add("l.price_cny<=?", Number(searchParams.get("priceCnyMax")));
   if (Number(searchParams.get("landedMax"))) add("l.estimated_total_usd<=?", Number(searchParams.get("landedMax")));
+  if (Number(searchParams.get("landedMin"))) add("l.estimated_total_usd>=?", Number(searchParams.get("landedMin")));
   return { where:`WHERE ${clauses.join(" AND ")}`, values };
 }
 
 export function buildCarOrder(searchParams) {
   const orders = {
-    newest:"COALESCE(NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz, l.first_seen_at) DESC NULLS LAST, l.id",
+    newest:"l.listed_at DESC NULLS LAST, l.id",
     price:"l.estimated_total_usd ASC NULLS LAST, l.id",
     price_asc:"l.estimated_total_usd ASC NULLS LAST, l.id",
     price_desc:"l.estimated_total_usd DESC NULLS LAST, l.id",
@@ -77,6 +78,13 @@ export function buildCarOrder(searchParams) {
     year_desc:"v.model_year DESC NULLS LAST, l.id",
     year_asc:"v.model_year ASC NULLS LAST, l.id",
   };
+  // The catalog pages by offset, so the default shuffle has to stay the same
+  // between "показать ещё" requests: the client sends one seed per catalog
+  // session and the seed is hashed into the row order.
+  if (searchParams.get("sort") === "default") {
+    const seed = String(searchParams.get("seed") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 32) || "catalog";
+    return `md5(l.id::text || '${seed}'), l.id`;
+  }
   return orders[searchParams.get("sort")] || orders.newest;
 }
 
@@ -95,6 +103,24 @@ export async function listCars(searchParams) {
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 24));
   const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
   const order = buildCarOrder(searchParams);
+  // `sort=variety` feeds the home showcase: one random listing per model, then a
+  // random order over those. Ordinary sorting cannot do this — the newest page is
+  // whatever an import just wrote, so a single model can fill the whole block.
+  if (searchParams.get("sort") === "variety") {
+    // Sample by id, not by full row: deduplicating over the selected columns made DISTINCT ON
+    // sort every active listing together with its source_payload (~950 ms). Sorting the narrow
+    // (brand, model, id) tuples and materialising full rows only for the chosen page is ~140 ms.
+    const [itemsResult, countResult] = await Promise.all([
+      pool.query(`WITH sample AS (
+        SELECT DISTINCT ON (v.brand, v.model) l.id
+        FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
+        ORDER BY v.brand, v.model, random()
+      ), picked AS (SELECT id FROM sample ORDER BY random() LIMIT $${values.length + 1})
+      ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY random()`, [...values, limit]),
+      pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+    ]);
+    return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, limit, offset:0 };
+  }
   const [itemsResult, countResult] = await Promise.all([
     pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
     pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),

@@ -19,6 +19,12 @@ test("ignores selector defaults and invalid numbers", () => {
   assert.equal(result.where, "WHERE l.status='active'");
 });
 
+test("filters by a landed price floor", () => {
+  const result = buildCarFilters(new URLSearchParams({ landedMin:"100000" }));
+  assert.deepEqual(result.values, [100000]);
+  assert.match(result.where, /l\.estimated_total_usd>=\$1/);
+});
+
 test("filters by an allowlisted condition grade", () => {
   const result = buildCarFilters(new URLSearchParams({ conditionGrade:"A" }));
   assert.deepEqual(result.values, ["A"]);
@@ -31,10 +37,16 @@ test("uses only allowlisted catalog sort orders", () => {
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"price_desc" })), "l.estimated_total_usd DESC NULLS LAST, l.id");
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"mileage_asc" })), "l.mileage_km ASC NULLS LAST, l.id");
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"range_desc" })), "COALESCE(v.electric_range_km, v.combined_range_km) DESC NULLS LAST, l.id");
-  assert.equal(buildCarOrder(new URLSearchParams({ sort:"newest" })), "COALESCE(NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz, l.first_seen_at) DESC NULLS LAST, l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"newest" })), "l.listed_at DESC NULLS LAST, l.id");
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"year_desc" })), "v.model_year DESC NULLS LAST, l.id");
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"year_asc" })), "v.model_year ASC NULLS LAST, l.id");
-  assert.equal(buildCarOrder(new URLSearchParams({ sort:"DROP TABLE listings" })), "COALESCE(NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz, l.first_seen_at) DESC NULLS LAST, l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"DROP TABLE listings" })), "l.listed_at DESC NULLS LAST, l.id");
+});
+
+test("keeps the default order stable per seed and strips seed injection", () => {
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"default", seed:"ab12cd" })), "md5(l.id::text || 'ab12cd'), l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"default", seed:"x'; DROP TABLE listings; --" })), "md5(l.id::text || 'xDROPTABLElistings'), l.id");
+  assert.equal(buildCarOrder(new URLSearchParams({ sort:"default" })), "md5(l.id::text || 'catalog'), l.id");
 });
 
 test("omits heavy technical specifications from catalog summaries", () => {
