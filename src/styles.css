@@ -8780,6 +8780,9 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   background: var(--panel-soft);
   color: var(--accent-dark);
 }
+.header-menu-settings {
+  display: none;
+}
 .header-actions {
   align-items: center;
   gap: 10px;
@@ -8931,22 +8934,56 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .header-actions {
     gap: 6px;
   }
-  .header-actions > .currency-switch {
-    display: grid;
-    grid-template-columns: 30px 42px;
-    width: 78px;
-    height: 40px;
-    flex: 0 0 78px;
-    padding: 4px;
-    border-radius: 12px;
+  .header-actions > .currency-switch,
+  .header-actions > .theme-toggle {
+    display: none;
   }
-  .header-actions .currency-switch button {
+  .header-menu-settings {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .header-menu-currency {
+    width: 100%;
+    height: 40px;
+    grid-template-columns: 1fr 1fr;
+    padding: 4px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--panel-soft);
+  }
+  .header-menu-currency button {
     height: 32px;
     min-width: 0;
     padding: 0 4px;
+    border: 0;
     border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
     font-size: 14px;
+    font-weight: 800;
     line-height: 32px;
+  }
+  .header-menu-currency button.active {
+    background: var(--panel);
+    color: var(--accent-dark);
+  }
+  .header-menu-theme-toggle {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    border: 0 !important;
+    border-radius: 11px;
+    background: var(--panel-soft) !important;
+  }
+  .header-menu-theme-toggle:hover {
+    border: 0 !important;
+    background: var(--panel) !important;
+  }
+  :root[data-theme="dark"] .header-menu-currency button.active {
+    background: #383d45;
+    color: #ff7a81;
   }
   .header-actions .account-link,
   .header-actions .favorites-link {
@@ -8955,12 +8992,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     padding: 0;
     border-radius: 12px;
     background: var(--header-control-bg);
-  }
-  .header-actions .theme-toggle {
-    width: 40px;
-    height: 40px;
-    flex-basis: 40px;
-    border-radius: 12px;
   }
   .app-loader {
     min-height: calc(100dvh - 66px);
@@ -8982,6 +9013,8 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .header-menu,
   .header-menu-icon,
   .header-actions .currency-switch button,
+  .header-menu-currency button,
+  .header-menu-theme-toggle,
   .mobile-filter-sheet {
     animation: none !important;
     transition: none !important;

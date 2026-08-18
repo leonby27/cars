@@ -80,7 +80,7 @@ Header appearance preference: keep the header container borderless and use the s
 
 Mobile header-control preference: place the favorites and account icon buttons on the same soft gray filled blocks as the burger-menu and theme controls, with matching compact dimensions and corner radii.
 
-Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; cap its width against the viewport safe insets so it never creates horizontal page overflow on narrow devices. Keep the compact currency switch in the header immediately to the left of the theme toggle rather than inside the burger menu.
+Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; cap its width against the viewport safe insets so it never creates horizontal page overflow on narrow devices. Place both the currency switch and theme toggle inside the burger menu on mobile, while preserving their desktop position in the header.
 
 Header menu-surface preference: in the dark theme, render the opened burger-menu popover slightly lighter than the standard dark card surface so the floating menu remains clearly visible against the page; use a dedicated surface token rather than changing every panel.
 
