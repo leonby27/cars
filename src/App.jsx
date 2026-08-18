@@ -1208,6 +1208,7 @@ function Home({ navigate, cars, apiMode, favorites, toggleFavorite }) {
   const randomPool = useRef([]);
   const nextItemKey = useRef(0);
   const feedSource = useRef(cars);
+  const [useCatalogCards, setUseCatalogCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
   const takeRandomBatch = () => {
     const batch = [];
     if (!cars.length) return batch;
@@ -1220,6 +1221,13 @@ function Home({ navigate, cars, apiMode, favorites, toggleFavorite }) {
     return batch;
   };
   const [feedCars, setFeedCars] = useState(() => takeRandomBatch());
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 700px)");
+    const updateLayout = () => setUseCatalogCards(media.matches);
+    media.addEventListener("change", updateLayout);
+    return () => media.removeEventListener("change", updateLayout);
+  }, []);
 
   useEffect(() => {
     if (feedSource.current === cars) return;
@@ -1281,17 +1289,25 @@ function Home({ navigate, cars, apiMode, favorites, toggleFavorite }) {
             Все автомобили <ArrowRight size={18} />
           </AppLink>
         </div>
-        <div className="car-list home-car-list">
-          {feedCars.map(({ car, key }) => (
-            <CarRow
-              key={key}
-              car={car}
-              navigate={navigate}
-              favorite={favorites.has(car.id)}
-              toggleFavorite={toggleFavorite}
-            />
-          ))}
-        </div>
+        {useCatalogCards ? (
+          <div className="car-list home-car-list">
+            {feedCars.map(({ car, key }) => (
+              <CarRow
+                key={key}
+                car={car}
+                navigate={navigate}
+                favorite={favorites.has(car.id)}
+                toggleFavorite={toggleFavorite}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="featured-grid">
+            {feedCars.map(({ car, key }) => (
+              <FeaturedCard key={key} car={car} navigate={navigate} onClick={() => navigate(`/cars/${car.id}`)} />
+            ))}
+          </div>
+        )}
         <button type="button" className="load-more featured-load-more" onClick={loadMore}>
           Показать ещё
         </button>

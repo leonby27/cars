@@ -3288,7 +3288,7 @@ button {
     scroll-padding-inline: 6px;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
-    touch-action: pan-x;
+    touch-action: pan-x pan-y;
   }
   .car-row-mobile-image-strip::-webkit-scrollbar {
     display: none;
@@ -8942,10 +8942,10 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     border-radius: 12px;
   }
   .header-menu {
-    position: absolute;
-    top: calc(100% + 10px);
+    position: fixed;
+    top: 66px;
     right: auto;
-    left: 0;
+    left: 14px;
     width: min(260px, calc(100vw - 28px));
     max-height: calc(100dvh - 88px);
     overflow-y: auto;
