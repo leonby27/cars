@@ -1004,6 +1004,9 @@ button {
   border-top: 1px solid var(--line);
   cursor: pointer;
 }
+.car-row-mobile-header {
+  display: none;
+}
 .car-row:last-child {
   border-bottom: 1px solid var(--line);
 }
@@ -1034,6 +1037,9 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.car-row-mobile-image-strip {
+  display: none;
 }
 .car-row-image > span {
   position: absolute;
@@ -1249,6 +1255,12 @@ button {
   margin: 10px 0 5px;
   font-size: 34px;
   letter-spacing: -1.2px;
+}
+.detail-mobile-price {
+  display: none;
+}
+.detail-floating-availability {
+  display: none;
 }
 .detail-title p {
   margin: 0;
@@ -2073,7 +2085,7 @@ button {
     grid-column: 2;
   }
   .process-list h3 {
-    font-size: 17px;
+    font-size: 16px;
   }
   .process-list p {
     font-size: 16px;
@@ -3071,8 +3083,7 @@ button {
   .catalog-heading {
     align-items: flex-start;
   }
-  .catalog-heading h1,
-  .detail-title h1 {
+  .catalog-heading h1 {
     font-size: 27px;
   }
   .catalog-heading > span {
@@ -3096,42 +3107,192 @@ button {
   .car-row {
     grid-template-columns: 1fr;
     min-height: 0;
-    padding: 14px 0 20px;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel-soft);
+  }
+  .car-row:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+  .car-row:hover {
+    border-color: var(--line);
+    border-radius: 14px;
+    background: var(--panel-soft);
+  }
+  .car-row:hover + .car-row {
+    border-top-color: var(--line);
+  }
+  html[data-theme="dark"] .car-row,
+  html[data-theme="dark"] .car-row:last-child,
+  html[data-theme="dark"] .car-row:hover,
+  html[data-theme="dark"] .car-row:hover + .car-row {
+    border-color: transparent;
+  }
+  .car-row-mobile-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
     gap: 12px;
   }
+  .car-row-mobile-header > div {
+    min-width: 0;
+  }
+  .car-row-mobile-header h2 {
+    margin: 0;
+    overflow: hidden;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.35px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .car-row-mobile-header h2 a:any-link {
+    color: inherit;
+    text-decoration: none;
+  }
+  .car-row-mobile-header strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 21px;
+    font-weight: 800;
+    line-height: 1.2;
+    -webkit-text-stroke: 0.3px currentColor;
+  }
+  .car-row-mobile-header > button {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: var(--filter-field-bg);
+  }
   .car-row-image {
-    height: 230px;
+    width: calc(100% + 28px);
+    height: 138px;
+    max-width: none;
+    margin-inline: -14px;
+    border-radius: 0;
   }
-  .car-row-info {
-    padding: 0 4px;
-  }
-  .car-row-price {
-    grid-column: auto;
-    padding: 0 4px;
-    align-items: flex-start;
-  }
-  .car-row-price b,
-  .car-row-price small {
+  .car-row-image.hover-image-preview > img {
     display: none;
   }
-  .row-title h2 {
-    font-size: 18px;
+  .car-row-mobile-image-strip {
+    height: 100%;
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    padding-inline: 6px;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 6px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    touch-action: pan-x;
   }
-  .source-line {
-    margin-top: 14px;
+  .car-row-mobile-image-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .car-row-mobile-image-strip > img {
+    width: 46%;
+    min-width: 46%;
+    height: 100%;
+    flex: 0 0 46%;
+    object-fit: cover;
+    scroll-snap-align: start;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  .car-row-mobile-image-strip > img:first-child {
+    border-radius: 9px 0 0 9px;
+  }
+  .car-row-mobile-image-strip > img:last-child {
+    border-radius: 0 9px 9px 0;
+  }
+  .car-row-image .hover-image-segments {
+    display: none;
+  }
+  .car-row-info {
+    padding: 0;
+  }
+  .car-row-info .row-title {
+    display: none;
+  }
+  .car-row-price {
+    display: none;
+  }
+  .car-row .summary {
+    margin: 2px 0 10px;
+    font-size: 15px;
+  }
+  .mini-specs {
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .mini-specs::-webkit-scrollbar {
+    display: none;
+  }
+  .car-row .mini-specs > span {
+    gap: 4px;
+    padding: 4px 7px;
+    border-radius: 6px;
+    background: var(--filter-field-bg);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .car-row .mini-specs > span > svg {
+    width: 15px;
+    height: 15px;
+  }
+  .mini-specs .body-type-spec {
+    max-width: none;
+    flex: 0 0 auto;
+  }
+  .car-row .source-line {
+    margin-top: 10px;
+    font-size: 15px;
   }
   .back-mobile {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin: 18px 0 12px;
-    padding: 0;
+    margin: 12px 0 20px;
+    width: fit-content;
+    min-height: 40px;
+    padding: 8px 12px;
     border: 0;
-    background: transparent;
+    border-radius: 10px;
+    background: var(--header-control-bg);
     font-size: 16px;
   }
   .detail-title {
     align-items: start;
+  }
+  .detail-title h1 {
+    margin: 0 0 5px;
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.2px;
+  }
+  .detail-mobile-price {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--ink);
+    font-size: 27px;
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -1.2px;
+  }
+  .detail-title p {
+    display: none;
   }
   .detail-kicker > span:last-child {
     display: none;
@@ -3992,12 +4153,19 @@ button {
 }
 @media (max-width: 700px) {
   .result-summary {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
+    display: block;
+  }
+  .result-summary b {
+    display: none;
   }
   .result-summary span {
+    color: var(--ink);
     font-size: 16px;
+    font-weight: 700;
+  }
+  .sort-custom-select .select-trigger b,
+  .sort-custom-select .select-options button {
+    font-size: 14px;
   }
 }
 .car-row-image > span {
@@ -5089,7 +5257,8 @@ footer {
     gap: 30px;
   }
   .detail-facts-section h2 {
-    font-size: 21px;
+    margin-bottom: 12px;
+    font-size: 20px;
   }
   .detail-facts-heading {
     align-items: flex-start;
@@ -5098,17 +5267,22 @@ footer {
     display: flex;
   }
   .fact-row {
-    grid-template-columns: 28px minmax(0, 1fr);
-    gap: 5px 10px;
-    padding: 13px 4px;
+    min-height: 0;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 9px 4px;
+  }
+  .fact-row svg {
+    width: 18px;
+    height: 18px;
   }
   .fact-row span {
-    font-size: 17px;
+    font-size: 16px;
   }
   .fact-row b {
-    grid-column: 2;
-    font-size: 17px;
-    text-align: left;
+    grid-column: 3;
+    font-size: 16px;
+    text-align: right;
   }
   .detail-source-card {
     padding: 18px;
@@ -8550,6 +8724,34 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 }
 
 @media (max-width: 700px) {
+  .vehicle-quick-info {
+    display: none;
+  }
+  .detail-floating-availability {
+    position: fixed;
+    z-index: 45;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    display: block;
+    padding: 8px;
+    border-radius: 14px;
+    background: var(--panel-soft);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.24);
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+  .detail-floating-availability.is-hidden {
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  .detail-floating-availability .primary {
+    width: 100%;
+    min-height: 52px;
+    margin: 0;
+  }
   .site-header {
     height: 66px;
   }
@@ -8567,6 +8769,16 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     width: 40px;
     height: 40px;
     border-radius: 12px;
+  }
+  .header-menu {
+    position: fixed;
+    top: 74px;
+    right: 14px;
+    left: 14px;
+    width: auto;
+    max-height: calc(100dvh - 88px);
+    overflow-y: auto;
+    transform-origin: top center;
   }
   .header-actions {
     gap: 6px;

@@ -68,6 +68,8 @@ Header appearance preference: keep the header container borderless and use the s
 
 Mobile header-control preference: place the favorites and account icon buttons on the same soft gray filled blocks as the burger-menu and theme controls, with matching compact dimensions and corner radii.
 
+Mobile header-menu preference: keep the burger-menu popover fixed within the viewport's left and right safe insets so its hidden or open state never creates horizontal page overflow on narrow devices.
+
 Header menu-surface preference: in the dark theme, render the opened burger-menu popover slightly lighter than the standard dark card surface so the floating menu remains clearly visible against the page; use a dedicated surface token rather than changing every panel.
 
 Neutral surface hierarchy preference: keep grouped gray surfaces low-contrast against the page. In the dark theme, use `#1b1e22` for grouped/soft surfaces and `#22262b` for cards that are white in the light theme, so nested cards are only slightly lighter than their container; use `#202329` for intermediate control surfaces. Give shared search selects their own higher-contrast `--filter-field-bg` token (`#292d34` in dark and `#f4f5f6` in light) instead of inheriting the generic surface token. Give disabled selects a separate, still-visible `--filter-field-disabled-bg` (`#24282e` in dark and `#eef0f2` in light) so they remain distinguishable from the grouped container without looking active. When a select opens, increase its surface contrast slightly via `--filter-field-open-bg` (`#30343c` in dark and white in light); never make the open trigger darker than its resting state. Dark search panels should be borderless. In the light theme, preserve the existing white-card-on-`#eff1f3` hierarchy.
@@ -130,6 +132,10 @@ Expanded filter layout preference: keep the primary “Показать … ав
 
 Vehicle card preview preference: on pointer-hover desktop layouts, split the image into 4–5 horizontal cursor zones that switch among the first listing photos, with a compact segmented position indicator similar to Auto.ru. Keep touch previews stable.
 
+Mobile catalog-card gallery preference: replace the single large hover-preview image in each mobile catalog result with a compact 138px-tall horizontally swipeable inline photo strip showing two images plus a small reveal of the third. Let the gallery viewport span the full card width without persistent corner clipping, but keep 6px padding inside the scroll track so the left inset appears only at the initial position and the right inset only at the final position; intermediate photos should scroll flush to the card edges. Apply the 9px left corner radius only to the first photo and the right corner radius only to the last photo, so each radius scrolls away with its respective edge image. Let users swipe through the same first five listing photos used by the desktop hover preview, distinguish horizontal swipes from taps so swiping never opens the detail page, use a 2px gap, hide the desktop segmented indicator, and keep the photo-count badge over the strip.
+
+Mobile catalog-card layout preference: present every result as its own compact, moderately rounded low-contrast card instead of separating results with divider lines. Put the vehicle title at a compact 16px size and 600 weight and the landed price at a visibly reinforced 800 weight at the top with the favorite control in the upper-right corner, followed by the photo strip, 15px summary, small low-padding 14px medium-weight specification blocks with 15px icons, and 15px location; these mobile card details are explicit sub-16px typography exceptions. Do not repeat the title or price below the gallery. In the dark theme, keep the favorite control and specification blocks visibly lighter than the card at rest instead of revealing their contrast only on hover.
+
 Similar-vehicle preference: select detail-page recommendations by the same body type and a comparable landed-price budget, always excluding other listings of the current make and model. Rank matches deterministically by price proximity rather than randomizing them.
 
 Featured card pricing preference: do not show the “под ключ до Минска” label on home-page vehicle cards. Keep the price left-aligned with the title and metadata, and use compact vertical spacing between card text rows.
@@ -143,6 +149,8 @@ Catalog sorting preference: offer the sort options “Дешёвые”, “До
 Catalog sort-control sizing preference: size the visible sorting trigger to its selected label rather than the dropdown width. Keep the dropdown independently wide enough for the longest sorting option.
 
 Catalog sort-menu preference: show all sorting options at once without an internal scrollbar when the complete list fits comfortably in the menu.
+
+Mobile catalog result-tools preference: hide the “Подходящие варианты” label, promote “N найденных” to the same 16px/700 primary typography, and use compact 14px text in the sorting trigger and its options; the sorting text is an explicit sub-16px mobile exception.
 
 Catalog result-card layout preference: keep the desktop listing photo slightly narrower so the information column has enough room to keep the battery, range, and body-type chips on one row when the available catalog width permits it.
 
@@ -160,9 +168,17 @@ Vehicle detail breadcrumb preference: use the trail “Главная → Авт
 
 Vehicle quick-summary preference: above the estimate card in the detail sidebar, show a separate compact rounded card titled “Основная информация” in small muted text. Below it, use a slightly denser font weight and split the comma-separated summary into two paragraphs: year, mileage, and powertrain first; electric/combined range, drivetrain, battery capacity, and horsepower second. Do not show transmission or body type there. Translate common values into concise Russian wording and omit unavailable facts rather than inferring them.
 
-Vehicle fact-list typography preference: use slightly larger 17px text for both labels and values in the vehicle characteristics and source-facts lists on desktop and mobile.
+Mobile vehicle quick-summary preference: hide the “Основная информация” sidebar card on vehicle-detail pages at mobile widths; keep it visible on desktop.
 
-Vehicle fact typography preference: use larger, comfortably readable text for characteristic labels and values—16px on desktop and 15px on mobile.
+Mobile vehicle availability-CTA preference: keep “Уточнить актуальность авто” in a compact floating bottom panel until the original CTA inside the estimate card enters the viewport. Hide the floating duplicate while the original CTA is visible or its modal is open; both controls must trigger the same action.
+
+Vehicle fact-list typography preference: use 17px text for labels and values on desktop. On mobile, render each fact as one compact 16px row with a small icon, label, and right-aligned value instead of stacking the value below the label.
+
+Vehicle fact typography preference: keep characteristic labels and values comfortably readable while prioritizing compact mobile density—17px on desktop and 16px on mobile.
+
+Mobile vehicle-detail heading preference: place the vehicle name above the landed price in the hero. Render the name like compact supporting copy at 16px/600 in the primary white text color, and give the price the former large-title treatment at 27px/800.
+
+Mobile vehicle-detail hero preference: hide the powertrain, drivetrain, and mileage summary beneath the hero price, and render “Назад к каталогу” as a compact soft-gray filled pill with its arrow instead of a plain text control. Keep the pill closer to the header than to the vehicle title, using a 12px top margin and 20px bottom margin.
 
 Localization preference: show Chinese listing cities in Russian. Present source letter grades as plain-language vehicle-condition labels; do not expose the source name in catalog result metadata.
 

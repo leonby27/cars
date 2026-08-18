@@ -832,10 +832,13 @@ function QuickSearch({ navigate, cars, apiMode }) {
   );
 }
 
-function HoverImagePreview({ car, className }) {
+function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }) {
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
   const [active, setActive] = useState(0);
   const preloadStarted = useRef(false);
+  const mobileStripRef = useRef(null);
+  const mobileStripStart = useRef(0);
+  const mobileStripMoved = useRef(false);
 
   const preload = () => {
     if (preloadStarted.current || images.length < 2) return;
@@ -855,6 +858,34 @@ function HoverImagePreview({ car, className }) {
   return (
     <div className={`${className} hover-image-preview`} onMouseEnter={preload} onMouseMove={selectByCursor} onMouseLeave={() => setActive(0)}>
       <img src={imageSource(images[active])} alt={car.title} draggable="false" />
+      {mobileStrip && (
+        <div
+          className="car-row-mobile-image-strip"
+          ref={mobileStripRef}
+          onPointerDown={() => {
+            mobileStripStart.current = mobileStripRef.current?.scrollLeft || 0;
+            mobileStripMoved.current = false;
+          }}
+          onScroll={() => {
+            const currentScroll = mobileStripRef.current?.scrollLeft || 0;
+            if (Math.abs(currentScroll - mobileStripStart.current) > 4) mobileStripMoved.current = true;
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (!mobileStripMoved.current) onMobileOpen?.();
+          }}
+        >
+          {images.map((image, index) => (
+            <img
+              src={imageSource(image)}
+              alt={index === 0 ? car.title : ""}
+              draggable="false"
+              loading={index === 0 ? "eager" : "lazy"}
+              key={`${image}-mobile-${index}`}
+            />
+          ))}
+        </div>
+      )}
       {images.length > 1 && (
         <div className="hover-image-segments" aria-hidden="true">
           {images.map((image, index) => (
@@ -1282,7 +1313,24 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen }) {
   const listingAge = formatListingAge(getSourceListedAt(car));
   return (
     <article className="car-row" onClick={open} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && open()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}>
-      <HoverImagePreview car={car} className="car-row-image" />
+      <div className="car-row-mobile-header">
+        <div>
+          <h2><AppLink href={`/cars/${car.id}`} navigate={navigate} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
+          <strong>≈ {money(price.totalUsd, currency)}</strong>
+        </div>
+        <button
+          type="button"
+          aria-label={favorite ? "Удалить из избранного" : "Добавить в избранное"}
+          className={favorite ? "selected" : ""}
+          onClick={(event) => {
+            event.stopPropagation();
+            toggleFavorite(car.id);
+          }}
+        >
+          <Heart size={22} weight={favorite ? "fill" : "regular"} />
+        </button>
+      </div>
+      <HoverImagePreview car={car} className="car-row-image" mobileStrip onMobileOpen={open} />
       <div className="car-row-info">
         <div className="row-title">
           <div>
@@ -2152,11 +2200,26 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
   const currency = useCurrency();
   const [availabilityUnavailableOpen, setAvailabilityUnavailableOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [availabilityCtaVisible, setAvailabilityCtaVisible] = useState(false);
+  const availabilityCtaRef = useRef(null);
   useEffect(() => {
     if (car) trackEvent("vehicle_view", { listingId:car.id, listingTitle:car.title });
   }, [car?.id]);
+  useEffect(() => {
+    const cta = availabilityCtaRef.current;
+    if (!cta || typeof IntersectionObserver === "undefined") return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      setAvailabilityCtaVisible(entry.isIntersecting);
+    }, { threshold: 0.15 });
+    observer.observe(cta);
+    return () => observer.disconnect();
+  }, [car?.id]);
   if (!car) return <NotFound navigate={navigate} />;
   const price = estimateLandedCost(car);
+  const openAvailabilityModal = () => {
+    trackEvent("availability_click", { listingId:car.id, listingTitle:car.title });
+    setAvailabilityUnavailableOpen(true);
+  };
   const quickInfo = buildVehicleQuickInfo(car);
   const specs = [
     [CalendarBlank, "Год", car.year],
@@ -2191,6 +2254,9 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
       <div className="detail-title">
         <div>
           <h1>{car.title}</h1>
+          <strong className="detail-mobile-price">
+            {approximateMoney(price.totalLow, price.totalHigh, currency)}
+          </strong>
           <p>
             {car.type} · {car.drive} привод · {number(car.mileage)} км
           </p>
@@ -2301,13 +2367,18 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
                 </div>
               </div>
             </section>
-            <button className="primary report-order-cta" onClick={() => { trackEvent("availability_click", { listingId:car.id, listingTitle:car.title }); setAvailabilityUnavailableOpen(true); }}>
+            <button ref={availabilityCtaRef} className="primary report-order-cta" onClick={openAvailabilityModal}>
               Уточнить актуальность авто
             </button>
           </aside>
         </div>
       </div>
       <SimilarCarsSlider car={car} cars={cars} navigate={navigate} />
+      <div className={`detail-floating-availability${availabilityCtaVisible || availabilityUnavailableOpen ? " is-hidden" : ""}`} aria-hidden={availabilityCtaVisible || availabilityUnavailableOpen}>
+        <button className="primary" type="button" onClick={openAvailabilityModal} tabIndex={availabilityCtaVisible || availabilityUnavailableOpen ? -1 : 0}>
+          Уточнить актуальность авто
+        </button>
+      </div>
       {availabilityUnavailableOpen && <AvailabilityUnavailableModal onClose={() => setAvailabilityUnavailableOpen(false)} />}
     </main>
   );
