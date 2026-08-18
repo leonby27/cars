@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, InstagramLogo, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, InstagramLogo, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, Phone, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -308,7 +308,7 @@ function ScrollToTopButton() {
 const routeSeo = {
   "/": ["Автомобили из Китая в Беларусь — evcars.by", "Автомобили с пробегом из Китая с проверкой, расчётом стоимости и доставкой в Минск и Беларусь."],
   "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | evcars.by", "Каталог автомобилей с пробегом из Китая: электромобили и гибриды, характеристики, пробег и ориентировочная стоимость доставки в Беларусь."],
-  "/how-it-works": ["Как купить автомобиль из Китая в Беларуси | evcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
+  "/how-it-works": ["О сервисе покупки автомобилей из Китая | evcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
   "/about": ["О сервисе доставки автомобилей из Китая | evcars.by", "evcars.by помогает выбрать, проверить, выкупить и доставить автомобиль с пробегом из Китая в Беларусь."],
   "/delivered": ["Доставленные автомобили из Китая — примеры и цены | evcars.by", "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска."],
   "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | evcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
@@ -423,18 +423,13 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
             className={`header-menu${menuOpen ? " open" : ""}`}
             id="header-menu"
             aria-hidden={!menuOpen}
-            inert={menuOpen ? undefined : ""}
+            inert={menuOpen ? undefined : true}
           >
               <nav aria-label="Основная навигация">
                 <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>Автомобили</AppLink>
-                <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>Как это работает</AppLink>
-                <AppLink href="/about" navigate={navigate} className={path === "/about" ? "active" : ""} aria-current={path === "/about" ? "page" : undefined}>О компании</AppLink>
+                <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
                 <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
               </nav>
-              <div className="header-menu-currency" role="group" aria-label="Валюта цен">
-                <button type="button" className={currency === "USD" ? "active" : ""} aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>$</button>
-                <button type="button" className={currency === "BYN" ? "active" : ""} aria-pressed={currency === "BYN"} onClick={() => setCurrency("BYN")}>BYN</button>
-              </div>
           </div>
         </div>
         <div className="header-actions">
@@ -575,7 +570,7 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
         <CaretDown size={16} weight="bold" />
       </button>
       {!disabled && (
-        <div className={`select-menu${open ? " open" : ""}`} aria-hidden={!open} inert={open ? undefined : ""}>
+        <div className={`select-menu${open ? " open" : ""}`} aria-hidden={!open} inert={open ? undefined : true}>
           {searchable && (
             <div className="select-search">
               <MagnifyingGlass size={16} />
@@ -1202,7 +1197,7 @@ function HomeConversionSections({ navigate }) {
   );
 }
 
-function Home({ navigate, cars, apiMode }) {
+function Home({ navigate, cars, apiMode, favorites, toggleFavorite }) {
   const batchSize = 20;
   const randomPool = useRef([]);
   const nextItemKey = useRef(0);
@@ -1280,9 +1275,15 @@ function Home({ navigate, cars, apiMode }) {
             Все автомобили <ArrowRight size={18} />
           </AppLink>
         </div>
-        <div className="featured-grid">
+        <div className="car-list home-car-list">
           {feedCars.map(({ car, key }) => (
-            <FeaturedCard key={key} car={car} navigate={navigate} onClick={() => navigate(`/cars/${car.id}`)} />
+            <CarRow
+              key={key}
+              car={car}
+              navigate={navigate}
+              favorite={favorites.has(car.id)}
+              toggleFavorite={toggleFavorite}
+            />
           ))}
         </div>
         <button type="button" className="load-more featured-load-more" onClick={loadMore}>
@@ -1820,7 +1821,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
             </li>
           </ul>
           <button className="secondary" onClick={() => navigate("/how-it-works")}>
-            Как это работает
+            О сервисе
           </button>
         </aside>
       </div>
@@ -2753,27 +2754,27 @@ const purchaseSteps = [
   {
     icon: MagnifyingGlass,
     title: "Вы выбираете автомобиль",
-    text: "Смотрите реальные объявления, сравниваете комплектации и видите предварительную цену до Минска.",
+    text: "Сравниваете объявления, комплектации и предварительную цену до Минска.",
   },
   {
     icon: ChatCircleText,
     title: "Мы подтверждаем объявление",
-    text: "Связываемся с продавцом, уточняем наличие, цену, VIN и возможность экспорта.",
+    text: "Подтверждаем наличие, цену, VIN и возможность экспорта.",
   },
   {
     icon: ShieldCheck,
     title: "Проверяем автомобиль",
-    text: "Заказываем независимую диагностику кузова, техники и батареи. Результаты показываем до решения о покупке.",
+    text: "Проводим независимую диагностику кузова, техники и батареи.",
   },
   {
     icon: ListChecks,
     title: "Фиксируем смету",
-    text: "Согласовываем автомобиль, логистику, таможенные платежи и услуги. Неподтверждённые суммы отмечаем отдельно.",
+    text: "Согласовываем автомобиль, логистику, платежи и услуги.",
   },
   {
     icon: CarProfile,
     title: "Выкупаем и доставляем",
-    text: "Сопровождаем оплату, экспортные документы и перевозку. Вы получаете автомобиль в Минске.",
+    text: "Сопровождаем оплату, документы и доставку автомобиля в Минск.",
   },
 ];
 
@@ -2786,46 +2787,18 @@ function HowItWorksPage({ navigate }) {
             <ArrowLeft size={18} />
             На главную
           </button>
-          <span className="info-eyebrow">Как это работает</span>
-          <h1>Покупка авто из Китая — без прыжка в неизвестность</h1>
+          <span className="info-eyebrow">О сервисе</span>
+          <h1>Покупка авто из Китая — всё под контролем</h1>
           <p>Сначала проверка автомобиля и понятная смета. Только потом — решение о покупке, договор и оплата.</p>
           <div className="info-actions">
             <button className="primary" onClick={() => navigate("/catalog")}>
               Выбрать автомобиль <ArrowRight size={18} />
             </button>
-            <a href="#steps">Посмотреть этапы</a>
           </div>
         </div>
-        <aside className="journey-preview" aria-label="Краткая схема покупки">
-          <span>Ваш путь</span>
-          <div>
-            <b>01</b>
-            <p>
-              <strong>Выбор</strong>
-              <small>Каталог и расчёт</small>
-            </p>
-            <Check size={18} weight="bold" />
-          </div>
-          <div>
-            <b>02</b>
-            <p>
-              <strong>Проверка</strong>
-              <small>Продавец, VIN, состояние</small>
-            </p>
-            <Clock size={18} />
-          </div>
-          <div>
-            <b>03</b>
-            <p>
-              <strong>Доставка</strong>
-              <small>Документы и логистика</small>
-            </p>
-            <CarProfile size={18} />
-          </div>
-          <p className="journey-note">
-            <Info size={17} /> Деньги за автомобиль не переводятся до согласования результатов проверки и итоговой сметы.
-          </p>
-        </aside>
+        <div className="info-hero-visual">
+          <img src={appHref("/illustrations/how-it-works-hero.png")} alt="Автомобиль из Китая с проверкой и доставкой" />
+        </div>
       </section>
       <section className="info-proof page-width">
         <div>
@@ -3217,24 +3190,26 @@ function ContactsPage({ navigate }) {
   return (
     <main className="contact-page">
       <section className="contact-hero page-width">
-        <div>
+        <div className="contact-hero-copy">
           <button className="back-mobile" onClick={() => navigate("/")}>
             <ArrowLeft size={18} />
             На главную
           </button>
           <span className="info-eyebrow">Контакты</span>
-          <h1>Давайте обсудим ваш автомобиль лично</h1>
-          <p>Ответим на вопросы, покажем договор и расчёт, объясним проверку и доставку. Можно написать онлайн или встретиться в офисе в Минске.</p>
+          <h1>Расскажем о процессе и ответим на ваши вопросы</h1>
+          <p className="contact-office-summary">
+            <strong>Офис в Минске</strong>
+            <span>{COMPANY.address}. {COMPANY.hours}</span>
+          </p>
+          <div className="info-actions">
+            <a className="primary contact-telegram-cta" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer">
+              Написать нам в Telegram <ArrowRight size={18} />
+            </a>
+          </div>
         </div>
-        <aside className="contact-office-card">
-          <span className="contact-card-icon"><MapPin size={26} weight="duotone" /></span>
-          <small>Офис в Минске</small>
-          <h2>{COMPANY.address}</h2>
-          <p><Clock size={18} /> {COMPANY.hours}</p>
-          <a className="primary" href="https://maps.google.com/?q=Минск+улица+Тимирязева+65Б" target="_blank" rel="noreferrer">
-            Открыть на карте <ArrowRight size={17} />
-          </a>
-        </aside>
+        <div className="info-hero-visual">
+          <img src={appHref("/illustrations/contact-hero.png")} alt="Чай, архитектура Китая и деловые принадлежности" />
+        </div>
       </section>
 
       <section className="contact-options page-width" aria-label="Способы связи">
@@ -3246,13 +3221,26 @@ function ContactsPage({ navigate }) {
           <EnvelopeSimple size={24} weight="duotone" />
           <span><small>Электронная почта</small><b>{COMPANY.email}</b><em>Документы и деловые вопросы</em></span>
         </a>
+        <a href={`tel:${COMPANY.phoneHref}`}>
+          <Phone size={24} weight="duotone" />
+          <span><small>Позвонить нам</small><b>{COMPANY.phone}</b><em>В рабочее время офиса</em></span>
+        </a>
+      </section>
+
+      <section className="contact-map page-width" aria-label="Офис evcars.by на карте">
+        <iframe
+          src="https://yandex.ru/map-widget/v1/?ll=27.512217%2C53.922078&pt=27.512217%2C53.922078%2Cpmrdm&z=16"
+          title="Офис evcars.by на Яндекс Картах"
+          loading="lazy"
+          allowFullScreen
+        />
       </section>
 
       <section className="company-details-section">
         <div className="page-width company-details-grid">
           <div>
             <span className="info-eyebrow">Реквизиты</span>
-            <h2>Работаем по договору от белорусского юридического лица</h2>
+            <h2>Фиксируем все детали договором</h2>
             <p>Перед оплатой фиксируем выбранный автомобиль, состав услуг, порядок расчётов и ответственность сторон.</p>
           </div>
           <dl className="company-details" id="details">
@@ -3321,8 +3309,8 @@ function SiteFooter({ navigate }) {
             <a className="instagram-social-link" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramLogo size={27} weight="bold" /></a>
           </div>
         </div>
-        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/about" navigate={navigate}>О компании</AppLink><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>Как это работает</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
-        <div className="footer-column footer-contacts"><b>Связаться</b><AppLink href="/contacts" navigate={navigate}>Контакты</AppLink><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><span>{COMPANY.address}</span></div>
+        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
+        <div className="footer-column footer-contacts"><b>Связаться</b><AppLink href="/contacts" navigate={navigate}>Контакты</AppLink><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><a href={`tel:${COMPANY.phoneHref}`}>{COMPANY.phone}</a><span>{COMPANY.address}</span></div>
       </div>
       <div className="page-width footer-bottom">
         <span>© 2026 {COMPANY.legalName} · УНП {COMPANY.unp}</span>
@@ -3646,14 +3634,14 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose }) {
           <button type="button" role="tab" aria-selected={!registering} className={!registering ? "active" : ""} onClick={() => navigate("/login", { replace:true })}>Вход</button>
           <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register", { replace:true })}>Регистрация</button>
         </div>
-        <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : ""}>
+        <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
           <div className="auth-registration-reveal-inner">
             <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required={registering} disabled={!registering} /></label>
           </div>
         </div>
         <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder="+375291234567" maxLength={16} required /></label>
         <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder={registering ? "Минимум 8 символов" : ""} required />
-        <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : ""}>
+        <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
           <div className="auth-registration-reveal-inner">
             <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required={registering} disabled={!registering} />
             <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <button type="button" onClick={() => navigate("/terms")}>условиями</button> и <button type="button" onClick={() => navigate("/privacy")}>политикой конфиденциальности</button></span></label>
@@ -4455,7 +4443,7 @@ export function App() {
     ) : showAccountFromAuthRoute ? (
       <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} />
     ) : contentPath === "/" ? (
-      <Home navigate={navigate} cars={cars} apiMode={apiMode} />
+      <Home navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : contentPath === "/catalog" ? (
       <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : contentPath === "/favorites" ? (
@@ -4490,7 +4478,7 @@ export function App() {
   return (
     <CurrencyContext.Provider value={currency}>
       <ClientSeo path={path} car={detailId ? cars.find((item) => item.id === detailId) : null} />
-      <div className="app-content" aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? "" : undefined}>
+      <div className="app-content" aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}
           favoritesCount={favorites.size}

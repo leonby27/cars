@@ -79,7 +79,6 @@ html[data-theme="dark"] #root :where(
   .filter-panel,
   .decision-section,
   .service-scope,
-  .company-details-section,
   .case-proof-section,
   .purchase-notice-section,
   .guarantee-boundaries,
@@ -1633,6 +1632,19 @@ button {
   font-weight: 800;
   text-underline-offset: 4px;
 }
+.info-hero-visual {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.info-hero-visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 540px;
+  object-fit: contain;
+}
 .journey-preview,
 .about-statement {
   padding: 28px;
@@ -1694,7 +1706,7 @@ button {
 .info-proof {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  margin-bottom: 90px;
+  margin-bottom: 45px;
   border: 1px solid var(--line);
   border-radius: 16px;
 }
@@ -1753,21 +1765,24 @@ button {
   line-height: 1.65;
 }
 .process-list {
-  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
 }
 .process-list article {
-  min-height: 128px;
+  min-height: 112px;
   display: grid;
-  grid-template-columns: 62px 52px minmax(0, 1fr);
+  grid-template-columns: 70px 52px minmax(0, 1fr);
   gap: 18px;
   align-items: center;
-  border-bottom: 1px solid var(--line);
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: var(--panel-soft);
 }
 .process-number {
   color: #a2a7ae;
-  font-size: 16px;
+  font-size: 24px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 .process-icon,
 .principles-grid article > span {
@@ -1776,15 +1791,20 @@ button {
   width: 48px;
   height: 48px;
   border-radius: 13px;
-  background: var(--accent-soft);
   color: var(--accent-dark);
+}
+.process-icon {
+  background: var(--panel);
+}
+.principles-grid article > span {
+  background: var(--accent-soft);
 }
 .process-list h3 {
   margin: 0 0 7px;
   font-size: 19px;
 }
 .process-list p {
-  max-width: 760px;
+  max-width: none;
   margin: 0;
   color: var(--muted);
   font-size: 16px;
@@ -1840,8 +1860,8 @@ button {
   margin-bottom: 88px;
   padding: 34px 38px;
   border-radius: 20px;
-  background: #17191c;
-  color: #fff;
+  background: var(--panel-soft);
+  color: var(--ink);
 }
 .info-cta h2 {
   margin-bottom: 8px;
@@ -1849,7 +1869,7 @@ button {
 }
 .info-cta p {
   margin: 0;
-  color: #b7bcc3;
+  color: var(--muted);
   font-size: 16px;
 }
 .info-cta .primary {
@@ -1968,6 +1988,7 @@ button {
 }
 #steps {
   scroll-margin-top: 65px;
+  padding-top: 40px;
 }
 @media (max-width: 980px) {
   .info-hero,
@@ -1982,12 +2003,19 @@ button {
   .about-statement {
     max-width: 650px;
   }
+  .info-hero-visual {
+    width: min(100%, 650px);
+    margin-inline: auto;
+  }
   .info-proof {
-    margin-bottom: 50px;
+    margin-bottom: 25px;
   }
   .info-section {
     padding-top: 58px;
     padding-bottom: 70px;
+  }
+  #steps {
+    padding-top: 29px;
   }
   .decision-grid,
   .service-scope-grid {
@@ -2007,6 +2035,10 @@ button {
   }
 }
 @media (max-width: 700px) {
+  .info-page > .info-hero .info-hero-visual,
+  .contact-page .contact-hero .info-hero-visual {
+    display: none;
+  }
   .info-hero,
   .about-hero {
     gap: 28px;
@@ -2036,6 +2068,9 @@ button {
   .about-hero .primary {
     margin-top: 24px;
   }
+  .info-hero-visual img {
+    max-height: 430px;
+  }
   .journey-preview,
   .about-statement {
     padding: 21px 18px;
@@ -2050,7 +2085,7 @@ button {
   }
   .info-proof {
     grid-template-columns: 1fr;
-    margin-bottom: 24px;
+    margin-bottom: 12px;
   }
   .info-proof > div {
     padding: 17px 18px;
@@ -2062,6 +2097,9 @@ button {
   .info-section {
     padding-top: 48px;
     padding-bottom: 56px;
+  }
+  #steps {
+    padding-top: 24px;
   }
   .info-section-heading {
     margin-bottom: 26px;
@@ -2076,7 +2114,9 @@ button {
   .process-list article {
     grid-template-columns: 42px 1fr;
     gap: 6px 12px;
-    padding: 18px 0;
+    min-height: 0;
+    padding: 18px;
+    border-radius: 14px;
   }
   .process-icon {
     grid-row: 1/3;
@@ -2233,7 +2273,6 @@ button {
   .filter-panel,
   .decision-section,
   .service-scope,
-  .company-details-section,
   .case-proof-section,
   .purchase-notice-section,
   .guarantee-boundaries,
@@ -2637,6 +2676,21 @@ button {
   font-size: 17px;
   line-height: 1.65;
 }
+.contact-hero-copy {
+  max-width: 760px;
+}
+.contact-office-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.contact-office-summary strong {
+  color: var(--ink);
+  font-size: 17px;
+}
+.contact-office-summary span {
+  display: block;
+}
 .contact-office-card {
   padding: 30px;
   border: 1px solid var(--line);
@@ -2688,7 +2742,7 @@ button {
 .contact-options {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  margin-bottom: 90px;
+  margin-bottom: 32px;
   border: 1px solid var(--line);
   border-radius: 17px;
   background: var(--panel);
@@ -2706,6 +2760,10 @@ button {
 }
 .contact-options > a > svg {
   color: var(--accent-dark);
+}
+.info-actions a.contact-telegram-cta {
+  color: var(--yellow-ink);
+  text-decoration: none;
 }
 .contact-options span {
   min-width: 0;
@@ -2726,16 +2784,31 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.company-details-section {
+.contact-map {
+  height: 420px;
+  margin-bottom: 90px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 20px;
   background: var(--panel-soft);
+}
+.contact-map iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.company-details-section {
+  padding-bottom: 88px;
+  background: var(--page);
 }
 .company-details-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(440px, 1.1fr);
   gap: 80px;
   align-items: start;
-  padding-top: 78px;
-  padding-bottom: 88px;
+  padding: 64px;
+  border-radius: 20px;
+  background: var(--panel-soft);
 }
 .company-details-grid h2 {
   margin: 9px 0 14px;
@@ -2752,14 +2825,20 @@ button {
 }
 .company-details {
   margin: 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-strong);
 }
 .company-details > div {
   display: grid;
   grid-template-columns: 170px 1fr;
   gap: 24px;
   padding: 15px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-strong);
+}
+:root[data-theme="dark"] :where(.company-details, .company-details > div) {
+  border-color: #3f464f;
+}
+:root[data-theme="dark"] :where(.contact-options, .contact-map) {
+  border: 0;
 }
 .company-details dt {
   color: var(--muted);
@@ -5732,8 +5811,7 @@ footer {
   box-shadow: 0 1px 4px rgba(23, 25, 28, 0.14);
   animation: currency-switch-in var(--motion-fast) var(--motion-ease);
 }
-.header-actions .currency-switch button:active,
-.header-menu-currency button:active {
+.header-actions .currency-switch button:active {
   transform: scale(0.96);
 }
 @keyframes currency-switch-in {
@@ -5805,7 +5883,7 @@ footer {
   }
   .contact-options {
     grid-template-columns: 1fr;
-    margin-bottom: 54px;
+    margin-bottom: 24px;
   }
   .contact-options > a {
     padding: 19px 18px;
@@ -5814,10 +5892,18 @@ footer {
     border-top: 1px solid var(--line);
     border-left: 0;
   }
+  .contact-map {
+    height: 320px;
+    margin-bottom: 54px;
+    border-radius: 15px;
+  }
   .company-details-grid {
     gap: 30px;
-    padding-top: 52px;
-    padding-bottom: 60px;
+    padding: 38px 18px 44px;
+    border-radius: 15px;
+  }
+  .company-details-section {
+    padding-bottom: 54px;
   }
   .company-details-grid h2 {
     font-size: 28px;
@@ -8694,9 +8780,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   background: var(--panel-soft);
   color: var(--accent-dark);
 }
-.header-menu-currency {
-  display: none;
-}
 .header-actions {
   align-items: center;
   gap: 10px;
@@ -8836,20 +8919,34 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     border-radius: 12px;
   }
   .header-menu {
-    position: fixed;
-    top: 74px;
-    right: 14px;
-    left: 14px;
-    width: auto;
+    position: absolute;
+    top: calc(100% + 10px);
+    right: auto;
+    left: 0;
+    width: min(260px, calc(100vw - 28px));
     max-height: calc(100dvh - 88px);
     overflow-y: auto;
-    transform-origin: top center;
+    transform-origin: top left;
   }
   .header-actions {
     gap: 6px;
   }
   .header-actions > .currency-switch {
-    display: none;
+    display: grid;
+    grid-template-columns: 30px 42px;
+    width: 78px;
+    height: 40px;
+    flex: 0 0 78px;
+    padding: 4px;
+    border-radius: 12px;
+  }
+  .header-actions .currency-switch button {
+    height: 32px;
+    min-width: 0;
+    padding: 0 4px;
+    border-radius: 9px;
+    font-size: 14px;
+    line-height: 32px;
   }
   .header-actions .account-link,
   .header-actions .favorites-link {
@@ -8864,34 +8961,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     height: 40px;
     flex-basis: 40px;
     border-radius: 12px;
-  }
-  .header-menu-currency {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    margin-top: 8px;
-    padding: 4px;
-    border-radius: 11px;
-    background: var(--panel-soft);
-  }
-  .header-menu-currency button {
-    min-height: 36px;
-    padding: 0 12px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--muted);
-    font-size: 16px;
-    font-weight: 800;
-    transition:
-      background-color var(--motion-fast) ease,
-      color var(--motion-fast) ease,
-      transform var(--motion-fast) var(--motion-ease);
-  }
-  .header-menu-currency button.active {
-    background: var(--panel);
-    color: var(--accent-dark);
-    animation: currency-switch-in var(--motion-fast) var(--motion-ease);
   }
   .app-loader {
     min-height: calc(100dvh - 66px);
@@ -8913,7 +8982,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .header-menu,
   .header-menu-icon,
   .header-actions .currency-switch button,
-  .header-menu-currency button,
   .mobile-filter-sheet {
     animation: none !important;
     transition: none !important;

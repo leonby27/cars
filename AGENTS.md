@@ -48,6 +48,16 @@ Mobile home-hero preference: center the main heading and render the benefits ben
 
 Home hero-benefit copy preference: use “Полное сопровождение” as the third benefit instead of “Оплата без посредников” on both mobile and desktop.
 
+How-it-works hero visual preference: replace the right-side “Ваш путь” summary card with the transparent `public/illustrations/how-it-works-hero.png` artwork sourced from `img1.png`. Show the entire artwork with `object-fit: contain`, without adding a background panel, and keep it responsive on mobile and desktop.
+
+How-it-works hero-copy preference: use the heading “Покупка авто из Китая — всё под контролем” and keep only the primary “Выбрать автомобиль” CTA; do not show the secondary “Посмотреть этапы” link.
+
+How-it-works process-step preference: present every stage as a separate gray rounded card with an 8px gap. In the light theme, keep the icon tile inside each step white rather than pale red; use a neutral gray tile in the dark theme. Use larger 24px step numbers and concise descriptions that stay on one line at desktop widths, while allowing natural wrapping on mobile.
+
+How-it-works section-spacing preference: keep the vertical gap between the three-item proof strip and the “Пять этапов” section compact—approximately half the original spacing (85px total on desktop), with proportionally reduced spacing at narrower breakpoints.
+
+Information-page CTA preference: do not invert the closing catalog CTA to a dark block in the light theme. Use the shared light-gray soft surface with normal dark text and muted supporting copy; preserve the yellow primary button.
+
 Mobile popular-brands preference: center the catalog arrow inside a compact square control aligned with the section heading, and keep generous vertical spacing between brand rows.
 
 Home conversion content preference: use the space between the vehicle feed and footer for concise trust, objection-handling, and SEO content. Prioritize a transparent order journey and practical answers over generic promotional claims.
@@ -70,9 +80,11 @@ Header appearance preference: keep the header container borderless and use the s
 
 Mobile header-control preference: place the favorites and account icon buttons on the same soft gray filled blocks as the burger-menu and theme controls, with matching compact dimensions and corner radii.
 
-Mobile header-menu preference: keep the burger-menu popover fixed within the viewport's left and right safe insets so its hidden or open state never creates horizontal page overflow on narrow devices.
+Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; cap its width against the viewport safe insets so it never creates horizontal page overflow on narrow devices. Keep the compact currency switch in the header immediately to the left of the theme toggle rather than inside the burger menu.
 
 Header menu-surface preference: in the dark theme, render the opened burger-menu popover slightly lighter than the standard dark card surface so the floating menu remains clearly visible against the page; use a dedicated surface token rather than changing every panel.
+
+Vehicle-card consistency preference: render the home-page catalog feed with the same shared `CarRow` component and responsive layout used in the main catalog, including favorite state, pricing, image browsing, specifications, and location metadata. Do not maintain a separate simplified home-card layout.
 
 Neutral surface hierarchy preference: keep grouped gray surfaces low-contrast against the page. In the dark theme, use `#1b1e22` for grouped/soft surfaces and `#22262b` for cards that are white in the light theme, so nested cards are only slightly lighter than their container; use `#202329` for intermediate control surfaces. Give shared search selects their own higher-contrast `--filter-field-bg` token (`#292d34` in dark and `#f4f5f6` in light) instead of inheriting the generic surface token. Give disabled selects a separate, still-visible `--filter-field-disabled-bg` (`#24282e` in dark and `#eef0f2` in light) so they remain distinguishable from the grouped container without looking active. When a select opens, increase its surface contrast slightly via `--filter-field-open-bg` (`#30343c` in dark and white in light); never make the open trigger darker than its resting state. Dark search panels should be borderless. In the light theme, preserve the existing white-card-on-`#eff1f3` hierarchy.
 
@@ -88,7 +100,17 @@ Company-address preference: show the Minsk street address without an office numb
 
 Company-details preference: do not show a settlement account number in the public company details.
 
-Company-phone preference: do not publish a company phone number; keep Telegram and email as the public contact methods.
+Company-phone preference: show the centralized temporary demo phone number as the third contact method on the contacts page and in the footer. Keep it in `src/company-data.js` so it can be replaced before publication.
+
+Contact-map preference: embed a responsive Yandex Maps frame for the Minsk office directly below the contact-method row. Use a native red Yandex placemark tied to the office coordinates so it moves with the map; do not overlay a separate HTML marker or open the address information card.
+
+Contact-hero preference: match the two-column proportions of the “О сервисе” hero, with the constrained text block on the left and the same automotive illustration on the right. Do not show a separate office card or map button; place “Офис в Минске” and the address/hours directly in the supporting copy below the title.
+
+Dark contact-surface preference: remove the outer outlines from the contact-method group and embedded map in the dark theme. Keep internal dividers where they separate content.
+
+Company-details appearance preference: keep the requisites section visually separate from the footer. Place its content inside a rounded soft-gray card on the page background, leave a clear page-colored gap before the footer, and use slightly stronger dividers between detail rows.
+
+Company-details copy preference: title the requisites section “Фиксируем все детали договором”.
 
 Footer appearance preference: keep the site footer light, using a pale neutral surface with dark headings and readable gray secondary text; do not use a dark inverted footer. Keep the footer itself borderless.
 
@@ -99,6 +121,8 @@ Footer grouping preference: combine the former “Компания” and “П�
 Footer contact-link preference: omit “Оплата и договор” from the combined navigation column and place a “Контакты” link at the top of the “Связаться” column before the public email and address.
 
 Footer contact-link typography preference: style “Контакты” like an ordinary footer navigation item such as “О компании”; reserve the stronger primary-text treatment in the “Связаться” column for the email address only.
+
+Service-navigation preference: label the `/how-it-works` page “О сервисе” everywhere in the visible interface and generated navigation. Hide the separate “О компании” (`/about`) page from header, footer, and generated navigation while preserving its route for old direct links.
 
 Footer social-icon preference: place slightly enlarged, monochrome social icons in consistent white circular buttons without outlines.
 
