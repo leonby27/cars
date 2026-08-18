@@ -435,15 +435,6 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
                   <button type="button" className={currency === "USD" ? "active" : ""} aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>$</button>
                   <button type="button" className={currency === "BYN" ? "active" : ""} aria-pressed={currency === "BYN"} onClick={() => setCurrency("BYN")}>BYN</button>
                 </div>
-                <button
-                  type="button"
-                  className="theme-toggle header-menu-theme-toggle"
-                  onClick={toggleTheme}
-                  aria-label={theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
-                  title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-                >
-                  {theme === "dark" ? <Sun size={20} weight="bold" /> : <Moon size={20} weight="bold" />}
-                </button>
               </div>
           </div>
         </div>

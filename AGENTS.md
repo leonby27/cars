@@ -48,6 +48,8 @@ Mobile home-hero preference: center the main heading and render the benefits ben
 
 Home hero-benefit copy preference: use “Полное сопровождение” as the third benefit instead of “Оплата без посредников” on both mobile and desktop.
 
+Mobile vehicle-type tabs preference: keep “Все / Электромобили / Гибриды” fully visible in one row without horizontal scrolling. Use hug-content widths rather than stretching the tabs across the filter, and tighten only their internal horizontal padding so the row fits naturally.
+
 How-it-works hero visual preference: replace the right-side “Ваш путь” summary card with the transparent `public/illustrations/how-it-works-hero.png` artwork sourced from `img1.png`. Show the entire artwork with `object-fit: contain`, without adding a background panel, and keep it responsive on mobile and desktop.
 
 How-it-works hero-copy preference: use the heading “Покупка авто из Китая — всё под контролем” and keep only the primary “Выбрать автомобиль” CTA; do not show the secondary “Посмотреть этапы” link.
@@ -80,7 +82,7 @@ Header appearance preference: keep the header container borderless and use the s
 
 Mobile header-control preference: place the favorites and account icon buttons on the same soft gray filled blocks as the burger-menu and theme controls, with matching compact dimensions and corner radii.
 
-Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; cap its width against the viewport safe insets so it never creates horizontal page overflow on narrow devices. Place both the currency switch and theme toggle inside the burger menu on mobile, while preserving their desktop position in the header.
+Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; cap its width against the viewport safe insets so it never creates horizontal page overflow on narrow devices. Place the currency switch inside the burger menu on mobile, but keep the theme toggle visible in its original header position.
 
 Header menu-surface preference: in the dark theme, render the opened burger-menu popover slightly lighter than the standard dark card surface so the floating menu remains clearly visible against the page; use a dedicated surface token rather than changing every panel.
 

@@ -3047,7 +3047,17 @@ button {
     font-size: 16px;
   }
   .type-tabs {
-    overflow-x: auto;
+    width: fit-content;
+    max-width: 100%;
+    display: flex;
+    gap: 2px;
+    overflow: visible;
+  }
+  .type-tabs button {
+    min-width: 0;
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    white-space: nowrap;
   }
   .quick-fields {
     grid-template-columns: 1fr 1fr;
@@ -4005,6 +4015,11 @@ button {
 }
 .type-tabs button {
   font-size: 16px;
+}
+@media (max-width: 700px) {
+  .type-tabs button {
+    font-size: 15px;
+  }
 }
 .select-field > span,
 .custom-select > span {
@@ -5566,15 +5581,20 @@ footer {
     position: fixed;
     inset: 0;
     z-index: 120;
+    width: 100%;
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    overflow-x: hidden;
     background: rgba(8, 10, 12, 0.64);
   }
   .mobile-filter-sheet {
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     max-height: min(88dvh, 720px);
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 8px 18px calc(18px + env(safe-area-inset-bottom));
     border-radius: 24px 24px 0 0;
     background: var(--panel);
@@ -8934,14 +8954,11 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .header-actions {
     gap: 6px;
   }
-  .header-actions > .currency-switch,
-  .header-actions > .theme-toggle {
+  .header-actions > .currency-switch {
     display: none;
   }
   .header-menu-settings {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 40px;
-    gap: 8px;
+    display: block;
     margin-top: 8px;
   }
   .header-menu-currency {
@@ -8969,17 +8986,11 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     background: var(--panel);
     color: var(--accent-dark);
   }
-  .header-menu-theme-toggle {
+  .header-actions .theme-toggle {
     width: 40px;
     height: 40px;
     flex-basis: 40px;
-    border: 0 !important;
-    border-radius: 11px;
-    background: var(--panel-soft) !important;
-  }
-  .header-menu-theme-toggle:hover {
-    border: 0 !important;
-    background: var(--panel) !important;
+    border-radius: 12px;
   }
   :root[data-theme="dark"] .header-menu-currency button.active {
     background: #383d45;
@@ -9014,7 +9025,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .header-menu-icon,
   .header-actions .currency-switch button,
   .header-menu-currency button,
-  .header-menu-theme-toggle,
   .mobile-filter-sheet {
     animation: none !important;
     transition: none !important;
