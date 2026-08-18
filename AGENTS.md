@@ -10,6 +10,8 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 Typography preference: prioritize comfortable readability over ultra-compact UI. Keep every rendered text size at 16px or larger across the project, including supporting copy, controls, labels, badges, and mobile layouts. The muted “Срок доставки до Минска” label, the “Основная информация” label, and the non-offer disclaimer in the vehicle estimate card are explicit sub-16px exceptions; do not introduce other smaller sizes unless the user explicitly requests them. Match the delivery label typography to the “Основная информация” label instead of uppercasing it.
 
+Authentication modal preference: present login and registration as a centered modal over the current page without changing its scroll position. Keep only a centered heading above the tabs, with no eyebrow or supporting description. Use darker dark-theme inputs and tab rail, and give the close control a lighter circular surface. Animate the modal's height smoothly when switching between login and registration. Keep the registration consent selected by default and its sentence compact enough for one desktop line with plain underlined links; this consent line is an explicit sub-16px typography exception.
+
 Vehicle estimate density preference: in the detail sidebar, lead the estimate with the final landed-price figure aligned left and do not label it “Итого” or show a “Предварительный расчёт” heading. Keep intermediate labels and prices slightly smaller, omit dividers between them, and render the non-offer disclaimer as an extra-small plain text line without an icon.
 
 Russian typography preference: prevent short Russian prepositions and conjunctions from hanging at the ends of lines throughout the rendered interface, including dynamic content. Keep the shared typography processor enabled instead of relying only on manually inserted non-breaking spaces.
@@ -74,9 +76,9 @@ Company-details preference: do not show a settlement account number in the publi
 
 Company-phone preference: do not publish a company phone number; keep Telegram and email as the public contact methods.
 
-Footer appearance preference: keep the site footer light, using a pale neutral surface with dark headings and readable gray secondary text; do not use a dark inverted footer.
+Footer appearance preference: keep the site footer light, using a pale neutral surface with dark headings and readable gray secondary text; do not use a dark inverted footer. Keep the footer itself borderless.
 
-Footer social-icon preference: place social icons in consistent white circular buttons; use a blue Telegram mark and a recognizable gradient-outline Instagram glyph rather than a filled Instagram tile.
+Footer social-icon preference: place slightly enlarged, monochrome social icons in consistent white circular buttons without outlines.
 
 Delivered-case preference: use structured delivery stories as trust proof, including route, duration, mileage, final landed cost, decision context, and a customer quote. Keep all temporary case data centralized in `src/delivery-cases.js` for replacement with verified cases.
 

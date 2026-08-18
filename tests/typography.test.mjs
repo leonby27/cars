@@ -12,6 +12,7 @@ const SMALL_TEXT_EXCEPTIONS = new Set([
   ".price-breakdown small",
   ".price-breakdown strong",
   ".mini-specs > span",
+  ".auth-modal .auth-consent",
   ".vehicle-quick-info-label",
   ".select-option-count",
 ]);

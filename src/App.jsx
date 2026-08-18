@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, GearSix, Heart, IdentificationCard, Images, Info, InstagramLogo, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesMinimumYear, sortCars } from "./car-filters.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -27,34 +27,6 @@ const priceOptions = [ANY_PRICE, "до $40 000", "до $30 000", "до $25 000"]
 const mileageOptions = [ANY_MILEAGE, "до 50 000 км", "до 30 000 км", "до 15 000 км"];
 const priceLimitLabel = (value, currency) => (value === ANY_PRICE ? value : `до ${money(filterNumber(value), currency)}`);
 const useCurrency = () => useContext(CurrencyContext);
-
-function TelegramBrandIcon() {
-  return (
-    <svg className="social-brand-icon telegram-brand-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M21.79 3.27 18.6 19.13c-.24 1.12-.87 1.39-1.76.87l-4.86-3.58-2.35 2.26c-.26.26-.48.48-.98.48l.35-4.95 9-8.13c.39-.35-.09-.55-.61-.2L6.26 12.89l-4.79-1.5c-1.04-.33-1.06-1.04.22-1.54L20.42 2.63c.87-.32 1.63.2 1.37.64Z" />
-    </svg>
-  );
-}
-
-function InstagramBrandIcon() {
-  const gradientId = useId();
-  return (
-    <svg className="social-brand-icon instagram-brand-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <defs>
-        <linearGradient id={gradientId} x1="3" y1="21" x2="21" y2="3" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#ffdc80" />
-          <stop offset="0.28" stopColor="#fcaf45" />
-          <stop offset="0.52" stopColor="#f77737" />
-          <stop offset="0.72" stopColor="#e1306c" />
-          <stop offset="1" stopColor="#833ab4" />
-        </linearGradient>
-      </defs>
-      <rect x="2.75" y="2.75" width="18.5" height="18.5" rx="5.15" fill="none" stroke={`url(#${gradientId})`} strokeWidth="2.15" />
-      <circle cx="12" cy="12" r="4.15" fill="none" stroke={`url(#${gradientId})`} strokeWidth="2.15" />
-      <circle cx="17.35" cy="6.75" r="1.15" fill={`url(#${gradientId})`} />
-    </svg>
-  );
-}
 
 const displayValue = (value, fallback = "Не указано") => (value === null || value === undefined || value === "" ? fallback : value);
 const cityNames = {
@@ -253,17 +225,20 @@ function useRoute() {
       if (timer) window.clearTimeout(timer);
     };
   }, [route.key, route.restoreY]);
-  const navigate = (next, { replace = false } = {}) => {
+  const navigate = (next, { replace = false, preserveScroll = false } = {}) => {
     if (next === -1) {
       window.history.back();
       return;
     }
     const target = new URL(next, window.location.origin);
     const currentPath = appPath(window.location.pathname);
+    const targetPath = appPath(target.pathname);
+    const keepScrollPosition = preserveScroll || targetPath === "/login" || targetPath === "/register";
     const targetUrl = `${basePath}${target.pathname}${target.search}${target.hash}`;
     if (replace) {
+      const currentIsAuthRoute = currentPath === "/login" || currentPath === "/register";
       window.history.replaceState(
-        { ...window.history.state, fromPath: window.history.state?.fromPath || currentPath, scrollY: 0 },
+        { ...window.history.state, fromPath: currentIsAuthRoute ? window.history.state?.fromPath || "/" : currentPath, scrollY: window.scrollY },
         "",
         targetUrl,
       );
@@ -272,11 +247,11 @@ function useRoute() {
       window.history.pushState({ fromPath: currentPath, scrollY: 0 }, "", targetUrl);
     }
     setRoute((current) => ({
-      path: appPath(target.pathname),
+      path: targetPath,
       restoreY: null,
       key: current.key + 1,
     }));
-    window.scrollTo({ top: 0, behavior: "auto" });
+    if (!keepScrollPosition) window.scrollTo({ top: 0, behavior: "auto" });
   };
   const backToCatalog = () => (window.history.state?.fromPath === "/catalog" ? navigate(-1) : navigate("/catalog"));
   return { path: route.path, navigate, backToCatalog };
@@ -456,7 +431,7 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
           <button
             className={`icon-label account-link${path === "/account" || path === "/login" || path === "/register" ? " selected" : ""}`}
             aria-current={path === "/account" ? "page" : undefined}
-            onClick={() => navigate(user ? "/account" : "/login")}
+            onClick={() => user ? navigate("/account") : navigate("/login", { replace:true, preserveScroll:true })}
           >
             <UserCircle size={22} weight={user ? "fill" : "bold"} />
             <span>{user ? user.name.split(" ")[0] : "Войти"}</span>
@@ -3195,8 +3170,8 @@ function SiteFooter({ navigate }) {
           <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="На главную">ev<span>cars</span><small>.by</small></AppLink>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
           <div className="footer-socials">
-            <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramBrandIcon /></a>
-            <a className="instagram-social-link" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramBrandIcon /></a>
+            <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramLogo size={27} weight="fill" /></a>
+            <a className="instagram-social-link" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramLogo size={27} weight="bold" /></a>
           </div>
         </div>
         <div className="footer-column"><b>Компания</b><AppLink href="/about" navigate={navigate}>О компании</AppLink><AppLink href="/delivered" navigate={navigate}>Доставленные авто</AppLink><AppLink href="/contacts" navigate={navigate}>Контакты и офис</AppLink><AppLink href="/contacts" navigate={navigate}>Реквизиты</AppLink></div>
@@ -3433,14 +3408,14 @@ async function localDeleteAccount(userId, password) {
   window.localStorage.removeItem(pendingOrderKey);
 }
 
-function PasswordField({ label, value, onChange, autoComplete, placeholder = "", required = false }) {
+function PasswordField({ label, value, onChange, autoComplete, placeholder = "", required = false, disabled = false }) {
   const [visible, setVisible] = useState(false);
   return (
     <label className="auth-field">
       <span>{label}</span>
       <div className="password-input">
-        <input type={visible ? "text" : "password"} autoComplete={autoComplete} value={value} onChange={onChange} placeholder={placeholder} required={required} />
-        <button type="button" aria-label={visible ? "Скрыть пароль" : "Показать пароль"} aria-pressed={visible} onClick={() => setVisible((current) => !current)}>
+        <input type={visible ? "text" : "password"} autoComplete={autoComplete} value={value} onChange={onChange} placeholder={placeholder} required={required} disabled={disabled} />
+        <button type="button" aria-label={visible ? "Скрыть пароль" : "Показать пароль"} aria-pressed={visible} onClick={() => setVisible((current) => !current)} disabled={disabled}>
           {visible ? <EyeSlash size={20} /> : <Eye size={20} />}
         </button>
       </div>
@@ -3477,9 +3452,9 @@ function AvailabilityUnavailableModal({ onClose }) {
   );
 }
 
-function AuthPage({ mode, navigate, onAuthenticate, pending }) {
+function AuthModal({ mode, navigate, onAuthenticate, pending, onClose }) {
   const registering = mode === "register";
-  const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:false });
+  const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:true });
   const [error, setError] = useState("");
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
   const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
@@ -3502,35 +3477,47 @@ function AuthPage({ mode, navigate, onAuthenticate, pending }) {
       setError(authMessages[authError.message] || "Не удалось продолжить. Попробуйте ещё раз.");
     }
   };
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape" && !pending) onClose();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose, pending]);
   return (
-    <main className="auth-page">
-      <section className="auth-shell page-width">
-        <div className="auth-intro">
-          <span className="info-eyebrow"><LockKey size={18} weight="duotone" /> Личный кабинет</span>
-          <h1>{registering ? "Создайте аккаунт" : "С возвращением"}</h1>
-          <p>{registering ? "Сохраняйте автомобили, следите за заявками и общайтесь с менеджером в одном месте." : "Войдите, чтобы вернуться к избранным автомобилям и своим заявкам."}</p>
-          <div className="auth-benefits">
-            <p><CheckCircle size={21} weight="fill" /> Избранные автомобили всегда под рукой</p>
-            <p><CheckCircle size={21} weight="fill" /> История заявок и расчётов</p>
-            <p><CheckCircle size={21} weight="fill" /> Статусы доставки в следующих версиях</p>
+    <div className="modal-backdrop auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
+      <form className="auth-card auth-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+        <button className="modal-close" type="button" onClick={onClose} disabled={pending} aria-label="Закрыть"><X size={19} /></button>
+        <div className="auth-modal-heading">
+          <h1 id="auth-modal-title">{registering ? "Создайте аккаунт" : "С возвращением"}</h1>
+        </div>
+        <div className="auth-switch" role="tablist" aria-label="Тип формы">
+          <button type="button" role="tab" aria-selected={!registering} className={!registering ? "active" : ""} onClick={() => navigate("/login", { replace:true })}>Вход</button>
+          <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register", { replace:true })}>Регистрация</button>
+        </div>
+        <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : ""}>
+          <div className="auth-registration-reveal-inner">
+            <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required={registering} disabled={!registering} /></label>
           </div>
         </div>
-        <form className="auth-card" onSubmit={submit}>
-          <div className="auth-switch" role="tablist" aria-label="Тип формы">
-            <button type="button" role="tab" aria-selected={!registering} className={!registering ? "active" : ""} onClick={() => navigate("/login", { replace:true })}>Вход</button>
-            <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register", { replace:true })}>Регистрация</button>
+        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder="+375291234567" maxLength={16} required /></label>
+        <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder={registering ? "Минимум 8 символов" : ""} required />
+        <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : ""}>
+          <div className="auth-registration-reveal-inner">
+            <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required={registering} disabled={!registering} />
+            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <button type="button" onClick={() => navigate("/terms")}>условиями</button> и <button type="button" onClick={() => navigate("/privacy")}>политикой конфиденциальности</button></span></label>
           </div>
-          {registering && <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required /></label>}
-          <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder="+375291234567" maxLength={16} required /></label>
-          <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder="Минимум 8 символов" required />
-          {registering && <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required />}
-          {registering && <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} /><span>Согласен с <button type="button" onClick={() => navigate("/terms")}>условиями</button> и <button type="button" onClick={() => navigate("/privacy")}>политикой конфиденциальности</button></span></label>}
-          {error && <div className="auth-error" role="alert">{error}</div>}
-          <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : registering ? "Создать аккаунт" : "Войти"}<ArrowRight size={18} /></button>
-          <p className="auth-help">{registering ? "Уже есть аккаунт?" : "Ещё нет аккаунта?"} <button type="button" onClick={() => navigate(registering ? "/login" : "/register")}>{registering ? "Войти" : "Зарегистрироваться"}</button></p>
-        </form>
-      </section>
-    </main>
+        </div>
+        {error && <div className="auth-error" role="alert">{error}</div>}
+        <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : registering ? "Создать аккаунт" : "Войти"}<ArrowRight size={18} /></button>
+        <p className="auth-help">{registering ? "Уже есть аккаунт?" : "Ещё нет аккаунта?"} <button type="button" onClick={() => navigate(registering ? "/login" : "/register", { replace:true, preserveScroll:true })}>{registering ? "Войти" : "Зарегистрироваться"}</button></p>
+      </form>
+    </div>
   );
 }
 
@@ -3959,8 +3946,18 @@ async function loadStaticCar(id, signal) {
 
 export function App() {
   const { path, navigate, backToCatalog } = useRoute();
-  const detailId = path.startsWith("/cars/") ? path.split("/")[2] : null;
-  const orderId = path.startsWith("/orders/draft/") ? path.split("/")[3] : null;
+  const authRoute = path === "/login" || path === "/register";
+  const storedAuthBackground = window.history.state?.fromPath;
+  const authBackgroundPath =
+    typeof storedAuthBackground === "string" &&
+    storedAuthBackground.startsWith("/") &&
+    !["/login", "/register", "/account"].includes(storedAuthBackground) &&
+    !storedAuthBackground.startsWith("/orders/")
+      ? storedAuthBackground
+      : "/";
+  const dataPath = authRoute ? authBackgroundPath : path;
+  const detailId = dataPath.startsWith("/cars/") ? dataPath.split("/")[2] : null;
+  const orderId = dataPath.startsWith("/orders/draft/") ? dataPath.split("/")[3] : null;
   const targetId = detailId || orderId;
   const [favorites, setFavorites] = useState(() => readFavorites(guestFavoritesKey));
   const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "BYN" ? "BYN" : "USD"));
@@ -4292,8 +4289,14 @@ export function App() {
       setAuthPending(false);
     }
   };
+  const authModalOpen = !authLoading && !user && (authRoute || path === "/account");
+  const contentPath = authRoute || authModalOpen ? authBackgroundPath : path;
+  const showAccountFromAuthRoute = authRoute && Boolean(user);
+  const closeAuthModal = () => {
+    navigate(authBackgroundPath, { replace:true, preserveScroll:true });
+  };
   const page =
-    path === "/analytics" ? (
+    contentPath === "/analytics" ? (
       <AnalyticsPage />
     ) : loading || routeLoading ? (
       <AppLoader />
@@ -4303,37 +4306,37 @@ export function App() {
         <h1>Не удалось загрузить каталог</h1>
         <p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p>
       </main>
-    ) : path === "/" ? (
+    ) : showAccountFromAuthRoute ? (
+      <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} />
+    ) : contentPath === "/" ? (
       <Home navigate={navigate} cars={cars} apiMode={apiMode} />
-    ) : path === "/catalog" ? (
+    ) : contentPath === "/catalog" ? (
       <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
-    ) : path === "/favorites" ? (
+    ) : contentPath === "/favorites" ? (
       <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} />
-    ) : path === "/login" || path === "/register" ? (
-      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} /> : <AuthPage mode={path === "/register" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
-    ) : path === "/account" ? (
-      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} /> : <AuthPage mode="login" navigate={navigate} onAuthenticate={authenticate} pending={authPending} />
+    ) : contentPath === "/account" ? (
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} /> : null
     ) : orderId ? (
       <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
     ) : detailId ? (
       <Detail car={cars.find((item) => item.id === detailId)} cars={cars} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} />
-    ) : path === "/how-it-works" ? (
+    ) : contentPath === "/how-it-works" ? (
       <HowItWorksPage navigate={navigate} />
-    ) : path === "/about" ? (
+    ) : contentPath === "/about" ? (
       <AboutPage navigate={navigate} />
-    ) : path === "/delivered" ? (
+    ) : contentPath === "/delivered" ? (
       <DeliveredCarsPage navigate={navigate} />
-    ) : path === "/payment-and-contract" ? (
+    ) : contentPath === "/payment-and-contract" ? (
       <PaymentAndContractPage navigate={navigate} />
-    ) : path === "/guarantees" ? (
+    ) : contentPath === "/guarantees" ? (
       <GuaranteesPage navigate={navigate} />
-    ) : path === "/faq" ? (
+    ) : contentPath === "/faq" ? (
       <FaqPage navigate={navigate} />
-    ) : path === "/contacts" ? (
+    ) : contentPath === "/contacts" ? (
       <ContactsPage navigate={navigate} />
-    ) : path === "/privacy" ? (
+    ) : contentPath === "/privacy" ? (
       <LegalPage navigate={navigate} kind="privacy" />
-    ) : path === "/terms" ? (
+    ) : contentPath === "/terms" ? (
       <LegalPage navigate={navigate} kind="terms" />
     ) : (
       <NotFound navigate={navigate} />
@@ -4341,22 +4344,25 @@ export function App() {
   return (
     <CurrencyContext.Provider value={currency}>
       <ClientSeo path={path} car={detailId ? cars.find((item) => item.id === detailId) : null} />
-      <Header
-        navigate={navigate}
-        favoritesCount={favorites.size}
-        path={path}
-        currency={currency}
-        setCurrency={setCurrency}
-        user={user}
-        theme={theme}
-        toggleTheme={() => {
-          const nextTheme = theme === "dark" ? "light" : "dark";
-          window.localStorage.setItem("evcars-theme", nextTheme);
-          setThemeMode(nextTheme);
-        }}
-      />
-      {page}
-      <SiteFooter navigate={navigate} />
+      <div className="app-content" aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? "" : undefined}>
+        <Header
+          navigate={navigate}
+          favoritesCount={favorites.size}
+          path={path}
+          currency={currency}
+          setCurrency={setCurrency}
+          user={user}
+          theme={theme}
+          toggleTheme={() => {
+            const nextTheme = theme === "dark" ? "light" : "dark";
+            window.localStorage.setItem("evcars-theme", nextTheme);
+            setThemeMode(nextTheme);
+          }}
+        />
+        {page}
+        <SiteFooter navigate={navigate} />
+      </div>
+      {authModalOpen && <AuthModal mode={path === "/register" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} onClose={closeAuthModal} />}
     </CurrencyContext.Provider>
   );
 }
