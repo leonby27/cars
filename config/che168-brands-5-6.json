@@ -1,0 +1,718 @@
+{
+  "generatedAt": "2026-08-18T18:16:53.693Z",
+  "source": "Che168 Global",
+  "fuelTypes": [
+    5,
+    6
+  ],
+  "fuelType": "plug-in hybrid + range extender",
+  "brands": {
+    "Aion": {
+      "brandId": 313,
+      "listings": 7,
+      "byFuelType": {
+        "6": 7
+      }
+    },
+    "AITO Wenjie": {
+      "brandId": 609,
+      "listings": 1161,
+      "byFuelType": {
+        "6": 1161
+      }
+    },
+    "ARCFOX": {
+      "brandId": 272,
+      "listings": 12,
+      "byFuelType": {
+        "6": 12
+      }
+    },
+    "Audi": {
+      "brandId": 33,
+      "listings": 39,
+      "byFuelType": {
+        "5": 39
+      }
+    },
+    "Avatr": {
+      "brandId": 502,
+      "listings": 126,
+      "byFuelType": {
+        "6": 126
+      }
+    },
+    "BAIC": {
+      "brandId": 173,
+      "listings": 1,
+      "byFuelType": {
+        "5": 1
+      }
+    },
+    "BAIC ORV": {
+      "brandId": 27,
+      "listings": 32,
+      "byFuelType": {
+        "6": 32
+      }
+    },
+    "Baojun": {
+      "brandId": 120,
+      "listings": 21,
+      "byFuelType": {
+        "5": 21
+      }
+    },
+    "Bentley": {
+      "brandId": 39,
+      "listings": 57,
+      "byFuelType": {
+        "5": 57
+      }
+    },
+    "Besturn": {
+      "brandId": 95,
+      "listings": 1,
+      "byFuelType": {
+        "5": 1
+      }
+    },
+    "BMW": {
+      "brandId": 15,
+      "listings": 356,
+      "byFuelType": {
+        "5": 356
+      }
+    },
+    "Buick": {
+      "brandId": 38,
+      "listings": 278,
+      "byFuelType": {
+        "5": 213,
+        "6": 65
+      }
+    },
+    "BYD": {
+      "brandId": 75,
+      "listings": 3325,
+      "byFuelType": {
+        "5": 3325
+      }
+    },
+    "Cadillac": {
+      "brandId": 47,
+      "listings": 5,
+      "byFuelType": {
+        "5": 5
+      }
+    },
+    "Changan": {
+      "brandId": 76,
+      "listings": 86,
+      "byFuelType": {
+        "5": 78,
+        "6": 8
+      }
+    },
+    "Changan Oshan": {
+      "brandId": 163,
+      "listings": 8,
+      "byFuelType": {
+        "5": 8
+      }
+    },
+    "Changan Qiyuan": {
+      "brandId": 582,
+      "listings": 103,
+      "byFuelType": {
+        "5": 64,
+        "6": 39
+      }
+    },
+    "Chery": {
+      "brandId": 26,
+      "listings": 65,
+      "byFuelType": {
+        "5": 65
+      }
+    },
+    "Chery Fengyun": {
+      "brandId": 634,
+      "listings": 172,
+      "byFuelType": {
+        "5": 159,
+        "6": 13
+      }
+    },
+    "Chevrolet": {
+      "brandId": 71,
+      "listings": 4,
+      "byFuelType": {
+        "5": 4
+      }
+    },
+    "Chrysler": {
+      "brandId": 9,
+      "listings": 16,
+      "byFuelType": {
+        "5": 16
+      }
+    },
+    "Cowin": {
+      "brandId": 214,
+      "listings": 4,
+      "byFuelType": {
+        "5": 4
+      }
+    },
+    "Deepal": {
+      "brandId": 530,
+      "listings": 338,
+      "byFuelType": {
+        "6": 338
+      }
+    },
+    "Denza": {
+      "brandId": 161,
+      "listings": 544,
+      "byFuelType": {
+        "5": 544
+      }
+    },
+    "Dongfeng": {
+      "brandId": 32,
+      "listings": 2,
+      "byFuelType": {
+        "5": 2
+      }
+    },
+    "Dongfeng Aeolus": {
+      "brandId": 113,
+      "listings": 14,
+      "byFuelType": {
+        "5": 14
+      }
+    },
+    "Dongfeng Fengguang": {
+      "brandId": 259,
+      "listings": 1,
+      "byFuelType": {
+        "6": 1
+      }
+    },
+    "Dongfeng Fengxing": {
+      "brandId": 165,
+      "listings": 10,
+      "byFuelType": {
+        "5": 8,
+        "6": 2
+      }
+    },
+    "Dongfeng Yipai": {
+      "brandId": 597,
+      "listings": 67,
+      "byFuelType": {
+        "6": 67
+      }
+    },
+    "DS": {
+      "brandId": 169,
+      "listings": 1,
+      "byFuelType": {
+        "5": 1
+      }
+    },
+    "Exeed": {
+      "brandId": 350,
+      "listings": 78,
+      "byFuelType": {
+        "5": 32,
+        "6": 46
+      }
+    },
+    "Fang Cheng Bao": {
+      "brandId": 577,
+      "listings": 218,
+      "byFuelType": {
+        "5": 218
+      }
+    },
+    "Feidie Auto": {
+      "brandId": 434,
+      "listings": 1,
+      "byFuelType": {
+        "5": 1
+      }
+    },
+    "Ferrari": {
+      "brandId": 42,
+      "listings": 139,
+      "byFuelType": {
+        "5": 139
+      }
+    },
+    "Ford": {
+      "brandId": 8,
+      "listings": 36,
+      "byFuelType": {
+        "5": 25,
+        "6": 11
+      }
+    },
+    "GAC Group": {
+      "brandId": 329,
+      "listings": 3,
+      "byFuelType": {
+        "5": 3
+      }
+    },
+    "GAC Haobo": {
+      "brandId": 590,
+      "listings": 10,
+      "byFuelType": {
+        "6": 10
+      }
+    },
+    "GAC Trumpchi": {
+      "brandId": 82,
+      "listings": 187,
+      "byFuelType": {
+        "5": 187
+      }
+    },
+    "Geely": {
+      "brandId": 25,
+      "listings": 46,
+      "byFuelType": {
+        "5": 46
+      }
+    },
+    "Geely Galaxy": {
+      "brandId": 575,
+      "listings": 501,
+      "byFuelType": {
+        "5": 497,
+        "6": 4
+      }
+    },
+    "Geely Radar": {
+      "brandId": 536,
+      "listings": 5,
+      "byFuelType": {
+        "5": 5
+      }
+    },
+    "Great Wall": {
+      "brandId": 77,
+      "listings": 3,
+      "byFuelType": {
+        "5": 3
+      }
+    },
+    "Haval": {
+      "brandId": 181,
+      "listings": 138,
+      "byFuelType": {
+        "5": 138
+      }
+    },
+    "Honda": {
+      "brandId": 14,
+      "listings": 54,
+      "byFuelType": {
+        "5": 54
+      }
+    },
+    "Hongqi": {
+      "brandId": 91,
+      "listings": 289,
+      "byFuelType": {
+        "5": 289
+      }
+    },
+    "Huajing": {
+      "brandId": 686,
+      "listings": 3,
+      "byFuelType": {
+        "5": 3
+      }
+    },
+    "Hyundai": {
+      "brandId": 12,
+      "listings": 1,
+      "byFuelType": {
+        "5": 1
+      }
+    },
+    "iCAR": {
+      "brandId": 476,
+      "listings": 23,
+      "byFuelType": {
+        "6": 23
+      }
+    },
+    "IM Motors": {
+      "brandId": 448,
+      "listings": 74,
+      "byFuelType": {
+        "6": 74
+      }
+    },
+    "JAC Motors": {
+      "brandId": 592,
+      "listings": 1,
+      "byFuelType": {
+        "5": 1
+      }
+    },
+    "JAC Refine": {
+      "brandId": 525,
+      "listings": 3,
+      "byFuelType": {
+        "5": 3
+      }
+    },
+    "Jeep": {
+      "brandId": 46,
+      "listings": 26,
+      "byFuelType": {
+        "5": 26
+      }
+    },
+    "Jetour": {
+      "brandId": 319,
+      "listings": 6,
+      "byFuelType": {
+        "5": 6
+      }
+    },
+    "Jetour Shanhai": {
+      "brandId": 642,
+      "listings": 115,
+      "byFuelType": {
+        "5": 115
+      }
+    },
+    "Jetour X70": {
+      "brandId": 650,
+      "listings": 8,
+      "byFuelType": {
+        "5": 8
+      }
+    },
+    "Kia": {
+      "brandId": 62,
+      "listings": 3,
+      "byFuelType": {
+        "5": 3
+      }
+    },
+    "Lamborghini": {
+      "brandId": 48,
+      "listings": 21,
+      "byFuelType": {
+        "5": 21
+      }
+    },
+    "Land Rover": {
+      "brandId": 49,
+      "listings": 80,
+      "byFuelType": {
+        "5": 80
+      }
+    },
+    "Landian": {
+      "brandId": 580,
+      "listings": 33,
+      "byFuelType": {
+        "5": 33
+      }
+    },
+    "Leapmotor": {
+      "brandId": 318,
+      "listings": 413,
+      "byFuelType": {
+        "6": 413
+      }
+    },
+    "LEVC": {
+      "brandId": 320,
+      "listings": 5,
+      "byFuelType": {
+        "6": 5
+      }
+    },
+    "Lexus": {
+      "brandId": 52,
+      "listings": 10,
+      "byFuelType": {
+        "5": 10
+      }
+    },
+    "Li Auto": {
+      "brandId": 345,
+      "listings": 2906,
+      "byFuelType": {
+        "6": 2906
+      }
+    },
+    "Lincoln": {
+      "brandId": 51,
+      "listings": 6,
+      "byFuelType": {
+        "5": 6
+      }
+    },
+    "Lingshi Auto": {
+      "brandId": 588,
+      "listings": 2,
+      "byFuelType": {
+        "6": 2
+      }
+    },
+    "Lorinser": {
+      "brandId": 118,
+      "listings": 1,
+      "byFuelType": {
+        "6": 1
+      }
+    },
+    "Lotus Cars": {
+      "brandId": 50,
+      "listings": 6,
+      "byFuelType": {
+        "5": 6
+      }
+    },
+    "Lynk & Co": {
+      "brandId": 279,
+      "listings": 367,
+      "byFuelType": {
+        "5": 367
+      }
+    },
+    "Mazda": {
+      "brandId": 58,
+      "listings": 4,
+      "byFuelType": {
+        "6": 4
+      }
+    },
+    "McLaren": {
+      "brandId": 129,
+      "listings": 17,
+      "byFuelType": {
+        "5": 17
+      }
+    },
+    "Mengshi": {
+      "brandId": 541,
+      "listings": 46,
+      "byFuelType": {
+        "5": 26,
+        "6": 20
+      }
+    },
+    "Mercedes-Benz": {
+      "brandId": 36,
+      "listings": 181,
+      "byFuelType": {
+        "5": 181
+      }
+    },
+    "MG": {
+      "brandId": 20,
+      "listings": 8,
+      "byFuelType": {
+        "5": 8
+      }
+    },
+    "Nezha Auto": {
+      "brandId": 309,
+      "listings": 43,
+      "byFuelType": {
+        "6": 43
+      }
+    },
+    "Nissan": {
+      "brandId": 63,
+      "listings": 22,
+      "byFuelType": {
+        "5": 21,
+        "6": 1
+      }
+    },
+    "Peugeot": {
+      "brandId": 13,
+      "listings": 1,
+      "byFuelType": {
+        "5": 1
+      }
+    },
+    "Porsche": {
+      "brandId": 40,
+      "listings": 169,
+      "byFuelType": {
+        "5": 169
+      }
+    },
+    "Roewe": {
+      "brandId": 19,
+      "listings": 160,
+      "byFuelType": {
+        "5": 160
+      }
+    },
+    "ROX Jishi": {
+      "brandId": 589,
+      "listings": 6,
+      "byFuelType": {
+        "6": 6
+      }
+    },
+    "SAIC Maxus": {
+      "brandId": 155,
+      "listings": 50,
+      "byFuelType": {
+        "5": 48,
+        "6": 2
+      }
+    },
+    "SERES": {
+      "brandId": 325,
+      "listings": 21,
+      "byFuelType": {
+        "6": 21
+      }
+    },
+    "Shangjie": {
+      "brandId": 648,
+      "listings": 186,
+      "byFuelType": {
+        "6": 186
+      }
+    },
+    "Skyworth Auto": {
+      "brandId": 400,
+      "listings": 5,
+      "byFuelType": {
+        "5": 5
+      }
+    },
+    "smart": {
+      "brandId": 45,
+      "listings": 7,
+      "byFuelType": {
+        "5": 7
+      }
+    },
+    "SONGSAN MOTORS": {
+      "brandId": 436,
+      "listings": 2,
+      "byFuelType": {
+        "5": 2
+      }
+    },
+    "Tank": {
+      "brandId": 458,
+      "listings": 456,
+      "byFuelType": {
+        "5": 456
+      }
+    },
+    "Toyota": {
+      "brandId": 3,
+      "listings": 45,
+      "byFuelType": {
+        "5": 45
+      }
+    },
+    "Venucia": {
+      "brandId": 122,
+      "listings": 18,
+      "byFuelType": {
+        "5": 18
+      }
+    },
+    "Volkswagen": {
+      "brandId": 1,
+      "listings": 283,
+      "byFuelType": {
+        "5": 283
+      }
+    },
+    "Volvo": {
+      "brandId": 70,
+      "listings": 195,
+      "byFuelType": {
+        "5": 195
+      }
+    },
+    "Voyah Auto": {
+      "brandId": 425,
+      "listings": 683,
+      "byFuelType": {
+        "5": 443,
+        "6": 240
+      }
+    },
+    "WEY": {
+      "brandId": 283,
+      "listings": 186,
+      "byFuelType": {
+        "5": 186
+      }
+    },
+    "Wuling Motors": {
+      "brandId": 114,
+      "listings": 171,
+      "byFuelType": {
+        "5": 137,
+        "6": 34
+      }
+    },
+    "Xiangjie": {
+      "brandId": 649,
+      "listings": 141,
+      "byFuelType": {
+        "6": 141
+      }
+    },
+    "XPeng": {
+      "brandId": 275,
+      "listings": 57,
+      "byFuelType": {
+        "6": 57
+      }
+    },
+    "Yangwang": {
+      "brandId": 554,
+      "listings": 27,
+      "byFuelType": {
+        "5": 3,
+        "6": 24
+      }
+    },
+    "ZEEKR": {
+      "brandId": 456,
+      "listings": 89,
+      "byFuelType": {
+        "5": 89
+      }
+    },
+    "Zhijie": {
+      "brandId": 595,
+      "listings": 78,
+      "byFuelType": {
+        "6": 78
+      }
+    },
+    "Zunjie": {
+      "brandId": 509,
+      "listings": 1684,
+      "byFuelType": {
+        "6": 59
+      }
+    }
+  }
+}

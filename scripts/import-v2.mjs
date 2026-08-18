@@ -27,9 +27,14 @@ import { IMPORT_BRANDS, canonicalImportBrand, importPolicyViolation } from "../c
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
 const REPORT_PATH = path.join(ROOT, "public", "data", "import-che168-report.json");
-const BRAND_MAP_PATH = path.join(ROOT, "config", "che168-brands.json");
-const FEED_URL = "https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=7";
 const PAGE_SIZE = 24;
+
+// The source splits its catalog by powertrain: 5 is a plug-in hybrid, 6 a range
+// extender, 7 pure electric. A run targets one or more of those feeds; brand ids
+// are probed per feed, because a brand present in one is not necessarily in
+// another, so each set of fuel types gets its own cached map.
+const FUEL_TYPE_NAMES = { 3: "hybrid", 5: "plug-in hybrid", 6: "range extender", 7: "electric" };
+const ELECTRIC_FUEL_TYPE = 7;
 
 const args = new Map(process.argv.slice(2).map((arg) => {
   const [key, value = "true"] = arg.replace(/^--/, "").split("=");
@@ -46,6 +51,17 @@ const repairField = args.get("repair") || null;
 const refreshMap = args.get("refresh-map") === "true";
 const writeDatabase = args.get("database") !== "0";
 const maxBrandId = Number(args.get("max-brand-id") || 999);
+const fuelTypes = String(args.get("fueltype") || ELECTRIC_FUEL_TYPE)
+  .split(",")
+  .map((value) => Number(value.trim()))
+  .filter((value) => Number.isFinite(value) && value > 0);
+if (!fuelTypes.length) throw new Error("--fueltype needs at least one numeric source fuel type");
+// The pure-electric feed still carries hybrids, so they are dropped before a
+// detail request is spent. A hybrid run must obviously not apply that filter.
+const skipHybridCandidates = fuelTypes.every((fuelType) => fuelType === ELECTRIC_FUEL_TYPE);
+const fuelKey = [...fuelTypes].sort((a, b) => a - b).join("-");
+const BRAND_MAP_PATH = path.join(ROOT, "config", fuelKey === String(ELECTRIC_FUEL_TYPE) ? "che168-brands.json" : `che168-brands-${fuelKey}.json`);
+const FEED_URL = `https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=${fuelTypes[0]}`;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const startedAt = new Date().toISOString();
@@ -76,7 +92,7 @@ async function flight(page, url, expectMarker = null) {
   }, [url, expectMarker]);
 }
 
-const listUrl = (brandId, pageIndex) => `/en/used-cars?brandid=${brandId}&fueltype=7&vehicle_list=1${pageIndex > 1 ? `&page=${pageIndex}` : ""}&_rsc=l${brandId}${pageIndex}`;
+const listUrl = (brandId, pageIndex, fuelType) => `/en/used-cars?brandid=${brandId}&fueltype=${fuelType}&vehicle_list=1${pageIndex > 1 ? `&page=${pageIndex}` : ""}&_rsc=l${fuelType}${brandId}${pageIndex}`;
 
 // The browser hands back a raw Flight stream; wrapping it in the shape the
 // canonical parser expects from server-rendered HTML keeps one list/detail
@@ -90,25 +106,45 @@ const listPayload = (text) => extractChe168ListPayload([asFlightScript(text)]);
 const HYBRID_FUEL = /PHEV|plug[- ]in|range extender|hybrid|DM-[ip]|增程|混动/i;
 
 // Maps every Che168 brand id to its brand name once, so later runs address
-// brands by name. Probed against the electric feed: a brand with no electric
-// listing returns no items and is simply absent from the map.
+// brands by name. Each requested feed is probed separately and the per-feed
+// counts are kept: a brand sells a different number of plug-in hybrids than of
+// electric cars, and discovery needs the per-feed figure to size its pagination.
+// A brand absent from every requested feed returns no items and stays out.
 async function buildBrandMap(page) {
   const map = {};
   const queue = Array.from({ length: maxBrandId }, (_, index) => index + 1);
   const worker = async () => {
     while (queue.length) {
       const brandId = queue.shift();
-      const { text } = await flight(page, listUrl(brandId, 1));
-      const payload = text ? listPayload(text) : null;
-      const name = payload?.items?.[0]?.brandname?.trim();
-      if (name) map[name] = { brandId, electricListings: payload.totalCount || payload.items.length };
-      await sleep(80);
+      for (const fuelType of fuelTypes) {
+        const { text } = await flight(page, listUrl(brandId, 1, fuelType));
+        const payload = text ? listPayload(text) : null;
+        const name = payload?.items?.[0]?.brandname?.trim();
+        if (!name) { await sleep(80); continue; }
+        const count = payload.totalCount || payload.items.length;
+        const entry = map[name] || (map[name] = { brandId, listings: 0, byFuelType: {} });
+        entry.byFuelType[fuelType] = count;
+        entry.listings += count;
+        await sleep(80);
+      }
     }
   };
   await Promise.all(Array.from({ length: concurrency }, worker));
   const sorted = Object.fromEntries(Object.entries(map).sort(([a], [b]) => a.localeCompare(b)));
-  await fs.writeFile(BRAND_MAP_PATH, `${JSON.stringify({ generatedAt: new Date().toISOString(), source: "Che168 Global", fuelType: "electric", brands: sorted }, null, 2)}\n`);
+  const fuelLabel = fuelTypes.map((fuelType) => FUEL_TYPE_NAMES[fuelType] || fuelType).join(" + ");
+  await fs.writeFile(BRAND_MAP_PATH, `${JSON.stringify({ generatedAt: new Date().toISOString(), source: "Che168 Global", fuelTypes, fuelType: fuelLabel, brands: sorted }, null, 2)}\n`);
   return sorted;
+}
+
+// The electric map predates per-feed counts and stores a single
+// `electricListings` number, so it is read through this shim rather than
+// rewritten — re-probing 144 brand ids to rename one field would be wasteful.
+function brandListings(info) {
+  return Number(info.listings ?? info.electricListings) || 0;
+}
+
+function brandListingsFor(info, fuelType) {
+  return Number(info.byFuelType?.[fuelType] ?? (fuelTypes.length === 1 ? brandListings(info) : 0)) || 0;
 }
 
 async function loadBrandMap(page) {
@@ -205,9 +241,10 @@ try {
     .map(([sourceName, info]) => ({ sourceName, ...info, policyBrand: canonicalImportBrand(sourceName) }))
     .filter((target) => IMPORT_BRANDS.includes(target.policyBrand))
     .filter((target) => !brandFilter || brandFilter.includes(target.policyBrand))
-    .sort((a, b) => b.electricListings - a.electricListings);
-  console.log(`[map] ${Object.keys(brandMap).length} Che168 brands with electric listings; ${targets.length} match the import policy`);
-  console.log(`[targets] ${targets.map((target) => `${target.sourceName}(${target.electricListings})`).join(", ") || "none"}`);
+    .sort((a, b) => brandListings(b) - brandListings(a));
+  const fuelLabel = fuelTypes.map((fuelType) => FUEL_TYPE_NAMES[fuelType] || fuelType).join(" + ");
+  console.log(`[map] ${Object.keys(brandMap).length} Che168 brands with ${fuelLabel} listings; ${targets.length} match the import policy`);
+  console.log(`[targets] ${targets.map((target) => `${target.sourceName}(${brandListings(target)})`).join(", ") || "none"}`);
   if (mapOnly) {
     console.log(JSON.stringify({ brandMap, targets }, null, 2));
   } else {
@@ -229,30 +266,36 @@ try {
       }
       for (const target of targets) {
       if (accepted.length >= limit) break;
-      let pageCount = Math.max(1, Math.ceil(target.electricListings / PAGE_SIZE));
       let brandCandidates = 0;
       let known = 0;
       let skippedOld = 0;
       let skippedHybrid = 0;
-      for (let pageIndex = 1; pageIndex <= pageCount && accepted.length < limit; pageIndex += 1) {
-        const { text, status } = await flight(listerPage, listUrl(target.brandId, pageIndex));
-        const payload = status === 200 && text ? listPayload(text) : null;
-        if (!payload?.items?.length) break;
-        if (payload.pageCount) pageCount = Math.min(pageCount, payload.pageCount);
-        for (const item of payload.items) {
-          const externalId = String(item.infoid || "");
-          if (!externalId || seen.has(externalId)) continue;
-          if (catalogById.has(`che168-${externalId}`)) { known += 1; continue; }
-          if (HYBRID_FUEL.test(`${item.fuelname} ${item.specname} ${item.carname}`)) { skippedHybrid += 1; continue; }
-          const year = Number(`${item.specname} ${item.carname}`.match(/\b(20\d{2})\b/)?.[1]);
-          if (!year || year < 2020) { skippedOld += 1; continue; }
-          seen.add(externalId);
-          candidates.push({ externalId, brand: target.policyBrand, year, carname: String(item.carname || "").trim() });
-          brandCandidates += 1;
+      // Each feed paginates on its own, so a brand is walked once per fuel type.
+      for (const fuelType of fuelTypes) {
+        if (accepted.length >= limit) break;
+        const listed = brandListingsFor(target, fuelType);
+        if (!listed) continue;
+        let pageCount = Math.max(1, Math.ceil(listed / PAGE_SIZE));
+        for (let pageIndex = 1; pageIndex <= pageCount && accepted.length < limit; pageIndex += 1) {
+          const { text, status } = await flight(listerPage, listUrl(target.brandId, pageIndex, fuelType));
+          const payload = status === 200 && text ? listPayload(text) : null;
+          if (!payload?.items?.length) break;
+          if (payload.pageCount) pageCount = Math.min(pageCount, payload.pageCount);
+          for (const item of payload.items) {
+            const externalId = String(item.infoid || "");
+            if (!externalId || seen.has(externalId)) continue;
+            if (catalogById.has(`che168-${externalId}`)) { known += 1; continue; }
+            if (skipHybridCandidates && HYBRID_FUEL.test(`${item.fuelname} ${item.specname} ${item.carname}`)) { skippedHybrid += 1; continue; }
+            const year = Number(`${item.specname} ${item.carname}`.match(/\b(20\d{2})\b/)?.[1]);
+            if (!year || year < 2020) { skippedOld += 1; continue; }
+            seen.add(externalId);
+            candidates.push({ externalId, brand: target.policyBrand, year, carname: String(item.carname || "").trim() });
+            brandCandidates += 1;
+          }
+          await sleep(60);
         }
-        await sleep(60);
       }
-      console.log(`[discover] ${target.sourceName}: ${brandCandidates} new candidates · ${known} already imported · skipped ${skippedOld} pre-2020, ${skippedHybrid} hybrid · ${target.electricListings} listed`);
+      console.log(`[discover] ${target.sourceName}: ${brandCandidates} new candidates · ${known} already imported · skipped ${skippedOld} pre-2020${skipHybridCandidates ? `, ${skippedHybrid} hybrid` : ""} · ${brandListings(target)} listed`);
     } };
 
     // Details: parsed and policy-checked in Node; a batch write happens every

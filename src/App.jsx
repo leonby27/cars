@@ -23,7 +23,7 @@ const ANY_YEAR = "Любой год";
 const ANY_PRICE = "Любая цена";
 const ANY_MILEAGE = "Любой пробег";
 const ANY_CONDITION = "Любое состояние";
-const yearOptions = [ANY_YEAR, "от 2020", "от 2021", "от 2022", "от 2023", "от 2024"];
+const yearOptions = [ANY_YEAR, "от 2020", "от 2021", "от 2022", "от 2023", "от 2024", "от 2025", "от 2026"];
 const priceOptions = [ANY_PRICE, "до $40 000", "до $30 000", "до $25 000"];
 const mileageOptions = [ANY_MILEAGE, "до 50 000 км", "до 30 000 км", "до 15 000 км"];
 const priceLimitLabel = (value, currency) => (value === ANY_PRICE ? value : `до ${money(filterNumber(value), currency)}`);

@@ -8,6 +8,7 @@ import {
   isAllowedImportBrand,
   isEligibleNewImport,
 } from "../config/import-policy.mjs";
+import { normalizeChe168Energy } from "../scripts/lib/che168-parser.mjs";
 
 test("normalizes source brand variants used by the import policy", () => {
   assert.equal(canonicalImportBrand("Hima"), "HIMA");
@@ -39,10 +40,20 @@ test("allows the Belarus import brands including Leapmotor", () => {
   assert.equal(IMPORT_BRAND_SLUGS.includes("haima"), false);
 });
 
-test("accepts only 2020+ electric cars for future imports", () => {
+test("accepts 2020+ electric and hybrid cars for future imports", () => {
   assert.equal(IMPORT_MIN_YEAR, 2020);
   assert.equal(isEligibleNewImport({ brand: "Leapmotor", year: 2020, type: "Электромобиль" }), true);
+  assert.equal(isEligibleNewImport({ brand: "Li Auto", year: 2024, type: "Гибрид" }), true);
   assert.match(importPolicyViolation({ brand: "Leapmotor", year: 2019, type: "Электромобиль" }), /2020/);
-  assert.match(importPolicyViolation({ brand: "Leapmotor", year: 2025, type: "Гибрид" }), /electric/);
   assert.match(importPolicyViolation({ brand: "Haima", year: 2025, type: "Электромобиль" }), /brand/);
+});
+
+test("keeps combustion cars out, including 48V mild hybrids", () => {
+  assert.match(importPolicyViolation({ brand: "Toyota", year: 2024, type: "ДВС" }), /electric or hybrid/);
+  // A mild hybrid reaches the policy already classified as ДВС by the parser,
+  // so the word "hybrid" in the source label never buys it a place.
+  assert.equal(normalizeChe168Energy({ fuelname: "Gasoline + 48V Mild Hybrid System" }, []), "ДВС");
+  assert.equal(normalizeChe168Energy({ fuelname: "Plug-in Hybrid" }, []), "Гибрид");
+  assert.equal(normalizeChe168Energy({ fuelname: "Range Extender" }, []), "Гибрид");
+  assert.equal(normalizeChe168Energy({ fuelname: "Pure Electric" }, []), "Электромобиль");
 });

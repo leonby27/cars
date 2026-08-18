@@ -1,5 +1,11 @@
 export const IMPORT_MIN_YEAR = 2020;
 
+// Electric and hybrid both belong in the catalog; a plain combustion car does
+// not. A mild-hybrid petrol car reads as "Gasoline + 48V Mild Hybrid System" at
+// the source and must not slip in on the word "hybrid" alone — the parser
+// classifies it as `ДВС`, which this list excludes.
+export const IMPORTABLE_POWERTRAINS = Object.freeze(["Электромобиль", "Гибрид"]);
+
 // Sources retired from the catalog. Their existing listings stay in the
 // database as `unavailable` so orders that already reference them keep
 // resolving, but nothing re-imports or re-activates them: `upsertCar` forces
@@ -121,7 +127,7 @@ export function isAllowedImportBrand(value) {
 export function importPolicyViolation(car) {
   if (!isAllowedImportBrand(car?.brand)) return "brand is outside the Belarus import list";
   if (!Number.isFinite(Number(car?.year)) || Number(car.year) < IMPORT_MIN_YEAR) return `model year is below ${IMPORT_MIN_YEAR}`;
-  if (car?.type !== "Электромобиль") return "new imports must be electric";
+  if (!IMPORTABLE_POWERTRAINS.includes(car?.type)) return "new imports must be electric or hybrid";
   return null;
 }
 

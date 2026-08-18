@@ -162,8 +162,12 @@ function cleanModel(value, brand) {
   return model;
 }
 
-function normalizeChe168Energy(detail, specs) {
+export function normalizeChe168Energy(detail, specs) {
   const energy = [detail.fuelname, specValue(specs, [/^Energy Type$/i]), detail.carname, detail.specname].filter(Boolean).join(" ");
+  // A 48V mild hybrid is a petrol car that cannot be charged, and the source
+  // still spells it "Gasoline + 48V Mild Hybrid System". Matching on "hybrid"
+  // alone would file it next to the plug-ins, so it is ruled out first.
+  if (/mild hybrid|48V|MHEV|轻混/i.test(energy)) return "ДВС";
   if (/PHEV|plug[- ]in|range extender|hybrid|DM-[ip]|增程|混动/i.test(energy)) return "Гибрид";
   if (/Pure Electric|Battery Electric|BEV/i.test(energy)) return "Электромобиль";
   return "ДВС";
