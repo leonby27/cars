@@ -490,10 +490,6 @@ function SelectField({ label, value, options, onChange, searchable = false, clas
     setActiveIndex(index >= 0 ? index : 0);
   }, [open, query, value, filteredOptions]);
 
-  useEffect(() => {
-    if (open && searchable) requestAnimationFrame(() => searchRef.current?.focus());
-  }, [open, searchable]);
-
   const choose = (item) => {
     onChange?.(item);
     close(true);
@@ -604,8 +600,31 @@ function HomeFaqItem({ item, initiallyOpen = false }) {
 
 function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, hasActiveFilters = false, initiallyExpanded = false }) {
   const currency = useCurrency();
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(initiallyExpanded);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => initiallyExpanded && !window.matchMedia("(max-width: 700px)").matches);
   const extraFiltersId = useId();
+  const mobileFiltersId = useId();
+
+  useEffect(() => {
+    if (!moreFiltersOpen || !window.matchMedia("(max-width: 700px)").matches) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => event.key === "Escape" && setMoreFiltersOpen(false);
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [moreFiltersOpen]);
+
+  const extraFilters = (className = "") => (
+    <>
+      <SelectField className={className} label="Кузов" value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} />
+      {Number(availability.drive) > 0 && <SelectField className={className} label="Привод" value={values.drive} onChange={actions.drive} options={options.drives} />}
+      {Number(availability.owners) > 0 && <SelectField className={className} label="Владельцы" value={values.owners} onChange={actions.owners} options={ownerOptions} />}
+      {Number(availability.claims) > 0 && <SelectField className={className} label="История" value={values.history} onChange={actions.history} options={historyOptions} />}
+      {Number(availability.condition) > 0 && <SelectField className={className} label="Состояние" value={values.condition} onChange={actions.condition} options={conditionOptions} />}
+    </>
+  );
 
   return (
     <section className={`search-box${constrained ? " search-box--constrained" : ""}`}>
@@ -619,21 +638,40 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
       <div className="filter-primary-row unified-filter-primary">
         <SelectField label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} searchable />
         <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} optionCounts={optionCounts?.models} searchable disabled={values.brand === "Все марки"} />
-        <SelectField label="Год выпуска" value={values.year} onChange={actions.year} options={yearOptions} />
-        <SelectField label="Цена до Минска" value={values.price} onChange={actions.price} options={priceOptions} formatOption={(value) => priceLimitLabel(value, currency)} />
-        <SelectField label="Пробег" value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
+        <SelectField className="mobile-sheet-filter-source" label="Год выпуска" value={values.year} onChange={actions.year} options={yearOptions} />
+        <SelectField className="mobile-sheet-filter-source" label="Цена до Минска" value={values.price} onChange={actions.price} options={priceOptions} formatOption={(value) => priceLimitLabel(value, currency)} />
+        <SelectField className="mobile-sheet-filter-source" label="Пробег" value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
       </div>
       {moreFiltersOpen && (
-        <div className="filter-extra-row" id={extraFiltersId}>
-          <SelectField label="Кузов" value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} />
-          {Number(availability.drive) > 0 && <SelectField label="Привод" value={values.drive} onChange={actions.drive} options={options.drives} />}
-          {Number(availability.owners) > 0 && <SelectField label="Владельцы" value={values.owners} onChange={actions.owners} options={ownerOptions} />}
-          {Number(availability.claims) > 0 && <SelectField label="История" value={values.history} onChange={actions.history} options={historyOptions} />}
-          {Number(availability.condition) > 0 && <SelectField label="Состояние" value={values.condition} onChange={actions.condition} options={conditionOptions} />}
-        </div>
+        <>
+          <div className="filter-extra-row desktop-filter-extra" id={extraFiltersId}>
+            {extraFilters()}
+          </div>
+          <div className="mobile-filter-sheet-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setMoreFiltersOpen(false)}>
+            <section className="mobile-filter-sheet" id={mobileFiltersId} role="dialog" aria-modal="true" aria-labelledby={`${mobileFiltersId}-title`}>
+              <div className="mobile-filter-sheet-handle" aria-hidden="true" />
+              <header className="mobile-filter-sheet-header">
+                <h2 id={`${mobileFiltersId}-title`}>Фильтры</h2>
+                <button type="button" onClick={() => setMoreFiltersOpen(false)} aria-label="Закрыть фильтры">
+                  <X size={20} weight="bold" />
+                </button>
+              </header>
+              <div className="mobile-filter-sheet-fields">
+                <SelectField label="Год выпуска" value={values.year} onChange={actions.year} options={yearOptions} />
+                <SelectField label="Цена до Минска" value={values.price} onChange={actions.price} options={priceOptions} formatOption={(value) => priceLimitLabel(value, currency)} />
+                <SelectField label="Пробег" value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
+                {extraFilters()}
+              </div>
+              <footer className="mobile-filter-sheet-actions">
+                {hasActiveFilters && <button type="button" className="search-reset" onClick={onReset}>Сбросить</button>}
+                <button type="button" className="primary" onClick={() => setMoreFiltersOpen(false)}>Готово</button>
+              </footer>
+            </section>
+          </div>
+        </>
       )}
       <div className="filter-actions-row">
-        <button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls={extraFiltersId} onClick={() => setMoreFiltersOpen((open) => !open)}>
+        <button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls={`${extraFiltersId} ${mobileFiltersId}`} onClick={() => setMoreFiltersOpen((open) => !open)}>
           <SlidersHorizontal size={17} />
           {moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}
           <CaretDown size={15} weight="bold" />
@@ -1169,7 +1207,7 @@ function Home({ navigate, cars, apiMode }) {
       <section className="featured page-width">
         <div className="section-heading">
           <div>
-            <h2>Свежие реальные предложения</h2>
+            <h2>Каталог</h2>
           </div>
           <AppLink className="section-heading-link" href="/catalog" navigate={navigate}>
             Все автомобили <ArrowRight size={18} />

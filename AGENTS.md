@@ -22,6 +22,8 @@ Outline color preference: never use red for borders, outlines, focus rings, or s
 
 Select-search focus preference: keep the search field inside an open select to one thin neutral 1px border only. Do not add an outer focus shadow or a second ring; use `--line-strong` for the focused border.
 
+Select opening-focus preference: opening any searchable select must keep focus on the select trigger instead of automatically focusing the search field; users may focus search explicitly by tapping it or navigating to it with the keyboard.
+
 Favicon preference: use a compact red `#EE1C25` favicon with a centered lowercase white `e` rendered as the Comfortaa 700 glyph from the customer-facing wordmark.
 
 Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. On desktop, keep a sticky left-side thumbnail rail for quick navigation and expose the full thumbnail set; on mobile, support horizontal swipe navigation directly on the main gallery. Keep the inline gallery’s previous/next arrows dark on their translucent white circular buttons in both themes so the icons remain legible over photos.
@@ -38,7 +40,13 @@ SEO appearance preference: SEO work must not change the existing visual design, 
 
 Home vehicle feed preference: show a randomized feed with 4 cards per row on desktop. Initially show 5 rows (20 cards), then append another 20 cards only when the user clicks “Показать ещё”; do not auto-load on scroll. Do not show the “Карточка доступна” status label anywhere in the product.
 
+Home catalog-section preference: title the home vehicle-feed section “Каталог”, keep its “Все автомобили” link on one line on mobile, and align the heading and link text to the same baseline.
+
 Home quick-search count preference: when every quick-search filter is at its default, label the CTA “Показать 2500+ авто”; after any filter is selected, show the exact matching count.
+
+Mobile home-hero preference: center the main heading and render the benefits beneath it as centered regular-weight muted text separated by commas, without check icons or bullet styling.
+
+Mobile popular-brands preference: center the catalog arrow inside a compact square control aligned with the section heading, and keep generous vertical spacing between brand rows.
 
 Home conversion content preference: use the space between the vehicle feed and footer for concise trust, objection-handling, and SEO content. Prioritize a transparent order journey and practical answers over generic promotional claims.
 
@@ -57,6 +65,8 @@ Product brand preference: use `evcars.by` as the customer-facing product name an
 Header-navigation preference: do not show the “Доставленные авто” link in the main header navigation; keep delivered cases accessible elsewhere in the site.
 
 Header appearance preference: keep the header container borderless and use the same solid background token as the page (`var(--page)`) in both themes so scrolling content does not show through. Do not use backdrop blur. Use a larger wordmark and keep primary navigation inside a burger menu instead of inline links. Avoid outlined controls in the header; prefer clean surfaces and filled soft backgrounds only for individual controls where separation is needed. Keep the burger-menu button on the same soft filled background as the other header controls in both themes.
+
+Mobile header-control preference: place the favorites and account icon buttons on the same soft gray filled blocks as the burger-menu and theme controls, with matching compact dimensions and corner radii.
 
 Header menu-surface preference: in the dark theme, render the opened burger-menu popover slightly lighter than the standard dark card surface so the floating menu remains clearly visible against the page; use a dedicated surface token rather than changing every panel.
 
@@ -98,7 +108,7 @@ Personal-data preference: do not show placeholder copy about future phone-number
 
 Catalog custom-search preference: when catalog filters return no cars and when a user reaches the end of the results, show a light, white-background CTA offering individual vehicle sourcing, including cars not currently in the catalog. The CTA opens a modal with a vehicle-preferences textarea and phone input; do not use a dark or inverted treatment.
 
-Search filter preference: use one shared `VehicleSearch` component for the home page and catalog so their markup, styling, controls, and behavior remain identical. Only the home-page instance may have a maximum-width constraint; the catalog instance fills its available width. Keep the “Все / Электромобили / Гибриды” tabs plus brand, model, year, price, and mileage in the primary area. Place body type and optional advanced fields in the collapsible section below. In the lower action row, align the “Ещё фильтры” control left and the primary CTA right; use the red accent color.
+Search filter preference: use one shared `VehicleSearch` component for the home page and catalog so their markup, styling, controls, and behavior remain identical. Only the home-page instance may have a maximum-width constraint; the catalog instance fills its available width. On desktop, keep the “Все / Электромобили / Гибриды” tabs plus brand, model, year, price, and mileage in the primary area, with body type and optional advanced fields in the collapsible section below. On mobile, keep only brand and model in the primary area and move year, price, mileage, body type, and available advanced fields into a bottom action sheet opened by “Ещё фильтры”. In the lower desktop action row, align the “Ещё фильтры” control left and the primary CTA right; use the red accent color.
 
 Search reset preference: whenever any primary, type, or advanced vehicle-search filter differs from its default, show a quiet borderless “Сбросить” action immediately before the primary CTA. Reset every filter, including hidden advanced values and the dependent model, on both the home page and catalog; hide the action when all defaults are active.
 
