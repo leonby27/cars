@@ -18,6 +18,18 @@ test("normalizes source brand variants used by the import policy", () => {
   assert.equal(canonicalImportBrand("XPENG"), "XPeng");
 });
 
+test("treats the HIMA marques and Voyah Auto as their policy brands", () => {
+  for (const marque of ["AITO Wenjie", "Wenjie", "Zhijie", "Xiangjie", "Zunjie", "Shangjie"]) {
+    assert.equal(canonicalImportBrand(marque), "HIMA", marque);
+    assert.equal(isAllowedImportBrand(marque), true, marque);
+  }
+  assert.equal(canonicalImportBrand("Voyah Auto"), "Voyah");
+  assert.equal(isAllowedImportBrand("Voyah Auto"), true);
+  // Only confirmed alliance marques are folded into HIMA; a similar-looking
+  // source name is not evidence of membership.
+  assert.equal(isAllowedImportBrand("Shijie"), false);
+});
+
 test("allows the Belarus import brands including Leapmotor", () => {
   for (const brand of ["BYD", "Leapmotor", "Tesla", "Mercedes-Benz", "Lynk & Co", "Mazda", "Toyota"]) {
     assert.equal(isAllowedImportBrand(brand), true, brand);

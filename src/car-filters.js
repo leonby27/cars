@@ -9,8 +9,9 @@ export function matchesMinimumYear(car, value) {
 export function sortCars(cars, sort = "newest") {
   const sorted = [...cars];
   const listedAt = (car) => {
-    if (!car.sourceListedAt) return null;
-    const timestamp = new Date(car.sourceListedAt).getTime();
+    const value = car.sourceListedAt || car.firstSeenAt || car.importedAt;
+    if (!value) return null;
+    const timestamp = new Date(value).getTime();
     return Number.isNaN(timestamp) ? null : timestamp;
   };
   const landedPrice = (car) => Number(car.estimatedTotalUsd ?? car.totalUsd ?? 0);

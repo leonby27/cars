@@ -1,50 +1,150 @@
 {
-  "startedAt": "2026-08-18T13:00:22.160Z",
-  "finishedAt": "2026-08-18T13:18:35.147Z",
+  "startedAt": "2026-08-18T17:27:27.047Z",
   "source": "Che168 Global",
   "layer": "Incomplete Reports",
-  "targetBrand": "Zeekr",
-  "requested": 1000,
-  "sourceTotalCount": 937,
-  "sourcePageCount": 40,
-  "discoveryMode": "staged-client-rendered-series-and-multi-sort",
-  "discovered": null,
-  "attempted": null,
-  "imported": 601,
-  "rejected": null,
-  "rejectionAttempts": 29,
+  "discoveryMode": "flight-list",
+  "requested": 5000,
+  "batchSize": 200,
+  "concurrency": 4,
+  "detailReads": 2634,
+  "imported": 2593,
   "importedByBrand": {
-    "Zeekr": 601
+    "Audi": 9,
+    "Volkswagen": 9,
+    "Xiaomi": 107,
+    "Zeekr": 83,
+    "Tesla": 1281,
+    "BYD": 496,
+    "NIO": 550,
+    "Leapmotor": 58
   },
-  "importedByModel": {
-    "009": 130,
-    "001": 127,
-    "007": 92,
-    "X": 76,
-    "MIX": 74,
-    "007GT": 71,
-    "7X": 27,
-    "001 FR": 4
+  "rejected": 41,
+  "rejectedByReason": {
+    "source still has no range": 28,
+    "detail page lacks required structured fields or gallery": 13
   },
-  "importedByYear": {
-    "2021": 20,
-    "2022": 102,
-    "2023": 59,
-    "2024": 133,
-    "2025": 276,
-    "2026": 11
-  },
-  "fieldCoverage": {
-    "battery": 536,
-    "electricRange": 518,
-    "drive": 601,
-    "bodyStructure": 601,
-    "bodyColor": 601,
-    "firstRegistration": 601,
-    "technicalSpecs": 601
-  },
-  "previousCount": 3256,
-  "resultingCount": 3857,
+  "rejectionExamples": [
+    {
+      "externalId": "59291030",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59227365",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59281164",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59287962",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "58905780",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59282124",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59202322",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59254457",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59136815",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59088893",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59088914",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "58907950",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "59371987",
+      "reason": "detail page lacks required structured fields or gallery"
+    },
+    {
+      "externalId": "58963656",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59223443",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "58923784",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59322048",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59321575",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59323849",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59205606",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "58963551",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59010511",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59130110",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59073204",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59329547",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "58986969",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "58652665",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "58985956",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "59059231",
+      "reason": "source still has no range"
+    },
+    {
+      "externalId": "57827974",
+      "reason": "source still has no range"
+    }
+  ],
   "policy": {
     "minYear": 2020,
     "brands": [
@@ -74,9 +174,9 @@
     "newImports": "electric-only",
     "cleansExistingCatalog": false
   },
-  "discoveryErrors": [],
-  "notes": [
-    "Discovery was persisted in multiple batches; global candidate and unique rejection totals were not retained across browser-session resets.",
-    "Known listing IDs are skipped before detail-page parsing on subsequent imports."
-  ]
+  "previousCount": 21954,
+  "finishedAt": "2026-08-18T17:46:56.102Z",
+  "final": true,
+  "resultingCount": 21954,
+  "databaseRows": 144
 }

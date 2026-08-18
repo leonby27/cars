@@ -30,7 +30,34 @@ Guazi Global result-page previews are used only for discovery. A card is written
 
 The Che168 Global pilot uses the **Incomplete Reports** layer (`vehicle_list=1`) in a connected browser because the public HTTP endpoint presents a JavaScript bot challenge. `scripts/import-che168-browser.mjs` exports the browser-backed pilot runner. It applies the same 2020+, electric-only, allowed-brand policy and requires a structured detail page with at least two original photos before appending a card. New Che168 imports retain every populated row from the detail page's grouped technical specification table in `technicalSpecs`; this uses the detail response already required for validation and does not add a source request. The catalog API omits this heavier block from list responses and returns it only on the individual vehicle endpoint.
 
-### Fast Che168 bulk workflow
+### Import v2 — default Che168 bulk path
+
+`scripts/import-v2.mjs` (`npm run importv2`) is the fastest route and the one to reach for first. Measured on the first full sweep: ~17,700 candidates discovered across 20 policy brands, imported at roughly 100 cards per 40 seconds with a 0.3% rejection rate.
+
+It launches Playwright Chromium, loads the electric feed once so the bot challenge is solved, and from then on reads the site's own React Flight endpoint (`RSC: 1` header) instead of scraping rendered DOM:
+
+- The list layer honours `brandid` and `page` **server-side**. Pages are stable, 24 items each, and `ssrPageIndex`/`ssrPageCount` report progress honestly, so brand feeds do not need the sort-order recovery trick. The plain HTML list is the layer that repeats stale pages — the Flight response does not.
+- A detail Flight payload is less than half the weight of the detail HTML page and carries the same `ssrCarDetail`/`ssrSpecParam` data. Wrapping it as `[1,${JSON.stringify(text)}])` lets the canonical parser read it with no separate RSC code path.
+- List items expose `fuelname`, so hybrids are dropped before a detail request is spent on them. The detail card stays the authority: the policy rechecks brand, model year, and powertrain there.
+- Discovery and detail reads run concurrently. A 20-brand sweep is hundreds of list pages; discovering everything first would leave a long run with nothing written.
+- Every `--batch` accepted cards are appended to `public/data/cars.json` **and** PostgreSQL, so an interrupted run keeps what it already earned. Nothing existing is replaced or filtered.
+
+`config/che168-brands.json` caches the source's brand-id map (144 brands with electric listings, built once by probing the electric feed). Refresh it with `--refresh-map` when a new marque appears.
+
+Commands:
+
+- `npm run importv2 -- --limit=100` — one batch of 100
+- `npm run importv2 -- --limit=20000 --batch=100 --concurrency=6` — full sweep of every policy brand, checkpointing each 100
+- `npm run importv2 -- --limit=500 --brands=Deepal,Zeekr` — selected brands only
+- `npm run importv2 -- --map-only --refresh-map` — rebuild the brand-id map
+- `npm run importv2 -- --repair=range` — re-read cards already in the catalog whose named field never parsed, and fill it in place; nothing new is added
+- `--database=0` skips the PostgreSQL write; `--concurrency` above 6 starts drawing HTTP 429 from the source
+
+Keep concurrency modest: the source rate-limits, and the runner backs off on 429 rather than dropping a listing.
+
+Requires Playwright (`playwright` devDependency plus `npx playwright install chromium`). Headless Chromium passes the challenge; no headed session is needed.
+
+### Import v1 — browser-driven Che168 workflow (fallback)
 
 1. Open the client-rendered **Incomplete Reports** feed for one brand with `vehicle_list=1` and the electric filter. Do not use the server/SSR list as the discovery authority: it can repeat an old page even when the visible catalog has changed.
 2. Read IDs and preview fields from `[data-uc-car-card]`. Add `&page=N` or use the visible pagination controls, but verify progress by newly rendered external IDs rather than by the page number alone.

@@ -33,6 +33,20 @@ test("decodes Next flight payloads and extracts Che168 detail data", () => {
   assert.deepEqual(extractChe168DetailPayload([encoded]), { detail, specGroups:specs });
 });
 
+test("reads an older listing's NEDC range but prefers CLTC when both are given", () => {
+  const nedcSpecs = [{ name:"Battery & Charging", paramitems:[
+    { name:"Battery Energy (kWh)", value:"60.0", sublist:[] },
+    { name:"NEDC Pure Electric Range (km)", value:"468", sublist:[] },
+    { name:"Measured range (km)", value:"390", sublist:[] },
+  ] }];
+  assert.equal(buildChe168Car({ detail, specGroups:nedcSpecs }).electricRange, 468);
+  const bothSpecs = [{ name:"Battery & Charging", paramitems:[
+    { name:"NEDC Pure Electric Range (km)", value:"468", sublist:[] },
+    { name:"CLTC Pure Electric Range (km)", value:"510", sublist:[] },
+  ] }];
+  assert.equal(buildChe168Car({ detail, specGroups:bothSpecs }).electricRange, 510);
+});
+
 test("builds a policy-ready Che168 EV with original gallery and specifications", () => {
   const car = buildChe168Car({ detail, specGroups:specs }, { importedAt:"2026-08-18T00:00:00.000Z" });
   assert.equal(car.id, "che168-59376071");

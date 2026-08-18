@@ -1,8 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { IMPORT_BRANDS, IMPORT_BRAND_SLUGS, IMPORT_MIN_YEAR, canonicalImportBrand, importPolicyViolation, isAllowedImportBrand } from "../config/import-policy.mjs";
+import { IMPORT_BRANDS, IMPORT_BRAND_SLUGS, IMPORT_MIN_YEAR, assertImportSourceEnabled, canonicalImportBrand, importPolicyViolation, isAllowedImportBrand } from "../config/import-policy.mjs";
 import { parseGuaziGlobalListing, parseGuaziGlobalProduct } from "./lib/guazi-parser.mjs";
+
+assertImportSourceEnabled("Guazi");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");

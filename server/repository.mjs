@@ -68,7 +68,7 @@ export function buildCarFilters(searchParams) {
 
 export function buildCarOrder(searchParams) {
   const orders = {
-    newest:"NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz DESC NULLS LAST, l.id",
+    newest:"COALESCE(NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz, l.first_seen_at) DESC NULLS LAST, l.id",
     price:"l.estimated_total_usd ASC NULLS LAST, l.id",
     price_asc:"l.estimated_total_usd ASC NULLS LAST, l.id",
     price_desc:"l.estimated_total_usd DESC NULLS LAST, l.id",
@@ -82,7 +82,7 @@ export function buildCarOrder(searchParams) {
 
 export function rowToCar(row) {
   const raw = row.source_payload || {};
-  return normalizeCar({ ...raw, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:"Карточка доступна", statusTone:"green", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, sourceId:raw.sourceId || `${row.source === "Che168" ? "CH" : "GZ"}-${row.external_id}`, ...row.specifications });
+  return normalizeCar({ ...raw, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:"Карточка доступна", statusTone:"green", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, sourceId:raw.sourceId || `${row.source === "Che168" ? "CH" : "GZ"}-${row.external_id}`, ...row.specifications });
 }
 
 export function withoutDetailPayload(car) {

@@ -22,6 +22,7 @@
     "preview": "vite preview",
     "import:guazi": "node scripts/import-guazi.mjs",
     "import:guazi-global": "node scripts/import-guazi-global.mjs",
+    "importv2": "node scripts/import-v2.mjs",
     "import:watch": "node scripts/watch-guazi.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs"
@@ -36,6 +37,7 @@
     "vite": "6.4.2"
   },
   "devDependencies": {
-    "concurrently": "^10.0.4"
+    "concurrently": "^10.0.4",
+    "playwright": "^1.62.1"
   }
 }

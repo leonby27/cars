@@ -1,9 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { IMPORT_BRANDS, IMPORT_MIN_YEAR, isAllowedImportBrand, isEligibleNewImport } from "../config/import-policy.mjs";
+import { IMPORT_BRANDS, IMPORT_MIN_YEAR, assertImportSourceEnabled, isAllowedImportBrand, isEligibleNewImport } from "../config/import-policy.mjs";
 import { normalizeDrive, normalizeEnergy, parseGuaziHtml, parseGuaziListing, parseGuaziMarkdown, parseGuaziSeriesLinks } from "./lib/guazi-parser.mjs";
 import { fetchSourceText } from "./lib/source-client.mjs";
+
+assertImportSourceEnabled("Guazi");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUTPUT_DIR = path.join(ROOT, "public", "data");

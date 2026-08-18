@@ -184,7 +184,12 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
   if (!brand || !model || !year || !sourcePriceUsd || mileage === null || images.length < 2) return null;
 
   const battery = numeric(specValue(specs, [/^Battery Energy \(kWh\)$/i, /^Battery Capacity/i]));
-  const electricRange = numeric(specValue(specs, [/^CLTC Pure Electric Range/i, /^Pure Electric Range/i]));
+  // Cars registered before CLTC became the Chinese standard report their range
+  // as NEDC, so a CLTC-only lookup leaves a quarter of the older listings with
+  // no range at all. Standards are tried in order of accuracy and never mixed
+  // with a dealer's own measured figure.
+  const electricRange = [/^CLTC Pure Electric Range/i, /^WLTP Pure Electric Range/i, /^NEDC Pure Electric Range/i, /^Pure Electric Range/i]
+    .reduce((found, pattern) => found ?? numeric(specValue(specs, [pattern])), null);
   const horsepower = numeric(specValue(specs, [/^Total Electric Motor Horsepower/i, /^Electric Motor \(Ps\)$/i]));
   const sourceUrl = `https://global.che168.com/en/detail/${detail.infoid}`;
   const chinaPrice = Math.round((sourcePriceUsd * usdToCny) / 100) * 100;

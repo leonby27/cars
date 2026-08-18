@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { assertImportSourceEnabled } from "../config/import-policy.mjs";
+
+assertImportSourceEnabled("Guazi");
 
 const intervalMs = Number(process.env.GUAZI_SYNC_INTERVAL_MS || 6 * 60 * 60 * 1000);
 const importLimit = Number(process.env.GUAZI_IMPORT_LIMIT || 60);

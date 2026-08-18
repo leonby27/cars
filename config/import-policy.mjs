@@ -1,5 +1,26 @@
 export const IMPORT_MIN_YEAR = 2020;
 
+// Sources retired from the catalog. Their existing listings stay in the
+// database as `unavailable` so orders that already reference them keep
+// resolving, but nothing re-imports or re-activates them: `upsertCar` forces
+// `status='active'` on conflict, so one accidental run would put the whole
+// source back into the catalog. Set `IMPORT_ALLOW_DISABLED_SOURCE=1` to
+// override for a deliberate one-off run.
+export const DISABLED_IMPORT_SOURCES = Object.freeze(["Guazi"]);
+
+export function isDisabledImportSource(source) {
+  return DISABLED_IMPORT_SOURCES.includes(String(source || "").trim());
+}
+
+export function assertImportSourceEnabled(source) {
+  if (!isDisabledImportSource(source)) return;
+  if (process.env.IMPORT_ALLOW_DISABLED_SOURCE === "1") {
+    console.warn(`[policy] ${source} is retired; continuing because IMPORT_ALLOW_DISABLED_SOURCE=1`);
+    return;
+  }
+  throw new Error(`${source} is retired from the catalog (config/import-policy.mjs). Re-run with IMPORT_ALLOW_DISABLED_SOURCE=1 if this is intentional.`);
+}
+
 // This list mirrors the "Популярные марки" block on the home page.
 export const HOMEPAGE_POPULAR_BRANDS = Object.freeze([
   "BYD",
@@ -64,6 +85,16 @@ export const IMPORT_BRAND_SLUGS = Object.freeze(Object.keys(IMPORT_BRAND_BY_SLUG
 const BRAND_ALIASES = new Map([
   ["hima", "HIMA"],
   ["aito", "HIMA"],
+  // HIMA reaches a source catalogue as its individual marques rather than as
+  // the alliance name: Wenjie/AITO, Zhijie, Xiangjie, Zunjie, and Shangjie.
+  ["aito wenjie", "HIMA"],
+  ["wenjie", "HIMA"],
+  ["zhijie", "HIMA"],
+  ["xiangjie", "HIMA"],
+  ["zunjie", "HIMA"],
+  ["shangjie", "HIMA"],
+  ["voyah", "Voyah"],
+  ["voyah auto", "Voyah"],
   ["xiaomi auto", "Xiaomi"],
   ["xiaomi", "Xiaomi"],
   ["nio", "NIO"],

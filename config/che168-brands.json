@@ -1,0 +1,583 @@
+{
+  "generatedAt": "2026-08-18T15:06:57.484Z",
+  "source": "Che168 Global",
+  "fuelType": "electric",
+  "brands": {
+    "Aion": {
+      "brandId": 313,
+      "electricListings": 885
+    },
+    "Aishang": {
+      "brandId": 652,
+      "electricListings": 4
+    },
+    "AITO Wenjie": {
+      "brandId": 609,
+      "electricListings": 95
+    },
+    "ARCFOX": {
+      "brandId": 272,
+      "electricListings": 209
+    },
+    "Audi": {
+      "brandId": 626,
+      "electricListings": 39
+    },
+    "Avatr": {
+      "brandId": 502,
+      "electricListings": 280
+    },
+    "BAIC": {
+      "brandId": 173,
+      "electricListings": 23
+    },
+    "BAIC New Energy": {
+      "brandId": 208,
+      "electricListings": 36
+    },
+    "Baojun": {
+      "brandId": 120,
+      "electricListings": 354
+    },
+    "BAW (Beijing Automobile Works)": {
+      "brandId": 154,
+      "electricListings": 11
+    },
+    "Besturn": {
+      "brandId": 95,
+      "electricListings": 329
+    },
+    "BMW": {
+      "brandId": 15,
+      "electricListings": 904
+    },
+    "Buick": {
+      "brandId": 38,
+      "electricListings": 194
+    },
+    "BYD": {
+      "brandId": 75,
+      "electricListings": 3002
+    },
+    "Cadillac": {
+      "brandId": 47,
+      "electricListings": 38
+    },
+    "Caocao Auto": {
+      "brandId": 579,
+      "electricListings": 1
+    },
+    "Changan": {
+      "brandId": 76,
+      "electricListings": 84
+    },
+    "Changan Kaicheng": {
+      "brandId": 294,
+      "electricListings": 30
+    },
+    "Changan Kuayue": {
+      "brandId": 299,
+      "electricListings": 12
+    },
+    "Changan Oshan": {
+      "brandId": 163,
+      "electricListings": 6
+    },
+    "Changan Qiyuan": {
+      "brandId": 582,
+      "electricListings": 377
+    },
+    "Chery Fengyun": {
+      "brandId": 634,
+      "electricListings": 8
+    },
+    "Chery New Energy": {
+      "brandId": 487,
+      "electricListings": 26
+    },
+    "Chevrolet": {
+      "brandId": 71,
+      "electricListings": 13
+    },
+    "CIIMO": {
+      "brandId": 162,
+      "electricListings": 8
+    },
+    "Cowin": {
+      "brandId": 214,
+      "electricListings": 25
+    },
+    "Dali Niumowang": {
+      "brandId": 559,
+      "electricListings": 4
+    },
+    "Dayun": {
+      "brandId": 405,
+      "electricListings": 15
+    },
+    "Deepal": {
+      "brandId": 530,
+      "electricListings": 206
+    },
+    "Denza": {
+      "brandId": 161,
+      "electricListings": 35
+    },
+    "Dongfeng": {
+      "brandId": 32,
+      "electricListings": 9
+    },
+    "Dongfeng Aeolus": {
+      "brandId": 113,
+      "electricListings": 59
+    },
+    "Dongfeng Fengguang": {
+      "brandId": 259,
+      "electricListings": 19
+    },
+    "Dongfeng Fengxing": {
+      "brandId": 165,
+      "electricListings": 37
+    },
+    "Dongfeng Xiaokang": {
+      "brandId": 142,
+      "electricListings": 4
+    },
+    "Dongfeng Yipai": {
+      "brandId": 597,
+      "electricListings": 168
+    },
+    "Dongfeng Yufeng": {
+      "brandId": 451,
+      "electricListings": 5
+    },
+    "Electric House": {
+      "brandId": 480,
+      "electricListings": 10
+    },
+    "Everus": {
+      "brandId": 124,
+      "electricListings": 5
+    },
+    "Exeed": {
+      "brandId": 350,
+      "electricListings": 8
+    },
+    "Fang Cheng Bao": {
+      "brandId": 577,
+      "electricListings": 33
+    },
+    "Feidie Auto": {
+      "brandId": 434,
+      "electricListings": 1
+    },
+    "Firefly": {
+      "brandId": 629,
+      "electricListings": 49
+    },
+    "Ford": {
+      "brandId": 8,
+      "electricListings": 36
+    },
+    "Foton": {
+      "brandId": 96,
+      "electricListings": 10
+    },
+    "GAC Group": {
+      "brandId": 329,
+      "electricListings": 5
+    },
+    "GAC Haobo": {
+      "brandId": 590,
+      "electricListings": 42
+    },
+    "Geely": {
+      "brandId": 25,
+      "electricListings": 17
+    },
+    "Geely Galaxy": {
+      "brandId": 575,
+      "electricListings": 697
+    },
+    "Geely Geometry": {
+      "brandId": 373,
+      "electricListings": 158
+    },
+    "Geely Radar": {
+      "brandId": 536,
+      "electricListings": 13
+    },
+    "Genesis": {
+      "brandId": 371,
+      "electricListings": 1
+    },
+    "Golden Dragon": {
+      "brandId": 175,
+      "electricListings": 3
+    },
+    "Haima": {
+      "brandId": 86,
+      "electricListings": 2
+    },
+    "Hengchi": {
+      "brandId": 428,
+      "electricListings": 1
+    },
+    "HiPhi": {
+      "brandId": 383,
+      "electricListings": 84
+    },
+    "Honda": {
+      "brandId": 14,
+      "electricListings": 37
+    },
+    "Hongqi": {
+      "brandId": 91,
+      "electricListings": 359
+    },
+    "Huachen Xinyi": {
+      "brandId": 442,
+      "electricListings": 6
+    },
+    "Huolala Duola Automobile": {
+      "brandId": 676,
+      "electricListings": 1
+    },
+    "Hycan Auto": {
+      "brandId": 376,
+      "electricListings": 21
+    },
+    "Hyundai": {
+      "brandId": 12,
+      "electricListings": 5
+    },
+    "iCAR": {
+      "brandId": 476,
+      "electricListings": 161
+    },
+    "IM Motors": {
+      "brandId": 448,
+      "electricListings": 260
+    },
+    "Iveco": {
+      "brandId": 144,
+      "electricListings": 1
+    },
+    "JAC Motors": {
+      "brandId": 84,
+      "electricListings": 38
+    },
+    "JAC Yiwei": {
+      "brandId": 583,
+      "electricListings": 18
+    },
+    "Jaguar": {
+      "brandId": 44,
+      "electricListings": 6
+    },
+    "Jetour": {
+      "brandId": 319,
+      "electricListings": 1
+    },
+    "Jiangling": {
+      "brandId": 119,
+      "electricListings": 10
+    },
+    "Jinbei": {
+      "brandId": 83,
+      "electricListings": 2
+    },
+    "Jinhu New Energy": {
+      "brandId": 560,
+      "electricListings": 2
+    },
+    "Jiyue": {
+      "brandId": 516,
+      "electricListings": 17
+    },
+    "JMCG New Energy": {
+      "brandId": 270,
+      "electricListings": 49
+    },
+    "Junchi": {
+      "brandId": 627,
+      "electricListings": 1
+    },
+    "Kama": {
+      "brandId": 574,
+      "electricListings": 1
+    },
+    "Karry": {
+      "brandId": 101,
+      "electricListings": 28
+    },
+    "Kaven Auto": {
+      "brandId": 630,
+      "electricListings": 3
+    },
+    "Kia": {
+      "brandId": 62,
+      "electricListings": 9
+    },
+    "King Long": {
+      "brandId": 145,
+      "electricListings": 1
+    },
+    "Leapmotor": {
+      "brandId": 318,
+      "electricListings": 1733
+    },
+    "Ledao": {
+      "brandId": 612,
+      "electricListings": 222
+    },
+    "LeiDing": {
+      "brandId": 215,
+      "electricListings": 2
+    },
+    "Lexus": {
+      "brandId": 52,
+      "electricListings": 24
+    },
+    "Li Auto": {
+      "brandId": 345,
+      "electricListings": 400
+    },
+    "Lingbao Auto": {
+      "brandId": 420,
+      "electricListings": 34
+    },
+    "Lingshi Auto": {
+      "brandId": 588,
+      "electricListings": 5
+    },
+    "Lingxi": {
+      "brandId": 598,
+      "electricListings": 15
+    },
+    "Link Tour Auto": {
+      "brandId": 343,
+      "electricListings": 1
+    },
+    "Lotus Cars": {
+      "brandId": 50,
+      "electricListings": 53
+    },
+    "Lynk & Co": {
+      "brandId": 279,
+      "electricListings": 64
+    },
+    "Maserati": {
+      "brandId": 57,
+      "electricListings": 1
+    },
+    "Mazda": {
+      "brandId": 58,
+      "electricListings": 6
+    },
+    "Mengshi": {
+      "brandId": 541,
+      "electricListings": 2
+    },
+    "Mercedes-Benz": {
+      "brandId": 36,
+      "electricListings": 444
+    },
+    "MG": {
+      "brandId": 20,
+      "electricListings": 81
+    },
+    "MINI": {
+      "brandId": 56,
+      "electricListings": 44
+    },
+    "Mitsubishi": {
+      "brandId": 68,
+      "electricListings": 2
+    },
+    "New Longma Auto": {
+      "brandId": 197,
+      "electricListings": 2
+    },
+    "Nezha Auto": {
+      "brandId": 309,
+      "electricListings": 372
+    },
+    "NIO": {
+      "brandId": 284,
+      "electricListings": 2408
+    },
+    "Nissan": {
+      "brandId": 63,
+      "electricListings": 111
+    },
+    "Ora": {
+      "brandId": 331,
+      "electricListings": 670
+    },
+    "Orange Knight": {
+      "brandId": 477,
+      "electricListings": 2
+    },
+    "Peugeot": {
+      "brandId": 13,
+      "electricListings": 1
+    },
+    "Polestar": {
+      "brandId": 308,
+      "electricListings": 7
+    },
+    "Porsche": {
+      "brandId": 40,
+      "electricListings": 133
+    },
+    "Punk Motors": {
+      "brandId": 449,
+      "electricListings": 1
+    },
+    "Qiantu": {
+      "brandId": 235,
+      "electricListings": 3
+    },
+    "QQ New Energy": {
+      "brandId": 685,
+      "electricListings": 271
+    },
+    "Renault": {
+      "brandId": 10,
+      "electricListings": 16
+    },
+    "Roewe": {
+      "brandId": 19,
+      "electricListings": 334
+    },
+    "Rolls-Royce": {
+      "brandId": 54,
+      "electricListings": 10
+    },
+    "Ruichi": {
+      "brandId": 296,
+      "electricListings": 34
+    },
+    "Ruilan Auto": {
+      "brandId": 416,
+      "electricListings": 30
+    },
+    "SAIC Maxus": {
+      "brandId": 155,
+      "electricListings": 21
+    },
+    "Sehol": {
+      "brandId": 330,
+      "electricListings": 92
+    },
+    "Shangjie": {
+      "brandId": 648,
+      "electricListings": 88
+    },
+    "Shijie": {
+      "brandId": 633,
+      "electricListings": 4
+    },
+    "Singulato": {
+      "brandId": 527,
+      "electricListings": 3
+    },
+    "Skyworth Auto": {
+      "brandId": 400,
+      "electricListings": 9
+    },
+    "smart": {
+      "brandId": 45,
+      "electricListings": 180
+    },
+    "Soueast": {
+      "brandId": 81,
+      "electricListings": 1
+    },
+    "SRM Xinyuan": {
+      "brandId": 306,
+      "electricListings": 15
+    },
+    "Tesla": {
+      "brandId": 133,
+      "electricListings": 5056
+    },
+    "Toyota": {
+      "brandId": 3,
+      "electricListings": 191
+    },
+    "Venucia": {
+      "brandId": 122,
+      "electricListings": 26
+    },
+    "Volkswagen": {
+      "brandId": 1,
+      "electricListings": 1028
+    },
+    "Volvo": {
+      "brandId": 70,
+      "electricListings": 62
+    },
+    "Voyah Auto": {
+      "brandId": 425,
+      "electricListings": 110
+    },
+    "Weltmeister": {
+      "brandId": 291,
+      "electricListings": 31
+    },
+    "Wuling Motors": {
+      "brandId": 114,
+      "electricListings": 2628
+    },
+    "Xiangjie": {
+      "brandId": 649,
+      "electricListings": 30
+    },
+    "Xiaohu": {
+      "brandId": 457,
+      "electricListings": 7
+    },
+    "Xiaomi Auto": {
+      "brandId": 489,
+      "electricListings": 939
+    },
+    "XPeng": {
+      "brandId": 275,
+      "electricListings": 1597
+    },
+    "Yangwang": {
+      "brandId": 554,
+      "electricListings": 4
+    },
+    "Yuan Cheng": {
+      "brandId": 382,
+      "electricListings": 65
+    },
+    "Yudo": {
+      "brandId": 286,
+      "electricListings": 2
+    },
+    "ZEEKR": {
+      "brandId": 456,
+      "electricListings": 934
+    },
+    "Zhido": {
+      "brandId": 206,
+      "electricListings": 11
+    },
+    "Zhijie": {
+      "brandId": 595,
+      "electricListings": 173
+    },
+    "Zotye": {
+      "brandId": 94,
+      "electricListings": 3
+    },
+    "Zunjie": {
+      "brandId": 647,
+      "electricListings": 4
+    }
+  }
+}
