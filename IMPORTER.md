@@ -28,6 +28,20 @@ When the API is available, the website reads paginated data from PostgreSQL. `pu
 
 Guazi Global result-page previews are used only for discovery. A card is written to the catalog only after its product page yields a gallery with at least two original photos; incomplete reader responses are neither cached nor imported.
 
+The Che168 Global pilot uses the **Incomplete Reports** layer (`vehicle_list=1`) in a connected browser because the public HTTP endpoint presents a JavaScript bot challenge. `scripts/import-che168-browser.mjs` exports the browser-backed pilot runner. It applies the same 2020+, electric-only, allowed-brand policy and requires a structured detail page with at least two original photos before appending a card. New Che168 imports retain every populated row from the detail page's grouped technical specification table in `technicalSpecs`; this uses the detail response already required for validation and does not add a source request. The catalog API omits this heavier block from list responses and returns it only on the individual vehicle endpoint.
+
+### Fast Che168 bulk workflow
+
+1. Open the client-rendered **Incomplete Reports** feed for one brand with `vehicle_list=1` and the electric filter. Do not use the server/SSR list as the discovery authority: it can repeat an old page even when the visible catalog has changed.
+2. Read IDs and preview fields from `[data-uc-car-card]`. Add `&page=N` or use the visible pagination controls, but verify progress by newly rendered external IDs rather than by the page number alone.
+3. For a large brand, enumerate its visible model/series options and crawl each `seriesid` separately. This is usually faster and more complete than trying to force the entire brand feed through one pagination window.
+4. If a large model still exposes only part of its count, repeat that model under the available sort orders (recommended, price, posting date, model year, and mileage). Merge all feeds by external listing ID.
+5. Once discovery is complete, fetch detail pages in parallel; a browser does not need to open every vehicle manually. Reject cards that fail the 2020+, pure-electric, structured-fields, or gallery rules.
+6. Write the same accepted set to `public/data/cars.json` and PostgreSQL. Keep the source name internal; do not add Guazi/Che168 labels to customer-facing cards.
+7. Routine bulk verification is intentionally short: syntax/parser smoke checks, unique-ID and policy invariants, static/DB count parity, and `git diff --check`. The user performs visual catalog review; do not run the full build/test/visual QA cycle unless requested or importer code changed in a risky way.
+
+Requested batch sizes are targets, not exact quotas. Import all valid cards found near the target when that avoids an artificial cutoff.
+
 ## Local database and API
 
 1. Run `npm run db:setup` to start PostgreSQL, apply migrations, and seed the current JSON snapshot.

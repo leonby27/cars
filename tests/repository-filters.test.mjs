@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCarFilters, buildCarOrder } from "../server/repository.mjs";
+import { buildCarFilters, buildCarOrder, withoutDetailPayload } from "../server/repository.mjs";
 
 test("parameterizes all catalog filters", () => {
   const params = new URLSearchParams({ type:"Гибрид", brand:"Deepal", model:"S07", bodyType:"SUV / кроссовер", drive:"Полный", ownersMax:"2", noClaims:"1", yearMin:"2024", mileageMax:"50000", landedMax:"40000" });
@@ -35,4 +35,10 @@ test("uses only allowlisted catalog sort orders", () => {
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"year_desc" })), "v.model_year DESC NULLS LAST, l.id");
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"year_asc" })), "v.model_year ASC NULLS LAST, l.id");
   assert.equal(buildCarOrder(new URLSearchParams({ sort:"DROP TABLE listings" })), "NULLIF(l.source_payload->>'sourceListedAt','')::timestamptz DESC NULLS LAST, l.id");
+});
+
+test("omits heavy technical specifications from catalog summaries", () => {
+  const car = { id:"che168-1", title:"Audi Q4 e-tron 2025", technicalSpecs:{ count:65, groups:[{ name:"Body", items:[] }] } };
+  assert.deepEqual(withoutDetailPayload(car), { id:"che168-1", title:"Audi Q4 e-tron 2025" });
+  assert.equal(car.technicalSpecs.count, 65);
 });

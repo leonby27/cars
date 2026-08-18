@@ -32,6 +32,8 @@ Gallery modal header preference: keep the vehicle title/count close to the left 
 
 Visual QA preference: do not run browser-based visual checks, take implementation screenshots, or perform design-QA comparisons unless the user explicitly asks. The user reviews visual changes manually. Validate changes with build, tests, and non-visual checks only.
 
+Che168 bulk-import preference: use the **Incomplete Reports** catalog and treat client-rendered listing cards as the discovery source of truth; SSR/embedded list payloads may be stale or repeated. Discover by brand, split large brands into model/series feeds when that improves coverage, use the site's `page` parameter/client pagination, and deduplicate every candidate by the external listing ID. Use multiple sort orders only to recover listings that normal pagination does not expose. After discovery, parse detail cards in parallel and keep the 2020+, pure-electric import policy. Import counts are approximate targets: a slightly larger or smaller valid batch is acceptable. For routine bulk imports, skip browser visual QA and the full test suite unless explicitly requested; run only fast syntax, data-integrity, static-catalog/PostgreSQL count, and relevant parser checks. The user will inspect the rendered catalog visually.
+
 Interaction motion preference: use subtle, immediate microinteractions without delay. Keep select/dropdown, accordion, burger-menu, caret, and currency-switch motion in the 140–200ms range with gentle fade, short translate/scale, or rotation; avoid layout jumps and honor `prefers-reduced-motion`.
 
 Primary loading-state preference: use a compact spinner and short muted label centered in the available viewport instead of an oversized text-based loading hero.
@@ -42,7 +44,7 @@ Home vehicle feed preference: show a randomized feed with 4 cards per row on des
 
 Home catalog-section preference: title the home vehicle-feed section “Каталог”, keep its “Все автомобили” link on one line on mobile, and align the heading and link text to the same baseline.
 
-Home quick-search count preference: when every quick-search filter is at its default, label the CTA “Показать 2500+ авто”; after any filter is selected, show the exact matching count.
+Home quick-search count preference: when every quick-search filter is at its default, derive the CTA count from the full catalog total, round it down to hundreds, and append “+” (for example, 3857 → “Показать 3800+ авто”); after any filter is selected, show the exact matching count.
 
 Mobile home-hero preference: center the main heading and render the benefits beneath it as centered regular-weight muted text separated into short sentences with periods, without check icons or bullet styling.
 
@@ -240,4 +242,4 @@ Vehicle delivery-detail preference: keep the expanded delivery disclosure concis
 
 Estimate-description preference: keep explanatory copy for individual cost rows behind an info icon beside the row title. Show it only while the icon is hovered and hide it immediately when the pointer leaves; do not toggle it by click.
 
-Vehicle import policy: for future imports, import only model-year 2023+ electric vehicles from the home-page popular brands plus Leapmotor, Tesla, Mercedes-Benz, Lynk & Co, Mazda, and Toyota. Never use this policy to clean or remove existing catalog entries; existing hybrids and all other existing cars remain untouched. Keep the executable policy in `config/import-policy.mjs` and the human-readable rules in `IMPORT_POLICY.md` synchronized.
+Vehicle import policy: for future imports, import only model-year 2020+ electric vehicles from the home-page popular brands plus Leapmotor, Tesla, Mercedes-Benz, Lynk & Co, Mazda, and Toyota. Never use this policy to clean or remove existing catalog entries; existing hybrids and all other existing cars remain untouched. Keep the executable policy in `config/import-policy.mjs` and the human-readable rules in `IMPORT_POLICY.md` synchronized.

@@ -14,6 +14,8 @@ test("normalizes source brand variants used by the import policy", () => {
   assert.equal(canonicalImportBrand("Xiaomi Auto"), "Xiaomi");
   assert.equal(canonicalImportBrand("Nio"), "NIO");
   assert.equal(canonicalImportBrand("Lync Co"), "Lynk & Co");
+  assert.equal(canonicalImportBrand("ZEEKR"), "Zeekr");
+  assert.equal(canonicalImportBrand("XPENG"), "XPeng");
 });
 
 test("allows the Belarus import brands including Leapmotor", () => {
@@ -25,10 +27,10 @@ test("allows the Belarus import brands including Leapmotor", () => {
   assert.equal(IMPORT_BRAND_SLUGS.includes("haima"), false);
 });
 
-test("accepts only 2023+ electric cars for future imports", () => {
-  assert.equal(IMPORT_MIN_YEAR, 2023);
-  assert.equal(isEligibleNewImport({ brand: "Leapmotor", year: 2023, type: "Электромобиль" }), true);
-  assert.match(importPolicyViolation({ brand: "Leapmotor", year: 2022, type: "Электромобиль" }), /2023/);
+test("accepts only 2020+ electric cars for future imports", () => {
+  assert.equal(IMPORT_MIN_YEAR, 2020);
+  assert.equal(isEligibleNewImport({ brand: "Leapmotor", year: 2020, type: "Электромобиль" }), true);
+  assert.match(importPolicyViolation({ brand: "Leapmotor", year: 2019, type: "Электромобиль" }), /2020/);
   assert.match(importPolicyViolation({ brand: "Leapmotor", year: 2025, type: "Гибрид" }), /electric/);
   assert.match(importPolicyViolation({ brand: "Haima", year: 2025, type: "Электромобиль" }), /brand/);
 });

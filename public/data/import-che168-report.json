@@ -1,0 +1,82 @@
+{
+  "startedAt": "2026-08-18T13:00:22.160Z",
+  "finishedAt": "2026-08-18T13:18:35.147Z",
+  "source": "Che168 Global",
+  "layer": "Incomplete Reports",
+  "targetBrand": "Zeekr",
+  "requested": 1000,
+  "sourceTotalCount": 937,
+  "sourcePageCount": 40,
+  "discoveryMode": "staged-client-rendered-series-and-multi-sort",
+  "discovered": null,
+  "attempted": null,
+  "imported": 601,
+  "rejected": null,
+  "rejectionAttempts": 29,
+  "importedByBrand": {
+    "Zeekr": 601
+  },
+  "importedByModel": {
+    "009": 130,
+    "001": 127,
+    "007": 92,
+    "X": 76,
+    "MIX": 74,
+    "007GT": 71,
+    "7X": 27,
+    "001 FR": 4
+  },
+  "importedByYear": {
+    "2021": 20,
+    "2022": 102,
+    "2023": 59,
+    "2024": 133,
+    "2025": 276,
+    "2026": 11
+  },
+  "fieldCoverage": {
+    "battery": 536,
+    "electricRange": 518,
+    "drive": 601,
+    "bodyStructure": 601,
+    "bodyColor": 601,
+    "firstRegistration": 601,
+    "technicalSpecs": 601
+  },
+  "previousCount": 3256,
+  "resultingCount": 3857,
+  "policy": {
+    "minYear": 2020,
+    "brands": [
+      "BYD",
+      "Zeekr",
+      "Li Auto",
+      "Voyah",
+      "Deepal",
+      "Geely Galaxy",
+      "Dongfeng",
+      "Avatr",
+      "HIMA",
+      "Xiaomi",
+      "XPeng",
+      "NIO",
+      "Denza",
+      "BMW",
+      "Volkswagen",
+      "Audi",
+      "Leapmotor",
+      "Tesla",
+      "Mercedes-Benz",
+      "Lynk & Co",
+      "Mazda",
+      "Toyota"
+    ],
+    "newImports": "electric-only",
+    "cleansExistingCatalog": false
+  },
+  "discoveryErrors": [],
+  "notes": [
+    "Discovery was persisted in multiple batches; global candidate and unique rejection totals were not retained across browser-session resets.",
+    "Known listing IDs are skipped before detail-page parsing on subsequent imports."
+  ]
+}

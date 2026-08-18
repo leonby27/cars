@@ -82,7 +82,12 @@ export function buildCarOrder(searchParams) {
 
 export function rowToCar(row) {
   const raw = row.source_payload || {};
-  return normalizeCar({ ...raw, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:"Карточка доступна", statusTone:"green", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, sourceId:`GZ-${row.external_id}`, ...row.specifications });
+  return normalizeCar({ ...raw, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:"Карточка доступна", statusTone:"green", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, sourceId:raw.sourceId || `${row.source === "Che168" ? "CH" : "GZ"}-${row.external_id}`, ...row.specifications });
+}
+
+export function withoutDetailPayload(car) {
+  const { technicalSpecs, ...summary } = car;
+  return summary;
 }
 
 export async function listCars(searchParams) {
@@ -94,7 +99,7 @@ export async function listCars(searchParams) {
     pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
     pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
-  return { items:itemsResult.rows.map(rowToCar), total:countResult.rows[0].total, limit, offset };
+  return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, limit, offset };
 }
 
 export async function getCar(id) {

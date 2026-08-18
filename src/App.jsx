@@ -6,6 +6,7 @@ import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
+import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
@@ -113,7 +114,7 @@ const translateSourceValue = (value) =>
         非常好: "Очень хорошо",
         衰减保修: "Гарантия на деградацию",
         每车必检: "Обязательная проверка",
-        终身包退: "Пожизненный возврат по условиям Guazi",
+        终身包退: "Пожизненный возврат по условиям площадки",
       }[value] || value
     : null;
 const translateClaims = (value) => {
@@ -727,7 +728,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
   );
 }
 
-function QuickSearch({ navigate, cars, apiMode }) {
+function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [type, setType] = useState("Все");
   const [brand, setBrand] = useState("Все марки");
   const [model, setModel] = useState("Все модели");
@@ -861,7 +862,7 @@ function QuickSearch({ navigate, cars, apiMode }) {
       options={{ brands, models, bodyTypes, drives }}
       optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }}
       availability={availability}
-      resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : "2500+"}
+      resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : formatRoundedListingCount(totalCount || cars.length)}
       hasActiveFilters={hasActiveFilters}
       onReset={resetFilters}
       onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}&body=${encodeURIComponent(bodyType)}&year=${encodeURIComponent(year)}&mileage=${encodeURIComponent(mileage)}&price=${encodeURIComponent(priceLimit)}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&history=${encodeURIComponent(history)}&condition=${encodeURIComponent(condition)}`)}
@@ -1203,7 +1204,7 @@ function HomeConversionSections({ navigate }) {
   );
 }
 
-function Home({ navigate, cars, apiMode, favorites, toggleFavorite }) {
+function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite }) {
   const batchSize = 20;
   const randomPool = useRef([]);
   const nextItemKey = useRef(0);
@@ -1248,7 +1249,7 @@ function Home({ navigate, cars, apiMode, favorites, toggleFavorite }) {
           <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
           <li><CheckCircle size={21} weight="fill" />Полное сопровождение</li>
         </ul>
-        <QuickSearch navigate={navigate} cars={cars} apiMode={apiMode} />
+        <QuickSearch navigate={navigate} cars={cars} apiMode={apiMode} totalCount={catalogTotal} />
       </section>
       <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />
       <section className="trust-strip page-width">
@@ -2347,7 +2348,7 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
           <aside className="source-card detail-source-card">
             <h3>Источник объявления</h3>
             <p className="source-meta">ID {car.sourceId}</p>
-            <small>Это сведения продавца и Guazi, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</small>
+            <small>Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</small>
           </aside>
         </div>
         <div className="detail-sidebar">
@@ -2364,7 +2365,7 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
             </div>
             <div className="price-breakdown">
               <div>
-                <PriceLabel label="Автомобиль в Китае" description={`${number(car.chinaPrice)} ¥ · данные Guazi`} />
+                <PriceLabel label="Автомобиль в Китае" description={`${number(car.chinaPrice)} ¥ · данные источника`} />
                 <strong>{money(price.chinaUsd, currency)}</strong>
               </div>
               <div>
@@ -2447,7 +2448,7 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
 
 function DataTag({ type }) {
   const labels = {
-    source: "Guazi",
+    source: "Источник",
     calculated: "Расчёт",
     pending: "Нужно подтвердить",
   };
@@ -2536,7 +2537,7 @@ function OrderDraft({ car, navigate }) {
     ["Защита батареи", translateSourceValue(car.batteryProtection)],
   ];
   const conditionRows = [
-    ["Оценка Guazi", translateSourceValue(car.inspectionGrade || car.conditionGrade)],
+    ["Оценка источника", translateSourceValue(car.inspectionGrade || car.conditionGrade)],
     ["Внешний вид", car.appearanceScore ? `${car.appearanceScore}/100` : null],
     ["Страховые выплаты", translateClaims(car.claims || car.incident)],
     ["Силовая установка", car.powertrainInspection],
@@ -2602,7 +2603,7 @@ function OrderDraft({ car, navigate }) {
             </div>
             <div className="order-cost-list">
               <div>
-                <PriceLabel label="Автомобиль в Китае" description={`${number(car.chinaPrice)} ¥ · Guazi`} />
+                <PriceLabel label="Автомобиль в Китае" description={`${number(car.chinaPrice)} ¥ · данные источника`} />
                 <b>{money(price.chinaUsd, currency)}</b>
               </div>
               <div>
@@ -2659,7 +2660,7 @@ function OrderDraft({ car, navigate }) {
             <div className="order-section-title">
               <div>
                 <span>04</span>
-                <h2>Состояние по отчёту Guazi</h2>
+                <h2>Состояние по отчёту источника</h2>
               </div>
               <DataTag type="source" />
             </div>
@@ -2694,7 +2695,7 @@ function OrderDraft({ car, navigate }) {
               <li className="done">
                 <Check size={15} />
                 <p>
-                  <b>Карточка Guazi найдена</b>
+                  <b>Карточка источника найдена</b>
                 </p>
               </li>
               <li className="done">
@@ -2760,7 +2761,7 @@ function OrderDraft({ car, navigate }) {
             <div className="progress-links">
               {sourceLink && (
                 <a href={sourceLink} target="_blank" rel="noreferrer">
-                  Оригинал Guazi <ArrowRight size={16} />
+                  Оригинал объявления <ArrowRight size={16} />
                 </a>
               )}
               <button onClick={() => navigate(`/cars/${car.id}`)}>Вернуться к автомобилю</button>
@@ -4126,6 +4127,7 @@ export function App() {
   const theme = themeMode === "system" ? systemTheme : themeMode;
   const [cars, setCars] = useState([]);
   const [apiMode, setApiMode] = useState(false);
+  const [catalogTotal, setCatalogTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(Boolean(targetId));
   const [loadError, setLoadError] = useState(false);
@@ -4215,6 +4217,7 @@ export function App() {
         }
         if (!cancelled) {
           setCars(initialCars.map(normalizeImportedCar));
+          setCatalogTotal(Number(payload.total) || initialCars.length);
           setApiMode(true);
         }
       } catch {
@@ -4230,6 +4233,7 @@ export function App() {
           }
           if (!cancelled) {
             setCars(initialCars.map(normalizeImportedCar));
+            setCatalogTotal(Number(payload.count) || payload.cars.length);
             setApiMode(false);
           }
         } catch {
@@ -4465,7 +4469,7 @@ export function App() {
     ) : showAccountFromAuthRoute ? (
       <AccountPage user={user} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} pending={authPending} />
     ) : contentPath === "/" ? (
-      <Home navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
+      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : contentPath === "/catalog" ? (
       <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : contentPath === "/favorites" ? (

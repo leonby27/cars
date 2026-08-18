@@ -1,4 +1,4 @@
-export const IMPORT_MIN_YEAR = 2023;
+export const IMPORT_MIN_YEAR = 2020;
 
 // This list mirrors the "Популярные марки" block on the home page.
 export const HOMEPAGE_POPULAR_BRANDS = Object.freeze([
@@ -75,10 +75,12 @@ const BRAND_ALIASES = new Map([
   ["mercedes-benz", "Mercedes-Benz"],
 ]);
 const allowedBrands = new Set(IMPORT_BRANDS);
+const allowedBrandByLower = new Map(IMPORT_BRANDS.map((brand) => [brand.toLocaleLowerCase("en-US"), brand]));
 
 export function canonicalImportBrand(value) {
   const brand = String(value || "").trim();
-  return BRAND_ALIASES.get(brand.toLocaleLowerCase("en-US")) || brand;
+  const normalized = brand.toLocaleLowerCase("en-US");
+  return BRAND_ALIASES.get(normalized) || allowedBrandByLower.get(normalized) || brand;
 }
 
 export function isAllowedImportBrand(value) {
