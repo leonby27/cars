@@ -24,7 +24,7 @@ This is a closed-pilot source adapter for Chinese EV and PHEV listings. Its defa
 - `npm run worker` — continuously consume refresh jobs (`npm run worker:once` handles one job)
 - `npm test` — parser and site tests
 
-When the API is available, the website reads paginated data from PostgreSQL. `public/data/cars.json` remains a static fallback for GitHub Pages. Import diagnostics are written to `public/data/import-report.json`.
+When the API is available, the website reads paginated data from PostgreSQL. `public/data/cars.json` remains a static fallback for GitHub Pages. Import diagnostics are written to `runtime/import-report.json`. Reports stay out of `public/` on purpose: everything under `public/` is served to visitors, and the reports describe sources, proxy channels and error texts.
 
 Guazi Global result-page previews are used only for discovery. A card is written to the catalog only after its product page yields a gallery with at least two original photos; incomplete reader responses are neither cached nor imported.
 

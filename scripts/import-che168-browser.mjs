@@ -7,7 +7,7 @@ import { buildChe168Car, extractChe168DetailPayload, extractChe168ListPayload, p
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
-const REPORT_PATH = path.join(ROOT, "public", "data", "import-che168-report.json");
+const REPORT_PATH = path.join(ROOT, "runtime", "import-che168-report.json");
 const LIST_URL = "https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=7";
 const SOURCE_PREFIXES = new Map([
   ["Xiaomi Auto", "Xiaomi"], ["Xiaomi", "Xiaomi"], ["ZEEKR", "Zeekr"], ["Zeekr", "Zeekr"],
@@ -204,6 +204,7 @@ export async function createChe168Pilot({ browser, limit = 100, pages = 24, conc
     };
     if (existsSync(DATA_PATH)) await fs.writeFile(DATA_PATH, `${JSON.stringify({ ...current, generatedAt:finishedAt, count:merged.length, cars:merged }, null, 2)}\n`);
     else console.warn(`[static] ${path.relative(ROOT, DATA_PATH)} нет — статическая копия каталога не пишется; машины ушли в базу.`);
+    await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
     await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
     return report;
   }

@@ -18,12 +18,9 @@ export function normalizeWorkerEvent(body = {}) {
   const sessionId = clean(body.sessionId, 80);
   if (!eventId || !visitorId || !sessionId) return { error:"invalid_event_identity" };
   const source = body.properties && typeof body.properties === "object" && !Array.isArray(body.properties) ? body.properties : {};
+  // Личные данные в события не принимаем: приём событий открыт без пароля, поэтому имя
+  // и телефон здесь были бы вторым, подделываемым экземпляром персональных данных.
   const properties = {};
-  if (eventName === "registration_completed") {
-    properties.name = clean(source.name, 80);
-    properties.phone = clean(source.phone, 32);
-  }
-  if (eventName === "custom_search_submitted") properties.phone = clean(source.phone, 32);
   if (source.source) properties.source = clean(source.source, 40);
   return {
     eventId,
@@ -92,7 +89,9 @@ const daysValue = (url) => [7, 30, 90].includes(Number(url.searchParams.get("day
 
 async function dashboard(db, days) {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
-  const [summary,daily,vehicles,registrations,recent] = await Promise.all([
+  // Список регистраций с контактами живёт только там, где есть таблица аккаунтов
+  // (основной хостинг). Здесь остаётся счётчик регистраций без личных данных.
+  const [summary,daily,vehicles,recent] = await Promise.all([
     db.prepare(`SELECT count(DISTINCT visitor_id) AS visitors, count(DISTINCT session_id) AS sessions,
       sum(CASE WHEN event_name='page_view' THEN 1 ELSE 0 END) AS page_views,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS vehicle_views,
@@ -113,9 +112,6 @@ async function dashboard(db, days) {
       sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites
       FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND listing_id IS NOT NULL
       GROUP BY listing_id ORDER BY availability_clicks DESC, views DESC LIMIT 30`).bind(cutoff).all(),
-    db.prepare(`SELECT json_extract(properties,'$.name') AS name, json_extract(properties,'$.phone') AS phone, created_at, path
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND event_name='registration_completed'
-      ORDER BY created_at DESC LIMIT 100`).bind(cutoff).all(),
     db.prepare(`SELECT event_name,listing_id,listing_title,path,created_at
       FROM analytics_events WHERE datetime(created_at) >= datetime(?) ORDER BY created_at DESC LIMIT 30`).bind(cutoff).all(),
   ]);
@@ -126,7 +122,7 @@ async function dashboard(db, days) {
     summary:safeSummary,
     daily:daily.results || [],
     vehicles:(vehicles.results || []).map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, availabilityClicks:row.availability_clicks, favorites:row.favorites })),
-    registrations:(registrations.results || []).map((row) => ({ name:row.name, phone:row.phone, path:row.path, createdAt:row.created_at })),
+    registrations:[],
     recent:(recent.results || []).map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),
   };
 }

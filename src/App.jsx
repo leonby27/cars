@@ -2818,7 +2818,9 @@ function CustomSearchModal({ filters, onClose }) {
         }),
       });
       if (!response.ok) throw new Error("save unavailable");
-      trackEvent("custom_search_submitted", { properties:{ phone:`+${normalizedPhone}` } });
+      // Телефон в аналитику не уходит: заявка уже сохранена в `order_drafts`, а второй
+      // экземпляр личных данных в счётчиках событий пришлось бы охранять отдельно.
+      trackEvent("custom_search_submitted");
       setSaved(true);
     } catch {
       setError("Не удалось отправить заявку. Проверьте подключение и попробуйте ещё раз.");
@@ -4373,6 +4375,7 @@ const authMessages = {
   email_required: "Укажите email или выберите другой способ связи.",
   telegram_required: "Укажите Telegram или выберите другой способ связи.",
   unauthorized: "Сессия завершилась. Войдите ещё раз.",
+  too_many_requests: "Слишком много попыток. Подождите несколько минут и попробуйте снова.",
 };
 
 const normalizeLocalPhone = (value) => {
@@ -4436,24 +4439,29 @@ async function localAuthenticate(mode, values) {
   if (mode === "register") {
     if (accounts.some((item) => item.phone === phone)) throw new Error("phone_already_registered");
     const salt = window.crypto.randomUUID();
-    const account = { id:window.crypto.randomUUID(), name:values.name.trim(), phone, email:"", telegram:"", city:"", preferredContact:"phone", passportNumber:"", personalNumber:"", passportIssueDate:"", passportIssuedBy:"", registrationAddress:"", salt, passwordHash:await localPasswordHash(values.password, salt), createdAt:new Date().toISOString() };
+    const account = { id:window.crypto.randomUUID(), name:values.name.trim(), phone, email:"", telegram:"", city:"", preferredContact:"phone", salt, passwordHash:await localPasswordHash(values.password, salt), createdAt:new Date().toISOString() };
     window.localStorage.setItem(localAccountsKey, JSON.stringify([...accounts, account]));
-    const user = { id:account.id, name:account.name, phone:account.phone, email:account.email, telegram:account.telegram, city:account.city, preferredContact:account.preferredContact, passportNumber:account.passportNumber, personalNumber:account.personalNumber, passportIssueDate:account.passportIssueDate, passportIssuedBy:account.passportIssuedBy, registrationAddress:account.registrationAddress, createdAt:account.createdAt };
+    const user = { id:account.id, name:account.name, phone:account.phone, email:account.email, telegram:account.telegram, city:account.city, preferredContact:account.preferredContact, createdAt:account.createdAt };
     saveLocalSession(user);
     return user;
   }
   const account = accounts.find((item) => item.phone === phone);
   if (!account || (await localPasswordHash(values.password, account.salt)) !== account.passwordHash) throw new Error("invalid_credentials");
-  const user = { id:account.id, name:account.name, phone:account.phone, email:account.email || "", telegram:account.telegram || "", city:account.city || "", preferredContact:account.preferredContact || "phone", passportNumber:account.passportNumber || "", personalNumber:account.personalNumber || "", passportIssueDate:account.passportIssueDate || "", passportIssuedBy:account.passportIssuedBy || "", registrationAddress:account.registrationAddress || "", createdAt:account.createdAt };
+  const user = { id:account.id, name:account.name, phone:account.phone, email:account.email || "", telegram:account.telegram || "", city:account.city || "", preferredContact:account.preferredContact || "phone", createdAt:account.createdAt };
   saveLocalSession(user);
   return user;
 }
+
+// Паспорт, личный номер, дата и место выдачи и адрес прописки в браузере не хранятся:
+// местный режим включается при недоступном сервере, а его хранилище остаётся в чужом
+// компьютере и ничем не защищено. Такие данные принимает только база — зашифрованными.
+const withoutPassportData = ({ passportNumber, personalNumber, passportIssueDate, passportIssuedBy, registrationAddress, ...rest }) => rest;
 
 function localUpdateProfile(userId, profile) {
   const accounts = readLocalAccounts();
   const index = accounts.findIndex((item) => item.id === userId);
   if (index < 0) throw new Error("unauthorized");
-  accounts[index] = { ...accounts[index], ...profile };
+  accounts[index] = { ...withoutPassportData(accounts[index]), ...withoutPassportData(profile) };
   window.localStorage.setItem(localAccountsKey, JSON.stringify(accounts));
   const { salt, passwordHash, ...user } = accounts[index];
   saveLocalSession(user);
@@ -4998,7 +5006,9 @@ function AccountPage({ user, cars, authBackend, navigate, onLogout, onSaveProfil
               <label className="auth-field"><span>Город</span><input autoComplete="address-level2" value={profile.city} onChange={updateProfileField("city")} placeholder="Например, Минск" maxLength={120} /></label>
               <div className="auth-field"><span>Как удобнее связаться</span><SelectField className="profile-contact-select" label="Как удобнее связаться" value={preferredContactLabel(profile.preferredContact)} options={preferredContactLabels} onChange={(label) => setProfileValue("preferredContact", preferredContactValue(label))} /></div>
             </div>
-            <details className="profile-extra">
+            {/* В местном режиме профиль сохраняется в браузере посетителя, поэтому
+                паспортных полей там нет: их место — только база под шифрованием. */}
+            {authBackend !== "local" && <details className="profile-extra">
               <summary>
                 <span>Дополнительные поля</span>
                 <CaretDown className="profile-extra-caret" size={18} />
@@ -5010,7 +5020,7 @@ function AccountPage({ user, cars, authBackend, navigate, onLogout, onSaveProfil
                 <label className="auth-field"><span>Кем выдан</span><input value={profile.passportIssuedBy} onChange={updateProfileField("passportIssuedBy")} placeholder="Наименование органа" maxLength={200} /></label>
                 <label className="auth-field"><span>Адрес регистрации</span><input autoComplete="street-address" value={profile.registrationAddress} onChange={updateProfileField("registrationAddress")} placeholder="Населённый пункт, улица, дом, квартира" maxLength={240} /></label>
               </div>
-            </details>
+            </details>}
             {profileError && <div className="auth-error" role="alert">{profileError}</div>}
             <div className="profile-actions"><button className="primary" type="submit" disabled={pending}>Сохранить изменения</button>{profileSaved && <p role="status"><CheckCircle size={18} weight="fill" /> Данные сохранены</p>}</div>
           </form>
@@ -5346,7 +5356,10 @@ export function App() {
     setAuthPending(true);
     const complete = (authenticatedUser, source) => {
       setUser(authenticatedUser);
-      if (mode === "register") trackEvent("registration_completed", { properties:{ name:authenticatedUser.name, phone:formatAccountPhone(authenticatedUser.phone), source } });
+      // В аналитику уходит только факт регистрации и способ (сервер или местный режим).
+      // Имя и телефон живут в таблице аккаунтов — единственном месте, откуда их берёт
+      // защищённый раздел: подделать их запросом со стороны там нельзя.
+      if (mode === "register") trackEvent("registration_completed", { properties:{ source } });
     };
     try {
       if (authBackend === "local") {

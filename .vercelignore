@@ -4,6 +4,11 @@ dist
 runtime
 .vercel
 
+# Пароли и ключи Vercel берёт из настроек проекта (Settings → Environment Variables).
+# Локальным файлам с секретами в загружаемой сборке места нет.
+.env
+.env.*
+
 # Дамп каталога (421 МБ) в git не хранится и в сборке не участвует — карточки
 # в проде отдаёт API поверх Neon.
 public/data/cars.json

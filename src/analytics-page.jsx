@@ -31,7 +31,9 @@ function Login({ onSuccess }) {
       if (!response.ok) throw new Error(payload.error || "login_failed");
       onSuccess();
     } catch (loginError) {
-      setError(loginError.message === "analytics_not_configured" ? "Пароль аналитики ещё не настроен на сервере." : "Неверный пароль.");
+      if (loginError.message === "analytics_not_configured") setError("Пароль аналитики ещё не настроен на сервере.");
+      else if (loginError.message === "too_many_requests") setError("Слишком много попыток входа. Подождите и попробуйте позже.");
+      else setError("Неверный пароль.");
     } finally { setPending(false); }
   };
   return (

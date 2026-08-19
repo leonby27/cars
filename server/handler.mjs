@@ -6,8 +6,38 @@ import { authenticateAccount, clearSessionCookie, createAccount, createSession, 
 import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { analyticsCookie, clearAnalyticsCookie, createAnalyticsToken, getAnalyticsDashboard, hasAnalyticsSession, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
+// Ограничение размера: через прокси идёт фотография объявления, а не файл в сотни
+// мегабайт. Без предела чужой сервер мог бы гнать поток через нашу функцию.
+const maxImageBytes = 12 * 1024 * 1024;
+const allowedImageSource = (source) => source.protocol === "https:" && imageHosts.has(source.hostname);
+
+// Перенаправления проходим сами, проверяя каждый следующий адрес по тому же списку.
+// С автоматическим `redirect: "follow"` разрешённый сервер источника мог перебросить
+// наш запрос куда угодно — включая внутренние адреса, недоступные снаружи.
+async function fetchAllowedImage(source) {
+  let current = source;
+  for (let hop = 0; hop < 3; hop += 1) {
+    const response = await fetch(current, {
+      redirect:"manual",
+      headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"evcars.by-image-proxy/1.0" },
+    });
+    const location = response.headers.get("location");
+    if (response.status >= 300 && response.status < 400 && location) {
+      let next;
+      try { next = new URL(location, current); } catch { return { error:"image_unavailable", status:502 }; }
+      if (!allowedImageSource(next)) return { error:"image_host_not_allowed", status:403 };
+      current = next;
+      continue;
+    }
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.startsWith("image/") || !response.body) return { error:"image_unavailable", status:502 };
+    return { response, contentType };
+  }
+  return { error:"image_unavailable", status:502 };
+}
 const gzipAsync = promisify(gzip);
 // Catalog payloads are a few hundred KB of highly repetitive JSON, so gzip cuts them ~7x.
 // Below this size the header overhead outweighs the saving.
@@ -62,15 +92,23 @@ const readJson = async (request) => {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 };
 
+// Один ответ на все превышения: сколько именно попыток осталось, снаружи знать незачем.
+const tooManyRequests = (response, retryAfter) =>
+  json(response, 429, { error:"too_many_requests" }, { "retry-after":String(retryAfter) });
+
 export async function handleApiRequest(request, response) {
   if (request.method === "OPTIONS") return json(response, 204, null);
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
   try {
     if (request.method === "POST" && url.pathname === "/api/analytics/events") {
+      const limit = await checkRateLimit("analyticsEvents", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const result = await recordAnalyticsEvent(await readJson(request));
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
     if (request.method === "POST" && url.pathname === "/api/analytics/login") {
+      const limit = await checkRateLimit("analyticsLogin", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const body = await readJson(request);
       const verification = verifyAnalyticsPassword(String(body.password || ""));
       if (verification.error) return json(response, 503, { error:verification.error });
@@ -91,22 +129,33 @@ export async function handleApiRequest(request, response) {
     if (request.method === "GET" && url.pathname === "/api/image") {
       let source;
       try { source = new URL(url.searchParams.get("src") || ""); } catch { return json(response, 400, { error:"invalid_image_url" }); }
-      if (source.protocol !== "https:" || !imageHosts.has(source.hostname)) return json(response, 403, { error:"image_host_not_allowed" });
-      const upstream = await fetch(source, { redirect:"follow", headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"evcars.by-image-proxy/1.0" } });
-      const contentType = upstream.headers.get("content-type") || "";
-      if (!upstream.ok || !contentType.startsWith("image/") || !upstream.body) return json(response, 502, { error:"image_unavailable" });
-      response.writeHead(200, { "content-type":contentType, "cache-control":"public, max-age=21600, stale-while-revalidate=86400", "x-content-type-options":"nosniff" });
-      return Readable.fromWeb(upstream.body).pipe(response);
+      if (!allowedImageSource(source)) return json(response, 403, { error:"image_host_not_allowed" });
+      const upstream = await fetchAllowedImage(source);
+      if (upstream.error) return json(response, upstream.status, { error:upstream.error });
+      const bytes = Number(upstream.response.headers.get("content-length")) || 0;
+      if (bytes > maxImageBytes) return json(response, 502, { error:"image_too_large" });
+      response.writeHead(200, { "content-type":upstream.contentType, "cache-control":"public, max-age=21600, stale-while-revalidate=86400", "x-content-type-options":"nosniff" });
+      return Readable.fromWeb(upstream.response.body).pipe(response);
     }
     if (request.method === "GET" && url.pathname === "/api/health") {
-      const [cars,jobs,sources] = await Promise.all([
-        pool.query("SELECT count(*)::int AS cars FROM listings WHERE status='active'"),
+      // Без пароля — только «сайт жив» и размер каталога. Очередь задач, состояние
+      // источников и тексты ошибок наружу не отдаём: это внутренняя кухня импорта,
+      // а в текст ошибки однажды может попасть адрес прокси. Всё это остаётся
+      // доступным по той же куке, что и раздел аналитики.
+      const cars = await pool.query("SELECT count(*)::int AS cars FROM listings WHERE status='active'");
+      const publicHealth = { ok:true, cars:cars.rows[0].cars };
+      if (!hasAnalyticsSession(request)) return json(response, 200, publicHealth);
+      const [jobs,sources] = await Promise.all([
         pool.query("SELECT count(*) FILTER (WHERE status='queued')::int queued, count(*) FILTER (WHERE status='running')::int running, count(*) FILTER (WHERE status='failed')::int failed FROM crawl_jobs"),
         pool.query("SELECT source,status,blocked_until,last_success_at,last_failure_at,consecutive_failures,last_error FROM source_health ORDER BY source"),
       ]);
-      return json(response, 200, { ok:true, database:"postgresql", cars:cars.rows[0].cars, jobs:jobs.rows[0], sources:sources.rows });
+      return json(response, 200, { ...publicHealth, database:"postgresql", jobs:jobs.rows[0], sources:sources.rows });
     }
     if (request.method === "POST" && url.pathname === "/api/auth/register") {
+      // Ограничение здесь закрывает сразу две вещи: набивание базы пустыми аккаунтами
+      // и перебор номеров, по ответу которого видно, зарегистрирован телефон или нет.
+      const limit = await checkRateLimit("register", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const body = await readJson(request);
       const name = String(body.name || "").trim();
       const phone = normalizePhone(body.phone);
@@ -121,6 +170,9 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "POST" && url.pathname === "/api/auth/login") {
       const body = await readJson(request);
+      // Считаем и по адресу, и по номеру: иначе один аккаунт перебирали бы с разных адресов.
+      const limit = await checkRateLimit("login", [clientAddress(request), `phone:${normalizePhone(body.phone)}`]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const user = await authenticateAccount({ phone:body.phone, password:String(body.password || "") });
       if (!user) return json(response, 401, { error:"invalid_credentials" });
       const token = await createSession(user.id);
@@ -149,6 +201,9 @@ export async function handleApiRequest(request, response) {
       return result.error ? json(response, 401, result) : json(response, 200, result);
     }
     if (request.method === "DELETE" && url.pathname === "/api/account") {
+      // Здесь тоже проверяется пароль, значит и здесь его можно было бы подбирать.
+      const limit = await checkRateLimit("accountDelete", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const body = await readJson(request);
       const result = await deleteAccount(request, String(body.password || ""));
       if (result.error === "unauthorized") return json(response, 401, result);
@@ -211,6 +266,10 @@ export async function handleApiRequest(request, response) {
       return car ? json(response, 200, car, catalogCache) : json(response, 404, { error:"car_not_found" });
     }
     if (request.method === "POST" && url.pathname === "/api/order-drafts") {
+      // Каждая заявка ставит краулеру задачу с высоким приоритетом, поэтому поток
+      // поддельных заявок — это ещё и способ загнать наш краулер в блокировку источника.
+      const limit = await checkRateLimit("orderDraft", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const body = await readJson(request);
       let name = String(body.name || "").trim();
       let contact = String(body.contact || "").trim();

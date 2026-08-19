@@ -24,12 +24,10 @@ export function normalizeAnalyticsEvent(body = {}) {
   const path = text(body.path, 400) || "/";
   if (!eventId || !visitorId || !sessionId) return { error:"invalid_event_identity" };
   const properties = body.properties && typeof body.properties === "object" && !Array.isArray(body.properties) ? body.properties : {};
+  // Личные данные в события не принимаем вообще, даже если их пришлёт браузер: приём
+  // событий открыт без пароля, поэтому любой мог бы набить таблицу чужими именами и
+  // телефонами. Имя и телефон берутся из таблицы аккаунтов, где они уже есть.
   const safeProperties = {};
-  if (eventName === "registration_completed") {
-    safeProperties.name = text(properties.name, 80);
-    safeProperties.phone = text(properties.phone, 32);
-  }
-  if (eventName === "custom_search_submitted") safeProperties.phone = text(properties.phone, 32);
   if (properties.source) safeProperties.source = text(properties.source, 40);
   return {
     eventId,
@@ -134,8 +132,11 @@ export async function getAnalyticsDashboard(daysValue) {
       count(*) FILTER (WHERE event_name='favorite_added')::int AS favorites
       FROM analytics_events WHERE created_at >= $1 AND listing_id IS NOT NULL
       GROUP BY listing_id ORDER BY availability_clicks DESC, views DESC LIMIT 30`, [cutoff]),
-    pool.query(`SELECT properties->>'name' AS name, properties->>'phone' AS phone, created_at, path
-      FROM analytics_events WHERE created_at >= $1 AND event_name='registration_completed'
+    // Список регистраций читаем из таблицы аккаунтов, а не из событий: события
+    // принимаются без пароля и подделываются, а аккаунт создаётся только настоящей
+    // регистрацией. Заодно личные данные остаются в одном месте.
+    pool.query(`SELECT name, phone, created_at
+      FROM customer_accounts WHERE created_at >= $1
       ORDER BY created_at DESC LIMIT 100`, [cutoff]),
     pool.query(`SELECT event_name,listing_id,listing_title,path,created_at
       FROM analytics_events WHERE created_at >= $1 ORDER BY created_at DESC LIMIT 30`, [cutoff]),
@@ -146,7 +147,9 @@ export async function getAnalyticsDashboard(daysValue) {
     summary:summaryResult.rows[0],
     daily:dailyResult.rows,
     vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, availabilityClicks:row.availability_clicks, favorites:row.favorites })),
-    registrations:registrationsResult.rows.map((row) => ({ ...row, createdAt:row.created_at })),
+    // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
+    // разделе он читался и работала ссылка «позвонить».
+    registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
     recent:recentResult.rows.map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),
   };
 }

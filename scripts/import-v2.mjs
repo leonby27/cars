@@ -27,7 +27,7 @@ import { IMPORT_BRANDS, canonicalImportBrand, importPolicyViolation } from "../c
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
-const REPORT_PATH = path.join(ROOT, "public", "data", "import-che168-report.json");
+const REPORT_PATH = path.join(ROOT, "runtime", "import-che168-report.json");
 const PAGE_SIZE = 24;
 
 // The source splits its catalog by powertrain: 5 is a plug-in hybrid, 6 a range
@@ -250,6 +250,7 @@ async function writeBatch(final = false) {
     databaseRows = await importCars(fresh);
   }
   checkpointed = upto;
+  await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
   await fs.writeFile(REPORT_PATH, `${JSON.stringify(report({ finishedAt, final, resultingCount: cars.length, databaseRows }), null, 2)}\n`);
   console.log(`[batch] +${fresh.length} accepted (total ${accepted.length}/${limit}) · catalog ${cars.length}${databaseRows === null ? "" : ` · db +${databaseRows}`}`);
 }

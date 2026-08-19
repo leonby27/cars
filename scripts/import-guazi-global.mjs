@@ -9,7 +9,7 @@ assertImportSourceEnabled("Guazi");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
-const REPORT_PATH = path.join(ROOT, "public", "data", "import-global-report.json");
+const REPORT_PATH = path.join(ROOT, "runtime", "import-global-report.json");
 const CACHE_DIR = path.join(ROOT, "runtime", "guazi-global-cache");
 const args = new Map(process.argv.slice(2).map((item) => item.includes("=") ? item.split(/=(.*)/s).slice(0, 2) : [item, true]));
 const limit = Math.max(1, Number(args.get("--limit") || 100));
@@ -254,6 +254,8 @@ const report = {
   listErrors,
   detailErrors: detailErrors.slice(0, 30),
 };
+
+await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
 
 await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));

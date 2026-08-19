@@ -2,16 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, verifyAnalyticsToken } from "../server/analytics.mjs";
 
-test("analytics events are allowlisted and trim personal data", () => {
+test("analytics events are allowlisted and drop personal data", () => {
   const event = normalizeAnalyticsEvent({
     eventId:"event-1",
     visitorId:"visitor-1",
     sessionId:"session-1",
     eventName:"registration_completed",
     path:"/register",
-    properties:{ name:"  Анна  ", phone:" +375 29 123-45-67 ", ignored:"secret" },
+    properties:{ name:"  Анна  ", phone:" +375 29 123-45-67 ", ignored:"secret", source:" server " },
   });
-  assert.deepEqual(event.properties, { name:"Анна", phone:"+375 29 123-45-67" });
+  // Приём событий открыт без пароля, поэтому имя и телефон отбрасываются даже когда их
+  // прислали: контакты берутся только из таблицы аккаунтов.
+  assert.deepEqual(event.properties, { source:"server" });
   assert.equal(normalizeAnalyticsEvent({ eventName:"arbitrary" }).error, "invalid_event");
   for (const eventName of ["page_view","vehicle_view","availability_click","registration_completed","favorite_added","custom_search_submitted"]) {
     assert.equal(normalizeAnalyticsEvent({ eventId:`event-${eventName}`, visitorId:"visitor", sessionId:"session", eventName, path:"/" }).eventName, eventName);

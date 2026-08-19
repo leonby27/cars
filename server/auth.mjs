@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { promisify } from "node:util";
 import { pool } from "./db.mjs";
+import { decryptPersonalField, encryptPersonalField } from "./personal-data.mjs";
 
 const scrypt = promisify(crypto.scrypt);
 const SESSION_COOKIE = "navostok_session";
@@ -21,11 +22,13 @@ const safeUser = (row) => ({
   telegram: row.telegram || "",
   city: row.city || "",
   preferredContact: row.preferred_contact || "phone",
-  passportNumber: row.passport_number || "",
-  personalNumber: row.personal_number || "",
+  // Паспортные поля лежат в базе зашифрованными; владельцу профиля они возвращаются
+  // расшифрованными, всем остальным недоступны вообще — сессия проверяется до этого.
+  passportNumber: decryptPersonalField(row.passport_number),
+  personalNumber: decryptPersonalField(row.personal_number),
   passportIssueDate: row.passport_issue_date || "",
-  passportIssuedBy: row.passport_issued_by || "",
-  registrationAddress: row.registration_address || "",
+  passportIssuedBy: decryptPersonalField(row.passport_issued_by),
+  registrationAddress: decryptPersonalField(row.registration_address),
   createdAt: row.created_at,
 });
 
@@ -121,7 +124,9 @@ export async function updateAccountProfile(request, profile) {
             passport_issued_by=NULLIF($10,''),registration_address=NULLIF($11,''),updated_at=now()
       WHERE id=$1
       RETURNING id,name,phone,email,telegram,city,preferred_contact,passport_number,personal_number,passport_issue_date,passport_issued_by,registration_address,created_at`,
-    [account.id, value.name, value.email, value.telegram, value.city, value.preferredContact, value.passportNumber, value.personalNumber, value.passportIssueDate, value.passportIssuedBy, value.registrationAddress],
+    [account.id, value.name, value.email, value.telegram, value.city, value.preferredContact,
+      encryptPersonalField(value.passportNumber), encryptPersonalField(value.personalNumber), value.passportIssueDate,
+      encryptPersonalField(value.passportIssuedBy), encryptPersonalField(value.registrationAddress)],
   );
   return { user:safeUser(result.rows[0]) };
 }
