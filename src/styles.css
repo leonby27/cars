@@ -5623,6 +5623,113 @@ footer {
 .condition-card .text-button {
   margin-top: 16px;
 }
+.spec-search {
+  margin: 0 0 14px;
+  border-color: transparent;
+}
+.spec-search:focus-within {
+  border-color: var(--line-strong);
+}
+/* Тёмная тема задаёт всем .select-search свой фон и рамку селектором с большей
+   силой — для поиска по данным возвращаем спокойный тон без обводки. */
+html[data-theme="dark"] #root .spec-search,
+:root[data-theme="dark"] .spec-search {
+  background: var(--panel-soft);
+  border-color: transparent;
+}
+.spec-search-empty {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 16px;
+}
+.spec-group {
+  border-top: 1px solid var(--line);
+}
+.spec-group:last-of-type {
+  border-bottom: 1px solid var(--line);
+}
+.spec-group summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 12px 8px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 17px;
+  font-weight: 600;
+}
+.spec-group summary::-webkit-details-marker {
+  display: none;
+}
+.spec-group summary small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 400;
+}
+.spec-group summary svg {
+  flex-shrink: 0;
+  color: var(--accent-dark);
+}
+.spec-group summary .spec-caret {
+  color: var(--muted);
+  transition: color 0.18s ease;
+}
+.spec-group[open] summary .spec-caret {
+  color: var(--accent-dark);
+}
+.spec-rows {
+  padding: 0 8px 14px;
+}
+/* Плавное раскрытие групп. Современные браузеры умеют анимировать высоту
+   самого <details> через ::details-content; для остальных — мягкое появление
+   содержимого, чтобы открытие нигде не выглядело рывком. */
+@supports (interpolate-size: allow-keywords) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+}
+.spec-group::details-content {
+  opacity: 0;
+  block-size: 0;
+  overflow: clip;
+  transition: content-visibility 0.25s allow-discrete, opacity 0.25s ease, block-size 0.25s ease;
+}
+.spec-group[open]::details-content {
+  opacity: 1;
+  block-size: auto;
+}
+@supports not selector(::details-content) {
+  .spec-group[open] .spec-rows {
+    animation: spec-rows-open 0.22s ease;
+  }
+}
+@keyframes spec-rows-open {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.spec-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 1.15fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.spec-row span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.spec-row b {
+  min-width: 0;
+  font-size: 16px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
 .detail-source-card {
   position: static;
   top: auto;
@@ -8865,6 +8972,16 @@ html[data-theme="dark"] body #root .select-search {
   background: #22262c;
   border-color: var(--line-strong);
 }
+/* Поиск в «Полных данных» спокойнее прочих: без обводки и на самом мягком
+   фоне, рамка появляется только с фокусом. */
+html[data-theme="dark"] body #root .select-search.spec-search {
+  background: var(--panel-soft);
+  border-color: transparent;
+}
+html[data-theme="dark"] body #root .select-search.spec-search:focus-within {
+  background: var(--panel);
+  border-color: var(--focus-ring);
+}
 html[data-theme="dark"] body #root .custom-select.disabled {
   background: var(--filter-field-disabled-bg);
   border-color: transparent;
@@ -9351,6 +9468,12 @@ html[data-theme="dark"] body #root :where(
    иначе карточки расчёта и галерея перестают читаться как отдельные блоки. */
 :root[data-theme="dark"] .quick-view-modal {
   background: #191c20;
+}
+/* Фон окна предпросмотра почти совпадает с мягким тоном поиска по данным —
+   внутри него поиску нужен тон посветлее, иначе поле сливается. */
+:root[data-theme="dark"] .quick-view-modal .spec-search,
+html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search {
+  background: var(--panel);
 }
 .detail-action-tooltip {
   /* Подсказка к служебным кнопкам заголовка: «Назад», «Открыть полную страницу»,

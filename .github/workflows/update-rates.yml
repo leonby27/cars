@@ -1,0 +1,35 @@
+# Каждое утро подтягивает курс НБРБ в src/pricing.js и, если он изменился,
+# коммитит правку. Пуш в main запускает обычную сборку на Vercel, так что
+# сайт получает свежий курс без участия человека.
+name: Курс НБРБ
+
+on:
+  schedule:
+    # 07:00 UTC = 10:00 по Минску, курс на текущий день уже опубликован.
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update-rates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Обновить курс из API НБРБ
+        run: node scripts/update-rates.mjs
+      - name: Закоммитить, если курс изменился
+        run: |
+          if git diff --quiet src/pricing.js; then
+            echo "Курс не изменился — коммит не нужен."
+            exit 0
+          fi
+          git config user.name "nbrb-rates-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/pricing.js
+          git commit -m "Курс НБРБ: автообновление"
+          git push

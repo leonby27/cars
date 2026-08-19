@@ -85,7 +85,7 @@ test("keeps the default order stable per seed and strips seed injection", () => 
 
 test("omits heavy technical specifications from catalog summaries", () => {
   const car = { id:"che168-1", title:"Audi Q4 e-tron 2025", technicalSpecs:{ count:65, groups:[{ name:"Body", items:[] }] } };
-  assert.deepEqual(withoutDetailPayload(car), { id:"che168-1", title:"Audi Q4 e-tron 2025" });
+  assert.deepEqual(withoutDetailPayload(car), { id:"che168-1", title:"Audi Q4 e-tron 2025", _summary:true });
   assert.equal(car.technicalSpecs.count, 65);
 });
 

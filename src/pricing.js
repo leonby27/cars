@@ -1,10 +1,14 @@
-export const PRICING = { usdByn:2.9564, cnyBynPer10:4.4231, eurByn:3.4105, deliveryUsd:3500, serviceUsd:800, evCustomsUsd:350, rateDate:"13.08.2026", chinaHandling:[450,800], delivery:[3200,3900], reserve:[300,700] };
+export const PRICING = { usdByn:3.0313, cnyBynPer10:4.5021, eurByn:3.5093, deliveryUsd:3500, serviceUsd:800, evCustomsUsd:350, rateDate:"19.08.2026", chinaHandling:[450,800], delivery:[3200,3900], reserve:[300,700] };
 const round50 = (value) => Math.round(value / 50) * 50;
 
 export function estimateLandedCost(car) {
   const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
-  const chinaUsd = round50(car.chinaPrice * cnyUsd);
+  // Che168 quotes its export price in dollars; storing it as yuan at 7.15 and
+  // converting back at the display cross-rate (~6.68 ¥/$) marked every card up
+  // by ~7%. The source's own dollar figure is shown when the card carries one.
+  // Guazi's usdPrice is a FOB quote with delivery baked in, so it stays out.
+  const chinaUsd = (car.source === "Che168" && Number(car.usdPrice)) || round50(car.chinaPrice * cnyUsd);
   const age = 2026 - car.year;
   let customsUsd = PRICING.evCustomsUsd;
   let customsNote = "Льгота 0% · оформление и сборы";

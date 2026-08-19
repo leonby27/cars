@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
@@ -9,6 +9,7 @@ import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogR
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
+import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
@@ -251,6 +252,26 @@ function normalizeImportedCar(car) {
     range: car.range || electricRange || combinedRange,
     checkedAt: car.checkedAt || car.importedAt,
   };
+}
+
+const pluralRu = (count, one, few, many) => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+};
+
+// Дата последней сверки карточки с источником (npm run refresh пишет её в
+// last_checked_at); у карточек, которые ещё ни разу не сверяли, — дата импорта.
+function formatCheckedAgo(value) {
+  const at = new Date(value || "").getTime();
+  if (!Number.isFinite(at)) return null;
+  const hours = Math.floor((Date.now() - at) / 3600000);
+  if (hours < 1) return "Обновлено только что";
+  if (hours < 24) return `Обновлено ${hours} ${pluralRu(hours, "час", "часа", "часов")} назад`;
+  const days = Math.floor(hours / 24);
+  return `Обновлено ${days} ${pluralRu(days, "день", "дня", "дней")} назад`;
 }
 
 // Safari отменяет history.replaceState/pushState чаще ~100 раз за 30 секунд
@@ -1987,6 +2008,13 @@ function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
 
 function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnavailableFavorites, saving = false }) {
   const { favoriteCars, hasUnresolved } = useFavoriteCars(cars, favorites, apiMode, onUnavailableFavorites);
+  // Свитчер быстрого просмотра здесь не показываем, но общую настройку уважаем:
+  // включили его в каталоге — из избранного карточки тоже раскрываются модалкой.
+  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
+  const openCar = (car) => {
+    if (openQuickView(car)) return;
+    navigate(`/cars/${car.id}`);
+  };
   // The car saved during registration lands here a moment after the page does, so the
   // empty state would be a lie for that moment.
   const awaitingCars = hasUnresolved || saving;
@@ -2006,7 +2034,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
       {favoriteCars.length ? (
         <div className="car-list">
           {favoriteCars.map((car) => (
-            <CarRow key={car.id} car={car} navigate={navigate} favorite toggleFavorite={toggleFavorite} />
+            <CarRow key={car.id} car={car} navigate={navigate} favorite toggleFavorite={toggleFavorite} onOpen={openCar} />
           ))}
         </div>
       ) : awaitingCars ? (
@@ -2019,6 +2047,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
           <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
         </div>
       )}
+      {quickViewModal}
     </main>
   );
 }
@@ -2718,6 +2747,73 @@ function FactList({ items }) {
   );
 }
 
+// Полная техническая карта источника: ~85 пунктов в 7 группах, свёрнутых по
+// умолчанию, чтобы не раздавить страницу. Словарь перевода живёт в
+// spec-translations.js; незнакомые значения показываются как есть.
+const SPEC_GROUP_ICONS = {
+  "Общие данные": ClipboardText,
+  "Кузов": CarProfile,
+  "Электромотор": Lightning,
+  "Батарея и зарядка": BatteryHigh,
+  "Двигатель": Engine,
+  "Трансмиссия": Gear,
+  "Шасси и рулевое управление": SteeringWheel,
+  "Колёса и тормоза": Tire,
+};
+
+function TechnicalSpecs({ car }) {
+  const groups = useMemo(() => translateTechnicalSpecs(car.technicalSpecs), [car.technicalSpecs]);
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLocaleLowerCase("ru");
+  // Поиск фильтрует на месте: совпавшие группы раскрываются сами, внутри
+  // остаются только совпавшие строки (ищем и по названию, и по значению).
+  // Пустой запрос возвращает обычный свёрнутый аккордеон.
+  const shown = useMemo(() => {
+    if (!needle) return groups;
+    return groups
+      .map((group) => ({ ...group, items: group.items.filter((item) => `${item.name} ${item.value}`.toLocaleLowerCase("ru").includes(needle)) }))
+      .filter((group) => group.items.length);
+  }, [groups, needle]);
+  if (!groups.length) return null;
+  const searching = Boolean(needle);
+  return (
+    <section className="detail-facts-section technical-specs">
+      <h2>Полные данные</h2>
+      <div className="select-search spec-search">
+        <MagnifyingGlass size={16} />
+        <input type="search" value={query} placeholder="Поиск: разгон, багажник, зарядка…" aria-label="Поиск по полным данным" onChange={(event) => setQuery(event.target.value)} />
+        {query && (
+          <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => setQuery("")}>
+            <X size={14} weight="bold" />
+          </button>
+        )}
+      </div>
+      {searching && !shown.length && <p className="spec-search-empty">Ничего не найдено — попробуйте другое слово.</p>}
+      {shown.map((group) => {
+        const GroupIcon = SPEC_GROUP_ICONS[group.name] || ListChecks;
+        return (
+        <details className="spec-group" key={group.name} open={searching || undefined}>
+          <summary>
+            <GroupIcon size={21} weight="duotone" aria-hidden="true" />
+            <span>{group.name}</span>
+            <small>{group.items.length}</small>
+            <CaretDown className="spec-caret" size={18} aria-hidden="true" />
+          </summary>
+          <div className="spec-rows">
+            {group.items.map((item, index) => (
+              <div className="spec-row" key={`${item.name}-${index}`}>
+                <span>{item.name}</span>
+                <b>{item.value}</b>
+              </div>
+            ))}
+          </div>
+        </details>
+        );
+      })}
+    </section>
+  );
+}
+
 function PriceLabel({ label, description }) {
   return (
     <div className="price-label">
@@ -3063,13 +3159,17 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
     [BatteryHigh, "Батарея", car.battery ? `${car.battery} кВт·ч` : "Не указана"],
     [CarProfile, "Кузов", car.bodyType],
   ];
+  // Блок отчёта продавца заполнен только у Guazi; у Che168 все поля пусты, а тип
+  // батареи и так виден в «Полных характеристиках». Пустые строки не показываем,
+  // а без единой строки исчезает и весь блок — вместе с дисклеймером-заглушкой.
+  const sourceClaims = translateClaims(car.claims || car.incident);
   const conditionFacts = [
     [CarProfile, "Владельцы в Китае", car.owners],
-    [ShieldCheck, "Страховые случаи", translateClaims(car.claims || car.incident)],
-    [Sparkle, "Оценка внешнего вида", car.appearanceScore ? `${car.appearanceScore}/100` : "Не указана"],
-    [BatteryHigh, "Тип батареи", translateBattery(car.batteryType)],
-    [Gauge, "Здоровье батареи", car.batteryHealth ? `${car.batteryHealth}%` : "Не указано"],
-  ];
+    [ShieldCheck, "Страховые случаи", sourceClaims === "Отчёт источника может быть неполным" ? null : sourceClaims],
+    [Sparkle, "Оценка внешнего вида", car.appearanceScore ? `${car.appearanceScore}/100` : null],
+    [BatteryHigh, "Тип батареи", car.technicalSpecs?.count ? null : translateBattery(car.batteryType)],
+    [Gauge, "Здоровье батареи", car.batteryHealth ? `${car.batteryHealth}%` : null],
+  ].filter(([, , value]) => value);
   return (
     <>
       <div className="detail-title">
@@ -3094,6 +3194,7 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
           </strong>
           <p>
             {car.type} · {car.drive} привод · {number(car.mileage)} км
+            {formatCheckedAgo(car.checkedAt) ? ` · ${formatCheckedAgo(car.checkedAt)}` : ""}
           </p>
         </div>
         <div className="detail-actions">
@@ -3111,12 +3212,15 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
             <h2>Характеристики</h2>
             <FactList items={specs} />
           </section>
-          <section className="detail-facts-section condition-card">
-            <div className="detail-facts-heading">
-              <h2>Что указано в объявлении</h2>
-            </div>
-            <FactList items={conditionFacts} />
-          </section>
+          {conditionFacts.length > 0 && (
+            <section className="detail-facts-section condition-card">
+              <div className="detail-facts-heading">
+                <h2>Что указано в объявлении</h2>
+              </div>
+              <FactList items={conditionFacts} />
+            </section>
+          )}
+          <TechnicalSpecs car={car} />
           <aside className="source-card detail-source-card">
             <h3>Источник объявления</h3>
             {car.sourceId && <p className="source-meta">ID {car.sourceId}</p>}
@@ -5261,7 +5365,7 @@ export function App() {
       return;
     }
     const targetCar = cars.find((item) => item.id === targetId);
-    const needsApiDetail = apiMode && !targetCar;
+    const needsApiDetail = apiMode && (!targetCar || targetCar._summary);
     const needsStaticDetail = !apiMode && (!targetCar || targetCar._summary);
     if (!needsApiDetail && !needsStaticDetail) return;
     const controller = new AbortController();
