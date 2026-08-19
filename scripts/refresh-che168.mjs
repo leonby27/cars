@@ -9,8 +9,13 @@
 // unpublish a card. Its own page is the authority: a sold card still answers
 // with a detail payload, just without a price.
 //
+// The run starts with a priority pass: cards visitors opened in the last 30
+// days (view/availability/favorite events, top 300) get a detail check and a
+// database write first, so the cars people care about are fresh within minutes
+// even if the rest of the run is interrupted. --skip-detail skips this pass too.
+//
 // Usage:
-//   npm run refresh                     # full run: lists + detail checks + writes
+//   npm run refresh                     # full run: priority pass + lists + detail checks + writes
 //   npm run refresh -- --dry-run       # measure only, no database writes
 //   npm run refresh -- --skip-detail   # lists only (prices), leave missing cards alone
 //   npm run refresh -- --detail-limit=500
@@ -76,9 +81,24 @@ const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_
     (source_payload->>'year')::int AS year,
     source_payload->>'type' AS type,
     source_payload->>'engine' AS engine,
+    source_payload->>'city' AS city,
+    source_payload->>'dimensions' AS dimensions,
+    (source_payload->>'curbWeight')::numeric AS curb_weight,
     title
   FROM listings WHERE source='Che168' AND status='active'`);
 console.log(`[db] ${rows.length} active Che168 listings`);
+
+// Cards visitors actually opened in the last month jump the queue: each gets a
+// detail-page check and a database write before the list sweep even starts, so
+// the cars people look at are fresh within the first minutes of a run.
+const { rows: popular } = await pool.query(`SELECT listing_id, count(*)::int AS views
+  FROM analytics_events
+  WHERE listing_id IS NOT NULL
+    AND created_at >= now() - interval '30 days'
+    AND event_name IN ('vehicle_view','availability_click','favorite_added')
+  GROUP BY listing_id ORDER BY views DESC LIMIT 300`);
+const activeById = new Map(rows.map((row) => [row.id, row]));
+const popularRows = popular.map((p) => activeById.get(p.listing_id)).filter(Boolean);
 
 const browser = await chromium.launch();
 const context = await browser.newContext({
@@ -142,14 +162,15 @@ const landedTotal = (row, usd) => estimateLandedCost({
   year: row.year,
   type: row.type,
   engine: row.engine,
+  city: row.city,
+  dimensions: row.dimensions,
+  curbWeight: row.curb_weight,
 }).totalUsd;
 
 try {
   await page.goto(FEED_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForFunction(() => document.querySelectorAll("[data-uc-car-card]").length > 0, null, { timeout: 60_000 });
   console.log("[browser] challenge passed");
-
-  await sweepLists();
 
   const priceUpdates = []; // real re-pricings: new price + landed estimate + history point
   const estimateUpdates = []; // price unchanged, but the stored landed estimate drifted
@@ -178,12 +199,76 @@ try {
     else touchIds.push(row.id);
   };
 
+  const chunk = (list, size) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
+
+  // Totals survive across flushes; the working arrays are drained by each one.
+  const stats = { rePriced: 0, priceUpdates: [], drops: [], estimateOnly: 0, unchanged: 0, sold: 0 };
+  const flushWrites = async () => {
+    if (!dryRun) {
+      for (const batch of chunk(priceUpdates, 1000)) {
+        await pool.query(`UPDATE listings l SET price_cny=v.cny, estimated_total_usd=v.est,
+            source_payload = l.source_payload || jsonb_build_object('usdPrice', v.usd, 'sourcePriceUsd', v.usd, 'chinaPrice', v.cny),
+            last_seen_at=now(), last_checked_at=now()
+          FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer, usd numeric, est numeric)
+          WHERE l.id = v.id`, [JSON.stringify(batch.map(({ id, cny, usd, est }) => ({ id, cny, usd, est })))]);
+        await pool.query(`INSERT INTO price_history (listing_id, observed_at, price_cny)
+          SELECT v.id, now(), v.cny FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer)
+          ON CONFLICT DO NOTHING`, [JSON.stringify(batch.map(({ id, cny }) => ({ id, cny })))]);
+      }
+      for (const batch of chunk(estimateUpdates, 2000)) {
+        await pool.query(`UPDATE listings l SET estimated_total_usd=v.est, last_seen_at=now(), last_checked_at=now()
+          FROM jsonb_to_recordset($1::jsonb) AS v(id text, est numeric) WHERE l.id = v.id`, [JSON.stringify(batch)]);
+      }
+      for (const batch of chunk(touchIds, 5000)) {
+        await pool.query(`UPDATE listings SET last_seen_at=now(), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
+      }
+      for (const batch of chunk(soldIds, 5000)) {
+        await pool.query(`UPDATE listings SET status='unavailable', last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
+      }
+    }
+    stats.rePriced += priceUpdates.length;
+    stats.priceUpdates.push(...priceUpdates);
+    stats.drops.push(...priceUpdates.filter((u) => u.usd < u.oldUsd));
+    stats.estimateOnly += estimateUpdates.length;
+    stats.unchanged += touchIds.length;
+    stats.sold += soldIds.length;
+    priceUpdates.length = 0;
+    estimateUpdates.length = 0;
+    touchIds.length = 0;
+    soldIds.length = 0;
+  };
+
+  // Priority pass: the cars visitors opened get their authoritative detail
+  // check and a write immediately, before the ~6-minute list walk begins.
+  const prioritized = new Set();
+  if (!skipDetail && popularRows.length) {
+    console.log(`[priority] ${popularRows.length} visitor-viewed cars go first`);
+    const queue = [...popularRows];
+    const worker = async () => {
+      while (queue.length) {
+        const row = queue.shift();
+        const result = await checkDetail(row.external_id);
+        if (result.verdict === "sold") soldIds.push(row.id);
+        else if (result.verdict === "alive") classify(row, result.price);
+        else unknown += 1;
+        prioritized.add(row.id);
+        await sleep(60);
+      }
+    };
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    console.log(`[priority] done: ${prioritized.size} checked · ${soldIds.length} sold · ${priceUpdates.length} re-priced`);
+    await flushWrites();
+  }
+
+  await sweepLists();
+
   for (const row of rows) {
+    if (prioritized.has(row.id)) continue;
     const liveUsd = seenPrices.get(String(row.external_id));
     if (liveUsd) classify(row, liveUsd);
     else missing.push(row);
   }
-  console.log(`[match] ${rows.length - missing.length} in lists · ${priceUpdates.length} re-priced · ${missing.length} need a detail check`);
+  console.log(`[match] ${rows.length - prioritized.size - missing.length} in lists · ${priceUpdates.length} re-priced · ${missing.length} need a detail check`);
 
   if (!skipDetail) {
     const queue = missing.slice(0, detailLimit);
@@ -206,32 +291,9 @@ try {
     console.log(`[detail] done: ${checked} checked, ${soldIds.length} sold, ${unknown} without a clear answer`);
   }
 
-  const chunk = (list, size) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
+  await flushWrites();
 
-  if (!dryRun) {
-    for (const batch of chunk(priceUpdates, 1000)) {
-      await pool.query(`UPDATE listings l SET price_cny=v.cny, estimated_total_usd=v.est,
-          source_payload = l.source_payload || jsonb_build_object('usdPrice', v.usd, 'sourcePriceUsd', v.usd, 'chinaPrice', v.cny),
-          last_seen_at=now(), last_checked_at=now()
-        FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer, usd numeric, est numeric)
-        WHERE l.id = v.id`, [JSON.stringify(batch.map(({ id, cny, usd, est }) => ({ id, cny, usd, est })))]);
-      await pool.query(`INSERT INTO price_history (listing_id, observed_at, price_cny)
-        SELECT v.id, now(), v.cny FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer)
-        ON CONFLICT DO NOTHING`, [JSON.stringify(batch.map(({ id, cny }) => ({ id, cny })))]);
-    }
-    for (const batch of chunk(estimateUpdates, 2000)) {
-      await pool.query(`UPDATE listings l SET estimated_total_usd=v.est, last_seen_at=now(), last_checked_at=now()
-        FROM jsonb_to_recordset($1::jsonb) AS v(id text, est numeric) WHERE l.id = v.id`, [JSON.stringify(batch)]);
-    }
-    for (const batch of chunk(touchIds, 5000)) {
-      await pool.query(`UPDATE listings SET last_seen_at=now(), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
-    }
-    for (const batch of chunk(soldIds, 5000)) {
-      await pool.query(`UPDATE listings SET status='unavailable', last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
-    }
-  }
-
-  const drops = priceUpdates.filter((u) => u.usd < u.oldUsd);
+  const drops = stats.drops;
   const report = {
     startedAt: new Date(startedAt).toISOString(),
     finishedAt: new Date().toISOString(),
@@ -241,19 +303,20 @@ try {
     listPages,
     listPagesEmpty,
     pricedByLists: seenPrices.size,
-    rePriced: priceUpdates.length,
+    prioritized: prioritized.size,
+    rePriced: stats.rePriced,
     priceDrops: drops.length,
-    priceRises: priceUpdates.length - drops.length,
-    estimateOnly: estimateUpdates.length,
-    unchanged: touchIds.length,
-    detailChecked: skipDetail ? 0 : Math.min(missing.length, detailLimit),
-    sold: soldIds.length,
+    priceRises: stats.rePriced - drops.length,
+    estimateOnly: stats.estimateOnly,
+    unchanged: stats.unchanged,
+    detailChecked: skipDetail ? 0 : prioritized.size + Math.min(missing.length, detailLimit),
+    sold: stats.sold,
     noAnswer: unknown,
     biggestDrops: [...drops].sort((a, b) => (a.usd - a.oldUsd) - (b.usd - b.oldUsd)).slice(0, 10)
       .map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })),
   };
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
-  await fs.writeFile(REPORT_PATH, `${JSON.stringify({ ...report, priceUpdates: priceUpdates.map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })) }, null, 2)}\n`);
+  await fs.writeFile(REPORT_PATH, `${JSON.stringify({ ...report, priceUpdates: stats.priceUpdates.map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })) }, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
 } finally {
   await browser.close();

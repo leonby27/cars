@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, CalendarBlan
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
+import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
 import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, saveCatalogReturn, saveCatalogReturnScroll } from "./catalog-return.js";
@@ -261,16 +262,17 @@ const pluralRu = (count, one, few, many) => {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
   return many;
 };
+const daysRange = ([low, high]) => `${low}–${high} ${pluralRu(high, "день", "дня", "дней")}`;
 
 // Дата последней сверки карточки с источником (npm run refresh пишет её в
 // last_checked_at); у карточек, которые ещё ни разу не сверяли, — дата импорта.
 function formatCheckedAgo(value) {
-  const at = new Date(value || "").getTime();
-  if (!Number.isFinite(at)) return null;
-  const hours = Math.floor((Date.now() - at) / 3600000);
-  if (hours < 1) return "Обновлено только что";
-  if (hours < 24) return `Обновлено ${hours} ${pluralRu(hours, "час", "часа", "часов")} назад`;
-  const days = Math.floor(hours / 24);
+  const at = new Date(value || "");
+  if (!Number.isFinite(at.getTime())) return null;
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(at)) / 86400000);
+  if (days <= 0) return "Обновлено сегодня";
+  if (days === 1) return "Обновлено вчера";
   return `Обновлено ${days} ${pluralRu(days, "день", "дня", "дней")} назад`;
 }
 
@@ -1649,7 +1651,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
   const nextItemKey = useRef(0);
   const feedSource = useRef(cars);
   const [useCatalogCards, setUseCatalogCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
-  const takeRandomBatch = (precedingCars = []) => {
+  const takeRandomBatch = (precedingCars = [], count = batchSize) => {
     const batch = [];
     if (!cars.length) return batch;
     const candidates = [];
@@ -1659,7 +1661,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
         candidates.push(randomPool.current.pop());
       }
     };
-    while (batch.length < batchSize) {
+    while (batch.length < count) {
       refill();
       // Compare against the three cards before this slot, including the tail of
       // the previous batch so "Показать ещё" does not seam two similar cards.
@@ -1692,7 +1694,19 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
     nextItemKey.current = restored.reduce((max, item) => Math.max(max, Number(String(item.key).split("-").pop()) || 0), 0) + 1;
     return restored;
   };
-  const [feedCars, setFeedCars] = useState(() => restoreFeed(window.history.state?.feed) || takeRandomBatch());
+  // После перезагрузки на другой странице от сохранённой ленты обычно выживают
+  // только просмотренные машины: остальных нет в свежезагруженном списке. Пара
+  // «знакомых» карточек вместо витрины выглядит как поломка, поэтому уцелевшие
+  // оставляем сверху (к ним ведёт возврат прокрутки), а ленту добираем свежими.
+  const buildFeed = () => {
+    const restored = restoreFeed(window.history.state?.feed);
+    if (!restored) return takeRandomBatch();
+    if (restored.length >= batchSize) return restored;
+    const seen = new Set(restored.map((item) => item.car.id));
+    randomPool.current = shuffleCars(cars.filter((car) => !seen.has(car.id)));
+    return [...restored, ...takeRandomBatch(restored.map((item) => item.car), batchSize - restored.length)];
+  };
+  const [feedCars, setFeedCars] = useState(buildFeed);
   const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
   const openFeedCar = (item) => {
     const scrollAnchor = feedAnchorSelector(item.key);
@@ -1720,7 +1734,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
     feedSource.current = cars;
     randomPool.current = [];
     nextItemKey.current = 0;
-    setFeedCars(restoreFeed(window.history.state?.feed) || takeRandomBatch());
+    setFeedCars(buildFeed());
   }, [cars]);
 
   const loadMore = () => setFeedCars((current) => [...current, ...takeRandomBatch(current.slice(-3).map((item) => item.car))]);
@@ -2764,35 +2778,73 @@ const SPEC_GROUP_ICONS = {
 function TechnicalSpecs({ car }) {
   const groups = useMemo(() => translateTechnicalSpecs(car.technicalSpecs), [car.technicalSpecs]);
   const [query, setQuery] = useState("");
+  const searchBoxRef = useRef(null);
   const needle = query.trim().toLocaleLowerCase("ru");
-  // Поиск фильтрует на месте: совпавшие группы раскрываются сами, внутри
-  // остаются только совпавшие строки (ищем и по названию, и по значению).
-  // Пустой запрос возвращает обычный свёрнутый аккордеон.
-  const shown = useMemo(() => {
-    if (!needle) return groups;
+  // Выдача поиска — слой поверх аккордеона: сами группы не перестраиваются,
+  // поэтому страница не дёргается при наборе (ищем и по названию, и по значению).
+  const found = useMemo(() => {
+    if (!needle) return [];
     return groups
       .map((group) => ({ ...group, items: group.items.filter((item) => `${item.name} ${item.value}`.toLocaleLowerCase("ru").includes(needle)) }))
       .filter((group) => group.items.length);
   }, [groups, needle]);
-  if (!groups.length) return null;
   const searching = Boolean(needle);
+  // Клик мимо панели или Escape закрывают выдачу вместе с запросом. Escape
+  // перехватываем на capture-фазе, чтобы в быстром просмотре он сперва закрыл
+  // выдачу, а не модалку целиком.
+  useEffect(() => {
+    if (!searching) return undefined;
+    const onPointerDown = (event) => {
+      if (!searchBoxRef.current?.contains(event.target)) setQuery("");
+    };
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setQuery("");
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [searching]);
+  if (!groups.length) return null;
   return (
     <section className="detail-facts-section technical-specs">
       <h2>Полные данные</h2>
-      <div className="select-search spec-search">
-        <MagnifyingGlass size={16} />
-        <input type="search" value={query} placeholder="Поиск: разгон, багажник, зарядка…" aria-label="Поиск по полным данным" onChange={(event) => setQuery(event.target.value)} />
-        {query && (
-          <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => setQuery("")}>
-            <X size={14} weight="bold" />
-          </button>
+      <div className="spec-search-box" ref={searchBoxRef}>
+        <div className="select-search spec-search">
+          <MagnifyingGlass size={16} />
+          <input type="search" value={query} placeholder="Поиск: разгон, багажник, зарядка…" aria-label="Поиск по полным данным" onChange={(event) => setQuery(event.target.value)} />
+          {query && (
+            <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => setQuery("")}>
+              <X size={14} weight="bold" />
+            </button>
+          )}
+        </div>
+        {searching && (
+          <div className="spec-search-results" role="region" aria-label="Результаты поиска по полным данным">
+            {found.length
+              ? found.map((group) => (
+                  <div className="spec-search-group" key={group.name}>
+                    <p>{group.name}</p>
+                    {group.items.map((item, index) => (
+                      <div className="spec-row" key={`${item.name}-${index}`}>
+                        <span>{item.name}</span>
+                        <b>{item.value}</b>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              : <p className="spec-search-empty">Ничего не найдено — попробуйте другое слово.</p>}
+          </div>
         )}
       </div>
-      {searching && !shown.length && <p className="spec-search-empty">Ничего не найдено — попробуйте другое слово.</p>}
-      {shown.map((group) => {
+      {groups.map((group) => {
         const GroupIcon = SPEC_GROUP_ICONS[group.name] || ListChecks;
         return (
-        <details className="spec-group" key={group.name} open={searching || undefined}>
+        <details className="spec-group" key={group.name}>
           <summary>
             <GroupIcon size={21} weight="duotone" aria-hidden="true" />
             <span>{group.name}</span>
@@ -2815,14 +2867,14 @@ function TechnicalSpecs({ car }) {
 }
 
 function PriceLabel({ label, description }) {
+  // Подсказка общая со служебными кнопками: координаты ставит JS с fixed-позицией,
+  // иначе текст резали край окна и прокрутка (как раньше у «Удалить из избранного»).
   return (
     <div className="price-label">
       <b>{label}</b>
-      <span className="price-info" aria-label={`Подробнее: ${label}`}>
+      <span className="price-info" tabIndex={0} aria-label={`Подробнее: ${label}`}>
         <Info size={16} />
-        <span className="price-info-popover" role="tooltip">
-          {description}
-        </span>
+        <ActionTooltip text={description} />
       </span>
     </div>
   );
@@ -3145,6 +3197,7 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
     return () => observer.disconnect();
   }, [car?.id]);
   const price = estimateLandedCost(car);
+  const timing = estimateDeliveryDays(car.city);
   const openAvailabilityModal = () => {
     trackEvent("availability_click", { listingId:car.id, listingTitle:car.title });
     setAvailabilityUnavailableOpen(true);
@@ -3246,12 +3299,20 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
                 <strong>{money(price.chinaUsd, currency)}</strong>
               </div>
               <div>
-                <PriceLabel label="Расходы в Китае" description="Выкуп, банк и экспортные документы" />
-                <strong>{approximateMoney(price.chinaHandlingLow, price.chinaHandlingHigh, currency)}</strong>
+                <PriceLabel label="Выкуп и перевод денег" description="Платёжный агент и комиссии банка" />
+                <strong>{approximateMoney(price.buyoutLow, price.buyoutHigh, currency)}</strong>
               </div>
               <div>
-                <PriceLabel label="Доставка до Минска" description="Оценка стоимости логистики" />
-                <strong>{approximateMoney(price.deliveryLow, price.deliveryHigh, currency)}</strong>
+                <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
+                <strong>{approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)}</strong>
+              </div>
+              <div>
+                <PriceLabel label="Доставка до Минска" description={price.intlNote} />
+                <strong>{approximateMoney(price.intlLow, price.intlHigh, currency)}</strong>
+              </div>
+              <div>
+                <PriceLabel label="СВХ в Минске" description="Разгрузка и хранение до оформления" />
+                <strong>{approximateMoney(price.svhLow, price.svhHigh, currency)}</strong>
               </div>
               <div>
                 <PriceLabel label="Растаможка и сборы" description={price.customsNote} />
@@ -3272,36 +3333,33 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
                 </div>
                 <div>
                   <span>Срок доставки до Минска</span>
-                  <h2>35–50 дней</h2>
+                  <h2>{daysRange(timing.totalDays)}</h2>
                 </div>
                 <CaretDown className="disclosure-caret" size={20} weight="bold" />
               </button>
               <div className="animated-disclosure" aria-hidden={!deliveryOpen}>
                 <div className="disclosure-content delivery-disclosure-content">
-                <p className="delivery-intro">От договора до прибытия авто в Минск.</p>
+                <p className="delivery-intro">От договора до выдачи авто в Минске.</p>
                 <div className="delivery-stages">
                   <div>
-                    <ListChecks size={20} />
-                    <p>
-                      <b>Выкуп и подготовка — 2–4 дня</b>
-                    </p>
+                    <b>Выкуп и экспорт</b>
+                    <strong>{daysRange(timing.buyoutDays)}</strong>
                   </div>
                   <div>
-                    <MapPin size={20} />
-                    <p>
-                      <b>Логистика по Китаю — 3–6 дней</b>
-                    </p>
+                    <b>Логистика по Китаю</b>
+                    <strong>{daysRange(timing.chinaDays)}</strong>
                   </div>
                   <div>
-                    <CarProfile size={20} />
-                    <p>
-                      <b>Маршрут до Минска — 30–40 дней</b>
-                    </p>
+                    <b>Маршрут до Минска</b>
+                    <strong>{daysRange(timing.intlDays)}</strong>
+                  </div>
+                  <div>
+                    <b>СВХ и оформление</b>
+                    <strong>{daysRange(timing.svhDays)}</strong>
                   </div>
                 </div>
-                <div className="delivery-note">
-                  <Info size={16} />
-                  <span>Срок зависит от города продавца, границы и маршрута.</span>
+                <div className="price-assumption delivery-note">
+                  <span>Срок зависит от очереди на границе и загрузки перевозчика.</span>
                 </div>
                 </div>
               </div>
@@ -3613,12 +3671,20 @@ function OrderDraft({ car, navigate }) {
                 <b>{money(price.chinaUsd, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Расходы в Китае" description="Выкуп, банк, экспортные документы" />
-                <b>{approximateMoney(price.chinaHandlingLow, price.chinaHandlingHigh, currency)}</b>
+                <PriceLabel label="Выкуп и перевод денег" description="Платёжный агент и комиссии банка" />
+                <b>{approximateMoney(price.buyoutLow, price.buyoutHigh, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Доставка до Минска" description="Оценка зависит от маршрута и перевозчика" />
-                <b>{approximateMoney(price.deliveryLow, price.deliveryHigh, currency)}</b>
+                <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
+                <b>{approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)}</b>
+              </div>
+              <div>
+                <PriceLabel label="Доставка до Минска" description={price.intlNote} />
+                <b>{approximateMoney(price.intlLow, price.intlHigh, currency)}</b>
+              </div>
+              <div>
+                <PriceLabel label="СВХ в Минске" description="Разгрузка и хранение до оформления" />
+                <b>{approximateMoney(price.svhLow, price.svhHigh, currency)}</b>
               </div>
               <div>
                 <PriceLabel label="Таможня и сборы" description={price.customsNote} />
@@ -3627,10 +3693,6 @@ function OrderDraft({ car, navigate }) {
               <div>
                 <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
                 <b>{money(price.serviceUsd, currency)}</b>
-              </div>
-              <div>
-                <PriceLabel label="Резерв на изменение расходов" description="Курс, хранение и дополнительные сборы" />
-                <b>{approximateMoney(price.reserveLow, price.reserveHigh, currency)}</b>
               </div>
             </div>
             <div className="order-grand-total">
@@ -5191,6 +5253,12 @@ let catalogRequest = null;
 const bootCatalogUrl = () => (window.location.pathname === "/catalog" ? "/api/cars?limit=1&sort=newest" : "/api/cars?limit=60&sort=variety");
 // Memoised so StrictMode's double effect invocation does not fire the request twice.
 const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || fetchCarsJson(bootCatalogUrl()));
+// Загрузившись на /catalog, приложение знает одну машину — витрину главной и блок
+// похожих из такого списка не собрать: они крутили бы по кругу пару просмотренных
+// карточек. Флаг помнит этот урезанный старт, а запрос мемоизирован от StrictMode.
+let bootListMinimal = window.location.pathname === "/catalog";
+let showcaseListRequest = null;
+const requestShowcaseList = () => (showcaseListRequest ||= fetchCarsJson("/api/cars?limit=60&sort=variety"));
 const requestBootCar = (id) => (window.__boot?.carId === id && window.__boot.car) || fetchCarsJson(`/api/cars/${encodeURIComponent(id)}`);
 
 export function App() {
@@ -5359,6 +5427,27 @@ export function App() {
       cancelled = true;
     };
   }, []);
+  // Первый уход со страницы каталога после урезанного старта: дозапрашиваем
+  // обычный список витрины, чтобы главной и похожим было из чего собираться.
+  useEffect(() => {
+    if (!apiMode || !bootListMinimal || dataPath === "/catalog") return;
+    let cancelled = false;
+    requestShowcaseList()
+      .then((payload) => {
+        if (cancelled) return;
+        bootListMinimal = false;
+        const items = (payload.items || []).map(normalizeImportedCar);
+        setCars((current) => {
+          const known = new Set(current.map((car) => car.id));
+          return [...current, ...items.filter((car) => !known.has(car.id))];
+        });
+      })
+      .catch(() => {
+        // Не получилось — забываем запрос, чтобы следующий переход попробовал снова.
+        showcaseListRequest = null;
+      });
+    return () => { cancelled = true; };
+  }, [apiMode, dataPath]);
   useEffect(() => {
     if (loading || !targetId) {
       if (!targetId) setRouteLoading(false);

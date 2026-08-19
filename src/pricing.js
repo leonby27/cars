@@ -1,4 +1,18 @@
-export const PRICING = { usdByn:3.0313, cnyBynPer10:4.5021, eurByn:3.5093, deliveryUsd:3500, serviceUsd:800, evCustomsUsd:350, rateDate:"19.08.2026", chinaHandling:[450,800], delivery:[3200,3900], reserve:[300,700] };
+import { chinaTransitFor } from "./china-logistics.js";
+
+export const PRICING = {
+  usdByn:3.0313, cnyBynPer10:4.5021, eurByn:3.5093, rateDate:"19.08.2026",
+  serviceUsd:800, evCustomsUsd:350,
+  // Этапы до СВХ, доллары [низ, верх]. Ориентиры — открытые тарифы перевозчиков
+  // Китай→Минск и платёжных агентов (лето 2026): автовоз «под ключ» ≈ $3500,
+  // перевод через агента от 0,9%, внутрикитайское плечо 30–80 тыс. ₽ по удалённости.
+  buyoutPercent:[0.011, 0.019], // платёжный агент и перевод юаней продавцу, % от цены
+  buyoutMinUsd:[150, 250],
+  exportDocsUsd:[250, 400], // экспортная декларация, снятие с учёта, страховка в пути
+  intlDeliveryUsd:[2350, 2750], // автовоз Хоргос → Минск через Казахстан и Россию
+  bigCarExtraUsd:[150, 250], // длина от 4,95 м или масса от 2,3 т занимает больше места на автовозе
+  svhUsd:[100, 200], // разгрузка и склад временного хранения в Минске до выдачи
+};
 const round50 = (value) => Math.round(value / 50) * 50;
 
 export function estimateLandedCost(car) {
@@ -9,6 +23,21 @@ export function estimateLandedCost(car) {
   // by ~7%. The source's own dollar figure is shown when the card carries one.
   // Guazi's usdPrice is a FOB quote with delivery baked in, so it stays out.
   const chinaUsd = (car.source === "Che168" && Number(car.usdPrice)) || round50(car.chinaPrice * cnyUsd);
+
+  const buyoutLow = Math.max(PRICING.buyoutMinUsd[0], round50(chinaUsd * PRICING.buyoutPercent[0]));
+  const buyoutHigh = Math.max(PRICING.buyoutMinUsd[1], round50(chinaUsd * PRICING.buyoutPercent[1]));
+
+  const transit = chinaTransitFor(car.city);
+  const chinaLegLow = PRICING.exportDocsUsd[0] + transit.usd[0];
+  const chinaLegHigh = PRICING.exportDocsUsd[1] + transit.usd[1];
+  const chinaLegNote = `Документы и автовоз до Хоргоса · ${transit.label}`;
+
+  const lengthMm = Number(String(car.dimensions || "").match(/^\d{4}/)?.[0]) || 0;
+  const bigCar = lengthMm >= 4950 || Number(car.curbWeight) >= 2300;
+  const intlLow = PRICING.intlDeliveryUsd[0] + (bigCar ? PRICING.bigCarExtraUsd[0] : 0);
+  const intlHigh = PRICING.intlDeliveryUsd[1] + (bigCar ? PRICING.bigCarExtraUsd[1] : 0);
+  const intlNote = bigCar ? "Хоргос → Минск · крупный кузов, дороже место" : "Хоргос → Минск, через Казахстан и Россию";
+
   const age = 2026 - car.year;
   let customsUsd = PRICING.evCustomsUsd;
   let customsNote = "Льгота 0% · оформление и сборы";
@@ -31,7 +60,17 @@ export function estimateLandedCost(car) {
   const customsSpread = car.type === "Электромобиль" ? 150 : Math.max(300, round50(customsUsd * .08));
   const customsLow = Math.max(0, customsUsd - customsSpread);
   const customsHigh = customsUsd + customsSpread;
-  const totalLow = round50(chinaUsd + PRICING.chinaHandling[0] + PRICING.delivery[0] + customsLow + PRICING.serviceUsd + PRICING.reserve[0]);
-  const totalHigh = round50(chinaUsd + PRICING.chinaHandling[1] + PRICING.delivery[1] + customsHigh + PRICING.serviceUsd + PRICING.reserve[1]);
-  return { chinaUsd, deliveryUsd:PRICING.deliveryUsd, deliveryLow:PRICING.delivery[0], deliveryHigh:PRICING.delivery[1], chinaHandlingLow:PRICING.chinaHandling[0], chinaHandlingHigh:PRICING.chinaHandling[1], customsUsd, customsLow, customsHigh, customsNote, serviceUsd:PRICING.serviceUsd, reserveLow:PRICING.reserve[0], reserveHigh:PRICING.reserve[1], totalLow, totalHigh, totalUsd:round50((totalLow + totalHigh) / 2) };
+
+  const totalLow = round50(chinaUsd + buyoutLow + chinaLegLow + intlLow + PRICING.svhUsd[0] + customsLow + PRICING.serviceUsd);
+  const totalHigh = round50(chinaUsd + buyoutHigh + chinaLegHigh + intlHigh + PRICING.svhUsd[1] + customsHigh + PRICING.serviceUsd);
+  return {
+    chinaUsd,
+    buyoutLow, buyoutHigh,
+    chinaLegLow, chinaLegHigh, chinaLegNote,
+    intlLow, intlHigh, intlNote,
+    svhLow:PRICING.svhUsd[0], svhHigh:PRICING.svhUsd[1],
+    customsUsd, customsLow, customsHigh, customsNote,
+    serviceUsd:PRICING.serviceUsd,
+    totalLow, totalHigh, totalUsd:round50((totalLow + totalHigh) / 2),
+  };
 }

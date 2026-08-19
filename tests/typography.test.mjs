@@ -11,6 +11,9 @@ const SMALL_TEXT_EXCEPTIONS = new Set([
   ".price-breakdown b",
   ".price-breakdown small",
   ".price-breakdown strong",
+  // Список сроков доставки повторяет вид разбивки цены — и её размер шрифта.
+  ".delivery-stages b",
+  ".delivery-stages strong",
   ".mini-specs > span",
   ".car-row .mini-specs > span",
   ".car-row .summary",
