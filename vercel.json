@@ -13,11 +13,11 @@
     },
     {
       "source": "/orders/:path*",
-      "destination": "/private.html"
+      "destination": "/private"
     },
     {
       "source": "/cars/:id",
-      "destination": "/car.html"
+      "destination": "/car"
     },
     {
       "source": "/analytics",
