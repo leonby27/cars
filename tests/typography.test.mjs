@@ -20,6 +20,7 @@ const SMALL_TEXT_EXCEPTIONS = new Set([
   ".auth-modal .auth-consent",
   ".vehicle-quick-info-label",
   ".select-option-count",
+  ".detail-action-tooltip",
 ]);
 
 test("CSS font sizes never fall below 16px outside explicit exceptions", async () => {

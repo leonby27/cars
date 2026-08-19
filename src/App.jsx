@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LockKey, MagnifyingGlass, MapPin, Moon, Rows, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, EnvelopeSimple, Eye, EyeSlash, Gauge, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, Sun, TelegramLogo, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
-import { carAnchorSelector, feedAnchorSelector, readCatalogReturn, saveCatalogReturn } from "./catalog-return.js";
+import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, saveCatalogReturn, saveCatalogReturnScroll } from "./catalog-return.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
@@ -243,6 +243,45 @@ function normalizeImportedCar(car) {
   };
 }
 
+// Safari отменяет history.replaceState/pushState чаще ~100 раз за 30 секунд
+// (Firefox — 200 за 10), и дальше запись истории молча остаётся без state: назад
+// жестом или кнопкой браузера открывает каталог без фильтров и без позиции.
+// Поэтому историю пишем редко, всегда через try/catch, а вторую копию снимка
+// держим в sessionStorage.
+const historyWriteInterval = 1000;
+const patchHistoryState = (patch) => {
+  try {
+    window.history.replaceState({ ...window.history.state, ...patch }, "");
+    return true;
+  } catch {
+    return false;
+  }
+};
+const replaceHistoryEntry = (state, url) => {
+  try {
+    window.history.replaceState(state, "", url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const pushHistoryEntry = (state, url) => {
+  try {
+    window.history.pushState(state, "", url);
+    return true;
+  } catch {
+    // Запись создать не дали — уходим обычным переходом, иначе адрес разойдётся
+    // с тем, что показано на экране. Снимок каталога поднимется из sessionStorage.
+    window.location.assign(url);
+    return false;
+  }
+};
+// Снимок относится к этому же экрану каталога, только если совпадает поисковая строка.
+const matchingCatalogReturn = () => {
+  const stored = readCatalogReturn();
+  return stored && stored.search === window.location.search ? stored : null;
+};
+
 function useRoute() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const appPath = (pathname) => {
@@ -256,31 +295,63 @@ function useRoute() {
     restoreOffset: 0,
     key: 0,
   });
+  const scrollSaveTimer = useRef(null);
+  const lastScrollSave = useRef(0);
+  const restoringScroll = useRef(false);
+  const dropScrollSave = () => {
+    if (scrollSaveTimer.current === null) return;
+    window.clearTimeout(scrollSaveTimer.current);
+    scrollSaveTimer.current = null;
+  };
+  const saveScrollNow = () => {
+    dropScrollSave();
+    lastScrollSave.current = Date.now();
+    patchHistoryState({ scrollY: window.scrollY });
+    // sessionStorage частотой не ограничен, поэтому позиция каталога всегда свежая.
+    if (appPath(window.location.pathname) === "/catalog") saveCatalogReturnScroll(window.scrollY, window.location.search);
+  };
   useEffect(() => {
     if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
-    const saveScroll = () => window.history.replaceState({ ...window.history.state, scrollY: window.scrollY }, "");
-    let scrollFrame = null;
+    // Не чаще одной записи в секунду: на каждый кадр прокрутки браузер перестаёт
+    // сохранять state вообще, вместе с фильтрами каталога.
     const onScroll = () => {
-      if (scrollFrame) return;
-      scrollFrame = requestAnimationFrame(() => {
-        scrollFrame = null;
-        saveScroll();
-      });
+      // Пока идёт доводка возврата, прокрутка — наша, а не пользователя: её
+      // промежуточные значения не должны затирать сохранённую позицию.
+      if (restoringScroll.current || scrollSaveTimer.current !== null) return;
+      scrollSaveTimer.current = window.setTimeout(saveScrollNow, Math.max(0, historyWriteInterval - (Date.now() - lastScrollSave.current)));
     };
-    const onPop = (event) =>
+    const onHide = () => {
+      if (scrollSaveTimer.current !== null) saveScrollNow();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") onHide();
+    };
+    const onPop = (event) => {
+      // Отложенная запись относилась к прежней записи истории: выполнить её сейчас
+      // значит подставить текущую прокрутку в ту, куда мы только что вернулись.
+      dropScrollSave();
+      const path = appPath(window.location.pathname);
+      const state = event.state || window.history.state || {};
+      const stored = (state.catalog || path !== "/catalog") ? null : matchingCatalogReturn();
+      const source = stored || state;
       setRoute((current) => ({
-        path: appPath(window.location.pathname),
-        restoreY: Number(event.state?.scrollY) || 0,
-        restoreAnchor: event.state?.scrollAnchor || null,
-        restoreOffset: Number(event.state?.scrollAnchorOffset) || 0,
+        path,
+        restoreY: Number(source.scrollY) || 0,
+        restoreAnchor: source.scrollAnchor || null,
+        restoreOffset: Number(source.scrollAnchorOffset) || 0,
         key: current.key + 1,
       }));
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("popstate", onPop);
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      if (scrollFrame) cancelAnimationFrame(scrollFrame);
+      dropScrollSave();
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("popstate", onPop);
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
   useEffect(() => {
@@ -291,8 +362,10 @@ function useRoute() {
     let cancelled = false;
     let coarseDone = false;
     let stable = 0;
+    restoringScroll.current = true;
     const stop = () => {
       cancelled = true;
+      restoringScroll.current = false;
       if (timer) window.clearTimeout(timer);
     };
     // Сохранённый scrollY — только грубая оценка: выдача догружается и
@@ -308,7 +381,10 @@ function useRoute() {
         const top = Math.max(0, Math.round(anchor.getBoundingClientRect().top + window.scrollY - restoreOffset));
         stable = Math.abs(top - window.scrollY) <= 1 ? stable + 1 : 0;
         if (!stable) window.scrollTo({ top, behavior: "instant" });
-        if (stable >= 3 || Date.now() >= deadline) return;
+        if (stable >= 3 || Date.now() >= deadline) {
+          restoringScroll.current = false;
+          return;
+        }
         timer = window.setTimeout(restore, 100);
         return;
       }
@@ -318,16 +394,26 @@ function useRoute() {
         window.scrollTo({ top: Math.min(target, maxScroll), behavior: "instant" });
         coarseDone = true;
       }
-      if (expired || (coarseDone && !restoreAnchor)) return;
+      if (expired || (coarseDone && !restoreAnchor)) {
+        restoringScroll.current = false;
+        return;
+      }
       timer = window.setTimeout(restore, 50);
     };
     timer = window.setTimeout(restore, 0);
-    // Взялся за прокрутку сам — доводку прекращаем.
-    const handOver = ["wheel", "touchstart", "keydown"];
-    for (const name of handOver) window.addEventListener(name, stop, { passive: true });
+    // Взялся за прокрутку сам — доводку прекращаем. Жест «назад» на трекпаде —
+    // это тоже wheel, и его инерция прилетает уже после popstate, поэтому ждём
+    // явного вертикального движения и не слушаем первые мгновения после перехода.
+    const grace = Date.now() + 300;
+    const handOver = (event) => {
+      if (event.type === "wheel" && (Date.now() < grace || Math.abs(event.deltaY) < 4)) return;
+      stop();
+    };
+    const handOverEvents = ["wheel", "touchstart", "keydown"];
+    for (const name of handOverEvents) window.addEventListener(name, handOver, { passive: true });
     return () => {
       stop();
-      for (const name of handOver) window.removeEventListener(name, stop);
+      for (const name of handOverEvents) window.removeEventListener(name, handOver);
     };
   }, [route.key, route.restoreY, route.restoreAnchor, route.restoreOffset]);
   const navigate = (next, { replace = false, preserveScroll = false, catalogState = null } = {}) => {
@@ -340,16 +426,19 @@ function useRoute() {
     const targetPath = appPath(target.pathname);
     const keepScrollPosition = preserveScroll || targetPath === "/login" || targetPath === "/register";
     const targetUrl = `${basePath}${target.pathname}${target.search}${target.hash}`;
+    dropScrollSave();
     if (replace) {
       const currentIsAuthRoute = currentPath === "/login" || currentPath === "/register";
-      window.history.replaceState(
+      replaceHistoryEntry(
         { ...window.history.state, fromPath: currentIsAuthRoute ? window.history.state?.fromPath || "/" : currentPath, scrollY: window.scrollY },
-        "",
         targetUrl,
       );
     } else {
-      window.history.replaceState({ ...window.history.state, scrollY: window.scrollY }, "");
-      window.history.pushState(
+      patchHistoryState({ scrollY: window.scrollY });
+      // Свежий заход в каталог (меню, ссылка с главной) — не возврат: прошлый
+      // снимок фильтров к этому экрану уже не относится.
+      if (targetPath === "/catalog" && !catalogState) clearCatalogReturn();
+      pushHistoryEntry(
         {
           fromPath: currentPath,
           scrollY: Number(catalogState?.scrollY) || 0,
@@ -357,7 +446,6 @@ function useRoute() {
             ? { catalog: catalogState.catalog, scrollAnchor: catalogState.scrollAnchor || null, scrollAnchorOffset: Number(catalogState.scrollAnchorOffset) || 0 }
             : {}),
         },
-        "",
         targetUrl,
       );
     }
@@ -399,6 +487,15 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
     navigate(href);
   };
   return <a href={appHref(href)} onClick={handleClick} {...props}>{children}</a>;
+}
+
+// Карточка должна вести себя как ссылка целиком: правый клик по любому её месту
+// открывает системное меню ссылки, а не картинки, а средняя кнопка и ⌘-клик уводят
+// в новую вкладку силами браузера. Обычный клик отдаём обработчику карточки — он
+// успевает запомнить позицию возврата в каталог. Заголовок карточки и так ссылка,
+// поэтому подложку убираем и с клавиатуры, и из скринридеров, чтобы не дублировать.
+function CardLinkOverlay({ car, open }) {
+  return <AppLink className="card-link-overlay" href={`/cars/${car.id}`} navigate={open} onClick={(event) => event.stopPropagation()} tabIndex={-1} aria-hidden="true" />;
 }
 
 function ScrollToTopButton() {
@@ -508,6 +605,18 @@ function ClientSeo({ path, car, landing }) {
   return null;
 }
 
+/* Both theme variants ship in the markup and CSS reveals the matching one: the
+   theme attribute is set before first paint, so swapping `src` from React state
+   would only add a flash of the wrong logo on hydration. */
+function SiteLogo() {
+  return (
+    <>
+      <img className="wordmark-image wordmark-image-light" src="/logo-light.svg" width="480" height="100" alt="" aria-hidden="true" />
+      <img className="wordmark-image wordmark-image-dark" src="/logo-dark.svg" width="480" height="100" alt="" aria-hidden="true" />
+    </>
+  );
+}
+
 function Header({ navigate, favoritesCount, path, currency, setCurrency, user, theme, toggleTheme }) {
   const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -535,9 +644,8 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
   return (
     <header className="site-header">
       <div className="header-inner">
-        <AppLink className="wordmark" href="/" navigate={navigate} aria-label="На главную">
-          ev<span>cars</span>
-          <small>.by</small>
+        <AppLink className="wordmark" href="/" navigate={navigate} aria-label="evcars.by — на главную">
+          <SiteLogo />
         </AppLink>
         <div className="header-menu-shell" ref={menuRef}>
           <button
@@ -1099,6 +1207,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
   const [active, setActive] = useState(0);
   const preloadStarted = useRef(false);
+  const frameRef = useRef(null);
   const mobileStripRef = useRef(null);
   const mobileStripStart = useRef(0);
   const mobileStripMoved = useRef(false);
@@ -1111,15 +1220,31 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
       image.src = imageSource(src);
     });
   };
-  const selectByCursor = (event) => {
-    if (images.length < 2) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const progress = Math.min(0.9999, Math.max(0, (event.clientX - bounds.left) / bounds.width));
-    setActive(Math.floor(progress * images.length));
-  };
+  // Карточку целиком перекрывает ссылка-подложка, поэтому до самого превью события
+  // мыши не доходят: слушаем их на карточке, а кадр считаем по границам картинки.
+  useEffect(() => {
+    const frame = frameRef.current;
+    const card = frame?.closest("[data-car-id]") || frame;
+    if (!card || images.length < 2) return undefined;
+    const selectByCursor = (event) => {
+      const bounds = frame.getBoundingClientRect();
+      const inside = event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+      if (!inside) return setActive(0);
+      preload();
+      const progress = Math.min(0.9999, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+      setActive(Math.floor(progress * images.length));
+    };
+    const reset = () => setActive(0);
+    card.addEventListener("mousemove", selectByCursor);
+    card.addEventListener("mouseleave", reset);
+    return () => {
+      card.removeEventListener("mousemove", selectByCursor);
+      card.removeEventListener("mouseleave", reset);
+    };
+  }, [car.id, images.length]);
 
   return (
-    <div className={`${className} hover-image-preview`} onMouseEnter={preload} onMouseMove={selectByCursor} onMouseLeave={() => setActive(0)}>
+    <div className={`${className} hover-image-preview`} ref={frameRef}>
       <img src={imageSource(images[active])} alt={car.title} draggable="false" />
       {mobileStrip && (
         <div
@@ -1164,12 +1289,13 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
   );
 }
 
-function FeaturedCard({ car, onClick, navigate, favorite, toggleFavorite, anchorKey }) {
+function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
   const currency = useCurrency();
   const price = estimateLandedCost(car);
   const listingAge = formatListingAge(getSourceListedAt(car));
   return (
     <article className="featured-card" data-car-id={car.id} data-feed-key={anchorKey} onClick={onClick} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}>
+      <CardLinkOverlay car={car} open={onClick} />
       <HoverImagePreview car={car} className="featured-image" />
       {toggleFavorite && (
         <button
@@ -1185,7 +1311,7 @@ function FeaturedCard({ car, onClick, navigate, favorite, toggleFavorite, anchor
         </button>
       )}
       <div className="featured-body">
-        <h3><AppLink href={`/cars/${car.id}`} navigate={navigate} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
+        <h3><AppLink href={`/cars/${car.id}`} navigate={onClick} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
         <p>
           {number(car.mileage)} км · {car.type} · {car.drive}
         </p>
@@ -1206,7 +1332,7 @@ function FeaturedCard({ car, onClick, navigate, favorite, toggleFavorite, anchor
 // Five rows of the four-column grid, matching the home page feed.
 const SIMILAR_CARS_BATCH = 20;
 
-function SimilarCars({ car, cars, navigate }) {
+function SimilarCars({ car, cars, onOpenCar }) {
   const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars]);
   const [visibleCount, setVisibleCount] = useState(SIMILAR_CARS_BATCH);
 
@@ -1221,7 +1347,7 @@ function SimilarCars({ car, cars, navigate }) {
       </div>
       <div className="featured-grid">
         {similarCars.slice(0, visibleCount).map((candidate) => (
-          <FeaturedCard key={candidate.id} car={candidate} navigate={navigate} onClick={() => navigate(`/cars/${candidate.id}`)} />
+          <FeaturedCard key={candidate.id} car={candidate} onClick={() => onOpenCar(candidate)} />
         ))}
       </div>
       {visibleCount < similarCars.length && (
@@ -1496,18 +1622,18 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
     return restored;
   };
   const [feedCars, setFeedCars] = useState(() => restoreFeed(window.history.state?.feed) || takeRandomBatch());
+  const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
   const openFeedCar = (item) => {
     const scrollAnchor = feedAnchorSelector(item.key);
     const node = document.querySelector(scrollAnchor);
-    window.history.replaceState(
-      {
-        ...window.history.state,
-        feed: feedCars.slice(0, 600).map(({ car, key }) => ({ id:car.id, key })),
-        scrollAnchor,
-        scrollAnchorOffset: node ? Math.round(node.getBoundingClientRect().top) : 0,
-      },
-      "",
-    );
+    patchHistoryState({
+      feed: feedCars.slice(0, 600).map(({ car, key }) => ({ id:car.id, key })),
+      scrollAnchor,
+      scrollAnchorOffset: node ? Math.round(node.getBoundingClientRect().top) : 0,
+    });
+    // Быстрый просмотр дополняет страницу автомобиля: со стрелки в модалке
+    // уходят на неё же, поэтому позицию возврата запоминаем в любом случае.
+    if (openQuickView(item.car)) return;
     navigate(`/cars/${item.car.id}`);
   };
 
@@ -1572,8 +1698,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
       </section>
       <section className="featured page-width">
         <div className="section-heading">
-          <div>
+          <div className="section-heading-title">
             <h2>Каталог</h2>
+            {quickViewToggle}
           </div>
           <AppLink className="section-heading-link" href="/catalog" navigate={navigate}>
             Все автомобили <ArrowRight size={18} />
@@ -1600,7 +1727,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
             {showSkeletons
               ? skeletonCards.map((key) => <CardSkeleton key={key} />)
               : feedCars.map(({ car, key }) => (
-                  <FeaturedCard key={key} anchorKey={key} car={car} navigate={navigate} onClick={() => openFeedCar({ car, key })} />
+                  <FeaturedCard key={key} anchorKey={key} car={car} onClick={() => openFeedCar({ car, key })} />
                 ))}
           </div>
         )}
@@ -1612,6 +1739,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
       </section>
       <HomeConversionSections navigate={navigate} />
       <ScrollToTopButton />
+      {quickViewModal}
     </main>
   );
 }
@@ -1675,9 +1803,10 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
   const listingAge = formatListingAge(getSourceListedAt(car));
   return (
     <article className="car-row" data-car-id={car.id} data-feed-key={anchorKey} onClick={open} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && open()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}>
+      <CardLinkOverlay car={car} open={open} />
       <div className="car-row-mobile-header">
         <div>
-          <h2><AppLink href={`/cars/${car.id}`} navigate={navigate} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
+          <h2><AppLink href={`/cars/${car.id}`} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
           <strong>≈ {money(price.totalUsd, currency)}</strong>
         </div>
         <button
@@ -1696,7 +1825,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <div className="car-row-info">
         <div className="row-title">
           <div>
-            <h2><AppLink href={`/cars/${car.id}`} navigate={navigate} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
+            <h2><AppLink href={`/cars/${car.id}`} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
           </div>
           <div className="row-actions">
             <button
@@ -1802,8 +1931,11 @@ function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
   return { favoriteCars, hasUnresolved:missingIds.length > 0 };
 }
 
-function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnavailableFavorites }) {
+function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnavailableFavorites, saving = false }) {
   const { favoriteCars, hasUnresolved } = useFavoriteCars(cars, favorites, apiMode, onUnavailableFavorites);
+  // The car saved during registration lands here a moment after the page does, so the
+  // empty state would be a lie for that moment.
+  const awaitingCars = hasUnresolved || saving;
   return (
     <main className="catalog favorites-page page-width">
       <div className="breadcrumbs">
@@ -1824,7 +1956,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
             <CarRow key={car.id} car={car} navigate={navigate} favorite toggleFavorite={toggleFavorite} />
           ))}
         </div>
-      ) : hasUnresolved ? (
+      ) : awaitingCars ? (
         <div className="account-section-loading" aria-live="polite">Загружаем сохранённые автомобили…</div>
       ) : (
         <div className="empty-state favorites-empty">
@@ -1892,7 +2024,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     battery: batteryOptions.includes(rawBattery) ? rawBattery : ANY_BATTERY,
     condition: conditionOptions.includes(rawCondition) ? rawCondition : ANY_CONDITION,
   };
-  const restoredCatalog = window.history.state?.catalog;
+  const restoredCatalog = window.history.state?.catalog || matchingCatalogReturn()?.catalog || null;
   const [filters, setFilters] = useState(() => ({
     ...initialFilters,
     ...(restoredCatalog?.filters || {}),
@@ -1916,12 +2048,16 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const [loadedLimit, setLoadedLimit] = useState(() => Math.max(pageSize, Number(restoredCatalog?.loadedCount) || pageSize));
   const restoredOrder = useRef(restoredCatalog?.order || null);
   const [view, setView] = useState(readCatalogView);
+  const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:useApi, favorites, toggleFavorite, navigate });
   const loadMoreTarget = useRef(null);
   const loadMoreRequest = useRef(null);
   const loadingMore = useRef(false);
   const persistCatalogState = (anchor = {}) => {
     const state = window.history.state || {};
-    const pick = (key, fallback) => (anchor[key] !== undefined ? anchor[key] : state[key] ?? fallback);
+    // Запись истории могла остаться без state — тогда якорь и открытую карточку
+    // берём из копии в sessionStorage, иначе первый же persist затрёт их пустыми.
+    const stored = state.catalog ? null : matchingCatalogReturn();
+    const pick = (key, fallback) => (anchor[key] !== undefined ? anchor[key] : state[key] ?? stored?.[key] ?? fallback);
     const scrollAnchor = pick("scrollAnchor", null);
     const scrollAnchorOffset = Number(pick("scrollAnchorOffset", 0)) || 0;
     const openedCarId = pick("openedCarId", null);
@@ -1932,7 +2068,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       loadedCount: Math.max(loadedLimit, remoteCars.length),
       order: remoteCars.slice(0, 600).map((car) => car.id),
     };
-    window.history.replaceState({ ...state, catalog, scrollAnchor, scrollAnchorOffset, openedCarId }, "");
+    patchHistoryState({ catalog, scrollAnchor, scrollAnchorOffset, openedCarId });
     saveCatalogReturn({ catalog, scrollAnchor, scrollAnchorOffset, openedCarId, scrollY: window.scrollY, search: window.location.search });
   };
   // Новая выдача — старый якорь и старый порядок уже ни на что не указывают.
@@ -1943,9 +2079,14 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const openCar = (car) => {
     // Save synchronously before leaving the catalog. The effect below is useful
     // for regular updates, but can otherwise lag behind a quick filter + click.
+    // Быстрый просмотр тоже запоминает позицию: из него уходят на полную
+    // страницу стрелкой, и «назад» должен вернуть к этой же карточке.
     const scrollAnchor = carAnchorSelector(car.id);
     const node = document.querySelector(scrollAnchor);
     persistCatalogState({ scrollAnchor, scrollAnchorOffset: node ? Math.round(node.getBoundingClientRect().top) : 0, openedCarId: car.id });
+    // На десктопе карточка раскрывается быстрым просмотром: выдача, фильтры и
+    // позиция прокрутки остаются на месте, уходить со страницы незачем.
+    if (openQuickView(car)) return;
     navigate(`/cars/${car.id}`);
   };
   const updateFilters = (updater) => {
@@ -2172,6 +2313,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
           <div className="result-tools">
             <div className="result-summary">
               <b>{knownResultCount == null ? "Загружаем" : `${knownResultCount} найдено`}</b>
+              {quickViewToggle}
             </div>
             <div className="result-controls">
               <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => updateSort(sortOptions.find((option) => option.label === label)?.value || "default")} />
@@ -2204,7 +2346,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
             view === "grid" ? (
               <div className="featured-grid catalog-card-grid">
                 {displayed.map((car) => (
-                  <FeaturedCard key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
+                  <FeaturedCard key={car.id} car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
                 ))}
               </div>
             ) : (
@@ -2259,6 +2401,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       </div>
       <ScrollToTopButton />
       {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
+      {quickViewModal}
     </main>
   );
 }
@@ -2667,7 +2810,7 @@ function CustomSearchModal({ filters, onClose }) {
   );
 }
 
-function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }) {
+function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorites, toggleFavorite }) {
   // Шаг назад по истории возвращает и фильтры, и позицию карточки, поэтому
   // кнопка идёт именно им. Прямой заход историей не подкреплён — тогда в каталог.
   const goBack = () => (window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : backToCatalog(car.id));
@@ -2684,6 +2827,148 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
       catalogState: { ...stored, catalog: { ...stored.catalog, filters: { ...stored.catalog.filters, brand: car.brand, model: [] }, order: [] }, scrollY: 0, scrollAnchor: null },
     });
   };
+  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
+  const openSimilarCar = (candidate) => {
+    if (openQuickView(candidate)) return;
+    navigate(`/cars/${candidate.id}`);
+  };
+  if (!car) return <NotFound navigate={navigate} />;
+  return (
+    <main className="detail page-width">
+      <div className="breadcrumbs">
+        <button onClick={() => navigate("/")}>Главная</button>
+        <CaretRight size={13} />
+        <button onClick={() => backToCatalog(car.id)}>Автомобили из Китая</button>
+        <CaretRight size={13} />
+        <button onClick={openBrand}>{car.brand}</button>
+        <CaretRight size={13} />
+        {car.model} {car.year}
+      </div>
+      <VehicleDetailBody car={car} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} />
+      <SimilarCars car={car} cars={cars} onOpenCar={openSimilarCar} />
+      {quickViewModal}
+    </main>
+  );
+}
+
+// Тело карточки автомобиля. Страница и быстрый просмотр в каталоге показывают
+// одни и те же блоки, поэтому они живут отдельно от обвязки страницы: крошек,
+// кнопки назад и похожих авто в быстром просмотре нет.
+// Подсказка к круглым кнопкам действий: над кнопкой и по центру, а если сверху
+// места нет — под ней. Координаты считаем от кнопки в координатах окна: в быстром
+// просмотре строка действий стоит у самого края прокручиваемой области, и
+// подсказка внутри потока обрезалась бы её границами — и сверху, и справа.
+function ActionTooltip({ text }) {
+  const tooltipRef = useRef(null);
+  const [visible, setVisible] = useState(false);
+  const [box, setBox] = useState(null);
+  const place = useCallback(() => {
+    const tooltip = tooltipRef.current;
+    const button = tooltip?.parentElement;
+    if (!button) return;
+    const anchor = button.getBoundingClientRect();
+    const gap = 8;
+    const edge = 10;
+    const width = tooltip.offsetWidth;
+    const height = tooltip.offsetHeight;
+    const above = anchor.top - gap - height >= edge;
+    const centered = anchor.left + anchor.width / 2 - width / 2;
+    setBox({
+      above,
+      top: Math.round(above ? anchor.top - gap - height : anchor.bottom + gap),
+      left: Math.round(Math.min(Math.max(edge, centered), Math.max(edge, window.innerWidth - width - edge))),
+    });
+  }, []);
+  useEffect(() => {
+    const button = tooltipRef.current?.parentElement;
+    if (!button) return undefined;
+    const show = () => {
+      place();
+      setVisible(true);
+    };
+    const hide = () => setVisible(false);
+    button.addEventListener("mouseenter", show);
+    button.addEventListener("mouseleave", hide);
+    button.addEventListener("focus", show);
+    button.addEventListener("blur", hide);
+    return () => {
+      button.removeEventListener("mouseenter", show);
+      button.removeEventListener("mouseleave", hide);
+      button.removeEventListener("focus", show);
+      button.removeEventListener("blur", hide);
+    };
+  }, [place]);
+  // Текст меняется на «Ссылка скопирована» — вместе с ним меняется и ширина.
+  useEffect(() => {
+    if (visible) place();
+  }, [text, visible, place]);
+  useEffect(() => {
+    if (!visible) return undefined;
+    const update = () => place();
+    window.addEventListener("scroll", update, { passive:true, capture:true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, { capture:true });
+      window.removeEventListener("resize", update);
+    };
+  }, [visible, place]);
+  return (
+    <span
+      ref={tooltipRef}
+      className={`detail-action-tooltip${box?.above === false ? " is-below" : ""}${visible ? " is-visible" : ""}`}
+      style={box ? { top:`${box.top}px`, left:`${box.left}px` } : undefined}
+      aria-hidden="true"
+    >
+      {text}
+    </span>
+  );
+}
+
+// Ссылку кладём в буфер обмена: без доступа к Clipboard API (http, отказ в
+// разрешении) остаётся старый путь через скрытое поле.
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {}
+  try {
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.setAttribute("readonly", "");
+    field.style.position = "fixed";
+    field.style.top = "0";
+    field.style.opacity = "0";
+    document.body.appendChild(field);
+    field.select();
+    const copied = document.execCommand("copy");
+    field.remove();
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
+function CopyLinkButton({ car }) {
+  const [state, setState] = useState("idle");
+  useEffect(() => {
+    if (state === "idle") return undefined;
+    const timer = window.setTimeout(() => setState("idle"), 2200);
+    return () => window.clearTimeout(timer);
+  }, [state]);
+  const hint = state === "copied" ? "Ссылка скопирована" : state === "failed" ? "Не удалось скопировать" : "Копировать ссылку";
+  const copy = async () => {
+    const link = new URL(appHref(`/cars/${car.id}`), window.location.origin).href;
+    setState((await copyToClipboard(link)) ? "copied" : "failed");
+  };
+  return (
+    <button type="button" aria-label={hint} onClick={copy}>
+      <LinkSimple size={21} />
+      <ActionTooltip text={hint} />
+    </button>
+  );
+}
+
+function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true }) {
   const currency = useCurrency();
   const [availabilityUnavailableOpen, setAvailabilityUnavailableOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
@@ -2701,12 +2986,12 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
     observer.observe(cta);
     return () => observer.disconnect();
   }, [car?.id]);
-  if (!car) return <NotFound navigate={navigate} />;
   const price = estimateLandedCost(car);
   const openAvailabilityModal = () => {
     trackEvent("availability_click", { listingId:car.id, listingTitle:car.title });
     setAvailabilityUnavailableOpen(true);
   };
+  const favoriteHint = favorite ? "Удалить из избранного" : "Добавить в избранное";
   const quickInfo = buildVehicleQuickInfo(car);
   const specs = [
     [CalendarBlank, "Год", car.year],
@@ -2724,23 +3009,23 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
     [Gauge, "Здоровье батареи", car.batteryHealth ? `${car.batteryHealth}%` : "Не указано"],
   ];
   return (
-    <main className="detail page-width">
-      <div className="breadcrumbs">
-        <button onClick={() => navigate("/")}>Главная</button>
-        <CaretRight size={13} />
-        <button onClick={() => backToCatalog(car.id)}>Автомобили из Китая</button>
-        <CaretRight size={13} />
-        <button onClick={openBrand}>{car.brand}</button>
-        <CaretRight size={13} />
-        {car.model} {car.year}
-      </div>
+    <>
       <div className="detail-title">
         <div>
           <div className="detail-title-line">
-            <button type="button" className="detail-back" aria-label="Назад" onClick={goBack}>
-              <ArrowLeft size={20} />
-            </button>
+            {goBack && (
+              <button type="button" className="detail-back" aria-label="Назад" onClick={goBack}>
+                <ArrowLeft size={20} />
+                <ActionTooltip text="Назад" />
+              </button>
+            )}
             <h1>{car.title}</h1>
+            {openFull && (
+              <AppLink className="detail-back detail-open-full" href={`/cars/${car.id}`} navigate={openFull} aria-label="Открыть полную страницу автомобиля">
+                <ArrowUpRight size={20} />
+                <ActionTooltip text="Открыть полную страницу" />
+              </AppLink>
+            )}
           </div>
           <strong className="detail-mobile-price">
             {approximateMoney(price.totalLow, price.totalHigh, currency)}
@@ -2750,11 +3035,10 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
           </p>
         </div>
         <div className="detail-actions">
-          <button aria-label="Поделиться">
-            <ShareNetwork size={21} />
-          </button>
-          <button aria-label="Добавить в избранное" className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}>
+          <CopyLinkButton car={car} />
+          <button aria-label={favoriteHint} className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}>
             <Heart size={21} weight={favorite ? "fill" : "regular"} />
+            <ActionTooltip text={favoriteHint} />
           </button>
         </div>
       </div>
@@ -2773,7 +3057,7 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
           </section>
           <aside className="source-card detail-source-card">
             <h3>Источник объявления</h3>
-            <p className="source-meta">ID {car.sourceId}</p>
+            {car.sourceId && <p className="source-meta">ID {car.sourceId}</p>}
             <small>Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</small>
           </aside>
         </div>
@@ -2861,15 +3145,144 @@ function Detail({ car, cars, navigate, backToCatalog, favorite, toggleFavorite }
           </aside>
         </div>
       </div>
-      <SimilarCars car={car} cars={cars} navigate={navigate} />
-      <div className={`detail-floating-availability${availabilityCtaVisible || availabilityUnavailableOpen ? " is-hidden" : ""}`} aria-hidden={availabilityCtaVisible || availabilityUnavailableOpen}>
-        <button className="primary" type="button" onClick={openAvailabilityModal} tabIndex={availabilityCtaVisible || availabilityUnavailableOpen ? -1 : 0}>
-          Уточнить актуальность авто
-        </button>
-      </div>
+      {floatingCta && (
+        <div className={`detail-floating-availability${availabilityCtaVisible || availabilityUnavailableOpen ? " is-hidden" : ""}`} aria-hidden={availabilityCtaVisible || availabilityUnavailableOpen}>
+          <button className="primary" type="button" onClick={openAvailabilityModal} tabIndex={availabilityCtaVisible || availabilityUnavailableOpen ? -1 : 0}>
+            Уточнить актуальность авто
+          </button>
+        </div>
+      )}
       {availabilityUnavailableOpen && <AvailabilityUnavailableModal onClose={() => setAvailabilityUnavailableOpen(false)} />}
-    </main>
+    </>
   );
+}
+
+// Быстрый просмотр — только для десктопа: на узком экране модалка повторяла бы
+// всю страницу автомобиля и мешала бы прокрутке выдачи.
+const DESKTOP_VIEWPORT = "(min-width: 981px)";
+
+function useDesktopViewport() {
+  const [desktop, setDesktop] = useState(() => window.matchMedia(DESKTOP_VIEWPORT).matches);
+  useEffect(() => {
+    const media = window.matchMedia(DESKTOP_VIEWPORT);
+    const update = () => setDesktop(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return desktop;
+}
+
+// Выдача из API несёт карточку целиком, статическая сборка — только сводку,
+// поэтому для быстрого просмотра полную карточку в этом режиме дозапрашиваем.
+function useQuickViewCar(listed, apiMode) {
+  const id = listed?.id || null;
+  const [detail, setDetail] = useState(null);
+  const [failedId, setFailedId] = useState(null);
+  const detailed = detail?.id === id ? detail.car : null;
+  const needsDetail = Boolean(id) && !detailed && failedId !== id && Boolean(listed?._summary);
+  useEffect(() => {
+    if (!needsDetail) return undefined;
+    const controller = new AbortController();
+    const request = apiMode
+      ? fetch(`/api/cars/${encodeURIComponent(id)}`, { signal:controller.signal }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("not found"))))
+      : loadStaticCar(id, controller.signal);
+    request
+      .then((loadedCar) => setDetail({ id, car:normalizeImportedCar(loadedCar) }))
+      .catch((error) => {
+        if (error.name !== "AbortError") setFailedId(id);
+      });
+    return () => controller.abort();
+  }, [apiMode, id, needsDetail]);
+  return detailed || listed;
+}
+
+function VehicleQuickViewModal({ car, favorite, toggleFavorite, onOpenFull, onClose }) {
+  const closeRef = useRef(null);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      // Галерея и модалка наличия открываются поверх и закрываются сами.
+      if (document.querySelector(".gallery-modal, .modal-backdrop")) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
+  return (
+    <div className="quick-view-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="quick-view-modal" role="dialog" aria-modal="true" aria-label={`Быстрый просмотр: ${car.title}`}>
+        <header className="quick-view-bar">
+          <span>Быстрый просмотр</span>
+          <button ref={closeRef} className="quick-view-close" type="button" onClick={onClose} aria-label="Закрыть быстрый просмотр">
+            <X size={19} />
+          </button>
+        </header>
+        <div className="quick-view-scroll">
+          <VehicleDetailBody car={car} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// Быстрый просмотр включён по умолчанию, но это дополнение к странице
+// автомобиля: свитчер рядом с выдачей возвращает обычный переход по клику.
+const quickViewKey = "evcars-quick-view";
+const readQuickViewEnabled = () => window.localStorage.getItem(quickViewKey) !== "off";
+
+function QuickViewToggle({ checked, onChange }) {
+  return (
+    <label className="quick-view-toggle">
+      <input type="checkbox" role="switch" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span className="quick-view-toggle-track" aria-hidden="true">
+        <i />
+      </span>
+      <span className="quick-view-toggle-label">Быстрый просмотр</span>
+    </label>
+  );
+}
+
+// Быстрый просмотр открывается с карточек главной, каталога и похожих авто.
+// В избранном его нет: там карточку открывают, чтобы работать с ней целиком.
+function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate }) {
+  const desktop = useDesktopViewport();
+  const [enabled, setEnabled] = useState(readQuickViewEnabled);
+  const [listed, setListed] = useState(null);
+  const car = useQuickViewCar(listed, apiMode);
+  const close = useCallback(() => setListed(null), []);
+  const changeEnabled = (value) => {
+    setEnabled(value);
+    window.localStorage.setItem(quickViewKey, value ? "on" : "off");
+    if (!value) setListed(null);
+  };
+  // Стрелка у названия уводит на полную страницу: модалку закрываем, иначе она
+  // осталась бы висеть поверх только что открытой карточки.
+  const openFullView = (href) => {
+    setListed(null);
+    navigate(href);
+  };
+  // Окно сузилось до мобильной раскладки — быстрый просмотр закрываем.
+  useEffect(() => {
+    if (!desktop) setListed(null);
+  }, [desktop]);
+  // true — карточка раскрыта модалкой, переходить на страницу не нужно.
+  const openQuickView = (nextCar) => {
+    if (!desktop || !enabled || !nextCar) return false;
+    setListed(nextCar);
+    return true;
+  };
+  return {
+    openQuickView,
+    // Свитчер нужен только там, где быстрый просмотр вообще работает.
+    quickViewToggle: desktop ? <QuickViewToggle checked={enabled} onChange={changeEnabled} /> : null,
+    quickViewModal: car ? <VehicleQuickViewModal car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpenFull={openFullView} onClose={close} /> : null,
+  };
 }
 
 function DataTag({ type }) {
@@ -3748,7 +4161,7 @@ function SiteFooter({ navigate }) {
     <footer className="site-footer">
       <div className="page-width footer-main">
         <div className="footer-brand">
-          <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="На главную">ev<span>cars</span><small>.by</small></AppLink>
+          <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="evcars.by — на главную"><SiteLogo /></AppLink>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
           <div className="footer-socials">
             <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramLogo size={27} weight="fill" /></a>
@@ -4018,10 +4431,11 @@ function AvailabilityUnavailableModal({ onClose }) {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", closeOnEscape);
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", closeOnEscape);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
     };
   }, [onClose]);
   return (
@@ -4041,7 +4455,7 @@ function AvailabilityUnavailableModal({ onClose }) {
   );
 }
 
-function AuthModal({ mode, navigate, onAuthenticate, pending, onClose }) {
+function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectTo = "/account" }) {
   const registering = mode === "register";
   const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:true });
   const [error, setError] = useState("");
@@ -4061,7 +4475,7 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose }) {
     if (registering && !values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
     try {
       await onAuthenticate(mode, values);
-      navigate("/account", { replace:true });
+      navigate(redirectTo, { replace:true });
     } catch (authError) {
       setError(authMessages[authError.message] || "Не удалось продолжить. Попробуйте ещё раз.");
     }
@@ -4601,6 +5015,11 @@ export function App() {
   const targetId = detailId || orderId;
   // Filled once the session is known: a signed-out visitor has no favourites.
   const [favorites, setFavorites] = useState(() => new Set());
+  // True once the account's list has arrived, so a pending heart is added to it and not
+  // overwritten by the load that answers right after.
+  const [favoritesReady, setFavoritesReady] = useState(false);
+  // The car a signed-out visitor tried to save: added as soon as the account exists.
+  const [pendingFavorite, setPendingFavorite] = useState(null);
   const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "BYN" ? "BYN" : "USD"));
   const [themeMode, setThemeMode] = useState(() => {
     const savedTheme = window.localStorage.getItem("evcars-theme");
@@ -4659,9 +5078,15 @@ export function App() {
     let cancelled = false;
     if (!user) {
       setFavorites(new Set());
+      setFavoritesReady(false);
       return undefined;
     }
     const localKey = accountFavoritesKey(user.id);
+    const applyFavorites = (values) => {
+      if (cancelled) return;
+      setFavorites(values);
+      setFavoritesReady(true);
+    };
     const loadLocalFavorites = () => {
       let values = readFavorites(localKey);
       try {
@@ -4671,7 +5096,7 @@ export function App() {
           window.localStorage.setItem(favoritesMigrationKey, user.id);
         }
       } catch {}
-      if (!cancelled) setFavorites(values);
+      applyFavorites(values);
     };
     if (authBackend === "local") {
       loadLocalFavorites();
@@ -4684,7 +5109,7 @@ export function App() {
         if (!response.ok) throw new Error(payload.error || "favorites_load_failed");
         return payload;
       })
-      .then((payload) => { if (!cancelled) setFavorites(new Set(Array.isArray(payload.ids) ? payload.ids : [])); })
+      .then((payload) => applyFavorites(new Set(Array.isArray(payload.ids) ? payload.ids : [])))
       .catch(() => {
         if (cancelled) return;
         setAuthBackend("local");
@@ -4766,8 +5191,10 @@ export function App() {
   }, [apiMode, targetId, cars, loading]);
   const toggleFavorite = (id) => {
     // Saving without an account would strand the list in this browser, so the
-    // heart offers registration instead of storing anything.
+    // heart offers registration instead of storing anything — and the car is held
+    // aside so signing in finishes the click the visitor already made.
     if (!user) {
+      setPendingFavorite(id);
       navigate("/register", { replace:true, preserveScroll:true });
       return;
     }
@@ -4796,6 +5223,16 @@ export function App() {
       })
       .catch(() => setFavorites(previous));
   };
+  // The heart pressed before signing in. Waiting for the account list keeps the car from
+  // being wiped by the load that answers right after registration, and the visitor lands
+  // where the click promised instead of in the profile.
+  useEffect(() => {
+    if (!pendingFavorite || !user || !favoritesReady) return;
+    const id = pendingFavorite;
+    setPendingFavorite(null);
+    if (!favorites.has(id)) toggleFavorite(id);
+    if (path !== "/favorites") navigate("/favorites", { replace:true });
+  }, [favorites, favoritesReady, path, pendingFavorite, user]);
   const pruneUnavailableFavorites = useCallback((ids) => {
     const unavailable = ids.filter((id) => favorites.has(id));
     if (!unavailable.length) return;
@@ -4943,6 +5380,7 @@ export function App() {
   const contentPath = authRoute || authModalOpen ? authBackgroundPath : path;
   const showAccountFromAuthRoute = authRoute && Boolean(user);
   const closeAuthModal = () => {
+    setPendingFavorite(null);
     navigate(authBackgroundPath, { replace:true, preserveScroll:true });
   };
   // Pages built entirely from static content must never wait on the catalog request, and the
@@ -4989,13 +5427,13 @@ export function App() {
     ) : showAccountFromAuthRoute ? (
       <AccountPage user={user} cars={cars} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} />
     ) : contentPath === "/favorites" ? (
-      <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} />
+      <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} saving={Boolean(pendingFavorite) || !favoritesReady} />
     ) : contentPath === "/account" ? (
       authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : null
     ) : orderId ? (
       <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
     ) : detailId ? (
-      <Detail car={cars.find((item) => item.id === detailId)} cars={cars} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} toggleFavorite={toggleFavorite} />
+      <Detail car={cars.find((item) => item.id === detailId)} cars={cars} apiMode={apiMode} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : (
       <NotFound navigate={navigate} />
     );
@@ -5020,7 +5458,16 @@ export function App() {
         {page}
         <SiteFooter navigate={navigate} />
       </div>
-      {authModalOpen && <AuthModal mode={path === "/register" || path === "/favorites" ? "register" : "login"} navigate={navigate} onAuthenticate={authenticate} pending={authPending} onClose={closeAuthModal} />}
+      {authModalOpen && (
+        <AuthModal
+          mode={path === "/register" || path === "/favorites" ? "register" : "login"}
+          navigate={navigate}
+          onAuthenticate={authenticate}
+          pending={authPending}
+          onClose={closeAuthModal}
+          redirectTo={pendingFavorite || path === "/favorites" ? "/favorites" : "/account"}
+        />
+      )}
     </CurrencyContext.Provider>
   );
 }

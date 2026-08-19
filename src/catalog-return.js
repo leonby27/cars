@@ -22,3 +22,17 @@ export function readCatalogReturn() {
     return null;
   }
 }
+
+export function clearCatalogReturn() {
+  try {
+    window.sessionStorage.removeItem(storageKey);
+  } catch {}
+}
+
+// Позицию прокрутки каталога обновляем часто, а history такого не выдерживает:
+// в sessionStorage её можно освежать без ограничений.
+export function saveCatalogReturnScroll(scrollY, search) {
+  const stored = readCatalogReturn();
+  if (!stored || stored.search !== search) return;
+  saveCatalogReturn({ ...stored, scrollY });
+}

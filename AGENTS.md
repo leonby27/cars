@@ -94,7 +94,7 @@ Neutral surface hierarchy preference: keep grouped gray surfaces low-contrast ag
 
 Dark card-border preference: keep featured vehicle cards, catalog information side cards, the vehicle quick-information card, and the estimate card borderless in the dark theme. Use surface contrast and spacing for separation; the outlined secondary action inside the catalog side card should also become a filled borderless control. Preserve their borders in the light theme.
 
-Logo preference: render the customer-facing `evcars.by` wordmark entirely in lowercase red Comfortaa, using one consistent type size and a visually heavy 700 weight across the full name. In the dark theme, use the adapted `--accent-dark` red used by other dark-theme accent text instead of the brighter base-red token.
+Logo preference: render the customer-facing `evcars.by` logo from the supplied SVG artwork, not from live type — `public/logo-light.svg` and `public/logo-dark.svg` (a red badge plus the wordmark). Ship both variants in the markup and let CSS reveal the one matching `data-theme`, since the theme is resolved before first paint. Size every placement through the `--wordmark-height` custom property so the artwork keeps its own proportions.
 
 Theme preference: support both light and dark themes with a compact theme toggle in the main header. Remember the explicit device-local choice, otherwise follow the operating-system preference. Preserve the red brand accent and yellow primary CTAs in both themes.
 
@@ -243,3 +243,11 @@ Vehicle delivery-detail preference: keep the expanded delivery disclosure concis
 Estimate-description preference: keep explanatory copy for individual cost rows behind an info icon beside the row title. Show it only while the icon is hovered and hide it immediately when the pointer leaves; do not toggle it by click.
 
 Vehicle import policy: for future imports, import only model-year 2020+ electric vehicles from the home-page popular brands plus Leapmotor, Tesla, Mercedes-Benz, Lynk & Co, Mazda, and Toyota. Never use this policy to clean or remove existing catalog entries; existing hybrids and all other existing cars remain untouched. Keep the executable policy in `config/import-policy.mjs` and the human-readable rules in `IMPORT_POLICY.md` synchronized.
+
+Vehicle quick-view preference: on desktop widths (min-width 981px), a click on a vehicle card opens a quick-view modal instead of navigating to `/cars/:id`. This applies to every card list — the home feed, the catalog (list and grid), and the similar-vehicles block on a vehicle page — except the favourites list, where the card keeps opening the full page. The page behind the modal keeps its state: catalog filters, order, and scroll position. The modal shows the same blocks as the vehicle page except breadcrumbs, the back button, and similar vehicles. Below 981px every card keeps navigating to the full page.
+
+Quick view is an addition to the full vehicle page, never a replacement: keep an arrow beside the vehicle name in the modal that opens the full page, and keep every card a real link so ⌘/middle/right-click opens the full page in a new tab. A "Быстрый просмотр" switch sits beside the vehicle lists that use it — next to the "Каталог" heading on the home page and next to the result count in the catalog. It is on by default, persists in localStorage, and turning it off makes every card click go straight to the vehicle page. Show the switch only on desktop widths, and keep the switch itself compact next to the heading text.
+
+Action-button tooltip preference: the round "Копировать ссылку" and favourite buttons show a small (14px) borderless tooltip that fades in above the button and centred on it, flipping below only when there is no room above; the copy button reports the result in the same tooltip.
+
+Share-action preference: no share icon anywhere in the interface, including the vehicle-page action row.

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Comfortaa:wght@700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
 :root {
   font-family:
     "Manrope",
@@ -155,26 +155,31 @@ button {
   align-items: center;
   gap: 42px;
 }
+/* The logo is a two-variant SVG asset; `--wordmark-height` is the single knob
+   each placement overrides, and the artwork keeps its own 480:100 ratio. */
 .wordmark {
+  --wordmark-height: 24px;
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--accent);
-  font-family: "Comfortaa", sans-serif;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -1px;
-  -webkit-text-stroke: 0.45px currentColor;
+  line-height: 0;
   text-decoration: none;
 }
-.wordmark span {
-  color: inherit;
+.wordmark-image {
+  display: block;
+  width: auto;
+  height: var(--wordmark-height);
 }
-.wordmark small {
-  margin-left: 0;
-  font-size: inherit;
+.wordmark-image-dark {
+  display: none;
+}
+:root[data-theme="dark"] .wordmark-image-light {
+  display: none;
+}
+:root[data-theme="dark"] .wordmark-image-dark {
+  display: block;
 }
 .desktop-nav {
   display: flex;
@@ -1046,9 +1051,10 @@ button {
   font-size: 16px;
 }
 .car-row {
+  position: relative;
   min-height: 216px;
   display: grid;
-  grid-template-columns: 250px 1fr 170px;
+  grid-template-columns: 250px minmax(0, 1fr) 170px;
   gap: 18px;
   padding: 14px;
   border-top: 1px solid var(--line);
@@ -1145,6 +1151,7 @@ button {
 }
 .row-actions button,
 .detail-actions button {
+  position: relative;
   width: 36px;
   height: 36px;
   display: grid;
@@ -1317,21 +1324,23 @@ button {
 .detail-title .detail-title-line h1 {
   margin: 0;
 }
+/* Тот же кружок, что у «Копировать ссылку» и «Избранного» в строке действий:
+   служебные кнопки заголовка — одна группа, отдельная обводка их только выделяла. */
 .detail-back {
   position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 50%;
-  background: var(--header-control-bg);
+  background: var(--surface);
   color: var(--ink);
   cursor: pointer;
-  transition: background var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+  transition: background var(--motion-fast) var(--motion-ease);
 }
 .detail-back svg {
   width: 55%;
@@ -1344,8 +1353,7 @@ button {
   inset: -5px;
 }
 .detail-back:hover {
-  border-color: var(--muted);
-  background: color-mix(in srgb, var(--ink) 8%, var(--header-control-bg));
+  background: color-mix(in srgb, var(--ink) 8%, var(--surface));
 }
 .detail-mobile-price {
   display: none;
@@ -2361,9 +2369,6 @@ button {
   background: var(--page);
   border-color: transparent;
 }
-:root[data-theme="dark"] .wordmark {
-  color: var(--accent-dark);
-}
 :root[data-theme="dark"] .hero {
   background: var(--page);
 }
@@ -2685,12 +2690,9 @@ button {
   font-size: 16px;
   line-height: 1.6;
 }
-.footer-wordmark {
+.wordmark.footer-wordmark {
+  --wordmark-height: 32px;
   padding: 0;
-  color: var(--ink);
-}
-.footer-wordmark small {
-  color: #747a83;
 }
 .footer-socials {
   display: flex;
@@ -3338,7 +3340,9 @@ button {
     margin-top: 22px;
   }
   .car-row {
-    grid-template-columns: 1fr;
+    /* minmax(0, …): иначе nowrap-заголовок в .car-row-mobile-header растягивает
+       трек шире контейнера и вся страница получает горизонтальный скролл. */
+    grid-template-columns: minmax(0, 1fr);
     min-height: 0;
     gap: 10px;
     margin-top: 12px;
@@ -3369,6 +3373,7 @@ button {
   }
   .car-row-mobile-header {
     display: flex;
+    min-width: 0;
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
@@ -5624,6 +5629,19 @@ footer {
 }
 
 /* Cursor-position photo preview for vehicle cards. */
+/* Пустая ссылка поверх всей карточки: правый клик по картинке попадал в <img> и
+   браузер предлагал действия с изображением вместо «Открыть ссылку в новой вкладке».
+   Всё, что нажимают отдельно, поднято над ней, иначе клик уходил бы в ссылку. */
+.card-link-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.car-row :where(.car-row-mobile-header button, .row-actions button, .car-row-mobile-image-strip) {
+  position: relative;
+  z-index: 2;
+}
 .hover-image-preview {
   position: relative;
 }
@@ -8815,13 +8833,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   gap: 14px;
 }
 .wordmark {
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -1.4px;
-}
-.wordmark small {
-  margin-left: 0;
-  font-size: inherit;
+  --wordmark-height: 30px;
 }
 .header-menu-shell {
   position: relative;
@@ -9044,11 +9056,10 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     gap: 8px;
   }
   .wordmark {
-    font-size: 27px;
-    letter-spacing: -1.4px;
+    --wordmark-height: 26px;
   }
-  .wordmark small {
-    font-size: inherit;
+  .wordmark.footer-wordmark {
+    --wordmark-height: 28px;
   }
   .header-menu-trigger {
     width: 40px;
@@ -9179,4 +9190,211 @@ html[data-theme="dark"] body #root :where(
   .account-order-loading
 ) {
   border-color: transparent;
+}
+
+/* Быстрый просмотр карточки из каталога. Модалка повторяет страницу автомобиля
+   без крошек, кнопки назад и похожих авто, поэтому её содержимое живёт на фоне
+   страницы: панели и карточки внутри читаются точно так же, как на /cars/:id.
+   Открывается только на десктопе, отдельной мобильной раскладки у неё нет. */
+.quick-view-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 17, 20, 0.62);
+}
+.quick-view-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1040px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--page);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.32);
+}
+.quick-view-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 12px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.quick-view-bar span {
+  color: var(--muted);
+  font-size: 16px;
+}
+.quick-view-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.quick-view-close:hover {
+  background: color-mix(in srgb, var(--ink) 8%, var(--surface));
+}
+.quick-view-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 24px 28px;
+}
+/* Заголовок машины начинает содержимое модалки, отбивка сверху уже у полосы. */
+.quick-view-scroll .detail-title {
+  margin-top: 0;
+}
+/* Стрелка к полной странице живёт в строке названия: быстрый просмотр её
+   дополняет, а не заменяет. Кружок тот же, что у стрелки «назад». */
+.detail-open-full {
+  text-decoration: none;
+}
+/* На тёмном фоне обычная линия панели слишком заметна для служебной полосы. */
+:root[data-theme="dark"] .quick-view-bar {
+  border-bottom-color: color-mix(in srgb, var(--line) 45%, transparent);
+}
+/* В тёмной теме модалка чуть светлее страницы под ней, но темнее панелей внутри,
+   иначе карточки расчёта и галерея перестают читаться как отдельные блоки. */
+:root[data-theme="dark"] .quick-view-modal {
+  background: #191c20;
+}
+.detail-action-tooltip {
+  /* Подсказка к служебным кнопкам заголовка: «Назад», «Открыть полную страницу»,
+     «Копировать ссылку», «Избранное». Координаты ставит JS,
+     поэтому позиционирование фиксированное: так подсказку не режет ни прокрутка
+     быстрого просмотра, ни правый край модалки. */
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 120;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 20px));
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: #17191c;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(18, 20, 24, 0.22);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease),
+    visibility var(--motion-fast) var(--motion-ease);
+  pointer-events: none;
+}
+/* Снизу подсказка выезжает в другую сторону. */
+.detail-action-tooltip.is-below {
+  transform: translateY(-4px);
+}
+.detail-action-tooltip.is-visible {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+/* На тёмном фоне подсказка должна быть светлее подложки, а не темнее её. */
+:root[data-theme="dark"] .detail-action-tooltip {
+  background: var(--filter-field-open-bg);
+}
+/* Свитчер «Быстрый просмотр» рядом с выдачей: на главной — у заголовка каталога,
+   в каталоге — у счётчика найденного. */
+.section-heading-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+/* У заголовка секции есть верхний отступ под надзаголовок: повторяем его у
+   свитчера, иначе он встаёт выше середины строки. */
+.section-heading-title .quick-view-toggle {
+  margin-top: 9px;
+}
+.quick-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.quick-view-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.quick-view-toggle .quick-view-toggle-track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.quick-view-toggle .quick-view-toggle-track i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--motion-medium) var(--motion-ease);
+}
+.quick-view-toggle input:checked + .quick-view-toggle-track {
+  background: var(--accent);
+}
+.quick-view-toggle input:checked + .quick-view-toggle-track i {
+  transform: translateX(13px);
+}
+.quick-view-toggle input:focus-visible + .quick-view-toggle-track {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.quick-view-toggle .quick-view-toggle-label {
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.quick-view-toggle input:checked ~ .quick-view-toggle-label {
+  color: var(--ink);
+}
+.result-summary .quick-view-toggle {
+  align-self: center;
+  margin-left: 8px;
+}
+
+/* Узкие телефоны (320–360 px): шапка в мобильной раскладке требует
+   125 (логотип) + 40 (меню) + 3 × 40 (действия) + зазоры ≈ 347 px, поэтому
+   ниже этой ширины она вылезала за экран и вся страница получала
+   горизонтальный скролл. Здесь поджимаем логотип и зазоры. */
+@media (max-width: 360px) {
+  .header-inner {
+    gap: 6px;
+  }
+  .wordmark {
+    --wordmark-height: 22px;
+  }
+  .header-menu-shell {
+    margin-left: 2px;
+  }
+  .header-actions {
+    gap: 4px;
+  }
 }
