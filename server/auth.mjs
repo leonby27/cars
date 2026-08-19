@@ -137,7 +137,7 @@ export async function deleteAccount(request, password) {
 export async function listAccountFavorites(request) {
   const account = await getSessionAccount(request);
   if (!account) return { error:"unauthorized" };
-  const result = await pool.query("SELECT listing_id FROM customer_favorites WHERE customer_id=$1 ORDER BY created_at", [account.id]);
+  const result = await pool.query("SELECT listing_id FROM customer_favorites WHERE customer_id=$1 ORDER BY created_at DESC, listing_id", [account.id]);
   return { ids:result.rows.map((row) => row.listing_id) };
 }
 

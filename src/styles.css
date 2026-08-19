@@ -1004,6 +1004,14 @@ button {
   margin-top: 30px;
   align-items: start;
 }
+/* Выдача не расширяет колонку под свою самую широкую строку: тесноту разбирают
+   сами строки (см. .sort-custom-select). */
+.results-list {
+  min-width: 0;
+}
+.result-tools {
+  min-width: 0;
+}
 .model-quick-chips {
   display: flex;
   gap: 8px;
@@ -2460,6 +2468,7 @@ button {
   background: var(--surface);
   border-color: #5a616d;
 }
+:root[data-theme="dark"] .price-currency-switch button.active,
 :root[data-theme="dark"] .header-actions .currency-switch button.active {
   background: #383d45;
   color: #ff7a81;
@@ -3058,10 +3067,13 @@ button {
   .filter-submit {
     grid-column: span 2;
   }
+  /* minmax(0, …), а не 1fr: иначе трек растягивается под самое широкое содержимое
+     (строка сортировки, длинный заголовок) и страница получает горизонтальный скролл
+     вместо того, чтобы обрезать текст. */
   .catalog-layout,
   .detail-main,
   .detail-columns {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .side-card {
     display: none;
@@ -3520,8 +3532,20 @@ button {
   .detail-title {
     align-items: start;
   }
+  /* На узком экране стрелка «назад» уходит левее всего блока: сначала кнопка,
+     потом название и цена. display: contents поднимает её из строки заголовка
+     в общую сетку, поэтому разметка остаётся одна и та же с десктопом. */
+  .detail-title > div:first-child {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 2px;
+  }
   .detail-title h1 {
-    margin: 0 0 5px;
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
     color: var(--ink);
     font-size: 16px;
     font-weight: 600;
@@ -3529,21 +3553,25 @@ button {
     letter-spacing: -0.2px;
   }
   .detail-title-line {
-    gap: 8px;
-    margin: 0 0 5px;
+    display: contents;
   }
+  /* Тот же кружок, что у «Копировать ссылку» и «Избранного» справа. */
   .detail-back {
-    width: 22px;
-    height: 22px;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 36px;
+    height: 36px;
   }
   .detail-mobile-price {
     display: block;
-    margin-bottom: 6px;
+    grid-column: 2;
+    grid-row: 2;
+    margin-bottom: 0;
     color: var(--ink);
-    font-size: 27px;
+    font-size: 24px;
     font-weight: 800;
     line-height: 1.12;
-    letter-spacing: -1.2px;
+    letter-spacing: -1px;
   }
   .detail-title p {
     display: none;
@@ -3814,6 +3842,21 @@ button {
   display: block;
   font-size: 28px;
   letter-spacing: -0.8px;
+}
+/* В быстром просмотре шапка сайта закрыта модалкой, поэтому валюту переключают
+   прямо у итоговой цены — тем же переключателем, что стоит в шапке. */
+.price-total-with-currency {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.price-currency-switch {
+  flex: 0 0 auto;
+  cursor: default;
+}
+.price-currency-switch button {
+  cursor: pointer;
 }
 .price-assumption {
   display: block;
@@ -4403,15 +4446,20 @@ button {
   font-size: 16px;
 }
 .result-tools {
+  gap: 10px;
   font-size: 16px;
 }
+/* Счётчик и переключатели вида занимают ровно столько, сколько им нужно: тесноту
+   разбирает название сортировки — оно рубится троеточием. */
 .result-summary {
   display: flex;
+  flex: 0 0 auto;
   align-items: baseline;
   gap: 8px;
 }
 .sort-custom-select {
   width: fit-content;
+  min-width: 0;
   max-width: 100%;
   height: 36px;
   padding: 0;
@@ -4431,14 +4479,21 @@ button {
 .sort-custom-select .select-trigger {
   position: relative;
   inset: auto;
-  width: auto;
+  /* Кнопка при `width: auto` считает ширину по содержимому и вылезает из
+     сжавшегося селекта: длинное название сортировки тогда налезало на
+     переключатель вида. С 100% она следует за селектом, а текст обрезается. */
+  width: 100%;
+  min-width: 0;
   align-items: center;
   padding: 0 10px 0 11px;
 }
+/* «С наибольшим запасом хода» на узком экране не влезает целиком — обрезаем текст,
+   а не строку: стрелка и переключатели вида остаются на месте. */
 .sort-custom-select .select-trigger b {
-  overflow: visible;
+  overflow: hidden;
   font-size: 16px;
-  text-overflow: clip;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .sort-custom-select .select-menu {
   right: -1px;
@@ -4455,6 +4510,8 @@ button {
 .result-controls {
   --result-pill-bg: var(--model-chip-bg);
   display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: center;
   gap: 8px;
 }
@@ -4475,6 +4532,7 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
 }
 #root .result-view-toggle {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 2px;
   height: 36px;
@@ -5551,8 +5609,10 @@ footer {
   color: var(--accent-dark);
 }
 .fact-row span {
+  min-width: 0;
   color: var(--muted);
   font-size: 17px;
+  overflow-wrap: anywhere;
 }
 .fact-row b {
   min-width: 0;
@@ -5608,9 +5668,12 @@ footer {
   .detail-facts-heading .report-badge {
     display: flex;
   }
+  /* Колонка значения раньше была `auto`: длинная строка вроде «Отчёт источника
+     может быть неполным» раздвигала таблицу и налезала на подпись. Обе колонки
+     теперь сжимаются, а текст переносится внутри своей. */
   .fact-row {
     min-height: 0;
-    grid-template-columns: 22px minmax(0, 1fr) auto;
+    grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1.1fr);
     gap: 8px;
     padding: 9px 4px;
   }
@@ -6043,7 +6106,8 @@ footer {
   background: var(--surface);
 }
 
-.header-actions .currency-switch button {
+.header-actions .currency-switch button,
+.price-currency-switch button {
   height: 30px;
   padding: 0 9px;
   border: 0;
@@ -6059,16 +6123,19 @@ footer {
     box-shadow 0.16s ease,
     transform var(--motion-fast) var(--motion-ease);
 }
-.header-actions .currency-switch button:hover {
+.header-actions .currency-switch button:hover,
+.price-currency-switch button:hover {
   color: var(--ink);
 }
-.header-actions .currency-switch button.active {
+.header-actions .currency-switch button.active,
+.price-currency-switch button.active {
   background: var(--panel);
   color: var(--accent-dark);
   box-shadow: 0 1px 4px rgba(23, 25, 28, 0.14);
   animation: currency-switch-in var(--motion-fast) var(--motion-ease);
 }
-.header-actions .currency-switch button:active {
+.header-actions .currency-switch button:active,
+.price-currency-switch button:active {
   transform: scale(0.96);
 }
 @keyframes currency-switch-in {
@@ -9224,7 +9291,8 @@ html[data-theme="dark"] body #root :where(
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(1040px, 100%);
+  /* Немного шире страницы автомобиля: галерея и расчёт в двух колонках не поджимаются. */
+  width: min(1240px, 100%);
   max-height: calc(100vh - 48px);
   overflow: hidden;
   border-radius: 20px;
@@ -9411,5 +9479,41 @@ html[data-theme="dark"] body #root :where(
   }
   .header-actions {
     gap: 4px;
+  }
+}
+
+/* Клик по логотипу возвращает на главную и прокручивает страницу вверх. Если экран
+   тот же, менять нечего — короткий отзыв показывает, что клик сработал. */
+@keyframes refresh-pulse-content {
+  from {
+    opacity: 0.4;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes refresh-pulse-logo {
+  0% {
+    transform: none;
+  }
+  40% {
+    transform: scale(0.93);
+  }
+  100% {
+    transform: none;
+  }
+}
+:root.refresh-pulse .app-content > main {
+  animation: refresh-pulse-content 420ms var(--motion-ease) both;
+}
+:root.refresh-pulse .wordmark {
+  animation: refresh-pulse-logo 420ms var(--motion-ease) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root.refresh-pulse .app-content > main,
+  :root.refresh-pulse .wordmark {
+    animation: none;
   }
 }

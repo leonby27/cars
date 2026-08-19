@@ -19,6 +19,9 @@ import { AnalyticsPage } from "./analytics-page.jsx";
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
 const CurrencyContext = createContext("USD");
+// Валюту переключают не только в шапке: в быстром просмотре шапка недоступна,
+// поэтому сеттер доступен из любого места дерева.
+const SetCurrencyContext = createContext(null);
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? Math.round(usd * PRICING.usdByn) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
@@ -94,6 +97,7 @@ const clampPriceMax = (priceMin, priceMax) => {
 };
 const hasPriceRange = (priceMin, priceMax) => priceBound(priceMin, ANY_PRICE_MIN) !== null || priceBound(priceMax, ANY_PRICE_MAX) !== null;
 const useCurrency = () => useContext(CurrencyContext);
+const useSetCurrency = () => useContext(SetCurrencyContext);
 
 const displayValue = (value, fallback = "Не указано") => (value === null || value === undefined || value === "" ? fallback : value);
 const cityNames = {
@@ -631,6 +635,36 @@ function ClientSeo({ path, car, landing }) {
 /* Both theme variants ship in the markup and CSS reveals the matching one: the
    theme attribute is set before first paint, so swapping `src` from React state
    would only add a flash of the wrong logo on hydration. */
+function CurrencySwitch({ currency, setCurrency, className = "" }) {
+  return (
+    <div className={`currency-switch${className ? ` ${className}` : ""}`} role="group" aria-label="Валюта цен">
+      {[["USD", "$"], ["BYN", "BYN"]].map(([code, label]) => (
+        <button key={code} type="button" className={currency === code ? "active" : ""} aria-pressed={currency === code} onClick={() => setCurrency(code)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Клик по логотипу на главной не меняет ни адрес, ни содержимое, поэтому подтверждаем
+// его короткой анимацией: страница проявляется заново, логотип чуть подаётся под палец.
+// Класс висит на <html> и снимается по таймеру, чтобы пережить перерисовку при переходе
+// с другого экрана.
+const refreshPulseMs = 420;
+let refreshPulseTimer = 0;
+const playRefreshPulse = (event) => {
+  // ⌘-клик и средняя кнопка уводят в новую вкладку — эту страницу трогать не нужно.
+  if (event && (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
+  const root = document.documentElement;
+  window.clearTimeout(refreshPulseTimer);
+  root.classList.remove("refresh-pulse");
+  // Повторный клик перезапустит анимацию только после того, как браузер увидел класс снятым.
+  void root.offsetWidth;
+  root.classList.add("refresh-pulse");
+  refreshPulseTimer = window.setTimeout(() => root.classList.remove("refresh-pulse"), refreshPulseMs);
+};
+
 function SiteLogo() {
   return (
     <>
@@ -667,7 +701,7 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
   return (
     <header className="site-header">
       <div className="header-inner">
-        <AppLink className="wordmark" href="/" navigate={navigate} aria-label="evcars.by — на главную">
+        <AppLink className="wordmark" href="/" navigate={navigate} onClick={playRefreshPulse} aria-label="evcars.by — на главную">
           <SiteLogo />
         </AppLink>
         <div className="header-menu-shell" ref={menuRef}>
@@ -694,22 +728,12 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
                 <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
               </nav>
               <div className="header-menu-settings">
-                <div className="currency-switch header-menu-currency" role="group" aria-label="Валюта цен">
-                  <button type="button" className={currency === "USD" ? "active" : ""} aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>$</button>
-                  <button type="button" className={currency === "BYN" ? "active" : ""} aria-pressed={currency === "BYN"} onClick={() => setCurrency("BYN")}>BYN</button>
-                </div>
+                <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
               </div>
           </div>
         </div>
         <div className="header-actions">
-          <div className="currency-switch" role="group" aria-label="Валюта цен">
-            <button type="button" className={currency === "USD" ? "active" : ""} aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>
-              $
-            </button>
-            <button type="button" className={currency === "BYN" ? "active" : ""} aria-pressed={currency === "BYN"} onClick={() => setCurrency("BYN")}>
-              BYN
-            </button>
-          </div>
+          <CurrencySwitch currency={currency} setCurrency={setCurrency} />
           <button
             type="button"
             className="theme-toggle"
@@ -1917,7 +1941,11 @@ function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
     loadedCars.forEach((car) => values.set(car.id,car));
     return [...values.values()];
   }, [cars,loadedCars]);
-  const favoriteCars = allCars.filter((car) => favorites.has(car.id));
+  // Порядок берём из набора избранного, а не из каталога: свежая машина сохраняется первой и остаётся наверху.
+  const favoriteCars = [...favorites].flatMap((id) => {
+    const car = allCars.find((item) => item.id === id);
+    return car ? [car] : [];
+  });
   const knownIds = new Set(allCars.map((car) => car.id));
   const missingIds = [...favorites].filter((id) => !knownIds.has(id));
   const missingKey = missingIds.sort().join("|");
@@ -1972,7 +2000,6 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
       <div className="catalog-heading">
         <div>
           <h1>Избранное</h1>
-          <p>Сохранённые автомобили для быстрого сравнения</p>
         </div>
         <span>{hasUnresolved ? favorites.size : favoriteCars.length} авто</span>
       </div>
@@ -2344,7 +2371,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
         <section className="results-list" aria-busy={remoteLoading && !displayed.length ? "true" : undefined}>
           <div className="result-tools">
             <div className="result-summary">
-              <b>{knownResultCount == null ? "Загружаем" : `${knownResultCount} найдено`}</b>
+              <b>{knownResultCount == null ? "Загружаем" : `${knownResultCount} шт.`}</b>
               {quickViewToggle}
             </div>
             <div className="result-controls">
@@ -3000,8 +3027,9 @@ function CopyLinkButton({ car }) {
   );
 }
 
-function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true }) {
+function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false }) {
   const currency = useCurrency();
+  const setCurrency = useSetCurrency();
   const [availabilityUnavailableOpen, setAvailabilityUnavailableOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [availabilityCtaVisible, setAvailabilityCtaVisible] = useState(false);
@@ -3102,8 +3130,9 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
             </section>
           )}
           <aside className="order-card">
-            <div className="price-total" aria-label="Ориентировочная стоимость до Минска">
+            <div className={`price-total${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
               <strong>{approximateMoney(price.totalLow, price.totalHigh, currency)}</strong>
+              {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
             </div>
             <div className="price-breakdown">
               <div>
@@ -3256,7 +3285,7 @@ function VehicleQuickViewModal({ car, favorite, toggleFavorite, onOpenFull, onCl
           </button>
         </header>
         <div className="quick-view-scroll">
-          <VehicleDetailBody car={car} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} />
+          <VehicleDetailBody car={car} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch />
         </div>
       </section>
     </div>
@@ -5251,9 +5280,9 @@ export function App() {
       return;
     }
     const previous = new Set(favorites);
-    const next = new Set(favorites);
-    const adding = !next.has(id);
-    adding ? next.add(id) : next.delete(id);
+    const adding = !favorites.has(id);
+    // Новая машина встаёт в начало набора, поэтому в избранном она оказывается сверху.
+    const next = adding ? new Set([id, ...favorites]) : new Set([...favorites].filter((item) => item !== id));
     setFavorites(next);
     if (adding) {
       const car = cars.find((item) => item.id === id);
@@ -5491,6 +5520,7 @@ export function App() {
     );
   return (
     <CurrencyContext.Provider value={currency}>
+     <SetCurrencyContext.Provider value={setCurrency}>
       <ClientSeo path={path} car={detailId ? cars.find((item) => item.id === detailId) : null} />
       <div className="app-content" aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
@@ -5520,6 +5550,7 @@ export function App() {
           redirectTo={pendingFavorite || path === "/favorites" ? "/favorites" : "/account"}
         />
       )}
+     </SetCurrencyContext.Provider>
     </CurrencyContext.Provider>
   );
 }
