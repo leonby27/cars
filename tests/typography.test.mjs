@@ -21,6 +21,12 @@ const SMALL_TEXT_EXCEPTIONS = new Set([
   ".vehicle-quick-info-label",
   ".select-option-count",
   ".detail-action-tooltip",
+  // Служебные элементы интерфейса, а не текст для чтения: кружок-счётчик
+  // избранного, переключатель валюты и таб-кнопки в мобильном меню.
+  ".icon-label b",
+  ".header-actions .favorites-link > b",
+  ".header-menu-currency button",
+  ".type-tabs button",
 ]);
 
 test("CSS font sizes never fall below 16px outside explicit exceptions", async () => {
@@ -36,7 +42,9 @@ test("CSS font sizes never fall below 16px outside explicit exceptions", async (
       if (size < MINIMUM_FONT_SIZE_PX) {
         const blockStart = stylesheet.lastIndexOf("{", match.index);
         const selectorStart = stylesheet.lastIndexOf("}", blockStart) + 1;
-        const selectors = stylesheet.slice(selectorStart, blockStart).split(",").map((selector) => selector.trim());
+        // Внутри @media перед селектором остаётся её собственная открывающая скобка,
+        // поэтому берём то, что после последней «{» в этом куске.
+        const selectors = stylesheet.slice(selectorStart, blockStart).split("{").pop().split(",").map((selector) => selector.trim());
         if (selectors.some((selector) => SMALL_TEXT_EXCEPTIONS.has(selector))) continue;
         const line = stylesheet.slice(0, match.index).split("\n").length;
         violations.push(`line ${line}: font-size: ${declaration}`);
