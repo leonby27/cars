@@ -16,6 +16,10 @@
       "destination": "/private.html"
     },
     {
+      "source": "/cars/:id",
+      "destination": "/car.html"
+    },
+    {
       "source": "/analytics",
       "destination": "/analytics/index.html"
     }

@@ -429,6 +429,11 @@ button {
   color: var(--ink);
   text-decoration: none;
 }
+/* Обёртка над иллюстрацией нужна только для выбора формата (AVIF/WebP/PNG) и в
+   раскладке не участвует: размеры и object-fit остаются на самой картинке. */
+.illustration {
+  display: contents;
+}
 .useful-service-art {
   position: relative;
   display: block;
@@ -4539,11 +4544,18 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
   }
   .result-summary {
     display: block;
+    min-width: 0;
   }
+  /* Счётчик найденного не переносим на вторую строку: длинное число обрезаем
+     троеточием, чтобы строка с сортировкой оставалась одной высоты. */
   .result-summary b {
+    display: block;
+    overflow: hidden;
     color: var(--ink);
     font-size: 16px;
     font-weight: 700;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .sort-custom-select .select-trigger b,
   .sort-custom-select .select-options button {
@@ -5652,10 +5664,13 @@ footer {
   object-fit: cover;
   user-select: none;
 }
+/* Счётчик фото держим у левого края: справа над картинкой сидит сердечко избранного,
+   и на одной стороне они накладывались друг на друга. */
 .hover-image-count,
 .car-row-image > .hover-image-count {
   position: absolute;
-  right: 9px;
+  left: 9px;
+  right: auto;
   top: 9px;
   bottom: auto;
   display: flex;
@@ -7347,7 +7362,7 @@ footer {
 }
 .account-layout {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 336px minmax(0, 1fr);
   gap: 32px;
   margin-top: 36px;
   align-items: start;
@@ -8885,7 +8900,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   position: absolute;
   top: calc(100% + 12px);
   left: 0;
-  width: 260px;
+  width: 180px;
   padding: 10px;
   border: 0;
   border-radius: 18px;

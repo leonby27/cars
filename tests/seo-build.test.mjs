@@ -74,7 +74,7 @@ async function build(env = {}) {
   const catalogPath = path.join(dir, "cars.json");
   await writeFile(catalogPath, JSON.stringify({ generatedAt: "2026-08-18T19:18:05.086Z", cars: fixtureCars }));
   await run(process.execPath, [script], {
-    env: { ...process.env, SEO_OUTPUT_DIR: clientDir, SEO_CATALOG: catalogPath, SITE_URL: "https://evcars.by", SEO_ALLOW_INDEXING: "", SEO_VEHICLE_PAGES: "", ...env },
+    env: { ...process.env, SEO_OUTPUT_DIR: clientDir, SEO_CATALOG: catalogPath, SITE_URL: "https://evcars.by", SEO_ALLOW_INDEXING: "", SEO_VEHICLE_PAGES: "", SEO_SITEMAP_TOKEN: "testtoken", ...env },
   });
   return {
     read: (relative) => readFile(path.join(clientDir, relative), "utf8"),
@@ -84,34 +84,70 @@ async function build(env = {}) {
   };
 }
 
+// Имя карты сайта задаётся токеном; в тестах фиксируем свой, чтобы проверки не зависели
+// от значения по умолчанию и от того, что задано в окружении сборки.
+const sitemapToken = "testtoken";
+const sitemapIndex = `sitemap-${sitemapToken}.xml`;
+const sitemapCars = `sitemap-${sitemapToken}-cars.xml`;
+
 test("preview build ships public pages as noindex and no vehicle pages", async () => {
   const { read, missing } = await build();
-  const [home, catalog, robots, sitemap] = await Promise.all([read("index.html"), read("catalog/index.html"), read("robots.txt"), read("sitemap.xml")]);
+  const [home, catalog, robots, sitemap] = await Promise.all([read("index.html"), read("catalog/index.html"), read("robots.txt"), read(sitemapIndex)]);
   assert.match(home, /<h1>Автомобили с пробегом из Китая/);
-  assert.match(catalog, /<link rel="canonical" href="https:\/\/evcars\.by\/catalog\/"/);
+  assert.match(catalog, /<link rel="canonical" href="https:\/\/evcars\.by\/catalog"/);
   assert.match(catalog, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   assert.match(robots, /Disallow: \/$/m);
   // Страницы машин выключены — ни ссылок на них, ни карты, ни статического каталога.
   assert.doesNotMatch(home, /<a href="\/cars\//);
-  assert.doesNotMatch(sitemap, /sitemap-cars\.xml/);
-  await missing("sitemap-cars.xml");
+  assert.doesNotMatch(sitemap, new RegExp(sitemapCars.replace(/\./g, "\\.")));
+  await missing(sitemapCars);
   await missing("cars/guazi-170268619192114/index.html");
   await missing("data/catalog.json");
 });
 
+test("предсказуемых имён карты сайта в сборке нет", async () => {
+  const { read, missing } = await build();
+  // `/sitemap.xml` — готовый список адресов каталога для конкурента, поэтому карта лежит
+  // под именем с токеном, а robots.txt на неё не ссылается: адрес задают вручную.
+  await missing("sitemap.xml");
+  await missing("sitemap-pages.xml");
+  const [robots, sitemap] = await Promise.all([read("robots.txt"), read(sitemapIndex)]);
+  assert.doesNotMatch(robots, /Sitemap:/i);
+  assert.match(sitemap, /<loc>https:\/\/evcars\.by\/sitemap-testtoken-pages\.xml<\/loc>/);
+});
+
+test("заготовка страницы машины отдаётся без чужого адреса-первоисточника", async () => {
+  // Без этого файла адреса `/cars/<id>` отвечали «страница не найдена»: статических
+  // страниц машин в сборке нет. Свой адрес-первоисточник дописывает приложение, поэтому
+  // в заготовке его быть не должно — иначе все карточки указывали бы на одну страницу.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const shell = await read("car.html");
+  assert.doesNotMatch(shell, /rel="canonical"/);
+  assert.doesNotMatch(shell, /og:url/);
+  // Запрет индексации в готовом HTML оставлять нельзя: поисковик выбросит страницу,
+  // не дожидаясь, пока скрипт этот запрет снимет.
+  assert.match(shell, /<meta name="robots" content="index, follow/);
+  assert.match(shell, /<div id="root">/);
+});
+
+test("на тестовой сборке заготовка машины закрыта от индексации", async () => {
+  const { read } = await build();
+  assert.match(await read("car.html"), /<meta name="robots" content="noindex, nofollow, noarchive"/);
+});
+
 test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", async () => {
   const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
-  const [home, html, robots, sitemap] = await Promise.all([read("index.html"), read("cars/guazi-170268619192114/index.html"), read("robots.txt"), read("sitemap.xml")]);
-  assert.match(home, /<a href="\/cars\/guazi-170268619192114\//);
+  const [home, html, robots, sitemap] = await Promise.all([read("index.html"), read("cars/guazi-170268619192114/index.html"), read("robots.txt"), read(sitemapIndex)]);
+  assert.match(home, /<a href="\/cars\/guazi-170268619192114"/);
   assert.match(html, /<title>BYD Song Pro 2024, 21[^<]*400 км — цена до Минска/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/cars\/guazi-170268619192114\/"/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/cars\/guazi-170268619192114"/);
   assert.match(html, /<meta name="robots" content="index, follow/);
   assert.match(html, /"@type":"Vehicle"/);
   assert.match(html, /<h1>BYD Song Pro 2024<\/h1>/);
   // Исходные китайские названия в разметку не попадают.
   assert.doesNotMatch(html, /比亚迪/);
   assert.match(robots, /^Allow: \/$/m);
-  assert.match(sitemap, /sitemap-cars\.xml/);
+  assert.match(sitemap, new RegExp(sitemapCars.replace(/\./g, "\\.")));
 });
 
 test("static fallback ships a compact catalog and addressable full records", async () => {
@@ -123,4 +159,33 @@ test("static fallback ships a compact catalog and addressable full records", asy
   assert.equal(compact.cars[0].description, undefined);
   assert.equal(compact.cars[0].technicalSpecs, undefined);
   assert.equal(Array.isArray(detail.images) && detail.images.length > 1, true);
+});
+
+test("адреса не оканчиваются косой чертой ни в страницах, ни в карте сайта", async () => {
+  // Хостинг настроен на адреса без черты и сам перебрасывает `/catalog/` на `/catalog`.
+  // Пока черта оставалась, сайт указывал поисковику на адрес, которого нет: карта сайта
+  // вела на перебросы, а внутренние ссылки добавляли лишний шаг на каждом переходе.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
+  const [home, catalog, car, pagesXml, carsXml] = await Promise.all([
+    read("index.html"), read("catalog/index.html"), read("cars/guazi-170268619192114/index.html"),
+    read(`sitemap-${sitemapToken}-pages.xml`), read(sitemapCars),
+  ]);
+  // Главная — единственный адрес, у которого черта на конце законна.
+  for (const [name, html] of [["главная", home], ["каталог", catalog], ["машина", car]]) {
+    const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
+    assert.ok(canonical, `${name}: адрес-первоисточник должен быть указан`);
+    if (canonical !== "https://evcars.by/") assert.doesNotMatch(canonical, /\/$/, `${name}: ${canonical}`);
+    // Хлебные крошки и og:url ссылаются на те же адреса, что и первоисточник.
+    assert.doesNotMatch(html, /"item":"https:\/\/evcars\.by\/[^"]+\/"/, `${name}: крошки с чертой`);
+    assert.doesNotMatch(html, /<meta property="og:url" content="https:\/\/evcars\.by\/[^"]+\/"/, `${name}: og:url с чертой`);
+    // Внутренние ссылки ведут туда же, куда указывает первоисточник.
+    assert.doesNotMatch(html, /<a href="\/[^"]+\/"/, `${name}: внутренняя ссылка с чертой`);
+  }
+  for (const [name, xml] of [["страницы", pagesXml], ["машины", carsXml]]) {
+    const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+    assert.ok(locs.length, `карта «${name}» не должна быть пустой`);
+    for (const loc of locs) {
+      if (loc !== "https://evcars.by/") assert.doesNotMatch(loc, /\/$/, `карта «${name}»: ${loc}`);
+    }
+  }
 });

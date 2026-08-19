@@ -16,8 +16,23 @@ const compressFromBytes = 1024;
 // compression in that case only costs the local API server, never correctness.
 const acceptsGzip = (response) => /\bgzip\b/.test(String(response.req?.headers?.["accept-encoding"] || ""));
 
+// Каталог меняется только когда запускают импорт, поэтому одинаковые ответы незачем
+// собирать заново для каждого посетителя. `s-maxage` разрешает хранить ответ сети
+// Vercel (не браузеру: `max-age=0` оставляет за посетителем свежую проверку), а
+// `stale-while-revalidate` отдаёт последний ответ, пока в фоне готовится новый —
+// именно на этом окне пропадают полуторасекундные ответы «просыпающейся» функции.
+// Помечаем так только чтение каталога: у него нет ничего личного и он не зависит от
+// сессии, поэтому общий на всех кэш безопасен.
+const catalogCache = { "cache-control":"public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
+
+// Каталог нужен только собственным страницам, поэтому разрешения на сторонние
+// запросы больше нет: с `access-control-allow-origin: *` любой чужой сайт мог
+// выкачивать каталог из браузера своих посетителей. В дев-режиме vite проксирует
+// `/api` на этот же адрес, так что запросы приложения остаются свойственными.
+// Понадобится отдать каталог партнёру или мобильному приложению — разрешение
+// возвращают точечно, конкретному адресу, а не всем.
 const json = async (response, status, payload, headers = {}) => {
-  const responseHeaders = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "access-control-allow-origin":"*", "access-control-allow-headers":"content-type", ...headers };
+  const responseHeaders = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", ...headers };
   if (status === 204) {
     response.writeHead(status, responseHeaders);
     return response.end();
@@ -187,12 +202,13 @@ export async function handleApiRequest(request, response) {
       const result = await setAccountFavorite(request, listingId, request.method === "PUT");
       return result.error ? json(response, 401, result) : json(response, 200, result);
     }
-    if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams));
-    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")));
+    if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams), catalogCache);
+    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")), catalogCache);
     const carMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)$/);
     if (carMatch) {
       const car = await getCar(decodeURIComponent(carMatch[1]));
-      return car ? json(response, 200, car) : json(response, 404, { error:"car_not_found" });
+      // Ненайденную карточку не кэшируем: объявление может появиться следующим импортом.
+      return car ? json(response, 200, car, catalogCache) : json(response, 404, { error:"car_not_found" });
     }
     if (request.method === "POST" && url.pathname === "/api/order-drafts") {
       const body = await readJson(request);

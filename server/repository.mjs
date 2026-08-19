@@ -113,10 +113,31 @@ export function withoutDetailPayload(car) {
   return summary;
 }
 
-export async function listCars(searchParams) {
-  const { where, values } = buildCarFilters(searchParams);
+// Глубже этой позиции каталог не листается. Живой посетитель берёт по 24 карточки,
+// то есть потолок наступает после ~200 нажатий «Показать ещё»; выкачка всех 33 тысяч
+// объявлений постраничным перебором на этом заканчивается. Ответ всегда несёт
+// `hasMore`, поэтому приложение узнаёт про упор в потолок и прекращает подгрузку,
+// вместо того чтобы сравнивать загруженное с общим числом и биться в пустые страницы.
+export const maxOffset = 5000;
+
+// Расчёт страницы держим отдельной функцией: потолок глубины — то место, где легко
+// незаметно отрезать живым посетителям часть каталога, поэтому он проверяется тестами
+// без обращения к базе.
+export function catalogPaging(searchParams) {
   const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || 24));
   const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
+  // За потолком страницу не выбираем вовсе: обрезать `offset` вниз нельзя — тогда
+  // ответ повторил бы уже показанные карточки вместо признака конца списка.
+  return { limit, offset, beyondCap:offset >= maxOffset };
+}
+
+// «Есть ещё» ограничено и общим числом, и потолком: на потолке подгрузка обязана
+// остановиться, иначе прокрутка будет бесконечно просить страницы, которых не будет.
+export const catalogHasMore = (offset, count, total) => offset + count < Math.min(total, maxOffset);
+
+export async function listCars(searchParams) {
+  const { where, values } = buildCarFilters(searchParams);
+  const { limit, offset, beyondCap } = catalogPaging(searchParams);
   const order = buildCarOrder(searchParams);
   // `sort=variety` feeds the home showcase: one random listing per model, then a
   // random order over those. Ordinary sorting cannot do this — the newest page is
@@ -134,13 +155,18 @@ export async function listCars(searchParams) {
       ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY random()`, [...values, limit]),
       pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
     ]);
-    return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, limit, offset:0 };
+    // Витрина главной — одна выдача без листания: следующей страницы у неё нет.
+    return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, limit, offset:0, hasMore:false };
   }
   const [itemsResult, countResult] = await Promise.all([
-    pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
+    beyondCap
+      ? Promise.resolve({ rows:[] })
+      : pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
     pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
-  return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, limit, offset };
+  const total = countResult.rows[0].total;
+  const items = itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row)));
+  return { items, total, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
 }
 
 export async function getCar(id) {

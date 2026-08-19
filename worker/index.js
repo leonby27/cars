@@ -40,6 +40,18 @@ export default {
     const routeResponse = await env.ASSETS.fetch(new Request(routeIndexUrl, request));
     if (routeResponse.status !== 404) return withSeoHeaders(routeResponse);
 
+    // Страницы машин заранее не собираются, поэтому своего файла у `/cars/<id>` нет.
+    // Отдаём заготовку с обычным 200 — карточку дорисует приложение поверх API. Иначе
+    // каждое объявление отвечало бы «страница не найдена». Если страницы всё же собраны
+    // (`SEO_VEHICLE_PAGES=1`), до этой ветки дело не доходит: файл найдётся выше.
+    if (cleanPath.startsWith("/cars/")) {
+      const carShellUrl = new URL(request.url);
+      carShellUrl.pathname = "/car.html";
+      carShellUrl.search = "";
+      const carShell = await env.ASSETS.fetch(new Request(carShellUrl, request));
+      if (carShell.status !== 404) return withSeoHeaders(carShell);
+    }
+
     const privateRoute = ["/account", "/favorites", "/login", "/register", "/analytics"].includes(cleanPath) || cleanPath.startsWith("/orders/");
     if (!privateRoute) {
       const body = request.method === "HEAD" ? null : '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="robots" content="noindex, nofollow"><title>Страница не найдена | evcars.by</title></head><body><main><h1>Страница не найдена</h1><p><a href="/">Вернуться на главную</a></p></main></body></html>';

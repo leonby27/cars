@@ -27,7 +27,10 @@
       // very first request, which is what the boot loader was mostly waiting for.
       (() => {
         const start = (url) => {
-          const request = fetch(url, { cache: "no-store" }).then((response) => (response.ok ? response.json() : Promise.reject(new Error(url))));
+          // Без `cache: "no-store"`: он заставлял браузер добавлять к запросу «не бери
+          // из кэша», а по этой пометке сеть Vercel отдаёт мимо своего кэша. Свежесть
+          // задаёт сам ответ каталога — там `max-age=0`, то есть браузер своё не хранит.
+          const request = fetch(url).then((response) => (response.ok ? response.json() : Promise.reject(new Error(url))));
           // Nothing awaits these until the bundle boots; keep rejections from going unhandled.
           request.catch(() => {});
           return request;
@@ -35,8 +38,13 @@
         const detail = location.pathname.match(/^\/(?:cars|orders\/draft)\/([^/]+)/);
         let id = null;
         try { id = detail ? decodeURIComponent(detail[1]) : null; } catch { id = detail[1]; }
+        // Список из 60 карточек читают только витрина главной и блок «Похожие
+        // автомобили». Каталог отправляет собственный запрос с фильтрами и этот
+        // список не открывает, поэтому там просим одну карточку: загрузочного
+        // запроса всё равно достаточно, чтобы узнать размер каталога и что база отвечает.
+        const showcase = location.pathname !== "/catalog";
         window.__boot = {
-          catalog: start("/api/cars?limit=60&sort=variety"),
+          catalog: start(showcase ? "/api/cars?limit=60&sort=variety" : "/api/cars?limit=1&sort=newest"),
           carId: id,
           car: id ? start(`/api/cars/${encodeURIComponent(id)}`) : null,
         };

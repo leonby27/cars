@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCarFilters, buildCarOrder, withoutDetailPayload } from "../server/repository.mjs";
+import { buildCarFilters, buildCarOrder, catalogHasMore, catalogPaging, maxOffset, withoutDetailPayload } from "../server/repository.mjs";
 
 test("parameterizes all catalog filters", () => {
   const params = new URLSearchParams({ type:"Гибрид", brand:"Deepal", model:"S07", bodyType:"SUV / кроссовер", drive:"Полный", ownersMax:"2", noClaims:"1", yearMin:"2024", mileageMax:"50000", landedMax:"40000" });
@@ -87,4 +87,35 @@ test("omits heavy technical specifications from catalog summaries", () => {
   const car = { id:"che168-1", title:"Audi Q4 e-tron 2025", technicalSpecs:{ count:65, groups:[{ name:"Body", items:[] }] } };
   assert.deepEqual(withoutDetailPayload(car), { id:"che168-1", title:"Audi Q4 e-tron 2025" });
   assert.equal(car.technicalSpecs.count, 65);
+});
+
+test("листает каталог до потолка и честно сообщает, что дальше ничего нет", () => {
+  // Потолок защищает каталог от постраничной выкачки: обычный посетитель берёт по 24
+  // карточки, то есть до упора ему нужно больше двухсот нажатий «Показать ещё».
+  const page = catalogPaging(new URLSearchParams({ limit:"24", offset:"48" }));
+  assert.deepEqual(page, { limit:24, offset:48, beyondCap:false });
+  assert.equal(catalogHasMore(48, 24, 32916), true);
+
+  // На потолке подгрузка обязана остановиться, иначе прокрутка просит пустые страницы.
+  assert.equal(catalogHasMore(maxOffset - 24, 24, 32916), false);
+  assert.equal(catalogPaging(new URLSearchParams({ offset:String(maxOffset) })).beyondCap, true);
+
+  // Запрос за потолком не должен повторять уже показанные карточки.
+  const beyond = catalogPaging(new URLSearchParams({ offset:String(maxOffset + 500) }));
+  assert.equal(beyond.beyondCap, true);
+  assert.equal(beyond.offset, maxOffset + 500);
+  assert.equal(catalogHasMore(beyond.offset, 0, 32916), false);
+});
+
+test("короткий каталог заканчивается по своему размеру, а не по потолку", () => {
+  // Под фильтрами машин обычно немного: список должен закончиться на последней странице.
+  assert.equal(catalogHasMore(0, 24, 24), false);
+  assert.equal(catalogHasMore(0, 24, 30), true);
+  assert.equal(catalogHasMore(24, 6, 30), false);
+});
+
+test("ограничивает размер страницы и не принимает мусор в листании", () => {
+  assert.equal(catalogPaging(new URLSearchParams({ limit:"5000" })).limit, 100);
+  assert.equal(catalogPaging(new URLSearchParams({ limit:"0" })).limit, 24);
+  assert.deepEqual(catalogPaging(new URLSearchParams({ limit:"nope", offset:"-40" })), { limit:24, offset:0, beyondCap:false });
 });

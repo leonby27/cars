@@ -207,6 +207,12 @@ const appendPriceRange = (query, priceMin, priceMax) => {
 };
 const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION }) => (drive === ANY_DRIVE || car.drive === drive) && (owners === ANY_OWNERS || Number(car.owners) <= filterNumber(owners)) && (battery === ANY_BATTERY || Number(car.battery) >= batteryFloor(battery)) && (condition === ANY_CONDITION || car.conditionGrade === conditionGrades[condition]);
 const ownerOptions = [ANY_OWNERS, "1 владелец", "До 2 владельцев"];
+// Сеед перемешивания уходит в адрес запроса каталога. Полностью случайный делал адрес
+// уникальным для каждого посетителя, поэтому общий кэш по нему не срабатывал никогда.
+// Дюжины вариантов достаточно, чтобы выдача не выглядела одинаковой у всех, и при этом
+// адреса повторяются — ответ отдаётся из кэша, а не собирается в базе заново.
+const CATALOG_SHUFFLE_SEEDS = 12;
+const randomShuffleSeed = () => `s${Math.floor(Math.random() * CATALOG_SHUFFLE_SEEDS)}`;
 const proxiedImageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 const imageSource = (source) => {
   if (!source) return source;
@@ -498,6 +504,21 @@ function CardLinkOverlay({ car, open }) {
   return <AppLink className="card-link-overlay" href={`/cars/${car.id}`} navigate={open} onClick={(event) => event.stopPropagation()} tabIndex={-1} aria-hidden="true" />;
 }
 
+// Иллюстрации отдаём в AVIF и WebP, PNG оставляем последним запасом: браузер берёт
+// первый формат, который понимает, и вместо ~10 МБ картинок страницы тянут ~0,8 МБ.
+// Обёртка `<picture>` из раскладки исключена через `display: contents`, поэтому все
+// существующие правила размеров продолжают относиться к самой картинке.
+function Illustration({ src, alt, ...props }) {
+  const base = src.replace(/\.png$/, "");
+  return (
+    <picture className="illustration">
+      <source type="image/avif" srcSet={appHref(`${base}.avif`)} />
+      <source type="image/webp" srcSet={appHref(`${base}.webp`)} />
+      <img src={appHref(src)} alt={alt} {...props} />
+    </picture>
+  );
+}
+
 function ScrollToTopButton() {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -572,7 +593,9 @@ function ClientSeo({ path, car, landing }) {
     canonicalBase.pathname = "/";
     canonicalBase.search = "";
     canonicalBase.hash = "";
-    const canonicalPath = detailTitle ? `/cars/${encodeURIComponent(car.id)}/` : path === "/" ? "/" : `${path}/`;
+    // Без косой черты на конце — как отвечает хостинг и как ведут внутренние ссылки.
+    // С чертой первоисточник указывал на адрес, с которого посетителя перебрасывают.
+    const canonicalPath = detailTitle ? `/cars/${encodeURIComponent(car.id)}` : path === "/" ? "/" : path.replace(/\/+$/, "");
     const canonical = new URL(canonicalPath, canonicalBase).href;
     const indexingEnabled = document.documentElement.dataset.seoIndexing === "true";
     const indexable = indexingEnabled && !privatePage && Boolean(routeSeo[path] || detailTitle || landingSeo);
@@ -1099,8 +1122,11 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesYears(car, yearMin, yearMax) && (mileage === ANY_MILEAGE || car.mileage <= mileageCap) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition })).length;
   const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION;
   useEffect(() => {
-    if (!apiMode) return;
+    // Ждать загрузочный запрос незачем: справочник нужен сразу и уходит параллельно
+    // с витриной. Останавливает его только выясненный статический режим.
+    if (apiMode === false) return undefined;
     const controller = new AbortController();
+    let cancelled = false;
     const timer = window.setTimeout(async () => {
       const metaQuery = new URLSearchParams();
       const carsQuery = new URLSearchParams({ limit: "1" });
@@ -1123,23 +1149,23 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       if (battery !== ANY_BATTERY) carsQuery.set("batteryMin", String(batteryFloor(battery)));
       if (condition !== ANY_CONDITION) carsQuery.set("conditionGrade", conditionGrades[condition]);
       try {
-        const [metaResponse, carsResponse] = await Promise.all([
-          fetch(`/api/catalog/meta?${metaQuery}`, {
-            signal: controller.signal,
-          }),
-          fetch(`/api/cars?${carsQuery}`, { signal: controller.signal }),
+        // Пока ни один фильтр не выбран, кнопка показывает общее число из загрузочного
+        // запроса, поэтому считать то же самое второй раз незачем.
+        const [meta, catalog] = await Promise.all([
+          requestCatalogMeta(metaQuery.toString()),
+          hasActiveFilters ? fetchCarsJson(`/api/cars?${carsQuery}`, controller.signal) : null,
         ]);
-        if (!metaResponse.ok || !carsResponse.ok) throw new Error("search unavailable");
-        const [meta, catalog] = await Promise.all([metaResponse.json(), carsResponse.json()]);
+        if (cancelled) return;
         setRemoteMeta(meta);
-        setRemoteCount(catalog.total);
+        if (catalog) setRemoteCount(catalog.total);
       } catch {}
     }, 120);
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [apiMode, normalizedType, brand, model, bodyType, yearMin, yearMax, mileageCap, priceMin, priceMax, drive, owners, battery, condition]);
+  }, [apiMode, hasActiveFilters, normalizedType, brand, model, bodyType, yearMin, yearMax, mileageCap, priceMin, priceMax, drive, owners, battery, condition]);
   const changeType = (value) => {
     setType(value);
     setModel([]);
@@ -1426,16 +1452,16 @@ function PopularBrands({ navigate, cars, apiMode }) {
   }, [cars]);
 
   useEffect(() => {
-    if (!apiMode) {
+    if (apiMode === false) {
       setRemoteBrands([]);
-      return;
+      return undefined;
     }
-    const controller = new AbortController();
-    fetch("/api/catalog/meta", { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("brand meta unavailable"))))
-      .then((payload) => setRemoteBrands(payload.brands || []))
+    let cancelled = false;
+    // Тот же справочник, что запрашивает поиск на главной, поэтому запрос уходит один.
+    requestCatalogMeta()
+      .then((payload) => { if (!cancelled) setRemoteBrands(payload.brands || []); })
       .catch(() => {});
-    return () => controller.abort();
+    return () => { cancelled = true; };
   }, [apiMode]);
 
   const availableBrands = apiMode && remoteBrands.length ? remoteBrands : localBrands;
@@ -1513,7 +1539,7 @@ function UsefulServices({ navigate }) {
           {HOME_SERVICES.map((service) => (
             <AppLink className="useful-service-card" href={service.href} navigate={navigate} key={service.id}>
               <span className="useful-service-art">
-                <img src={`${import.meta.env.BASE_URL}${service.image}`} alt="" loading="lazy" />
+                <Illustration src={service.image} alt="" loading="lazy" />
               </span>
               <span className="useful-service-title">{service.title}</span>
             </AppLink>
@@ -1727,7 +1753,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
             {showSkeletons
               ? skeletonCards.map((key) => <CardSkeleton key={key} />)
               : feedCars.map(({ car, key }) => (
-                  <FeaturedCard key={key} anchorKey={key} car={car} onClick={() => openFeedCar({ car, key })} />
+                  <FeaturedCard key={key} anchorKey={key} car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openFeedCar({ car, key })} />
                 ))}
           </div>
         )}
@@ -2031,6 +2057,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   }));
   const [remoteCars, setRemoteCars] = useState([]);
   const [remoteTotal, setRemoteTotal] = useState(0);
+  // «Есть ли ещё» решает сервер, а не сравнение загруженного с общим числом: у API
+  // есть потолок глубины листания, и без его признака бесконечная прокрутка молотила
+  // бы пустые страницы и показывала ошибку загрузки на ровном месте.
+  const [remoteHasMore, setRemoteHasMore] = useState(false);
   const [remoteMeta, setRemoteMeta] = useState({
     brands: [],
     models: [],
@@ -2044,7 +2074,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : "default"));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
   // mix in place while paging and when a visitor comes back from a vehicle page.
-  const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || Math.random().toString(36).slice(2, 12));
+  const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || randomShuffleSeed());
   const [loadedLimit, setLoadedLimit] = useState(() => Math.max(pageSize, Number(restoredCatalog?.loadedCount) || pageSize));
   const restoredOrder = useRef(restoredCatalog?.order || null);
   const [view, setView] = useState(readCatalogView);
@@ -2201,6 +2231,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       .then(([catalog, meta]) => {
         setRemoteCars(restoreRemoteOrder(catalog.items.map(normalizeImportedCar)));
         setRemoteTotal(catalog.total);
+        setRemoteHasMore(Boolean(catalog.hasMore));
         setRemoteMeta(meta);
       })
       .catch((error) => {
@@ -2227,7 +2258,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       setLoadedLimit((current) => Math.min(current + pageSize, filtered.length));
       return;
     }
-    if (loadingMore.current || remoteLoading || remoteCars.length >= remoteTotal) return;
+    if (loadingMore.current || remoteLoading || !remoteHasMore) return;
     const controller = new AbortController();
     loadMoreRequest.current = controller;
     loadingMore.current = true;
@@ -2243,6 +2274,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       setRemoteCars((current) => [...current, ...orderRemoteBatch(catalog.items.map(normalizeImportedCar), current)]);
       setLoadedLimit((current) => current + catalog.items.length);
       setRemoteTotal(catalog.total);
+      setRemoteHasMore(Boolean(catalog.hasMore));
     } catch (error) {
       if (error.name !== "AbortError") setRemoteError(true);
     } finally {
@@ -2257,7 +2289,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const resultCount = useApi ? remoteTotal : filtered.length;
   // Until the first page answers there is no count yet, and "0" reads as an empty result.
   const knownResultCount = remoteLoading && !remoteCars.length ? null : resultCount;
-  const hasMore = displayed.length < resultCount;
+  const hasMore = useApi ? remoteHasMore : displayed.length < resultCount;
   useEffect(() => {
     const target = loadMoreTarget.current;
     if (!target || !hasMore || remoteLoading || remoteError) return undefined;
@@ -3659,7 +3691,7 @@ function HowItWorksPage({ navigate }) {
           </div>
         </div>
         <div className="info-hero-visual">
-          <img src={appHref("/illustrations/how-it-works-hero.png")} alt="Автомобиль из Китая с проверкой и доставкой" />
+          <Illustration src="/illustrations/how-it-works-hero.png" alt="Автомобиль из Китая с проверкой и доставкой" />
         </div>
       </section>
       <section className="info-proof page-width">
@@ -3893,7 +3925,7 @@ function DeliveredCarsPage({ navigate }) {
           {DELIVERY_CASES.map((item, index) => (
             <article className="delivery-case" key={item.id}>
               <div className="delivery-case-image">
-                <img src={`${import.meta.env.BASE_URL}cars/${item.image}`} alt={item.vehicle} />
+                <Illustration src={`cars/${item.image}`} alt={item.vehicle} />
                 <span>{item.delivered}</span>
               </div>
               <div className="delivery-case-content">
@@ -4071,7 +4103,7 @@ function ContactsPage({ navigate, theme }) {
           </div>
         </div>
         <div className="info-hero-visual">
-          <img src={appHref("/illustrations/contact-hero.png")} alt="Чай, архитектура Китая и деловые принадлежности" />
+          <Illustration src="/illustrations/contact-hero.png" alt="Чай, архитектура Китая и деловые принадлежности" />
         </div>
       </section>
 
@@ -4992,10 +5024,30 @@ async function loadStaticCar(id, signal) {
 // index.html starts the boot requests before this bundle is downloaded, so the network is
 // already busy while React mounts. Falling back to a plain fetch keeps the app working
 // wherever that inline script did not run.
-const fetchCarsJson = (url) => fetch(url, { cache:"no-store" }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("api unavailable"))));
+// Как и в index.html, без `cache: "no-store"`: иначе запрос уходит с пометкой «не бери
+// из кэша» и сеть Vercel отвечает мимо своего кэша. Ответы каталога несут `max-age=0`,
+// поэтому браузер всё равно ничего не хранит у себя.
+const fetchCarsJson = (url, signal) => fetch(url, { signal }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("api unavailable"))));
+// Справочник фильтров спрашивают и поиск на главной, и блок популярных марок, причём
+// об одном и том же. Держим обещание по строке запроса: второй потребитель дожидается
+// первого ответа вместо того, чтобы отправлять свой.
+const metaRequests = new Map();
+const requestCatalogMeta = (query = "") => {
+  const key = String(query);
+  if (!metaRequests.has(key)) {
+    const request = fetchCarsJson(`/api/catalog/meta${key ? `?${key}` : ""}`);
+    // Неудачу не запоминаем, иначе следующий выбор фильтра больше не попробует.
+    request.catch(() => metaRequests.delete(key));
+    metaRequests.set(key, request);
+  }
+  return metaRequests.get(key);
+};
 let catalogRequest = null;
+// Same split as the inline script in index.html: the 60-card list is only read by the
+// home showcase and by "похожие автомобили", so the catalog asks for a single card.
+const bootCatalogUrl = () => (window.location.pathname === "/catalog" ? "/api/cars?limit=1&sort=newest" : "/api/cars?limit=60&sort=variety");
 // Memoised so StrictMode's double effect invocation does not fire the request twice.
-const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || fetchCarsJson("/api/cars?limit=60&sort=variety"));
+const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || fetchCarsJson(bootCatalogUrl()));
 const requestBootCar = (id) => (window.__boot?.carId === id && window.__boot.car) || fetchCarsJson(`/api/cars/${encodeURIComponent(id)}`);
 
 export function App() {

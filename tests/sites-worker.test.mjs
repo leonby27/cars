@@ -71,6 +71,24 @@ test("keeps an informative 404 body when the asset host omits 404.html", async (
   assert.match(await response.text(), /Страница не найдена/);
 });
 
+test("отдаёт страницу машины заготовкой, а не ошибкой 404", async () => {
+  // Статических страниц машин в сборке нет, поэтому без заготовки каждое объявление
+  // отвечало бы «страница не найдена» — для поиска это означает «страницы не существует».
+  const response = await worker.fetch(new Request("https://example.test/cars/che168-56135000", { headers:{ accept:"text/html" } }), {
+    ASSETS: {
+      fetch: async (request) => {
+        const pathname = new URL(request.url).pathname;
+        return new Response(pathname === "/car.html" ? "app" : "missing", {
+          status:pathname === "/car.html" ? 200 : 404,
+          headers:{ "content-type":"text/html" },
+        });
+      },
+    },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "app");
+});
+
 test("keeps private application routes available but non-indexable", async () => {
   const response = await worker.fetch(new Request("https://example.test/orders/draft/123", { headers:{ accept:"text/html" } }), {
     ASSETS: {

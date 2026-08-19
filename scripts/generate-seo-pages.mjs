@@ -15,6 +15,17 @@ const catalogPath = process.env.SEO_CATALOG ? path.resolve(process.env.SEO_CATAL
 const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
 const siteBasePath = new URL(siteUrl).pathname.replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
+// Карта сайта лежит под неочевидным именем и не упомянута в robots.txt. Причина не в
+// поисковиках — им адрес задают вручную в Search Console и Вебмастере, — а в том, что
+// `/sitemap.xml` это готовый список всех адресов каталога: конкуренту не нужно обходить
+// сайт, чтобы узнать, что у нас есть. Имя должно оставаться одним и тем же между
+// сборками, иначе зарегистрированный адрес перестанет открываться; сменить его можно
+// через `SEO_SITEMAP_TOKEN` — тогда карту нужно заново добавить в оба сервиса.
+const sitemapToken = String(process.env.SEO_SITEMAP_TOKEN || "7c4f19b2").replace(/[^a-z0-9-]/gi, "") || "7c4f19b2";
+const sitemapIndexName = `sitemap-${sitemapToken}.xml`;
+const pagesSitemapName = `sitemap-${sitemapToken}-pages.xml`;
+const carsSitemapName = `sitemap-${sitemapToken}-cars.xml`;
+const sitemapNames = [sitemapIndexName, pagesSitemapName, carsSitemapName];
 const shell = readFileSync(shellPath, "utf8");
 // Страницы автомобилей и статический каталог собираются только по явному
 // `SEO_VEHICLE_PAGES=1`. По умолчанию их нет: на хостинге карточки отдаёт API
@@ -47,8 +58,18 @@ const privateRoutes = ["/favorites/", "/login/", "/register/", "/account/", "/an
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
 const escapeXml = (value) => escapeHtml(value).replace(/'/g, "&apos;");
 const jsonLd = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
-const routeUrl = (route) => `${siteUrl}${route === "/" ? "/" : route}`;
-const hrefRoute = (route) => `${siteBasePath}${route}` || "/";
+// Адреса отдаём без косой черты на конце: хостинг настроен на `trailingSlash: false`
+// и сам перебрасывает `/catalog/` на `/catalog`. Пока адреса-первоисточники, карта сайта
+// и внутренние ссылки писались с чертой, сайт указывал поисковику на адрес, которого нет:
+// каждая ссылка была лишним перебросом, а первоисточник — обещанием, что настоящая
+// страница лежит там, откуда его перебрасывают. Внутри маршруты по-прежнему можно писать
+// с чертой — папки для файлов от этого не зависят, `writeRoute` их всё равно обрезает.
+const trimRoute = (route) => {
+  const trimmed = String(route).replace(/\/+$/, "");
+  return trimmed || "/";
+};
+const routeUrl = (route) => `${siteUrl}${trimRoute(route)}`;
+const hrefRoute = (route) => `${siteBasePath}${trimRoute(route)}` || "/";
 const carRoute = (car) => `/cars/${encodeURIComponent(car.id)}/`;
 const carTitle = (car) => car.title || [car.brand, car.model, car.year].filter(Boolean).join(" ");
 const number = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
@@ -70,18 +91,24 @@ function metadata({ title, description, canonical, image, type = "website", inde
   const imageTags = image ? `
     <meta property="og:image" content="${escapeHtml(image)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />` : "";
+  // Заготовка страницы машины собирается без адреса-первоисточника: на этапе сборки
+  // неизвестно, какую машину откроют, а подставить сюда главную или /404/ — значит
+  // сказать поисковику, что настоящей страницы нет. Адрес дописывает приложение,
+  // когда узнает машину.
+  const canonicalTags = canonical ? `
+    <link rel="canonical" href="${escapeHtml(canonical)}" />
+    <link rel="alternate" hreflang="ru-BY" href="${escapeHtml(canonical)}" />` : "";
+  const urlTag = canonical ? `
+    <meta property="og:url" content="${escapeHtml(canonical)}" />` : "";
   return `
     <title>${escapeHtml(title)}</title>
     <meta name="description" content="${escapeHtml(description)}" />
-    <meta name="robots" content="${robots}" />
-    <link rel="canonical" href="${escapeHtml(canonical)}" />
-    <link rel="alternate" hreflang="ru-BY" href="${escapeHtml(canonical)}" />
+    <meta name="robots" content="${robots}" />${canonicalTags}
     <meta property="og:locale" content="ru_BY" />
     <meta property="og:type" content="${type}" />
     <meta property="og:site_name" content="evcars.by" />
     <meta property="og:title" content="${escapeHtml(title)}" />
-    <meta property="og:description" content="${escapeHtml(description)}" />
-    <meta property="og:url" content="${escapeHtml(canonical)}" />${imageTags}
+    <meta property="og:description" content="${escapeHtml(description)}" />${urlTag}${imageTags}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
@@ -199,19 +226,45 @@ writeFileSync(path.join(clientDir, "private.html"), privateHtml);
 const notFoundHtml = renderHtml({ title: "Страница не найдена | evcars.by", description: "Запрошенная страница не найдена.", canonical: routeUrl("/404/"), body: `${navigation()}<main class="page-width"><h1>Страница не найдена</h1><p><a href="${hrefRoute("/")}">Вернуться на главную</a></p></main>${footer()}`, image: null, indexable: false });
 writeFileSync(path.join(clientDir, "404.html"), notFoundHtml);
 
+// Заготовка страницы машины. Без неё адреса `/cars/<id>` отдавали 404: статических
+// страниц машин в сборке нет (их включает только `SEO_VEHICLE_PAGES=1`), а на хостинге
+// не осталось ничего, чем ответить, — карточку рисует приложение поверх API. Правило
+// в `vercel.json` отдаёт этот файл на такие адреса, поэтому ответ становится обычным
+// 200, а заголовок, описание и адрес-первоисточник дописывает приложение, когда
+// получит машину. Запрет индексации здесь общий, по `SEO_ALLOW_INDEXING`: оставить
+// `noindex` в готовом HTML насовсем нельзя — поисковик выбрасывает страницу, не
+// дожидаясь, пока скрипт этот запрет снимет. Если страницы машин всё же собраны
+// заранее, они лежат по своим адресам и правило до заготовки не доходит.
+const carShellHtml = renderHtml({
+  title: "Автомобиль с пробегом из Китая — цена до Минска | evcars.by",
+  description: "Характеристики, пробег, состояние и ориентировочная стоимость автомобиля с пробегом из Китая с доставкой в Минск.",
+  canonical: null,
+  body: `${navigation()}<main class="page-width"><h1>Автомобиль с пробегом из Китая</h1><p>Загружаем карточку автомобиля: характеристики, фотографии и ориентировочную стоимость до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Все автомобили в каталоге</a></p></main>${footer()}`,
+  type: "product",
+});
+writeFileSync(path.join(clientDir, "car.html"), carShellHtml);
+
 const pageEntries = publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null }));
 const carEntries = cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) }));
 const urlset = (entries) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(({ loc, lastmod }) => `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`).join("\n")}\n</urlset>\n`;
-writeFileSync(path.join(clientDir, "sitemap-pages.xml"), urlset(pageEntries));
+writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
 // Пустую карту машин не публикуем и в индекс не вписываем: без страниц машин
 // ссылаться в ней не на что.
-if (carEntries.length) writeFileSync(path.join(clientDir, "sitemap-cars.xml"), urlset(carEntries));
-else rmSync(path.join(clientDir, "sitemap-cars.xml"), { force:true });
-const sitemaps = ["sitemap-pages.xml", ...(carEntries.length ? ["sitemap-cars.xml"] : [])];
-writeFileSync(path.join(clientDir, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps.map((name) => `  <sitemap><loc>${escapeXml(siteUrl)}/${name}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`);
+if (carEntries.length) writeFileSync(path.join(clientDir, carsSitemapName), urlset(carEntries));
+else rmSync(path.join(clientDir, carsSitemapName), { force:true });
+const sitemaps = [pagesSitemapName, ...(carEntries.length ? [carsSitemapName] : [])];
+writeFileSync(path.join(clientDir, sitemapIndexName), `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps.map((name) => `  <sitemap><loc>${escapeXml(siteUrl)}/${name}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`);
+// Прежние предсказуемые имена в сборке не оставляем: файл с адресами всех машин по
+// адресу `/sitemap.xml` — готовый список для выкачки конкурентом.
+for (const stale of ["sitemap.xml", "sitemap-pages.xml", "sitemap-cars.xml"]) {
+  if (!sitemapNames.includes(stale)) rmSync(path.join(clientDir, stale), { force:true });
+}
 
 const robots = allowIndexing
-  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\n\nSitemap: ${siteUrl}/sitemap.xml\n`
+  // Карту сайта в robots.txt не упоминаем: эта строка публично показала бы, где лежит
+  // список всех адресов каталога. Поисковикам её адрес задают вручную — один раз, в
+  // Google Search Console и Яндекс.Вебмастере; на обход и индексацию это не влияет.
+  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\n`
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;
 writeFileSync(path.join(clientDir, "robots.txt"), robots);
 
@@ -248,3 +301,6 @@ if (cars.length) {
 rmSync(path.join(clientDir, "data", "cars.json"), { force:true });
 
 console.log(`Generated ${publicPages.length} public pages, ${cars.length} vehicle pages${vehiclePages ? "" : " (SEO_VEHICLE_PAGES=1 включает страницы машин и статический каталог)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
+// Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
+// вставляют в Google Search Console и Яндекс.Вебмастер.
+console.log(`Карта сайта (в robots.txt не указана, добавить вручную в Search Console и Вебмастер): ${siteUrl}/${sitemapIndexName}`);
