@@ -71,7 +71,11 @@ const appendYearRange = (query, yearMin, yearMax) => {
 const priceSteps = Array.from({ length: 18 }, (_, step) => String(15000 + step * 5000));
 const priceMinOptions = [ANY_PRICE_MIN, ...priceSteps];
 const priceMaxOptions = [ANY_PRICE_MAX, ...priceSteps];
-const mileageOptions = [ANY_MILEAGE, "до 50 000 км", "до 30 000 км", "до 15 000 км"];
+// Шаг сгущается там, где машин больше всего: три прежние ступени делили каталог
+// только между 25% и 67%, а всё, что дальше 50 000 км, не разделялось вовсе.
+// Подпись целиком лежит в ссылке `?mileage=`, поэтому разряды разделяет обычный
+// пробел: с неразрывным старые ссылки перестали бы совпадать и сбрасывали фильтр.
+const mileageOptions = [ANY_MILEAGE, ...[100000, 70000, 50000, 30000, 20000, 15000, 10000, 5000].map((value) => `до ${String(value).replace(/\B(?=(\d{3})+$)/g, " ")} км`)];
 const batteryOptions = [ANY_BATTERY, ...[40, 60, 80, 100].map((value) => `От ${value} кВт·ч`)];
 const batteryFloor = (value) => Number(String(value).replace(/\D/g, "")) || 0;
 const priceBound = (value, anyLabel) => (!value || value === anyLabel ? null : Number(value));

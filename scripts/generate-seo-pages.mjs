@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -14,7 +14,12 @@ const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+
 const siteBasePath = new URL(siteUrl).pathname.replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
 const shell = readFileSync(shellPath, "utf8");
-const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
+// Дамп каталога весит сотни мегабайт и живёт вне git, поэтому на хостинге его нет.
+// Там карточки отдаёт API поверх базы, и сборке хватает публичных страниц; без
+// дампа она предупреждает и продолжает, вместо того чтобы падать на ENOENT.
+const hasCatalog = existsSync(catalogPath);
+if (!hasCatalog) console.warn(`Каталог ${path.relative(root, catalogPath)} не найден: страницы автомобилей и статический каталог собраны не будут.`);
+const catalog = hasCatalog ? JSON.parse(readFileSync(catalogPath, "utf8")) : {};
 const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id).map((car) => ({ ...car, drive:normalizeDrive(car.drive) }));
 
 const publicPages = [
@@ -215,13 +220,17 @@ const compactCars = cars.map((car) => ({
   images: car.image ? [car.image] : [],
   _summary: true,
 }));
-const compactPayload = JSON.stringify({ generatedAt:catalog.generatedAt || null, cars:compactCars });
-writeFileSync(path.join(clientDir, "data", "catalog.json"), compactPayload);
-writeFileSync(path.join(clientDir, "data", "catalog.json.gz"), gzipSync(compactPayload, { level:9 }));
-for (const car of cars) {
-  const target = path.join(clientDir, "data", "cars", `${encodeURIComponent(car.id)}.json`);
-  mkdirSync(path.dirname(target), { recursive:true });
-  writeFileSync(target, JSON.stringify(car));
+// Пустой каталог не пишем: приложение считает такой ответ поводом показать ошибку,
+// а отсутствующий файл честно роняет его на API, который и держит карточки.
+if (cars.length) {
+  const compactPayload = JSON.stringify({ generatedAt:catalog.generatedAt || null, cars:compactCars });
+  writeFileSync(path.join(clientDir, "data", "catalog.json"), compactPayload);
+  writeFileSync(path.join(clientDir, "data", "catalog.json.gz"), gzipSync(compactPayload, { level:9 }));
+  for (const car of cars) {
+    const target = path.join(clientDir, "data", "cars", `${encodeURIComponent(car.id)}.json`);
+    mkdirSync(path.dirname(target), { recursive:true });
+    writeFileSync(target, JSON.stringify(car));
+  }
 }
 rmSync(path.join(clientDir, "data", "cars.json"), { force:true });
 
