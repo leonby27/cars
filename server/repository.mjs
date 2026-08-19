@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { pool, withTransaction } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeBodyType } from "../src/body-types.js";
+import { DRIVE_TYPES, normalizeDrive, orderDrives, UNKNOWN_DRIVE } from "../src/drive-types.js";
 
 const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).slice(0, 2)) : Number(value) || null;
 const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({ price:car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images })).digest("hex");
@@ -10,7 +11,7 @@ export function normalizeCar(car) {
   const electricRange = car.electricRange ?? (Number(car.description?.match(/纯电续航\s*(\d+)/)?.[1]) || null);
   const combinedRange = car.combinedRange ?? (Number(car.description?.match(/综合续航\s*(\d+)/)?.[1]) || null);
   const model = car.brand === "Deepal" ? String(car.model).replace(/^深蓝/, "") : car.model;
-  return { ...car, model, title:`${car.brand} ${model} ${car.year}`, bodyType:normalizeBodyType({ ...car, model }), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
+  return { ...car, model, title:`${car.brand} ${model} ${car.year}`, bodyType:normalizeBodyType({ ...car, model }), drive:normalizeDrive(car.drive), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
 }
 
 export async function upsertCar(car, client = pool) {
@@ -47,23 +48,37 @@ export async function importCars(cars, batchSize = 250) {
 const carSelect = `SELECT l.*, v.brand, v.model, v.model_year, v.powertrain, v.drivetrain, v.battery_kwh, v.electric_range_km, v.combined_range_km, v.specifications,
   COALESCE((SELECT json_agg(m.url ORDER BY m.position) FROM listing_media m WHERE m.listing_id=l.id), '[]'::json) AS images`;
 
+// Кузов и модель приходят мультивыбором: несколько одноимённых параметров.
+// Для кузова дополнительно принимаем список через запятую — названия там фиксированы,
+// у моделей запятая может быть частью имени, поэтому их не режем.
+export function multiParamValues(input, anyLabel, { splitCommas = false } = {}) {
+  const raw = input == null ? [] : Array.isArray(input) ? input : [input];
+  const items = raw.map((item) => String(item));
+  const parts = splitCommas ? items.flatMap((item) => item.split(",")) : items;
+  return [...new Set(parts.map((item) => item.trim()).filter((item) => item && item !== anyLabel))];
+}
+
 export function buildCarFilters(searchParams) {
   const clauses = ["l.status='active'"];
   const values = [];
   const add = (sql, value) => { values.push(value); clauses.push(sql.replace("?", `$${values.length}`)); };
   if (searchParams.get("type") && searchParams.get("type") !== "Все") add("v.powertrain=?", searchParams.get("type"));
   if (searchParams.get("brand") && searchParams.get("brand") !== "Все марки") add("v.brand=?", searchParams.get("brand"));
-  if (searchParams.get("model") && searchParams.get("model") !== "Все модели") add("v.model=?", searchParams.get("model"));
-  if (searchParams.get("bodyType") && searchParams.get("bodyType") !== "Все кузова") add("v.specifications->>'bodyType'=?", searchParams.get("bodyType"));
-  if (searchParams.get("drive") && searchParams.get("drive") !== "Любой привод") add("v.drivetrain=?", searchParams.get("drive"));
+  const models = multiParamValues(searchParams.getAll("model"), "Все модели");
+  if (models.length) add("v.model=ANY(?)", models);
+  const bodyTypes = multiParamValues(searchParams.getAll("bodyType"), "Все кузова", { splitCommas:true });
+  if (bodyTypes.length) add("v.specifications->>'bodyType'=ANY(?)", bodyTypes);
+  if (DRIVE_TYPES.includes(searchParams.get("drive"))) add("v.drivetrain=?", searchParams.get("drive"));
   if (Number(searchParams.get("ownersMax"))) add("l.owners<=?", Number(searchParams.get("ownersMax")));
   if (searchParams.get("noClaims") === "1") clauses.push("COALESCE(l.claims, l.source_payload->>'claims', l.source_payload->>'incident') ~ '(0\\s*次理赔|理赔\\s*0\\s*次)'");
   if (["S", "A", "B", "C", "D"].includes(searchParams.get("conditionGrade"))) add("l.condition_grade=?", searchParams.get("conditionGrade"));
   if (Number(searchParams.get("yearMin"))) add("v.model_year>=?", Number(searchParams.get("yearMin")));
+  if (Number(searchParams.get("yearMax"))) add("v.model_year<=?", Number(searchParams.get("yearMax")));
   if (Number(searchParams.get("mileageMax"))) add("l.mileage_km<=?", Number(searchParams.get("mileageMax")));
   if (Number(searchParams.get("priceCnyMax"))) add("l.price_cny<=?", Number(searchParams.get("priceCnyMax")));
   if (Number(searchParams.get("landedMax"))) add("l.estimated_total_usd<=?", Number(searchParams.get("landedMax")));
   if (Number(searchParams.get("landedMin"))) add("l.estimated_total_usd>=?", Number(searchParams.get("landedMin")));
+  if (Number(searchParams.get("batteryMin"))) add("v.battery_kwh>=?", Number(searchParams.get("batteryMin")));
   return { where:`WHERE ${clauses.join(" AND ")}`, values };
 }
 
@@ -134,16 +149,17 @@ export async function getCar(id) {
 }
 
 export async function getCatalogMeta(type, brand, bodyType) {
+  const selectedBodyTypes = multiParamValues(bodyType, "Все кузова", { splitCommas:true });
   const values = [];
   const filters = ["l.status='active'"];
   if (type && type !== "Все") { values.push(type); filters.push(`v.powertrain=$${values.length}`); }
   const brandValues = [...values];
   const brandFilters = [...filters];
-  if (bodyType && bodyType !== "Все кузова") { brandValues.push(bodyType); brandFilters.push(`v.specifications->>'bodyType'=$${brandValues.length}`); }
+  if (selectedBodyTypes.length) { brandValues.push(selectedBodyTypes); brandFilters.push(`v.specifications->>'bodyType'=ANY($${brandValues.length})`); }
   if (brand && brand !== "Все марки") { values.push(brand); filters.push(`v.brand=$${values.length}`); }
   const bodyFilters = [...filters];
   const bodyValues = [...values];
-  if (bodyType && bodyType !== "Все кузова") { bodyValues.push(bodyType); bodyFilters.push(`v.specifications->>'bodyType'=$${bodyValues.length}`); }
+  if (selectedBodyTypes.length) { bodyValues.push(selectedBodyTypes); bodyFilters.push(`v.specifications->>'bodyType'=ANY($${bodyValues.length})`); }
   const where = `WHERE ${filters.join(" AND ")}`;
   const bodyWhere = `WHERE ${bodyFilters.join(" AND ")}`;
   const brandWhere = `WHERE ${brandFilters.join(" AND ")}`;
@@ -153,9 +169,14 @@ export async function getCatalogMeta(type, brand, bodyType) {
     pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
     pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
     pool.query("SELECT v.drivetrain drive, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
-    pool.query("SELECT count(v.drivetrain)::int drive, count(l.owners)::int owners, count(l.claims)::int claims, count(l.condition_grade)::int condition FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'"),
+    pool.query("SELECT count(v.drivetrain)::int drive, count(l.owners)::int owners, count(v.battery_kwh)::int battery, count(l.condition_grade)::int condition FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'"),
   ]);
-  return { total:count.rows[0].total, brands:brands.rows, models:models.rows, bodyTypes:bodyTypes.rows, drives:drives.rows, availability:availability.rows[0] };
+  const driveCounts = drives.rows.reduce((totals, row) => {
+    const drive = normalizeDrive(row.drive);
+    return drive === UNKNOWN_DRIVE ? totals : totals.set(drive, (totals.get(drive) || 0) + Number(row.count));
+  }, new Map());
+  const driveRows = orderDrives([...driveCounts.keys()]).map((drive) => ({ drive, count:driveCounts.get(drive) }));
+  return { total:count.rows[0].total, brands:brands.rows, models:models.rows, bodyTypes:bodyTypes.rows, drives:driveRows, availability:availability.rows[0] };
 }
 
 export async function createOrderDraft({ listingId, name = null, contact, calculation = {} }) {

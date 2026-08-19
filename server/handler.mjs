@@ -188,7 +188,7 @@ export async function handleApiRequest(request, response) {
       return result.error ? json(response, 401, result) : json(response, 200, result);
     }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams));
-    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.get("bodyType")));
+    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")));
     const carMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)$/);
     if (carMatch) {
       const car = await getCar(decodeURIComponent(carMatch[1]));

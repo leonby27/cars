@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run api\" \"npm run dev:web\"",
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run api:watch\" \"npm run dev:web\"",
     "dev:web": "vite",
-    "dev:all": "concurrently -k -n api,crawler,web -c blue,yellow,magenta \"npm run api\" \"npm run worker\" \"npm run dev:web\"",
+    "dev:all": "concurrently -k -n api,crawler,web -c blue,yellow,magenta \"npm run api:watch\" \"npm run worker\" \"npm run dev:web\"",
     "api": "node server/index.mjs",
+    "api:watch": "node --watch server/index.mjs",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:migrate": "node scripts/db-migrate.mjs",

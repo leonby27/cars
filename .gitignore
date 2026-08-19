@@ -10,3 +10,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .vercel
+
+# Импортёры пересоздают каталог локально; 441 МБ в git не помещаются.
+public/data/cars.json

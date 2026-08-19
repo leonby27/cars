@@ -5,7 +5,7 @@ import { buildCarFilters, buildCarOrder, withoutDetailPayload } from "../server/
 test("parameterizes all catalog filters", () => {
   const params = new URLSearchParams({ type:"Гибрид", brand:"Deepal", model:"S07", bodyType:"SUV / кроссовер", drive:"Полный", ownersMax:"2", noClaims:"1", yearMin:"2024", mileageMax:"50000", landedMax:"40000" });
   const result = buildCarFilters(params);
-  assert.deepEqual(result.values, ["Гибрид", "Deepal", "S07", "SUV / кроссовер", "Полный", 2, 2024, 50000, 40000]);
+  assert.deepEqual(result.values, ["Гибрид", "Deepal", ["S07"], ["SUV / кроссовер"], "Полный", 2, 2024, 50000, 40000]);
   assert.match(result.where, /v\.drivetrain=\$5/);
   assert.match(result.where, /l\.owners<=\$6/);
   assert.match(result.where, /0\\s\*次理赔/);
@@ -17,6 +17,40 @@ test("ignores selector defaults and invalid numbers", () => {
   const result = buildCarFilters(new URLSearchParams({ type:"Все", brand:"Все марки", yearMin:"nope", conditionGrade:"DROP TABLE listings" }));
   assert.deepEqual(result.values, []);
   assert.equal(result.where, "WHERE l.status='active'");
+});
+
+test("filters by several body types at once", () => {
+  const params = new URLSearchParams();
+  params.append("bodyType", "SUV / кроссовер");
+  params.append("bodyType", "Седан");
+  params.append("bodyType", "Все кузова");
+  params.append("bodyType", "Седан");
+  const result = buildCarFilters(params);
+  assert.deepEqual(result.values, [["SUV / кроссовер", "Седан"]]);
+  assert.match(result.where, /v\.specifications->>'bodyType'=ANY\(\$1\)/);
+});
+
+test("filters by several models at once and keeps commas inside names", () => {
+  const params = new URLSearchParams();
+  params.append("model", "Song Plus, DM-i");
+  params.append("model", "Han");
+  params.append("model", "Все модели");
+  params.append("model", "Han");
+  const result = buildCarFilters(params);
+  assert.deepEqual(result.values, [["Song Plus, DM-i", "Han"]]);
+  assert.match(result.where, /v\.model=ANY\(\$1\)/);
+});
+
+test("accepts a comma separated body type list", () => {
+  const result = buildCarFilters(new URLSearchParams({ bodyType:"Седан,Хэтчбек" }));
+  assert.deepEqual(result.values, [["Седан", "Хэтчбек"]]);
+});
+
+test("filters by a closed year range", () => {
+  const result = buildCarFilters(new URLSearchParams({ yearMin:"2022", yearMax:"2024" }));
+  assert.deepEqual(result.values, [2022, 2024]);
+  assert.match(result.where, /v\.model_year>=\$1/);
+  assert.match(result.where, /v\.model_year<=\$2/);
 });
 
 test("filters by a landed price floor", () => {

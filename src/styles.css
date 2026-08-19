@@ -95,7 +95,6 @@ html[data-theme="dark"] #root :where(
   .currency-switch,
   .select-search,
   .auth-field input,
-  .profile-fields .auth-field select,
   .profile-input-prefix
 ) {
   background: var(--surface);
@@ -206,18 +205,24 @@ button {
   gap: 7px;
 }
 .icon-label b {
+  position: absolute;
+  left: 9px;
+  top: 2px;
+  box-sizing: border-box;
   display: grid;
   place-items: center;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  border-radius: 20px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
   background: var(--accent);
-  color: white;
-  font-size: 16px;
-  position: absolute;
-  left: 12px;
-  top: 1px;
+  /* Обводка цветом фона кнопки, чтобы край кружка не касался иконки. */
+  box-shadow: 0 0 0 2px var(--header-control-bg);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 .hero {
   padding: 84px 24px 48px;
@@ -353,7 +358,8 @@ button {
   top: 21px;
 }
 .primary,
-.secondary {
+.secondary,
+.invert-button {
   min-height: 50px;
   border-radius: 10px;
   border: 0;
@@ -370,6 +376,14 @@ button {
 }
 .primary:hover {
   background: #dcc20d;
+}
+/* Инверсия к фону панели: в светлой теме тёмная кнопка, в тёмной — белая. */
+.invert-button {
+  background: var(--ink);
+  color: var(--panel);
+}
+.invert-button:hover {
+  background: color-mix(in srgb, var(--ink) 86%, var(--panel));
 }
 .secondary {
   border: 1px solid var(--line-strong);
@@ -1291,6 +1305,47 @@ button {
   margin: 10px 0 5px;
   font-size: 34px;
   letter-spacing: -1.2px;
+}
+/* Стрелка назад живёт в строке заголовка: кружок не выше строки, поэтому не
+   выпирает за неё и не сдвигает соседние блоки. */
+.detail-title-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 5px;
+}
+.detail-title .detail-title-line h1 {
+  margin: 0;
+}
+.detail-back {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--header-control-bg);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+}
+.detail-back svg {
+  width: 55%;
+  height: 55%;
+}
+/* Зона нажатия до 44px, не меняя раскладку строки. */
+.detail-back::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
+.detail-back:hover {
+  border-color: var(--muted);
+  background: color-mix(in srgb, var(--ink) 8%, var(--header-control-bg));
 }
 .detail-mobile-price {
   display: none;
@@ -2370,7 +2425,6 @@ button {
   .currency-switch,
   .select-search,
   .auth-field input,
-  .profile-fields .auth-field select,
   .profile-input-prefix
 ) {
   background: var(--surface);
@@ -2380,7 +2434,6 @@ button {
 :root[data-theme="dark"] :where(
   .select-search:focus-within,
   .auth-field input:focus,
-  .profile-fields .auth-field select:focus,
   .profile-input-prefix:focus-within
 ) {
   background: var(--panel);
@@ -3292,7 +3345,7 @@ button {
     padding: 14px;
     border: 1px solid var(--line);
     border-radius: 14px;
-    background: var(--panel-soft);
+    background: var(--panel);
   }
   .car-row:last-child {
     border-bottom: 1px solid var(--line);
@@ -3300,16 +3353,19 @@ button {
   .car-row:hover {
     border-color: var(--line);
     border-radius: 14px;
-    background: var(--panel-soft);
+    background: var(--panel);
   }
   .car-row:hover + .car-row {
     border-top-color: var(--line);
   }
+  /* Dark theme keeps the soft fill and drops the outline: there the card is
+     read by its lighter surface, while in light it is read by the outline. */
   html[data-theme="dark"] .car-row,
   html[data-theme="dark"] .car-row:last-child,
   html[data-theme="dark"] .car-row:hover,
   html[data-theme="dark"] .car-row:hover + .car-row {
     border-color: transparent;
+    background: var(--panel-soft);
   }
   .car-row-mobile-header {
     display: flex;
@@ -3461,6 +3517,14 @@ button {
     font-weight: 600;
     line-height: 1.3;
     letter-spacing: -0.2px;
+  }
+  .detail-title-line {
+    gap: 8px;
+    margin: 0 0 5px;
+  }
+  .detail-back {
+    width: 22px;
+    height: 22px;
   }
   .detail-mobile-price {
     display: block;
@@ -4015,6 +4079,56 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Brand marks in the brand list. Marks differ in proportion, so the slot is a
+   fixed box and every logo is centred inside it: the column of logos reads as
+   one straight line no matter how wide or tall a particular mark is. */
+.select-option-icon {
+  flex: 0 0 30px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  color: var(--muted);
+}
+.select-option-icon .brand-logo {
+  width: 30px;
+  height: 18px;
+  flex: 0 0 30px;
+  justify-content: center;
+}
+.select-option-icon .brand-logo img {
+  width: auto;
+  max-width: 100%;
+}
+.select-option-icon .brand-logo-fallback {
+  width: 28px;
+  flex-basis: 28px;
+  border-radius: 5px;
+  font-size: 16px;
+  line-height: 1;
+}
+.select-options button.selected .select-option-icon {
+  color: inherit;
+}
+.select-option-check {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: #fff;
+  transition: background-color 110ms ease, border-color 110ms ease;
+}
+.select-option-check.checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
 .select-option-count {
   flex: 0 0 auto;
   color: var(--muted);
@@ -4090,9 +4204,6 @@ button {
 .desktop-nav button,
 .desktop-nav a,
 .header-actions button {
-  font-size: 16px;
-}
-.icon-label b {
   font-size: 16px;
 }
 .eyebrow {
@@ -5461,61 +5572,9 @@ footer {
   font-size: 28px;
   letter-spacing: -0.8px;
 }
-.similar-cars-controls {
-  display: flex;
-  gap: 8px;
-}
-.similar-cars-controls button {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--panel);
-  color: var(--ink);
-  transition: border-color 0.2s, color 0.2s, transform 0.2s;
-}
-.similar-cars-controls button:not(:disabled):hover {
-  border-color: var(--line-strong);
-  color: var(--accent-dark);
-  transform: translateY(-1px);
-}
-.similar-cars-controls button:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-.similar-cars-controls button:disabled {
-  cursor: default;
-  opacity: 0.35;
-}
-.similar-cars-track {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: calc((100% - 48px) / 4);
-  gap: 16px;
-  overflow-x: auto;
-  padding: 2px 2px 24px;
-  margin: -2px -2px -24px;
-  scroll-behavior: smooth;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-  overscroll-behavior-inline: contain;
-}
-.similar-cars-track::-webkit-scrollbar {
-  display: none;
-}
-.similar-cars-track .featured-card {
-  height: 100%;
-  scroll-snap-align: start;
-}
 @media (max-width: 980px) {
   .detail-content {
     gap: 34px;
-  }
-  .similar-cars-track {
-    grid-auto-columns: calc((100% - 16px) / 2);
   }
 }
 @media (max-width: 700px) {
@@ -5561,19 +5620,6 @@ footer {
   }
   .similar-cars-heading h2 {
     font-size: 23px;
-  }
-  .similar-cars-controls {
-    display: none;
-  }
-  .similar-cars-track {
-    grid-auto-columns: min(82vw, 310px);
-    margin-right: -14px;
-    padding-right: 14px;
-    scroll-padding-inline: 2px 14px;
-  }
-  .similar-cars-track .featured-image {
-    height: auto;
-    aspect-ratio: 16 / 10;
   }
 }
 
@@ -5641,10 +5687,26 @@ footer {
   gap: 8px;
 }
 .unified-filter-primary {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+/* Год и цена задаются парой «от»/«до»: пара делит одну ячейку сетки и склеена
+   швом в 1px — у левой половины нет правых скруглений, у правой нет левых. */
+.filter-range-pair {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+}
+.filter-range-pair > .custom-select:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.filter-range-pair > .custom-select:last-child {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 .filter-extra-row {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 8px;
 }
 .filter-actions-row {
@@ -5784,7 +5846,8 @@ footer {
     display: grid;
     gap: 10px;
   }
-  .mobile-filter-sheet-fields > .custom-select {
+  .mobile-filter-sheet-fields > .custom-select,
+  .mobile-filter-sheet-fields > .filter-range-pair > .custom-select {
     height: 54px;
     flex: 0 0 auto;
   }
@@ -7003,15 +7066,13 @@ footer {
 .auth-intro {
   max-width: 590px;
 }
-.auth-intro h1,
-.account-heading h1 {
+.auth-intro h1 {
   margin: 10px 0 16px;
   font-size: clamp(38px, 4vw, 54px);
   line-height: 1.08;
   letter-spacing: -2.4px;
 }
-.auth-intro > p,
-.account-heading p {
+.auth-intro > p {
   max-width: 600px;
   margin: 0;
   color: var(--muted);
@@ -7244,18 +7305,22 @@ footer {
   text-decoration: none;
 }
 .account-page {
+  width: min(1220px, calc(100% - 48px));
+  margin-inline: auto;
   min-height: 680px;
-  padding-top: 62px;
+  padding-top: 26px;
   padding-bottom: 96px;
 }
 .account-heading {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   gap: 40px;
 }
 .account-heading h1 {
+  margin: 0;
   font-size: 42px;
+  line-height: 1.08;
   letter-spacing: -1.7px;
 }
 .account-logout {
@@ -7279,11 +7344,34 @@ footer {
 }
 .account-sidebar-user {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   gap: 11px;
   align-items: center;
   padding: 8px 7px 17px;
   border-bottom: 1px solid var(--line);
+}
+/* Deliberately quiet: account removal sits in the corner as an icon, so it never
+   competes with the sections, and it turns red only on approach. */
+.account-delete {
+  align-self: start;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  transition: background-color 130ms ease, color 130ms ease;
+}
+.account-delete:hover {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+.account-delete:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 .account-sidebar-user > b {
   width: 42px;
@@ -7336,9 +7424,8 @@ footer {
   color: var(--ink);
 }
 .account-navigation button.active {
-  background: var(--panel);
+  background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 2px 8px rgba(26, 29, 34, 0.08);
 }
 .account-navigation button.active > svg {
   color: var(--accent);
@@ -7358,10 +7445,17 @@ footer {
 .account-content {
   min-width: 0;
 }
-.account-content > .customer-order,
-.account-content > .account-order-loading,
+.account-content .customer-order,
+.account-content .account-order-loading,
 .account-content .account-profile-section {
   margin-top: 0;
+}
+/* Transparent wrapper: it only carries `hidden`, never a box of its own. */
+.account-tabpanel {
+  display: contents;
+}
+.account-tabpanel[hidden] {
+  display: none;
 }
 .account-order-loading {
   margin-top: 38px;
@@ -7560,6 +7654,27 @@ footer {
 .order-removal-error {
   margin-top: 18px;
   font-size: 16px;
+}
+/* Подтверждающие окна обходятся без плашки и иконки: заголовок с описанием
+   стоят по центру, а кнопки делят ширину контента поровну. */
+.confirm-modal > h2 {
+  margin-top: 4px;
+  text-align: center;
+}
+.confirm-modal > p {
+  text-align: center;
+}
+.account-removal-form {
+  margin-top: 20px;
+}
+.lead-modal.confirm-modal .order-removal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.confirm-modal .order-removal-actions > button {
+  width: 100%;
+  min-height: 46px;
+  justify-content: center;
 }
 .lead-modal .order-removal-actions {
   display: flex;
@@ -7821,38 +7936,15 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   color: var(--muted);
 }
 .account-section-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 30px;
-  padding-bottom: 22px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
-.account-section-heading > div > span {
-  color: var(--accent-dark);
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.account-section-heading h2 {
-  margin: 6px 0 0;
+.account-section-heading > span {
+  display: block;
+  color: var(--ink);
   font-size: 27px;
+  font-weight: 700;
   letter-spacing: -0.8px;
-}
-.account-section-heading p {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 16px;
-}
-.account-section-heading > b {
-  min-width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--surface);
-  font-size: 18px;
 }
 .account-favorites-list {
   margin-top: 8px;
@@ -7864,75 +7956,6 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   padding: 48px 0;
   color: var(--muted);
   font-size: 16px;
-}
-.account-settings-section {
-  display: grid;
-  gap: 18px;
-}
-.account-security-row {
-  min-height: 70px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
-}
-.account-security-row + .account-security-row {
-  margin-top: 0;
-}
-.account-security-row > div {
-  display: grid;
-  gap: 5px;
-}
-.account-security-row b {
-  font-size: 16px;
-}
-.account-panel .account-security-row span {
-  color: var(--muted);
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.account-security-row > svg {
-  color: var(--green);
-}
-.account-settings {
-  margin-top: 20px;
-  border-top: 1px solid var(--line);
-}
-.account-settings > summary {
-  min-height: 76px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  list-style: none;
-  color: var(--muted);
-  font-size: 16px;
-  cursor: pointer;
-}
-.account-settings > summary::-webkit-details-marker {
-  display: none;
-}
-.account-settings > summary > span {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.account-settings > summary b {
-  color: var(--ink);
-}
-.account-settings > summary > svg {
-  transition: transform 0.18s;
-}
-.account-settings[open] > summary > svg {
-  transform: rotate(180deg);
-}
-.account-settings-content .profile-editor {
-  margin-top: 0;
 }
 .account-summary {
   display: grid;
@@ -8068,43 +8091,26 @@ button.customer-order-stage-heading:hover:not(:disabled) {
 .profile-editor {
   margin-top: 18px;
 }
-.profile-editor-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-}
-.profile-editor-heading > svg {
-  color: var(--accent-dark);
-}
-.profile-editor-heading p {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 16px;
-}
 .profile-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 18px;
+  max-width: 500px;
   margin-top: 8px;
 }
-.profile-fields .auth-field input,
-.profile-fields .auth-field select {
+.profile-fields .auth-field input {
   min-height: 50px;
 }
-.profile-fields .auth-field select {
-  width: 100%;
-  padding: 0 38px 0 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  outline: 0;
-  background: var(--panel-soft);
-  color: var(--ink);
-  font-size: 16px;
+/* Поля профиля сидят на фоне страницы, читаются обводкой; дропдаун — наоборот. */
+#root .profile-fields .auth-field input,
+#root .profile-fields .auth-field input:focus,
+#root .profile-fields .profile-input-prefix,
+#root .profile-fields .profile-input-prefix:focus-within {
+  background: var(--page);
 }
-.profile-fields .auth-field select:focus {
-  border-color: var(--focus-ring);
-  background: var(--panel);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 34%, transparent);
+.profile-contact-select .select-trigger {
+  padding: 0 14px;
+}
+.profile-contact-select .select-trigger b {
+  font-weight: 400;
 }
 .profile-phone input:disabled {
   color: #7c828a;
@@ -8140,79 +8146,37 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   border-radius: 0 !important;
   box-shadow: none !important;
 }
-.passport-disclosure {
-  margin-top: 24px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  background: var(--panel-soft);
+.profile-extra {
+  margin-top: 22px;
 }
-.passport-disclosure > summary {
-  min-height: 78px;
-  display: flex;
+.profile-extra > summary {
+  min-height: 44px;
+  display: inline-flex;
   align-items: center;
-  gap: 13px;
-  padding: 14px 16px;
+  gap: 7px;
   list-style: none;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
   cursor: pointer;
 }
-.passport-disclosure > summary::-webkit-details-marker {
+.profile-extra > summary::-webkit-details-marker {
   display: none;
 }
-.passport-summary-icon {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--accent-dark) !important;
+.profile-extra > summary:hover {
+  color: var(--accent-dark);
 }
-.passport-summary-copy {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-  color: var(--ink) !important;
-  letter-spacing: normal !important;
-  text-transform: none !important;
-}
-.passport-summary-copy strong {
-  font-size: 17px;
-  line-height: 1.35;
-}
-.passport-summary-copy small {
-  color: var(--muted);
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1.45;
-}
-.passport-disclosure > summary em {
-  margin-left: auto;
-  padding: 6px 9px;
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 16px;
-  font-style: normal;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.passport-summary-caret {
+.profile-extra-caret {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: currentColor;
   transition: transform 0.16s ease;
 }
-.passport-disclosure[open] .passport-summary-caret {
+.profile-extra[open] .profile-extra-caret {
   transform: rotate(180deg);
 }
-.passport-fields {
+.profile-extra-fields {
   margin-top: 0;
-  padding: 2px 16px 18px;
-  border-top: 1px solid var(--line);
-}
-.passport-wide {
-  grid-column: 1 / -1;
 }
 .profile-actions {
   display: flex;
@@ -8400,46 +8364,82 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   .auth-modal .auth-consent {
     white-space: normal;
   }
+  /* `display: contents` on the heading lets the logout button leave the title
+     row and become the last item of the page grid, under the content. */
   .account-page {
-    padding-top: 34px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    /* `min-height` leaves free space when a tab is short, and the default
+       stretch would hand that space to the rows as extra gaps — so the blocks
+       sat lower on the short tab than on the tall one. */
+    align-content: start;
+    width: min(100% - 28px, 1220px);
+    padding-top: 18px;
     padding-bottom: 66px;
   }
   .account-heading {
-    display: grid;
-    gap: 23px;
+    display: contents;
   }
   .account-heading h1 {
-    margin-top: 7px;
     font-size: 34px;
     letter-spacing: -1.4px;
   }
-  .account-heading p {
-    font-size: 16px;
-  }
   .account-logout {
-    width: max-content;
-    min-height: 44px;
+    order: 3;
+    justify-self: stretch;
+    width: 100%;
+    min-height: 46px;
+    margin-top: 26px;
   }
   .account-layout {
-    grid-template-columns: 1fr;
+    order: 2;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
     gap: 20px;
     margin-top: 28px;
   }
+  /* The card and the tabs become separate rows of the page: the user block on
+     top, then the switcher, then the section itself. `display: contents` lifts
+     both out of the sidebar without duplicating the markup for one breakpoint. */
   .account-sidebar {
-    position: static;
-    padding: 10px;
-    border-radius: 14px;
+    display: contents;
   }
   .account-sidebar-user {
-    padding-bottom: 14px;
+    padding: 14px 15px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
   }
   .account-navigation {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
+    display: flex;
+    gap: 3px;
+    margin-top: 0;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    background: var(--panel);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .account-navigation::-webkit-scrollbar {
+    display: none;
   }
   .account-navigation button {
-    min-height: 48px;
-    padding-inline: 11px;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 42px;
+    justify-content: center;
+    gap: 7px;
+    padding-inline: 14px;
+    white-space: nowrap;
+  }
+  .account-navigation button > svg {
+    display: none;
+  }
+  .account-navigation button > b {
+    margin-left: 0;
+    min-width: 20px;
+    height: 20px;
   }
   .customer-order {
     margin-top: 0;
@@ -8513,7 +8513,8 @@ button.customer-order-stage-heading:hover:not(:disabled) {
     width: 100%;
     justify-content: center;
   }
-  .order-removal-actions .danger-button {
+  .order-removal-actions .danger-button,
+  .confirm-modal .order-removal-actions .invert-button {
     grid-row: 1;
   }
   .customer-order-stages {
@@ -8583,9 +8584,6 @@ button.customer-order-stage-heading:hover:not(:disabled) {
     display: grid;
     gap: 5px;
   }
-  .account-settings > summary {
-    min-height: 68px;
-  }
   .account-summary {
     grid-template-columns: 1fr;
     margin-top: 28px;
@@ -8603,43 +8601,11 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   .account-empty .primary {
     width: 100%;
   }
-  .account-section-heading {
-    align-items: flex-start;
-  }
-  .account-section-heading h2 {
+  .account-section-heading > span {
     font-size: 24px;
-  }
-  .account-section-heading p {
-    font-size: 16px;
-    line-height: 1.5;
   }
   .account-favorites-list {
     margin-top: 4px;
-  }
-  .profile-fields {
-    grid-template-columns: 1fr;
-  }
-  .passport-disclosure > summary {
-    align-items: flex-start;
-    gap: 10px;
-    padding: 14px;
-  }
-  .passport-summary-icon {
-    width: 38px;
-    height: 38px;
-    flex-basis: 38px;
-  }
-  .passport-disclosure > summary em {
-    display: none;
-  }
-  .passport-summary-caret {
-    margin-top: 8px;
-  }
-  .passport-fields {
-    padding: 2px 14px 16px;
-  }
-  .passport-wide {
-    grid-column: auto;
   }
   .profile-actions {
     align-items: flex-start;
@@ -8673,6 +8639,11 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   }
 }
 
+/* Кружок закрытия в тёмной теме читается только если он светлее панели окна. */
+html[data-theme="dark"] .modal-close {
+  background: #2b3038;
+}
+
 /* Dark theme component states: keep interaction hierarchy deliberate. */
 html[data-theme="dark"] {
   --line-strong: #454b55;
@@ -8702,8 +8673,10 @@ html[data-theme="dark"] :where(.popular-brands-heading button, .popular-brands-h
   color: var(--ink);
   box-shadow: none;
 }
-html[data-theme="dark"] .auth-switch button.active {
+html[data-theme="dark"] :where(.auth-switch, .account-navigation) button.active {
   background: #3b414a;
+  color: var(--ink);
+  box-shadow: none;
 }
 html[data-theme="dark"] .auth-modal .auth-switch {
   background: #191c20;
@@ -8809,7 +8782,7 @@ html[data-theme="dark"] body #root :where(.primary, .secondary):disabled {
   opacity: 1;
 }
 html[data-theme="dark"] body #root .customer-order-stages {
-  border-color: #2b3037;
+  border-color: transparent;
 }
 html[data-theme="dark"] body #root .customer-order-stage + .customer-order-stage {
   border-top-color: #2b3037;
@@ -9145,6 +9118,15 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     border-radius: 12px;
     background: var(--header-control-bg);
   }
+  .header-actions .favorites-link > b {
+    left: auto;
+    right: 2px;
+    top: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+  }
   .app-loader {
     min-height: calc(100dvh - 66px);
     padding-bottom: 66px;
@@ -9186,4 +9168,15 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .catalog-card-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Dark theme: личный кабинет читается по фону панелей, без обводок блоков. */
+html[data-theme="dark"] body #root :where(
+  .account-sidebar,
+  .account-panel,
+  .account-summary article,
+  .customer-order-car,
+  .account-order-loading
+) {
+  border-color: transparent;
 }

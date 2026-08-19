@@ -1,15 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { matchesMinimumYear, minimumYear, sortCars } from "../src/car-filters.js";
+import { matchesYearRange, sortCars } from "../src/car-filters.js";
 
-test("extracts the lower year boundary", () => {
-  assert.equal(minimumYear("от 2024"), 2024);
+test("keeps an open year range unfiltered", () => {
+  assert.equal(matchesYearRange({ year: 2019 }, null, null), true);
+  assert.equal(matchesYearRange({ year: 2019 }, 2024, null), false);
+  assert.equal(matchesYearRange({ year: 2025 }, null, 2024), false);
 });
 
-test("excludes older cars from a minimum-year filter", () => {
-  assert.equal(matchesMinimumYear({ year: 2022 }, "от 2024"), false);
-  assert.equal(matchesMinimumYear({ year: 2024 }, "от 2024"), true);
-  assert.equal(matchesMinimumYear({ year: 2025 }, "от 2024"), true);
+test("includes both ends of a closed year range", () => {
+  assert.equal(matchesYearRange({ year: 2021 }, 2022, 2024), false);
+  assert.equal(matchesYearRange({ year: 2022 }, 2022, 2024), true);
+  assert.equal(matchesYearRange({ year: 2023 }, 2022, 2024), true);
+  assert.equal(matchesYearRange({ year: 2024 }, 2022, 2024), true);
+  assert.equal(matchesYearRange({ year: 2025 }, 2022, 2024), false);
 });
 
 test("sorts catalog cars by price, mileage, listing date and model year", () => {

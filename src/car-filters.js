@@ -1,11 +1,9 @@
 import { seededRandom, varietyOrder } from "./car-variety.js";
 
-export function minimumYear(value) {
-  return Number(String(value || "").match(/\d{4}/)?.[0] || 0);
-}
-
-export function matchesMinimumYear(car, value) {
-  return Number(car.year) >= minimumYear(value);
+// Границы приходят числами или null — ярлыки селектов остаются в UI.
+export function matchesYearRange(car, yearMin, yearMax) {
+  const year = Number(car.year) || 0;
+  return (!yearMin || year >= Number(yearMin)) && (!yearMax || year <= Number(yearMax));
 }
 
 export function sortCars(cars, sort = "newest", seed = "") {

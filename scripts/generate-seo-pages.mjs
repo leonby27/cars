@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { estimateLandedCost } from "../src/pricing.js";
+import { normalizeDrive } from "../src/drive-types.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const clientDir = path.join(root, "dist", "client");
@@ -14,7 +15,7 @@ const siteBasePath = new URL(siteUrl).pathname.replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
 const shell = readFileSync(shellPath, "utf8");
 const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
-const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id);
+const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id).map((car) => ({ ...car, drive:normalizeDrive(car.drive) }));
 
 const publicPages = [
   { route: "/", title: "Автомобили из Китая в Беларусь — evcars.by", description: "Автомобили с пробегом из Китая с проверкой, расчётом стоимости и доставкой в Минск и Беларусь.", h1: "Автомобили с пробегом из Китая с доставкой в Беларусь", lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },

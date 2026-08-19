@@ -1,3 +1,7 @@
+import { normalizeDrive } from "../../src/drive-types.js";
+
+export { normalizeDrive };
+
 const BRAND_MAP = new Map([
   ["比亚迪", "BYD"], ["理想汽车", "Li Auto"], ["理想", "Li Auto"],
   ["极氪", "Zeekr"], ["小鹏", "XPeng"], ["蔚来", "NIO"],
@@ -187,13 +191,7 @@ export function normalizeEnergy(value, title = "") {
   return "Электромобиль";
 }
 
-export function normalizeDrive(value) {
-  if (!value) return "Не указан";
-  if (/四驱|全驱|AWD|4WD|dual motor/i.test(value)) return "Полный";
-  if (/后驱|RWD|rear[- ]wheel/i.test(value)) return "Задний";
-  if (/前驱|FWD|front[- ]wheel/i.test(value)) return "Передний";
-  return value;
-}
+
 
 const globalLineValue = (markdown, label) => markdown.match(new RegExp(`^${label}\\s*([^\\n]+)$`, "mi"))?.[1]?.trim() || null;
 const globalNumber = (value) => {
