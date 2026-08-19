@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { IMPORT_BRANDS, IMPORT_BRAND_SLUGS, IMPORT_MIN_YEAR, assertImportSourceEnabled, canonicalImportBrand, importPolicyViolation, isAllowedImportBrand } from "../config/import-policy.mjs";
@@ -67,7 +68,7 @@ async function fetchReader(targetUrl, key, selector, attempts = 4, { bypassCache
   throw lastError;
 }
 
-const current = JSON.parse(await fs.readFile(DATA_PATH, "utf8"));
+const current = existsSync(DATA_PATH) ? JSON.parse(await fs.readFile(DATA_PATH, "utf8")) : { cars: [] };
 const existingCarsById = new Map((current.cars || []).map((car) => [car.id, car]));
 const needsDetailRepair = (car) => car?.id?.startsWith("guazi-global-")
   && (car.listingFallback === true || (car.images || []).filter(Boolean).length < 2);
@@ -260,6 +261,6 @@ const meetsSafetyThreshold = repairFallbacks ? imported.length > 0 || candidates
 if (!meetsSafetyThreshold) {
   console.error("Import safety threshold not reached; catalog was not changed.");
   process.exitCode = 1;
-} else if (imported.length > 0) {
+} else if (imported.length > 0 && existsSync(DATA_PATH)) {
   await fs.writeFile(DATA_PATH, `${JSON.stringify({ ...current, source: "Guazi", generatedAt: finishedAt, count: mergedCars.length, cars: mergedCars }, null, 2)}\n`);
 }

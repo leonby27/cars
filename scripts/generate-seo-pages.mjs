@@ -7,18 +7,25 @@ import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeDrive } from "../src/drive-types.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const clientDir = path.join(root, "dist", "client");
+// Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
+// временной папке, чтобы не зависеть ни от дампа каталога, ни от общей сборки.
+const clientDir = process.env.SEO_OUTPUT_DIR ? path.resolve(process.env.SEO_OUTPUT_DIR) : path.join(root, "dist", "client");
 const shellPath = path.join(clientDir, "index.html");
-const catalogPath = path.join(root, "public", "data", "cars.json");
+const catalogPath = process.env.SEO_CATALOG ? path.resolve(process.env.SEO_CATALOG) : path.join(root, "public", "data", "cars.json");
 const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
 const siteBasePath = new URL(siteUrl).pathname.replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
 const shell = readFileSync(shellPath, "utf8");
-// Дамп каталога весит сотни мегабайт и живёт вне git, поэтому на хостинге его нет.
-// Там карточки отдаёт API поверх базы, и сборке хватает публичных страниц; без
-// дампа она предупреждает и продолжает, вместо того чтобы падать на ENOENT.
-const hasCatalog = existsSync(catalogPath);
-if (!hasCatalog) console.warn(`Каталог ${path.relative(root, catalogPath)} не найден: страницы автомобилей и статический каталог собраны не будут.`);
+// Страницы автомобилей и статический каталог собираются только по явному
+// `SEO_VEHICLE_PAGES=1`. По умолчанию их нет: на хостинге карточки отдаёт API
+// поверх базы, дампа каталога там вообще не бывает, а индексация выключена —
+// то есть 30 тысяч noindex-страниц и столько же JSON-файлов давали лишь гигабайт
+// в `dist/` и получасовую сборку. Когда страницы машин понадобятся поисковикам,
+// флаг включается вместе с `SEO_ALLOW_INDEXING=1`, и тогда же нужно решить,
+// откуда сборка берёт каталог — дамп или база.
+const vehiclePages = /^(1|true|yes)$/i.test(String(process.env.SEO_VEHICLE_PAGES || "false"));
+const hasCatalog = vehiclePages && existsSync(catalogPath);
+if (vehiclePages && !hasCatalog) console.warn(`Каталог ${path.relative(root, catalogPath)} не найден: страницы автомобилей и статический каталог собраны не будут.`);
 const catalog = hasCatalog ? JSON.parse(readFileSync(catalogPath, "utf8")) : {};
 const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id).map((car) => ({ ...car, drive:normalizeDrive(car.drive) }));
 
@@ -196,8 +203,12 @@ const pageEntries = publicPages.map((page) => ({ loc: routeUrl(page.route), last
 const carEntries = cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) }));
 const urlset = (entries) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(({ loc, lastmod }) => `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`).join("\n")}\n</urlset>\n`;
 writeFileSync(path.join(clientDir, "sitemap-pages.xml"), urlset(pageEntries));
-writeFileSync(path.join(clientDir, "sitemap-cars.xml"), urlset(carEntries));
-writeFileSync(path.join(clientDir, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <sitemap><loc>${escapeXml(siteUrl)}/sitemap-pages.xml</loc></sitemap>\n  <sitemap><loc>${escapeXml(siteUrl)}/sitemap-cars.xml</loc></sitemap>\n</sitemapindex>\n`);
+// Пустую карту машин не публикуем и в индекс не вписываем: без страниц машин
+// ссылаться в ней не на что.
+if (carEntries.length) writeFileSync(path.join(clientDir, "sitemap-cars.xml"), urlset(carEntries));
+else rmSync(path.join(clientDir, "sitemap-cars.xml"), { force:true });
+const sitemaps = ["sitemap-pages.xml", ...(carEntries.length ? ["sitemap-cars.xml"] : [])];
+writeFileSync(path.join(clientDir, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps.map((name) => `  <sitemap><loc>${escapeXml(siteUrl)}/${name}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`);
 
 const robots = allowIndexing
   ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\n\nSitemap: ${siteUrl}/sitemap.xml\n`
@@ -223,6 +234,8 @@ const compactCars = cars.map((car) => ({
 // Пустой каталог не пишем: приложение считает такой ответ поводом показать ошибку,
 // а отсутствующий файл честно роняет его на API, который и держит карточки.
 if (cars.length) {
+  // Папку данных до этого создавал только vite, копируя `public/data`.
+  mkdirSync(path.join(clientDir, "data"), { recursive:true });
   const compactPayload = JSON.stringify({ generatedAt:catalog.generatedAt || null, cars:compactCars });
   writeFileSync(path.join(clientDir, "data", "catalog.json"), compactPayload);
   writeFileSync(path.join(clientDir, "data", "catalog.json.gz"), gzipSync(compactPayload, { level:9 }));
@@ -234,4 +247,4 @@ if (cars.length) {
 }
 rmSync(path.join(clientDir, "data", "cars.json"), { force:true });
 
-console.log(`Generated ${publicPages.length} public pages, ${cars.length} vehicle pages, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
+console.log(`Generated ${publicPages.length} public pages, ${cars.length} vehicle pages${vehiclePages ? "" : " (SEO_VEHICLE_PAGES=1 включает страницы машин и статический каталог)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);

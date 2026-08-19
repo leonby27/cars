@@ -251,3 +251,7 @@ Quick view is an addition to the full vehicle page, never a replacement: keep an
 Action-button tooltip preference: the round "Копировать ссылку" and favourite buttons show a small (14px) borderless tooltip that fades in above the button and centred on it, flipping below only when there is no room above; the copy button reports the result in the same tooltip.
 
 Share-action preference: no share icon anywhere in the interface, including the vehicle-page action row.
+
+Static vehicle-page policy: the build ships the public pages only. Per-vehicle prerendered pages, the per-vehicle JSON records, and the compact static catalog are generated exclusively with `SEO_VEHICLE_PAGES=1`. Production serves listings from the database API and keeps indexing disabled, so those 30 000 noindex pages and their JSON twins were pure build weight — a gigabyte in `dist/` and a build that read a 421 MB dump. Turning them back on for search engines means setting `SEO_ALLOW_INDEXING=1` alongside it and deciding where the build reads the catalog from: the local dump or the database. Without them the app has no static fallback data, so `npm run preview` needs the API running.
+
+Catalog-dump policy: treat `public/data/cars.json` as an optional local artifact. It stays out of git, only importers create it, and the database is the source of truth for which listings are already known. A missing dump must never crash an importer: known ids come from the database, and the static copy is simply not written instead of being recreated from a single run.

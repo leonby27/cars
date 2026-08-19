@@ -18,6 +18,7 @@
 //   npm run importv2 -- --limit=1000 --batch=100 --brands=Deepal,Zeekr
 //   npm run importv2 -- --repair=range
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -54,7 +55,13 @@ const writeDatabase = args.get("database") !== "0";
 // share that file: each rewrites it whole from its own snapshot, so the second
 // writer drops the first one's cards. The accepted cards are parked in a sidecar
 // instead, ready to be merged once the other run is done — no refetching.
-const writeStatic = args.get("static") !== "0";
+// Дампа каталога может не быть вовсе — он весит сотни мегабайт, вне git и
+// пересоздаётся только импортом. Источник истины — база: там те же машины и ещё
+// сверх того, поэтому без дампа просто не пишем статическую копию, а не заводим
+// её заново с одной машины.
+const hasStaticCatalog = existsSync(DATA_PATH);
+const writeStatic = args.get("static") !== "0" && hasStaticCatalog;
+if (args.get("static") !== "0" && !hasStaticCatalog) console.warn(`[static] ${path.relative(ROOT, DATA_PATH)} нет — статическая копия каталога не пишется; известные id берём из базы.`);
 const PENDING_PATH = path.join(ROOT, "runtime", "che168-pending.json");
 const maxBrandId = Number(args.get("max-brand-id") || 999);
 const fuelTypes = String(args.get("fueltype") || ELECTRIC_FUEL_TYPE)
@@ -164,7 +171,7 @@ async function loadBrandMap(page) {
   return buildBrandMap(page);
 }
 
-const catalog = JSON.parse(await fs.readFile(DATA_PATH, "utf8"));
+const catalog = hasStaticCatalog ? JSON.parse(await fs.readFile(DATA_PATH, "utf8")) : { cars: [] };
 const catalogById = new Map((catalog.cars || []).map((car) => [car.id, car]));
 // Listings can be in the database without being in the static file yet — that is
 // exactly what `--static=0` produces. Skipping those ids too keeps a follow-up

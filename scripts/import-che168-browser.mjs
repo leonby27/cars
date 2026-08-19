@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { IMPORT_BRANDS, IMPORT_MIN_YEAR, canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
@@ -84,7 +85,8 @@ export async function createChe168Pilot({ browser, limit = 100, pages = 24, conc
     listUrl,
     ...seriesIds.map((seriesId) => `https://global.che168.com/en/used-cars?brandid=${encodeURIComponent(brandId)}&seriesid=${encodeURIComponent(seriesId)}&fueltype=7&vehicle_list=1${sortQuery}`),
   ])];
-  const current = JSON.parse(await fs.readFile(DATA_PATH, "utf8"));
+  // Дампа каталога может не быть: он вне git, а машины живут в базе.
+  const current = existsSync(DATA_PATH) ? JSON.parse(await fs.readFile(DATA_PATH, "utf8")) : { cars: [] };
   const existingIds = new Set((current.cars || []).map((car) => car.id));
   const startedAt = new Date().toISOString();
   const candidates = [];
@@ -200,7 +202,8 @@ export async function createChe168Pilot({ browser, limit = 100, pages = 24, conc
       discoveryErrors,
       rejectionExamples:rejected.slice(0, 30),
     };
-    await fs.writeFile(DATA_PATH, `${JSON.stringify({ ...current, generatedAt:finishedAt, count:merged.length, cars:merged }, null, 2)}\n`);
+    if (existsSync(DATA_PATH)) await fs.writeFile(DATA_PATH, `${JSON.stringify({ ...current, generatedAt:finishedAt, count:merged.length, cars:merged }, null, 2)}\n`);
+    else console.warn(`[static] ${path.relative(ROOT, DATA_PATH)} нет — статическая копия каталога не пишется; машины ушли в базу.`);
     await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
     return report;
   }
