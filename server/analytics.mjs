@@ -108,7 +108,7 @@ export function normalizeAnalyticsDays(value) {
 export async function getAnalyticsDashboard(daysValue) {
   const days = normalizeAnalyticsDays(daysValue);
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
-  const [summaryResult,dailyResult,vehiclesResult,registrationsResult,recentResult] = await Promise.all([
+  const [summaryResult,dailyResult,vehiclesResult,registrationsResult,recentResult,accountsResult] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id)::int AS visitors,
       count(DISTINCT session_id)::int AS sessions,
@@ -140,12 +140,26 @@ export async function getAnalyticsDashboard(daysValue) {
       ORDER BY created_at DESC LIMIT 100`, [cutoff]),
     pool.query(`SELECT event_name,listing_id,listing_title,path,created_at
       FROM analytics_events WHERE created_at >= $1 ORDER BY created_at DESC LIMIT 30`, [cutoff]),
+    // Регистрации считаем по аккаунтам, а не по событиям — тем же источником, из которого
+    // берётся список ниже. Иначе счётчик и список расходятся: событий может не быть вовсе
+    // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
+    pool.query(`SELECT created_at::date::text AS day, count(*)::int AS registrations
+      FROM customer_accounts WHERE created_at >= $1 GROUP BY 1`, [cutoff]),
   ]);
+  const registrationsByDay = new Map(accountsResult.rows.map((row) => [row.day, row.registrations]));
+  const registrations = [...registrationsByDay.values()].reduce((total, value) => total + value, 0);
+  // День с регистрацией, но без событий, в выборке событий не появится — добавляем его сами,
+  // иначе регистрация исчезла бы из графика.
+  const daily = dailyResult.rows.map((row) => ({ ...row, registrations:registrationsByDay.get(row.day) || 0 }));
+  for (const [day, count] of registrationsByDay) {
+    if (!daily.some((row) => row.day === day)) daily.push({ day, visitors:0, vehicle_views:0, availability_clicks:0, registrations:count, custom_searches:0 });
+  }
+  daily.sort((left, right) => left.day.localeCompare(right.day));
   return {
     days,
     generatedAt:new Date().toISOString(),
-    summary:summaryResult.rows[0],
-    daily:dailyResult.rows,
+    summary:{ ...summaryResult.rows[0], registrations },
+    daily,
     vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, availabilityClicks:row.availability_clicks, favorites:row.favorites })),
     // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
     // разделе он читался и работала ссылка «позвонить».
