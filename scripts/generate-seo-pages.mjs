@@ -54,7 +54,7 @@ const publicPages = [
   { route: "/terms/", title: "Условия использования сайта | evcars.by", description: "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая.", h1: "Условия использования сайта", lead: "Информация каталога и расчёты являются предварительными; финальные условия фиксируются после проверки и в договоре." },
 ];
 
-const privateRoutes = ["/favorites/", "/login/", "/register/", "/account/", "/analytics/"];
+const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
 const escapeXml = (value) => escapeHtml(value).replace(/'/g, "&apos;");
 const jsonLd = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
@@ -264,7 +264,7 @@ const robots = allowIndexing
   // Карту сайта в robots.txt не упоминаем: эта строка публично показала бы, где лежит
   // список всех адресов каталога. Поисковикам её адрес задают вручную — один раз, в
   // Google Search Console и Яндекс.Вебмастере; на обход и индексацию это не влияет.
-  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\n`
+  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /searches/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\n`
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;
 writeFileSync(path.join(clientDir, "robots.txt"), robots);
 

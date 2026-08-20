@@ -8,6 +8,7 @@ export const ANALYTICS_EVENTS = new Set([
   "availability_click",
   "registration_completed",
   "favorite_added",
+  "search_saved",
   "custom_search_submitted",
 ]);
 

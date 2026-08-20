@@ -5,6 +5,7 @@ import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
+import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
 import { analyticsCookie, clearAnalyticsCookie, createAnalyticsToken, getAnalyticsDashboard, hasAnalyticsSession, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 
@@ -212,6 +213,26 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "GET" && url.pathname === "/api/account/favorites") {
       const result = await listAccountFavorites(request);
+      return result.error ? json(response, 401, result) : json(response, 200, result);
+    }
+    if (request.method === "GET" && url.pathname === "/api/account/searches") {
+      const result = await listCustomerSearches(request);
+      return result.error ? json(response, 401, result) : json(response, 200, result);
+    }
+    if (request.method === "POST" && url.pathname === "/api/account/searches") {
+      const body = await readJson(request);
+      const title = String(body.title || "").trim();
+      if (!title || title.length > 160) return json(response, 400, { error:"invalid_title" });
+      const filters = normalizeSearchFilters(body.filters);
+      if (!filters) return json(response, 400, { error:"invalid_filters" });
+      const result = await createCustomerSearch(request, title, filters);
+      if (result.error === "unauthorized") return json(response, 401, result);
+      if (result.error) return json(response, 409, result);
+      return json(response, 201, result);
+    }
+    const searchDeleteMatch = request.method === "DELETE" && url.pathname.match(/^\/api\/account\/searches\/(\d+)$/);
+    if (searchDeleteMatch) {
+      const result = await deleteCustomerSearch(request, Number(searchDeleteMatch[1]));
       return result.error ? json(response, 401, result) : json(response, 200, result);
     }
     if (request.method === "GET" && url.pathname === "/api/account/orders") {

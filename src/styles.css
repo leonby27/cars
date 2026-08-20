@@ -101,7 +101,9 @@ html[data-theme="dark"] #root :where(
   border-color: var(--line);
   color: var(--ink);
 }
-html[data-theme="dark"] #root :where(.secondary, .side-card .secondary, .danger-button) {
+/* Залитый вариант (.solid) не перекрашиваем: он должен оставаться красной
+   кнопкой действия и в тёмной теме. */
+html[data-theme="dark"] #root :where(.secondary, .side-card .secondary, .danger-button:not(.solid)) {
   background: var(--panel);
   border-color: #454b55;
 }
@@ -135,7 +137,7 @@ button {
   cursor: pointer;
 }
 .page-width {
-  width: min(1180px, calc(100% - 48px));
+  width: min(1280px, calc(100% - 48px));
   margin-inline: auto;
 }
 .site-header {
@@ -148,7 +150,7 @@ button {
   backdrop-filter: none;
 }
 .header-inner {
-  width: min(1220px, calc(100% - 48px));
+  width: min(1320px, calc(100% - 48px));
   height: 100%;
   margin: auto;
   display: flex;
@@ -230,7 +232,9 @@ button {
   font-variant-numeric: tabular-nums;
 }
 .hero {
-  padding: 84px 24px 48px;
+  /* Нижний отступ небольшой: блок фильтров по умолчанию свёрнут,
+     и «Популярные марки» не должны отваливаться от строки поиска. */
+  padding: 84px 24px 18px;
   text-align: center;
   background: var(--page);
 }
@@ -280,6 +284,141 @@ button {
 .hero-benefits svg {
   flex: 0 0 auto;
   color: var(--green);
+}
+.hero-search {
+  position: relative;
+  width: min(1040px, 100%);
+  margin: 0 auto 14px;
+  text-align: left;
+}
+.hero-search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  /* Чуть темнее var(--panel-soft): строка поиска должна читаться на белой странице. */
+  background: #e9ebef;
+  border: 0;
+  border-radius: 20px;
+}
+.hero-search-field > svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.hero-search-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 23px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 17px;
+}
+.hero-search-field input::-webkit-search-cancel-button {
+  display: none;
+}
+/* Подсказка заметнее набранного текста по ритму: чуть крупнее и плотнее. */
+.hero-search-field input::placeholder {
+  color: var(--muted);
+  font-size: 1.06em;
+  font-weight: 500;
+}
+/* Кнопка фильтров и крестик очистки живут в одном «гнезде» справа: пока строка
+   пустая — фильтры, появился текст — крестик. Геометрия у них общая, различаются
+   только иконка и цвет, чтобы подмена не дёргала строку. */
+.hero-search-clear,
+.hero-search-filters {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  /* Поле с боков имеет 18px; -4px оставляет справа 14px — столько же,
+     сколько остаётся у кнопки сверху и снизу. */
+  margin-right: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+/* Крестик инверсией к теме: в тёмной — белый с тёмным крестиком, в светлой наоборот. */
+.hero-search-clear {
+  background: var(--ink);
+  color: var(--page);
+  transition: opacity var(--motion-fast) ease;
+}
+.hero-search-clear:hover {
+  opacity: 0.82;
+}
+.hero-search-filters {
+  background: var(--panel);
+  color: var(--muted);
+  transition: color var(--motion-fast) ease;
+}
+.hero-search-filters:hover {
+  color: var(--ink);
+}
+.hero-search-filters[aria-expanded="true"] {
+  color: var(--accent-dark);
+}
+/* В тёмной теме строка поиска светлее фона страницы, а подложка кнопки
+   фильтров — ещё на шаг светлее, иначе они сливаются. */
+html[data-theme="dark"] .hero-search-field {
+  background: #23272d;
+}
+html[data-theme="dark"] .hero-search-filters {
+  background: #30353d;
+}
+.hero-quick-search {
+  display: none;
+}
+.hero-quick-search.open {
+  display: block;
+}
+/* Во время поиска блоки между строкой и выдачей спрятаны — зазор ужимаем в разы.
+   Двойной класс перевешивает мобильные отступы `.hero`/`.featured`, объявленные ниже:
+   вместе с margin строки поиска (14px) и отступом заголовка (5px) выходит 24px. */
+.hero.hero--searching {
+  padding-bottom: 0;
+}
+.featured.featured--search {
+  padding-top: 5px;
+}
+.search-results-note {
+  margin: -6px 0 18px;
+  color: var(--muted);
+  font-size: 16px;
+}
+/* Счётчик и «Быстрый просмотр» слева одной строкой. */
+.search-results-lead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+.search-results-lead .search-results-note {
+  margin: 0;
+}
+/* Счётчик слева, сортировка и вид справа — по нижней линии счётчика.
+   От строки поиска до этой строки на десктопе ровно 60px:
+   14px (низ строки поиска) + 5px (верх секции) + 41px здесь. */
+.search-results-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 41px 0 18px;
+}
+.search-results-bar .search-results-note {
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .hero-search-field input {
+    font-size: 16px;
+  }
 }
 .visually-hidden {
   position: absolute !important;
@@ -477,7 +616,7 @@ button {
 }
 .popular-brands {
   width: min(1040px, calc(100% - 48px));
-  padding: 44px 0 38px;
+  padding: 14px 0 38px;
 }
 .popular-brands-heading {
   display: flex;
@@ -1294,6 +1433,36 @@ button {
 .favorites-page {
   min-height: calc(100vh - 145px);
 }
+.listing-id-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.listing-id-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+.listing-id-row button:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+/* Сортировка и вид живут прямо в строке заголовка: на узком экране
+   переносим их под заголовок, а не сжимаем. */
+.favorites-page .catalog-heading {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+}
 .favorites-empty svg {
   color: var(--accent-dark);
 }
@@ -1302,6 +1471,222 @@ button {
   max-width: 460px;
   font-size: 16px;
   line-height: 1.6;
+}
+/* Мои поиски: заголовок открывает каталог, ниже — ряд маленьких превью машин. */
+.saved-searches-page {
+  min-height: calc(100vh - 145px);
+}
+.saved-search-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 6px;
+}
+.saved-search-card {
+  display: grid;
+  gap: 11px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+}
+/* Текст заголовка и «Удалить поиск» стоят на одной строчной линии. */
+.saved-search-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.saved-search-main {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+/* Название, число машин и дата — одной строкой через точку-глиф. */
+/* Вся строка — единым заголовочным цветом и весом, без выделений и реакции на курсор. */
+/* Строка течёт как обычный текст и переносится по словам: раньше каждая часть
+   была отдельным блоком, и перенос случался раньше, чем кончалось место. */
+.saved-search-title-line {
+  display: block;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1.45;
+}
+.saved-search-title-line :is(strong, b, span) {
+  color: inherit;
+  font-weight: inherit;
+}
+/* Промежутки у точек — как у точки внутри названия («Электромобили · Audi»). */
+.saved-search-dot {
+  margin: 0 5px;
+}
+/* Удаление — просто красная текстовая кнопка в правом верхнем углу карточки;
+   иконка-корзинка припасена для телефона и на широких экранах спрятана. */
+.saved-search-delete {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-dark);
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.saved-search-delete:hover {
+  background: var(--accent-soft);
+}
+.saved-search-delete > svg {
+  display: none;
+}
+.saved-search-previews {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+}
+/* Мини-карточка — только фото с прокруткой галереи по наведению; цена лежит
+   плашкой в левом верхнем углу снимка. */
+.saved-search-preview {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+.saved-search-preview:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+.saved-search-preview-image {
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface);
+  aspect-ratio: 4 / 3;
+}
+.saved-search-preview .hover-image-count {
+  display: none;
+}
+.saved-search-preview-price {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: rgba(14, 16, 19, 0.75);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+/* Седьмая ячейка ряда — блок-стрелка той же высоты, что фото соседних карточек. */
+.saved-search-more {
+  display: grid;
+  align-self: start;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  aspect-ratio: 4 / 3;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+/* Подсветка нейтральная, а кружок всегда светлее и плитки, и её ховера,
+   чтобы не сливаться с фоном ни в одной из тем. */
+.saved-search-more:hover {
+  background: var(--model-chip-hover-bg);
+}
+.saved-search-more-circle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--panel);
+}
+:root[data-theme="dark"] .saved-search-more-circle {
+  background: #414751;
+}
+/* В тёмной теме карточка без обводки и почти сливается с фоном страницы. */
+:root[data-theme="dark"] .saved-search-card {
+  border-color: transparent;
+  background: var(--panel-soft);
+}
+.saved-searches-empty svg {
+  color: var(--accent-dark);
+}
+.saved-searches-empty p {
+  margin: 0 auto 22px;
+  max-width: 460px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+@media (max-width: 700px) {
+  .saved-search-card {
+    gap: 10px;
+    padding: 16px;
+  }
+  /* На телефоне вместо подписи «Удалить поиск» — квадратная кнопка-корзинка,
+     иначе она отъедала половину строки заголовка. */
+  .saved-search-head {
+    align-items: flex-start;
+  }
+  /* Заголовок на телефоне занимает три строки — делаем его мельче и легче,
+     чтобы он не спорил с превью (мельче 16px — явное решение владельца). */
+  .saved-search-title-line {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+  }
+  .saved-search-delete {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .saved-search-delete > svg {
+    display: block;
+  }
+  .saved-search-delete span {
+    display: none;
+  }
+  /* «Смотреть все» на телефоне стоит первой карточкой ленты — иначе до неё
+     пришлось бы долистывать все превью. */
+  .saved-search-more {
+    order: -1;
+  }
+  /* Пять мини-карточек в ширину телефона не читаются — лента листается пальцем. */
+  .saved-search-previews {
+    grid-auto-flow: column;
+    grid-auto-columns: 44%;
+    grid-template-columns: none;
+    gap: 10px;
+    overflow-x: auto;
+    margin: 0 -16px;
+    padding: 0 16px 4px;
+    scrollbar-width: none;
+  }
+  .saved-search-previews::-webkit-scrollbar {
+    display: none;
+  }
 }
 .detail {
   padding-bottom: 90px;
@@ -1375,7 +1760,29 @@ button {
   display: none;
 }
 .mobile-scroll-top {
-  display: none;
+  position: fixed;
+  z-index: 40;
+  right: 22px;
+  bottom: 22px;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  background: var(--header-control-bg);
+  color: var(--ink);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(12px) scale(0.94);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.mobile-scroll-top.is-visible {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 .detail-title p {
   margin: 0;
@@ -1664,6 +2071,7 @@ button {
 }
 .skeleton-card .featured-image,
 .skeleton-card .car-row-image,
+.skeleton-card .saved-search-preview-image,
 .skeleton-line {
   background: linear-gradient(90deg, var(--surface) 30%, var(--header-control-bg) 50%, var(--surface) 70%);
   background-size: 300% 100%;
@@ -1696,6 +2104,7 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .skeleton-card .featured-image,
   .skeleton-card .car-row-image,
+  .skeleton-card .saved-search-preview-image,
   .skeleton-line {
     animation: none;
   }
@@ -2536,6 +2945,16 @@ button {
 :root[data-theme="dark"] .danger-button:hover {
   background: rgba(238, 28, 37, 0.14);
 }
+/* «Залитый» опасный вариант остаётся залитым и в тёмной теме: общие правила выше
+   делали его контурным, и подтверждающая красная кнопка выглядела как второстепенная. */
+:root[data-theme="dark"] .danger-button.solid {
+  border-color: transparent;
+  background: #c73523;
+  color: #fff;
+}
+:root[data-theme="dark"] .danger-button.solid:hover {
+  background: #d64431;
+}
 @media (max-width: 700px) {
   .header-inner {
     gap: 8px;
@@ -2574,12 +2993,12 @@ button {
 }
 .modal-close {
   position: absolute;
-  top: 15px;
-  right: 15px;
+  top: 13px;
+  right: 13px;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 50%;
   background: var(--surface);
@@ -3123,7 +3542,7 @@ button {
 @media (max-width: 700px) {
   .page-width,
   .header-inner {
-    width: min(100% - 28px, 1180px);
+    width: min(100% - 28px, 1280px);
   }
   .site-header {
     height: 58px;
@@ -3136,7 +3555,8 @@ button {
   }
   .hero {
     min-height: auto;
-    padding: 52px 14px 38px;
+    /* Отступ от шапки до заголовка — вдвое меньше десктопного ритма. */
+    padding: 26px 14px 13px;
     text-align: center;
   }
   .hero h1 {
@@ -3144,6 +3564,7 @@ button {
     letter-spacing: -1.6px;
   }
   .hero > p {
+    margin-top: 10px;
     font-size: 16px;
   }
   .hero-benefits {
@@ -3226,7 +3647,7 @@ button {
     grid-column: span 2;
   }
   .popular-brands {
-    padding: 34px 0 30px;
+    padding: 11px 0 30px;
   }
   .popular-brands-heading {
     align-items: center;
@@ -3330,10 +3751,15 @@ button {
     display: none;
   }
   .catalog {
-    padding-top: 25px;
+    padding-top: 10px;
   }
   .catalog-heading {
     align-items: flex-start;
+  }
+  .catalog .catalog-heading {
+    justify-content: center;
+    text-align: center;
+    margin-bottom: 16px;
   }
   .catalog-heading h1 {
     font-size: 27px;
@@ -3546,11 +3972,15 @@ button {
     grid-column: 2;
     grid-row: 1;
     margin: 0;
+    /* Длинное название не переносится на вторую строку, а режется в три точки. */
+    overflow: hidden;
     color: var(--ink);
     font-size: 16px;
     font-weight: 600;
     line-height: 1.3;
     letter-spacing: -0.2px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .detail-title-line {
     display: contents;
@@ -4493,6 +4923,24 @@ html body #root .result-controls .sort-custom-select.open,
 html body #root .result-controls .sort-custom-select.open .select-trigger {
   background: var(--filter-field-open-bg);
 }
+/* Жёлтая «В каталог» рядом с переключателем вида: по высоте, скруглению
+   и шрифту повторяет селект сортировки. Только на широких экранах. */
+.search-catalog-link {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  /* Перебиваем min-height: 50px из общего .primary — тут высота как у селекта. */
+  min-height: 0;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: var(--yellow-ink);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
 #root .result-view-toggle {
   display: flex;
   flex: 0 0 auto;
@@ -4538,30 +4986,19 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
   box-shadow: none;
 }
 @media (max-width: 700px) {
+  #root .result-view-toggle {
+    display: none;
+  }
+  /* На телефоне жёлтая «В каталог» ужимается до одной стрелки. */
+  .search-catalog-link .search-catalog-link-label {
+    display: none;
+  }
+  .search-catalog-link {
+    padding: 0 11px;
+  }
   .mobile-scroll-top {
-    position: fixed;
-    z-index: 40;
     right: 14px;
     bottom: max(14px, env(safe-area-inset-bottom));
-    width: 46px;
-    height: 46px;
-    display: grid;
-    place-items: center;
-    padding: 0;
-    border: 0;
-    border-radius: 13px;
-    background: var(--header-control-bg);
-    color: var(--ink);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
-    pointer-events: none;
-    opacity: 0;
-    transform: translateY(12px) scale(0.94);
-    transition: opacity 180ms ease, transform 180ms ease;
-  }
-  .mobile-scroll-top.is-visible {
-    pointer-events: auto;
-    opacity: 1;
-    transform: translateY(0) scale(1);
   }
   .result-summary {
     display: block;
@@ -4580,6 +5017,12 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
   }
   .sort-custom-select .select-trigger b,
   .sort-custom-select .select-options button {
+    font-size: 14px;
+  }
+  /* Чипы моделей под фильтрами — тем же кеглем, что и селект сортировки рядом. */
+  .model-quick-chips button {
+    min-height: 34px;
+    padding: 0 12px;
     font-size: 14px;
   }
 }
@@ -5925,6 +6368,9 @@ html[data-theme="dark"] #root .spec-search,
   margin-left: auto;
 }
 .search-reset {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   min-height: 40px;
   margin-left: auto;
   padding: 0 12px;
@@ -5942,6 +6388,37 @@ html[data-theme="dark"] #root .spec-search,
 .search-reset + .primary {
   margin-left: 0;
 }
+/* «Сохранить поиск» стоит в паре со «Сбросить» и делит с ним правый край строки. */
+.search-save {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+}
+.search-save:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.search-save.saved {
+  color: var(--accent-dark);
+}
+.search-save ~ .search-reset {
+  margin-left: 0;
+}
+.filter-actions-divider {
+  width: 1px;
+  height: 22px;
+  flex: 0 0 1px;
+  background: var(--line-strong);
+}
 .more-filters-toggle {
   display: flex;
   align-items: center;
@@ -5958,6 +6435,18 @@ html[data-theme="dark"] #root .spec-search,
 .more-filters-toggle:hover {
   background: var(--accent-soft);
   color: var(--accent-dark);
+}
+/* Подпись не переносится на вторую строку: когда места мало, режется в три точки. */
+.more-filters-toggle {
+  min-width: 0;
+}
+.more-filters-toggle-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.more-filters-toggle svg {
+  flex: 0 0 auto;
 }
 .more-filters-toggle svg:last-child {
   transition: transform 0.18s ease;
@@ -6074,6 +6563,7 @@ html[data-theme="dark"] #root .spec-search,
   .mobile-filter-sheet-actions .search-reset {
     min-height: 52px;
     flex: 1;
+    justify-content: center;
     margin: 0;
     padding: 0 16px;
     border-radius: 10px;
@@ -6103,13 +6593,26 @@ html[data-theme="dark"] #root .spec-search,
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 14px 12px;
+    gap: 12px;
   }
   .filter-actions-row .primary {
     grid-column: 1 / -1;
     grid-row: 2;
     width: 100%;
     margin-left: 0;
+  }
+  /* «Сохранить поиск» на телефоне живёт под жёлтой кнопкой — с иконкой и подписью;
+     в строке с «Ещё фильтры» ему не хватало места. */
+  .filter-actions-row > .search-save {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    min-height: 40px;
+    justify-self: center;
+    align-self: center;
+    margin-left: 0;
+  }
+  .filter-actions-divider {
+    display: none;
   }
   .filter-actions-row > .search-reset {
     grid-column: 2;
@@ -7502,18 +8005,8 @@ html[data-theme="dark"] #root .spec-search,
   cursor: wait;
   opacity: 0.65;
 }
-.auth-help {
-  margin: 17px 0 0;
-  color: var(--muted);
-  font-size: 16px;
-  text-align: center;
-}
-.auth-help button {
-  color: var(--accent-dark);
-  text-decoration: none;
-}
 .account-page {
-  width: min(1220px, calc(100% - 48px));
+  width: min(1320px, calc(100% - 48px));
   margin-inline: auto;
   min-height: 680px;
   padding-top: 26px;
@@ -7867,6 +8360,8 @@ html[data-theme="dark"] #root .spec-search,
    стоят по центру, а кнопки делят ширину контента поровну. */
 .confirm-modal > h2 {
   margin-top: 4px;
+  /* Боковые поля держат центрированный заголовок в стороне от крестика закрытия. */
+  padding-inline: 28px;
   text-align: center;
 }
 .confirm-modal > p {
@@ -8558,19 +9053,89 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   }
   .auth-modal {
     max-height: calc(100dvh - 24px);
-    padding: 24px 18px 20px;
+    padding: 18px 16px 16px;
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.26);
   }
   .auth-modal-heading {
     margin-bottom: 20px;
-    padding-inline: 38px;
+    padding-inline: 34px;
   }
   .auth-modal-heading h1 {
-    font-size: 28px;
-    letter-spacing: -0.9px;
+    font-size: 23px;
+    letter-spacing: -0.6px;
+  }
+  .auth-modal .auth-switch {
+    margin-bottom: 16px;
+  }
+  .auth-modal .auth-switch button {
+    min-height: 38px;
+  }
+  .auth-modal .auth-field {
+    gap: 5px;
+    margin-top: 11px;
+  }
+  .auth-modal .auth-field > span {
+    font-size: 15px;
+  }
+  .auth-modal .auth-field input {
+    min-height: 46px;
   }
   .auth-modal .auth-consent {
+    margin-top: 12px;
     white-space: normal;
+  }
+  .auth-modal .auth-submit {
+    margin-top: 18px;
+  }
+  /* На телефоне подписи полей не показываем: их текст продублирован
+     плейсхолдерами. Скрываем не через display, чтобы подпись осталась
+     доступной программам чтения с экрана. */
+  .auth-modal .auth-field > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  /* Строка с результатами не переносится: длинное название сортировки
+     обрезается троеточием, а счётчик и кнопки остаются на своих местах. */
+  .featured--search .search-results-bar {
+    flex-wrap: nowrap;
+  }
+  .featured--search .search-results-lead {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .featured--search .search-results-lead .search-results-note {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .featured--search .search-results-bar {
+    margin-top: 0;
+  }
+  /* Плашки доверия: ужимаем поля и шрифт, чтобы подписи помещались в одну строку. */
+  .trust-strip {
+    gap: 10px;
+    margin-top: 26px;
+  }
+  .trust-strip > div {
+    gap: 11px;
+    padding: 14px 15px;
+  }
+  .trust-strip div > span {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+  .trust-strip b {
+    font-size: 17px;
+  }
+  .trust-strip small {
+    margin-top: 2px;
+    font-size: 14px;
   }
   /* `display: contents` on the heading lets the logout button leave the title
      row and become the last item of the page grid, under the content. */
@@ -8581,7 +9146,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
        stretch would hand that space to the rows as extra gaps — so the blocks
        sat lower on the short tab than on the tall one. */
     align-content: start;
-    width: min(100% - 28px, 1220px);
+    width: min(100% - 28px, 1320px);
     padding-top: 18px;
     padding-bottom: 66px;
   }
@@ -8710,11 +9275,22 @@ button.customer-order-stage-heading:hover:not(:disabled) {
     align-self: center;
   }
   .order-removal-modal {
-    padding: 26px 20px 20px;
+    padding: 22px 18px 18px;
   }
-  .lead-modal .order-removal-actions {
+  .confirm-modal > h2 {
+    font-size: 22px;
+  }
+  .confirm-modal > p {
+    margin-top: 8px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .lead-modal .order-removal-actions,
+  .lead-modal.confirm-modal .order-removal-actions {
     display: grid;
     grid-template-columns: 1fr;
+    gap: 9px;
+    margin-top: 20px;
   }
   .order-removal-actions .secondary,
   .order-removal-actions .danger-button {
@@ -9157,7 +9733,8 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   border-radius: 14px;
 }
 .header-actions .account-link,
-.header-actions .favorites-link {
+.header-actions .favorites-link,
+.header-actions .searches-link {
   height: 48px;
   padding: 0 16px;
   border-radius: 14px;
@@ -9170,19 +9747,26 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 .header-actions .account-link:hover,
 .header-actions .account-link.selected,
 .header-actions .favorites-link:hover,
-.header-actions .favorites-link.selected {
+.header-actions .favorites-link.selected,
+.header-actions .searches-link:hover,
+.header-actions .searches-link.selected {
   background: var(--header-control-bg);
   color: var(--accent-dark);
 }
-.header-actions :where(.theme-toggle, .account-link, .favorites-link):hover {
+.header-actions :where(.theme-toggle, .account-link, .favorites-link, .searches-link):hover {
   transform: translateY(-1px);
 }
-.header-actions :where(.theme-toggle, .account-link, .favorites-link):active {
+.header-actions :where(.theme-toggle, .account-link, .favorites-link, .searches-link):active {
   transform: scale(0.97);
 }
-.header-actions :where(.account-link, .favorites-link):focus-visible {
+.header-actions :where(.account-link, .favorites-link, .searches-link):focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
+}
+/* Пункт «Мои поиски» в выпадающем меню — только для узких экранов:
+   на широких та же кнопка стоит в шапке рядом с избранным. */
+.header-menu-searches {
+  display: none;
 }
 :root[data-theme="dark"] .site-header {
   border-bottom: 0;
@@ -9328,6 +9912,13 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     padding: 0;
     border-radius: 12px;
     background: var(--header-control-bg);
+  }
+  /* Пятая кнопка в шапку телефона не помещается — «Мои поиски» переезжают в меню. */
+  .header-actions .searches-link {
+    display: none;
+  }
+  .header-menu-searches {
+    display: block;
   }
   .header-actions .favorites-link > b {
     left: auto;

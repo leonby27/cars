@@ -36,3 +36,23 @@ export function saveCatalogReturnScroll(scrollY, search) {
   if (!stored || stored.search !== search) return;
   saveCatalogReturn({ ...stored, scrollY });
 }
+
+// Поиск на главной: выдача живёт только в памяти страницы, поэтому для возврата
+// из карточки снимок (запрос, сортировка, загруженные машины) держим здесь.
+// Признак «возврат к поиску» лежит в history.state той записи, откуда ушли.
+const homeSearchKey = "home-search-return-state";
+
+export function saveHomeSearchReturn(state) {
+  try {
+    window.sessionStorage.setItem(homeSearchKey, JSON.stringify(state));
+  } catch {}
+}
+
+export function readHomeSearchReturn() {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(homeSearchKey) || "null");
+    return stored?.query && stored.items?.length ? stored : null;
+  } catch {
+    return null;
+  }
+}

@@ -44,7 +44,7 @@ test("каталог отдаётся с общим кэшем, но брауз�
 });
 
 test("личные ответы и состояние базы не кэшируются", async () => {
-  for (const path of ["/api/auth/me", "/api/account/favorites", "/api/health", "/api/cars/does-not-exist"]) {
+  for (const path of ["/api/auth/me", "/api/account/favorites", "/api/account/searches", "/api/health", "/api/cars/does-not-exist"]) {
     const { cacheControl } = await requestApi(path);
     assert.equal(cacheControl, "no-store", path);
   }

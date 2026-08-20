@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
-import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, saveCatalogReturn, saveCatalogReturnScroll } from "./catalog-return.js";
+import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn } from "./catalog-return.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
@@ -598,6 +598,7 @@ const routeSeo = {
 
 const privateRouteSeo = {
   "/favorites": ["Избранные автомобили | evcars.by", "Сохранённые автомобили в вашем личном кабинете evcars.by."],
+  "/searches": ["Мои поиски | evcars.by", "Сохранённые поиски автомобилей в вашем личном кабинете evcars.by."],
   "/login": ["Вход в личный кабинет | evcars.by", "Вход в личный кабинет клиента evcars.by."],
   "/register": ["Регистрация личного кабинета | evcars.by", "Создание личного кабинета клиента evcars.by."],
   "/account": ["Личный кабинет | evcars.by", "Заказы, избранные автомобили и личные данные клиента evcars.by."],
@@ -605,7 +606,7 @@ const privateRouteSeo = {
 
 function ClientSeo({ path, car, landing }) {
   useEffect(() => {
-    const privatePage = ["/favorites", "/login", "/register", "/account", "/analytics"].includes(path) || path.startsWith("/orders/");
+    const privatePage = ["/favorites", "/searches", "/login", "/register", "/account", "/analytics"].includes(path) || path.startsWith("/orders/");
     const detailTitle = car?.title || (car ? `${car.brand} ${car.model} ${car.year}` : null);
     const landingSeo = landing
       ? landing.model
@@ -697,7 +698,7 @@ function SiteLogo() {
   );
 }
 
-function Header({ navigate, favoritesCount, path, currency, setCurrency, user, theme, toggleTheme }) {
+function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, setCurrency, user, theme, toggleTheme }) {
   const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -749,6 +750,12 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
                 <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>Автомобили</AppLink>
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
                 <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
+                {/* На узких экранах кнопке «Мои поиски» в шапке не хватает места,
+                    поэтому там она живёт в этом меню; на широких — прячется, чтобы
+                    не дублировать кнопку рядом с избранным. */}
+                <AppLink href="/searches" navigate={navigate} className={`header-menu-searches${path === "/searches" ? " active" : ""}`} aria-current={path === "/searches" ? "page" : undefined}>
+                  Мои поиски{savedSearchesCount > 0 ? ` · ${savedSearchesCount}` : ""}
+                </AppLink>
               </nav>
               <div className="header-menu-settings">
                 <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
@@ -765,6 +772,15 @@ function Header({ navigate, favoritesCount, path, currency, setCurrency, user, t
             title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
           >
             {theme === "dark" ? <Sun size={20} weight="bold" /> : <Moon size={20} weight="bold" />}
+          </button>
+          <button
+            className={`icon-label searches-link${path === "/searches" ? " selected" : ""}`}
+            aria-current={path === "/searches" ? "page" : undefined}
+            onClick={() => (user ? navigate("/searches") : navigate("/register", { replace:true, preserveScroll:true }))}
+          >
+            <BookmarkSimple size={21} weight={savedSearchesCount ? "fill" : "bold"} />
+            <span>Мои поиски</span>
+            {savedSearchesCount > 0 && <b>{savedSearchesCount}</b>}
           </button>
           <button
             className={`icon-label favorites-link${path === "/favorites" ? " selected" : ""}`}
@@ -1016,7 +1032,7 @@ function HomeFaqItem({ item, initiallyOpen = false }) {
   );
 }
 
-function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, hasActiveFilters = false, initiallyExpanded = false }) {
+function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, onSaveSearch, searchSaved = false, searchUpdate = false, hasActiveFilters = false, initiallyExpanded = false }) {
   const currency = useCurrency();
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => initiallyExpanded && !window.matchMedia("(max-width: 700px)").matches);
   const extraFiltersId = useId();
@@ -1105,11 +1121,25 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
       <div className="filter-actions-row">
         <button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls={`${extraFiltersId} ${mobileFiltersId}`} onClick={() => setMoreFiltersOpen((open) => !open)}>
           <SlidersHorizontal size={17} />
-          {moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}
+          <span className="more-filters-toggle-label">{moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}</span>
           <CaretDown size={15} weight="bold" />
         </button>
+        {hasActiveFilters && onSaveSearch && (
+          <button
+            type="button"
+            className={`search-save${searchSaved ? " saved" : ""}`}
+            onClick={onSaveSearch}
+            aria-label={searchSaved ? "Поиск сохранён" : searchUpdate ? "Обновить поиск" : "Сохранить поиск"}
+            title={searchSaved ? "Поиск сохранён — открыть «Мои поиски»" : searchUpdate ? "Записать изменения в сохранённый поиск" : "Сохранить поиск"}
+          >
+            <BookmarkSimple size={18} weight={searchSaved ? "fill" : "bold"} />
+            <span>{searchSaved ? "Поиск сохранён" : searchUpdate ? "Обновить поиск" : "Сохранить поиск"}</span>
+          </button>
+        )}
+        {hasActiveFilters && onSaveSearch && <span className="filter-actions-divider" aria-hidden="true" />}
         {hasActiveFilters && (
           <button type="button" className="search-reset" onClick={onReset}>
+            <X size={16} weight="bold" />
             Сбросить
           </button>
         )}
@@ -1143,7 +1173,10 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     drives: [],
     availability: {},
   });
-  const [remoteCount, setRemoteCount] = useState(0);
+  // null — число для текущих фильтров ещё не посчитано: кнопка показывает
+  // «Показать авто» без цифры вместо мгновенного «0 авто» при переключении.
+  const [remoteCount, setRemoteCount] = useState(null);
+  const countCacheRef = useRef(new Map());
   const normalizedType = type === "Электромобили" ? "Электромобиль" : type === "Гибриды" ? "Гибрид" : "Все";
   const brandCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && matchesMulti(car.bodyType, bodyType, ANY_BODY_TYPE));
   const modelCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand) && matchesMulti(car.bodyType, bodyType, ANY_BODY_TYPE));
@@ -1172,29 +1205,35 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     // Ждать загрузочный запрос незачем: справочник нужен сразу и уходит параллельно
     // с витриной. Останавливает его только выясненный статический режим.
     if (apiMode === false) return undefined;
+    const metaQuery = new URLSearchParams();
+    const carsQuery = new URLSearchParams({ limit: "1" });
+    if (normalizedType !== "Все") {
+      metaQuery.set("type", normalizedType);
+      carsQuery.set("type", normalizedType);
+    }
+    if (brand !== "Все марки") {
+      metaQuery.set("brand", brand);
+      carsQuery.set("brand", brand);
+    }
+    appendMulti(metaQuery, "bodyType", bodyType, ANY_BODY_TYPE);
+    appendMulti(carsQuery, "bodyType", bodyType, ANY_BODY_TYPE);
+    appendMulti(carsQuery, "model", model, ANY_MODEL);
+    appendYearRange(carsQuery, yearMin, yearMax);
+    if (mileage !== ANY_MILEAGE) carsQuery.set("mileageMax", String(mileageCap));
+    appendPriceRange(carsQuery, priceMin, priceMax);
+    if (drive !== ANY_DRIVE) carsQuery.set("drive", drive);
+    if (owners !== ANY_OWNERS) carsQuery.set("ownersMax", String(filterNumber(owners)));
+    if (battery !== ANY_BATTERY) carsQuery.set("batteryMin", String(batteryFloor(battery)));
+    if (condition !== ANY_CONDITION) carsQuery.set("conditionGrade", conditionGrades[condition]);
+    // Числа для уже виденных комбинаций фильтров помним: повторное переключение
+    // показывает счётчик сразу, без мигания. Прячем цифру только на первый подсчёт —
+    // чужое число (или «0») на кнопке хуже, чем секунда без числа.
+    const countKey = carsQuery.toString();
+    const cached = countCacheRef.current.get(countKey);
+    setRemoteCount(cached ?? null);
     const controller = new AbortController();
     let cancelled = false;
     const timer = window.setTimeout(async () => {
-      const metaQuery = new URLSearchParams();
-      const carsQuery = new URLSearchParams({ limit: "1" });
-      if (normalizedType !== "Все") {
-        metaQuery.set("type", normalizedType);
-        carsQuery.set("type", normalizedType);
-      }
-      if (brand !== "Все марки") {
-        metaQuery.set("brand", brand);
-        carsQuery.set("brand", brand);
-      }
-      appendMulti(metaQuery, "bodyType", bodyType, ANY_BODY_TYPE);
-      appendMulti(carsQuery, "bodyType", bodyType, ANY_BODY_TYPE);
-      appendMulti(carsQuery, "model", model, ANY_MODEL);
-      appendYearRange(carsQuery, yearMin, yearMax);
-      if (mileage !== ANY_MILEAGE) carsQuery.set("mileageMax", String(mileageCap));
-      appendPriceRange(carsQuery, priceMin, priceMax);
-      if (drive !== ANY_DRIVE) carsQuery.set("drive", drive);
-      if (owners !== ANY_OWNERS) carsQuery.set("ownersMax", String(filterNumber(owners)));
-      if (battery !== ANY_BATTERY) carsQuery.set("batteryMin", String(batteryFloor(battery)));
-      if (condition !== ANY_CONDITION) carsQuery.set("conditionGrade", conditionGrades[condition]);
       try {
         // Пока ни один фильтр не выбран, кнопка показывает общее число из загрузочного
         // запроса, поэтому считать то же самое второй раз незачем.
@@ -1204,7 +1243,10 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         ]);
         if (cancelled) return;
         setRemoteMeta(meta);
-        if (catalog) setRemoteCount(catalog.total);
+        if (catalog) {
+          countCacheRef.current.set(countKey, catalog.total);
+          setRemoteCount(catalog.total);
+        }
       } catch {}
     }, 120);
     return () => {
@@ -1273,6 +1315,508 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       onReset={resetFilters}
       onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}${multiValues(model, ANY_MODEL).map((item) => `&model=${encodeURIComponent(item)}`).join("")}${multiValues(bodyType, ANY_BODY_TYPE).map((item) => `&body=${encodeURIComponent(item)}`).join("")}${yearBound(yearMin, ANY_YEAR_MIN) === null ? "" : `&yearFrom=${yearMin}`}${yearBound(yearMax, ANY_YEAR_MAX) === null ? "" : `&yearTo=${yearMax}`}&mileage=${encodeURIComponent(mileage)}${priceBound(priceMin, ANY_PRICE_MIN) === null ? "" : `&priceFrom=${priceMin}`}${priceBound(priceMax, ANY_PRICE_MAX) === null ? "" : `&priceTo=${priceMax}`}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&battery=${encodeURIComponent(battery)}&condition=${encodeURIComponent(condition)}`)}
     />
+  );
+}
+
+// Быстрый поиск на главной: строка вида «Zeekr 001 2025» разбирается на марку,
+// модель и годы по тому же справочнику, которым живут выпадающие фильтры, а
+// найденное сразу подменяет витрину «Каталог» ниже — сервер ничего нового не считает.
+const HERO_SEARCH_YEAR_PATTERN = /^(19|20)\d{2}$/;
+const searchNormalize = (value) => String(value ?? "").toLocaleLowerCase("ru").replace(/ё/g, "е").replace(/[^0-9a-zа-я]+/g, " ").replace(/\s+/g, " ").trim();
+const searchMatchRank = (candidate, text) => {
+  const norm = searchNormalize(candidate);
+  const compact = norm.replace(/ /g, "");
+  const textCompact = text.replace(/ /g, "");
+  if (!compact || !textCompact) return 0;
+  if (norm === text || compact === textCompact) return 4;
+  if (norm.startsWith(text) || compact.startsWith(textCompact)) return 3;
+  if (norm.includes(` ${text}`)) return 2;
+  if (compact.includes(textCompact)) return 1;
+  return 0;
+};
+const rankSearchEntries = (entries, text) =>
+  entries
+    .map((entry) => ({ ...entry, rank: searchMatchRank(entry.name, text) }))
+    .filter((entry) => entry.rank > 0)
+    .sort((a, b) => b.rank - a.rank || b.count - a.count);
+
+// Словари запроса: привод, кузов и тип двигателя словами — «задний», «седан»,
+// «гибрид». Сравниваем по началу слова, чтобы понимались и падежи с множественным
+// числом («заднего», «седаны»). Значения совпадают с вариантами выпадающих фильтров.
+const HERO_DRIVE_ALIASES = [
+  ["задн", "Задний"],
+  ["передн", "Передний"],
+  ["полн", "Полный"],
+  ["rwd", "Задний"],
+  ["fwd", "Передний"],
+  ["awd", "Полный"],
+  ["4wd", "Полный"],
+  ["4x4", "Полный"],
+];
+const HERO_BODY_ALIASES = [
+  ["кроссовер", "SUV / кроссовер"],
+  ["suv", "SUV / кроссовер"],
+  ["джип", "SUV / кроссовер"],
+  ["внедорожник", "SUV / кроссовер"],
+  ["седан", "Седан"],
+  ["лифтбек", "Лифтбек"],
+  ["хэтчбек", "Хэтчбек"],
+  ["хетчбек", "Хэтчбек"],
+  ["универсал", "Универсал"],
+  ["минивэн", "Минивэн"],
+  ["минивен", "Минивэн"],
+];
+const HERO_TYPE_ALIASES = [
+  ["электро", "Электромобиль"],
+  ["гибрид", "Гибрид"],
+];
+const heroAliasValue = (word, aliases) => {
+  for (const [alias, value] of aliases) if (word.startsWith(alias)) return value;
+  return "";
+};
+
+// Соответствие клавиш латинской и русской раскладок: «яуулк» — это zeekr,
+// набранный без переключения. Карта работает в обе стороны.
+const LAYOUT_PAIRS = [
+  ["q", "й"], ["w", "ц"], ["e", "у"], ["r", "к"], ["t", "е"], ["y", "н"], ["u", "г"], ["i", "ш"], ["o", "щ"], ["p", "з"], ["[", "х"], ["]", "ъ"],
+  ["a", "ф"], ["s", "ы"], ["d", "в"], ["f", "а"], ["g", "п"], ["h", "р"], ["j", "о"], ["k", "л"], ["l", "д"], [";", "ж"], ["'", "э"],
+  ["z", "я"], ["x", "ч"], ["c", "с"], ["v", "м"], ["b", "и"], ["n", "т"], ["m", "ь"], [",", "б"], [".", "ю"],
+];
+const LAYOUT_SWAP = new Map();
+for (const [latin, cyrillic] of LAYOUT_PAIRS) {
+  LAYOUT_SWAP.set(latin, cyrillic);
+  LAYOUT_SWAP.set(cyrillic, latin);
+}
+const swapKeyboardLayout = (value) => [...String(value ?? "").toLocaleLowerCase("ru")].map((char) => LAYOUT_SWAP.get(char) || char).join("");
+
+// Русские написания марок: каталог хранит латиницу, а посетители часто пишут
+// кириллицей — «ауди», «мерс», «зикр». Многословные варианты стоят раньше
+// коротких, чтобы «джили галакси» не обрывалось на «джили».
+const HERO_BRAND_RU = [
+  ["джили галакси", "Geely Galaxy"],
+  ["ли авто", "Li Auto"],
+  ["линк энд ко", "Lynk & Co"],
+  ["линк ко", "Lynk & Co"],
+  ["лип мотор", "Leapmotor"],
+  ["аион", "AION"],
+  ["эйон", "AION"],
+  ["ауди", "Audi"],
+  ["аватр", "Avatr"],
+  ["аватар", "Avatr"],
+  ["бмв", "BMW"],
+  ["бид", "BYD"],
+  ["дипал", "Deepal"],
+  ["денза", "Denza"],
+  ["дунфэн", "Dongfeng"],
+  ["дунфен", "Dongfeng"],
+  ["донгфенг", "Dongfeng"],
+  ["джили", "Geely Galaxy"],
+  ["гили", "Geely Galaxy"],
+  ["хима", "HIMA"],
+  ["хунци", "Hongqi"],
+  ["хонгци", "Hongqi"],
+  ["липмотор", "Leapmotor"],
+  ["лисян", "Li Auto"],
+  ["ликсян", "Li Auto"],
+  ["линк", "Lynk & Co"],
+  ["мазда", "Mazda"],
+  ["мерседес", "Mercedes-Benz"],
+  ["мерс", "Mercedes-Benz"],
+  ["нио", "NIO"],
+  ["ора", "ORA"],
+  ["тесла", "Tesla"],
+  ["тойота", "Toyota"],
+  ["тоета", "Toyota"],
+  ["фольксваген", "Volkswagen"],
+  ["фольцваген", "Volkswagen"],
+  ["воях", "Voyah"],
+  ["воя", "Voyah"],
+  ["икспенг", "XPeng"],
+  ["сяопенг", "XPeng"],
+  ["сяопэн", "XPeng"],
+  ["сяоми", "Xiaomi"],
+  ["ксиаоми", "Xiaomi"],
+  ["шаоми", "Xiaomi"],
+  ["зикр", "Zeekr"],
+  ["зикер", "Zeekr"],
+  ["зеекр", "Zeekr"],
+];
+// Заменяет русские названия марок на каталожные. Недописанное слово от четырёх
+// букв тоже считается («фолькс» → Volkswagen).
+const translateBrandWords = (words) => {
+  const result = [];
+  for (let index = 0; index < words.length; index += 1) {
+    let replacement = null;
+    let consumed = 1;
+    for (const [alias, brandName] of HERO_BRAND_RU) {
+      const aliasWords = alias.split(" ");
+      const slice = words.slice(index, index + aliasWords.length);
+      if (slice.length !== aliasWords.length) continue;
+      const exact = aliasWords.every((part, position) => slice[position] === part);
+      const prefix = aliasWords.length === 1 && slice[0].length >= 4 && aliasWords[0].startsWith(slice[0]);
+      if (exact || prefix) {
+        replacement = brandName;
+        consumed = aliasWords.length;
+        break;
+      }
+    }
+    if (replacement) {
+      result.push(...searchNormalize(replacement).split(" "));
+      index += consumed - 1;
+    } else {
+      result.push(words[index]);
+    }
+  }
+  return result;
+};
+
+async function parseHeroSearch(query, context) {
+  const parsed = await parseHeroSearchOnce(query, context);
+  if (parsed?.matched) return parsed;
+  // Ничего не нашлось — возможно, запрос набран не в той раскладке.
+  const swapped = swapKeyboardLayout(query);
+  if (searchNormalize(swapped) === searchNormalize(query)) return parsed;
+  const alt = await parseHeroSearchOnce(swapped, context);
+  // Запоминаем исправленный текст — выдача покажет его рядом с запросом.
+  if (alt?.matched) return { ...alt, correctedQuery: swapped.trim() };
+  return parsed;
+}
+
+async function parseHeroSearchOnce(query, { apiMode, cars }) {
+  const tokens = searchNormalize(query).split(" ").filter(Boolean);
+  if (!tokens.length) return null;
+  // Номер объявления (например, 59116012) — ищем эту конкретную машину.
+  // Год — четыре цифры, так что с ним такой номер не спутать.
+  const idToken = tokens.find((token) => /^\d{6,}$/.test(token));
+  if (idToken) return { matched: true, listingId: idToken, brand: "", models: [], yearFrom: "", yearTo: "", drive: "", bodyType: "", powertrain: "" };
+  const yearTokens = tokens.filter((token) => HERO_SEARCH_YEAR_PATTERN.test(token)).sort();
+  const rawWords = tokens.filter((token) => !HERO_SEARCH_YEAR_PATTERN.test(token));
+  // Каталог фильтрует только по годам из своего списка — остальные не навязываем,
+  // иначе выдача молча показала бы не то, что просили.
+  const yearFrom = yearSteps.includes(yearTokens[0]) ? yearTokens[0] : "";
+  const lastYear = yearTokens[yearTokens.length - 1];
+  const yearTo = yearSteps.includes(lastYear) ? lastYear : "";
+
+  // Сначала выбираем из запроса слова про привод, кузов и тип двигателя,
+  // остаток текста ищем как марку и модель.
+  let drive = "";
+  let bodyType = "";
+  let powertrain = "";
+  const words = [];
+  for (const word of rawWords) {
+    // Само слово «привод» ничего не уточняет — направление уже назвало соседнее слово.
+    if (word.startsWith("привод")) continue;
+    const driveValue = heroAliasValue(word, HERO_DRIVE_ALIASES);
+    if (driveValue) {
+      drive = driveValue;
+      continue;
+    }
+    const bodyValue = heroAliasValue(word, HERO_BODY_ALIASES);
+    if (bodyValue) {
+      bodyType = bodyValue;
+      continue;
+    }
+    const typeValue = heroAliasValue(word, HERO_TYPE_ALIASES);
+    if (typeValue) {
+      powertrain = typeValue;
+      continue;
+    }
+    words.push(word);
+  }
+
+  let brandEntries = [];
+  let modelEntries = [];
+  let metaLoaded = false;
+  if (apiMode !== false) {
+    try {
+      const meta = await requestCatalogMeta("");
+      brandEntries = meta.brands.map((item) => ({ name: item.brand, count: Number(item.count) || 0 }));
+      modelEntries = meta.models.map((item) => ({ name: item.model, count: Number(item.count) || 0 }));
+      metaLoaded = true;
+    } catch {}
+  }
+  if (!metaLoaded) {
+    const brandCounts = new Map();
+    const modelCounts = new Map();
+    for (const car of cars) {
+      if (car.brand) brandCounts.set(car.brand, (brandCounts.get(car.brand) || 0) + 1);
+      if (car.model) modelCounts.set(car.model, (modelCounts.get(car.model) || 0) + 1);
+    }
+    brandEntries = [...brandCounts].map(([name, count]) => ({ name, count }));
+    modelEntries = [...modelCounts].map(([name, count]) => ({ name, count }));
+  }
+
+  const text = translateBrandWords(words).join(" ");
+  const result = { matched: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain };
+  if (!text) {
+    result.matched = Boolean(yearFrom || yearTo || drive || bodyType || powertrain);
+    return result;
+  }
+
+  // Полностью введённая марка в начале запроса: остаток текста ищем среди её моделей.
+  let matchedBrand = "";
+  let matchedBrandNorm = "";
+  let modelText = text;
+  for (const entry of brandEntries) {
+    const norm = searchNormalize(entry.name);
+    if (!norm) continue;
+    if ((text === norm || text.startsWith(`${norm} `)) && norm.length > matchedBrandNorm.length) {
+      matchedBrand = entry.name;
+      matchedBrandNorm = norm;
+      modelText = text.slice(norm.length).trim();
+    }
+  }
+  if (matchedBrand) {
+    result.brand = matchedBrand;
+    if (!modelText) {
+      result.matched = true;
+      return result;
+    }
+    let models = [];
+    if (metaLoaded) {
+      try {
+        const meta = await requestCatalogMeta(new URLSearchParams({ brand: matchedBrand }).toString());
+        models = meta.models.map((item) => ({ name: item.model, count: Number(item.count) || 0 }));
+      } catch {}
+    } else {
+      const counts = new Map();
+      for (const car of cars) if (car.brand === matchedBrand && car.model) counts.set(car.model, (counts.get(car.model) || 0) + 1);
+      models = [...counts].map(([name, count]) => ({ name, count }));
+    }
+    const matchedModels = rankSearchEntries(models, modelText).slice(0, 12).map((entry) => entry.name);
+    if (!matchedModels.length) {
+      // Марку узнали, а остаток текста ни на одну её модель не похож —
+      // честнее показать пустую выдачу, чем все машины марки.
+      result.brand = "";
+      return result;
+    }
+    result.models = matchedModels;
+    result.matched = true;
+    return result;
+  }
+
+  // Марка целиком не совпала: недописанная марка важнее случайного совпадения модели.
+  const brandMatches = rankSearchEntries(brandEntries, text);
+  if (brandMatches.length && brandMatches[0].rank >= 3) {
+    result.brand = brandMatches[0].name;
+    result.matched = true;
+    return result;
+  }
+  const modelMatches = rankSearchEntries(modelEntries, text).slice(0, 12);
+  if (modelMatches.length) {
+    result.models = modelMatches.map((entry) => entry.name);
+    result.matched = true;
+    return result;
+  }
+  if (brandMatches.length) {
+    result.brand = brandMatches[0].name;
+    result.matched = true;
+  }
+  return result;
+}
+
+// Ссылка в каталог и запрос к серверу называют одни и те же фильтры по-разному:
+// каталог ждёт yearFrom/body и множественное «Электромобили», сервер — yearMin/bodyType
+// и единственное число. Из-за смешения этих имён год из поиска раньше терялся.
+const heroCatalogHref = (parsed) => {
+  const params = new URLSearchParams();
+  if (parsed.powertrain) params.set("type", parsed.powertrain === "Гибрид" ? "Гибриды" : "Электромобили");
+  if (parsed.brand) params.set("brand", parsed.brand);
+  parsed.models.forEach((model) => params.append("model", model));
+  if (parsed.bodyType) params.append("body", parsed.bodyType);
+  if (parsed.yearFrom) params.set("yearFrom", parsed.yearFrom);
+  if (parsed.yearTo) params.set("yearTo", parsed.yearTo);
+  if (parsed.drive) params.set("drive", parsed.drive);
+  const search = params.toString();
+  return `/catalog${search ? `?${search}` : ""}`;
+};
+// Сохранённый поиск хранит фильтры каталога в одной и той же форме независимо от
+// того, чем их заполнили: фиксированный порядок ключей делает сериализацию пригодной
+// для сравнения «этот набор уже сохранён?» простым равенством строк.
+const savedFilterDefaults = {
+  type: "Все",
+  brand: "Все марки",
+  model: [],
+  bodyType: [],
+  yearMin: ANY_YEAR_MIN,
+  yearMax: ANY_YEAR_MAX,
+  mileage: ANY_MILEAGE,
+  priceMin: ANY_PRICE_MIN,
+  priceMax: ANY_PRICE_MAX,
+  drive: ANY_DRIVE,
+  owners: ANY_OWNERS,
+  battery: ANY_BATTERY,
+  condition: ANY_CONDITION,
+  // Выбранная сортировка — часть поиска: открытый заново, он выглядит так же.
+  sort: "default",
+};
+const savedSearchSortLabels = {
+  price_asc: "сначала дешёвые",
+  price_desc: "сначала дорогие",
+  newest: "новые объявления",
+  mileage_asc: "наименьший пробег",
+  range_desc: "наибольший запас хода",
+  year_desc: "новые по году",
+  year_asc: "старые по году",
+};
+const normalizeSavedFilters = (filters = {}) => {
+  const normalized = {};
+  for (const [key, fallback] of Object.entries(savedFilterDefaults)) {
+    const value = filters[key];
+    normalized[key] = Array.isArray(fallback)
+      ? multiValues(value ?? [], key === "model" ? ANY_MODEL : ANY_BODY_TYPE)
+      : typeof value === "string" && value
+        ? value
+        : fallback;
+  }
+  return normalized;
+};
+const savedSearchKey = (filters) => JSON.stringify(normalizeSavedFilters(filters));
+// Человеческое описание фильтров: из него складываются и заголовок сохранённого
+// поиска, и строка-подпись на его карточке. Цены — в долларах, как они и хранятся.
+const savedSearchChips = (filters) => {
+  const chips = [];
+  if (filters.type !== "Все") chips.push(filters.type === "Электромобиль" ? "Электромобили" : "Гибриды");
+  const models = multiValues(filters.model, ANY_MODEL);
+  if (filters.brand !== "Все марки") chips.push(models.length ? `${filters.brand} ${models.join(", ")}` : filters.brand);
+  multiValues(filters.bodyType, ANY_BODY_TYPE).forEach((body) => chips.push(body));
+  const yearFrom = yearBound(filters.yearMin, ANY_YEAR_MIN);
+  const yearTo = yearBound(filters.yearMax, ANY_YEAR_MAX);
+  if (yearFrom !== null && yearTo !== null) chips.push(yearFrom === yearTo ? `${yearFrom} г.` : `${yearFrom}–${yearTo} г.`);
+  else if (yearFrom !== null) chips.push(`от ${yearFrom} г.`);
+  else if (yearTo !== null) chips.push(`до ${yearTo} г.`);
+  const priceFrom = priceBound(filters.priceMin, ANY_PRICE_MIN);
+  const priceTo = priceBound(filters.priceMax, ANY_PRICE_MAX);
+  if (priceFrom !== null && priceTo !== null) chips.push(`$${number(priceFrom)}–$${number(priceTo)}`);
+  else if (priceFrom !== null) chips.push(`от $${number(priceFrom)}`);
+  else if (priceTo !== null) chips.push(`до $${number(priceTo)}`);
+  if (filters.mileage !== ANY_MILEAGE) chips.push(filters.mileage);
+  if (filters.drive !== ANY_DRIVE) chips.push(`${filters.drive} привод`);
+  if (filters.owners !== ANY_OWNERS) chips.push(filters.owners.toLowerCase());
+  if (filters.battery !== ANY_BATTERY) chips.push(`батарея ${filters.battery.toLowerCase()}`);
+  if (filters.condition !== ANY_CONDITION) chips.push(filters.condition.toLowerCase());
+  if (savedSearchSortLabels[filters.sort]) chips.push(savedSearchSortLabels[filters.sort]);
+  return chips;
+};
+const savedSearchTitle = (filters) => {
+  const chips = savedSearchChips(filters);
+  return chips.length ? chips.slice(0, 3).join(" · ") : "Все автомобили";
+};
+// Ссылка ведёт в каталог в том же формате, каким пользуется быстрый поиск главной:
+// каталог разберёт её при монтировании и восстановит фильтры один в один.
+const savedSearchCatalogHref = (filters) => {
+  const params = new URLSearchParams();
+  if (filters.type !== "Все") params.set("type", filters.type === "Электромобиль" ? "Электромобили" : "Гибриды");
+  if (filters.brand !== "Все марки") params.set("brand", filters.brand);
+  multiValues(filters.model, ANY_MODEL).forEach((model) => params.append("model", model));
+  multiValues(filters.bodyType, ANY_BODY_TYPE).forEach((body) => params.append("body", body));
+  if (yearBound(filters.yearMin, ANY_YEAR_MIN) !== null) params.set("yearFrom", filters.yearMin);
+  if (yearBound(filters.yearMax, ANY_YEAR_MAX) !== null) params.set("yearTo", filters.yearMax);
+  if (filters.mileage !== ANY_MILEAGE) params.set("mileage", filters.mileage);
+  if (priceBound(filters.priceMin, ANY_PRICE_MIN) !== null) params.set("priceFrom", filters.priceMin);
+  if (priceBound(filters.priceMax, ANY_PRICE_MAX) !== null) params.set("priceTo", filters.priceMax);
+  if (filters.drive !== ANY_DRIVE) params.set("drive", filters.drive);
+  if (filters.owners !== ANY_OWNERS) params.set("owners", filters.owners);
+  if (filters.battery !== ANY_BATTERY) params.set("battery", filters.battery);
+  if (filters.condition !== ANY_CONDITION) params.set("condition", filters.condition);
+  if (filters.sort && filters.sort !== "default") params.set("sort", filters.sort);
+  const search = params.toString();
+  return `/catalog${search ? `?${search}` : ""}`;
+};
+// Запрос числа подходящих машин — те же имена параметров, что собирает каталог.
+const savedSearchApiParams = (filters) => {
+  const query = new URLSearchParams();
+  if (filters.type !== "Все") query.set("type", filters.type);
+  if (filters.brand !== "Все марки") query.set("brand", filters.brand);
+  appendMulti(query, "model", filters.model, ANY_MODEL);
+  appendMulti(query, "bodyType", filters.bodyType, ANY_BODY_TYPE);
+  if (filters.drive !== ANY_DRIVE) query.set("drive", filters.drive);
+  if (filters.owners !== ANY_OWNERS) query.set("ownersMax", String(filterNumber(filters.owners)));
+  if (filters.battery !== ANY_BATTERY) query.set("batteryMin", String(batteryFloor(filters.battery)));
+  if (filters.condition !== ANY_CONDITION) query.set("conditionGrade", conditionGrades[filters.condition]);
+  appendYearRange(query, filters.yearMin, filters.yearMax);
+  if (filters.mileage !== ANY_MILEAGE) query.set("mileageMax", String(filterNumber(filters.mileage)));
+  appendPriceRange(query, filters.priceMin, filters.priceMax);
+  if (filters.sort && filters.sort !== "default") query.set("sort", filters.sort);
+  return query;
+};
+const matchesSavedFilters = (car, filters) =>
+  (filters.type === "Все" || car.type === filters.type) &&
+  (filters.brand === "Все марки" || car.brand === filters.brand) &&
+  matchesMulti(car.model, filters.model, ANY_MODEL) &&
+  matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) &&
+  matchesYears(car, filters.yearMin, filters.yearMax) &&
+  (filters.mileage === ANY_MILEAGE || car.mileage <= filterNumber(filters.mileage)) &&
+  matchesPriceRange(car, filters.priceMin, filters.priceMax) &&
+  matchesAdvancedFilters(car, filters);
+
+const heroApiParams = (parsed) => {
+  const params = new URLSearchParams();
+  if (parsed.powertrain) params.set("type", parsed.powertrain);
+  if (parsed.brand) params.set("brand", parsed.brand);
+  parsed.models.forEach((model) => params.append("model", model));
+  if (parsed.bodyType) params.append("bodyType", parsed.bodyType);
+  if (parsed.yearFrom) params.set("yearMin", parsed.yearFrom);
+  if (parsed.yearTo) params.set("yearMax", parsed.yearTo);
+  if (parsed.drive) params.set("drive", parsed.drive);
+  return params;
+};
+
+// Те же варианты сортировки, что и в каталоге, — выдача поиска ведёт себя одинаково.
+const HERO_SORT_OPTIONS = [
+  { value: "default", label: "По умолчанию" },
+  { value: "price_asc", label: "Дешёвые" },
+  { value: "price_desc", label: "Дорогие" },
+  { value: "newest", label: "Новые объявления" },
+  { value: "mileage_asc", label: "С наименьшим пробегом" },
+  { value: "range_desc", label: "С наибольшим запасом хода" },
+  { value: "year_desc", label: "Новые по году" },
+  { value: "year_asc", label: "Старые по году" },
+];
+
+function HeroSearch({ value, onChange, filtersOpen = false, onToggleFilters = null }) {
+  const fieldRef = useRef(null);
+  // На телефоне прокрутка выдачи пальцем прячет экранную клавиатуру: снимаем
+  // фокус со строки поиска. Слушаем именно касание, а не scroll — браузер сам
+  // прокручивает страницу к полю при фокусе, и по scroll клавиатура закрывалась
+  // бы сразу после открытия.
+  useEffect(() => {
+    const hideKeyboard = (event) => {
+      const field = fieldRef.current;
+      if (!field || field.contains(event.target)) return;
+      const input = field.querySelector("input");
+      if (input && document.activeElement === input) input.blur();
+    };
+    window.addEventListener("touchmove", hideKeyboard, { passive: true });
+    return () => window.removeEventListener("touchmove", hideKeyboard);
+  }, []);
+  return (
+    <div className="hero-search">
+      <div className="hero-search-field" ref={fieldRef}>
+        <MagnifyingGlass size={20} weight="bold" />
+        <input
+          type="search"
+          value={value}
+          placeholder="Что будем искать сегодня?"
+          aria-label="Поиск по каталогу"
+          enterKeyHint="search"
+          autoComplete="off"
+          onChange={(event) => onChange(event.target.value)}
+        />
+        {/* Одно «гнездо» на двоих: пока строка пустая — кнопка фильтров, появился
+            текст — на её месте крестик очистки. Геометрия общая, меняются только
+            иконка и цвет, поэтому строка не дёргается. */}
+        {value ? (
+          <button type="button" className="hero-search-clear" aria-label="Очистить поиск" onClick={() => onChange("")}>
+            <X size={18} weight="bold" />
+          </button>
+        ) : Boolean(onToggleFilters) && (
+          <button type="button" className="hero-search-filters" aria-label={filtersOpen ? "Скрыть фильтры" : "Показать фильтры"} aria-expanded={filtersOpen} onClick={onToggleFilters}>
+            <SlidersHorizontal size={21} weight="bold" />
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1740,18 +2284,218 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
   const loadMore = () => setFeedCars((current) => [...current, ...takeRandomBatch(current.slice(-3).map((item) => item.car))]);
   const showSkeletons = loading && !feedCars.length;
 
+  // Поиск из шапки: пока в строке есть текст, витрина «Каталог» ниже показывает
+  // не случайную подборку, а найденные машины, и блоки между ними прячутся,
+  // чтобы выдача оказалась сразу под строкой поиска.
+  //
+  // Возврат из карточки назад: снимок выдачи (его пишет openFeedCar) поднимаем
+  // из sessionStorage, чтобы показать те же результаты и ту же позицию, а не
+  // искать заново. Признак возврата — heroReturn в history.state этой записи.
+  const restoredHeroRef = useRef(undefined);
+  if (restoredHeroRef.current === undefined) {
+    restoredHeroRef.current = window.history.state?.heroReturn ? readHomeSearchReturn() : null;
+  }
+  const restoredHero = restoredHeroRef.current;
+  const [heroQuery, setHeroQuery] = useState(restoredHero?.query || "");
+  const [heroSearch, setHeroSearch] = useState(() => (restoredHero ? {
+    items: restoredHero.items,
+    total: Number(restoredHero.total) || restoredHero.items.length,
+    href: restoredHero.href || "/catalog",
+    loading: false,
+    loadingMore: false,
+    // Продолжить догрузку после возврата умеем только через API-запрос;
+    // без него оставшиеся результаты доступны по кнопке «В каталог».
+    hasMore: Boolean(restoredHero.hasMore && restoredHero.apiQuery),
+    apiQuery: restoredHero.apiQuery || null,
+    all: null,
+    corrected: null,
+  } : null));
+  // Блок фильтров под поиском по умолчанию свёрнут на всех экранах
+  // и открывается иконкой в строке поиска.
+  const [quickFiltersOpen, setQuickFiltersOpen] = useState(false);
+  const [heroSort, setHeroSort] = useState(restoredHero?.sort || "default");
+  // Вид выдачи общий с каталогом: переключили здесь — каталог откроется так же.
+  const [heroView, setHeroView] = useState(readCatalogView);
+  const updateHeroView = (value) => {
+    setHeroView(value);
+    window.localStorage.setItem(catalogViewKey, value);
+  };
+  // Номер попытки поиска: догрузка при прокрутке сверяется с ним, чтобы ответ
+  // на старый запрос не подмешался к свежей выдаче.
+  const heroSeq = useRef(0);
+  const emptyHeroResult = { items: [], total: 0, href: "/catalog", loading: false, loadingMore: false, hasMore: false, apiQuery: null, all: null, corrected: null };
+  useEffect(() => {
+    // После возврата из карточки не ищем заново, пока запрос и сортировка те же:
+    // повторный поиск обрезал бы догруженную выдачу и сбил восстановленную позицию.
+    if (restoredHeroRef.current) {
+      if (heroQuery === restoredHeroRef.current.query && heroSort === (restoredHeroRef.current.sort || "default")) return undefined;
+      restoredHeroRef.current = null;
+    }
+    heroSeq.current += 1;
+    if (!searchNormalize(heroQuery)) {
+      setHeroSearch(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    // Старые результаты остаются на экране, пока считаются новые, — без мигания.
+    setHeroSearch((current) => ({ ...emptyHeroResult, items: current?.items || [], total: current?.total || 0, href: current?.href || "/catalog", loading: true }));
+    const timer = window.setTimeout(async () => {
+      try {
+        const parsed = await parseHeroSearch(heroQuery, { apiMode, cars });
+        if (cancelled || !parsed) return;
+        if (!parsed.matched) {
+          setHeroSearch({ ...emptyHeroResult });
+          return;
+        }
+        if (parsed.listingId) {
+          // Наши номера хранятся с приставкой источника: сначала пробуем che168-…,
+          // затем номер как есть (вдруг вставили полный идентификатор).
+          const candidates = [`che168-${parsed.listingId}`, parsed.listingId];
+          let found = null;
+          if (apiMode !== false) {
+            for (const candidate of candidates) {
+              try {
+                found = normalizeImportedCar(await fetchCarsJson(`/api/cars/${encodeURIComponent(candidate)}`, controller.signal));
+                break;
+              } catch {}
+            }
+          } else {
+            found = cars.find((car) => candidates.includes(String(car.id)) || String(car.id).endsWith(`-${parsed.listingId}`)) || null;
+          }
+          if (cancelled) return;
+          setHeroSearch(found ? { ...emptyHeroResult, items: [found], total: 1, href: `/cars/${found.id}`, corrected: parsed.correctedQuery || null } : { ...emptyHeroResult });
+          return;
+        }
+        const href = heroCatalogHref(parsed);
+        if (apiMode !== false) {
+          const apiParams = heroApiParams(parsed);
+          // «По умолчанию» — родной порядок сервера; остальное сервер сортирует сам.
+          if (heroSort !== "default") apiParams.set("sort", heroSort);
+          const apiQuery = apiParams.toString();
+          const listParams = new URLSearchParams(apiQuery);
+          listParams.set("limit", "24");
+          const catalog = await fetchCarsJson(`/api/cars?${listParams}`, controller.signal);
+          if (cancelled) return;
+          setHeroSearch({ ...emptyHeroResult, items: catalog.items.map(normalizeImportedCar), total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null });
+        } else {
+          const modelSet = new Set(parsed.models);
+          const matches = cars.filter(
+            (car) =>
+              (!parsed.brand || car.brand === parsed.brand) &&
+              (!modelSet.size || modelSet.has(car.model)) &&
+              (!parsed.yearFrom || Number(car.year) >= Number(parsed.yearFrom)) &&
+              (!parsed.yearTo || Number(car.year) <= Number(parsed.yearTo)) &&
+              (!parsed.drive || car.drive === parsed.drive) &&
+              (!parsed.bodyType || car.bodyType === parsed.bodyType) &&
+              (!parsed.powertrain || car.type === parsed.powertrain)
+          );
+          // Карточки из статического каталога не всегда несут готовый итог «до Минска» —
+          // для сортировки по цене досчитываем его так же, как избранное.
+          const sorted = heroSort === "default" ? matches : sortCars(matches.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd })), heroSort);
+          setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null });
+        }
+      } catch {
+        if (!cancelled) setHeroSearch({ ...emptyHeroResult });
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [heroQuery, heroSort, apiMode, cars]);
+  const searching = heroSearch !== null;
+  // Уйти с главной можно куда угодно (карточка, «В каталог», меню), поэтому
+  // признак «сюда вернутся к поиску» и снимок выдачи поддерживаем всё время,
+  // пока поиск активен. history пишем только при смене признака — часто нельзя,
+  // а sessionStorage ограничений не имеет.
+  const heroReturnFlag = useRef(false);
+  useEffect(() => {
+    if (heroReturnFlag.current !== searching) {
+      heroReturnFlag.current = searching;
+      patchHistoryState({ heroReturn: searching });
+    }
+    if (searching && !heroSearch.loading && heroSearch.items.length) {
+      saveHomeSearchReturn({
+        query: heroQuery,
+        sort: heroSort,
+        items: heroSearch.items.slice(0, 240),
+        total: heroSearch.total,
+        href: heroSearch.href,
+        hasMore: heroSearch.hasMore,
+        apiQuery: heroSearch.apiQuery,
+      });
+    }
+  }, [searching, heroSearch, heroSort, heroQuery]);
+  const searchLoading = searching && heroSearch.loading && !heroSearch.items.length;
+  const displayItems = searching ? heroSearch.items.map((car) => ({ car, key: `search-${car.id}` })) : feedCars;
+  const gridBusy = showSkeletons || searchLoading;
+  // Выдача поиска листается бесконечно, как каталог: невидимая метка под карточками
+  // попадает в экран — и подгружается следующая пачка.
+  const searchMoreTarget = useRef(null);
+  const loadMoreSearch = async () => {
+    const current = heroSearch;
+    if (!current || current.loading || current.loadingMore || !current.hasMore) return;
+    const seq = heroSeq.current;
+    setHeroSearch((state) => (state ? { ...state, loadingMore: true } : state));
+    try {
+      if (current.apiQuery != null) {
+        const listParams = new URLSearchParams(current.apiQuery);
+        listParams.set("limit", "24");
+        listParams.set("offset", String(current.items.length));
+        const catalog = await fetchCarsJson(`/api/cars?${listParams}`);
+        if (heroSeq.current !== seq) return;
+        const batch = catalog.items.map(normalizeImportedCar);
+        setHeroSearch((state) => {
+          if (!state) return state;
+          // Выдача могла сдвинуться между страницами — повторы карточек не добавляем.
+          const known = new Set(state.items.map((car) => car.id));
+          return { ...state, items: [...state.items, ...batch.filter((car) => !known.has(car.id))], total: Number(catalog.total) || state.total, hasMore: Boolean(catalog.hasMore), loadingMore: false };
+        });
+      } else {
+        setHeroSearch((state) => {
+          if (!state?.all) return state;
+          const items = state.all.slice(0, state.items.length + 24);
+          return { ...state, items, hasMore: state.all.length > items.length, loadingMore: false };
+        });
+      }
+    } catch {
+      // Догрузка не удалась — останавливаем ленту, «Все результаты» ведёт в каталог.
+      if (heroSeq.current === seq) setHeroSearch((state) => (state ? { ...state, loadingMore: false, hasMore: false } : state));
+    }
+  };
+  useEffect(() => {
+    const target = searchMoreTarget.current;
+    if (!searching || !target) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadMoreSearch();
+      },
+      { rootMargin: "0px 0px 700px", threshold: 0 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [searching, heroSearch]);
+
   return (
     <main>
-      <section className="hero">
+      <section className={searching ? "hero hero--searching" : "hero"}>
         <h1>Доставим б/у авто из Китая в Беларусь</h1>
         <ul className="hero-benefits" aria-label="Преимущества заказа">
           <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
           <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
           <li><CheckCircle size={21} weight="fill" />Полное сопровождение</li>
         </ul>
-        <QuickSearch navigate={navigate} cars={cars} apiMode={apiMode} totalCount={catalogTotal} />
+        <HeroSearch value={heroQuery} onChange={setHeroQuery} filtersOpen={quickFiltersOpen} onToggleFilters={() => setQuickFiltersOpen((open) => !open)} />
+        {!searching && (
+          <div className={quickFiltersOpen ? "hero-quick-search open" : "hero-quick-search"}>
+            <QuickSearch navigate={navigate} cars={cars} apiMode={apiMode} totalCount={catalogTotal} />
+          </div>
+        )}
       </section>
-      <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />
+      {!searching && <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />}
+      {!searching && (
       <section className="trust-strip page-width">
         <div>
           <span>
@@ -1781,21 +2525,64 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
           </p>
         </div>
       </section>
-      <section className="featured page-width">
-        <div className="section-heading">
-          <div className="section-heading-title">
-            <h2>Каталог</h2>
-            {quickViewToggle}
+      )}
+      <section className={searching ? "featured featured--search page-width" : "featured page-width"}>
+        {/* Во время поиска заголовок не показываем: выдача начинается сразу со
+            строки с числом результатов, переключатель быстрого просмотра — там же. */}
+        {!searching && (
+          <div className="section-heading">
+            <div className="section-heading-title">
+              <h2>Каталог</h2>
+              {quickViewToggle}
+            </div>
+            <AppLink className="section-heading-link" href="/catalog" navigate={navigate}>
+              Все автомобили <ArrowRight size={18} />
+            </AppLink>
           </div>
-          <AppLink className="section-heading-link" href="/catalog" navigate={navigate}>
-            Все автомобили <ArrowRight size={18} />
-          </AppLink>
-        </div>
-        {useCatalogCards ? (
-          <div className="car-list home-car-list" aria-busy={showSkeletons ? "true" : undefined}>
-            {showSkeletons
+        )}
+        {searching && (
+          <div className="search-results-bar">
+            {/* Строка не исчезает на время пересчёта, иначе выдача дёргается при
+                каждой букве: пока ищем, держим прежний счёт или «Ищем…». */}
+            <div className="search-results-lead">
+              <p className="search-results-note">
+                {heroSearch.loading && !heroSearch.items.length
+                  ? "Ищем…"
+                  : heroSearch.total || heroSearch.loading
+                    ? `${number(heroSearch.total)} авто`
+                    : `По запросу «${heroQuery.trim()}» ничего не нашлось. Попробуйте изменить запрос: марка, модель, год или номер объявления.`}
+              </p>
+              {quickViewToggle}
+            </div>
+            <div className="result-controls">
+              <SelectField
+                className="sort-custom-select"
+                label="Сортировка"
+                value={(HERO_SORT_OPTIONS.find((option) => option.value === heroSort) || HERO_SORT_OPTIONS[0]).label}
+                options={HERO_SORT_OPTIONS.map((option) => option.label)}
+                onChange={(label) => setHeroSort(HERO_SORT_OPTIONS.find((option) => option.label === label)?.value || "default")}
+              />
+              <div className="result-view-toggle" role="group" aria-label="Вид выдачи">
+                <button type="button" className={heroView === "list" ? "active" : ""} aria-pressed={heroView === "list"} aria-label="Показать списком" title="Списком" onClick={() => updateHeroView("list")}>
+                  <Rows size={19} />
+                </button>
+                <button type="button" className={heroView === "grid" ? "active" : ""} aria-pressed={heroView === "grid"} aria-label="Показать карточками" title="Карточками" onClick={() => updateHeroView("grid")}>
+                  <SquaresFour size={19} />
+                </button>
+              </div>
+              <AppLink className="primary search-catalog-link" href={heroSearch.href || "/catalog"} navigate={navigate} aria-label="В каталог">
+                <span className="search-catalog-link-label">В каталог</span> <ArrowRight size={17} />
+              </AppLink>
+            </div>
+          </div>
+        )}
+        {/* На телефоне выдача всегда списочными карточками каталога (заголовок и
+            цена сверху, лента фото); переключатель вида есть только на широких. */}
+        {(searching ? useCatalogCards || heroView === "list" : useCatalogCards) ? (
+          <div className="car-list home-car-list" aria-busy={gridBusy ? "true" : undefined}>
+            {gridBusy
               ? skeletonCards.map((key) => <CardSkeleton key={key} row />)
-              : feedCars.map(({ car, key }) => (
+              : displayItems.map(({ car, key }) => (
                   <CarRow
                     key={key}
                     anchorKey={key}
@@ -1808,18 +2595,25 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
                 ))}
           </div>
         ) : (
-          <div className="featured-grid" aria-busy={showSkeletons ? "true" : undefined}>
-            {showSkeletons
+          <div className="featured-grid" aria-busy={gridBusy ? "true" : undefined}>
+            {gridBusy
               ? skeletonCards.map((key) => <CardSkeleton key={key} />)
-              : feedCars.map(({ car, key }) => (
+              : displayItems.map(({ car, key }) => (
                   <FeaturedCard key={key} anchorKey={key} car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openFeedCar({ car, key })} />
                 ))}
           </div>
         )}
-        {!showSkeletons && (
-          <button type="button" className="load-more featured-load-more" onClick={loadMore}>
-            Показать ещё
-          </button>
+        {searching ? (
+          <>
+            {heroSearch.loadingMore && <div className="catalog-message">Загружаем объявления…</div>}
+            {heroSearch.hasMore && !heroSearch.loading && !heroSearch.loadingMore && <div ref={searchMoreTarget} className="catalog-scroll-sentinel" aria-hidden="true" />}
+          </>
+        ) : (
+          !showSkeletons && (
+            <button type="button" className="load-more featured-load-more" onClick={loadMore}>
+              Показать ещё
+            </button>
+          )
         )}
       </section>
       <HomeConversionSections navigate={navigate} />
@@ -1829,7 +2623,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
   );
 }
 
-function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, optionCounts, availability }) {
+function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, optionCounts, availability, onSaveSearch, searchSaved, searchUpdate }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, model: [] }));
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
@@ -1876,6 +2670,9 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
       resultCount={resultCount}
       hasActiveFilters={hasActiveFilters}
       onReset={resetFilters}
+      onSaveSearch={onSaveSearch}
+      searchSaved={searchSaved}
+      searchUpdate={searchUpdate}
       initiallyExpanded={filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION}
     />
   );
@@ -1968,8 +2765,12 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
   );
 }
 
+// Карточки, догруженные для избранного, живут до перезагрузки страницы: страница
+// «Избранное» размонтируется при каждом уходе, и без этой памяти каждый заход
+// заново качал бы те же машины, мигая загрузчиком вместо готового списка.
+const favoriteCarCache = new Map();
 function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
-  const [loadedCars, setLoadedCars] = useState([]);
+  const [loadedCars, setLoadedCars] = useState(() => [...favoriteCarCache.values()]);
   const favoriteKey = [...favorites].sort().join("|");
   const allCars = useMemo(() => {
     const values = new Map(cars.map((car) => [car.id,car]));
@@ -1986,7 +2787,9 @@ function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
   const missingKey = missingIds.sort().join("|");
 
   useEffect(() => {
-    if (!missingIds.length) return undefined;
+    // apiMode ещё не определён (null) — не знаем, куда идти за карточкой; дождёмся
+    // ответа загрузки, иначе запрос в чужой слой пометил бы живую машину недоступной.
+    if (!missingIds.length || apiMode === null) return undefined;
     const controller = new AbortController();
     Promise.all(missingIds.map(async (id) => {
       try {
@@ -2006,6 +2809,7 @@ function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
       const resolved = results.flatMap((result) => result?.car ? [result.car] : []);
       const unavailable = results.flatMap((result) => result?.unavailable ? [result.id] : []);
       if (resolved.length) {
+        resolved.forEach((car) => favoriteCarCache.set(car.id, car));
         setLoadedCars((current) => {
           const values = new Map(current.map((car) => [car.id,car]));
           resolved.forEach((car) => values.set(car.id,car));
@@ -2022,9 +2826,31 @@ function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
 
 function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnavailableFavorites, saving = false }) {
   const { favoriteCars, hasUnresolved } = useFavoriteCars(cars, favorites, apiMode, onUnavailableFavorites);
-  // Свитчер быстрого просмотра здесь не показываем, но общую настройку уважаем:
-  // включили его в каталоге — из избранного карточки тоже раскрываются модалкой.
-  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
+  const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
+  const sortOptions = [
+    { value: "default", label: "По добавлению" },
+    { value: "price_asc", label: "Дешёвые" },
+    { value: "price_desc", label: "Дорогие" },
+    { value: "mileage_asc", label: "С наименьшим пробегом" },
+    { value: "range_desc", label: "С наибольшим запасом хода" },
+    { value: "year_desc", label: "Новые по году" },
+    { value: "year_asc", label: "Старые по году" },
+  ];
+  const [sort, setSort] = useState("default");
+  const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
+  // «По добавлению» — родной порядок избранного: свежесохранённая машина сверху.
+  // Карточки из API не несут готовый итог «до Минска» (каталог сортирует по нему
+  // на сервере), поэтому для локальной сортировки по цене считаем его здесь.
+  const sortableCars = favoriteCars.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd }));
+  const sortedCars = sort === "default" ? favoriteCars : sortCars(sortableCars, sort);
+  // Вид выдачи общий с каталогом: переключили здесь — каталог откроется так же.
+  // На телефоне переключателя нет и выдача всегда списочными карточками.
+  const [view, setView] = useState(readCatalogView);
+  const [mobileCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
+  const updateView = (value) => {
+    setView(value);
+    window.localStorage.setItem(catalogViewKey, value);
+  };
   const openCar = (car) => {
     if (openQuickView(car)) return;
     navigate(`/cars/${car.id}`);
@@ -2040,17 +2866,52 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
         <span>Избранное</span>
       </div>
       <div className="catalog-heading">
-        <div>
-          <h1>Избранное</h1>
+        <div className="section-heading-title">
+          <h1>Избранное · {hasUnresolved ? favorites.size : favoriteCars.length}</h1>
+          {quickViewToggle}
         </div>
-        <span>{hasUnresolved ? favorites.size : favoriteCars.length} авто</span>
+        {favoriteCars.length > 0 && (
+          <div className="result-controls">
+            <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => setSort(sortOptions.find((option) => option.label === label)?.value || "default")} />
+            <div className="result-view-toggle" role="group" aria-label="Вид выдачи">
+              <button
+                type="button"
+                className={view === "list" ? "active" : ""}
+                aria-pressed={view === "list"}
+                aria-label="Показать списком"
+                title="Списком"
+                onClick={() => updateView("list")}
+              >
+                <Rows size={19} />
+              </button>
+              <button
+                type="button"
+                className={view === "grid" ? "active" : ""}
+                aria-pressed={view === "grid"}
+                aria-label="Показать карточками"
+                title="Карточками"
+                onClick={() => updateView("grid")}
+              >
+                <SquaresFour size={19} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-      {favoriteCars.length ? (
-        <div className="car-list">
-          {favoriteCars.map((car) => (
-            <CarRow key={car.id} car={car} navigate={navigate} favorite toggleFavorite={toggleFavorite} onOpen={openCar} />
-          ))}
-        </div>
+      {sortedCars.length ? (
+        !mobileCards && view === "grid" ? (
+          <div className="featured-grid catalog-card-grid">
+            {sortedCars.map((car) => (
+              <FeaturedCard key={car.id} car={car} favorite toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
+            ))}
+          </div>
+        ) : (
+          <div className="car-list">
+            {sortedCars.map((car) => (
+              <CarRow key={car.id} car={car} navigate={navigate} favorite toggleFavorite={toggleFavorite} onOpen={openCar} />
+            ))}
+          </div>
+        )
       ) : awaitingCars ? (
         <div className="account-section-loading" aria-live="polite">Загружаем сохранённые автомобили…</div>
       ) : (
@@ -2061,7 +2922,203 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
           <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
         </div>
       )}
+      <ScrollToTopButton />
       {quickViewModal}
+    </main>
+  );
+}
+
+// Дата сохранения поиска — коротко, по-русски: «12 августа» либо с годом, если он не текущий.
+const savedSearchDate = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const options = { day:"numeric", month:"long" };
+  if (date.getFullYear() !== new Date().getFullYear()) options.year = "numeric";
+  return new Intl.DateTimeFormat("ru-RU", options).format(date);
+};
+
+// Шесть машин, седьмая ячейка ряда — блок-стрелка «смотреть все» в каталоге.
+const SAVED_SEARCH_PREVIEW_LIMIT = 6;
+const savedSearchSkeletons = ["a", "b", "c", "d", "e", "f", "g"];
+
+// Подтверждение перед удалением сохранённого поиска: восстановить его нельзя,
+// поэтому случайный клик по «Удалить поиск» не должен стоить набора фильтров.
+function SavedSearchRemovalModal({ search, onCancel, onConfirm }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onCancel]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
+      <section className="lead-modal order-removal-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="search-removal-title" aria-describedby="search-removal-description">
+        <button className="modal-close" type="button" onClick={onCancel} aria-label="Закрыть"><X size={19} /></button>
+        <h2 id="search-removal-title">Удалить поиск?</h2>
+        <p id="search-removal-description"><b>{search.title}</b> исчезнет из «Моих поисков». Автомобили останутся в каталоге — удалится только сохранённый набор фильтров.</p>
+        <div className="order-removal-actions">
+          <button className="secondary" type="button" onClick={onCancel}>Отмена</button>
+          <button className="danger-button solid" type="button" onClick={onConfirm}><Trash size={18} /> Удалить поиск</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMode, cars, favorites, toggleFavorite }) {
+  const currency = useCurrency();
+  const [removing, setRemoving] = useState(null);
+  const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
+  // Под каждым поиском — число подходящих машин и до пяти первых карточек-превью:
+  // в API-режиме — короткие запросы с limit=5 (сервер их кэширует), в статическом —
+  // подбор по загруженному каталогу.
+  const useApi = apiMode !== false;
+  const [previews, setPreviews] = useState({});
+  const searchesFingerprint = searches.map((item) => item.id).join("|");
+  useEffect(() => {
+    if (!searches.length) return undefined;
+    if (!useApi) {
+      setPreviews(Object.fromEntries(searches.map((item) => {
+        const matching = cars.filter((car) => matchesSavedFilters(car, normalizeSavedFilters(item.filters)));
+        return [item.id, { total:matching.length, items:matching.slice(0, SAVED_SEARCH_PREVIEW_LIMIT) }];
+      })));
+      return undefined;
+    }
+    const controller = new AbortController();
+    Promise.all(
+      searches.map(async (item) => {
+        try {
+          const query = savedSearchApiParams(normalizeSavedFilters(item.filters));
+          query.set("limit", String(SAVED_SEARCH_PREVIEW_LIMIT));
+          const response = await fetch(`/api/cars?${query}`, { signal:controller.signal });
+          if (!response.ok) return null;
+          const payload = await response.json();
+          return [item.id, { total:Number(payload.total) || 0, items:(payload.items || []).map(normalizeImportedCar) }];
+        } catch {
+          return null;
+        }
+      }),
+    ).then((entries) => {
+      if (!controller.signal.aborted) setPreviews(Object.fromEntries(entries.filter(Boolean)));
+    });
+    return () => controller.abort();
+  }, [useApi, searchesFingerprint]);
+  const openSearch = (item) => navigate(savedSearchCatalogHref(normalizeSavedFilters(item.filters)));
+  // На десктопе с включённым быстрым просмотром карточка раскрывается модалкой,
+  // как в каталоге; иначе — обычный переход на страницу машины.
+  const openCar = (car) => {
+    if (openQuickView(car)) return;
+    navigate(`/cars/${car.id}`);
+  };
+  return (
+    <main className="catalog saved-searches-page page-width">
+      <div className="breadcrumbs">
+        <button onClick={() => navigate("/")}>Главная</button>
+        <span>/</span>
+        <span>Мои поиски</span>
+      </div>
+      <div className="catalog-heading">
+        <div className="section-heading-title">
+          <h1>Мои поиски · {searches.length}</h1>
+          {quickViewToggle}
+        </div>
+      </div>
+      {searches.length ? (
+        <div className="saved-search-list">
+          {searches.map((item) => {
+            const preview = previews[item.id];
+            const savedAt = savedSearchDate(item.createdAt);
+            return (
+              <article key={item.id} className="saved-search-card">
+                <div className="saved-search-head">
+                  <button type="button" className="saved-search-main" onClick={() => openSearch(item)} aria-label={`Открыть поиск «${item.title}» в каталоге`}>
+                    <span className="saved-search-title-line">
+                      <strong className="saved-search-title">{item.title}</strong>
+                      {preview && (
+                        <>
+                          <span className="saved-search-dot" aria-hidden="true">·</span>
+                          <b className="saved-search-count">{number(preview.total)} авто</b>
+                        </>
+                      )}
+                      {savedAt && (
+                        <>
+                          <span className="saved-search-dot" aria-hidden="true">·</span>
+                          <span className="saved-search-date">Сохранён {savedAt}</span>
+                        </>
+                      )}
+                    </span>
+                  </button>
+                  {/* На телефоне подпись не помещается рядом с заголовком — остаётся корзинка. */}
+                  <button type="button" className="saved-search-delete" onClick={() => setRemoving(item)} aria-label={`Удалить поиск «${item.title}»`} title="Удалить поиск">
+                    <Trash size={18} aria-hidden="true" />
+                    <span>Удалить поиск</span>
+                  </button>
+                </div>
+                {preview ? (
+                  preview.items.length > 0 && (
+                    <div className="saved-search-previews">
+                      {preview.items.map((car) => (
+                        <article
+                          key={car.id}
+                          className="saved-search-preview"
+                          data-car-id={car.id}
+                          onClick={() => openCar(car)}
+                          onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && openCar(car)}
+                          tabIndex="0"
+                          role="button"
+                          aria-label={`Открыть ${car.title}`}
+                        >
+                          <HoverImagePreview car={car} className="saved-search-preview-image" />
+                          <span className="saved-search-preview-price">≈ {money(estimateLandedCost(car).totalUsd, currency)}</span>
+                        </article>
+                      ))}
+                      <button type="button" className="saved-search-more" onClick={() => openSearch(item)} aria-label={`Показать все ${number(preview.total)} авто по поиску «${item.title}»`}>
+                        <span className="saved-search-more-circle" aria-hidden="true">
+                          <ArrowRight size={20} weight="bold" />
+                        </span>
+                        <span>Смотреть все</span>
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  // Пока превью в пути, их место держат мерцающие заглушки той же
+                  // геометрии — карточка не прыгает, когда ответ приходит.
+                  <div className="saved-search-previews" aria-hidden="true">
+                    {savedSearchSkeletons.map((key) => (
+                      <div key={key} className="saved-search-preview skeleton-card">
+                        <div className="saved-search-preview-image" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      ) : saving ? (
+        <div className="account-section-loading" aria-live="polite">Загружаем сохранённые поиски…</div>
+      ) : (
+        <div className="empty-state saved-searches-empty">
+          <BookmarkSimple size={34} />
+          <h3>Сохранённых поисков пока нет</h3>
+          <p>Настройте фильтры в каталоге и нажмите «Сохранить поиск» — подборка будет ждать вас здесь.</p>
+          <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
+        </div>
+      )}
+      <ScrollToTopButton />
+      {quickViewModal}
+      {removing && (
+        <SavedSearchRemovalModal
+          search={removing}
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            onDelete(removing.id);
+            setRemoving(null);
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -2069,7 +3126,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
 const catalogViewKey = "navostok-catalog-view";
 const readCatalogView = () => (window.localStorage.getItem(catalogViewKey) === "grid" ? "grid" : "list");
 
-function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
+function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearch, updateSavedSearch, savedSearches }) {
   const pageSize = 24;
   // Pending and api resolve to the same value, so the boot request answering does not
   // retrigger the query this component already issued at mount.
@@ -2141,13 +3198,18 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
   const [remoteLoading, setRemoteLoading] = useState(useApi);
   const [remoteError, setRemoteError] = useState(false);
   const [customSearchOpen, setCustomSearchOpen] = useState(false);
-  const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : "default"));
+  // Сортировку может нести и ссылка (например, из сохранённого поиска); снимок
+  // истории при возврате важнее — он описывает то, что было на экране.
+  const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : "default";
+  const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : urlSort));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
   // mix in place while paging and when a visitor comes back from a vehicle page.
   const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || randomShuffleSeed());
   const [loadedLimit, setLoadedLimit] = useState(() => Math.max(pageSize, Number(restoredCatalog?.loadedCount) || pageSize));
   const restoredOrder = useRef(restoredCatalog?.order || null);
   const [view, setView] = useState(readCatalogView);
+  // На телефоне переключателя вида нет и выдача всегда списочными карточками.
+  const [mobileCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
   const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:useApi, favorites, toggleFavorite, navigate });
   const loadMoreTarget = useRef(null);
   const loadMoreRequest = useRef(null);
@@ -2381,6 +3443,25 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
     const chosen = multiValues(current.model, ANY_MODEL);
     return { ...current, model: chosen.includes(model) ? chosen.filter((item) => item !== model) : [...chosen, model] };
   });
+  // Кнопка «Сохранить поиск» знает, что этот набор уже сохранён, и вместо второй
+  // копии ведёт в «Мои поиски». У гостя список пуст, поэтому кнопка всегда активна.
+  const currentSearchKey = savedSearchKey({ ...filters, sort });
+  const searchSaved = (savedSearches || []).some((item) => savedSearchKey(item.filters) === currentSearchKey);
+  // «База» — сохранённый поиск, с которого начался этот экран: либо каталог открыт
+  // из «Моих поисков», либо поиск сохранили здесь. Изменённые фильтры тогда не
+  // плодят новую запись, а обновляют её кнопкой «Обновить поиск».
+  const [baseSearchKey, setBaseSearchKey] = useState(() => currentSearchKey);
+  const baseSearch = (savedSearches || []).find((item) => savedSearchKey(item.filters) === baseSearchKey) || null;
+  const searchUpdate = !searchSaved && Boolean(baseSearch);
+  const submitSearch = () => {
+    if (searchSaved) {
+      navigate("/searches");
+      return;
+    }
+    if (baseSearch) updateSavedSearch(baseSearch.id, { ...filters, sort });
+    else saveSearch({ ...filters, sort });
+    setBaseSearchKey(currentSearchKey);
+  };
   return (
     <main className="catalog page-width">
       <div className="breadcrumbs">
@@ -2391,7 +3472,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
       <div className="catalog-heading">
         <h1>Автомобили с пробегом из Китая</h1>
       </div>
-      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} />
+      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} />
       {filters.brand !== "Все марки" && models.length > 1 && (
         <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
           {models.map((model) => {
@@ -2445,7 +3526,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
           </div>
           {remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}
           {displayed.length ? (
-            view === "grid" ? (
+            !mobileCards && view === "grid" ? (
               <div className="featured-grid catalog-card-grid">
                 {displayed.map((car) => (
                   <FeaturedCard key={car.id} car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
@@ -2455,7 +3536,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode }) {
               displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpen={openCar} />)
             )
           ) : remoteLoading ? (
-            view === "grid" ? (
+            !mobileCards && view === "grid" ? (
               <div className="featured-grid catalog-card-grid">
                 {skeletonCards.map((key) => <CardSkeleton key={key} />)}
               </div>
@@ -3023,19 +4104,22 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   // Шаг назад по истории возвращает и фильтры, и позицию карточки, поэтому
   // кнопка идёт именно им. Прямой заход историей не подкреплён — тогда в каталог.
   const goBack = () => (window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : backToCatalog(car.id));
-  const openBrand = () => {
+  const openFilteredCatalog = (withModel) => {
     const stored = readCatalogReturn();
-    const target = `/catalog?brand=${encodeURIComponent(car.brand)}`;
+    const model = withModel ? [car.model] : [];
+    const target = `/catalog?brand=${encodeURIComponent(car.brand)}${withModel ? `&model=${encodeURIComponent(car.model)}` : ""}`;
     if (!stored || stored.openedCarId !== car.id) {
       navigate(target);
       return;
     }
-    // Марка сужает выдачу: фильтры переносим, но порядок и якорь прошлого
-    // списка к новому набору уже не относятся.
+    // Марка и модель сужают выдачу: фильтры переносим, но порядок и якорь
+    // прошлого списка к новому набору уже не относятся.
     navigate(target, {
-      catalogState: { ...stored, catalog: { ...stored.catalog, filters: { ...stored.catalog.filters, brand: car.brand, model: [] }, order: [] }, scrollY: 0, scrollAnchor: null },
+      catalogState: { ...stored, catalog: { ...stored.catalog, filters: { ...stored.catalog.filters, brand: car.brand, model }, order: [] }, scrollY: 0, scrollAnchor: null },
     });
   };
+  const openBrand = () => openFilteredCatalog(false);
+  const openModel = () => openFilteredCatalog(true);
   const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
   const openSimilarCar = (candidate) => {
     if (openQuickView(candidate)) return;
@@ -3050,6 +4134,8 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         <button onClick={() => backToCatalog(car.id)}>Автомобили из Китая</button>
         <CaretRight size={13} />
         <button onClick={openBrand}>{car.brand}</button>
+        <CaretRight size={13} />
+        <button onClick={openModel}>{car.model}</button>
         <CaretRight size={13} />
         {car.model} {car.year}
       </div>
@@ -3155,6 +4241,28 @@ async function copyToClipboard(text) {
   } catch {
     return false;
   }
+}
+
+// Серый ряд с номером объявления под карточкой цены: по нему клиент называет
+// машину менеджеру, поэтому рядом кнопка «скопировать».
+function ListingIdRow({ car }) {
+  const [state, setState] = useState("idle");
+  useEffect(() => {
+    if (state === "idle") return undefined;
+    const timer = window.setTimeout(() => setState("idle"), 2200);
+    return () => window.clearTimeout(timer);
+  }, [state]);
+  const id = car.sourceId || car.id;
+  if (!id) return null;
+  const copy = async () => setState((await copyToClipboard(String(id))) ? "copied" : "failed");
+  return (
+    <div className="listing-id-row">
+      <span>{state === "copied" ? "ID скопирован" : state === "failed" ? "Не удалось скопировать" : `ID объявления: ${id}`}</span>
+      <button type="button" aria-label="Копировать ID объявления" onClick={copy}>
+        {state === "copied" ? <Check size={15} /> : <Copy size={15} />}
+      </button>
+    </div>
+  );
 }
 
 function CopyLinkButton({ car }) {
@@ -3368,6 +4476,7 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
               Уточнить актуальность авто
             </button>
           </aside>
+          <ListingIdRow car={car} />
         </div>
       </div>
       {floatingCta && (
@@ -4443,6 +5552,16 @@ const favoritesMigrationKey = "navostok-favorites-account-migration";
 const accountFavoritesKey = (userId) => `navostok-account-favorites:${userId}`;
 const pendingOrderKey = "evcars-pending-order-listing";
 const accountOrdersKey = (userId) => `evcars-account-orders:${userId}`;
+const accountSearchesKey = (userId) => `evcars-account-searches:${userId}`;
+const readLocalSearches = (userId) => {
+  try {
+    const searches = JSON.parse(window.localStorage.getItem(accountSearchesKey(userId)) || "[]");
+    return Array.isArray(searches) ? searches : [];
+  } catch {
+    return [];
+  }
+};
+const storeLocalSearches = (userId, searches) => window.localStorage.setItem(accountSearchesKey(userId), JSON.stringify(searches));
 const readFavorites = (key) => {
   try {
     const saved = JSON.parse(window.localStorage.getItem(key) || "[]");
@@ -4452,6 +5571,24 @@ const readFavorites = (key) => {
   }
 };
 const storeFavorites = (key, values) => window.localStorage.setItem(key, JSON.stringify([...values]));
+// Единичный сбой сервера — обрыв сети или ответ 5xx в момент выкладки — не означает,
+// что API здесь нет: такие запросы повторяются с паузой. Признак отсутствия API — только 404,
+// иначе сессия из-за секундного сбоя навсегда пересаживалась на пустую копию в браузере.
+const transientStatuses = new Set([500, 502, 503, 504]);
+const fetchWithRetry = async (url, options = {}, attempts = 3) => {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+    try {
+      const response = await fetch(url, options);
+      if (!transientStatuses.has(response.status) || attempt === attempts - 1) return response;
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+};
 const readLocalOrders = (userId) => {
   try {
     const orders = JSON.parse(window.localStorage.getItem(accountOrdersKey(userId)) || "[]");
@@ -4694,6 +5831,14 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
   const registering = mode === "register";
   const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:true });
   const [error, setError] = useState("");
+  // На телефоне подписи полей скрыты (styles.css), их роль играют плейсхолдеры.
+  const [mobileLayout, setMobileLayout] = useState(() => window.matchMedia("(max-width: 700px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 700px)");
+    const updateLayout = () => setMobileLayout(media.matches);
+    media.addEventListener("change", updateLayout);
+    return () => media.removeEventListener("change", updateLayout);
+  }, []);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
   const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
   const blockPhoneWhitespace = (event) => {
@@ -4740,21 +5885,19 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
         </div>
         <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
           <div className="auth-registration-reveal-inner">
-            <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder="Например, Алексей" required={registering} disabled={!registering} /></label>
+            <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required={registering} disabled={!registering} /></label>
           </div>
         </div>
-        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder="+375291234567" maxLength={16} required /></label>
-        <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder={registering ? "Минимум 8 символов" : ""} required />
+        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
+        <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : registering ? "Минимум 8 символов" : ""} required />
         <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
           <div className="auth-registration-reveal-inner">
-            <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder="Ещё раз" required={registering} disabled={!registering} />
-            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <button type="button" onClick={() => navigate("/terms")}>условиями</button> и <button type="button" onClick={() => navigate("/privacy")}>политикой конфиденциальности</button></span></label>
+            <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Повторите пароль" : "Ещё раз"} required={registering} disabled={!registering} />
+            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <button type="button" onClick={() => navigate("/terms")}>условиями</button> и <button type="button" onClick={() => navigate("/privacy")}>политикой</button></span></label>
           </div>
         </div>
         {error && <div className="auth-error" role="alert">{error}</div>}
-        <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : registering ? "Создать аккаунт" : "Войти"}<ArrowRight size={18} /></button>
-        <p className="auth-help">{registering ? "Уже есть аккаунт?" : "Ещё нет аккаунта?"} <button type="button" onClick={() => navigate(registering ? "/login" : "/register", { replace:true, preserveScroll:true })}>{registering ? "Войти" : "Зарегистрироваться"}</button></p>
-      </form>
+        <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : registering ? "Создать аккаунт" : "Войти"}<ArrowRight size={18} /></button>      </form>
     </div>
   );
 }
@@ -5268,7 +6411,7 @@ export function App() {
   const authBackgroundPath =
     typeof storedAuthBackground === "string" &&
     storedAuthBackground.startsWith("/") &&
-    !["/login", "/register", "/account", "/favorites"].includes(storedAuthBackground) &&
+    !["/login", "/register", "/account", "/favorites", "/searches"].includes(storedAuthBackground) &&
     !storedAuthBackground.startsWith("/orders/")
       ? storedAuthBackground
       : "/";
@@ -5283,6 +6426,11 @@ export function App() {
   const [favoritesReady, setFavoritesReady] = useState(false);
   // The car a signed-out visitor tried to save: added as soon as the account exists.
   const [pendingFavorite, setPendingFavorite] = useState(null);
+  // Сохранённые поиски устроены как избранное: список приходит после входа,
+  // а поиск, сохранённый до регистрации, ждёт аккаунт в pendingSavedSearch.
+  const [savedSearches, setSavedSearches] = useState([]);
+  const [savedSearchesReady, setSavedSearchesReady] = useState(false);
+  const [pendingSavedSearch, setPendingSavedSearch] = useState(null);
   const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "BYN" ? "BYN" : "USD"));
   const [themeMode, setThemeMode] = useState(() => {
     const savedTheme = window.localStorage.getItem("evcars-theme");
@@ -5326,7 +6474,7 @@ export function App() {
     return () => media.removeEventListener("change", syncSystemTheme);
   }, []);
   useEffect(() => {
-    fetch("/api/auth/me", { cache:"no-store", credentials:"same-origin" })
+    fetchWithRetry("/api/auth/me", { cache:"no-store", credentials:"same-origin" })
       .then(async (response) => {
         if (response.ok) return response.json();
         if (response.status === 401) return { user:null };
@@ -5365,18 +6513,52 @@ export function App() {
       loadLocalFavorites();
       return () => { cancelled = true; };
     }
-    fetch("/api/account/favorites", { cache:"no-store", credentials:"same-origin" })
+    fetchWithRetry("/api/account/favorites", { cache:"no-store", credentials:"same-origin" })
       .then(async (response) => {
-        if ([404, 502, 503].includes(response.status)) throw new Error("favorites_api_unavailable");
+        if (response.status === 404) throw new Error("favorites_api_missing");
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "favorites_load_failed");
         return payload;
       })
       .then((payload) => applyFavorites(new Set(Array.isArray(payload.ids) ? payload.ids : [])))
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return;
-        setAuthBackend("local");
+        // Переезд на браузерную копию — только когда API нет вовсе; после временного
+        // сбоя показываем сохранённую копию, но сервер остаётся основным источником.
+        if (error?.message === "favorites_api_missing") setAuthBackend("local");
         loadLocalFavorites();
+      });
+    return () => { cancelled = true; };
+  }, [authBackend, authLoading, user]);
+  useEffect(() => {
+    if (authLoading) return undefined;
+    let cancelled = false;
+    if (!user) {
+      setSavedSearches([]);
+      setSavedSearchesReady(false);
+      return undefined;
+    }
+    const applySearches = (values) => {
+      if (cancelled) return;
+      setSavedSearches(values);
+      setSavedSearchesReady(true);
+    };
+    if (authBackend === "local") {
+      applySearches(readLocalSearches(user.id));
+      return () => { cancelled = true; };
+    }
+    fetchWithRetry("/api/account/searches", { cache:"no-store", credentials:"same-origin" })
+      .then(async (response) => {
+        if (response.status === 404) throw new Error("searches_api_missing");
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "searches_load_failed");
+        return payload;
+      })
+      .then((payload) => applySearches(Array.isArray(payload.searches) ? payload.searches : []))
+      .catch((error) => {
+        if (cancelled) return;
+        if (error?.message === "searches_api_missing") setAuthBackend("local");
+        applySearches(readLocalSearches(user.id));
       });
     return () => { cancelled = true; };
   }, [authBackend, authLoading, user]);
@@ -5496,9 +6678,9 @@ export function App() {
       storeFavorites(localKey, next);
       return;
     }
-    fetch(`/api/account/favorites/${encodeURIComponent(id)}`, { method:adding ? "PUT" : "DELETE", credentials:"same-origin" })
+    fetchWithRetry(`/api/account/favorites/${encodeURIComponent(id)}`, { method:adding ? "PUT" : "DELETE", credentials:"same-origin" })
       .then(async (response) => {
-        if ([404, 502, 503].includes(response.status)) {
+        if (response.status === 404) {
           storeFavorites(localKey, next);
           setAuthBackend("local");
           return;
@@ -5517,6 +6699,119 @@ export function App() {
     if (!favorites.has(id)) toggleFavorite(id);
     if (path !== "/favorites") navigate("/favorites", { replace:true });
   }, [favorites, favoritesReady, path, pendingFavorite, user]);
+  const saveSearch = (filters) => {
+    const normalized = normalizeSavedFilters(filters);
+    // Гостю сохранять некуда: как и сердце в карточке, кнопка предлагает
+    // регистрацию, а сам набор фильтров ждёт аккаунт и сохраняется после входа.
+    if (!user) {
+      setPendingSavedSearch(normalized);
+      navigate("/register", { replace:true, preserveScroll:true });
+      return;
+    }
+    const key = savedSearchKey(normalized);
+    if (savedSearches.some((item) => savedSearchKey(item.filters) === key)) return;
+    const title = savedSearchTitle(normalized);
+    const draft = { id:`local-${Date.now()}`, title, filters:normalized, createdAt:new Date().toISOString() };
+    const previous = savedSearches;
+    const next = [draft, ...savedSearches];
+    setSavedSearches(next);
+    trackEvent("search_saved", { properties:{ title } });
+    if (authBackend === "local") {
+      storeLocalSearches(user.id, next);
+      return;
+    }
+    fetchWithRetry("/api/account/searches", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ title, filters:normalized }) })
+      .then(async (response) => {
+        if (response.status === 404) {
+          storeLocalSearches(user.id, next);
+          setAuthBackend("local");
+          return;
+        }
+        const payload = await response.json();
+        if (!response.ok || !payload.search) throw new Error(payload.error || "search_save_failed");
+        // Временную запись подменяет серверная: у неё настоящий номер для удаления.
+        setSavedSearches((current) => current.map((item) => (item.id === draft.id ? payload.search : item)));
+      })
+      .catch(() => setSavedSearches(previous));
+  };
+  // Обновление сохранённого поиска: запись меняется на месте, без второй копии.
+  // На сервере это удаление старой строки и создание новой — отдельной ручки нет.
+  const updateSavedSearch = (id, filters) => {
+    if (!user) return;
+    const existing = savedSearches.find((item) => item.id === id);
+    if (!existing) {
+      saveSearch(filters);
+      return;
+    }
+    const normalized = normalizeSavedFilters(filters);
+    const key = savedSearchKey(normalized);
+    // Такой набор уже сохранён другим поиском — старую запись просто убираем.
+    const duplicate = savedSearches.some((item) => item.id !== id && savedSearchKey(item.filters) === key);
+    if (duplicate) {
+      deleteSavedSearch(id);
+      return;
+    }
+    const title = savedSearchTitle(normalized);
+    const previous = savedSearches;
+    const next = savedSearches.map((item) => (item.id === id ? { ...item, title, filters:normalized } : item));
+    setSavedSearches(next);
+    trackEvent("search_saved", { properties:{ title, updated:true } });
+    if (authBackend === "local" || String(id).startsWith("local-")) {
+      storeLocalSearches(user.id, next);
+      return;
+    }
+    (async () => {
+      try {
+        const removal = await fetch(`/api/account/searches/${encodeURIComponent(id)}`, { method:"DELETE", credentials:"same-origin" });
+        if ([404, 502, 503].includes(removal.status)) {
+          storeLocalSearches(user.id, next);
+          setAuthBackend("local");
+          return;
+        }
+        if (!removal.ok) throw new Error("search_update_failed");
+        const creation = await fetch("/api/account/searches", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ title, filters:normalized }) });
+        if ([404, 502, 503].includes(creation.status)) {
+          storeLocalSearches(user.id, next);
+          setAuthBackend("local");
+          return;
+        }
+        const payload = await creation.json();
+        if (!creation.ok || !payload.search) throw new Error(payload.error || "search_update_failed");
+        setSavedSearches((current) => current.map((item) => (item.id === id ? payload.search : item)));
+      } catch {
+        setSavedSearches(previous);
+      }
+    })();
+  };
+  const deleteSavedSearch = (id) => {
+    if (!user) return;
+    const previous = savedSearches;
+    const next = savedSearches.filter((item) => item.id !== id);
+    setSavedSearches(next);
+    if (authBackend === "local" || String(id).startsWith("local-")) {
+      storeLocalSearches(user.id, next);
+      return;
+    }
+    fetchWithRetry(`/api/account/searches/${encodeURIComponent(id)}`, { method:"DELETE", credentials:"same-origin" })
+      .then((response) => {
+        if (response.status === 404) {
+          storeLocalSearches(user.id, next);
+          setAuthBackend("local");
+          return;
+        }
+        if (!response.ok) throw new Error("search_delete_failed");
+      })
+      .catch(() => setSavedSearches(previous));
+  };
+  // Поиск, сохранённый до регистрации: как только список аккаунта пришёл,
+  // досохраняем его и ведём посетителя в «Мои поиски» — куда и вёл клик.
+  useEffect(() => {
+    if (!pendingSavedSearch || !user || !savedSearchesReady) return;
+    const filters = pendingSavedSearch;
+    setPendingSavedSearch(null);
+    saveSearch(filters);
+    if (path !== "/searches") navigate("/searches", { replace:true });
+  }, [path, pendingSavedSearch, savedSearches, savedSearchesReady, user]);
   const pruneUnavailableFavorites = useCallback((ids) => {
     const unavailable = ids.filter((id) => favorites.has(id));
     if (!unavailable.length) return;
@@ -5533,11 +6828,11 @@ export function App() {
       storeFavorites(localKey, next);
       return;
     }
-    Promise.all(unavailable.map((id) => fetch(`/api/account/favorites/${encodeURIComponent(id)}`, {
+    Promise.all(unavailable.map((id) => fetchWithRetry(`/api/account/favorites/${encodeURIComponent(id)}`, {
       method:"DELETE",
       credentials:"same-origin",
     }))).then((responses) => {
-      if (responses.some((response) => [404, 502, 503].includes(response.status))) {
+      if (responses.some((response) => response.status === 404)) {
         storeFavorites(localKey, next);
         setAuthBackend("local");
         return;
@@ -5562,19 +6857,22 @@ export function App() {
       }
       let response;
       try {
-        response = await fetch(`/api/auth/${mode === "register" ? "register" : "login"}`, { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify(values) });
+        response = await fetchWithRetry(`/api/auth/${mode === "register" ? "register" : "login"}`, { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify(values) });
       } catch {
         setAuthBackend("local");
         const localUser = await localAuthenticate(mode, values);
         complete(localUser, "local");
         return;
       }
-      if ([404, 502, 503].includes(response.status)) {
+      if (response.status === 404) {
         setAuthBackend("local");
         const localUser = await localAuthenticate(mode, values);
         complete(localUser, "local");
         return;
       }
+      // Сервер жив, но временно сбоит: честная ошибка вместо местного аккаунта,
+      // который разошёлся бы с настоящим.
+      if (transientStatuses.has(response.status)) throw new Error("auth_failed");
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "auth_failed");
       complete(payload.user, "server");
@@ -5614,17 +6912,16 @@ export function App() {
       }
       let response;
       try {
-        response = await fetch("/api/account", { method:"PATCH", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify(normalized) });
+        response = await fetchWithRetry("/api/account", { method:"PATCH", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify(normalized) });
       } catch {
+        throw new Error("profile_update_failed");
+      }
+      if (response.status === 404) {
         setAuthBackend("local");
         setUser(localUpdateProfile(user.id, normalized));
         return;
       }
-      if ([404, 502, 503].includes(response.status)) {
-        setAuthBackend("local");
-        setUser(localUpdateProfile(user.id, normalized));
-        return;
-      }
+      if (transientStatuses.has(response.status)) throw new Error("profile_update_failed");
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "profile_update_failed");
       setUser(payload.user);
@@ -5640,17 +6937,17 @@ export function App() {
       } else {
         let response;
         try {
-          response = await fetch("/api/account", { method:"DELETE", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ password }) });
+          response = await fetchWithRetry("/api/account", { method:"DELETE", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ password }) });
         } catch {
+          // Обрыв сети: аккаунт на сервере остался бы, поэтому не делаем вид, что удалили.
+          throw new Error("account_delete_failed");
+        }
+        if (response.status === 404) {
           setAuthBackend("local");
           await localDeleteAccount(user.id, password);
           response = null;
         }
-        if (response && [404, 502, 503].includes(response.status)) {
-          setAuthBackend("local");
-          await localDeleteAccount(user.id, password);
-          response = null;
-        }
+        if (response && transientStatuses.has(response.status)) throw new Error("account_delete_failed");
         if (response) {
           const payload = await response.json();
           if (!response.ok) throw new Error(payload.error || "account_delete_failed");
@@ -5663,11 +6960,12 @@ export function App() {
       setAuthPending(false);
     }
   };
-  const authModalOpen = !authLoading && !user && (authRoute || path === "/account" || path === "/favorites");
+  const authModalOpen = !authLoading && !user && (authRoute || path === "/account" || path === "/favorites" || path === "/searches");
   const contentPath = authRoute || authModalOpen ? authBackgroundPath : path;
   const showAccountFromAuthRoute = authRoute && Boolean(user);
   const closeAuthModal = () => {
     setPendingFavorite(null);
+    setPendingSavedSearch(null);
     navigate(authBackgroundPath, { replace:true, preserveScroll:true });
   };
   // Pages built entirely from static content must never wait on the catalog request, and the
@@ -5702,7 +7000,7 @@ export function App() {
     ) : !showAccountFromAuthRoute && contentPath === "/catalog" && !loadError ? (
       // Catalog issues its own filtered query, so it starts at mount rather than queueing
       // behind the boot request it never reads.
-      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} />
+      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} savedSearches={savedSearches} />
     ) : loading || routeLoading ? (
       <AppLoader />
     ) : loadError ? (
@@ -5715,6 +7013,8 @@ export function App() {
       <AccountPage user={user} cars={cars} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} />
     ) : contentPath === "/favorites" ? (
       <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} saving={Boolean(pendingFavorite) || !favoritesReady} />
+    ) : contentPath === "/searches" ? (
+      <SavedSearchesPage navigate={navigate} searches={savedSearches} onDelete={deleteSavedSearch} saving={Boolean(pendingSavedSearch) || !savedSearchesReady} apiMode={apiMode} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : contentPath === "/account" ? (
       authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : null
     ) : orderId ? (
@@ -5732,6 +7032,7 @@ export function App() {
         <Header
           navigate={navigate}
           favoritesCount={favorites.size}
+          savedSearchesCount={savedSearches.length}
           path={path}
           currency={currency}
           setCurrency={setCurrency}
@@ -5748,12 +7049,12 @@ export function App() {
       </div>
       {authModalOpen && (
         <AuthModal
-          mode={path === "/register" || path === "/favorites" ? "register" : "login"}
+          mode={path === "/register" || path === "/favorites" || path === "/searches" ? "register" : "login"}
           navigate={navigate}
           onAuthenticate={authenticate}
           pending={authPending}
           onClose={closeAuthModal}
-          redirectTo={pendingFavorite || path === "/favorites" ? "/favorites" : "/account"}
+          redirectTo={pendingFavorite || path === "/favorites" ? "/favorites" : pendingSavedSearch || path === "/searches" ? "/searches" : "/account"}
         />
       )}
      </SetCurrencyContext.Provider>
