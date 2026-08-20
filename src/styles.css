@@ -249,6 +249,27 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+/* Пилюля над заголовком: зелёный тон тот же, что у бейджа «Карточка доступна». */
+.hero-updated {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #eaf7f0;
+  color: #177b4c;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+.hero-updated::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}
 .hero h1 {
   margin: 0;
   font-size: clamp(36px, 4vw, 46px);
@@ -1429,6 +1450,28 @@ html[data-theme="dark"] .hero-search-filters {
 }
 .empty-state h3 {
   color: var(--ink);
+}
+/* Кнопке в заглушке даём полноценные поля — без них текст липнет к краям. */
+.empty-state .primary {
+  min-height: 54px;
+  padding: 0 32px;
+}
+/* Заглушка пустого поиска: компактный блок с советом вместо пустой сетки.
+   Ширина повторяет строку поиска (.hero-search), а зазор до неё — ровно 20px:
+   14px (низ строки поиска) + 5px (верх секции) + 1px здесь. */
+.search-empty {
+  width: min(1040px, 100%);
+  margin: 1px auto 0;
+  padding: 26px 20px;
+}
+.search-empty h3 {
+  margin: 8px 0 0;
+  font-size: 16px;
+}
+.search-empty p {
+  max-width: 560px;
+  margin: 6px auto 0;
+  font-size: 15px;
 }
 .favorites-page {
   min-height: calc(100vh - 145px);
@@ -2926,7 +2969,7 @@ html[data-theme="dark"] .hero-search-filters {
   filter: grayscale(1) brightness(0) invert(1);
   opacity: 0.88;
 }
-:root[data-theme="dark"] :where(.status.green, .report-badge, .data-tag.ready) {
+:root[data-theme="dark"] :where(.status.green, .report-badge, .data-tag.ready, .hero-updated) {
   background: rgba(50, 170, 107, 0.16);
   color: #79dba7;
 }
@@ -3075,33 +3118,6 @@ html[data-theme="dark"] .hero-search-filters {
 .success-state .secondary {
   min-width: 150px;
   margin-top: 12px;
-}
-.availability-unavailable-modal {
-  width: min(480px, 100%);
-  padding-top: 40px;
-  text-align: center;
-}
-.availability-unavailable-icon {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 20px;
-  border-radius: 18px;
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-}
-.availability-unavailable-modal h2 {
-  margin: 0 auto 10px;
-  padding: 0 30px;
-}
-.availability-unavailable-modal p {
-  margin: 0;
-}
-.availability-unavailable-modal > .primary {
-  width: 100%;
-  min-height: 50px;
-  margin-top: 24px;
 }
 .site-footer {
   border-top: 0;
@@ -6491,7 +6507,9 @@ html[data-theme="dark"] #root .spec-search,
     max-height: min(88dvh, 720px);
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 8px 18px calc(18px + env(safe-area-inset-bottom));
+    /* Без верхнего отступа: иначе над прилипающей шапкой остаётся прозрачная
+       полоса, сквозь которую при прокрутке видно уезжающие поля. */
+    padding: 0 18px calc(18px + env(safe-area-inset-bottom));
     border-radius: 24px 24px 0 0;
     background: var(--panel);
     box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.28);
@@ -6502,7 +6520,7 @@ html[data-theme="dark"] #root .spec-search,
   .mobile-filter-sheet-handle {
     width: 42px;
     height: 4px;
-    margin: 0 auto 6px;
+    margin: 8px auto 6px;
     border-radius: 999px;
     background: var(--line-strong);
   }
@@ -6544,10 +6562,13 @@ html[data-theme="dark"] #root .spec-search,
     height: 54px;
     flex: 0 0 auto;
   }
-  .mobile-filter-sheet-fields > .custom-select:nth-child(n + 4) .select-menu {
-    top: auto;
-    bottom: calc(100% + 8px);
-    transform-origin: bottom center;
+  /* Шторка прокручивается только вниз, поэтому раскрытый вверх список обрезался
+     краем прокрутки и уезжал под шапку «Фильтры». Все меню открываются вниз,
+     а видимость обеспечивает докрутка шторки в SelectField. */
+  /* Закрытые меню скрыты полностью: невидимый выпадающий список у нижних полей
+     иначе растягивает прокрутку шторки пустым «хвостом» после кнопки «Готово». */
+  .mobile-filter-sheet-fields .custom-select:not(.open) .select-menu {
+    display: none;
   }
   .mobile-filter-sheet-actions {
     position: sticky;
@@ -10230,5 +10251,275 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
   :root.refresh-pulse .app-content > main,
   :root.refresh-pulse .wordmark {
     animation: none;
+  }
+}
+
+/* ============================== Промо-лендинги моделей ===================== */
+
+.model-landing {
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
+  padding-bottom: 72px;
+}
+
+.model-landing-hero {
+  position: relative;
+  overflow: hidden;
+  background: #0d0f12;
+}
+
+.model-landing-hero > img {
+  display: block;
+  width: 100%;
+  max-height: 640px;
+  object-fit: cover;
+}
+
+.model-landing-hero-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  background: linear-gradient(to top, rgba(6, 8, 10, 0.78) 0%, rgba(6, 8, 10, 0.34) 42%, rgba(6, 8, 10, 0) 70%);
+}
+
+.model-landing-hero-overlay > .page-width {
+  padding-bottom: 44px;
+}
+
+.model-landing-hero-overlay .info-eyebrow {
+  color: #e6e9ed;
+}
+
+.model-landing-hero-overlay h1 {
+  margin: 10px 0 12px;
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.05;
+  color: #fff;
+}
+
+.model-landing-hero-overlay p {
+  max-width: 560px;
+  margin: 0 0 22px;
+  color: #d9dde2;
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+
+.model-landing-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.model-landing-hero-actions .primary,
+.model-landing-hero-actions .secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.model-landing-hero-actions .secondary {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+
+.model-landing-hero-actions .secondary:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.model-landing-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.model-landing-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.model-landing-stats strong {
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.model-landing-stats span {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.model-landing-cars {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.model-landing-cars .featured-load-more {
+  align-self: center;
+  text-decoration: none;
+}
+
+.model-landing-feature {
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: 32px;
+  align-items: center;
+}
+
+.model-landing-feature.reversed > figure {
+  order: 2;
+}
+
+.model-landing-feature figure {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+}
+
+.model-landing-feature img {
+  display: block;
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+}
+
+.model-landing-feature-text h2 {
+  margin: 10px 0 14px;
+  font-size: clamp(22px, 3vw, 28px);
+  line-height: 1.15;
+}
+
+.model-landing-feature-text p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.model-landing-disclaimer {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding-top: 4px;
+}
+
+.model-landing-disclaimer svg {
+  flex-shrink: 0;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.model-landing-disclaimer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.model-promo-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 26px;
+  padding: 14px 18px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
+}
+
+.model-promo-banner:hover {
+  border-color: var(--line-strong);
+  background: var(--panel-soft);
+}
+
+.model-promo-banner img {
+  width: 108px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.model-promo-banner div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.model-promo-banner strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.model-promo-banner span {
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.model-promo-banner svg {
+  margin-left: auto;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .model-landing {
+    gap: 40px;
+  }
+
+  .model-landing-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .model-landing-feature {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .model-landing-feature.reversed > figure {
+    order: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .model-landing-hero > img {
+    min-height: 300px;
+  }
+
+  .model-landing-hero-overlay > .page-width {
+    padding-bottom: 28px;
+  }
+
+  .model-landing-stats {
+    gap: 10px;
+  }
+
+  .model-landing-stats > div {
+    padding: 14px 16px;
+  }
+
+  .model-landing-stats strong {
+    font-size: 18px;
+  }
+
+  .model-promo-banner img {
+    width: 76px;
+    height: 52px;
   }
 }

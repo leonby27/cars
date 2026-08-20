@@ -6,8 +6,11 @@ const MAX_SAVED_SEARCHES = 30;
 
 // Форму набора фильтров задаёт фронтенд; сервер принимает только известные ключи
 // и строковые значения разумной длины, чтобы в базу не попадал произвольный JSON.
-const FILTER_KEYS = ["type", "brand", "model", "bodyType", "yearMin", "yearMax", "mileage", "priceMin", "priceMax", "drive", "owners", "battery", "condition", "sort"];
-const LIST_KEYS = new Set(["model", "bodyType"]);
+const FILTER_KEYS = ["type", "brand", "model", "bodyType", "color", "yearMin", "yearMax", "mileage", "priceMin", "priceMax", "drive", "owners", "battery", "condition", "accel", "tire", "torque", "sort"];
+const LIST_KEYS = new Set(["model", "bodyType", "color"]);
+// Ключи, появившиеся позже запуска сохранённых поисков: вкладка со старой сборкой
+// их не шлёт, и это не повод отклонять весь набор — просто ключа не будет.
+const OPTIONAL_KEYS = new Set(["accel", "tire", "torque"]);
 const MAX_FILTER_VALUE = 80;
 const MAX_FILTER_LIST = 30;
 
@@ -23,6 +26,7 @@ export function normalizeSearchFilters(filters) {
       normalized[key] = value.map((item) => item.trim());
       continue;
     }
+    if ((value === undefined || value === null) && OPTIONAL_KEYS.has(key)) continue;
     if (typeof value !== "string" || !value.trim() || value.length > MAX_FILTER_VALUE) return null;
     normalized[key] = value.trim();
   }

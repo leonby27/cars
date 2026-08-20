@@ -76,6 +76,26 @@ test("keeps all populated Che168 specification groups without duplicate rows", (
   assert.deepEqual(normalized.groups.map((group) => group.name), ["Battery & Charging", "Chassis & Steering"]);
 });
 
+test("extracts acceleration, best torque and tire size for catalog filters", () => {
+  const filterSpecs = [...specs, { name:"Basic Specifications", paramitems:[
+    { name:"Official 0-100km/h acceleration (s)", value:"5.1", sublist:[] },
+    { name:"Max Torque (N·m)", value:"430", sublist:[] },
+    { name:"Total Motor Torque (N·m)", value:"563", sublist:[] },
+  ] }, { name:"Wheels & Brakes", paramitems:[
+    { name:"Front Tire Specification", value:"255/50 R20", sublist:[] },
+  ] }];
+  const car = buildChe168Car({ detail, specGroups:filterSpecs });
+  assert.equal(car.acceleration, 5.1);
+  assert.equal(car.torqueNm, 563);
+  assert.equal(car.tireSizeFront, "255/50 R20");
+  assert.equal(car.tireRim, 20);
+  const bare = buildChe168Car({ detail, specGroups:specs });
+  assert.equal(bare.acceleration, null);
+  assert.equal(bare.torqueNm, null);
+  assert.equal(bare.tireSizeFront, null);
+  assert.equal(bare.tireRim, null);
+});
+
 test("rejects hybrids and incomplete galleries through normalized parser output", () => {
   const hybrid = buildChe168Car({ detail:{ ...detail, fuelname:"Plug-in Hybrid" }, specGroups:specs });
   const incomplete = buildChe168Car({ detail:{ ...detail, catepiclist:[{ list:["https://img/1.jpg"] }] }, specGroups:specs });

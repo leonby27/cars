@@ -1,4 +1,4 @@
-import { canonicalImportBrand } from "../../config/import-policy.mjs";
+import { canonicalImportBrand, canonicalImportModel } from "../../config/import-policy.mjs";
 import { normalizeDrive } from "./guazi-parser.mjs";
 
 const numeric = (value) => {
@@ -159,7 +159,7 @@ function cleanModel(value, brand) {
     const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     model = model.replace(new RegExp(`^${escaped}\\s+`, "i"), "").trim();
   }
-  return model;
+  return canonicalImportModel(brand, model);
 }
 
 export function normalizeChe168Energy(detail, specs) {
@@ -202,6 +202,16 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
   const batteryBrand = specValue(specs, [/^Battery cell brand$/i, /^Battery Brand$/i]);
   const bodyStructure = detail.structure || specValue(specs, [/^Body structure$/i]);
   const technicalSpecs = normalizeChe168TechnicalSpecs(payload.specGroups);
+  const acceleration = numeric(specValue(specs, [/^Official 0-100km\/h acceleration/i, /^Measured 0-100km\/h acceleration/i]));
+  // Момент у гибридов и электричек разложен по нескольким строкам (ДВС, моторы,
+  // суммарный); в карточку идёт наибольший — он и описывает машину целиком.
+  const torqueValues = specs
+    .filter((item) => /^(Max Torque|Total Motor Torque|System Combined Torque) \(N·m\)$/i.test(item.name || ""))
+    .map((item) => numeric(actualSpecValue(item)))
+    .filter((value) => value !== null);
+  const torqueNm = torqueValues.length ? Math.max(...torqueValues) : null;
+  const tireSizeFront = specValue(specs, [/^Front Tire Specification$/i]);
+  const tireRim = numeric(String(tireSizeFront || "").match(/R\s*(\d{2})/i)?.[1]);
 
   return {
     id: `che168-${detail.infoid}`,
@@ -242,6 +252,10 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     bodyColor: detail.color || null,
     vehicleClass: detail.level || null,
     bodyStructure,
+    acceleration,
+    torqueNm,
+    tireSizeFront,
+    tireRim,
     seats: numeric(detail.setcount || specValue(specs, [/^Seating capacity$/i])),
     doors: numeric(detail.structuredoor || specValue(specs, [/^Number of doors$/i])),
     dimensions: detail.dimension || null,

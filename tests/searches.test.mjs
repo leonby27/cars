@@ -10,6 +10,7 @@ const validFilters = {
   brand: "Audi",
   model: ["Q4 e-tron"],
   bodyType: [],
+  color: ["Чёрный"],
   yearMin: "2022",
   yearMax: "До",
   mileage: "до 30 000 км",
@@ -19,6 +20,9 @@ const validFilters = {
   owners: "1 владелец",
   battery: "От 60 кВт·ч",
   condition: "Отличное состояние",
+  accel: "До 6 с",
+  tire: "От R19",
+  torque: "От 400 Н·м",
   sort: "price_asc",
 };
 
@@ -46,4 +50,14 @@ test("пустые списочные поля допустимы и означ�
   const normalized = normalizeSearchFilters({ ...validFilters, model: [], bodyType: [] });
   assert.deepEqual(normalized.model, []);
   assert.deepEqual(normalized.bodyType, []);
+});
+
+test("старый клиент без новых ключей (разгон, шины, момент) не получает отказ", () => {
+  const normalized = normalizeSearchFilters({ ...validFilters, accel: undefined, tire: undefined, torque: undefined });
+  assert.notEqual(normalized, null);
+  assert.equal("accel" in normalized, false);
+  assert.equal("tire" in normalized, false);
+  assert.equal("torque" in normalized, false);
+  // Но мусор в этих ключах по-прежнему отклоняется целиком.
+  assert.equal(normalizeSearchFilters({ ...validFilters, accel: 6 }), null);
 });

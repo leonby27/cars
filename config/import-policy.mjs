@@ -128,6 +128,66 @@ export function canonicalImportBrand(value) {
   return BRAND_ALIASES.get(normalized) || allowedBrandByLower.get(normalized) || brand;
 }
 
+// The source's English series names are inconsistent: the same car arrives both
+// translated ("Seal") and transliterated ("Hai Bao"), sometimes with a factory
+// or sub-brand prefix glued on. Without a canonical form the model filter shows
+// one car as two entries, so every name passes through this dictionary — on
+// import and on read alike. New source spellings land here as they show up.
+const MODEL_PREFIX_STRIPS = new Map([
+  ["Deepal", ["Deep Blue", "DeepBlue", "Shenlan", "深蓝"]],
+]);
+
+const MODEL_ALIASES = new Map([
+  // BMW splits its M performance trims into separate series; the catalog files
+  // them under the base model. XM and i8 have no base model and stay as is.
+  ["bmw|m5 new energy", "5 Series New Energy"],
+  ["bmw|m760le", "7 Series New Energy"],
+  ["bmw|i4 m50", "i4"],
+  ["bmw|i5 m60", "i5"],
+  ["bmw|i7 m70l", "i7"],
+  ["bmw|ix m60", "iX"],
+  ["bmw|x5 new energy(imported)", "X5 New Energy"],
+  // Hai Bao / Hai Shi are transliterations of Seal / Sealion.
+  ["byd|hai bao 05 dm-i", "Seal 05 DM-i"],
+  ["byd|hai shi 05 ev", "Sealion 05 EV"],
+  ["byd|hai shi 07 dm-i", "Sealion 07 DM-i"],
+  ["voyah|taisan", "Taishan"],
+  ["voyah|taishan 8", "Taishan"],
+  ["hongqi|tian gong 08", "Tiangong 08"],
+  // One car built by two joint ventures; GAC later renamed its run "BoZhi 4X".
+  ["toyota|faw toyota bz4x", "bZ4X"],
+  ["toyota|gac toyota bz4x", "bZ4X"],
+  ["toyota|bozhi 4x", "bZ4X"],
+  ["toyota|bozhi 3x", "bZ3X"],
+  ["toyota|bozhi 7", "bZ7"],
+  // "Unique" and "Yuzhong" are the translation and transliteration of the same
+  // Chinese family name; VW's export name for it is ID. UNYX.
+  ["volkswagen|unique 06", "ID. UNYX 06"],
+  ["volkswagen|yuzhong 07", "ID. UNYX 07"],
+  ["volkswagen|yuzhong 08", "ID. UNYX 08"],
+  // "Li ONE" keeps its prefix — that is the model's actual name.
+  ["li auto|li l8", "L8"],
+  ["li auto|li xiang l9", "L9"],
+  ["li auto|li i8", "i8"],
+  ["aion|trumpchi ge3", "GE3"],
+  ["dongfeng|zhengzhou nissan z9 ge phev", "Nissan Z9 GE PHEV"],
+]);
+
+export function canonicalImportModel(brandValue, modelValue) {
+  const brand = canonicalImportBrand(brandValue);
+  let model = String(modelValue || "").trim();
+  for (const prefix of MODEL_PREFIX_STRIPS.get(brand) || []) {
+    const lower = model.toLocaleLowerCase("en-US");
+    const prefixLower = prefix.toLocaleLowerCase("en-US");
+    if (lower === prefixLower) continue;
+    if (lower.startsWith(prefixLower)) {
+      const rest = model.slice(prefix.length).trim();
+      if (rest) model = rest;
+    }
+  }
+  return MODEL_ALIASES.get(`${brand.toLocaleLowerCase("en-US")}|${model.toLocaleLowerCase("en-US")}`) || model;
+}
+
 export function isAllowedImportBrand(value) {
   return allowedBrands.has(canonicalImportBrand(value));
 }

@@ -59,6 +59,37 @@ test("filters by a landed price floor", () => {
   assert.match(result.where, /l\.estimated_total_usd>=\$1/);
 });
 
+test("filters by several body colors at once", () => {
+  const params = new URLSearchParams();
+  params.append("color", "Black");
+  params.append("color", "Silver,Dark Gray");
+  params.append("color", "Все цвета");
+  const result = buildCarFilters(params);
+  assert.deepEqual(result.values, [["Black", "Silver", "Dark Gray"]]);
+  assert.match(result.where, /v\.specifications->>'bodyColor'=ANY\(\$1\)/);
+});
+
+test("filters by acceleration ceiling, torque and tire rim floors", () => {
+  const result = buildCarFilters(new URLSearchParams({ accelMax:"6", torqueMin:"400", tireRimMin:"19" }));
+  assert.deepEqual(result.values, [6, 400, 19]);
+  assert.match(result.where, /\(v\.specifications->>'acceleration'\)::numeric<=\$1/);
+  assert.match(result.where, /\(v\.specifications->>'torqueNm'\)::numeric>=\$2/);
+  assert.match(result.where, /\(v\.specifications->>'tireRim'\)::numeric>=\$3/);
+});
+
+test("ignores non-numeric acceleration, torque and tire parameters", () => {
+  const result = buildCarFilters(new URLSearchParams({ accelMax:"быстро", torqueMin:"", tireRimMin:"R" }));
+  assert.deepEqual(result.values, []);
+  assert.equal(result.where, "WHERE l.status='active'");
+});
+
+test("filters by a closed mileage range", () => {
+  const result = buildCarFilters(new URLSearchParams({ mileageMin:"10000", mileageMax:"50000" }));
+  assert.deepEqual(result.values, [50000, 10000]);
+  assert.match(result.where, /l\.mileage_km<=\$1/);
+  assert.match(result.where, /l\.mileage_km>=\$2/);
+});
+
 test("filters by an allowlisted condition grade", () => {
   const result = buildCarFilters(new URLSearchParams({ conditionGrade:"A" }));
   assert.deepEqual(result.values, ["A"]);

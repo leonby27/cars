@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { canonicalImportModel } from "../config/import-policy.mjs";
 import { pool, withTransaction } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeBodyType } from "../src/body-types.js";
@@ -10,7 +11,7 @@ const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({
 export function normalizeCar(car) {
   const electricRange = car.electricRange ?? (Number(car.description?.match(/纯电续航\s*(\d+)/)?.[1]) || null);
   const combinedRange = car.combinedRange ?? (Number(car.description?.match(/综合续航\s*(\d+)/)?.[1]) || null);
-  const model = car.brand === "Deepal" ? String(car.model).replace(/^深蓝/, "") : car.model;
+  const model = canonicalImportModel(car.brand, car.model);
   return { ...car, model, title:`${car.brand} ${model} ${car.year}`, bodyType:normalizeBodyType({ ...car, model }), drive:normalizeDrive(car.drive), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
 }
 
@@ -21,7 +22,7 @@ export async function upsertCar(car, client = pool) {
   await client.query(`INSERT INTO vehicles (id, brand, model, model_year, powertrain, drivetrain, battery_kwh, electric_range_km, combined_range_km, specifications, updated_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
     ON CONFLICT (id) DO UPDATE SET brand=EXCLUDED.brand, model=EXCLUDED.model, model_year=EXCLUDED.model_year, powertrain=EXCLUDED.powertrain, drivetrain=EXCLUDED.drivetrain, battery_kwh=EXCLUDED.battery_kwh, electric_range_km=EXCLUDED.electric_range_km, combined_range_km=EXCLUDED.combined_range_km, specifications=EXCLUDED.specifications, updated_at=now()`,
-    [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify({ bodyType:item.bodyType,bodyStructure:item.bodyStructure,batteryType:item.batteryType,batteryBrand:item.batteryBrand,batteryHealth:item.batteryHealth,engine:item.engine,transmission:item.transmission,bodyColor:item.bodyColor,vehicleClass:item.vehicleClass,driverAssistance:item.driverAssistance,infotainmentChip:item.infotainmentChip,assistanceLevel:item.assistanceLevel,radarCount:item.radarCount,cameraCount:item.cameraCount,ultrasonicCount:item.ultrasonicCount,warranty:item.warranty,inspectionGrade:item.inspectionGrade,powertrainInspection:item.powertrainInspection,bodyInspection:item.bodyInspection,interiorInspection:item.interiorInspection,structureInspection:item.structureInspection,engineBayInspection:item.engineBayInspection,batteryProtection:item.batteryProtection })]);
+    [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify({ bodyType:item.bodyType,bodyStructure:item.bodyStructure,batteryType:item.batteryType,batteryBrand:item.batteryBrand,batteryHealth:item.batteryHealth,engine:item.engine,transmission:item.transmission,bodyColor:item.bodyColor,acceleration:item.acceleration,torqueNm:item.torqueNm,tireSizeFront:item.tireSizeFront,tireRim:item.tireRim,vehicleClass:item.vehicleClass,driverAssistance:item.driverAssistance,infotainmentChip:item.infotainmentChip,assistanceLevel:item.assistanceLevel,radarCount:item.radarCount,cameraCount:item.cameraCount,ultrasonicCount:item.ultrasonicCount,warranty:item.warranty,inspectionGrade:item.inspectionGrade,powertrainInspection:item.powertrainInspection,bodyInspection:item.bodyInspection,interiorInspection:item.interiorInspection,structureInspection:item.structureInspection,engineBayInspection:item.engineBayInspection,batteryProtection:item.batteryProtection })]);
   await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at)
     VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()))
     ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at)`,
@@ -68,6 +69,10 @@ export function buildCarFilters(searchParams) {
   if (models.length) add("v.model=ANY(?)", models);
   const bodyTypes = multiParamValues(searchParams.getAll("bodyType"), "Все кузова", { splitCommas:true });
   if (bodyTypes.length) add("v.specifications->>'bodyType'=ANY(?)", bodyTypes);
+  // Цвет кузова хранится нормализованными английскими значениями (Black, Silver…) —
+  // клиент переводит русские подписи фильтра в них сам.
+  const colors = multiParamValues(searchParams.getAll("color"), "Все цвета", { splitCommas:true });
+  if (colors.length) add("v.specifications->>'bodyColor'=ANY(?)", colors);
   if (DRIVE_TYPES.includes(searchParams.get("drive"))) add("v.drivetrain=?", searchParams.get("drive"));
   if (Number(searchParams.get("ownersMax"))) add("l.owners<=?", Number(searchParams.get("ownersMax")));
   if (searchParams.get("noClaims") === "1") clauses.push("COALESCE(l.claims, l.source_payload->>'claims', l.source_payload->>'incident') ~ '(0\\s*次理赔|理赔\\s*0\\s*次)'");
@@ -75,10 +80,17 @@ export function buildCarFilters(searchParams) {
   if (Number(searchParams.get("yearMin"))) add("v.model_year>=?", Number(searchParams.get("yearMin")));
   if (Number(searchParams.get("yearMax"))) add("v.model_year<=?", Number(searchParams.get("yearMax")));
   if (Number(searchParams.get("mileageMax"))) add("l.mileage_km<=?", Number(searchParams.get("mileageMax")));
+  if (Number(searchParams.get("mileageMin"))) add("l.mileage_km>=?", Number(searchParams.get("mileageMin")));
   if (Number(searchParams.get("priceCnyMax"))) add("l.price_cny<=?", Number(searchParams.get("priceCnyMax")));
   if (Number(searchParams.get("landedMax"))) add("l.estimated_total_usd<=?", Number(searchParams.get("landedMax")));
   if (Number(searchParams.get("landedMin"))) add("l.estimated_total_usd>=?", Number(searchParams.get("landedMin")));
   if (Number(searchParams.get("batteryMin"))) add("v.battery_kwh>=?", Number(searchParams.get("batteryMin")));
+  // Разгон, момент и шины перенесены из полной техкарты в specifications
+  // скриптом backfill-spec-filters.mjs и пишутся туда же при импорте; машины
+  // без значения фильтр честно отсеивает.
+  if (Number(searchParams.get("accelMax"))) add("(v.specifications->>'acceleration')::numeric<=?", Number(searchParams.get("accelMax")));
+  if (Number(searchParams.get("torqueMin"))) add("(v.specifications->>'torqueNm')::numeric>=?", Number(searchParams.get("torqueMin")));
+  if (Number(searchParams.get("tireRimMin"))) add("(v.specifications->>'tireRim')::numeric>=?", Number(searchParams.get("tireRimMin")));
   return { where:`WHERE ${clauses.join(" AND ")}`, values };
 }
 
@@ -156,20 +168,21 @@ export async function listCars(searchParams) {
         ORDER BY v.brand, v.model, random()
       ), picked AS (SELECT id FROM sample ORDER BY random() LIMIT $${values.length + 1})
       ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY random()`, [...values, limit]),
-      pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+      pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
     ]);
     // Витрина главной — одна выдача без листания: следующей страницы у неё нет.
-    return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, limit, offset:0, hasMore:false };
+    return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, refreshedAt:countResult.rows[0].refreshed_at, limit, offset:0, hasMore:false };
   }
   const [itemsResult, countResult] = await Promise.all([
     beyondCap
       ? Promise.resolve({ rows:[] })
       : pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
-    pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+    // max(last_seen_at) едет в том же скане, что и count(*): отдельного запроса дата не стоит.
+    pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
   const total = countResult.rows[0].total;
   const items = itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row)));
-  return { items, total, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
+  return { items, total, refreshedAt:countResult.rows[0].refreshed_at, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
 }
 
 export async function getCar(id) {

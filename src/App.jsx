@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
+import { mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
+import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING } from "./pricing.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
@@ -9,6 +11,7 @@ import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-typ
 import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn } from "./catalog-return.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { selectSimilarCars } from "./similar-cars.js";
+import { MODEL_LANDINGS, findModelLanding, landingForCar } from "./model-landings.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
@@ -37,6 +40,10 @@ const ANY_OWNERS = "Владельцы";
 const ANY_BATTERY = "Батарея";
 const ANY_BODY_TYPE = "Все кузова";
 const ANY_MODEL = "Все модели";
+const ANY_COLOR = "Все цвета";
+const ANY_ACCEL = "Разгон до";
+const ANY_TIRE = "Размер шин";
+const ANY_TORQUE = "Крутящий момент";
 // Кузов и модель выбираются списком, поэтому их значение хранится массивом.
 // Пустой массив = «все»; строку принимаем ради старых ссылок и history.state.
 const multiValues = (value, anyLabel) => (Array.isArray(value) ? value : [value]).filter((item) => item && item !== anyLabel);
@@ -83,6 +90,12 @@ const priceMaxOptions = [ANY_PRICE_MAX, ...priceSteps];
 const mileageOptions = [ANY_MILEAGE, ...[100000, 70000, 50000, 30000, 20000, 15000, 10000, 5000].map((value) => `до ${String(value).replace(/\B(?=(\d{3})+$)/g, " ")} км`)];
 const batteryOptions = [ANY_BATTERY, ...[40, 60, 80, 100].map((value) => `От ${value} кВт·ч`)];
 const batteryFloor = (value) => Number(String(value).replace(/\D/g, "")) || 0;
+// Разгон, шины и момент лежат в specifications каждой машины (перенесены из полной
+// техкарты источника). Ступени подобраны по живому каталогу: медианный разгон 6,1 с,
+// медианный момент около 400 Н·м, диски от R13 до R23 с горбом на R18–R20.
+const accelOptions = [ANY_ACCEL, ...[4, 5, 6, 7, 8].map((value) => `До ${value} с`)];
+const tireOptions = [ANY_TIRE, ...[16, 17, 18, 19, 20, 21].map((value) => `От R${value}`)];
+const torqueOptions = [ANY_TORQUE, ...[200, 300, 400, 500, 700].map((value) => `От ${value} Н·м`)];
 const priceBound = (value, anyLabel) => (!value || value === anyLabel ? null : Number(value));
 // Половинки узкие, а порядок и так читается по паре — префиксы «от»/«до» не печатаем.
 const priceMinLabel = (value, currency) => (priceBound(value, ANY_PRICE_MIN) === null ? ANY_PRICE_MIN : money(Number(value), currency));
@@ -211,7 +224,29 @@ const appendPriceRange = (query, priceMin, priceMax) => {
   if (min !== null) query.set("landedMin", String(min));
   if (max !== null) query.set("landedMax", String(max));
 };
-const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION }) => (drive === ANY_DRIVE || car.drive === drive) && (owners === ANY_OWNERS || Number(car.owners) <= filterNumber(owners)) && (battery === ANY_BATTERY || Number(car.battery) >= batteryFloor(battery)) && (condition === ANY_CONDITION || car.conditionGrade === conditionGrades[condition]);
+// Пробег хранится подписью («до 50 000 км», «от 10 000 до 50 000 км»): разбор
+// границ один и тот же для запросов к серверу и локальной фильтрации.
+const mileageRangeBounds = (label) => (!label || label === ANY_MILEAGE ? null : mileageBounds(label));
+const matchesMileageRange = (car, label) => {
+  const bounds = mileageRangeBounds(label);
+  if (!bounds) return true;
+  const mileage = Number(car.mileage) || 0;
+  return (!bounds.min || mileage >= bounds.min) && (!bounds.max || mileage <= bounds.max);
+};
+const appendMileageRange = (query, label) => {
+  const bounds = mileageRangeBounds(label);
+  if (bounds?.min) query.set("mileageMin", String(bounds.min));
+  if (bounds?.max) query.set("mileageMax", String(bounds.max));
+};
+const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION, accel = ANY_ACCEL, tire = ANY_TIRE, torque = ANY_TORQUE }) =>
+  (drive === ANY_DRIVE || car.drive === drive) &&
+  (owners === ANY_OWNERS || Number(car.owners) <= filterNumber(owners)) &&
+  (battery === ANY_BATTERY || Number(car.battery) >= batteryFloor(battery)) &&
+  (condition === ANY_CONDITION || car.conditionGrade === conditionGrades[condition]) &&
+  // Машину без значения фильтр отсеивает: Number(null) = 0 прошёл бы «до N с».
+  (accel === ANY_ACCEL || (Number(car.acceleration) > 0 && Number(car.acceleration) <= filterNumber(accel))) &&
+  (tire === ANY_TIRE || Number(car.tireRim) >= filterNumber(tire)) &&
+  (torque === ANY_TORQUE || Number(car.torqueNm) >= filterNumber(torque));
 const ownerOptions = [ANY_OWNERS, "1 владелец", "До 2 владельцев"];
 // Сеед перемешивания уходит в адрес запроса каталога. Полностью случайный делал адрес
 // уникальным для каждого посетителя, поэтому общий кэш по нему не срабатывал никогда.
@@ -595,6 +630,9 @@ const routeSeo = {
   "/privacy": ["Политика конфиденциальности | evcars.by", "Политика обработки и защиты персональных данных пользователей сайта evcars.by."],
   "/terms": ["Условия использования сайта | evcars.by", "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая."],
 };
+// Промо-страницы моделей описаны в model-landings.js; их заголовки попадают в ту же
+// карту, чтобы SEO-механика работала для них без отдельной ветки.
+for (const landing of MODEL_LANDINGS) routeSeo[landing.path] = [landing.seoTitle, landing.seoDescription];
 
 const privateRouteSeo = {
   "/favorites": ["Избранные автомобили | evcars.by", "Сохранённые автомобили в вашем личном кабинете evcars.by."],
@@ -905,6 +943,13 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     optionsRef.current?.querySelector('[role="option"].active')?.scrollIntoView({ block: "nearest" });
   }, [open, activeIndex]);
 
+  // Внутри мобильной шторки фильтров меню раскрывается вниз и может уйти за
+  // нижний край; докручиваем шторку, чтобы раскрытый список был виден целиком.
+  useEffect(() => {
+    if (!open || !rootRef.current?.closest(".mobile-filter-sheet")) return;
+    rootRef.current.querySelector(".select-menu")?.scrollIntoView({ block: "nearest" });
+  }, [open]);
+
   const choose = (item) => {
     if (multiple) {
       if (item === allOption) {
@@ -1069,10 +1114,14 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
     <>
       <SelectField className={className} label="Пробег" value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
       <SelectField className={className} label="Кузов" value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple />
+      <SelectField className={className} label="Цвет" value={values.color} onChange={actions.color} options={[ANY_COLOR, ...COLOR_LABELS]} multiple />
       {Number(availability.drive) > 0 && <SelectField className={className} label="Привод" value={values.drive} onChange={actions.drive} options={options.drives} />}
       {Number(availability.owners) > 0 && <SelectField className={className} label="Владельцы" value={values.owners} onChange={actions.owners} options={ownerOptions} />}
       {Number(availability.battery) > 0 && <SelectField className={className} label="Батарея" value={values.battery} onChange={actions.battery} options={batteryOptions} />}
       {Number(availability.condition) > 0 && <SelectField className={className} label="Состояние" value={values.condition} onChange={actions.condition} options={conditionOptions} />}
+      <SelectField className={className} label="Разгон до 100 км/ч" value={values.accel} onChange={actions.accel} options={accelOptions} />
+      <SelectField className={className} label="Размер шин" value={values.tire} onChange={actions.tire} options={tireOptions} />
+      <SelectField className={className} label="Крутящий момент" value={values.torque} onChange={actions.torque} options={torqueOptions} />
     </>
   );
 
@@ -1157,6 +1206,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [brand, setBrand] = useState("Все марки");
   const [model, setModel] = useState([]);
   const [bodyType, setBodyType] = useState([]);
+  const [color, setColor] = useState([]);
   const [yearMin, setYearMin] = useState(ANY_YEAR_MIN);
   const [yearMax, setYearMax] = useState(ANY_YEAR_MAX);
   const [mileage, setMileage] = useState(ANY_MILEAGE);
@@ -1166,6 +1216,9 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [owners, setOwners] = useState(ANY_OWNERS);
   const [battery, setBattery] = useState(ANY_BATTERY);
   const [condition, setCondition] = useState(ANY_CONDITION);
+  const [accel, setAccel] = useState(ANY_ACCEL);
+  const [tire, setTire] = useState(ANY_TIRE);
+  const [torque, setTorque] = useState(ANY_TORQUE);
   const [remoteMeta, setRemoteMeta] = useState({
     brands: [],
     models: [],
@@ -1198,9 +1251,8 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         battery: cars.filter((car) => Number(car.battery) > 0).length,
         condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
       };
-  const mileageCap = Number(mileage.replace(/\D/g, ""));
-  const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesYears(car, yearMin, yearMax) && (mileage === ANY_MILEAGE || car.mileage <= mileageCap) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition })).length;
-  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION;
+  const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesColorLabels(car.bodyColor, multiValues(color, ANY_COLOR)) && matchesYears(car, yearMin, yearMax) && matchesMileageRange(car, mileage) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition, accel, tire, torque })).length;
+  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || multiValues(color, ANY_COLOR).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION || accel !== ANY_ACCEL || tire !== ANY_TIRE || torque !== ANY_TORQUE;
   useEffect(() => {
     // Ждать загрузочный запрос незачем: справочник нужен сразу и уходит параллельно
     // с витриной. Останавливает его только выясненный статический режим.
@@ -1218,13 +1270,17 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     appendMulti(metaQuery, "bodyType", bodyType, ANY_BODY_TYPE);
     appendMulti(carsQuery, "bodyType", bodyType, ANY_BODY_TYPE);
     appendMulti(carsQuery, "model", model, ANY_MODEL);
+    colorValuesForLabels(multiValues(color, ANY_COLOR)).forEach((value) => carsQuery.append("color", value));
     appendYearRange(carsQuery, yearMin, yearMax);
-    if (mileage !== ANY_MILEAGE) carsQuery.set("mileageMax", String(mileageCap));
+    appendMileageRange(carsQuery, mileage);
     appendPriceRange(carsQuery, priceMin, priceMax);
     if (drive !== ANY_DRIVE) carsQuery.set("drive", drive);
     if (owners !== ANY_OWNERS) carsQuery.set("ownersMax", String(filterNumber(owners)));
     if (battery !== ANY_BATTERY) carsQuery.set("batteryMin", String(batteryFloor(battery)));
     if (condition !== ANY_CONDITION) carsQuery.set("conditionGrade", conditionGrades[condition]);
+    if (accel !== ANY_ACCEL) carsQuery.set("accelMax", String(filterNumber(accel)));
+    if (tire !== ANY_TIRE) carsQuery.set("tireRimMin", String(filterNumber(tire)));
+    if (torque !== ANY_TORQUE) carsQuery.set("torqueMin", String(filterNumber(torque)));
     // Числа для уже виденных комбинаций фильтров помним: повторное переключение
     // показывает счётчик сразу, без мигания. Прячем цифру только на первый подсчёт —
     // чужое число (или «0») на кнопке хуже, чем секунда без числа.
@@ -1254,7 +1310,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [apiMode, hasActiveFilters, normalizedType, brand, model, bodyType, yearMin, yearMax, mileageCap, priceMin, priceMax, drive, owners, battery, condition]);
+  }, [apiMode, hasActiveFilters, normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, torque]);
   const changeType = (value) => {
     setType(value);
     setModel([]);
@@ -1268,6 +1324,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     setBrand("Все марки");
     setModel([]);
     setBodyType([]);
+    setColor([]);
     setYearMin(ANY_YEAR_MIN);
     setYearMax(ANY_YEAR_MAX);
     setMileage(ANY_MILEAGE);
@@ -1277,13 +1334,16 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     setOwners(ANY_OWNERS);
     setBattery(ANY_BATTERY);
     setCondition(ANY_CONDITION);
+    setAccel(ANY_ACCEL);
+    setTire(ANY_TIRE);
+    setTorque(ANY_TORQUE);
   };
   return (
     <VehicleSearch
       constrained
       selectedType={type}
       onTypeChange={changeType}
-      values={{ brand, model, yearMin, yearMax, priceMin, priceMax, mileage, bodyType, drive, owners, battery, condition }}
+      values={{ brand, model, yearMin, yearMax, priceMin, priceMax, mileage, bodyType, color, drive, owners, battery, condition, accel, tire, torque }}
       actions={{
         brand: changeBrand,
         model: setModel,
@@ -1302,10 +1362,14 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
           setBodyType(value);
           setModel([]);
         },
+        color: setColor,
         drive: setDrive,
         owners: setOwners,
         battery: setBattery,
         condition: setCondition,
+        accel: setAccel,
+        tire: setTire,
+        torque: setTorque,
       }}
       options={{ brands, models, bodyTypes, drives }}
       optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }}
@@ -1313,7 +1377,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : (totalCount || cars.length) ? formatRoundedListingCount(totalCount || cars.length) : null}
       hasActiveFilters={hasActiveFilters}
       onReset={resetFilters}
-      onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}${multiValues(model, ANY_MODEL).map((item) => `&model=${encodeURIComponent(item)}`).join("")}${multiValues(bodyType, ANY_BODY_TYPE).map((item) => `&body=${encodeURIComponent(item)}`).join("")}${yearBound(yearMin, ANY_YEAR_MIN) === null ? "" : `&yearFrom=${yearMin}`}${yearBound(yearMax, ANY_YEAR_MAX) === null ? "" : `&yearTo=${yearMax}`}&mileage=${encodeURIComponent(mileage)}${priceBound(priceMin, ANY_PRICE_MIN) === null ? "" : `&priceFrom=${priceMin}`}${priceBound(priceMax, ANY_PRICE_MAX) === null ? "" : `&priceTo=${priceMax}`}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&battery=${encodeURIComponent(battery)}&condition=${encodeURIComponent(condition)}`)}
+      onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}${multiValues(model, ANY_MODEL).map((item) => `&model=${encodeURIComponent(item)}`).join("")}${multiValues(bodyType, ANY_BODY_TYPE).map((item) => `&body=${encodeURIComponent(item)}`).join("")}${multiValues(color, ANY_COLOR).map((item) => `&color=${encodeURIComponent(item)}`).join("")}${yearBound(yearMin, ANY_YEAR_MIN) === null ? "" : `&yearFrom=${yearMin}`}${yearBound(yearMax, ANY_YEAR_MAX) === null ? "" : `&yearTo=${yearMax}`}&mileage=${encodeURIComponent(mileage)}${priceBound(priceMin, ANY_PRICE_MIN) === null ? "" : `&priceFrom=${priceMin}`}${priceBound(priceMax, ANY_PRICE_MAX) === null ? "" : `&priceTo=${priceMax}`}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&battery=${encodeURIComponent(battery)}&condition=${encodeURIComponent(condition)}${accel === ANY_ACCEL ? "" : `&accel=${encodeURIComponent(accel)}`}${tire === ANY_TIRE ? "" : `&tire=${encodeURIComponent(tire)}`}${torque === ANY_TORQUE ? "" : `&torque=${encodeURIComponent(torque)}`}`)}
     />
   );
 }
@@ -1321,7 +1385,6 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
 // Быстрый поиск на главной: строка вида «Zeekr 001 2025» разбирается на марку,
 // модель и годы по тому же справочнику, которым живут выпадающие фильтры, а
 // найденное сразу подменяет витрину «Каталог» ниже — сервер ничего нового не считает.
-const HERO_SEARCH_YEAR_PATTERN = /^(19|20)\d{2}$/;
 const searchNormalize = (value) => String(value ?? "").toLocaleLowerCase("ru").replace(/ё/g, "е").replace(/[^0-9a-zа-я]+/g, " ").replace(/\s+/g, " ").trim();
 const searchMatchRank = (candidate, text) => {
   const norm = searchNormalize(candidate);
@@ -1352,12 +1415,16 @@ const HERO_DRIVE_ALIASES = [
   ["awd", "Полный"],
   ["4wd", "Полный"],
   ["4x4", "Полный"],
+  ["4х4", "Полный"],
 ];
 const HERO_BODY_ALIASES = [
   ["кроссовер", "SUV / кроссовер"],
   ["suv", "SUV / кроссовер"],
   ["джип", "SUV / кроссовер"],
   ["внедорожник", "SUV / кроссовер"],
+  ["паркетник", "SUV / кроссовер"],
+  ["хэтч", "Хэтчбек"],
+  ["хетч", "Хэтчбек"],
   ["седан", "Седан"],
   ["лифтбек", "Лифтбек"],
   ["хэтчбек", "Хэтчбек"],
@@ -1368,6 +1435,7 @@ const HERO_BODY_ALIASES = [
 ];
 const HERO_TYPE_ALIASES = [
   ["электро", "Электромобиль"],
+  ["электри", "Электромобиль"],
   ["гибрид", "Гибрид"],
 ];
 const heroAliasValue = (word, aliases) => {
@@ -1440,9 +1508,33 @@ const HERO_BRAND_RU = [
   ["зикр", "Zeekr"],
   ["зикер", "Zeekr"],
   ["зеекр", "Zeekr"],
+  // Латинские сокращения, опечатки и жаргон: каталожные написания посетители
+  // часто сокращают («vw») или пишут на слух («vokswagen», «тайота», «мерин»).
+  ["vw", "Volkswagen"],
+  ["vokswagen", "Volkswagen"],
+  ["volswagen", "Volkswagen"],
+  ["wolkswagen", "Volkswagen"],
+  ["folkswagen", "Volkswagen"],
+  ["mb", "Mercedes-Benz"],
+  ["merc", "Mercedes-Benz"],
+  ["benz", "Mercedes-Benz"],
+  ["бенц", "Mercedes-Benz"],
+  ["мерин", "Mercedes-Benz"],
+  ["беха", "BMW"],
+  ["бэха", "BMW"],
+  ["бумер", "BMW"],
+  ["тайота", "Toyota"],
+  ["zikr", "Zeekr"],
+  ["zeker", "Zeekr"],
+  ["zeeker", "Zeekr"],
+  ["xiomi", "Xiaomi"],
+  ["xaomi", "Xiaomi"],
+  ["джилли", "Geely Galaxy"],
+  ["хпенг", "XPeng"],
 ];
 // Заменяет русские названия марок на каталожные. Недописанное слово от четырёх
-// букв тоже считается («фолькс» → Volkswagen).
+// букв тоже считается («фолькс» → Volkswagen), как и падежи с множественным
+// числом («теслы», «мерсом», «тойоты») — окончание до трёх букв поверх основы.
 const translateBrandWords = (words) => {
   const result = [];
   for (let index = 0; index < words.length; index += 1) {
@@ -1454,7 +1546,13 @@ const translateBrandWords = (words) => {
       if (slice.length !== aliasWords.length) continue;
       const exact = aliasWords.every((part, position) => slice[position] === part);
       const prefix = aliasWords.length === 1 && slice[0].length >= 4 && aliasWords[0].startsWith(slice[0]);
-      if (exact || prefix) {
+      // Короткие псевдонимы («воя», «нио») склоняем только целиком, иначе
+      // обычные слова («вояж») превращались бы в марку.
+      const inflected =
+        aliasWords.length === 1 &&
+        ((aliasWords[0].length >= 4 && slice[0].startsWith(aliasWords[0]) && slice[0].length - aliasWords[0].length <= 3) ||
+          (aliasWords[0].length >= 5 && slice[0].startsWith(aliasWords[0].slice(0, -1)) && slice[0].length - aliasWords[0].length + 1 <= 3));
+      if (exact || prefix || inflected) {
         replacement = brandName;
         consumed = aliasWords.length;
         break;
@@ -1482,30 +1580,49 @@ async function parseHeroSearch(query, context) {
   return parsed;
 }
 
-async function parseHeroSearchOnce(query, { apiMode, cars }) {
-  const tokens = searchNormalize(query).split(" ").filter(Boolean);
-  if (!tokens.length) return null;
-  // Номер объявления (например, 59116012) — ищем эту конкретную машину.
-  // Год — четыре цифры, так что с ним такой номер не спутать.
-  const idToken = tokens.find((token) => /^\d{6,}$/.test(token));
-  if (idToken) return { matched: true, listingId: idToken, brand: "", models: [], yearFrom: "", yearTo: "", drive: "", bodyType: "", powertrain: "" };
-  const yearTokens = tokens.filter((token) => HERO_SEARCH_YEAR_PATTERN.test(token)).sort();
-  const rawWords = tokens.filter((token) => !HERO_SEARCH_YEAR_PATTERN.test(token));
-  // Каталог фильтрует только по годам из своего списка — остальные не навязываем,
-  // иначе выдача молча показала бы не то, что просили.
-  const yearFrom = yearSteps.includes(yearTokens[0]) ? yearTokens[0] : "";
-  const lastYear = yearTokens[yearTokens.length - 1];
-  const yearTo = yearSteps.includes(lastYear) ? lastYear : "";
+// Модели перечисляются через «или», «и», «либо» (запятая и косая черта превращаются
+// в «или» ещё при разборе чисел): «001 и 007» — два куска текста, каждый ищется сам.
+const MODEL_SEPARATORS = new Set(["или", "и", "либо"]);
+const splitModelSegments = (value) => {
+  const segments = [];
+  let current = [];
+  for (const word of String(value).split(" ").filter(Boolean)) {
+    if (MODEL_SEPARATORS.has(word)) {
+      if (current.length) segments.push(current.join(" "));
+      current = [];
+    } else current.push(word);
+  }
+  if (current.length) segments.push(current.join(" "));
+  return segments;
+};
 
-  // Сначала выбираем из запроса слова про привод, кузов и тип двигателя,
+async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
+  // Сначала из запроса вынимаются цена, пробег и годы («от 25000 до 40000»,
+  // «пробег до 50 тыс», «2021-2023»), остаток разбирается как марка и модель.
+  const ranges = parseQueryRanges(query, { currency });
+  const tokens = searchNormalize(ranges.rest).split(" ").filter(Boolean);
+  if (!tokens.length && !ranges.hasRanges) return null;
+  // Номер объявления (например, 59116012) — ищем эту конкретную машину.
+  const idToken = tokens.find((token) => /^\d{6,}$/.test(token));
+  if (idToken) return { matched: true, listingId: idToken, brand: "", models: [], yearFrom: "", yearTo: "", drive: "", bodyType: "", powertrain: "", colors: [], priceMinUsd: null, priceMaxUsd: null, mileageMin: null, mileageMax: null };
+  const yearFrom = ranges.yearFrom;
+  const yearTo = ranges.yearTo;
+
+  // Сначала выбираем из запроса слова про привод, кузов, тип двигателя и цвет,
   // остаток текста ищем как марку и модель.
   let drive = "";
   let bodyType = "";
   let powertrain = "";
+  const colors = [];
   const words = [];
-  for (const word of rawWords) {
+  for (const word of tokens) {
     // Само слово «привод» ничего не уточняет — направление уже назвало соседнее слово.
     if (word.startsWith("привод")) continue;
+    // «Тесла модель 3»: русское «модель» — это Model из названия.
+    if (word === "модель") {
+      words.push("model");
+      continue;
+    }
     const driveValue = heroAliasValue(word, HERO_DRIVE_ALIASES);
     if (driveValue) {
       drive = driveValue;
@@ -1521,8 +1638,18 @@ async function parseHeroSearchOnce(query, { apiMode, cars }) {
       powertrain = typeValue;
       continue;
     }
+    // «Чёрный или белый зикр»: цветов может быть несколько, ищутся любым из них.
+    const colorLabel = colorLabelForWord(word);
+    if (colorLabel) {
+      if (!colors.includes(colorLabel)) colors.push(colorLabel);
+      continue;
+    }
     words.push(word);
   }
+  // «Или» по краям осталось от съеденных соседей («чёрный или белый бмв») —
+  // марке и модели оно только мешает.
+  while (words.length && MODEL_SEPARATORS.has(words[0])) words.shift();
+  while (words.length && MODEL_SEPARATORS.has(words[words.length - 1])) words.pop();
 
   let brandEntries = [];
   let modelEntries = [];
@@ -1547,9 +1674,9 @@ async function parseHeroSearchOnce(query, { apiMode, cars }) {
   }
 
   const text = translateBrandWords(words).join(" ");
-  const result = { matched: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain };
+  const result = { matched: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain, colors, priceMinUsd: ranges.priceMinUsd, priceMaxUsd: ranges.priceMaxUsd, mileageMin: ranges.mileageMin, mileageMax: ranges.mileageMax };
   if (!text) {
-    result.matched = Boolean(yearFrom || yearTo || drive || bodyType || powertrain);
+    result.matched = Boolean(ranges.hasRanges || drive || bodyType || powertrain || colors.length);
     return result;
   }
 
@@ -1583,14 +1710,23 @@ async function parseHeroSearchOnce(query, { apiMode, cars }) {
       for (const car of cars) if (car.brand === matchedBrand && car.model) counts.set(car.model, (counts.get(car.model) || 0) + 1);
       models = [...counts].map(([name, count]) => ({ name, count }));
     }
-    const matchedModels = rankSearchEntries(models, modelText).slice(0, 12).map((entry) => entry.name);
-    if (!matchedModels.length) {
-      // Марку узнали, а остаток текста ни на одну её модель не похож —
-      // честнее показать пустую выдачу, чем все машины марки.
-      result.brand = "";
+    const segments = splitModelSegments(modelText);
+    if (!segments.length) {
+      result.matched = true;
       return result;
     }
-    result.models = matchedModels;
+    const matchedModels = [];
+    for (const segment of segments) {
+      const found = rankSearchEntries(models, segment).slice(0, 12).map((entry) => entry.name);
+      if (!found.length) {
+        // Марку узнали, а кусок текста ни на одну её модель не похож —
+        // честнее показать пустую выдачу, чем все машины марки.
+        result.brand = "";
+        return result;
+      }
+      for (const name of found) if (!matchedModels.includes(name)) matchedModels.push(name);
+    }
+    result.models = matchedModels.slice(0, 12);
     result.matched = true;
     return result;
   }
@@ -1602,9 +1738,19 @@ async function parseHeroSearchOnce(query, { apiMode, cars }) {
     result.matched = true;
     return result;
   }
-  const modelMatches = rankSearchEntries(modelEntries, text).slice(0, 12);
-  if (modelMatches.length) {
-    result.models = modelMatches.map((entry) => entry.name);
+  const textSegments = splitModelSegments(text);
+  const modelNames = [];
+  let allSegmentsMatched = textSegments.length > 0;
+  for (const segment of textSegments) {
+    const found = rankSearchEntries(modelEntries, segment).slice(0, 12).map((entry) => entry.name);
+    if (!found.length) {
+      allSegmentsMatched = false;
+      break;
+    }
+    for (const name of found) if (!modelNames.includes(name)) modelNames.push(name);
+  }
+  if (allSegmentsMatched && modelNames.length) {
+    result.models = modelNames.slice(0, 12);
     result.matched = true;
     return result;
   }
@@ -1626,6 +1772,11 @@ const heroCatalogHref = (parsed) => {
   if (parsed.bodyType) params.append("body", parsed.bodyType);
   if (parsed.yearFrom) params.set("yearFrom", parsed.yearFrom);
   if (parsed.yearTo) params.set("yearTo", parsed.yearTo);
+  if (parsed.priceMinUsd != null) params.set("priceFrom", String(parsed.priceMinUsd));
+  if (parsed.priceMaxUsd != null) params.set("priceTo", String(parsed.priceMaxUsd));
+  const mileage = mileageLabel(parsed.mileageMin, parsed.mileageMax);
+  if (mileage) params.set("mileage", mileage);
+  (parsed.colors || []).forEach((color) => params.append("color", color));
   if (parsed.drive) params.set("drive", parsed.drive);
   const search = params.toString();
   return `/catalog${search ? `?${search}` : ""}`;
@@ -1638,6 +1789,7 @@ const savedFilterDefaults = {
   brand: "Все марки",
   model: [],
   bodyType: [],
+  color: [],
   yearMin: ANY_YEAR_MIN,
   yearMax: ANY_YEAR_MAX,
   mileage: ANY_MILEAGE,
@@ -1647,6 +1799,9 @@ const savedFilterDefaults = {
   owners: ANY_OWNERS,
   battery: ANY_BATTERY,
   condition: ANY_CONDITION,
+  accel: ANY_ACCEL,
+  tire: ANY_TIRE,
+  torque: ANY_TORQUE,
   // Выбранная сортировка — часть поиска: открытый заново, он выглядит так же.
   sort: "default",
 };
@@ -1664,7 +1819,7 @@ const normalizeSavedFilters = (filters = {}) => {
   for (const [key, fallback] of Object.entries(savedFilterDefaults)) {
     const value = filters[key];
     normalized[key] = Array.isArray(fallback)
-      ? multiValues(value ?? [], key === "model" ? ANY_MODEL : ANY_BODY_TYPE)
+      ? multiValues(value ?? [], key === "model" ? ANY_MODEL : key === "color" ? ANY_COLOR : ANY_BODY_TYPE)
       : typeof value === "string" && value
         ? value
         : fallback;
@@ -1680,6 +1835,7 @@ const savedSearchChips = (filters) => {
   const models = multiValues(filters.model, ANY_MODEL);
   if (filters.brand !== "Все марки") chips.push(models.length ? `${filters.brand} ${models.join(", ")}` : filters.brand);
   multiValues(filters.bodyType, ANY_BODY_TYPE).forEach((body) => chips.push(body));
+  multiValues(filters.color, ANY_COLOR).forEach((color) => chips.push(color.toLowerCase()));
   const yearFrom = yearBound(filters.yearMin, ANY_YEAR_MIN);
   const yearTo = yearBound(filters.yearMax, ANY_YEAR_MAX);
   if (yearFrom !== null && yearTo !== null) chips.push(yearFrom === yearTo ? `${yearFrom} г.` : `${yearFrom}–${yearTo} г.`);
@@ -1695,6 +1851,9 @@ const savedSearchChips = (filters) => {
   if (filters.owners !== ANY_OWNERS) chips.push(filters.owners.toLowerCase());
   if (filters.battery !== ANY_BATTERY) chips.push(`батарея ${filters.battery.toLowerCase()}`);
   if (filters.condition !== ANY_CONDITION) chips.push(filters.condition.toLowerCase());
+  if (filters.accel && filters.accel !== ANY_ACCEL) chips.push(`разгон ${filters.accel.toLowerCase()}`);
+  if (filters.tire && filters.tire !== ANY_TIRE) chips.push(`шины ${filters.tire.toLowerCase().replace("r", "R")}`);
+  if (filters.torque && filters.torque !== ANY_TORQUE) chips.push(`момент ${filters.torque.toLowerCase().replace("н·м", "Н·м")}`);
   if (savedSearchSortLabels[filters.sort]) chips.push(savedSearchSortLabels[filters.sort]);
   return chips;
 };
@@ -1710,6 +1869,7 @@ const savedSearchCatalogHref = (filters) => {
   if (filters.brand !== "Все марки") params.set("brand", filters.brand);
   multiValues(filters.model, ANY_MODEL).forEach((model) => params.append("model", model));
   multiValues(filters.bodyType, ANY_BODY_TYPE).forEach((body) => params.append("body", body));
+  multiValues(filters.color, ANY_COLOR).forEach((color) => params.append("color", color));
   if (yearBound(filters.yearMin, ANY_YEAR_MIN) !== null) params.set("yearFrom", filters.yearMin);
   if (yearBound(filters.yearMax, ANY_YEAR_MAX) !== null) params.set("yearTo", filters.yearMax);
   if (filters.mileage !== ANY_MILEAGE) params.set("mileage", filters.mileage);
@@ -1719,6 +1879,9 @@ const savedSearchCatalogHref = (filters) => {
   if (filters.owners !== ANY_OWNERS) params.set("owners", filters.owners);
   if (filters.battery !== ANY_BATTERY) params.set("battery", filters.battery);
   if (filters.condition !== ANY_CONDITION) params.set("condition", filters.condition);
+  if (filters.accel && filters.accel !== ANY_ACCEL) params.set("accel", filters.accel);
+  if (filters.tire && filters.tire !== ANY_TIRE) params.set("tire", filters.tire);
+  if (filters.torque && filters.torque !== ANY_TORQUE) params.set("torque", filters.torque);
   if (filters.sort && filters.sort !== "default") params.set("sort", filters.sort);
   const search = params.toString();
   return `/catalog${search ? `?${search}` : ""}`;
@@ -1730,12 +1893,16 @@ const savedSearchApiParams = (filters) => {
   if (filters.brand !== "Все марки") query.set("brand", filters.brand);
   appendMulti(query, "model", filters.model, ANY_MODEL);
   appendMulti(query, "bodyType", filters.bodyType, ANY_BODY_TYPE);
+  colorValuesForLabels(multiValues(filters.color, ANY_COLOR)).forEach((value) => query.append("color", value));
   if (filters.drive !== ANY_DRIVE) query.set("drive", filters.drive);
   if (filters.owners !== ANY_OWNERS) query.set("ownersMax", String(filterNumber(filters.owners)));
   if (filters.battery !== ANY_BATTERY) query.set("batteryMin", String(batteryFloor(filters.battery)));
   if (filters.condition !== ANY_CONDITION) query.set("conditionGrade", conditionGrades[filters.condition]);
+  if (filters.accel && filters.accel !== ANY_ACCEL) query.set("accelMax", String(filterNumber(filters.accel)));
+  if (filters.tire && filters.tire !== ANY_TIRE) query.set("tireRimMin", String(filterNumber(filters.tire)));
+  if (filters.torque && filters.torque !== ANY_TORQUE) query.set("torqueMin", String(filterNumber(filters.torque)));
   appendYearRange(query, filters.yearMin, filters.yearMax);
-  if (filters.mileage !== ANY_MILEAGE) query.set("mileageMax", String(filterNumber(filters.mileage)));
+  appendMileageRange(query, filters.mileage);
   appendPriceRange(query, filters.priceMin, filters.priceMax);
   if (filters.sort && filters.sort !== "default") query.set("sort", filters.sort);
   return query;
@@ -1745,8 +1912,9 @@ const matchesSavedFilters = (car, filters) =>
   (filters.brand === "Все марки" || car.brand === filters.brand) &&
   matchesMulti(car.model, filters.model, ANY_MODEL) &&
   matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) &&
+  matchesColorLabels(car.bodyColor, multiValues(filters.color, ANY_COLOR)) &&
   matchesYears(car, filters.yearMin, filters.yearMax) &&
-  (filters.mileage === ANY_MILEAGE || car.mileage <= filterNumber(filters.mileage)) &&
+  matchesMileageRange(car, filters.mileage) &&
   matchesPriceRange(car, filters.priceMin, filters.priceMax) &&
   matchesAdvancedFilters(car, filters);
 
@@ -1758,6 +1926,11 @@ const heroApiParams = (parsed) => {
   if (parsed.bodyType) params.append("bodyType", parsed.bodyType);
   if (parsed.yearFrom) params.set("yearMin", parsed.yearFrom);
   if (parsed.yearTo) params.set("yearMax", parsed.yearTo);
+  if (parsed.priceMinUsd != null) params.set("landedMin", String(parsed.priceMinUsd));
+  if (parsed.priceMaxUsd != null) params.set("landedMax", String(parsed.priceMaxUsd));
+  if (parsed.mileageMin != null) params.set("mileageMin", String(parsed.mileageMin));
+  if (parsed.mileageMax != null) params.set("mileageMax", String(parsed.mileageMax));
+  colorValuesForLabels(parsed.colors || []).forEach((value) => params.append("color", value));
   if (parsed.drive) params.set("drive", parsed.drive);
   return params;
 };
@@ -1980,6 +2153,145 @@ function SimilarCars({ car, cars, onOpenCar }) {
   );
 }
 
+// Промо-лендинг модели: живой срез каталога по этой модели. Машины страница
+// запрашивает сама, как Catalog: при прямом заходе boot-запрос нужных карточек
+// не несёт. Хук и секция наличия общие для обоих шаблонов — с фото и «статьи».
+const LANDING_CARS_LIMIT = 8;
+
+function useLandingCars(landing) {
+  const [cars, setCars] = useState([]);
+  const [total, setTotal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    setCars([]);
+    setTotal(null);
+    setLoading(true);
+    setFailed(false);
+    const query = new URLSearchParams({ brand: landing.brand, model: landing.model, sort: "price_asc", limit: String(LANDING_CARS_LIMIT), offset: "0" });
+    fetch(`/api/cars?${query}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("landing catalog unavailable"))))
+      .then((catalog) => {
+        setCars(catalog.items.map(normalizeImportedCar));
+        setTotal(catalog.total);
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setFailed(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [landing]);
+  return { cars, total, loading, failed };
+}
+
+const landingCatalogTarget = (landing) => `/catalog?brand=${encodeURIComponent(landing.brand)}&model=${encodeURIComponent(landing.model)}`;
+
+function LandingCarsSection({ landing, carsState, navigate, favorites, toggleFavorite }) {
+  const { cars, total, loading, failed } = carsState;
+  const catalogTarget = landingCatalogTarget(landing);
+  return (
+    <section className="model-landing-cars page-width" aria-labelledby="landing-cars-title">
+      <div className="purchase-section-heading">
+        <span className="info-eyebrow">Наличие и цены</span>
+        <h2 id="landing-cars-title">{landing.name} в каталоге</h2>
+        <p>Цены — предварительный расчёт с доставкой до Минска. Сначала показываем самые доступные.</p>
+      </div>
+      {failed ? (
+        <p className="catalog-message">
+          Не получилось загрузить список. Обновите страницу или откройте <AppLink href={catalogTarget} navigate={navigate}>каталог</AppLink>.
+        </p>
+      ) : (
+        <div className="featured-grid catalog-card-grid">
+          {(loading ? Array.from({ length: LANDING_CARS_LIMIT }) : cars).map((car, index) =>
+            car ? (
+              <FeaturedCard key={car.id} car={car} onClick={() => navigate(`/cars/${car.id}`)} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} />
+            ) : (
+              <CardSkeleton key={index} />
+            ),
+          )}
+        </div>
+      )}
+      {!failed && !loading && total > cars.length && (
+        <AppLink className="load-more featured-load-more" href={catalogTarget} navigate={navigate}>
+          Показать все {total} автомобилей
+        </AppLink>
+      )}
+    </section>
+  );
+}
+
+function ModelLandingPage({ landing, navigate, favorites, toggleFavorite }) {
+  const carsState = useLandingCars(landing);
+  const { total } = carsState;
+  const catalogTarget = landingCatalogTarget(landing);
+  return (
+    <main className="model-landing">
+      <section className="model-landing-hero">
+        <img src={appHref(landing.hero.image)} alt={landing.hero.alt} fetchPriority="high" />
+        <div className="model-landing-hero-overlay">
+          <div className="page-width">
+            <span className="info-eyebrow">{landing.tagline}</span>
+            <h1>{landing.h1}</h1>
+            <p>{landing.lead}</p>
+            <div className="model-landing-hero-actions">
+              <AppLink className="primary" href={catalogTarget} navigate={navigate}>
+                {total ? `Смотреть ${total} в наличии` : "Смотреть в наличии"} <ArrowRight size={17} />
+              </AppLink>
+              <AppLink className="secondary" href="/how-it-works" navigate={navigate}>Как проходит покупка</AppLink>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section className="model-landing-stats page-width">
+        {landing.stats.map((stat) => (
+          <div key={stat.label}>
+            <strong>{stat.value}</strong>
+            <span>{stat.label}</span>
+          </div>
+        ))}
+      </section>
+      <LandingCarsSection landing={landing} carsState={carsState} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
+      {landing.sections.map((section, index) => (
+        <section key={section.title} className={`model-landing-feature page-width${index % 2 ? " reversed" : ""}`}>
+          <figure>
+            <img src={appHref(section.image)} alt={section.alt} loading="lazy" />
+            {section.secondaryImage && <img src={appHref(section.secondaryImage)} alt={section.secondaryAlt || ""} loading="lazy" />}
+          </figure>
+          <div className="model-landing-feature-text">
+            <span className="info-eyebrow">{section.eyebrow}</span>
+            <h2>{section.title}</h2>
+            {section.paragraphs.map((text) => (
+              <p key={text}>{text}</p>
+            ))}
+          </div>
+        </section>
+      ))}
+      <section className="model-landing-disclaimer page-width">
+        <Info size={20} weight="duotone" />
+        <p>{landing.disclaimer}</p>
+      </section>
+      <InfoCta navigate={navigate} title={`Присмотрели ${landing.name}?`} text="Выберите автомобиль в каталоге — проверим состояние, подтвердим смету и привезём в Минск." />
+    </main>
+  );
+}
+
+// Баннер в карточке машины: ведёт на промо-страницу её модели.
+function ModelPromoBanner({ landing, navigate }) {
+  return (
+    <AppLink className="model-promo-banner" href={landing.path} navigate={navigate}>
+      <img src={appHref(landing.hero.image)} alt="" loading="lazy" />
+      <div>
+        <strong>{landing.name} — страница модели</strong>
+        <span>Обзор, характеристики, цены и наличие</span>
+      </div>
+      <CaretRight size={18} />
+    </AppLink>
+  );
+}
+
 const brandLogos = {
   BYD: "byd.svg",
   Zeekr: "zeekr.svg",
@@ -2189,8 +2501,10 @@ function HomeConversionSections({ navigate }) {
   );
 }
 
-function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite, loading }) {
+function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorites, toggleFavorite, loading }) {
   const batchSize = 20;
+  // Сумма без валюты в строке поиска читается в валюте переключателя сайта.
+  const currency = useCurrency();
   const randomPool = useRef([]);
   const nextItemKey = useRef(0);
   const feedSource = useRef(cars);
@@ -2342,7 +2656,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
     setHeroSearch((current) => ({ ...emptyHeroResult, items: current?.items || [], total: current?.total || 0, href: current?.href || "/catalog", loading: true }));
     const timer = window.setTimeout(async () => {
       try {
-        const parsed = await parseHeroSearch(heroQuery, { apiMode, cars });
+        const parsed = await parseHeroSearch(heroQuery, { apiMode, cars, currency });
         if (cancelled || !parsed) return;
         if (!parsed.matched) {
           setHeroSearch({ ...emptyHeroResult });
@@ -2380,12 +2694,20 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
           setHeroSearch({ ...emptyHeroResult, items: catalog.items.map(normalizeImportedCar), total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null });
         } else {
           const modelSet = new Set(parsed.models);
+          // Итог «до Минска» есть не у всех статических карточек — для фильтра
+          // по цене досчитываем его так же, как это делает каталог.
+          const landedUsd = (car) => Number(car.estimatedTotalUsd) || estimateLandedCost(car).totalUsd;
           const matches = cars.filter(
             (car) =>
               (!parsed.brand || car.brand === parsed.brand) &&
               (!modelSet.size || modelSet.has(car.model)) &&
               (!parsed.yearFrom || Number(car.year) >= Number(parsed.yearFrom)) &&
               (!parsed.yearTo || Number(car.year) <= Number(parsed.yearTo)) &&
+              (parsed.priceMinUsd == null || landedUsd(car) >= parsed.priceMinUsd) &&
+              (parsed.priceMaxUsd == null || landedUsd(car) <= parsed.priceMaxUsd) &&
+              (parsed.mileageMin == null || Number(car.mileage) >= parsed.mileageMin) &&
+              (parsed.mileageMax == null || Number(car.mileage) <= parsed.mileageMax) &&
+              matchesColorLabels(car.bodyColor, parsed.colors || []) &&
               (!parsed.drive || car.drive === parsed.drive) &&
               (!parsed.bodyType || car.bodyType === parsed.bodyType) &&
               (!parsed.powertrain || car.type === parsed.powertrain)
@@ -2404,7 +2726,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [heroQuery, heroSort, apiMode, cars]);
+  }, [heroQuery, heroSort, apiMode, cars, currency]);
   const searching = heroSearch !== null;
   // Уйти с главной можно куда угодно (карточка, «В каталог», меню), поэтому
   // признак «сюда вернутся к поиску» и снимок выдачи поддерживаем всё время,
@@ -2431,6 +2753,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
   const searchLoading = searching && heroSearch.loading && !heroSearch.items.length;
   const displayItems = searching ? heroSearch.items.map((car) => ({ car, key: `search-${car.id}` })) : feedCars;
   const gridBusy = showSkeletons || searchLoading;
+  // Запрос набран, поиск завершён, ничего не нашлось — вместо пустой сетки
+  // показываем блок-заглушку с подсказкой и кнопками.
+  const searchEmpty = searching && !heroSearch.loading && !heroSearch.total;
   // Выдача поиска листается бесконечно, как каталог: невидимая метка под карточками
   // попадает в экран — и подгружается следующая пачка.
   const searchMoreTarget = useRef(null);
@@ -2481,6 +2806,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
   return (
     <main>
       <section className={searching ? "hero hero--searching" : "hero"}>
+        {Boolean(catalogUpdatedAt) && Boolean(catalogUpdatedDate(catalogUpdatedAt)) && (
+          <div className="hero-updated">Каталог авто обновлён {catalogUpdatedDate(catalogUpdatedAt)}</div>
+        )}
         <h1>Доставим б/у авто из Китая в Беларусь</h1>
         <ul className="hero-benefits" aria-label="Преимущества заказа">
           <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
@@ -2540,7 +2868,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
             </AppLink>
           </div>
         )}
-        {searching && (
+        {/* При пустой выдаче строку не показываем вовсе: счётчик, «Быстрый
+            просмотр» и сортировка не нужны, всё говорит блок-заглушка ниже. */}
+        {searching && !searchEmpty && (
           <div className="search-results-bar">
             {/* Строка не исчезает на время пересчёта, иначе выдача дёргается при
                 каждой букве: пока ищем, держим прежний счёт или «Ищем…». */}
@@ -2548,9 +2878,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
               <p className="search-results-note">
                 {heroSearch.loading && !heroSearch.items.length
                   ? "Ищем…"
-                  : heroSearch.total || heroSearch.loading
-                    ? `${number(heroSearch.total)} авто`
-                    : `По запросу «${heroQuery.trim()}» ничего не нашлось. Попробуйте изменить запрос: марка, модель, год или номер объявления.`}
+                  : `${number(heroSearch.total)} авто`}
               </p>
               {quickViewToggle}
             </div>
@@ -2578,7 +2906,13 @@ function Home({ navigate, cars, apiMode, catalogTotal, favorites, toggleFavorite
         )}
         {/* На телефоне выдача всегда списочными карточками каталога (заголовок и
             цена сверху, лента фото); переключатель вида есть только на широких. */}
-        {(searching ? useCatalogCards || heroView === "list" : useCatalogCards) ? (
+        {searchEmpty ? (
+          <div className="empty-state search-empty">
+            <MagnifyingGlass size={26} />
+            <h3>Ничего не найдено</h3>
+            <p>Попробуйте изменить запрос: марка, модель, год, цена («до 40 тыс»), пробег («до 50 тыс км») или номер объявления.</p>
+          </div>
+        ) : (searching ? useCatalogCards || heroView === "list" : useCatalogCards) ? (
           <div className="car-list home-car-list" aria-busy={gridBusy ? "true" : undefined}>
             {gridBusy
               ? skeletonCards.map((key) => <CardSkeleton key={key} row />)
@@ -2629,12 +2963,13 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
   const selectedType = filters.type === "Электромобиль" ? "Электромобили" : filters.type === "Гибрид" ? "Гибриды" : "Все";
   const selectType = (value) => changeType(value === "Электромобили" ? "Электромобиль" : value === "Гибриды" ? "Гибрид" : "Все");
-  const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION;
+  const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || filters.torque !== ANY_TORQUE;
   const resetFilters = () => setFilters(() => ({
     type: "Все",
     brand: "Все марки",
     model: [],
     bodyType: [],
+    color: [],
     yearMin: ANY_YEAR_MIN,
     yearMax: ANY_YEAR_MAX,
     mileage: ANY_MILEAGE,
@@ -2644,6 +2979,9 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
     owners: ANY_OWNERS,
     battery: ANY_BATTERY,
     condition: ANY_CONDITION,
+    accel: ANY_ACCEL,
+    tire: ANY_TIRE,
+    torque: ANY_TORQUE,
   }));
   return (
     <VehicleSearch
@@ -2659,10 +2997,14 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
         priceMax: update("priceMax"),
         mileage: update("mileage"),
         bodyType: (value) => setFilters((old) => ({ ...old, bodyType: value, model: [] })),
+        color: update("color"),
         drive: update("drive"),
         owners: update("owners"),
         battery: update("battery"),
         condition: update("condition"),
+        accel: update("accel"),
+        tire: update("tire"),
+        torque: update("torque"),
       }}
       options={{ brands: ["Все марки", ...brands], models, bodyTypes, drives }}
       optionCounts={optionCounts}
@@ -2673,7 +3015,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
       onSaveSearch={onSaveSearch}
       searchSaved={searchSaved}
       searchUpdate={searchUpdate}
-      initiallyExpanded={filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION}
+      initiallyExpanded={filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || filters.torque !== ANY_TORQUE}
     />
   );
 }
@@ -2928,6 +3270,13 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
   );
 }
 
+// Дата в пилюле над заголовком главной — всегда с годом: «19 августа 2026».
+const catalogUpdatedDate = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ru-RU", { day:"numeric", month:"long", year:"numeric" }).format(date).replace(/\s*г\.$/, "");
+};
+
 // Дата сохранения поиска — коротко, по-русски: «12 августа» либо с годом, если он не текущий.
 const savedSearchDate = (value) => {
   const date = new Date(value);
@@ -3146,6 +3495,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const rawBrand = params.get("brand");
   const rawModels = params.getAll("model");
   const rawBodyTypes = params.getAll("body").flatMap((item) => item.split(","));
+  const rawColors = params.getAll("color").flatMap((item) => item.split(","));
   const rawYearFrom = params.get("yearFrom");
   const rawYearTo = params.get("yearTo");
   // Старые ссылки несли одно значение вида «от 2024».
@@ -3162,20 +3512,30 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const rawOwners = params.get("owners");
   const rawBattery = params.get("battery");
   const rawCondition = params.get("condition");
+  const rawAccel = params.get("accel");
+  const rawTire = params.get("tire");
+  const rawTorque = params.get("torque");
   const initialFilters = {
     type: rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",
     brand: rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",
     model: multiValues(rawModels, ANY_MODEL),
     bodyType: BODY_TYPES.filter((item) => rawBodyTypes.includes(item)),
-    yearMin: yearSteps.includes(rawYearFrom || legacyYearFrom) ? rawYearFrom || legacyYearFrom : ANY_YEAR_MIN,
-    yearMax: yearSteps.includes(rawYearTo) ? rawYearTo : ANY_YEAR_MAX,
-    mileage: mileageOptions.includes(rawMileage) ? rawMileage : ANY_MILEAGE,
-    priceMin: priceSteps.includes(rawPriceFrom || legacyPriceFrom) ? rawPriceFrom || legacyPriceFrom : ANY_PRICE_MIN,
-    priceMax: priceSteps.includes(rawPriceTo || legacyPriceTo) ? rawPriceTo || legacyPriceTo : ANY_PRICE_MAX,
+    color: COLOR_LABELS.filter((item) => rawColors.includes(item)),
+    // Умный поиск приносит не только ступеньки выпадающих списков, но и свои
+    // значения («2018», «до 42 000 км», произвольную сумму) — принимаем любое
+    // правдоподобное, а не только из списка.
+    yearMin: /^(19|20)\d{2}$/.test(rawYearFrom || legacyYearFrom) ? rawYearFrom || legacyYearFrom : ANY_YEAR_MIN,
+    yearMax: /^(19|20)\d{2}$/.test(rawYearTo || "") ? rawYearTo : ANY_YEAR_MAX,
+    mileage: mileageBounds(rawMileage) ? rawMileage : ANY_MILEAGE,
+    priceMin: /^\d+$/.test(rawPriceFrom || legacyPriceFrom) && Number(rawPriceFrom || legacyPriceFrom) > 0 ? rawPriceFrom || legacyPriceFrom : ANY_PRICE_MIN,
+    priceMax: /^\d+$/.test(rawPriceTo || legacyPriceTo) && Number(rawPriceTo || legacyPriceTo) > 0 ? rawPriceTo || legacyPriceTo : ANY_PRICE_MAX,
     drive: DRIVE_TYPES.includes(rawDrive) ? rawDrive : ANY_DRIVE,
     owners: ownerOptions.includes(rawOwners) ? rawOwners : ANY_OWNERS,
     battery: batteryOptions.includes(rawBattery) ? rawBattery : ANY_BATTERY,
     condition: conditionOptions.includes(rawCondition) ? rawCondition : ANY_CONDITION,
+    accel: accelOptions.includes(rawAccel) ? rawAccel : ANY_ACCEL,
+    tire: tireOptions.includes(rawTire) ? rawTire : ANY_TIRE,
+    torque: torqueOptions.includes(rawTorque) ? rawTorque : ANY_TORQUE,
   };
   const restoredCatalog = window.history.state?.catalog || matchingCatalogReturn()?.catalog || null;
   const [filters, setFilters] = useState(() => ({
@@ -3295,10 +3655,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     () =>
       sortCars(
         cars
-          .filter((car) => {
-            const mileageCap = Number(filters.mileage.replace(/\D/g, ""));
-            return (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.model, filters.model, ANY_MODEL) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) && matchesYears(car, filters.yearMin, filters.yearMax) && (filters.mileage === ANY_MILEAGE || car.mileage <= mileageCap) && matchesPriceRange(car, filters.priceMin, filters.priceMax) && matchesAdvancedFilters(car, filters);
-          })
+          .filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.model, filters.model, ANY_MODEL) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) && matchesColorLabels(car.bodyColor, multiValues(filters.color, ANY_COLOR)) && matchesYears(car, filters.yearMin, filters.yearMax) && matchesMileageRange(car, filters.mileage) && matchesPriceRange(car, filters.priceMin, filters.priceMax) && matchesAdvancedFilters(car, filters))
           .map((car) => ({
             ...car,
             estimatedTotalUsd: estimateLandedCost(car).totalUsd,
@@ -3335,12 +3692,16 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     if (filters.brand !== "Все марки") query.set("brand", filters.brand);
     appendMulti(query, "model", filters.model, ANY_MODEL);
     appendMulti(query, "bodyType", filters.bodyType, ANY_BODY_TYPE);
+    colorValuesForLabels(multiValues(filters.color, ANY_COLOR)).forEach((value) => query.append("color", value));
     if (filters.drive !== ANY_DRIVE) query.set("drive", filters.drive);
     if (filters.owners !== ANY_OWNERS) query.set("ownersMax", String(filterNumber(filters.owners)));
     if (filters.battery !== ANY_BATTERY) query.set("batteryMin", String(batteryFloor(filters.battery)));
     if (filters.condition !== ANY_CONDITION) query.set("conditionGrade", conditionGrades[filters.condition]);
+    if (filters.accel !== ANY_ACCEL) query.set("accelMax", String(filterNumber(filters.accel)));
+    if (filters.tire !== ANY_TIRE) query.set("tireRimMin", String(filterNumber(filters.tire)));
+    if (filters.torque !== ANY_TORQUE) query.set("torqueMin", String(filterNumber(filters.torque)));
     appendYearRange(query, filters.yearMin, filters.yearMax);
-    if (filters.mileage !== ANY_MILEAGE) query.set("mileageMax", filters.mileage.replace(/\D/g, ""));
+    appendMileageRange(query, filters.mileage);
     appendPriceRange(query, filters.priceMin, filters.priceMax);
     return query;
   };
@@ -3857,7 +4218,15 @@ const SPEC_GROUP_ICONS = {
 };
 
 function TechnicalSpecs({ car }) {
-  const groups = useMemo(() => translateTechnicalSpecs(car.technicalSpecs), [car.technicalSpecs]);
+  // Цвета в техкарте источника нет — она описывает модель, а не конкретную машину.
+  // Подмешиваем его из объявления первой строкой «Общих данных», чтобы цвет
+  // находился и глазами, и встроенным поиском по полным данным.
+  const groups = useMemo(() => {
+    const translated = translateTechnicalSpecs(car.technicalSpecs);
+    const color = translateColor(car.bodyColor);
+    if (color && translated.length) translated[0] = { ...translated[0], items: [{ name: "Цвет кузова", value: color }, ...translated[0].items] };
+    return translated;
+  }, [car.technicalSpecs, car.bodyColor]);
   const [query, setQuery] = useState("");
   const searchBoxRef = useRef(null);
   const needle = query.trim().toLocaleLowerCase("ru");
@@ -4139,7 +4508,8 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         <CaretRight size={13} />
         {car.model} {car.year}
       </div>
-      <VehicleDetailBody car={car} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} />
+      <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} />
+      {landingForCar(car) && <ModelPromoBanner landing={landingForCar(car)} navigate={navigate} />}
       <SimilarCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       {quickViewModal}
     </main>
@@ -4285,10 +4655,9 @@ function CopyLinkButton({ car }) {
   );
 }
 
-function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false }) {
+function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
-  const [availabilityUnavailableOpen, setAvailabilityUnavailableOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [availabilityCtaVisible, setAvailabilityCtaVisible] = useState(false);
   const availabilityCtaRef = useRef(null);
@@ -4306,20 +4675,25 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
   }, [car?.id]);
   const price = estimateLandedCost(car);
   const timing = estimateDeliveryDays(car.city);
-  const openAvailabilityModal = () => {
+  // Кнопка заводит заказ: машину запоминаем, кабинет создаёт заказ сам.
+  // Неавторизованных на /account встречает окно входа, ожидание переживает его.
+  const requestAvailability = () => {
     trackEvent("availability_click", { listingId:car.id, listingTitle:car.title });
-    setAvailabilityUnavailableOpen(true);
+    window.localStorage.setItem(pendingOrderKey, car.id);
+    navigate("/account");
   };
   const favoriteHint = favorite ? "Удалить из избранного" : "Добавить в избранное";
   const quickInfo = buildVehicleQuickInfo(car);
+  // Цвет заполнен не у всех источников — без значения строка не показывается.
   const specs = [
     [CalendarBlank, "Год", car.year],
     [Gauge, "Пробег", `${number(car.mileage)} км`],
     [Lightning, "Тип", car.type],
     [CarProfile, "Привод", car.drive],
     [BatteryHigh, "Батарея", car.battery ? `${car.battery} кВт·ч` : "Не указана"],
+    [Palette, "Цвет", translateColor(car.bodyColor)],
     [CarProfile, "Кузов", car.bodyType],
-  ];
+  ].filter(([, , value]) => value);
   // Блок отчёта продавца заполнен только у Guazi; у Che168 все поля пусты, а тип
   // батареи и так виден в «Полных характеристиках». Пустые строки не показываем,
   // а без единой строки исчезает и весь блок — вместе с дисклеймером-заглушкой.
@@ -4383,8 +4757,6 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
           )}
           <TechnicalSpecs car={car} />
           <aside className="source-card detail-source-card">
-            <h3>Источник объявления</h3>
-            {car.sourceId && <p className="source-meta">ID {car.sourceId}</p>}
             <small>Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</small>
           </aside>
         </div>
@@ -4472,7 +4844,7 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
                 </div>
               </div>
             </section>
-            <button ref={availabilityCtaRef} className="primary report-order-cta" onClick={openAvailabilityModal}>
+            <button ref={availabilityCtaRef} className="primary report-order-cta" onClick={requestAvailability}>
               Уточнить актуальность авто
             </button>
           </aside>
@@ -4480,13 +4852,12 @@ function VehicleDetailBody({ car, favorite, toggleFavorite, goBack = null, openF
         </div>
       </div>
       {floatingCta && (
-        <div className={`detail-floating-availability${availabilityCtaVisible || availabilityUnavailableOpen ? " is-hidden" : ""}`} aria-hidden={availabilityCtaVisible || availabilityUnavailableOpen}>
-          <button className="primary" type="button" onClick={openAvailabilityModal} tabIndex={availabilityCtaVisible || availabilityUnavailableOpen ? -1 : 0}>
+        <div className={`detail-floating-availability${availabilityCtaVisible ? " is-hidden" : ""}`} aria-hidden={availabilityCtaVisible}>
+          <button className="primary" type="button" onClick={requestAvailability} tabIndex={availabilityCtaVisible ? -1 : 0}>
             Уточнить актуальность авто
           </button>
         </div>
       )}
-      {availabilityUnavailableOpen && <AvailabilityUnavailableModal onClose={() => setAvailabilityUnavailableOpen(false)} />}
     </>
   );
 }
@@ -4530,7 +4901,7 @@ function useQuickViewCar(listed, apiMode) {
   return detailed || listed;
 }
 
-function VehicleQuickViewModal({ car, favorite, toggleFavorite, onOpenFull, onClose }) {
+function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpenFull, onClose }) {
   const closeRef = useRef(null);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -4558,7 +4929,7 @@ function VehicleQuickViewModal({ car, favorite, toggleFavorite, onOpenFull, onCl
           </button>
         </header>
         <div className="quick-view-scroll">
-          <VehicleDetailBody car={car} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch />
+          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch />
         </div>
       </section>
     </div>
@@ -4615,7 +4986,7 @@ function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate }) {
     openQuickView,
     // Свитчер нужен только там, где быстрый просмотр вообще работает.
     quickViewToggle: desktop ? <QuickViewToggle checked={enabled} onChange={changeEnabled} /> : null,
-    quickViewModal: car ? <VehicleQuickViewModal car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpenFull={openFullView} onClose={close} /> : null,
+    quickViewModal: car ? <VehicleQuickViewModal car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpenFull={openFullView} onClose={close} /> : null,
   };
 }
 
@@ -4696,7 +5067,7 @@ function OrderDraft({ car, navigate }) {
     ["Двигатель", car.engine],
     ["Коробка", car.transmission],
     ["Привод", car.drive],
-    ["Цвет", car.bodyColor],
+    ["Цвет", translateColor(car.bodyColor)],
     ["Кузов", car.bodyType],
   ];
   const batteryRows = [
@@ -5547,6 +5918,7 @@ const localAuthKey = "navostok-local-auth";
 const localAccountsKey = "navostok-local-accounts";
 const localAccountResetKey = "navostok-account-reset-2026-08-15";
 const catalogTotalKey = "evcars-catalog-total";
+const catalogUpdatedKey = "evcars-catalog-updated";
 const guestFavoritesKey = "navostok-favorites";
 const favoritesMigrationKey = "navostok-favorites-account-migration";
 const accountFavoritesKey = (userId) => `navostok-account-favorites:${userId}`;
@@ -5797,36 +6169,6 @@ function PasswordField({ label, value, onChange, autoComplete, placeholder = "",
   );
 }
 
-function AvailabilityUnavailableModal({ onClose }) {
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", closeOnEscape);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [onClose]);
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="lead-modal availability-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="availability-unavailable-title" aria-describedby="availability-unavailable-description">
-        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть">
-          <X size={19} />
-        </button>
-        <div className="availability-unavailable-icon" aria-hidden="true">
-          <CarProfile size={30} weight="duotone" />
-        </div>
-        <h2 id="availability-unavailable-title">Автомобиль временно недоступен</h2>
-        <p id="availability-unavailable-description">Сейчас мы не можем подтвердить наличие этого автомобиля. Попробуйте вернуться к объявлению позже или выберите похожий вариант в каталоге.</p>
-        <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
-      </section>
-    </div>
-  );
-}
-
 function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectTo = "/account" }) {
   const registering = mode === "register";
   const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:true });
@@ -5992,7 +6334,6 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   const [removalOpen, setRemovalOpen] = useState(false);
   const [removalError, setRemovalError] = useState("");
   const [availabilityComment, setAvailabilityComment] = useState("");
-  const [availabilityUnavailableOpen, setAvailabilityUnavailableOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -6163,7 +6504,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
       <div className="customer-order-stages">
         <OrderStageRow number={1} title="Проверка объявления" description="Уточним у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
           {!availabilityRequested ? (
-            <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); setAvailabilityUnavailableOpen(true); }}>
+            <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); applyAction("request_availability_check", { comment: availabilityComment.trim() }); }}>
               <p>Перед осмотром свяжемся с продавцом и подтвердим:</p>
               <ul className="availability-check-list">
                 <li><CheckCircle size={20} weight="fill" /> автомобиль ещё в продаже;</li>
@@ -6210,7 +6551,6 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
       {removalOpen && <OrderRemovalModal carTitle={order.car.title} orderNumber={order.orderNumber} saving={saving} error={removalError} onCancel={() => { setRemovalOpen(false); setRemovalError(""); }} onConfirm={removeOrder} />}
-      {availabilityUnavailableOpen && <AvailabilityUnavailableModal onClose={() => setAvailabilityUnavailableOpen(false)} />}
     </section>
   );
 }
@@ -6446,6 +6786,9 @@ export function App() {
   // The total only moves when an import runs, so the last known value is a sound placeholder
   // while the catalog request is in flight and keeps the search button from reading "0+".
   const [catalogTotal, setCatalogTotal] = useState(() => Number(window.localStorage.getItem(catalogTotalKey)) || 0);
+  // Дата последней актуализации каталога — как и total, последнее известное значение
+  // годится как заглушка, пока ответ каталога в пути.
+  const [catalogUpdatedAt, setCatalogUpdatedAt] = useState(() => window.localStorage.getItem(catalogUpdatedKey) || "");
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(Boolean(targetId));
   const [loadError, setLoadError] = useState(false);
@@ -6462,6 +6805,9 @@ export function App() {
   useEffect(() => {
     if (catalogTotal) window.localStorage.setItem(catalogTotalKey, String(catalogTotal));
   }, [catalogTotal]);
+  useEffect(() => {
+    if (catalogUpdatedAt) window.localStorage.setItem(catalogUpdatedKey, catalogUpdatedAt);
+  }, [catalogUpdatedAt]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -6576,6 +6922,7 @@ export function App() {
         if (!cancelled) {
           setCars(initialCars.map(normalizeImportedCar));
           setCatalogTotal(Number(payload.total) || initialCars.length);
+          if (payload.refreshedAt) setCatalogUpdatedAt(payload.refreshedAt);
           setApiMode(true);
         }
       } catch {
@@ -6592,6 +6939,7 @@ export function App() {
           if (!cancelled) {
             setCars(initialCars.map(normalizeImportedCar));
             setCatalogTotal(Number(payload.count) || payload.cars.length);
+            if (payload.generatedAt) setCatalogUpdatedAt(payload.generatedAt);
             setApiMode(false);
           }
         } catch {
@@ -6989,6 +7337,9 @@ export function App() {
       <LegalPage navigate={navigate} kind="privacy" />
     ) : contentPath === "/terms" ? (
       <LegalPage navigate={navigate} kind="terms" />
+    ) : findModelLanding(contentPath) ? (
+      // Промо-страница модели запрашивает свой срез каталога сама и не ждёт boot-запроса.
+      <ModelLandingPage landing={findModelLanding(contentPath)} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : null;
   const page =
     contentPath === "/analytics" ? (
@@ -6996,7 +7347,7 @@ export function App() {
     ) : staticPage ? (
       staticPage
     ) : !showAccountFromAuthRoute && contentPath === "/" && !loadError ? (
-      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} />
+      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} catalogUpdatedAt={catalogUpdatedAt} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} />
     ) : !showAccountFromAuthRoute && contentPath === "/catalog" && !loadError ? (
       // Catalog issues its own filtered query, so it starts at mount rather than queueing
       // behind the boot request it never reads.
