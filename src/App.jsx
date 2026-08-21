@@ -11,7 +11,6 @@ import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-typ
 import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn } from "./catalog-return.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { selectSimilarCars } from "./similar-cars.js";
-import { MODEL_LANDINGS, findModelLanding, landingForCar } from "./model-landings.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
@@ -22,6 +21,17 @@ import { trackEvent } from "./analytics.js";
 import { AnalyticsPage } from "./analytics-page.jsx";
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
+// В адресе карточки и в подписи «ID объявления» показываем только номер объявления:
+// приставка источника («che168-», «CH-») посетителю ничего не говорит. Внутри
+// приложения и в базе идентификатор остаётся полным, а сервер понимает оба вида,
+// поэтому старые ссылки и закладки продолжают открываться.
+const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
+const carHref = (car) => `/cars/${encodeURIComponent(listingNumber(car?.id))}`;
+// Адрес несёт короткий номер, а карточки и избранное — полный идентификатор,
+// поэтому сравниваем их по номеру.
+const sameListing = (left, right) => Boolean(left) && Boolean(right) && listingNumber(left) === listingNumber(right);
+const findCarByListing = (cars, id) => (id ? cars.find((item) => sameListing(item.id, id)) || null : null);
+const hasFavoriteListing = (favorites, id) => (id ? favorites.has(id) || [...favorites].some((item) => sameListing(item, id)) : false);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
 const CurrencyContext = createContext("USD");
 // Валюту переключают не только в шапке: в быстром просмотре шапка недоступна,
@@ -563,7 +573,7 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
 // успевает запомнить позицию возврата в каталог. Заголовок карточки и так ссылка,
 // поэтому подложку убираем и с клавиатуры, и из скринридеров, чтобы не дублировать.
 function CardLinkOverlay({ car, open }) {
-  return <AppLink className="card-link-overlay" href={`/cars/${car.id}`} navigate={open} onClick={(event) => event.stopPropagation()} tabIndex={-1} aria-hidden="true" />;
+  return <AppLink className="card-link-overlay" href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()} tabIndex={-1} aria-hidden="true" />;
 }
 
 // Иллюстрации отдаём в AVIF и WebP, PNG оставляем последним запасом: браузер берёт
@@ -630,9 +640,6 @@ const routeSeo = {
   "/privacy": ["Политика конфиденциальности | evcars.by", "Политика обработки и защиты персональных данных пользователей сайта evcars.by."],
   "/terms": ["Условия использования сайта | evcars.by", "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая."],
 };
-// Промо-страницы моделей описаны в model-landings.js; их заголовки попадают в ту же
-// карту, чтобы SEO-механика работала для них без отдельной ветки.
-for (const landing of MODEL_LANDINGS) routeSeo[landing.path] = [landing.seoTitle, landing.seoDescription];
 
 const privateRouteSeo = {
   "/favorites": ["Избранные автомобили | evcars.by", "Сохранённые автомобили в вашем личном кабинете evcars.by."],
@@ -661,7 +668,7 @@ function ClientSeo({ path, car, landing }) {
     canonicalBase.hash = "";
     // Без косой черты на конце — как отвечает хостинг и как ведут внутренние ссылки.
     // С чертой первоисточник указывал на адрес, с которого посетителя перебрасывают.
-    const canonicalPath = detailTitle ? `/cars/${encodeURIComponent(car.id)}` : path === "/" ? "/" : path.replace(/\/+$/, "");
+    const canonicalPath = detailTitle ? carHref(car) : path === "/" ? "/" : path.replace(/\/+$/, "");
     const canonical = new URL(canonicalPath, canonicalBase).href;
     const indexingEnabled = document.documentElement.dataset.seoIndexing === "true";
     const indexable = indexingEnabled && !privatePage && Boolean(routeSeo[path] || detailTitle || landingSeo);
@@ -2101,7 +2108,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
         </button>
       )}
       <div className="featured-body">
-        <h3><AppLink href={`/cars/${car.id}`} navigate={onClick} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
+        <h3><AppLink href={carHref(car)} navigate={onClick} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
         <p>
           {number(car.mileage)} км · {car.type} · {car.drive}
         </p>
@@ -2150,145 +2157,6 @@ function SimilarCars({ car, cars, onOpenCar }) {
         </button>
       )}
     </section>
-  );
-}
-
-// Промо-лендинг модели: живой срез каталога по этой модели. Машины страница
-// запрашивает сама, как Catalog: при прямом заходе boot-запрос нужных карточек
-// не несёт. Хук и секция наличия общие для обоих шаблонов — с фото и «статьи».
-const LANDING_CARS_LIMIT = 8;
-
-function useLandingCars(landing) {
-  const [cars, setCars] = useState([]);
-  const [total, setTotal] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    setCars([]);
-    setTotal(null);
-    setLoading(true);
-    setFailed(false);
-    const query = new URLSearchParams({ brand: landing.brand, model: landing.model, sort: "price_asc", limit: String(LANDING_CARS_LIMIT), offset: "0" });
-    fetch(`/api/cars?${query}`, { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("landing catalog unavailable"))))
-      .then((catalog) => {
-        setCars(catalog.items.map(normalizeImportedCar));
-        setTotal(catalog.total);
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") setFailed(true);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [landing]);
-  return { cars, total, loading, failed };
-}
-
-const landingCatalogTarget = (landing) => `/catalog?brand=${encodeURIComponent(landing.brand)}&model=${encodeURIComponent(landing.model)}`;
-
-function LandingCarsSection({ landing, carsState, navigate, favorites, toggleFavorite }) {
-  const { cars, total, loading, failed } = carsState;
-  const catalogTarget = landingCatalogTarget(landing);
-  return (
-    <section className="model-landing-cars page-width" aria-labelledby="landing-cars-title">
-      <div className="purchase-section-heading">
-        <span className="info-eyebrow">Наличие и цены</span>
-        <h2 id="landing-cars-title">{landing.name} в каталоге</h2>
-        <p>Цены — предварительный расчёт с доставкой до Минска. Сначала показываем самые доступные.</p>
-      </div>
-      {failed ? (
-        <p className="catalog-message">
-          Не получилось загрузить список. Обновите страницу или откройте <AppLink href={catalogTarget} navigate={navigate}>каталог</AppLink>.
-        </p>
-      ) : (
-        <div className="featured-grid catalog-card-grid">
-          {(loading ? Array.from({ length: LANDING_CARS_LIMIT }) : cars).map((car, index) =>
-            car ? (
-              <FeaturedCard key={car.id} car={car} onClick={() => navigate(`/cars/${car.id}`)} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} />
-            ) : (
-              <CardSkeleton key={index} />
-            ),
-          )}
-        </div>
-      )}
-      {!failed && !loading && total > cars.length && (
-        <AppLink className="load-more featured-load-more" href={catalogTarget} navigate={navigate}>
-          Показать все {total} автомобилей
-        </AppLink>
-      )}
-    </section>
-  );
-}
-
-function ModelLandingPage({ landing, navigate, favorites, toggleFavorite }) {
-  const carsState = useLandingCars(landing);
-  const { total } = carsState;
-  const catalogTarget = landingCatalogTarget(landing);
-  return (
-    <main className="model-landing">
-      <section className="model-landing-hero">
-        <img src={appHref(landing.hero.image)} alt={landing.hero.alt} fetchPriority="high" />
-        <div className="model-landing-hero-overlay">
-          <div className="page-width">
-            <span className="info-eyebrow">{landing.tagline}</span>
-            <h1>{landing.h1}</h1>
-            <p>{landing.lead}</p>
-            <div className="model-landing-hero-actions">
-              <AppLink className="primary" href={catalogTarget} navigate={navigate}>
-                {total ? `Смотреть ${total} в наличии` : "Смотреть в наличии"} <ArrowRight size={17} />
-              </AppLink>
-              <AppLink className="secondary" href="/how-it-works" navigate={navigate}>Как проходит покупка</AppLink>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section className="model-landing-stats page-width">
-        {landing.stats.map((stat) => (
-          <div key={stat.label}>
-            <strong>{stat.value}</strong>
-            <span>{stat.label}</span>
-          </div>
-        ))}
-      </section>
-      <LandingCarsSection landing={landing} carsState={carsState} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
-      {landing.sections.map((section, index) => (
-        <section key={section.title} className={`model-landing-feature page-width${index % 2 ? " reversed" : ""}`}>
-          <figure>
-            <img src={appHref(section.image)} alt={section.alt} loading="lazy" />
-            {section.secondaryImage && <img src={appHref(section.secondaryImage)} alt={section.secondaryAlt || ""} loading="lazy" />}
-          </figure>
-          <div className="model-landing-feature-text">
-            <span className="info-eyebrow">{section.eyebrow}</span>
-            <h2>{section.title}</h2>
-            {section.paragraphs.map((text) => (
-              <p key={text}>{text}</p>
-            ))}
-          </div>
-        </section>
-      ))}
-      <section className="model-landing-disclaimer page-width">
-        <Info size={20} weight="duotone" />
-        <p>{landing.disclaimer}</p>
-      </section>
-      <InfoCta navigate={navigate} title={`Присмотрели ${landing.name}?`} text="Выберите автомобиль в каталоге — проверим состояние, подтвердим смету и привезём в Минск." />
-    </main>
-  );
-}
-
-// Баннер в карточке машины: ведёт на промо-страницу её модели.
-function ModelPromoBanner({ landing, navigate }) {
-  return (
-    <AppLink className="model-promo-banner" href={landing.path} navigate={navigate}>
-      <img src={appHref(landing.hero.image)} alt="" loading="lazy" />
-      <div>
-        <strong>{landing.name} — страница модели</strong>
-        <span>Обзор, характеристики, цены и наличие</span>
-      </div>
-      <CaretRight size={18} />
-    </AppLink>
   );
 }
 
@@ -2577,7 +2445,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     // Быстрый просмотр дополняет страницу автомобиля: со стрелки в модалке
     // уходят на неё же, поэтому позицию возврата запоминаем в любом случае.
     if (openQuickView(item.car)) return;
-    navigate(`/cars/${item.car.id}`);
+    navigate(carHref(item.car));
   };
 
   useEffect(() => {
@@ -2678,7 +2546,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             found = cars.find((car) => candidates.includes(String(car.id)) || String(car.id).endsWith(`-${parsed.listingId}`)) || null;
           }
           if (cancelled) return;
-          setHeroSearch(found ? { ...emptyHeroResult, items: [found], total: 1, href: `/cars/${found.id}`, corrected: parsed.correctedQuery || null } : { ...emptyHeroResult });
+          setHeroSearch(found ? { ...emptyHeroResult, items: [found], total: 1, href: carHref(found), corrected: parsed.correctedQuery || null } : { ...emptyHeroResult });
           return;
         }
         const href = heroCatalogHref(parsed);
@@ -3022,7 +2890,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
 
 function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) {
   const currency = useCurrency();
-  const open = () => (onOpen ? onOpen(car) : navigate(`/cars/${car.id}`));
+  const open = () => (onOpen ? onOpen(car) : navigate(carHref(car)));
   const price = estimateLandedCost(car);
   const listingAge = formatListingAge(getSourceListedAt(car));
   return (
@@ -3030,7 +2898,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <CardLinkOverlay car={car} open={open} />
       <div className="car-row-mobile-header">
         <div>
-          <h2><AppLink href={`/cars/${car.id}`} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
+          <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
           <strong>≈ {money(price.totalUsd, currency)}</strong>
         </div>
         <button
@@ -3049,7 +2917,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <div className="car-row-info">
         <div className="row-title">
           <div>
-            <h2><AppLink href={`/cars/${car.id}`} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
+            <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
           </div>
           <div className="row-actions">
             <button
@@ -3137,7 +3005,7 @@ function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
       try {
         const url = apiMode
           ? `/api/cars/${encodeURIComponent(id)}`
-          : `${import.meta.env.BASE_URL}data/cars/${encodeURIComponent(id)}.json`;
+          : `${import.meta.env.BASE_URL}data/cars/${encodeURIComponent(listingNumber(id))}.json`;
         const response = await fetch(url, { cache:"no-store", signal:controller.signal });
         if (response.status === 404) return { id, unavailable:true };
         if (!response.ok) throw new Error("favorite_car_load_failed");
@@ -3195,7 +3063,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
   };
   const openCar = (car) => {
     if (openQuickView(car)) return;
-    navigate(`/cars/${car.id}`);
+    navigate(carHref(car));
   };
   // The car saved during registration lands here a moment after the page does, so the
   // empty state would be a lie for that moment.
@@ -3359,7 +3227,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
   // как в каталоге; иначе — обычный переход на страницу машины.
   const openCar = (car) => {
     if (openQuickView(car)) return;
-    navigate(`/cars/${car.id}`);
+    navigate(carHref(car));
   };
   return (
     <main className="catalog saved-searches-page page-width">
@@ -3609,7 +3477,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     // На десктопе карточка раскрывается быстрым просмотром: выдача, фильтры и
     // позиция прокрутки остаются на месте, уходить со страницы незачем.
     if (openQuickView(car)) return;
-    navigate(`/cars/${car.id}`);
+    navigate(carHref(car));
   };
   const updateFilters = (updater) => {
     loadMoreRequest.current?.abort();
@@ -4492,7 +4360,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
   const openSimilarCar = (candidate) => {
     if (openQuickView(candidate)) return;
-    navigate(`/cars/${candidate.id}`);
+    navigate(carHref(candidate));
   };
   if (!car) return <NotFound navigate={navigate} />;
   return (
@@ -4509,7 +4377,6 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         {car.model} {car.year}
       </div>
       <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} />
-      {landingForCar(car) && <ModelPromoBanner landing={landingForCar(car)} navigate={navigate} />}
       <SimilarCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       {quickViewModal}
     </main>
@@ -4622,7 +4489,7 @@ function ListingIdRow({ car }) {
     const timer = window.setTimeout(() => setState("idle"), 2200);
     return () => window.clearTimeout(timer);
   }, [state]);
-  const id = car.sourceId || car.id;
+  const id = listingNumber(car.sourceId || car.id);
   if (!id) return null;
   const copy = async () => setState((await copyToClipboard(String(id))) ? "copied" : "failed");
   return (
@@ -4644,7 +4511,7 @@ function CopyLinkButton({ car }) {
   }, [state]);
   const hint = state === "copied" ? "Ссылка скопирована" : state === "failed" ? "Не удалось скопировать" : "Копировать ссылку";
   const copy = async () => {
-    const link = new URL(appHref(`/cars/${car.id}`), window.location.origin).href;
+    const link = new URL(appHref(carHref(car)), window.location.origin).href;
     setState((await copyToClipboard(link)) ? "copied" : "failed");
   };
   return (
@@ -4718,7 +4585,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             )}
             <h1>{car.title}</h1>
             {openFull && (
-              <AppLink className="detail-back detail-open-full" href={`/cars/${car.id}`} navigate={openFull} aria-label="Открыть полную страницу автомобиля">
+              <AppLink className="detail-back detail-open-full" href={carHref(car)} navigate={openFull} aria-label="Открыть полную страницу автомобиля">
                 <ArrowUpRight size={20} />
                 <ActionTooltip text="Открыть полную страницу" />
               </AppLink>
@@ -5103,17 +4970,17 @@ function OrderDraft({ car, navigate }) {
       <div className="breadcrumbs">
         <button onClick={() => navigate("/")}>Главная</button>
         <CaretRight size={13} />
-        <button onClick={() => navigate(`/cars/${car.id}`)}>{car.title}</button>
+        <button onClick={() => navigate(carHref(car))}>{car.title}</button>
         <CaretRight size={13} />
         Предварительный заказ
       </div>
-      <button className="back-mobile" onClick={() => navigate(`/cars/${car.id}`)}>
+      <button className="back-mobile" onClick={() => navigate(carHref(car))}>
         <ArrowLeft size={18} />
         Назад к автомобилю
       </button>
       <div className="order-heading">
         <div>
-          <span>Черновик заказа · {car.sourceId}</span>
+          <span>Черновик заказа · {listingNumber(car.sourceId)}</span>
           <h1>Предварительный заказ</h1>
           <p>Мы собрали всё, что уже известно, и отдельно отметили расчёты и данные, требующие подтверждения.</p>
         </div>
@@ -5312,7 +5179,7 @@ function OrderDraft({ car, navigate }) {
                   Оригинал объявления <ArrowRight size={16} />
                 </a>
               )}
-              <button onClick={() => navigate(`/cars/${car.id}`)}>Вернуться к автомобилю</button>
+              <button onClick={() => navigate(carHref(car))}>Вернуться к автомобилю</button>
             </div>
           </div>
         </aside>
@@ -6485,7 +6352,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
       <div className="customer-order-car">
         <img src={order.car.image} alt={order.car.title} />
         <div className="customer-order-car-copy">
-          <div className="customer-order-car-heading"><span>Выбранный автомобиль</span><h2><a href={`/cars/${encodeURIComponent(order.listingId)}`} target="_blank" rel="noopener noreferrer">{order.car.title}</a></h2><p>Заказ № {order.orderNumber}</p></div>
+          <div className="customer-order-car-heading"><span>Выбранный автомобиль</span><h2><a href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer">{order.car.title}</a></h2><p>Заказ № {order.orderNumber}</p></div>
           <div className="customer-order-car-meta">
             {order.car.year ? <span>{order.car.year} год</span> : null}
             {Number.isFinite(order.car.mileage) ? <span>{number(order.car.mileage)} км</span> : null}
@@ -6498,7 +6365,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
             <summary aria-label="Действия с автомобилем"><DotsThreeVertical size={23} weight="bold" /></summary>
             <div><button type="button" disabled={saving} onClick={requestOrderRemoval}><Trash size={17} /> Убрать автомобиль</button></div>
           </details>
-          <a className="customer-order-card-open" href={`/cars/${encodeURIComponent(order.listingId)}`} target="_blank" rel="noopener noreferrer" aria-label={`Открыть карточку ${order.car.title} в новой вкладке`}><span>Карточка автомобиля</span><ArrowRight size={24} /></a>
+          <a className="customer-order-card-open" href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer" aria-label={`Открыть карточку ${order.car.title} в новой вкладке`}><span>Карточка автомобиля</span><ArrowRight size={24} /></a>
         </div>
       </div>
       <div className="customer-order-stages">
@@ -6704,7 +6571,8 @@ async function loadStaticCatalog() {
 }
 
 async function loadStaticCar(id, signal) {
-  const response = await fetch(`${import.meta.env.BASE_URL}data/cars/${encodeURIComponent(id)}.json`, { signal });
+  // Файлы статической сборки названы коротким номером — тем же, что в адресе.
+  const response = await fetch(`${import.meta.env.BASE_URL}data/cars/${encodeURIComponent(listingNumber(id))}.json`, { signal });
   if (!response.ok) throw new Error("car unavailable");
   return response.json();
 }
@@ -6914,7 +6782,7 @@ export function App() {
       try {
         const payload = await requestBootCatalog();
         let initialCars = payload.items || [];
-        if (targetId && !initialCars.some((car) => car.id === targetId)) {
+        if (targetId && !initialCars.some((car) => sameListing(car.id, targetId))) {
           // Already in flight since index.html on a deep link, so this does not queue behind the list.
           const detailCar = await requestBootCar(targetId).catch(() => null);
           if (detailCar) initialCars = [...initialCars, detailCar];
@@ -6933,7 +6801,7 @@ export function App() {
           if (targetId) {
             try {
               const detailCar = await loadStaticCar(targetId);
-              initialCars = initialCars.map((car) => (car.id === targetId ? detailCar : car));
+              initialCars = initialCars.map((car) => (sameListing(car.id, targetId) ? detailCar : car));
             } catch {}
           }
           if (!cancelled) {
@@ -6983,7 +6851,7 @@ export function App() {
       if (!targetId) setRouteLoading(false);
       return;
     }
-    const targetCar = cars.find((item) => item.id === targetId);
+    const targetCar = findCarByListing(cars, targetId);
     const needsApiDetail = apiMode && (!targetCar || targetCar._summary);
     const needsStaticDetail = !apiMode && (!targetCar || targetCar._summary);
     if (!needsApiDetail && !needsStaticDetail) return;
@@ -7337,9 +7205,6 @@ export function App() {
       <LegalPage navigate={navigate} kind="privacy" />
     ) : contentPath === "/terms" ? (
       <LegalPage navigate={navigate} kind="terms" />
-    ) : findModelLanding(contentPath) ? (
-      // Промо-страница модели запрашивает свой срез каталога сама и не ждёт boot-запроса.
-      <ModelLandingPage landing={findModelLanding(contentPath)} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : null;
   const page =
     contentPath === "/analytics" ? (
@@ -7369,16 +7234,16 @@ export function App() {
     ) : contentPath === "/account" ? (
       authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : null
     ) : orderId ? (
-      <OrderDraft car={cars.find((item) => item.id === orderId)} navigate={navigate} />
+      <OrderDraft car={findCarByListing(cars, orderId)} navigate={navigate} />
     ) : detailId ? (
-      <Detail car={cars.find((item) => item.id === detailId)} cars={cars} apiMode={apiMode} navigate={navigate} backToCatalog={backToCatalog} favorite={favorites.has(detailId)} favorites={favorites} toggleFavorite={toggleFavorite} />
+      <Detail car={findCarByListing(cars, detailId)} cars={cars} apiMode={apiMode} navigate={navigate} backToCatalog={backToCatalog} favorite={hasFavoriteListing(favorites, detailId)} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : (
       <NotFound navigate={navigate} />
     );
   return (
     <CurrencyContext.Provider value={currency}>
      <SetCurrencyContext.Provider value={setCurrency}>
-      <ClientSeo path={path} car={detailId ? cars.find((item) => item.id === detailId) : null} />
+      <ClientSeo path={path} car={findCarByListing(cars, detailId)} />
       <div className="app-content" aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}

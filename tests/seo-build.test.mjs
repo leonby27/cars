@@ -101,7 +101,7 @@ test("preview build ships public pages as noindex and no vehicle pages", async (
   assert.doesNotMatch(home, /<a href="\/cars\//);
   assert.doesNotMatch(sitemap, new RegExp(sitemapCars.replace(/\./g, "\\.")));
   await missing(sitemapCars);
-  await missing("cars/guazi-170268619192114/index.html");
+  await missing("cars/170268619192114/index.html");
   await missing("data/catalog.json");
 });
 
@@ -137,10 +137,12 @@ test("на тестовой сборке заготовка машины зак�
 
 test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", async () => {
   const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
-  const [home, html, robots, sitemap] = await Promise.all([read("index.html"), read("cars/guazi-170268619192114/index.html"), read("robots.txt"), read(sitemapIndex)]);
-  assert.match(home, /<a href="\/cars\/guazi-170268619192114"/);
+  const [home, html, robots, sitemap] = await Promise.all([read("index.html"), read("cars/170268619192114/index.html"), read("robots.txt"), read(sitemapIndex)]);
+  // Адрес карточки — короткий номер объявления: приставка источника из ссылок убрана.
+  assert.match(home, /<a href="\/cars\/170268619192114"/);
+  assert.doesNotMatch(home, /<a href="\/cars\/guazi-/);
   assert.match(html, /<title>BYD Song Pro 2024, 21[^<]*400 км — цена до Минска/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/cars\/guazi-170268619192114"/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/cars\/170268619192114"/);
   assert.match(html, /<meta name="robots" content="index, follow/);
   assert.match(html, /"@type":"Vehicle"/);
   assert.match(html, /<h1>BYD Song Pro 2024<\/h1>/);
@@ -153,7 +155,7 @@ test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", asyn
 test("static fallback ships a compact catalog and addressable full records", async () => {
   const { read } = await build({ SEO_VEHICLE_PAGES: "1" });
   const compact = JSON.parse(await read("data/catalog.json"));
-  const detail = JSON.parse(await read("data/cars/guazi-170268619192114.json"));
+  const detail = JSON.parse(await read("data/cars/170268619192114.json"));
   assert.equal(compact.cars.length, fixtureCars.length);
   assert.equal(compact.cars[0]._summary, true);
   assert.equal(compact.cars[0].description, undefined);
@@ -167,7 +169,7 @@ test("адреса не оканчиваются косой чертой ни в
   // вела на перебросы, а внутренние ссылки добавляли лишний шаг на каждом переходе.
   const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
   const [home, catalog, car, pagesXml, carsXml] = await Promise.all([
-    read("index.html"), read("catalog/index.html"), read("cars/guazi-170268619192114/index.html"),
+    read("index.html"), read("catalog/index.html"), read("cars/170268619192114/index.html"),
     read(`sitemap-${sitemapToken}-pages.xml`), read(sitemapCars),
   ]);
   // Главная — единственный адрес, у которого черта на конце законна.

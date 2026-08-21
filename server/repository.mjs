@@ -185,8 +185,11 @@ export async function listCars(searchParams) {
   return { items, total, refreshedAt:countResult.rows[0].refreshed_at, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
 }
 
+// Адрес карточки несёт короткий номер объявления («/cars/59334290»), а идентификатор
+// в базе — с приставкой источника («che168-59334290»). Ищем по обоим: короткий номер
+// приходит из новых ссылок, полный — из старых, из закладок и из заказов.
 export async function getCar(id) {
-  const result = await pool.query(`${carSelect}, COALESCE((SELECT json_agg(json_build_object('at',p.observed_at,'priceCny',p.price_cny) ORDER BY p.observed_at) FROM price_history p WHERE p.listing_id=l.id), '[]'::json) AS price_history FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id=$1`, [id]);
+  const result = await pool.query(`${carSelect}, COALESCE((SELECT json_agg(json_build_object('at',p.observed_at,'priceCny',p.price_cny) ORDER BY p.observed_at) FROM price_history p WHERE p.listing_id=l.id), '[]'::json) AS price_history FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id=$1 OR l.external_id=$1 ORDER BY (l.id=$1) DESC LIMIT 1`, [id]);
   return result.rows[0] ? { ...rowToCar(result.rows[0]), priceHistory:result.rows[0].price_history } : null;
 }
 

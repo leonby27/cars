@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeDrive } from "../src/drive-types.js";
-import { MODEL_LANDINGS } from "../src/model-landings.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
@@ -53,9 +52,6 @@ const publicPages = [
   { route: "/contacts/", title: "Контакты evcars.by — автомобили из Китая в Минске", description: "Контакты сервиса evcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая.", h1: "Контакты evcars.by", lead: "Обсудим бюджет, подбор, проверку, договор и доставку автомобиля из Китая в Беларусь." },
   { route: "/privacy/", title: "Политика конфиденциальности | evcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта evcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
   { route: "/terms/", title: "Условия использования сайта | evcars.by", description: "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая.", h1: "Условия использования сайта", lead: "Информация каталога и расчёты являются предварительными; финальные условия фиксируются после проверки и в договоре." },
-  // Промо-страницы моделей: конфиг живёт в src/model-landings.js, здесь они получают
-  // статический файл для хостинга и попадают в карту сайта наравне с разделами.
-  ...MODEL_LANDINGS.map((landing) => ({ route: `${landing.path}/`, title: landing.seoTitle, description: landing.seoDescription, h1: landing.h1, lead: landing.lead })),
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
@@ -74,7 +70,10 @@ const trimRoute = (route) => {
 };
 const routeUrl = (route) => `${siteUrl}${trimRoute(route)}`;
 const hrefRoute = (route) => `${siteBasePath}${trimRoute(route)}` || "/";
-const carRoute = (car) => `/cars/${encodeURIComponent(car.id)}/`;
+// Адрес карточки — короткий номер объявления, без приставки источника; сервер
+// понимает и полный идентификатор, поэтому старые ссылки не ломаются.
+const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
+const carRoute = (car) => `/cars/${encodeURIComponent(listingNumber(car.id))}/`;
 const carTitle = (car) => car.title || [car.brand, car.model, car.year].filter(Boolean).join(" ");
 const number = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 const isoDate = (value) => {
@@ -297,7 +296,9 @@ if (cars.length) {
   writeFileSync(path.join(clientDir, "data", "catalog.json"), compactPayload);
   writeFileSync(path.join(clientDir, "data", "catalog.json.gz"), gzipSync(compactPayload, { level:9 }));
   for (const car of cars) {
-    const target = path.join(clientDir, "data", "cars", `${encodeURIComponent(car.id)}.json`);
+    // Файл называется коротким номером — тем же, что стоит в адресе карточки:
+    // в статическом режиме приложение берёт данные именно по нему.
+    const target = path.join(clientDir, "data", "cars", `${encodeURIComponent(listingNumber(car.id))}.json`);
     mkdirSync(path.dirname(target), { recursive:true });
     writeFileSync(target, JSON.stringify(car));
   }
