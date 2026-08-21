@@ -56,3 +56,24 @@ export function readHomeSearchReturn() {
     return null;
   }
 }
+
+// Быстрый просмотр — не отдельная страница: уйдя из него на страницу модели,
+// «назад» вернуло бы выдачу с закрытым превью. Машину запоминаем здесь, а на
+// записи истории, откуда ушли, оставляем её номер — так возврат отличается от
+// нового захода на тот же адрес.
+const quickViewKey = "quick-view-return-state";
+
+export function saveQuickViewReturn(state) {
+  try {
+    window.sessionStorage.setItem(quickViewKey, JSON.stringify(state));
+  } catch {}
+}
+
+export function readQuickViewReturn() {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(quickViewKey) || "null");
+    return stored?.car?.id ? stored : null;
+  } catch {
+    return null;
+  }
+}

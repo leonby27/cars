@@ -163,6 +163,23 @@ test("static fallback ships a compact catalog and addressable full records", asy
   assert.equal(Array.isArray(detail.images) && detail.images.length > 1, true);
 });
 
+test("страница модели попадает в сборку с текстом и в карту сайта", async () => {
+  // Страницу модели описывает один конфиг; сборка обязана превратить его в готовый
+  // файл с текстом — поисковик читает его, не запуская приложение.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const [page, pagesXml] = await Promise.all([read("models/zeekr-007gt/index.html"), read(`sitemap-${sitemapToken}-pages.xml`)]);
+  assert.match(page, /<h1>Zeekr 007 GT из Китая — купить с доставкой в Минск<\/h1>/);
+  assert.match(page, /<link rel="canonical" href="https:\/\/evcars\.by\/models\/zeekr-007gt"/);
+  assert.match(page, /<meta name="robots" content="index, follow/);
+  // Текст статьи, врезки внутри разделов и таблица версий лежат в самом файле,
+  // а не подгружаются скриптом.
+  assert.match(page, /<h2>Кузов и багажник<\/h2>/);
+  assert.match(page, /Zeekr 7 GT/);
+  // Цены версий пересчитаны в доллары — юани на странице не показываем.
+  assert.match(page, /≈ \$\d/);
+  assert.match(pagesXml, /<loc>https:\/\/evcars\.by\/models\/zeekr-007gt<\/loc>/);
+});
+
 test("адреса не оканчиваются косой чертой ни в страницах, ни в карте сайта", async () => {
   // Хостинг настроен на адреса без черты и сам перебрасывает `/catalog/` на `/catalog`.
   // Пока черта оставалась, сайт указывал поисковику на адрес, которого нет: карта сайта

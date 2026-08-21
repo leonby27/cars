@@ -15,6 +15,20 @@ export const PRICING = {
 };
 const round50 = (value) => Math.round(value / 50) * 50;
 
+// Цену в юанях со страницы модели переводим в доллары по тому же курсу, что и
+// расчёт стоимости машины: юани человеку ни о чём не говорят. Округляем до сотни —
+// это ориентир, не смета. «от»/«до» перед суммой сохраняем.
+export const yuanToUsdAbout = (text) => {
+  const source = String(text);
+  const digits = source.replace(/[\s\u00a0\u202f]/g, "").match(/(\d+)¥/);
+  if (!digits) return null;
+  const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
+  const usd = Math.round((Number(digits[1]) * cnyUsd) / 100) * 100;
+  const money = `$${usd.toLocaleString("ru-RU")}`;
+  const prefix = source.match(/^(от|до)\s/);
+  return prefix ? `${prefix[1]} ${money}` : `≈ ${money}`;
+};
+
 export function estimateLandedCost(car) {
   const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
   const eurUsd = PRICING.eurByn / PRICING.usdByn;

@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeDrive } from "../src/drive-types.js";
+import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
+import { yuanToUsdAbout } from "../src/pricing.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
@@ -52,6 +54,12 @@ const publicPages = [
   { route: "/contacts/", title: "Контакты evcars.by — автомобили из Китая в Минске", description: "Контакты сервиса evcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая.", h1: "Контакты evcars.by", lead: "Обсудим бюджет, подбор, проверку, договор и доставку автомобиля из Китая в Беларусь." },
   { route: "/privacy/", title: "Политика конфиденциальности | evcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта evcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
   { route: "/terms/", title: "Условия использования сайта | evcars.by", description: "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая.", h1: "Условия использования сайта", lead: "Информация каталога и расчёты являются предварительными; финальные условия фиксируются после проверки и в договоре." },
+  // Общая страница «О моделях авто» и сами обзоры: конфиг живёт в src/model-pages.js,
+  // здесь они получают статический файл для хостинга и попадают в карту сайта наравне
+  // с разделами. В заготовке лежит весь текст — поисковику он виден без запуска
+  // приложения.
+  { route: `${MODELS_INDEX.path}/`, title: MODELS_INDEX.seoTitle, description: MODELS_INDEX.seoDescription, h1: MODELS_INDEX.h1, lead: MODELS_INDEX.lead, modelsIndex: true },
+  ...MODEL_PAGES.map((modelPage) => ({ route: `${modelPage.path}/`, title: modelPage.seoTitle, description: modelPage.seoDescription, h1: modelPage.h1, lead: modelPage.lead, modelPage })),
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
@@ -123,6 +131,7 @@ function navigation() {
     <a href="${hrefRoute("/")}">evcars.by</a>
     <a href="${hrefRoute("/catalog/")}">Автомобили</a>
     <a href="${hrefRoute("/how-it-works/")}">О сервисе</a>
+    <a href="${hrefRoute(`${MODELS_INDEX.path}/`)}">О моделях авто</a>
     <a href="${hrefRoute("/contacts/")}">Контакты</a>
   </nav></header>`;
 }
@@ -142,9 +151,59 @@ function carLinks(items, limit = items.length) {
   return `<ul>${items.slice(0, limit).map((car) => `<li><a href="${hrefRoute(carRoute(car))}">${escapeHtml(carTitle(car))}</a> — ${number(car.mileage)} км</li>`).join("")}</ul>`;
 }
 
+function modelPageArticle(modelPage) {
+  const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+  // Списки, карточки сравнения и врезки — такой же текст, как абзацы: в статической
+  // версии страницы они тоже должны быть, иначе поисковик увидит меньше, чем человек.
+  const extras = (section) =>
+    [
+      section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${escapeHtml(item.text)}</dd>`).join("")}</dl>` : "",
+      section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${escapeHtml(option.text)}</p>`).join("") : "",
+      section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${escapeHtml(section.callout.text)}</p>` : "",
+    ].join("");
+  const sections = modelPage.sections
+    .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}${extras(section)}</section>`)
+    .join("");
+  const versions = modelPage.versions
+    ? `<section><h2>${escapeHtml(modelPage.versions.title)}</h2><table><thead><tr>${modelPage.versions.columns.map((column) => `<th scope="col">${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${modelPage.versions.rows
+        .map(
+        (row) =>
+          `<tr>${row
+            .map((cell, index) => {
+              const text = escapeHtml(yuanToUsdAbout(cell) || cell);
+              return index === 0 ? `<th scope="row">${text}</th>` : `<td>${text}</td>`;
+            })
+            .join("")}</tr>`,
+      )
+        .join("")}</tbody></table><p>${escapeHtml(modelPage.versions.note)}</p></section>`
+    : "";
+  // Частые вопросы: в статической странице это обычный текст, а разметку FAQPage
+  // добавляем отдельным блоком в <head> — по ней вопросы попадают в выдачу.
+  const faq = modelPage.faq?.length
+    ? `<section><h2>Частые вопросы про ${escapeHtml(modelPage.name)}</h2>${modelPage.faq
+        .map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`)
+        .join("")}</section>`
+    : "";
+  const inStock = cars.filter((car) => car.brand === modelPage.brand && car.model === modelPage.model);
+  const stock = inStock.length ? `<section><h2>${escapeHtml(modelPage.name)} в каталоге</h2>${carLinks(inStock, 24)}</section>` : "";
+  return `${paragraphs(modelPage.intro)}${sections}${versions}${faq}${stock}<p>${escapeHtml(modelPage.disclaimer)}</p>`;
+}
+
+function modelsIndexArticle() {
+  const intro = MODELS_INDEX.sections
+    .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${section.paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}</section>`)
+    .join("");
+  const list = MODEL_PAGES.map(
+    (modelPage) =>
+      `<li><a href="${hrefRoute(`${modelPage.path}/`)}">${escapeHtml(modelPage.name)}</a> — ${escapeHtml(modelPage.teaser)}</li>`,
+  ).join("");
+  return `${intro}<section><h2>${escapeHtml(MODELS_INDEX.listTitle)}</h2><ul>${list}</ul></section>`;
+}
+
 function publicPageBody(page) {
   const links = page.route === "/" ? carLinks(cars, 20) : page.route === "/catalog/" ? carLinks(cars, 48) : "";
-  return `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}</main>${footer()}`;
+  const article = page.modelPage ? modelPageArticle(page.modelPage) : page.modelsIndex ? modelsIndexArticle() : "";
+  return `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}</main>${footer()}`;
 }
 
 function breadcrumbsSchema(items) {
@@ -152,6 +211,18 @@ function breadcrumbsSchema(items) {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: items.map(([name, route], index) => ({ "@type": "ListItem", position: index + 1, name, item: routeUrl(route) })),
+  };
+}
+
+function faqSchema(modelPage) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: modelPage.faq.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
   };
 }
 
@@ -184,6 +255,7 @@ function writeRoute(route, html) {
 for (const page of publicPages) {
   const schemas = [breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
   if (page.route === "/") schemas.unshift(organizationSchema());
+  if (page.modelPage?.faq?.length) schemas.push(faqSchema(page.modelPage));
   writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas }));
 }
 

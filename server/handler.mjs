@@ -3,7 +3,7 @@ import { gzip } from "node:zlib";
 import { promisify } from "node:util";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
-import { createOrderDraft, getCar, getCatalogMeta, listCars } from "./repository.mjs";
+import { createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
 import { analyticsCookie, clearAnalyticsCookie, createAnalyticsToken, getAnalyticsDashboard, hasAnalyticsSession, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
@@ -279,6 +279,7 @@ export async function handleApiRequest(request, response) {
       return result.error ? json(response, 401, result) : json(response, 200, result);
     }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams), catalogCache);
+    if (request.method === "GET" && url.pathname === "/api/model-facts") return json(response, 200, await getModelFacts(), catalogCache);
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")), catalogCache);
     const carMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)$/);
     if (carMatch) {

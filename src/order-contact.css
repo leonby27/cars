@@ -29,7 +29,7 @@
   height: 46px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   outline: 0;
   background: var(--panel-soft);
   color: var(--ink);
@@ -66,7 +66,7 @@
   gap: 7px;
   padding: 0 10px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: var(--panel-soft);
   color: var(--muted);
   font-size: 16px;
@@ -105,7 +105,7 @@
 }
 .order-contact-error {
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: #fff0ed;
   color: #a83220;
   font-size: 16px;

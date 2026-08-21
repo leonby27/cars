@@ -102,6 +102,9 @@ export function buildCarOrder(searchParams) {
     price_desc:"l.estimated_total_usd DESC NULLS LAST, l.id",
     mileage_asc:"l.mileage_km ASC NULLS LAST, l.id",
     range_desc:"COALESCE(v.electric_range_km, v.combined_range_km) DESC NULLS LAST, l.id",
+    // Разгон лежит в характеристиках строкой: пустое значение приводим к NULL,
+    // иначе приведение к числу падало бы на машинах без замера.
+    accel_asc:"NULLIF(v.specifications->>'acceleration','')::numeric ASC NULLS LAST, l.id",
     year_desc:"v.model_year DESC NULLS LAST, l.id",
     year_asc:"v.model_year ASC NULLS LAST, l.id",
   };
@@ -222,6 +225,42 @@ export async function getCatalogMeta(type, brand, bodyType) {
   }, new Map());
   const driveRows = orderDrives([...driveCounts.keys()]).map((drive) => ({ drive, count:driveCounts.get(drive) }));
   return { total:count.rows[0].total, brands:brands.rows, models:models.rows, bodyTypes:bodyTypes.rows, drives:driveRows, availability:availability.rows[0] };
+}
+
+// Список обзоров на странице «О моделях авто» показывает по каждой модели фото,
+// число машин в наличии, цену, разгон и запас хода. Раньше страница спрашивала это
+// по одной модели за раз — сто тридцать обращений к каталогу, каждое со своим
+// пересчётом количества, из-за чего фотографии проявлялись десятками секунд. Здесь
+// всё считается одним проходом по активным объявлениям: цены и характеристики берём
+// сводкой по модели, фото — с самой доступной машины, то есть с той же, что и раньше.
+export async function getModelFacts() {
+  const result = await pool.query(`WITH active AS (
+      SELECT l.id, v.brand, v.model, l.estimated_total_usd AS price,
+        NULLIF(v.specifications->>'acceleration','')::numeric AS accel,
+        COALESCE(v.electric_range_km, v.combined_range_km) AS range
+      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'
+    ), summary AS (
+      SELECT brand, model, count(*)::int AS count, min(price) AS price_min, max(price) AS price_max,
+        min(accel) AS accel, max(range) AS range
+      FROM active GROUP BY brand, model
+    ), cheapest AS (
+      SELECT DISTINCT ON (brand, model) brand, model, id
+      FROM active ORDER BY brand, model, price ASC NULLS LAST, id
+    )
+    SELECT s.brand, s.model, s.count, s.price_min, s.price_max, s.accel, s.range,
+      (SELECT m.url FROM listing_media m WHERE m.listing_id=c.id ORDER BY m.position LIMIT 1) AS image
+    FROM summary s LEFT JOIN cheapest c ON c.brand=s.brand AND c.model=s.model
+    ORDER BY s.brand, s.model`);
+  return { models:result.rows.map((row) => ({
+    brand:row.brand,
+    model:row.model,
+    count:row.count,
+    priceMin:Number(row.price_min) || null,
+    priceMax:Number(row.price_max) || null,
+    accel:Number(row.accel) || null,
+    range:Number(row.range) || null,
+    image:row.image || null,
+  })) };
 }
 
 export async function createOrderDraft({ listingId, name = null, contact, calculation = {} }) {

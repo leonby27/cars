@@ -4,13 +4,14 @@ import { matchesYearRange, sortCars } from "./car-filters.js";
 import { mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { estimateLandedCost, PRICING } from "./pricing.js";
+import { estimateLandedCost, PRICING, yuanToUsdAbout } from "./pricing.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
-import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn } from "./catalog-return.js";
+import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
 import { formatListingAge, getSourceListedAt } from "./listing-age.js";
 import { selectSimilarCars } from "./similar-cars.js";
+import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar } from "./model-pages.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
@@ -37,6 +38,18 @@ const CurrencyContext = createContext("USD");
 // Валюту переключают не только в шапке: в быстром просмотре шапка недоступна,
 // поэтому сеттер доступен из любого места дерева.
 const SetCurrencyContext = createContext(null);
+// Машины, по которым у посетителя уже есть заказ. Кнопка на такой карточке ведёт в
+// кабинет, а не заводит второй заказ по той же машине. Список нужен и в каталоге, и
+// в быстром просмотре, и на странице автомобиля — поэтому лежит в контексте, а не
+// передаётся пропсами через все экраны. Второй контекст — на запись: кабинет,
+// загрузив заказы, обновляет список для всего приложения.
+const EMPTY_ORDERED_LISTINGS = new Set();
+const OrderedListingsContext = createContext(null);
+const SetOrderedListingsContext = createContext(null);
+// Заказ хранит полный идентификатор объявления, карточка — тоже, но в адресах живёт
+// короткий номер. Сравниваем по номеру, как и избранное.
+const orderedListingsFrom = (orders) => new Set((orders || []).map((order) => listingNumber(order?.listingId)).filter(Boolean));
+const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORDERED_LISTINGS;
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? Math.round(usd * PRICING.usdByn) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
@@ -265,16 +278,43 @@ const ownerOptions = [ANY_OWNERS, "1 владелец", "До 2 владельц
 const CATALOG_SHUFFLE_SEEDS = 12;
 const randomShuffleSeed = () => `s${Math.floor(Math.random() * CATALOG_SHUFFLE_SEEDS)}`;
 const proxiedImageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
-const imageSource = (source) => {
+// Фотохранилище Che168 умеет отдавать снимок любой ширины: она стоит в адресе перед
+// именем файла («1400x0_c42_...»). Оригинал на 1400 точек весит около 110 КБ, а в
+// карточке он показывается втрое мельче — на десятке карточек это лишние мегабайты,
+// из-за которых фотографии и не догружались. Просим ту ширину, в которой показываем:
+// 400 точек — это уже 12 КБ. Высоту хранилище считает само, поэтому ставим ноль.
+const resizedImageHref = (url, width) => {
+  if (!width || !/(^|\.)autoimg\.cn$/.test(url.hostname)) return null;
+  const path = url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`);
+  if (path === url.pathname) return null;
+  const resized = new URL(url.href);
+  resized.pathname = path;
+  return resized.href;
+};
+const imageSource = (source, width) => {
   if (!source) return source;
   try {
     const url = new URL(source);
     // Static preview hosts do not have the image-proxy API; use the original
     // allowlisted source there so catalog images remain visible.
-    return proxiedImageHosts.has(url.hostname) && import.meta.env.BASE_URL === "/" ? `/api/image?src=${encodeURIComponent(url.href)}` : source;
+    if (proxiedImageHosts.has(url.hostname) && import.meta.env.BASE_URL === "/") return `/api/image?src=${encodeURIComponent(url.href)}`;
+    return resizedImageHref(url, width) || source;
   } catch {
     return source;
   }
+};
+// Ширины под места, где показываем фото: с запасом для экранов с двойной плотностью.
+// Большое фото в галерее оставляем как есть — там оригинал и нужен.
+const IMAGE_WIDTH_CARD = 800;
+const IMAGE_WIDTH_TILE = 600;
+const IMAGE_WIDTH_THUMB = 240;
+// Страховка: если хранилище не отдало уменьшенный кадр, подставляем оригинал —
+// тяжёлое фото лучше пустой рамки. Повторяем только один раз.
+const retryWithFullImage = (event, source) => {
+  const image = event.currentTarget;
+  if (!source || image.dataset.fullSize) return;
+  image.dataset.fullSize = "1";
+  image.src = imageSource(source);
 };
 
 function normalizeImportedCar(car) {
@@ -557,6 +597,15 @@ function useRoute() {
 
 const appHref = (path) => `${import.meta.env.BASE_URL.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 
+// Адрес текущей страницы в том же виде, в каком его хранят маршруты: без базового
+// префикса сборки и без косой черты на конце.
+const currentAppPath = () => {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const pathname = window.location.pathname;
+  const unbased = base && pathname.startsWith(base) ? pathname.slice(base.length) || "/" : pathname;
+  return unbased.length > 1 ? unbased.replace(/\/+$/, "") : unbased;
+};
+
 function AppLink({ href, navigate, onClick, children, ...props }) {
   const handleClick = (event) => {
     onClick?.(event);
@@ -640,6 +689,10 @@ const routeSeo = {
   "/privacy": ["Политика конфиденциальности | evcars.by", "Политика обработки и защиты персональных данных пользователей сайта evcars.by."],
   "/terms": ["Условия использования сайта | evcars.by", "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая."],
 };
+// Страницы моделей описаны в model-pages.js; их заголовки попадают в ту же карту,
+// чтобы SEO-механика работала для них без отдельной ветки.
+routeSeo[MODELS_INDEX.path] = [MODELS_INDEX.seoTitle, MODELS_INDEX.seoDescription];
+for (const modelPage of MODEL_PAGES) routeSeo[modelPage.path] = [modelPage.seoTitle, modelPage.seoDescription];
 
 const privateRouteSeo = {
   "/favorites": ["Избранные автомобили | evcars.by", "Сохранённые автомобили в вашем личном кабинете evcars.by."],
@@ -794,6 +847,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
               <nav aria-label="Основная навигация">
                 <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>Автомобили</AppLink>
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
+                <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>
                 <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
                 {/* На узких экранах кнопке «Мои поиски» в шапке не хватает места,
                     поэтому там она живёт в этом меню; на широких — прячется, чтобы
@@ -2014,7 +2068,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
     preloadStarted.current = true;
     images.slice(1).forEach((src) => {
       const image = new Image();
-      image.src = imageSource(src);
+      image.src = imageSource(src, IMAGE_WIDTH_CARD);
     });
   };
   // Карточку целиком перекрывает ссылка-подложка, поэтому до самого превью события
@@ -2042,7 +2096,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
 
   return (
     <div className={`${className} hover-image-preview`} ref={frameRef}>
-      <img src={imageSource(images[active])} alt={car.title} draggable="false" />
+      <img src={imageSource(images[active], IMAGE_WIDTH_CARD)} alt={car.title} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
       {mobileStrip && (
         <div
           className="car-row-mobile-image-strip"
@@ -2062,9 +2116,10 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
         >
           {images.map((image, index) => (
             <img
-              src={imageSource(image)}
+              src={imageSource(image, IMAGE_WIDTH_CARD)}
               alt={index === 0 ? car.title : ""}
               draggable="false"
+              onError={(event) => retryWithFullImage(event, image)}
               loading={index === 0 ? "eager" : "lazy"}
               key={`${image}-mobile-${index}`}
             />
@@ -2156,6 +2211,626 @@ function SimilarCars({ car, cars, onOpenCar }) {
           Показать ещё
         </button>
       )}
+    </section>
+  );
+}
+
+// Страница модели: текст о машине плюс живой срез каталога по этой модели. Машины
+// страница запрашивает сама, как каталог: при прямом заходе boot-запрос нужных
+// карточек не несёт.
+// Двадцать машин — пять рядов по четыре карточки, как в подборке на главной.
+const MODEL_PAGE_CARS_LIMIT = 20;
+// Лента «Самые низкие цены» в разрыве текста берёт первые десять из того же среза.
+const MODEL_PAGE_SLIDER_LIMIT = 10;
+
+function useModelPageCars(modelPage) {
+  const [cars, setCars] = useState([]);
+  const [total, setTotal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const carsQuery = (offset) =>
+    new URLSearchParams({ brand: modelPage.brand, model: modelPage.model, sort: "price_asc", limit: String(MODEL_PAGE_CARS_LIMIT), offset: String(offset) });
+  useEffect(() => {
+    const controller = new AbortController();
+    setCars([]);
+    setTotal(null);
+    setLoading(true);
+    setFailed(false);
+    fetch(`/api/cars?${carsQuery(0)}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model page catalog unavailable"))))
+      .then((catalog) => {
+        setCars(catalog.items.map(normalizeImportedCar));
+        setTotal(catalog.total);
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setFailed(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [modelPage]);
+  // «Показать ещё» подгружает следующие двадцать машин к уже показанным. Совпадения
+  // по идентификатору отбрасываем: пока человек читает, срез каталога мог сдвинуться.
+  const loadMore = () => {
+    if (loading || loadingMore || failed) return;
+    setLoadingMore(true);
+    fetch(`/api/cars?${carsQuery(cars.length)}`)
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model page catalog page unavailable"))))
+      .then((catalog) => {
+        const next = catalog.items.map(normalizeImportedCar);
+        setCars((current) => {
+          const seen = new Set(current.map((car) => car.id));
+          return [...current, ...next.filter((car) => !seen.has(car.id))];
+        });
+        setTotal(catalog.total);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  };
+  return { cars, total, loading, loadingMore, failed, loadMore, hasMore: total != null && cars.length < total };
+}
+
+const modelPageCatalogHref = (modelPage) => `/catalog?brand=${encodeURIComponent(modelPage.brand)}&model=${encodeURIComponent(modelPage.model)}`;
+
+// Срез каталога внутри текста страницы: десять самых доступных машин этой модели
+// лентой с прокруткой в сторону. Стрелки нужны на компьютере — мышью боковую
+// прокрутку не крутят; на телефоне лента листается пальцем.
+function ModelPageCars({ modelPage, carsState, navigate, favorites, toggleFavorite, onOpenCar }) {
+  const { cars, loading, failed } = carsState;
+  const catalogTarget = modelPageCatalogHref(modelPage);
+  const trackRef = useRef(null);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(true);
+  const syncEdges = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const rest = track.scrollWidth - track.clientWidth - track.scrollLeft;
+    setAtStart(track.scrollLeft <= 2);
+    setAtEnd(rest <= 2);
+  }, []);
+  useEffect(() => {
+    syncEdges();
+    window.addEventListener("resize", syncEdges);
+    return () => window.removeEventListener("resize", syncEdges);
+  }, [syncEdges, cars.length, loading]);
+  const slide = (direction) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const card = track.firstElementChild;
+    const step = card ? (card.getBoundingClientRect().width + 16) * 2 : track.clientWidth * 0.8;
+    track.scrollBy({ left: step * direction, behavior: "smooth" });
+  };
+  return (
+    <section className="model-page-cars page-width" aria-labelledby="model-page-cars-title">
+      <div className="model-page-cars-heading">
+        <h2 id="model-page-cars-title">Самые низкие цены</h2>
+        <div className="model-page-cars-controls">
+          <button type="button" className="model-page-cars-nav" aria-label="Предыдущие автомобили" onClick={() => slide(-1)} disabled={atStart}>
+            <ArrowLeft size={18} />
+          </button>
+          <button type="button" className="model-page-cars-nav" aria-label="Следующие автомобили" onClick={() => slide(1)} disabled={atEnd}>
+            <ArrowRight size={18} />
+          </button>
+        </div>
+      </div>
+      {failed ? (
+        <p className="catalog-message">
+          Не получилось загрузить список. Обновите страницу или откройте <AppLink href={catalogTarget} navigate={navigate}>каталог</AppLink>.
+        </p>
+      ) : (
+        <div className="model-page-cars-track" ref={trackRef} onScroll={syncEdges}>
+          {(loading ? Array.from({ length: MODEL_PAGE_SLIDER_LIMIT }) : cars.slice(0, MODEL_PAGE_SLIDER_LIMIT)).map((car, index) =>
+            car ? (
+              <FeaturedCard key={car.id} car={car} onClick={() => onOpenCar(car)} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} />
+            ) : (
+              <CardSkeleton key={index} />
+            ),
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Частые вопросы по модели: те же плашки, что на главной, плюс разметка для
+// поисковика — по ней вопросы и ответы попадают прямо в выдачу.
+function ModelPageFaq({ modelPage }) {
+  if (!modelPage.faq?.length) return null;
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: modelPage.faq.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
+  return (
+    <section className="model-page-faq page-width" aria-labelledby="model-page-faq-title">
+      <h2 id="model-page-faq-title">Частые вопросы про {modelPage.name}</h2>
+      <div className="model-page-faq-list">
+        {modelPage.faq.map((item, index) => (
+          <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} />
+        ))}
+      </div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+    </section>
+  );
+}
+
+// Тот же срез каталога сеткой в конце страницы — с переходом ко всем машинам модели.
+function ModelPageCatalog({ modelPage, carsState, navigate, favorites, toggleFavorite, onOpenCar, quickViewToggle }) {
+  const { cars, loading, loadingMore, failed, loadMore, hasMore } = carsState;
+  const catalogTarget = modelPageCatalogHref(modelPage);
+  return (
+    <section className="model-page-catalog page-width" aria-labelledby="model-page-catalog-title">
+      <h2 className="model-page-catalog-title" id="model-page-catalog-title">
+        Цены на {modelPage.name} с доставкой в Минск
+      </h2>
+      {/* Строка под заголовком — как на главной: слева «Каталог» и переключатель
+          быстрого просмотра, справа переход ко всем машинам модели. */}
+      <div className="section-heading">
+        <div className="section-heading-title">
+          <h3>Каталог</h3>
+          {quickViewToggle}
+        </div>
+        <AppLink className="section-heading-link" href={catalogTarget} navigate={navigate}>
+          Все {modelPage.name} <ArrowRight size={18} />
+        </AppLink>
+      </div>
+      {failed ? (
+        <p className="catalog-message">
+          Не получилось загрузить список. Обновите страницу или откройте <AppLink href={catalogTarget} navigate={navigate}>каталог</AppLink>.
+        </p>
+      ) : (
+        <div className="featured-grid">
+          {(loading ? Array.from({ length: MODEL_PAGE_CARS_LIMIT }) : cars).map((car, index) =>
+            car ? (
+              <FeaturedCard key={car.id} car={car} onClick={() => onOpenCar(car)} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} />
+            ) : (
+              <CardSkeleton key={index} />
+            ),
+          )}
+        </div>
+      )}
+      {!failed && !loading && hasMore && (
+        <button type="button" className="load-more featured-load-more" onClick={loadMore} disabled={loadingMore}>
+          {loadingMore ? "Загружаем…" : "Показать ещё"}
+        </button>
+      )}
+    </section>
+  );
+}
+
+// Мозаика фотографий над текстом. Машины берём самые дорогие в наличии — у них лучше
+// и состояние, и съёмка. Из каждого объявления берём кадр со своим номером: у первой
+// машины первый снимок, у второй второй и так далее, иначе все пять кадров были бы
+// однотипными «три четверти спереди».
+const MODEL_PAGE_GALLERY_LIMIT = 5;
+
+function useModelPageGalleryCars(modelPage) {
+  const [cars, setCars] = useState([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setCars([]);
+    const query = new URLSearchParams({ brand: modelPage.brand, model: modelPage.model, sort: "price_desc", limit: String(MODEL_PAGE_GALLERY_LIMIT), offset: "0" });
+    fetch(`/api/cars?${query}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model gallery unavailable"))))
+      .then((catalog) => setCars(catalog.items.map(normalizeImportedCar)))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [modelPage]);
+  return cars;
+}
+
+function ModelPageGallery({ cars, onOpenCar }) {
+  const shots = cars
+    .map((car, index) => {
+      const gallery = car.images?.length ? car.images : [car.image].filter(Boolean);
+      // Номер кадра растёт через один: у первой машины первый снимок, у второй третий,
+      // у третьей пятый. Так в мозаике не собираются одинаковые ракурсы. Если снимков
+      // в объявлении меньше, берём последний.
+      const source = gallery[Math.min(index * 2, gallery.length - 1)];
+      return { car, source: source || null, image: imageSource(source || null, IMAGE_WIDTH_TILE) };
+    })
+    .filter((shot) => shot.image)
+    .slice(0, MODEL_PAGE_GALLERY_LIMIT);
+  if (shots.length < MODEL_PAGE_GALLERY_LIMIT) return null;
+  return (
+    <div className="model-page-gallery">
+      {shots.map(({ car, source, image }) => (
+        <button type="button" key={car.id} onClick={() => onOpenCar(car)} aria-label={`Открыть объявление: ${car.title}`}>
+          <img src={image} alt={car.title} loading="lazy" onError={(event) => retryWithFullImage(event, source)} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Раздел статьи: абзацы плюс необязательные блоки — список с выделенным началом
+// строки, две карточки сравнения и врезка с заметкой. Они разбивают текст и
+// вытаскивают из абзацев главное.
+function ModelPageSection({ section }) {
+  return (
+    <section>
+      <h2>{section.title}</h2>
+      {section.paragraphs.map((text) => (
+        <p key={text}>{text}</p>
+      ))}
+      {section.list && (
+        <dl className="model-page-points">
+          {section.list.map((item) => (
+            <div key={item.term}>
+              <dt>{item.term}</dt>
+              <dd>{item.text}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {section.compare && (
+        <div className="model-page-compare">
+          {section.compare.map((option) => (
+            <div key={option.name}>
+              <strong>{option.name}</strong>
+              <p>{option.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {section.callout && (
+        <aside className="model-page-callout">
+          <Info size={20} weight="duotone" />
+          <div>
+            <strong>{section.callout.title}</strong>
+            <p>{section.callout.text}</p>
+          </div>
+        </aside>
+      )}
+    </section>
+  );
+}
+
+// Рекламный блок в разрыве текста: ведёт на страницу «О сервисе», иллюстрацию берём
+// оттуда же.
+function ModelPagePromo({ navigate }) {
+  return (
+    <aside className="model-page-promo page-width">
+      <div className="model-page-promo-visual">
+        <Illustration src="/illustrations/how-it-works-hero.png" alt="" />
+      </div>
+      <div className="model-page-promo-copy">
+        <strong>Как заказать авто из Китая</strong>
+        <p>Сначала проверка автомобиля и понятная смета, только потом решение, договор и оплата. Дальше — выкуп, доставка и выдача в Минске.</p>
+        <AppLink className="primary" href="/how-it-works" navigate={navigate}>
+          О сервисе <ArrowRight size={18} />
+        </AppLink>
+      </div>
+    </aside>
+  );
+}
+
+// Фото и цифры для списка обзоров каталог отдаёт одним ответом на все модели сразу:
+// фото — с самой доступной машины модели, рядом число машин в наличии, крайние цены до
+// Минска, лучший разгон и наибольший запас хода. По ним же работают сортировки списка,
+// поэтому переключение сортировки больше ничего не догружает.
+//
+// Раньше страница спрашивала каталог по одной модели за раз — сто тридцать запросов
+// партиями по шесть, и фотографии проявлялись сверху вниз десятки секунд. Без API
+// (статическая сборка) ответа нет: список остаётся в исходном порядке и без фото.
+function useModelsIndexFacts() {
+  const [facts, setFacts] = useState({});
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/model-facts", { signal:controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model facts unavailable"))))
+      .then((data) => {
+        // Ключ — марка и модель вместе: у разных марок бывают одноимённые модели.
+        const byModel = new Map((data.models || []).map((row) => [`${row.brand}\u0000${row.model}`, row]));
+        const next = {};
+        for (const modelPage of MODEL_PAGES) {
+          const row = byModel.get(`${modelPage.brand}\u0000${modelPage.model}`);
+          if (!row) continue;
+          next[modelPage.slug] = {
+            image:imageSource(row.image || null, IMAGE_WIDTH_TILE) || null,
+            // Исходный адрес держим рядом: на него подменяем кадр, если хранилище не
+            // отдало уменьшенный.
+            imageFull:row.image || null,
+            count:Number(row.count) || 0,
+            priceMin:Number(row.priceMin) || null,
+            priceMax:Number(row.priceMax) || null,
+            accel:Number(row.accel) || null,
+            range:Number(row.range) || null,
+          };
+        }
+        setFacts(next);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  return facts;
+}
+
+// Марки для фильтра — только те, у которых есть обзор; порядок алфавитный.
+const MODELS_INDEX_ALL_BRANDS = "Все марки";
+const MODELS_INDEX_BRANDS = [MODELS_INDEX_ALL_BRANDS, ...Array.from(new Set(MODEL_PAGES.map((modelPage) => modelPage.brand))).sort((a, b) => a.localeCompare(b, "ru"))];
+
+// Сортировки списка обзоров. Цена, разгон и запас хода — по самой подходящей машине
+// модели в каталоге: дешёвые считаем по самой доступной, дорогие — по самой дорогой,
+// разгон и запас хода — по лучшей версии в наличии. Название берём из конфига.
+const MODELS_INDEX_SORTS = [
+  { value: "default", label: "По умолчанию" },
+  { value: "cars_desc", label: "Больше в наличии", field: "count", direction: "desc" },
+  { value: "price_asc", label: "Сначала дешёвые", field: "priceMin", direction: "asc" },
+  { value: "price_desc", label: "Сначала дорогие", field: "priceMax", direction: "desc" },
+  { value: "accel_asc", label: "С самым быстрым разгоном", field: "accel", direction: "asc" },
+  { value: "range_desc", label: "С наибольшим запасом хода", field: "range", direction: "desc" },
+  { value: "name_asc", label: "По названию" },
+];
+
+// Общая страница «О моделях авто»: вступление, поиск и список обзоров. Вёрстка та же,
+// что у самих обзоров, — блоки с текстом и рекламный блок сервиса между ними.
+function ModelsIndexPage({ navigate }) {
+  const [query, setQuery] = useState("");
+  const [brand, setBrand] = useState(MODELS_INDEX_ALL_BRANDS);
+  const [sort, setSort] = useState("default");
+  const facts = useModelsIndexFacts();
+  const search = query.trim().toLowerCase();
+  const selectedSort = MODELS_INDEX_SORTS.find((option) => option.value === sort) || MODELS_INDEX_SORTS[0];
+  // Сколько обзоров у каждой марки — числом рядом с маркой в списке выбора.
+  const brandCounts = useMemo(() => {
+    const counts = new Map([[MODELS_INDEX_ALL_BRANDS, MODEL_PAGES.length]]);
+    for (const modelPage of MODEL_PAGES) counts.set(modelPage.brand, (counts.get(modelPage.brand) || 0) + 1);
+    return counts;
+  }, []);
+  const found = useMemo(() => {
+    const matches = MODEL_PAGES.filter(
+      (modelPage) =>
+        (brand === MODELS_INDEX_ALL_BRANDS || modelPage.brand === brand) &&
+        (!search || `${modelPage.name} ${modelPage.brand} ${modelPage.tagline} ${modelPage.teaser}`.toLowerCase().includes(search)),
+    );
+    if (sort === "default") return matches;
+    if (sort === "name_asc") return [...matches].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    const option = MODELS_INDEX_SORTS.find((item) => item.value === sort);
+    if (!option?.field) return matches;
+    // Модели, по которым каталог ещё не ответил, уходят в конец: иначе они
+    // вставали бы в начало как «ноль машин» и «нулевая цена».
+    const rank = (modelPage) => Number(facts[modelPage.slug]?.[option.field]) || null;
+    return [...matches].sort((a, b) => {
+      const left = rank(a);
+      const right = rank(b);
+      if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
+      return option.direction === "asc" ? left - right : right - left;
+    });
+  }, [brand, search, sort, facts]);
+  return (
+    <main className="model-page">
+      <div className="model-page-reading">
+      <div className="model-page-body page-width">
+        <section className="model-page-hero">
+          <div className="model-page-hero-copy">
+            <h1>{MODELS_INDEX.h1}</h1>
+            <p>{MODELS_INDEX.lead}</p>
+          </div>
+        </section>
+      </div>
+      <div className="model-page-body page-width">
+        <article className="model-page-article">
+          <section>
+            <h2>{MODELS_INDEX.listTitle}</h2>
+            <div className="select-search models-index-search">
+              <MagnifyingGlass size={20} />
+              <input
+                type="search"
+                value={query}
+                placeholder="Поиск по моделям: Tesla, кроссовер, гибрид…"
+                aria-label="Поиск по обзорам моделей"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              {query && (
+                <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => setQuery("")}>
+                  <X size={14} weight="bold" />
+                </button>
+              )}
+            </div>
+            {/* Под поиском: слева выбор марки, справа сортировка. */}
+            <div className="models-index-controls">
+              <SelectField className="models-index-select" label="Марка" value={brand} options={MODELS_INDEX_BRANDS} onChange={setBrand} optionCounts={brandCounts} searchable />
+              <SelectField
+                className="models-index-select models-index-select-sort"
+                label="Сортировка"
+                value={selectedSort.label}
+                options={MODELS_INDEX_SORTS.map((option) => option.label)}
+                onChange={(label) => setSort(MODELS_INDEX_SORTS.find((option) => option.label === label)?.value || "default")}
+              />
+            </div>
+            {found.length ? (
+              <div className="models-index-list">
+                {found.map((modelPage) => (
+                  <AppLink key={modelPage.slug} href={modelPage.path} navigate={navigate}>
+                    <div className="models-index-photo">
+                      {facts[modelPage.slug]?.image && <img src={facts[modelPage.slug].image} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, facts[modelPage.slug].imageFull)} />}
+                    </div>
+                    <div className="models-index-copy">
+                      <strong>{modelPage.name}</strong>
+                      <p>{modelPage.teaser}</p>
+                    </div>
+                  </AppLink>
+                ))}
+              </div>
+            ) : (
+              <p className="catalog-message">Ничего не нашлось. Попробуйте другую марку, тип кузова или «гибрид».</p>
+            )}
+          </section>
+        </article>
+      </div>
+      {/* Общий текст о китайском рынке стоит после списка обзоров: сначала человек
+          видит, что вообще есть, и только потом читает объяснения. */}
+      <div className="model-page-body page-width">
+        <article className="model-page-article">
+          {MODELS_INDEX.sections.map((section) => (
+            <ModelPageSection key={section.title} section={section} />
+          ))}
+        </article>
+      </div>
+      </div>
+      <ModelPagePromo navigate={navigate} />
+    </main>
+  );
+}
+
+function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
+  const carsState = useModelPageCars(modelPage);
+  const { total } = carsState;
+  const catalogTarget = modelPageCatalogHref(modelPage);
+  // Текст разрываем примерно посередине: между половинами встаёт рекламный блок.
+  const splitAt = Math.ceil(modelPage.sections.length / 2);
+  const firstSections = modelPage.sections.slice(0, splitAt);
+  const restSections = modelPage.sections.slice(splitAt);
+  // Шаг назад по истории работает, только если на страницу пришли с другой страницы
+  // сайта. По прямой ссылке из поиска или мессенджера возвращаться некуда, поэтому
+  // ведём в каталог, уже отфильтрованный по этой модели.
+  const goBack = () =>
+    window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : navigate(catalogTarget);
+  // Клик по машине раскрывает быстрый просмотр — как в каталоге и на главной. Если
+  // он выключен или экран узкий, открывается полная страница автомобиля.
+  const galleryCars = useModelPageGalleryCars(modelPage);
+  const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
+  const openCar = (car) => {
+    if (openQuickView(car)) return;
+    navigate(carHref(car));
+  };
+  return (
+    <main className="model-page">
+      {/* Всё, что читают, лежит в одной дорожке: кружок «назад» едет рядом с текстом
+          до самого конца статьи и уходит только на большом каталоге внизу. */}
+      <div className="model-page-reading">
+        <div className="model-page-back-rail">
+          <button type="button" className="model-page-back" aria-label="Назад" onClick={goBack}>
+            <ArrowLeft size={24} />
+          </button>
+        </div>
+      {/* Мозаика фотографий стоит выше блока с текстом и вне него. */}
+      <ModelPageGallery cars={galleryCars} onOpenCar={openCar} />
+      <div className="model-page-body page-width">
+        <section className="model-page-hero">
+          <div className="model-page-hero-copy">
+            <h1>{modelPage.h1}</h1>
+            <p>{modelPage.lead}</p>
+            <div className="info-actions">
+              <AppLink className="primary" href={catalogTarget} navigate={navigate}>
+                {total ? `Смотреть ${total} в наличии` : "Смотреть в наличии"} <ArrowRight size={18} />
+              </AppLink>
+            </div>
+          </div>
+        </section>
+        <article className="model-page-article">
+          <div className="model-page-intro">
+            {modelPage.intro.map((text) => (
+              <p key={text}>{text}</p>
+            ))}
+          </div>
+          {/* Полоса главных цифр разбивает текст сразу после вступления: то, за чем
+              обычно и приходят, видно не вчитываясь. */}
+          {modelPage.stats && (
+            <div className="model-page-numbers">
+              {modelPage.stats.map((stat) => (
+                <div key={stat.label}>
+                  <strong>{stat.value}</strong>
+                  <span>{stat.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+      </div>
+      {/* Лента машин разрывает текст после вступления: дальше идут подробности,
+          и посетителю полезно сначала увидеть, что вообще есть в наличии. */}
+      <ModelPageCars modelPage={modelPage} carsState={carsState} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpenCar={openCar} />
+      <div className="model-page-body page-width">
+        <article className="model-page-article">
+          {firstSections.map((section) => (
+            <ModelPageSection key={section.title} section={section} />
+          ))}
+        </article>
+      </div>
+      {/* Реклама сервиса в разрыве текста: человек уже читает про модель, самое
+          время показать, как её вообще заказывают. */}
+      <ModelPagePromo navigate={navigate} />
+      <div className="model-page-body page-width">
+        <article className="model-page-article">
+          {restSections.map((section) => (
+            <ModelPageSection key={section.title} section={section} />
+          ))}
+          {modelPage.versions && (
+            <section className="model-page-versions">
+              <h2>{modelPage.versions.title}</h2>
+              {/* Вместо таблицы — карточки: первая ячейка строки становится
+                  заголовком, остальные читаются как «свойство — значение». Цены в
+                  юанях дополняем примерным пересчётом в доллары. */}
+              <div className="model-page-versions-cards">
+                {modelPage.versions.rows.map((row) => (
+                  <div key={row.join("-")}>
+                    <strong>{row[0]}</strong>
+                    <dl>
+                      {modelPage.versions.columns.slice(1).map((column, index) => {
+                        const value = row[index + 1];
+                        // Цену показываем только в долларах: юани для покупателя
+                        // из Минска ничего не значат.
+                        return (
+                          <div key={column}>
+                            <dt>{column}</dt>
+                            <dd>{yuanToUsdAbout(value) || value}</dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </div>
+                ))}
+              </div>
+              <p className="model-page-versions-note">{modelPage.versions.note}</p>
+            </section>
+          )}
+        </article>
+      </div>
+      <ModelPageFaq modelPage={modelPage} />
+      </div>
+      <ModelPageCatalog modelPage={modelPage} carsState={carsState} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpenCar={openCar} quickViewToggle={quickViewToggle} />
+      <p className="model-page-disclaimer page-width">{modelPage.disclaimer}</p>
+      {quickViewModal}
+    </main>
+  );
+}
+
+// Блок в карточке машины: слева фото этой же машины, справа короткое превью модели
+// и переход на её страницу. Если превью в конфиге не задано, показываем первый абзац
+// текста страницы. Фото берём из объявления — то же, что открывает галерею выше.
+function ModelIntroCard({ modelPage, car, navigate }) {
+  const preview = imageSource(car.image || car.images?.[0] || null, IMAGE_WIDTH_TILE);
+  // Блок ведёт на страницу модели. Если посетитель как раз оттуда и пришёл — или
+  // читает карточку в быстром просмотре, не уходя со страницы модели, — предлагать
+  // ему вернуться туда же незачем: блок просто не показываем.
+  if (window.history.state?.fromPath === modelPage.path || currentAppPath() === modelPage.path) return null;
+  return (
+    <section className={`model-intro${preview ? " has-photo" : ""}`} aria-labelledby="model-intro-title">
+      {preview && (
+        <div className="model-intro-photo">
+          <img src={preview} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, car.image || car.images?.[0])} />
+        </div>
+      )}
+      <div className="model-intro-body">
+        <div className="model-intro-heading">
+          <span className="info-eyebrow">О модели</span>
+          <h2 id="model-intro-title">{modelPage.name}</h2>
+        </div>
+        <div className="model-intro-text">
+          <p>{modelPage.teaser || modelPage.intro[0]}</p>
+        </div>
+        <AppLink className="primary model-intro-more" href={modelPage.path} navigate={navigate} aria-label={`Подробнее о модели ${modelPage.name}`}>
+          Подробнее
+        </AppLink>
+      </div>
     </section>
   );
 }
@@ -3921,7 +4596,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
               aria-label={`Перейти к фото ${index + 1}`}
               aria-current={activeIndex === index ? "true" : undefined}
             >
-              <img src={imageSource(image)} alt="" loading={index > 8 ? "lazy" : "eager"} />
+              <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt="" loading={index > 8 ? "lazy" : "eager"} onError={(event) => retryWithFullImage(event, image)} />
             </button>
           ))}
         </aside>
@@ -4043,7 +4718,7 @@ function VehicleGallery({ car }) {
         <div className="gallery-thumbs" ref={thumbsRef}>
           {images.map((image, index) => (
             <button key={`${image}-${index}`} className={active === index ? "active" : ""} onMouseEnter={() => selectImage(index)} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}>
-              <img src={imageSource(image)} alt="" loading="lazy" />
+              <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, image)} />
             </button>
           ))}
         </div>
@@ -4522,12 +5197,15 @@ function CopyLinkButton({ car }) {
   );
 }
 
-function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false }) {
+function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false, onOpenOrder = null }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [availabilityCtaVisible, setAvailabilityCtaVisible] = useState(false);
   const availabilityCtaRef = useRef(null);
+  // По этой машине заказ уже создан — тогда кнопка не заводит второй, а ведёт в кабинет.
+  const orderedListings = useOrderedListings();
+  const inOrder = orderedListings.has(listingNumber(car.id));
   useEffect(() => {
     if (car) trackEvent("vehicle_view", { listingId:car.id, listingTitle:car.title });
   }, [car?.id]);
@@ -4545,12 +5223,22 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // Кнопка заводит заказ: машину запоминаем, кабинет создаёт заказ сам.
   // Неавторизованных на /account встречает окно входа, ожидание переживает его.
   const requestAvailability = () => {
+    // Машина уже в заказе — заводить второй не нужно. Обычно ведём в кабинет, но если
+    // карточку и открыли из самого заказа, идти некуда: просто закрываем превью.
+    if (inOrder) {
+      if (onOpenOrder) onOpenOrder();
+      else navigate("/account");
+      return;
+    }
     trackEvent("availability_click", { listingId:car.id, listingTitle:car.title });
     window.localStorage.setItem(pendingOrderKey, car.id);
     navigate("/account");
   };
   const favoriteHint = favorite ? "Удалить из избранного" : "Добавить в избранное";
   const quickInfo = buildVehicleQuickInfo(car);
+  // Блок «О модели» есть только у моделей с описанной страницей; у остальных машин
+  // карточка выглядит как раньше.
+  const modelPage = modelPageForCar(car);
   // Цвет заполнен не у всех источников — без значения строка не показывается.
   const specs = [
     [CalendarBlank, "Год", car.year],
@@ -4623,6 +5311,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             </section>
           )}
           <TechnicalSpecs car={car} />
+          {modelPage && <ModelIntroCard modelPage={modelPage} car={car} navigate={navigate} />}
           <aside className="source-card detail-source-card">
             <small>Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</small>
           </aside>
@@ -4711,8 +5400,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 </div>
               </div>
             </section>
-            <button ref={availabilityCtaRef} className="primary report-order-cta" onClick={requestAvailability}>
-              Уточнить актуальность авто
+            <button ref={availabilityCtaRef} className={`primary report-order-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
+              {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
             </button>
           </aside>
           <ListingIdRow car={car} />
@@ -4720,8 +5409,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
       </div>
       {floatingCta && (
         <div className={`detail-floating-availability${availabilityCtaVisible ? " is-hidden" : ""}`} aria-hidden={availabilityCtaVisible}>
-          <button className="primary" type="button" onClick={requestAvailability} tabIndex={availabilityCtaVisible ? -1 : 0}>
-            Уточнить актуальность авто
+          <button className={`primary${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={availabilityCtaVisible ? -1 : 0}>
+            {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
           </button>
         </div>
       )}
@@ -4768,7 +5457,7 @@ function useQuickViewCar(listed, apiMode) {
   return detailed || listed;
 }
 
-function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpenFull, onClose }) {
+function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpenFull, onClose, onOpenOrder = null }) {
   const closeRef = useRef(null);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -4796,7 +5485,7 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
           </button>
         </header>
         <div className="quick-view-scroll">
-          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch />
+          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch onOpenOrder={onOpenOrder} />
         </div>
       </section>
     </div>
@@ -4822,12 +5511,40 @@ function QuickViewToggle({ checked, onChange }) {
 
 // Быстрый просмотр открывается с карточек главной, каталога и похожих авто.
 // В избранном его нет: там карточку открывают, чтобы работать с ней целиком.
-function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate }) {
+// `orderOnScreen` — превью открыли с экрана самого заказа: зелёная кнопка там просто
+// закрывает модалку, потому что заказ уже под ней.
+function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate, orderOnScreen = false }) {
   const desktop = useDesktopViewport();
   const [enabled, setEnabled] = useState(readQuickViewEnabled);
   const [listed, setListed] = useState(null);
   const car = useQuickViewCar(listed, apiMode);
-  const close = useCallback(() => setListed(null), []);
+  // Превью закрыли сами — метку на записи истории снимаем, иначе следующий
+  // возврат на этот экран открыл бы модалку снова.
+  const close = useCallback(() => {
+    setListed(null);
+    patchHistoryState({ quickViewCar: null });
+  }, []);
+  // Из превью уходят по ссылкам внутрь сайта — на страницу модели, в кабинет.
+  // Запоминаем машину и адрес выдачи: «назад» вернёт этот же экран, и превью на
+  // нём откроется снова.
+  const navigateFromQuickView = (target, options) => {
+    if (listed) {
+      patchHistoryState({ quickViewCar: listed.id });
+      saveQuickViewReturn({ path: `${window.location.pathname}${window.location.search}`, car: listed });
+    }
+    navigate(target, options);
+  };
+  // Вернулись назад на ту же выдачу — открываем то же превью. Метка живёт на
+  // записи истории, поэтому свежий заход по такому же адресу модалку не поднимает.
+  const restoreChecked = useRef(false);
+  useEffect(() => {
+    if (restoreChecked.current || !desktop || !enabled) return;
+    restoreChecked.current = true;
+    const stored = readQuickViewReturn();
+    if (!stored || stored.car.id !== window.history.state?.quickViewCar) return;
+    if (stored.path !== `${window.location.pathname}${window.location.search}`) return;
+    setListed(stored.car);
+  }, [desktop, enabled]);
   const changeEnabled = (value) => {
     setEnabled(value);
     window.localStorage.setItem(quickViewKey, value ? "on" : "off");
@@ -4835,8 +5552,11 @@ function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate }) {
   };
   // Стрелка у названия уводит на полную страницу: модалку закрываем, иначе она
   // осталась бы висеть поверх только что открытой карточки.
+  // Возврат к превью здесь не нужен: карточку и так открыли целиком, и «назад»
+  // со страницы машины ведёт к выдаче, а не к модалке того же автомобиля.
   const openFullView = (href) => {
     setListed(null);
+    patchHistoryState({ quickViewCar: null });
     navigate(href);
   };
   // Окно сузилось до мобильной раскладки — быстрый просмотр закрываем.
@@ -4853,7 +5573,7 @@ function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate }) {
     openQuickView,
     // Свитчер нужен только там, где быстрый просмотр вообще работает.
     quickViewToggle: desktop ? <QuickViewToggle checked={enabled} onChange={changeEnabled} /> : null,
-    quickViewModal: car ? <VehicleQuickViewModal car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpenFull={openFullView} onClose={close} /> : null,
+    quickViewModal: car ? <VehicleQuickViewModal car={car} navigate={navigateFromQuickView} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpenFull={openFullView} onClose={close} onOpenOrder={orderOnScreen ? close : null} /> : null,
   };
 }
 
@@ -4987,7 +5707,7 @@ function OrderDraft({ car, navigate }) {
         <DataTag type="pending" />
       </div>
       <section className="order-car-summary">
-        <img src={imageSource(car.image)} alt={car.title} />
+        <img src={imageSource(car.image, IMAGE_WIDTH_TILE)} alt={car.title} />
         <div>
           <h2>{car.title}</h2>
           <p>
@@ -5838,6 +6558,13 @@ const readLocalOrders = (userId) => {
 };
 const storeLocalOrders = (userId, orders) => window.localStorage.setItem(accountOrdersKey(userId), JSON.stringify(orders));
 const localOrderNumber = (id, createdAt) => `EV-${new Date(createdAt).getFullYear()}-${String(id).padStart(6, "0")}`;
+// В карточке заказа номер показываем коротко — «№000045» вместо «Заказ № EV-2026-000045».
+// Приставка и год у всех заказов одинаковые и различают их только цифры в конце; полный
+// номер остаётся в окне удаления и в подписи раздела для программ чтения с экрана.
+const shortOrderNumber = (orderNumber) => {
+  const tail = String(orderNumber || "").match(/(\d+)\s*$/);
+  return tail ? `№${tail[1]}` : String(orderNumber || "");
+};
 const createLocalOrder = (userId, car) => {
   const orders = readLocalOrders(userId);
   const existing = orders.find((order) => order.listingId === car.id);
@@ -6121,7 +6848,7 @@ const activeOrderStage = (order) => {
 function OrderStageRow({ number:stageNumber, title, description, open, locked, done, fixed = false, onToggle, children }) {
   const heading = (
     <>
-      <b>{done ? <Check size={20} weight="bold" /> : `${stageNumber}.`}</b>
+      <b>{done ? <Check size={23} weight="bold" /> : stageNumber}</b>
       <span><strong>{title}</strong><small>{description}</small></span>
       {!fixed ? locked ? <LockKey size={20} /> : <CaretDown size={21} className="customer-order-stage-caret" /> : null}
     </>
@@ -6145,16 +6872,15 @@ function OrderRemovalModal({ carTitle, orderNumber, saving, error, onCancel, onC
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !saving && onCancel()}>
-      <section className="lead-modal order-removal-modal" role="dialog" aria-modal="true" aria-labelledby="order-removal-title" aria-describedby="order-removal-description">
+      <section className="lead-modal order-removal-modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="order-removal-title" aria-describedby="order-removal-description">
         <button className="modal-close" type="button" onClick={onCancel} disabled={saving} aria-label="Закрыть"><X size={19} /></button>
         <div className="order-removal-icon"><Trash size={25} weight="duotone" /></div>
-        <span>Удаление из заказа</span>
         <h2 id="order-removal-title">Убрать автомобиль?</h2>
         <p id="order-removal-description"><b>{carTitle}</b> будет удалён из заказа № {orderNumber}. Прогресс по проверке объявления, осмотру, договору и оплате также будет удалён.</p>
         {error && <div className="auth-error order-removal-error" role="alert">{error}</div>}
         <form className="order-removal-actions" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}>
           <button className="secondary" type="button" onClick={onCancel} disabled={saving}>Отмена</button>
-          <button className="danger-button solid" type="submit" disabled={saving}><Trash size={18} /> {saving ? "Удаляем…" : "Убрать автомобиль"}</button>
+          <button className="danger-button solid" type="submit" disabled={saving}><Trash size={18} /> {saving ? "Удаляем…" : "Убрать авто"}</button>
         </form>
       </section>
     </div>
@@ -6191,7 +6917,7 @@ function AccountRemovalModal({ pending, error, onCancel, onConfirm }) {
   );
 }
 
-function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
+function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, authBackend, navigate }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -6201,6 +6927,34 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   const [removalOpen, setRemovalOpen] = useState(false);
   const [removalError, setRemovalError] = useState("");
   const [availabilityComment, setAvailabilityComment] = useState("");
+  const [selectedOrderId, setSelectedOrderId] = useState("");
+  // Машин в заказе может быть несколько: показываем выбранную, по умолчанию свежую.
+  const order = orders.find((item) => item.id === selectedOrderId) || orders[0] || null;
+  // Заголовок карточки открывает быстрый просмотр — тот же, что в каталоге.
+  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate, orderOnScreen:true });
+  // Кабинет — единственное место, где заказы заводятся и удаляются, поэтому именно он
+  // сообщает остальному приложению, по каким машинам заказ уже есть.
+  const publishOrderedListings = useContext(SetOrderedListingsContext);
+  const [previewCar, setPreviewCar] = useState(null);
+  const previewListingId = order?.listingId || null;
+  // Карточку для просмотра готовим заранее: модалка показывает полную страницу
+  // автомобиля, а в заказе хранится только короткая выжимка.
+  useEffect(() => {
+    if (!previewListingId || previewCar?.id === previewListingId) return undefined;
+    const known = cars.find((item) => item.id === previewListingId);
+    if (known && !known._summary) {
+      setPreviewCar(known);
+      return undefined;
+    }
+    const controller = new AbortController();
+    const request = apiMode !== false
+      ? fetch(`/api/cars/${encodeURIComponent(previewListingId)}`, { signal:controller.signal }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("not found"))))
+      : loadStaticCar(previewListingId, controller.signal);
+    request
+      .then((loaded) => setPreviewCar(normalizeImportedCar(loaded)))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [apiMode, cars, previewCar, previewListingId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -6259,8 +7013,15 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
     return () => { cancelled = true; };
   }, [authBackend, cars, user.id]);
 
+  // Список машин в заказе держим в актуальном состоянии для всего приложения: заказ
+  // могли только что создать или убрать, и кнопка на карточке обязана это отразить.
+  // Пока заказы грузятся, ничего не публикуем — иначе кнопка на миг стала бы обычной.
+  useEffect(() => {
+    if (!loading) publishOrderedListings?.(orders);
+  }, [loading, orders, publishOrderedListings]);
+
   const applyAction = async (action, values = {}) => {
-    const current = orders[0];
+    const current = order;
     if (!current || saving) return;
     setSaving(true);
     setError("");
@@ -6286,7 +7047,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   };
 
   const removeOrder = async () => {
-    const current = orders[0];
+    const current = order;
     if (!current || saving) return;
     setSaving(true);
     setError("");
@@ -6310,6 +7071,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
         setOrders((values) => values.filter((order) => order.id !== current.id));
       }
       setExpandedStage(1);
+      setSelectedOrderId("");
       setRemovalOpen(false);
     } catch (removeError) {
       console.error("[customer-order] removal failed", { orderId:current.id, source:localMode ? "local" : "server", error:removeError.message });
@@ -6319,8 +7081,17 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
     }
   };
 
+  // Переключение машины: у каждой свой прогресс, поэтому вместе с выбором
+  // подтягиваем её активный этап и комментарий.
+  const chooseOrder = (next) => {
+    if (!next || next.id === order?.id) return;
+    setSelectedOrderId(next.id);
+    setExpandedStage(activeOrderStage(next));
+    setAvailabilityComment(next.availabilityComment || "");
+    setError("");
+  };
+
   if (loading) return <section className="account-order-loading" aria-live="polite">Загружаем ваш заказ…</section>;
-  const order = orders[0];
   if (!order) return (
     <section className="account-panel account-empty">
       <div className="account-panel-title"><div><span>Мои заказы</span><h2>Начните с подходящего автомобиля</h2></div><ClipboardText size={27} weight="duotone" /></div>
@@ -6337,27 +7108,43 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
   const contractUnlocked = order.contractStatus !== "locked";
   const contractDone = order.contractStatus === "confirmed";
   const paymentUnlocked = order.paymentStatus !== "locked";
-  const responseMethods = Array.isArray(order.contactMethods) && order.contactMethods.length ? order.contactMethods : user.preferredContact === "telegram" ? ["telegram"] : ["phone"];
-  const responsePhone = order.contactPhone || formatAccountPhone(user.phone);
-  const responseLabels = responseMethods.map((method) => ({ phone:"по телефону", viber:"в Viber", telegram:"в Telegram" })[method]).filter(Boolean);
-  const responseDestination = responseLabels.length > 1 ? `${responseLabels.slice(0,-1).join(", ")} или ${responseLabels.at(-1)}` : responseLabels[0] || "по телефону";
-  const responseText = `Ответим ${responseDestination} — ${responsePhone}.`;
   const requestOrderRemoval = (event) => {
     event.currentTarget.closest("details")?.removeAttribute("open");
     setRemovalError("");
     setRemovalOpen(true);
   };
+  // Быстрый просмотр работает только на широком экране и при включённом свитчере;
+  // в остальных случаях ссылка открывает страницу автомобиля, как раньше.
+  const openCarPreview = (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
+    if (!previewCar || previewCar.id !== order.listingId) return;
+    if (openQuickView(previewCar)) event.preventDefault();
+  };
+  // Одинаковые названия встречаются у разных объявлений — такие различаем номером заказа.
+  const orderLabels = orders.map((item, index) => {
+    const title = item.car.title || "Автомобиль";
+    const twin = orders.some((other, otherIndex) => otherIndex !== index && (other.car.title || "Автомобиль") === title);
+    return twin ? `${title} · ${item.orderNumber}` : title;
+  });
+  const widestOrderLabel = orderLabels.reduce((longest, label) => (label.length > longest.length ? label : longest), "");
   return (
     <section className="customer-order" aria-label={`Заказ ${order.orderNumber}`}>
+      <div className="customer-order-picker">
+        <SelectField
+          className="customer-order-select"
+          label="Автомобиль в заказе"
+          value={orderLabels[orders.indexOf(order)]}
+          options={orderLabels}
+          onChange={(label) => chooseOrder(orders[orderLabels.indexOf(label)])}
+        />
+        {/* Невидимая мерка: ширину списка задаёт самое длинное название, иначе
+            поле дёргалось бы при каждом переключении машины. */}
+        <span className="customer-order-picker-sizer" aria-hidden="true">{widestOrderLabel}</span>
+      </div>
       <div className="customer-order-car">
-        <img src={order.car.image} alt={order.car.title} />
+        <img src={imageSource(order.car.image, IMAGE_WIDTH_TILE)} alt={order.car.title} onError={(event) => retryWithFullImage(event, order.car.image)} />
         <div className="customer-order-car-copy">
-          <div className="customer-order-car-heading"><span>Выбранный автомобиль</span><h2><a href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer">{order.car.title}</a></h2><p>Заказ № {order.orderNumber}</p></div>
-          <div className="customer-order-car-meta">
-            {order.car.year ? <span>{order.car.year} год</span> : null}
-            {Number.isFinite(order.car.mileage) ? <span>{number(order.car.mileage)} км</span> : null}
-            {order.car.type ? <span>{order.car.type}</span> : null}
-          </div>
+          <div className="customer-order-car-heading"><h2><a href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer" onClick={openCarPreview}>{order.car.title}</a></h2><p>{shortOrderNumber(order.orderNumber)}</p></div>
           {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b>≈ {number(order.car.estimatedTotalUsd)} USD</b></div> : null}
         </div>
         <div className="customer-order-card-controls">
@@ -6365,32 +7152,34 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
             <summary aria-label="Действия с автомобилем"><DotsThreeVertical size={23} weight="bold" /></summary>
             <div><button type="button" disabled={saving} onClick={requestOrderRemoval}><Trash size={17} /> Убрать автомобиль</button></div>
           </details>
-          <a className="customer-order-card-open" href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer" aria-label={`Открыть карточку ${order.car.title} в новой вкладке`}><span>Карточка автомобиля</span><ArrowRight size={24} /></a>
         </div>
       </div>
       <div className="customer-order-stages">
         <OrderStageRow number={1} title="Проверка объявления" description="Уточним у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
-          {!availabilityRequested ? (
-            <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); applyAction("request_availability_check", { comment: availabilityComment.trim() }); }}>
+          {/* После отправки запроса вёрстка этапа не меняется: поле с комментарием и
+              кнопка просто перестают быть активными, а рядом с кнопкой встаёт статус. */}
+          <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); applyAction("request_availability_check", { comment: availabilityComment.trim() }); }}>
+            <div className="availability-check-block">
               <p>Перед осмотром свяжемся с продавцом и подтвердим:</p>
               <ul className="availability-check-list">
                 <li><CheckCircle size={20} weight="fill" /> автомобиль ещё в продаже;</li>
                 <li><CheckCircle size={20} weight="fill" /> цена и комплектация не изменились;</li>
                 <li><CheckCircle size={20} weight="fill" /> продавец готов к осмотру и оформлению сделки.</li>
               </ul>
-              <label className="availability-comment-field">
-                <span>Комментарий менеджеру <small>необязательно</small></span>
-                <textarea value={availabilityComment} onChange={(event) => setAvailabilityComment(event.target.value)} maxLength={600} placeholder="Например: уточнить возможность торга, состояние батареи или комплект зимних колёс" />
-                <small>Можно оставить поле пустым — базовые вопросы мы зададим в любом случае.</small>
-              </label>
-              <button className="primary" type="submit" disabled={saving}>Уточнить актуальность</button>
-            </form>
-          ) : (
-            <div className="availability-requested">
-              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>{availabilityConfirmed ? "Автомобиль актуален." : "Запрос отправлен."}</b><span>{availabilityConfirmed ? "Проверка завершена — теперь можно выбрать осмотр." : `Проверим объявление и сообщим результат. ${responseText}`}</span></p></div>
-              {order.availabilityComment ? <p><b>Ваш комментарий:</b> {order.availabilityComment}</p> : null}
             </div>
-          )}
+            {/* После отправки пустое поле не оставляем: показывать нечего. */}
+            {(!availabilityRequested || availabilityComment.trim()) && (
+              <label className="availability-comment-field">
+                <textarea value={availabilityComment} onChange={(event) => setAvailabilityComment(event.target.value)} maxLength={600} disabled={availabilityRequested} aria-label="Комментарий менеджеру" placeholder="Комментарий менеджеру" />
+              </label>
+            )}
+            <div className="availability-check-actions">
+              <button className="primary" type="submit" disabled={saving || availabilityRequested}>Уточнить актуальность</button>
+              {availabilityRequested && (
+                <p className="availability-check-status"><CheckCircle size={20} weight="fill" />{availabilityConfirmed ? "Актуальность подтверждена." : "Запрос отправлен, скоро свяжемся."}</p>
+              )}
+            </div>
+          </form>
         </OrderStageRow>
         <OrderStageRow number={2} title="Осмотр автомобиля" description="Проверим состояние автомобиля перед покупкой." open={expandedStage === 2} locked={!inspectionUnlocked} done={inspectionDone} onToggle={() => setExpandedStage(expandedStage === 2 ? 0 : 2)}>
           {order.inspectionStatus === "decision" ? (
@@ -6418,6 +7207,7 @@ function CustomerOrdersPanel({ user, cars, authBackend, navigate }) {
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
       {removalOpen && <OrderRemovalModal carTitle={order.car.title} orderNumber={order.orderNumber} saving={saving} error={removalError} onCancel={() => { setRemovalOpen(false); setRemovalError(""); }} onConfirm={removeOrder} />}
+      {quickViewModal}
     </section>
   );
 }
@@ -6446,7 +7236,7 @@ function AccountLogoutModal({ pending, onCancel, onConfirm }) {
   );
 }
 
-function AccountPage({ user, cars, authBackend, navigate, onLogout, onSaveProfile, onDeleteAccount, pending }) {
+function AccountPage({ user, cars, apiMode, favorites, toggleFavorite, authBackend, navigate, onLogout, onSaveProfile, onDeleteAccount, pending }) {
   const [section, setSection] = useState("order");
   const [removalOpen, setRemovalOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -6507,7 +7297,7 @@ function AccountPage({ user, cars, authBackend, navigate, onLogout, onSaveProfil
             order panel replayed its fetch, so every switch flashed the loading
             row and the page height jumped. */}
         <div className="account-tabpanel" hidden={section !== "order"}>
-          <CustomerOrdersPanel user={user} cars={cars} authBackend={authBackend} navigate={navigate} />
+          <CustomerOrdersPanel user={user} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} />
         </div>
         <div className="account-tabpanel" hidden={section !== "profile"}>
           <form className="account-section profile-editor account-profile-section" onSubmit={saveProfile}>
@@ -6664,6 +7454,10 @@ export function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authPending, setAuthPending] = useState(false);
   const [authBackend, setAuthBackend] = useState("server");
+  // Заказы посетителя нужны не только в кабинете: на карточке уже заказанной машины
+  // кнопка меняется на «Добавлено в заказ». Держим здесь список её номеров.
+  const [orderedListings, setOrderedListings] = useState(EMPTY_ORDERED_LISTINGS);
+  const publishOrderedListings = useCallback((orders) => setOrderedListings(orderedListingsFrom(orders)), []);
   useEffect(() => {
     if (path !== "/analytics") trackEvent("page_view");
   }, [path]);
@@ -6744,6 +7538,27 @@ export function App() {
       });
     return () => { cancelled = true; };
   }, [authBackend, authLoading, user]);
+  // Заказы спрашиваем один раз на сессию: список машин в заказе меняется только когда
+  // посетитель сам заводит заказ, и тогда кабинет обновляет его через контекст.
+  // Гостю показывать нечего — список пустеет вместе с выходом из аккаунта.
+  useEffect(() => {
+    if (authLoading) return undefined;
+    if (!user) {
+      setOrderedListings(EMPTY_ORDERED_LISTINGS);
+      return undefined;
+    }
+    let cancelled = false;
+    const loadLocalOrders = () => { if (!cancelled) publishOrderedListings(readLocalOrders(user.id)); };
+    if (authBackend === "local") {
+      loadLocalOrders();
+      return () => { cancelled = true; };
+    }
+    fetch("/api/account/orders", { cache:"no-store", credentials:"same-origin" })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("orders_load_failed"))))
+      .then((payload) => { if (!cancelled) publishOrderedListings(payload.orders); })
+      .catch(loadLocalOrders);
+    return () => { cancelled = true; };
+  }, [authBackend, authLoading, publishOrderedListings, user]);
   useEffect(() => {
     if (authLoading) return undefined;
     let cancelled = false;
@@ -7205,6 +8020,11 @@ export function App() {
       <LegalPage navigate={navigate} kind="privacy" />
     ) : contentPath === "/terms" ? (
       <LegalPage navigate={navigate} kind="terms" />
+    ) : contentPath === MODELS_INDEX.path ? (
+      <ModelsIndexPage navigate={navigate} />
+    ) : findModelPage(contentPath) ? (
+      // Страница модели запрашивает свой срез каталога сама и не ждёт boot-запроса.
+      <ModelPage modelPage={findModelPage(contentPath)} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : null;
   const page =
     contentPath === "/analytics" ? (
@@ -7226,13 +8046,13 @@ export function App() {
         <p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p>
       </main>
     ) : showAccountFromAuthRoute ? (
-      <AccountPage user={user} cars={cars} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} />
+      <AccountPage user={user} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} />
     ) : contentPath === "/favorites" ? (
       <Favorites navigate={navigate} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} apiMode={apiMode} onUnavailableFavorites={pruneUnavailableFavorites} saving={Boolean(pendingFavorite) || !favoritesReady} />
     ) : contentPath === "/searches" ? (
       <SavedSearchesPage navigate={navigate} searches={savedSearches} onDelete={deleteSavedSearch} saving={Boolean(pendingSavedSearch) || !savedSearchesReady} apiMode={apiMode} cars={cars} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : contentPath === "/account" ? (
-      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : null
+      authLoading ? <main className="simple-page page-width"><span>Личный кабинет</span><h1>Проверяем аккаунт…</h1></main> : user ? <AccountPage user={user} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} /> : null
     ) : orderId ? (
       <OrderDraft car={findCarByListing(cars, orderId)} navigate={navigate} />
     ) : detailId ? (
@@ -7243,6 +8063,8 @@ export function App() {
   return (
     <CurrencyContext.Provider value={currency}>
      <SetCurrencyContext.Provider value={setCurrency}>
+     <OrderedListingsContext.Provider value={orderedListings}>
+     <SetOrderedListingsContext.Provider value={publishOrderedListings}>
       <ClientSeo path={path} car={findCarByListing(cars, detailId)} />
       <div className="app-content" aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
@@ -7273,6 +8095,8 @@ export function App() {
           redirectTo={pendingFavorite || path === "/favorites" ? "/favorites" : pendingSavedSearch || path === "/searches" ? "/searches" : "/account"}
         />
       )}
+     </SetOrderedListingsContext.Provider>
+     </OrderedListingsContext.Provider>
      </SetCurrencyContext.Provider>
     </CurrencyContext.Provider>
   );

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700;1,400&family=Manrope:wght@400;500;600;700;800&display=swap");
 :root {
   font-family:
     "Manrope",
@@ -10,6 +10,13 @@
   color: #17191c;
   background: var(--panel);
   font-synthesis: none;
+  /* Шрифт длинных текстов: Charis SIL — та же рисовка, что у Charter, но с
+     кириллицей. Georgia — запас, если Charis не загрузился. */
+  --font-article: "Charis SIL", Charter, "Bitstream Charter", Georgia, serif;
+  /* Насколько круглее рисуются углы. Единица — прежние скругления сайта; больше
+     единицы включается только там, где браузер умеет непрерывные углы (см. конец
+     файла). Одно число регулирует округлость всего сайта. */
+  --corner-scale: 1;
   --accent: #ee1c25;
   --accent-dark: #c9141d;
   --accent-soft: #fff0f1;
@@ -320,7 +327,7 @@ button {
   /* Чуть темнее var(--panel-soft): строка поиска должна читаться на белой странице. */
   background: #e9ebef;
   border: 0;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
 }
 .hero-search-field > svg {
   flex: 0 0 auto;
@@ -361,7 +368,7 @@ button {
   margin-right: -4px;
   padding: 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   cursor: pointer;
 }
 /* Фильтры инверсией к теме: в тёмной — белая кнопка с тёмной иконкой, в светлой
@@ -459,7 +466,7 @@ html[data-theme="dark"] .hero-search-clear {
   margin: 0;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--corner-scale));
   box-shadow: 0 18px 50px rgba(24, 27, 32, 0.1);
   text-align: left;
 }
@@ -474,7 +481,7 @@ html[data-theme="dark"] .hero-search-clear {
 }
 .type-tabs button {
   border: 0;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   padding: 8px 15px;
@@ -499,7 +506,7 @@ html[data-theme="dark"] .hero-search-clear {
   padding: 8px 34px 7px 13px;
   border: 0;
   background: var(--filter-field-bg);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   overflow: hidden;
 }
 .select-field > span {
@@ -527,7 +534,7 @@ html[data-theme="dark"] .hero-search-clear {
 .secondary,
 .invert-button {
   min-height: 50px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   border: 0;
   display: inline-flex;
   justify-content: center;
@@ -542,6 +549,22 @@ html[data-theme="dark"] .hero-search-clear {
 }
 .primary:hover {
   background: #dcc20d;
+}
+/* Машина уже в заказе: кнопка меняет смысл — не «уточнить актуальность», а «открыть
+   заказ», — поэтому и цвет другой, зелёный. В тёмной теме зелёный светлый, текст на
+   нём тёмный. */
+.primary.ordered-cta {
+  background: var(--green);
+  color: #ffffff;
+}
+.primary.ordered-cta:hover {
+  background: color-mix(in srgb, var(--green) 88%, #000000);
+}
+html[data-theme="dark"] .primary.ordered-cta {
+  color: var(--page);
+}
+html[data-theme="dark"] .primary.ordered-cta:hover {
+  background: color-mix(in srgb, var(--green) 88%, #ffffff);
 }
 /* Инверсия к фону панели: в светлой теме тёмная кнопка, в тёмной — белая. */
 .invert-button {
@@ -600,7 +623,7 @@ html[data-theme="dark"] .hero-search-clear {
   display: block;
   aspect-ratio: 1;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--surface);
   transition: box-shadow 0.18s ease;
 }
@@ -622,7 +645,7 @@ html[data-theme="dark"] .hero-search-clear {
 .useful-services-banner-slot {
   align-self: stretch;
   min-height: 0;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--surface);
 }
 .useful-service-card:hover {
@@ -634,7 +657,7 @@ html[data-theme="dark"] .hero-search-clear {
 .useful-service-card:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 5px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
 }
 .popular-brands {
   width: min(1040px, calc(100% - 48px));
@@ -660,7 +683,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 9px;
   padding: 0 18px;
   border: 0;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--corner-scale));
   background: var(--surface);
   font-size: 16px;
   font-weight: 800;
@@ -693,7 +716,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 13px;
   padding: 9px 6px;
   border: 0;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: transparent;
   font-size: 18px;
   font-weight: 600;
@@ -744,7 +767,7 @@ html[data-theme="dark"] .hero-search-clear {
    monogram rather than an approximated logo: a wrong mark reads as a mistake. */
 .brand-logo-fallback {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -764,7 +787,7 @@ html[data-theme="dark"] .hero-search-clear {
   align-items: center;
   gap: 13px;
   padding: 20px 22px;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .trust-strip > div + div {
@@ -778,7 +801,7 @@ html[data-theme="dark"] .hero-search-clear {
   width: 42px;
   height: 42px;
   flex: 0 0 42px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   color: var(--accent-dark);
   background: var(--panel);
   box-shadow: 0 1px 3px rgba(24, 27, 32, 0.06);
@@ -838,7 +861,7 @@ html[data-theme="dark"] .hero-search-clear {
 .featured-card {
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--panel);
   cursor: pointer;
   transition:
@@ -928,7 +951,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 58px;
   padding: 48px;
   border: 0;
-  border-radius: 24px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--header-control-bg);
 }
 .home-section-kicker {
@@ -976,7 +999,7 @@ html[data-theme="dark"] .hero-search-clear {
   min-width: 0;
   padding: 16px;
   border: 0;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
 }
 .home-step-topline {
@@ -989,7 +1012,7 @@ html[data-theme="dark"] .hero-search-clear {
   height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
@@ -1016,7 +1039,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 76px;
   margin-top: 92px;
   padding: 48px;
-  border-radius: 24px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--header-control-bg);
 }
 .home-faq-intro {
@@ -1038,7 +1061,7 @@ html[data-theme="dark"] .hero-search-clear {
 }
 .home-faq-item {
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 1px 3px rgba(24, 27, 32, 0.05);
 }
@@ -1133,7 +1156,7 @@ html[data-theme="dark"] .hero-search-clear {
 .filter-panel {
   padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .filter-title {
@@ -1189,7 +1212,7 @@ html[data-theme="dark"] .hero-search-clear {
   flex: 0 0 auto;
   padding: 0 14px;
   border: 0;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--model-chip-bg);
   color: var(--muted);
   font-size: 16px;
@@ -1220,7 +1243,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 6px;
   padding: 7px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: var(--panel);
   font-size: 16px;
 }
@@ -1242,7 +1265,7 @@ html[data-theme="dark"] .hero-search-clear {
 }
 .car-row:hover {
   border-top-color: transparent;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .car-row:hover + .car-row {
@@ -1260,7 +1283,7 @@ html[data-theme="dark"] .hero-search-clear {
 .car-row-image {
   position: relative;
   overflow: hidden;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--corner-scale));
   background: var(--surface);
 }
 .car-row-image img {
@@ -1279,7 +1302,7 @@ html[data-theme="dark"] .hero-search-clear {
   align-items: center;
   gap: 4px;
   padding: 5px 8px;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   color: #fff;
   background: rgba(14, 16, 19, 0.75);
   font-size: 16px;
@@ -1306,7 +1329,7 @@ html[data-theme="dark"] .hero-search-clear {
   display: inline-flex;
   align-items: center;
   padding: 5px 8px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   font-size: 16px;
   font-weight: 800;
   white-space: nowrap;
@@ -1358,7 +1381,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 5px;
   align-items: center;
   padding: 7px 9px;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: var(--surface);
   font-size: 15px;
   font-weight: 700;
@@ -1411,7 +1434,7 @@ html[data-theme="dark"] .hero-search-clear {
   top: 90px;
   padding: 22px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
 }
 .side-card h3 {
   margin: 15px 0 9px;
@@ -1446,7 +1469,7 @@ html[data-theme="dark"] .hero-search-clear {
   padding: 80px 30px;
   text-align: center;
   border: 1px dashed var(--line-strong);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   color: var(--muted);
 }
 .empty-state h3 {
@@ -1492,7 +1515,7 @@ html[data-theme="dark"] .hero-search-clear {
   justify-content: center;
   padding: 4px;
   border: 0;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--corner-scale));
   background: transparent;
   color: inherit;
 }
@@ -1530,7 +1553,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 11px;
   padding: 18px 20px 20px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
 }
 /* Текст заголовка и «Удалить поиск» стоят на одной строчной линии. */
@@ -1579,7 +1602,7 @@ html[data-theme="dark"] .hero-search-clear {
   flex: 0 0 auto;
   padding: 4px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: transparent;
   color: var(--accent-dark);
   font-size: 16px;
@@ -1607,11 +1630,11 @@ html[data-theme="dark"] .hero-search-clear {
 .saved-search-preview:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
 }
 .saved-search-preview-image {
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: var(--surface);
   aspect-ratio: 4 / 3;
 }
@@ -1623,7 +1646,7 @@ html[data-theme="dark"] .hero-search-clear {
   top: 8px;
   left: 8px;
   padding: 3px 7px;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: rgba(14, 16, 19, 0.75);
   color: #fff;
   font-size: 13px;
@@ -1642,7 +1665,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 10px;
   padding: 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: var(--surface);
   color: var(--ink);
   aspect-ratio: 4 / 3;
@@ -1703,7 +1726,7 @@ html[data-theme="dark"] .hero-search-clear {
     width: 40px;
     height: 40px;
     padding: 0;
-    border-radius: 12px;
+    border-radius: calc(12px * var(--corner-scale));
     background: var(--surface);
   }
   .saved-search-delete > svg {
@@ -1814,7 +1837,7 @@ html[data-theme="dark"] .hero-search-clear {
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 13px;
+  border-radius: calc(13px * var(--corner-scale));
   background: var(--header-control-bg);
   color: var(--ink);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
@@ -1846,7 +1869,7 @@ html[data-theme="dark"] .hero-search-clear {
   position: relative;
   height: 495px;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--surface);
 }
 .gallery-panel > img {
@@ -1861,7 +1884,7 @@ html[data-theme="dark"] .hero-search-clear {
   display: flex;
   align-items: center;
   gap: 6px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   padding: 8px 10px;
   background: rgba(17, 19, 22, 0.78);
   color: #fff;
@@ -1877,14 +1900,14 @@ html[data-theme="dark"] .hero-search-clear {
 }
 .gallery-badges b {
   padding: 6px 9px;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: rgba(255, 255, 255, 0.9);
   font-size: 16px;
 }
 .order-card {
   padding: 23px;
   border: 1px solid var(--line);
-  border-radius: 15px;
+  border-radius: calc(15px * var(--corner-scale));
   align-self: start;
 }
 .china-price,
@@ -1997,7 +2020,7 @@ html[data-theme="dark"] .hero-search-clear {
   align-items: center;
   gap: 5px;
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: #eaf7f0;
   color: var(--green);
   font-size: 16px;
@@ -2128,7 +2151,7 @@ html[data-theme="dark"] .hero-search-clear {
 }
 .skeleton-line {
   height: 17px;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--corner-scale));
 }
 .skeleton-line-title {
   height: 22px;
@@ -2259,7 +2282,7 @@ html[data-theme="dark"] .hero-search-clear {
 .about-statement {
   padding: 28px;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 24px 70px rgba(24, 27, 32, 0.09);
 }
@@ -2276,7 +2299,7 @@ html[data-theme="dark"] .hero-search-clear {
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
   font-size: 16px;
@@ -2318,7 +2341,7 @@ html[data-theme="dark"] .hero-search-clear {
   grid-template-columns: repeat(3, 1fr);
   margin-bottom: 45px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
 }
 .info-proof > div {
   display: flex;
@@ -2385,7 +2408,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 18px;
   align-items: center;
   padding: 20px 24px;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .process-number {
@@ -2400,7 +2423,7 @@ html[data-theme="dark"] .hero-search-clear {
   place-items: center;
   width: 48px;
   height: 48px;
-  border-radius: 13px;
+  border-radius: calc(13px * var(--corner-scale));
   color: var(--accent-dark);
 }
 .process-icon {
@@ -2436,7 +2459,7 @@ html[data-theme="dark"] .hero-search-clear {
 .decision-card {
   padding: 28px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--corner-scale));
   background: var(--panel);
 }
 .decision-card h3 {
@@ -2469,7 +2492,7 @@ html[data-theme="dark"] .hero-search-clear {
   margin-top: 88px;
   margin-bottom: 88px;
   padding: 34px 38px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--panel-soft);
   color: var(--ink);
 }
@@ -2528,7 +2551,7 @@ html[data-theme="dark"] .hero-search-clear {
 .principles-grid article {
   padding: 26px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
 }
 .principles-grid h3 {
   margin: 20px 0 9px;
@@ -2684,7 +2707,7 @@ html[data-theme="dark"] .hero-search-clear {
   .journey-preview,
   .about-statement {
     padding: 21px 18px;
-    border-radius: 15px;
+    border-radius: calc(15px * var(--corner-scale));
     box-shadow: none;
   }
   .about-statement {
@@ -2726,7 +2749,7 @@ html[data-theme="dark"] .hero-search-clear {
     gap: 6px 12px;
     min-height: 0;
     padding: 18px;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
   }
   .process-icon {
     grid-row: 1/3;
@@ -2755,7 +2778,7 @@ html[data-theme="dark"] .hero-search-clear {
     width: auto;
     margin: 56px 14px;
     padding: 25px 20px;
-    border-radius: 16px;
+    border-radius: calc(16px * var(--corner-scale));
   }
   .info-cta h2 {
     font-size: 24px;
@@ -2786,7 +2809,7 @@ html[data-theme="dark"] .hero-search-clear {
   place-items: center;
   padding: 0 !important;
   border: 1px solid var(--line) !important;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--surface) !important;
   color: var(--ink);
   transition:
@@ -3031,7 +3054,7 @@ html[data-theme="dark"] .hero-search-clear {
   max-height: calc(100vh - 40px);
   overflow-y: auto;
   padding: 32px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.3);
 }
@@ -3081,7 +3104,7 @@ html[data-theme="dark"] .hero-search-clear {
   height: 48px;
   padding: 0 13px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   outline: none;
   font-size: 16px;
 }
@@ -3210,7 +3233,7 @@ html[data-theme="dark"] .hero-search-clear {
 .seo-prerender img {
   width: min(750px, 100%);
   height: auto;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
 }
 
 .footer-contacts a[href^="mailto:"] {
@@ -3283,7 +3306,7 @@ html[data-theme="dark"] .hero-search-clear {
 .contact-office-card {
   padding: 30px;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 24px 70px rgba(24, 27, 32, 0.09);
 }
@@ -3293,7 +3316,7 @@ html[data-theme="dark"] .hero-search-clear {
   display: grid;
   place-items: center;
   margin-bottom: 24px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
@@ -3333,7 +3356,7 @@ html[data-theme="dark"] .hero-search-clear {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin-bottom: 32px;
   border: 1px solid var(--line);
-  border-radius: 17px;
+  border-radius: calc(17px * var(--corner-scale));
   background: var(--panel);
 }
 .contact-options > a {
@@ -3378,7 +3401,7 @@ html[data-theme="dark"] .hero-search-clear {
   margin-bottom: 90px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .contact-map iframe {
@@ -3396,7 +3419,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 80px;
   align-items: start;
   padding: 64px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .company-details-grid h2 {
@@ -3608,7 +3631,7 @@ html[data-theme="dark"] .hero-search-clear {
   }
   .search-box {
     padding: 12px;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
   }
   .useful-services {
     width: calc(100vw - 14px);
@@ -3633,7 +3656,7 @@ html[data-theme="dark"] .hero-search-clear {
     scroll-snap-align: start;
   }
   .useful-service-art {
-    border-radius: 17px;
+    border-radius: calc(17px * var(--corner-scale));
   }
   .useful-service-title {
     min-height: 20px;
@@ -3728,7 +3751,7 @@ html[data-theme="dark"] .hero-search-clear {
   .home-order {
     gap: 30px;
     padding: 28px 20px;
-    border-radius: 18px;
+    border-radius: calc(18px * var(--corner-scale));
   }
   .home-order-intro h2,
   .home-faq-intro h2 {
@@ -3754,7 +3777,7 @@ html[data-theme="dark"] .hero-search-clear {
     gap: 28px;
     margin-top: 62px;
     padding: 28px 20px;
-    border-radius: 18px;
+    border-radius: calc(18px * var(--corner-scale));
   }
   .home-faq-item > button {
     min-height: 70px;
@@ -3808,7 +3831,7 @@ html[data-theme="dark"] .hero-search-clear {
     margin-top: 12px;
     padding: 14px;
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
     background: var(--panel);
   }
   .car-row:last-child {
@@ -3816,7 +3839,7 @@ html[data-theme="dark"] .hero-search-clear {
   }
   .car-row:hover {
     border-color: var(--line);
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
     background: var(--panel);
   }
   .car-row:hover + .car-row {
@@ -3871,7 +3894,7 @@ html[data-theme="dark"] .hero-search-clear {
     place-items: center;
     padding: 0;
     border: 0;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--corner-scale));
     background: var(--filter-field-bg);
   }
   .car-row-image {
@@ -3910,10 +3933,10 @@ html[data-theme="dark"] .hero-search-clear {
     -webkit-user-drag: none;
   }
   .car-row-mobile-image-strip > img:first-child {
-    border-radius: 9px 0 0 9px;
+    border-radius: calc(9px * var(--corner-scale)) 0 0 calc(9px * var(--corner-scale));
   }
   .car-row-mobile-image-strip > img:last-child {
-    border-radius: 0 9px 9px 0;
+    border-radius: 0 calc(9px * var(--corner-scale)) calc(9px * var(--corner-scale)) 0;
   }
   .car-row-image .hover-image-segments {
     display: none;
@@ -3942,7 +3965,7 @@ html[data-theme="dark"] .hero-search-clear {
   .car-row .mini-specs > span {
     gap: 4px;
     padding: 4px 7px;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--corner-scale));
     background: var(--filter-field-bg);
     font-size: 14px;
     font-weight: 600;
@@ -3968,7 +3991,7 @@ html[data-theme="dark"] .hero-search-clear {
     min-height: 40px;
     padding: 8px 12px;
     border: 0;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--corner-scale));
     background: var(--header-control-bg);
     font-size: 16px;
   }
@@ -4119,7 +4142,7 @@ html[data-theme="dark"] .hero-search-clear {
   padding: 0;
   overflow: hidden;
   border: 2px solid transparent;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--corner-scale));
   background: var(--panel);
 }
 .gallery-thumbs button.active {
@@ -4151,7 +4174,7 @@ html[data-theme="dark"] .hero-search-clear {
 .order-card {
   padding: 22px;
   border-color: var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 14px 35px rgba(23, 25, 28, 0.06);
 }
@@ -4159,7 +4182,7 @@ html[data-theme="dark"] .hero-search-clear {
   margin: 0 0 12px;
   padding: 18px 20px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 10px 28px rgba(23, 25, 28, 0.05);
 }
@@ -4213,7 +4236,7 @@ html[data-theme="dark"] .hero-search-clear {
 .delivery-disclosure .delivery-card-heading:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 5px;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
 }
 .price-breakdown {
   padding: 2px 0 8px;
@@ -4313,7 +4336,7 @@ html[data-theme="dark"] .hero-search-clear {
   display: grid;
   place-items: center;
   flex: 0 0 44px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
@@ -4470,7 +4493,7 @@ html[data-theme="dark"] .hero-search-clear {
   max-width: 280px;
   padding: 6px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 18px 45px rgba(18, 21, 25, 0.16);
   transform-origin: top center;
@@ -4504,7 +4527,7 @@ html[data-theme="dark"] .hero-search-clear {
   gap: 12px;
   padding: 10px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: var(--panel);
   color: var(--ink);
   font-size: 16px;
@@ -4562,7 +4585,7 @@ html[data-theme="dark"] .hero-search-clear {
 .select-option-icon .brand-logo-fallback {
   width: 28px;
   flex-basis: 28px;
-  border-radius: 5px;
+  border-radius: calc(5px * var(--corner-scale));
   font-size: 16px;
   line-height: 1;
 }
@@ -4578,7 +4601,7 @@ html[data-theme="dark"] .hero-search-clear {
   width: 18px;
   height: 18px;
   border: 1.5px solid var(--line-strong);
-  border-radius: 5px;
+  border-radius: calc(5px * var(--corner-scale));
   background: var(--panel);
   color: #fff;
   transition: background-color 110ms ease, border-color 110ms ease;
@@ -4599,7 +4622,7 @@ html[data-theme="dark"] .hero-search-clear {
   align-items: center;
   margin: 2px 2px 6px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: var(--panel-soft);
   transition: border-color var(--motion-fast) ease, background-color var(--motion-fast) ease;
 }
@@ -4636,7 +4659,7 @@ html[data-theme="dark"] .hero-search-clear {
   display: grid !important;
   place-items: center;
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: transparent !important;
   color: var(--muted) !important;
 }
@@ -4742,7 +4765,7 @@ html[data-theme="dark"] .select-search-clear:hover {
   margin: 22px auto 0;
   padding: 13px 18px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--panel);
   font-weight: 750;
 }
@@ -4758,7 +4781,7 @@ html[data-theme="dark"] .select-search-clear:hover {
   margin-top: 26px;
   padding: 28px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
 }
 .custom-search-cta.is-empty {
@@ -4774,7 +4797,7 @@ html[data-theme="dark"] .select-search-clear:hover {
   width: 54px;
   height: 54px;
   flex: 0 0 54px;
-  border-radius: 15px;
+  border-radius: calc(15px * var(--corner-scale));
   color: var(--accent-dark);
   background: var(--accent-soft);
 }
@@ -4812,7 +4835,7 @@ html[data-theme="dark"] .select-search-clear:hover {
   padding: 12px 13px;
   resize: vertical;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   outline: none;
   font-size: 16px;
   line-height: 1.5;
@@ -4951,7 +4974,7 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
   min-height: 0;
   height: 36px;
   padding: 0 14px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   color: var(--yellow-ink);
   font-size: 16px;
   font-weight: 700;
@@ -4966,7 +4989,7 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
   height: 36px;
   padding: 3px;
   border: 0;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--result-pill-bg);
 }
 #root .result-view-toggle button {
@@ -4976,7 +4999,7 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   box-shadow: none;
@@ -5270,7 +5293,7 @@ footer {
   gap: 6px;
   padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: rgba(17, 19, 22, 0.82);
   color: #fff;
   font-weight: 700;
@@ -5351,7 +5374,7 @@ footer {
   padding: 0;
   overflow: hidden;
   border: 2px solid transparent;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: #24272d;
   contain: paint;
 }
@@ -5382,7 +5405,7 @@ footer {
   scroll-margin-top: 88px;
   margin: 0;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: #202329;
 }
 .gallery-modal figure img {
@@ -5398,7 +5421,7 @@ footer {
   right: 12px;
   bottom: 12px;
   padding: 7px 10px;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: rgba(10, 12, 15, 0.72);
   font-size: 16px;
 }
@@ -5476,7 +5499,7 @@ footer {
   display: inline-flex;
   align-items: center;
   padding: 5px 8px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   font-size: 16px;
   font-weight: 800;
   white-space: nowrap;
@@ -5503,14 +5526,14 @@ footer {
   align-items: center;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
 }
 .order-car-summary > img {
   width: 180px;
   height: 118px;
   object-fit: cover;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--corner-scale));
   background: var(--surface);
 }
 .order-car-summary h2 {
@@ -5562,7 +5585,7 @@ footer {
 .order-section {
   padding: 24px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
 }
 .order-section-title {
@@ -5582,7 +5605,7 @@ footer {
   place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
   font-size: 16px;
@@ -5613,7 +5636,7 @@ footer {
   gap: 24px;
   margin: 10px 0 0;
   padding: 18px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: #17191c;
   color: #fff;
 }
@@ -5683,7 +5706,7 @@ footer {
 .source-description {
   margin-top: 18px;
   padding: 16px;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--corner-scale));
   background: var(--surface);
 }
 .source-description b {
@@ -5702,7 +5725,7 @@ footer {
 .progress-card {
   padding: 23px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   box-shadow: 0 14px 35px rgba(23, 25, 28, 0.06);
 }
 .progress-card > span {
@@ -5825,7 +5848,7 @@ footer {
   height: 48px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   outline: none;
   font-size: 16px;
 }
@@ -6070,7 +6093,7 @@ footer {
   scrollbar-width: thin;
   padding: 6px 16px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 18px 45px rgba(18, 21, 25, 0.16);
 }
@@ -6308,7 +6331,7 @@ html[data-theme="dark"] #root .spec-search,
   align-items: center;
   gap: 4px;
   padding: 5px 8px;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   color: #fff;
   background: rgba(14, 16, 19, 0.75);
   font-size: 16px;
@@ -6392,7 +6415,7 @@ html[data-theme="dark"] #root .spec-search,
   margin-left: auto;
   padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   font-size: 16px;
@@ -6414,7 +6437,7 @@ html[data-theme="dark"] #root .spec-search,
   margin-left: auto;
   padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   font-size: 16px;
@@ -6443,7 +6466,7 @@ html[data-theme="dark"] #root .spec-search,
   margin: 0;
   padding: 7px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: transparent;
   color: var(--accent-dark);
   font-size: 16px;
@@ -6511,7 +6534,7 @@ html[data-theme="dark"] #root .spec-search,
     /* Без верхнего отступа: иначе над прилипающей шапкой остаётся прозрачная
        полоса, сквозь которую при прокрутке видно уезжающие поля. */
     padding: 0 18px calc(18px + env(safe-area-inset-bottom));
-    border-radius: 24px 24px 0 0;
+    border-radius: calc(20px * var(--corner-scale)) calc(20px * var(--corner-scale)) 0 0;
     background: var(--panel);
     box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.28);
     text-align: left;
@@ -6550,7 +6573,7 @@ html[data-theme="dark"] #root .spec-search,
     place-items: center;
     padding: 0;
     border: 0;
-    border-radius: 12px;
+    border-radius: calc(12px * var(--corner-scale));
     background: var(--surface);
     color: var(--ink);
   }
@@ -6588,7 +6611,7 @@ html[data-theme="dark"] #root .spec-search,
     justify-content: center;
     margin: 0;
     padding: 0 16px;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--corner-scale));
     background: var(--filter-field-bg);
     color: var(--ink);
     font-weight: 800;
@@ -6666,7 +6689,7 @@ html[data-theme="dark"] #root .spec-search,
     flex-direction: column;
     padding: 24px;
     border-color: #e3e5e8;
-    border-radius: 15px;
+    border-radius: calc(15px * var(--corner-scale));
     background: var(--panel);
     box-shadow: none;
   }
@@ -6674,7 +6697,7 @@ html[data-theme="dark"] #root .spec-search,
     width: 47px;
     height: 47px;
     flex-basis: 47px;
-    border-radius: 13px;
+    border-radius: calc(13px * var(--corner-scale));
     background: var(--accent-soft);
     color: var(--accent-dark);
   }
@@ -6713,7 +6736,7 @@ html[data-theme="dark"] #root .spec-search,
     min-height: 55px;
     margin-top: auto;
     border-color: var(--line-strong);
-    border-radius: 10px;
+    border-radius: calc(10px * var(--corner-scale));
     background: var(--panel);
     font-size: 16px;
     font-weight: 800;
@@ -6735,7 +6758,7 @@ html[data-theme="dark"] #root .spec-search,
   height: 38px;
   padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--surface);
 }
 
@@ -6744,7 +6767,7 @@ html[data-theme="dark"] #root .spec-search,
   height: 30px;
   padding: 0 9px;
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   font-size: 16px;
@@ -6832,7 +6855,7 @@ html[data-theme="dark"] #root .spec-search,
   }
   .contact-office-card {
     padding: 22px 18px;
-    border-radius: 15px;
+    border-radius: calc(15px * var(--corner-scale));
     box-shadow: none;
   }
   .contact-office-card h2 {
@@ -6852,12 +6875,12 @@ html[data-theme="dark"] #root .spec-search,
   .contact-map {
     height: 320px;
     margin-bottom: 54px;
-    border-radius: 15px;
+    border-radius: calc(15px * var(--corner-scale));
   }
   .company-details-grid {
     gap: 30px;
     padding: 38px 18px 44px;
-    border-radius: 15px;
+    border-radius: calc(15px * var(--corner-scale));
   }
   .company-details-section {
     padding-bottom: 54px;
@@ -6938,7 +6961,7 @@ html[data-theme="dark"] #root .spec-search,
 }
 .delivered-summary {
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: #17191c;
   color: #fff;
   box-shadow: 0 24px 70px rgba(24, 27, 32, 0.14);
@@ -6997,7 +7020,7 @@ html[data-theme="dark"] #root .spec-search,
   grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--panel);
 }
 .delivery-case-image {
@@ -7017,7 +7040,7 @@ html[data-theme="dark"] #root .spec-search,
   top: 18px;
   left: 18px;
   padding: 8px 11px;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: rgba(23, 25, 28, 0.84);
   color: #fff;
   font-size: 16px;
@@ -7086,7 +7109,7 @@ html[data-theme="dark"] #root .spec-search,
 .delivery-case blockquote {
   margin: 24px 0 0;
   padding: 17px 19px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: var(--panel-soft);
   color: var(--muted);
   font-size: 16px;
@@ -7169,7 +7192,7 @@ html[data-theme="dark"] #root .spec-search,
     width: 100%;
   }
   .delivered-summary {
-    border-radius: 15px;
+    border-radius: calc(15px * var(--corner-scale));
     box-shadow: none;
   }
   .delivered-summary > div {
@@ -7187,7 +7210,7 @@ html[data-theme="dark"] #root .spec-search,
     font-size: 29px;
   }
   .delivery-case {
-    border-radius: 15px;
+    border-radius: calc(15px * var(--corner-scale));
   }
   .delivery-case-content {
     padding: 23px 18px 20px;
@@ -7255,7 +7278,7 @@ html[data-theme="dark"] #root .spec-search,
 .guarantee-principle-card {
   padding: 28px;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 24px 70px rgba(24, 27, 32, 0.09);
 }
@@ -7265,7 +7288,7 @@ html[data-theme="dark"] #root .spec-search,
   display: grid;
   place-items: center;
   margin-bottom: 22px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
@@ -7353,7 +7376,7 @@ html[data-theme="dark"] #root .spec-search,
 .payment-stage-list dl {
   margin: 0;
   padding: 17px 19px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .payment-stage-list dl > div {
@@ -7419,7 +7442,7 @@ html[data-theme="dark"] #root .spec-search,
 }
 .responsibility-table {
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   overflow: hidden;
 }
 .responsibility-head,
@@ -7449,7 +7472,7 @@ html[data-theme="dark"] #root .spec-search,
 .responsibility-row > span {
   width: fit-content;
   padding: 6px 9px;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
   font-size: 16px;
@@ -7477,10 +7500,10 @@ html[data-theme="dark"] #root .spec-search,
   background: var(--panel);
 }
 .guarantee-boundaries-grid > div:first-child {
-  border-radius: 16px 0 0 16px;
+  border-radius: calc(16px * var(--corner-scale)) 0 0 calc(16px * var(--corner-scale));
 }
 .guarantee-boundaries-grid > div:last-child {
-  border-radius: 0 16px 16px 0;
+  border-radius: 0 calc(16px * var(--corner-scale)) calc(16px * var(--corner-scale)) 0;
 }
 .guarantee-boundaries-grid > div:first-child > svg {
   color: var(--green);
@@ -7512,7 +7535,7 @@ html[data-theme="dark"] #root .spec-search,
 .faq-hero aside {
   padding: 23px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .faq-hero aside > svg {
@@ -7573,7 +7596,7 @@ html[data-theme="dark"] #root .spec-search,
   flex: 0 0 30px;
   display: grid;
   place-items: center;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: var(--surface);
   color: var(--accent-dark);
   font-size: 19px;
@@ -7641,7 +7664,7 @@ html[data-theme="dark"] #root .spec-search,
   .agreement-preview,
   .guarantee-principle-card {
     padding: 22px 18px;
-    border-radius: 15px;
+    border-radius: calc(15px * var(--corner-scale));
     box-shadow: none;
   }
   .payment-stages,
@@ -7670,7 +7693,7 @@ html[data-theme="dark"] #root .spec-search,
     width: 100%;
   }
   .responsibility-table {
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
   }
   .responsibility-head {
     display: none;
@@ -7692,7 +7715,7 @@ html[data-theme="dark"] #root .spec-search,
   .guarantee-boundaries-grid > div:first-child,
   .guarantee-boundaries-grid > div:last-child {
     padding: 23px 19px;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
   }
   .faq-page {
     padding-top: 20px;
@@ -7832,7 +7855,7 @@ html[data-theme="dark"] #root .spec-search,
 .auth-card {
   padding: 30px;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 24px 70px rgba(28, 31, 36, 0.12);
 }
@@ -7910,13 +7933,13 @@ html[data-theme="dark"] #root .spec-search,
   gap: 4px;
   margin-bottom: 25px;
   padding: 4px;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--corner-scale));
   background: var(--surface);
 }
 .auth-switch button {
   min-height: 42px;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   font-size: 16px;
@@ -7941,7 +7964,7 @@ html[data-theme="dark"] #root .spec-search,
   min-height: 52px;
   padding: 0 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   outline: 0;
   background: var(--panel-soft);
   font-size: 16px;
@@ -7968,7 +7991,7 @@ html[data-theme="dark"] #root .spec-search,
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   transform: translateY(-50%);
@@ -8011,7 +8034,7 @@ html[data-theme="dark"] #root .spec-search,
 .auth-error {
   margin-top: 16px;
   padding: 11px 13px;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: #fff0ed;
   color: #a83220;
   font-size: 16px;
@@ -8062,7 +8085,7 @@ html[data-theme="dark"] #root .spec-search,
   top: 92px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
 }
 .account-sidebar-user {
@@ -8083,7 +8106,7 @@ html[data-theme="dark"] #root .spec-search,
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   transition: background-color 130ms ease, color 130ms ease;
@@ -8137,7 +8160,7 @@ html[data-theme="dark"] #root .spec-search,
   gap: 9px;
   padding: 0 13px;
   border: 0;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: transparent;
   color: var(--muted);
   font-size: 16px;
@@ -8190,6 +8213,32 @@ html[data-theme="dark"] #root .spec-search,
 .customer-order {
   margin-top: 38px;
 }
+/* Выбор машины стоит над карточкой: заказ может держать несколько автомобилей. */
+.customer-order-picker {
+  display: inline-grid;
+  width: max-content;
+  max-width: 100%;
+  margin-bottom: 14px;
+}
+.customer-order-picker-sizer {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  padding-inline: 16px 40px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 0;
+  white-space: nowrap;
+}
+.customer-order-select {
+  width: 100%;
+}
+.customer-order-select .select-trigger {
+  padding: 0 14px;
+}
+.customer-order-select .select-trigger b {
+  font-weight: 700;
+}
 .customer-order-car {
   display: grid;
   grid-template-columns: 170px minmax(0, 1fr) auto;
@@ -8198,31 +8247,30 @@ html[data-theme="dark"] #root .spec-search,
   margin-bottom: 16px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 15px;
+  border-radius: calc(15px * var(--corner-scale));
   background: var(--panel);
 }
 .customer-order-car img {
   width: 100%;
   height: 132px;
   object-fit: cover;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--corner-scale));
   background: var(--surface);
 }
 .customer-order-car h2 {
-  margin: 5px 0 0;
+  margin: 0;
   font-size: 23px;
   line-height: 1.2;
   letter-spacing: -0.55px;
 }
 .customer-order-car h2 a {
   color: inherit;
-  text-decoration: none;
-}
-.customer-order-car h2 a:hover {
-  color: var(--accent-dark);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 4px;
+}
+.customer-order-car h2 a:hover {
+  color: var(--accent-dark);
 }
 .customer-order-car p {
   margin: 7px 0 0;
@@ -8236,27 +8284,6 @@ html[data-theme="dark"] #root .spec-search,
 }
 .customer-order-car-heading {
   min-width: 0;
-}
-.customer-order-car-heading > span {
-  color: var(--accent-dark);
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-.customer-order-car-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.customer-order-car-meta span {
-  padding: 6px 9px;
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 16px;
-  font-weight: 650;
 }
 .customer-order-car-price {
   display: inline-flex;
@@ -8280,25 +8307,6 @@ html[data-theme="dark"] #root .spec-search,
   justify-content: space-between;
   gap: 12px;
 }
-.customer-order-card-open {
-  min-height: 46px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--ink);
-  font-size: 16px;
-  font-weight: 750;
-  text-decoration: none;
-}
-.customer-order-card-open:hover {
-  color: var(--accent-dark);
-}
-.customer-order-card-open svg {
-  transition: transform 0.16s;
-}
-.customer-order-card-open:hover svg {
-  transform: translateX(3px);
-}
 .order-car-menu {
   position: relative;
   align-self: flex-end;
@@ -8309,7 +8317,7 @@ html[data-theme="dark"] #root .spec-search,
   display: grid;
   place-items: center;
   list-style: none;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   color: var(--muted);
   cursor: pointer;
 }
@@ -8329,7 +8337,7 @@ html[data-theme="dark"] #root .spec-search,
   min-width: 190px;
   padding: 5px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--panel);
   box-shadow: 0 14px 35px rgba(24, 27, 31, 0.14);
 }
@@ -8341,7 +8349,7 @@ html[data-theme="dark"] #root .spec-search,
   gap: 8px;
   padding: 0 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--corner-scale));
   background: transparent;
   color: var(--accent-dark);
   font-size: 16px;
@@ -8359,12 +8367,11 @@ html[data-theme="dark"] #root .spec-search,
   height: 48px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  /* Окно центрировано целиком, поэтому плашка стоит по середине над заголовком. */
+  margin: 0 auto 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
-}
-.order-removal-modal > span {
-  margin-top: 18px;
 }
 .order-removal-modal > p {
   margin: 12px 0 0;
@@ -8414,7 +8421,7 @@ html[data-theme="dark"] #root .spec-search,
 .customer-order-stages {
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 15px;
+  border-radius: calc(15px * var(--corner-scale));
   background: var(--panel);
 }
 .customer-order-stage + .customer-order-stage {
@@ -8439,20 +8446,27 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   grid-template-columns: 56px 1fr;
   cursor: default;
 }
+/* У раскрытого этапа шапка не тянется до высоты свёрнутой строки: иначе между
+   описанием и содержимым остаётся лишний воздух. */
+.customer-order-stage.open .customer-order-stage-heading {
+  min-height: 0;
+  padding-bottom: 26px;
+}
 .customer-order-stage-heading:disabled {
   cursor: default;
 }
 .customer-order-stage-heading > b {
-  color: var(--accent);
-  font-size: 25px;
-  line-height: 1;
-}
-.customer-order-stage.done .customer-order-stage-heading > b {
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
   border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 18px;
+  line-height: 1;
+}
+.customer-order-stage.done .customer-order-stage-heading > b {
   background: #eaf7f0;
   color: var(--green);
 }
@@ -8502,10 +8516,21 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   font-size: 16px;
   line-height: 1.55;
 }
+.availability-check-block {
+  padding: 20px 22px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--panel-soft);
+}
+.availability-check-block > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
 .availability-check-list {
   display: grid;
   gap: 10px;
-  margin: -4px 0 0;
+  margin: 14px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -8522,65 +8547,64 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   margin-top: 2px;
   color: var(--green);
 }
-.availability-comment-field {
-  display: grid;
-  gap: 8px;
-}
-.availability-comment-field > span {
-  color: var(--ink);
-  font-size: 16px;
-  font-weight: 750;
-}
-.availability-comment-field > span small {
-  margin-left: 6px;
-  color: var(--muted);
-  font-size: 16px;
-  font-weight: 500;
-}
 .availability-comment-field textarea {
   width: 100%;
-  min-height: 112px;
+  min-height: 124px;
   padding: 13px 14px;
-  resize: vertical;
+  /* Родной уголок растягивания уродует угол поля, а комментарий короткий. */
+  resize: none;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   outline: 0;
-  background: var(--panel-soft);
+  background: var(--panel);
   color: var(--ink);
   font: inherit;
   font-size: 16px;
   line-height: 1.5;
+}
+.availability-comment-field textarea:disabled {
+  /* Неактивное поле читается только фоном: обводка тут лишняя, а подложка
+     отличается от панели — иначе в светлой теме поле пропадало бы. */
+  border-color: transparent;
+  background: var(--panel-soft);
+  color: var(--muted);
+  cursor: not-allowed;
 }
 .availability-comment-field textarea:focus {
   border-color: var(--focus-ring);
   background: var(--panel);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 34%, transparent);
 }
-.availability-comment-field > small {
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.45;
+.availability-check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 24px;
 }
-.availability-check-form > .primary {
+.availability-check-actions .primary {
   width: max-content;
   min-width: 230px;
   padding-inline: 24px;
 }
-.availability-requested {
-  display: grid;
-  gap: 18px;
-}
-.availability-requested > p {
-  margin: 0;
-  padding: 14px 16px;
-  border-radius: 10px;
+.availability-check-actions .primary:disabled {
   background: var(--panel-soft);
   color: var(--muted);
-  font-size: 16px;
-  line-height: 1.55;
+  cursor: not-allowed;
 }
-.availability-requested > p b {
+.availability-check-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
   color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.availability-check-status svg {
+  flex: 0 0 auto;
+  color: var(--green);
 }
 .customer-order-actions {
   display: flex;
@@ -8695,7 +8719,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   align-items: center;
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 15px;
+  border-radius: calc(15px * var(--corner-scale));
   background: var(--panel);
 }
 .account-summary article > span {
@@ -8703,7 +8727,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   height: 48px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--corner-scale));
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
@@ -8723,7 +8747,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: var(--surface);
 }
 .account-summary article > button:disabled {
@@ -8739,7 +8763,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
 .account-panel {
   padding: 28px;
   border: 1px solid var(--line);
-  border-radius: 17px;
+  border-radius: calc(17px * var(--corner-scale));
   background: var(--panel);
 }
 .account-panel-title {
@@ -8848,7 +8872,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   min-height: 50px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--panel-soft);
 }
 .profile-input-prefix:focus-within {
@@ -8929,7 +8953,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   margin-top: 18px;
   padding: 26px 28px;
   border: 1px solid var(--line);
-  border-radius: 17px;
+  border-radius: calc(17px * var(--corner-scale));
   background: #fffafa;
 }
 .account-danger > div > span {
@@ -8958,7 +8982,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   flex: 0 0 auto;
   padding: 0 17px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   background: var(--panel);
   color: #b23624;
   font-size: 16px;
@@ -9037,9 +9061,6 @@ button.customer-order-stage-heading:hover:not(:disabled) {
     gap: 16px;
     padding: 14px;
   }
-  .customer-order-card-open span {
-    display: none;
-  }
   .account-profile {
     max-width: 560px;
   }
@@ -9070,7 +9091,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   }
   .auth-card {
     padding: 20px 17px;
-    border-radius: 16px;
+    border-radius: calc(16px * var(--corner-scale));
     box-shadow: none;
   }
   .auth-modal {
@@ -9169,15 +9190,27 @@ button.customer-order-stage-heading:hover:not(:disabled) {
        sat lower on the short tab than on the tall one. */
     align-content: start;
     width: min(100% - 28px, 1320px);
-    padding-top: 18px;
+    /* Отбивка от шапки равна отступам между блоками кабинета: у шапки нет
+       границы, поэтому её собственный нижний воздух читается как часть
+       промежутка, и восемнадцати точек сверху было ощутимо много. */
+    padding-top: 6px;
     padding-bottom: 66px;
   }
   .account-heading {
     display: contents;
   }
+  /* Приветствие на телефоне не показываем: экран узкий, и строка «Здравствуйте»
+     только отодвигала заказ вниз. В разметке заголовок остаётся — его читают
+     программы чтения с экрана и поисковики. */
   .account-heading h1 {
-    font-size: 34px;
-    letter-spacing: -1.4px;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
   .account-logout {
     order: 3;
@@ -9191,7 +9224,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
     gap: 20px;
-    margin-top: 28px;
+    margin-top: 0;
   }
   /* The card and the tabs become separate rows of the page: the user block on
      top, then the switcher, then the section itself. `display: contents` lifts
@@ -9202,7 +9235,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   .account-sidebar-user {
     padding: 14px 15px;
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
     background: var(--panel);
   }
   .account-navigation {
@@ -9211,7 +9244,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
     margin-top: 0;
     padding: 3px;
     border: 1px solid var(--line);
-    border-radius: 13px;
+    border-radius: calc(13px * var(--corner-scale));
     background: var(--panel);
     overflow-x: auto;
     scrollbar-width: none;
@@ -9239,38 +9272,45 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   .customer-order {
     margin-top: 0;
   }
+  /* На узком экране поле выбора машины занимает всю ширину: мерка по самому
+     длинному названию нужна только там, где рядом остаётся свободное место. */
+  .customer-order-picker {
+    display: grid;
+    width: auto;
+  }
+  .customer-order-picker-sizer {
+    display: none;
+  }
   .customer-order-car {
+    position: relative;
     grid-template-columns: 100px minmax(0, 1fr);
     gap: 13px;
     padding: 11px;
-    border-radius: 13px;
+    border-radius: calc(13px * var(--corner-scale));
   }
   .customer-order-car img {
     height: 100px;
-    border-radius: 9px;
+    border-radius: calc(9px * var(--corner-scale));
   }
+  /* Длинное название не переносим на вторую строку: карточка от этого росла,
+     а номер и цена уезжали вниз — обрезаем многоточием. */
   .customer-order-car h2 {
     font-size: 19px;
     letter-spacing: -0.3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
+  /* Номер заказа — самая мелкая строка карточки: он нужен для обращения в
+     поддержку, а не для чтения. */
   .customer-order-car p {
     margin-top: 5px;
-    font-size: 16px;
+    font-size: 13px;
   }
   .customer-order-car-copy {
     display: grid;
     justify-content: stretch;
     gap: 10px;
-  }
-  .customer-order-car-heading > span {
-    font-size: 16px;
-  }
-  .customer-order-car-meta {
-    gap: 4px;
-  }
-  .customer-order-car-meta span {
-    padding: 4px 6px;
-    font-size: 16px;
   }
   .customer-order-car-price {
     display: grid;
@@ -9279,22 +9319,31 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   .customer-order-car-price b {
     font-size: 20px;
   }
+  /* Три точки уходят в правый верхний угол карточки: отдельной строкой под ней
+     они забирали высоту, а колонкой — ширину у названия. Заголовок и номер
+     заказа держат отступ, чтобы не подходить под кнопку вплотную. */
   .customer-order-card-controls {
-    grid-column: 1 / -1;
-    flex-direction: row-reverse;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 38px;
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    min-height: 0;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 0;
   }
-  .customer-order-card-open {
-    min-height: 38px;
-    font-size: 16px;
-  }
-  .customer-order-card-open span {
-    display: inline;
+  .customer-order-car-heading {
+    padding-right: 34px;
   }
   .order-car-menu {
-    align-self: center;
+    align-self: flex-end;
+  }
+  .order-car-menu > summary {
+    width: 34px;
+    height: 34px;
+  }
+  .order-car-menu > div {
+    top: 39px;
   }
   .order-removal-modal {
     padding: 22px 18px 18px;
@@ -9326,32 +9375,47 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   .customer-order-stages {
     margin-inline: 0;
     border: 1px solid var(--line);
-    border-radius: 13px;
+    border-radius: calc(13px * var(--corner-scale));
   }
+  /* Номер этапа стоит в одной строке с названием и описанием, а содержимое
+     этапа ниже начинается от края блока: раньше оно было сдвинуто под текст и
+     теряло почти пятьдесят точек ширины. */
   .customer-order-stage-heading {
-    min-height: 108px;
-    grid-template-columns: 39px 1fr 22px;
+    min-height: 0;
+    grid-template-columns: 34px minmax(0, 1fr) 22px;
     gap: 11px;
-    padding: 21px 24px;
+    align-items: start;
+    padding: 19px 12px 22px;
   }
   .customer-order-stage.fixed .customer-order-stage-heading {
-    grid-template-columns: 39px 1fr;
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+  .customer-order-stage.open .customer-order-stage-heading {
+    padding-bottom: 19px;
   }
   .customer-order-stage-heading > b {
-    font-size: 20px;
+    width: 34px;
+    height: 34px;
   }
-  .customer-order-stage.done .customer-order-stage-heading > b {
-    width: 31px;
-    height: 31px;
+  /* Первая строка названия встаёт по центру кружка с цифрой. */
+  .customer-order-stage-heading > span {
+    gap: 4px;
+    padding-top: 5px;
+  }
+  .customer-order-stage-heading > svg {
+    justify-self: end;
+    align-self: center;
   }
   .customer-order-stage-heading strong {
-    font-size: 18px;
+    font-size: 17px;
+    letter-spacing: -0.2px;
   }
   .customer-order-stage-heading small {
-    font-size: 16px;
+    font-size: 14px;
+    line-height: 1.35;
   }
   .customer-order-stage-body {
-    padding: 0 24px 27px 74px;
+    padding: 0 12px 27px;
   }
   .customer-order-stage-body > p {
     font-size: 16px;
@@ -9359,10 +9423,40 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   .availability-check-form {
     gap: 17px;
   }
-  .availability-comment-field textarea {
-    min-height: 126px;
+  /* Список условий на телефоне набран мельче и плотнее, зато чуть жирнее: это
+     короткая справка, а не основной текст, и в четыре строки она читается
+     хуже, чем компактным блоком. */
+  .availability-check-block {
+    padding: 14px 15px;
   }
-  .availability-check-form > .primary {
+  .availability-check-block > p {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .availability-check-list {
+    gap: 7px;
+    margin-top: 10px;
+  }
+  .availability-check-list li {
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  .availability-check-list svg {
+    width: 17px;
+    height: 17px;
+    margin-top: 1px;
+  }
+  .availability-comment-field textarea {
+    min-height: 152px;
+  }
+  .availability-check-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .availability-check-actions .primary {
     width: 100%;
     min-width: 0;
   }
@@ -9402,7 +9496,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   }
   .account-panel {
     padding: 21px 18px;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
   }
   .account-empty .primary {
     width: 100%;
@@ -9424,7 +9518,7 @@ button.customer-order-stage-heading:hover:not(:disabled) {
     align-items: stretch;
     flex-direction: column;
     padding: 21px 18px;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
   }
   .account-danger > .danger-button {
     width: 100%;
@@ -9603,9 +9697,14 @@ html[data-theme="dark"] body #root .customer-order-stages {
 html[data-theme="dark"] body #root .customer-order-stage + .customer-order-stage {
   border-top-color: #2b3037;
 }
+html[data-theme="dark"] body #root .customer-order-stage-heading > b {
+  background: #3a1c20;
+  border: 0;
+  color: var(--accent-dark);
+}
 html[data-theme="dark"] body #root .customer-order-stage.done .customer-order-stage-heading > b {
-  background: #173629;
-  border: 1px solid #28533f;
+  background: #1b4331;
+  border: 0;
   color: #69dba5;
 }
 html[data-theme="dark"] .brand-logo img[src$="/bmw.svg"],
@@ -9644,7 +9743,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--header-control-bg);
   color: var(--ink);
   transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
@@ -9686,7 +9785,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   width: 180px;
   padding: 10px;
   border: 0;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--corner-scale));
   background: var(--menu-popover-bg);
   box-shadow: 0 18px 50px rgba(23, 25, 28, 0.16);
   opacity: 0;
@@ -9712,7 +9811,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 }
 .header-menu nav a {
   padding: 12px 14px;
-  border-radius: 11px;
+  border-radius: calc(11px * var(--corner-scale));
   color: var(--ink);
   font-size: 16px;
   font-weight: 700;
@@ -9741,25 +9840,25 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 .header-actions .currency-switch {
   height: 48px;
   padding: 4px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
 }
 .header-actions .currency-switch button {
   height: 40px;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--corner-scale));
   line-height: 40px;
 }
 .header-actions .theme-toggle {
   width: 48px;
   height: 48px;
   flex-basis: 48px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
 }
 .header-actions .account-link,
 .header-actions .favorites-link,
 .header-actions .searches-link {
   height: 48px;
   padding: 0 16px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--corner-scale));
   background: var(--header-control-bg);
   transition:
     background 0.16s ease,
@@ -9838,7 +9937,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     left: 10px;
     display: block;
     padding: 8px;
-    border-radius: 14px;
+    border-radius: calc(14px * var(--corner-scale));
     background: var(--panel-soft);
     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.24);
     opacity: 1;
@@ -9870,7 +9969,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .header-menu-trigger {
     width: 40px;
     height: 40px;
-    border-radius: 12px;
+    border-radius: calc(12px * var(--corner-scale));
   }
   .header-menu {
     position: fixed;
@@ -9898,7 +9997,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     grid-template-columns: 1fr 1fr;
     padding: 4px;
     border: 0;
-    border-radius: 11px;
+    border-radius: calc(11px * var(--corner-scale));
     background: var(--panel-soft);
   }
   .header-menu-currency button {
@@ -9906,7 +10005,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     min-width: 0;
     padding: 0 4px;
     border: 0;
-    border-radius: 9px;
+    border-radius: calc(9px * var(--corner-scale));
     background: transparent;
     color: var(--muted);
     font-size: 14px;
@@ -9921,7 +10020,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     width: 40px;
     height: 40px;
     flex-basis: 40px;
-    border-radius: 12px;
+    border-radius: calc(12px * var(--corner-scale));
   }
   :root[data-theme="dark"] .header-menu-currency button.active {
     background: #383d45;
@@ -9932,7 +10031,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     width: 40px;
     height: 40px;
     padding: 0;
-    border-radius: 12px;
+    border-radius: calc(12px * var(--corner-scale));
     background: var(--header-control-bg);
   }
   /* Пятая кнопка в шапку телефона не помещается — «Мои поиски» переезжают в меню. */
@@ -10004,6 +10103,46 @@ html[data-theme="dark"] body #root :where(
 ) {
   border-color: transparent;
 }
+/* Панели кабинета держат тот же мягкий фон, что плашки доверия на главной:
+   на тёмной странице блок отделяется приглушённо, без светлой заливки. */
+html[data-theme="dark"] body #root :where(
+  .account-sidebar,
+  .account-panel,
+  .account-summary article,
+  .customer-order-car,
+  .customer-order-stages,
+  .customer-order-stage-heading
+) {
+  background: var(--panel-soft);
+  box-shadow: none;
+}
+/* Выбранный раздел меню: подсветка чуть выше фона панели, без светлой плашки. */
+html[data-theme="dark"] body #root .account-navigation button.active {
+  background: #2b3037;
+}
+/* Вложенные элементы внутри панели теперь светлее её, иначе сливаются. */
+html[data-theme="dark"] body #root .availability-check-block {
+  background: var(--panel);
+}
+html[data-theme="dark"] body #root .availability-comment-field textarea {
+  background: #16191d;
+}
+html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
+  background: #1a1e23;
+}
+
+/* Тёмная тема на узком экране: карточка с именем и переключатель разделов
+   отделяются фоном, обводка там только дробила страницу. Выбранный раздел
+   поэтому берёт заметно более светлую подсветку — иначе на полосе панели его
+   почти не видно. */
+@media (max-width: 700px) {
+  html[data-theme="dark"] body #root :where(.account-sidebar-user, .account-navigation) {
+    border-color: transparent;
+  }
+  html[data-theme="dark"] body #root .account-navigation button.active {
+    background: #3d434d;
+  }
+}
 
 /* Быстрый просмотр карточки из каталога. Модалка повторяет страницу автомобиля
    без крошек, кнопки назад и похожих авто, поэтому её содержимое живёт на фоне
@@ -10026,7 +10165,7 @@ html[data-theme="dark"] body #root :where(
   width: min(1240px, 100%);
   max-height: calc(100vh - 48px);
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: calc(20px * var(--corner-scale));
   background: var(--page);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.32);
 }
@@ -10101,13 +10240,13 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
   width: max-content;
   max-width: min(240px, calc(100vw - 20px));
   padding: 7px 10px;
-  border-radius: 9px;
+  border-radius: calc(9px * var(--corner-scale));
   background: #17191c;
   color: #fff;
   box-shadow: 0 8px 24px rgba(18, 20, 24, 0.22);
   font-size: 14px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.4;
   visibility: hidden;
   opacity: 0;
   transform: translateY(4px);
@@ -10255,5 +10394,1023 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
   }
 }
 
-/* ============================== Промо-лендинги моделей ===================== */
+/* ============================== Страницы моделей =========================== */
 
+/* Тон вложенных блоков в тёмной теме: цифры, карточки версий, вопросы, плитки
+   обзоров. Расчётный оттенок выходил светлее и теплее подложки страницы, поэтому
+   держим его отдельным цветом — на обеих страницах он должен быть один. */
+html[data-theme="dark"] {
+  --model-nested-bg: #2c2f36;
+}
+
+/* Блок «О модели» в карточке машины: начало текста и переход на страницу модели. */
+.model-intro {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--panel);
+}
+/* С фотографией блок становится двухколонным: слева кадр этой же машины из
+   объявления, справа текст и кнопка. */
+/* Колонки тянутся по высоте текста: так верх и низ фотографии совпадают с краями
+   текстового блока и он никуда не выступает. */
+.model-intro.has-photo {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
+}
+.model-intro-photo {
+  overflow: hidden;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--surface);
+  min-height: 170px;
+}
+.model-intro-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+/* Скругления как в iOS: непрерывная кривая (squircle) вместо дуги окружности —
+   у угла нет заметного перехода от прямой к скруглению. Свойство новое, поэтому
+   включаем его только там, где браузер его понимает; остальные рисуют обычное
+   скругление и ничего не ломается. Радиус при этом берём чуть больше: у непрерывной
+   кривой угол визуально «поджимается». */
+/* Форму углов задаёт общее правило в конце файла; здесь только радиусы чуть больше
+   обычных: у непрерывной кривой угол визуально «поджимается». */
+@supports (corner-shape: squircle) {
+  .model-intro {
+    border-radius: calc(20px * var(--corner-scale));
+  }
+  .model-intro-photo {
+    border-radius: calc(18px * var(--corner-scale));
+  }
+  .model-intro-more {
+    border-radius: calc(17px * var(--corner-scale));
+  }
+}
+.model-intro-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* В тёмной теме подложка блока сама отделяет его от фона, рамка только шумит.
+   Убираем цветом, а не свойством border, чтобы геометрия блока не сдвинулась. */
+html[data-theme="dark"] .model-intro {
+  border-color: transparent;
+}
+.model-intro-heading h2 {
+  margin: 6px 0 6px;
+  font-size: 24px;
+  letter-spacing: -0.5px;
+}
+.model-intro-text {
+  display: grid;
+  gap: 12px;
+}
+/* Текст описания темнее обычной серой подписи: это связный абзац, который читают,
+   а не служебная пометка. В карточке стоит только первый абзац — остальное на
+   странице модели по кнопке «Подробнее». */
+.model-intro-text p {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.model-intro-more {
+  align-self: flex-start;
+  min-height: 38px;
+  border-radius: calc(12px * var(--corner-scale));
+  margin-top: 14px;
+  padding: 0 18px;
+  text-decoration: none;
+}
+
+.model-page {
+  display: flex;
+  flex-direction: column;
+  /* Блоки стоят вплотную друг к другу: они уже разделены собственными подложками,
+     и большой зазор только растягивал страницу. */
+  gap: 18px;
+  /* Отступ сверху: подложка блока не должна упираться в шапку. */
+  padding: 26px 0 72px;
+}
+/* Плиток с цифрами справа больше нет, поэтому весь текст страницы идёт одной
+   колонкой по центру и лежит на подложке. В светлой теме она белая: от фона её
+   отделяют рамка и мягкая тень — та же, что у блока фильтров на главной. В тёмной
+   теме подложка серая и без тени: тень там всё равно не читается, а рамка шумит. */
+.model-page-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 38px;
+  width: min(860px, calc(100% - 48px));
+  padding: 40px;
+  border: 1px solid var(--line);
+  border-radius: calc(20px * var(--corner-scale));
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgba(24, 27, 32, 0.1);
+}
+html[data-theme="dark"] .model-page-body {
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: none;
+}
+/* Дорожка под кнопку «назад» тянется во всю высоту читаемой части страницы: кнопка
+   внутри «липкая» и едет вниз вместе с экраном до конца статьи, а на большом каталоге
+   внизу уходит вверх вместе с дорожкой. Стоит она в левом поле — блоки с текстом
+   остаются ровно по центру. */
+.model-page-reading {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.model-page-back-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* 430 — половина блока, 24 — зазор, 54 — сам кружок. */
+  left: calc(50% - 508px);
+  width: 54px;
+}
+/* Оформление как у самого блока: в светлой теме белый с рамкой и тенью, в тёмной
+   серый без рамки. Радиус размытия тени меньше — на кружке 54 пикселя тень блока
+   читалась бы пятном. */
+.model-page-back {
+  position: sticky;
+  top: 96px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow: 0 10px 26px rgba(24, 27, 32, 0.1);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+html[data-theme="dark"] .model-page-back {
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: none;
+}
+/* Под курсором кнопка чуть приподнимается, цвет остаётся прежним. */
+.model-page-back:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(24, 27, 32, 0.14);
+}
+html[data-theme="dark"] .model-page-back:hover {
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.4);
+}
+/* Когда слева места на кружок уже не хватает, он встаёт над первым блоком по его
+   левому краю и остаётся на месте: «липкая» кнопка поверх текста только мешала бы. */
+@media (max-width: 1100px) {
+  .model-page-back-rail {
+    position: static;
+    width: min(860px, calc(100% - 48px));
+    margin-inline: auto;
+  }
+  .model-page-back {
+    position: static;
+  }
+}
+.model-page-hero h1 {
+  margin: 0 0 16px;
+  font-size: clamp(30px, 4.4vw, 46px);
+  line-height: 1.06;
+  letter-spacing: -1.5px;
+}
+/* Абзац под заголовком — аннотация ко всей странице: тот же шрифт и цвет, что у
+   основного текста, просто крупнее. */
+.model-page-hero-copy > p {
+  margin: 0;
+  font-family: var(--font-article);
+  font-size: 21px;
+  line-height: 30px;
+  letter-spacing: 0;
+}
+.model-page-hero .info-actions .primary,
+.model-page-hero .info-actions .secondary {
+  padding: 0 20px;
+  text-decoration: none;
+}
+.model-page-hero .info-actions .secondary {
+  color: var(--ink);
+}
+.model-page-article {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+.model-page-article h2 {
+  margin: 0 0 14px;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.model-page-article p {
+  margin: 0 0 14px;
+  font-size: 18px;
+  line-height: 26px;
+}
+.model-page-article p:last-child {
+  margin-bottom: 0;
+}
+.model-page-intro p {
+  font-size: 18px;
+  line-height: 26px;
+}
+/* Сам текст статьи набран засечным шрифтом и крупнее интерфейсного: длинные
+   абзацы так читаются легче. Врезки, карточки сравнения и список остаются
+   интерфейсными — они разбивают текст, а не продолжают его. */
+.model-page-intro p,
+.model-page-article > section > p:not(.model-page-versions-note) {
+  font-family: var(--font-article);
+  font-size: 18px;
+  line-height: 26px;
+  letter-spacing: 0;
+}
+/* Мозаика фотографий над текстом: первый кадр вдвое крупнее остальных, поэтому сетка
+   не выглядит однообразной. Фон плитки светлее подложки блока — пока фото грузится,
+   место под него видно. */
+.model-page-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Строка ниже колонки: плитки чуть вытянуты по горизонтали, но не панорамные. */
+  grid-auto-rows: 158px;
+  gap: 12px;
+  width: min(860px, calc(100% - 48px));
+  margin-inline: auto;
+}
+.model-page-gallery > button {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--surface);
+  cursor: pointer;
+}
+html[data-theme="dark"] .model-page-gallery > button {
+  background: var(--model-nested-bg);
+}
+.model-page-gallery > button:first-child {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+.model-page-gallery img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--motion-medium) var(--motion-ease);
+}
+.model-page-gallery > button:hover img {
+  transform: scale(1.04);
+}
+/* Полоса главных цифр после вступления. Плитки светлее (в тёмной теме) или
+   серее (в светлой) подложки блока, поэтому читаются как отдельный элемент. */
+.model-page-numbers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.model-page-numbers > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
+}
+/* В тёмной теме плитка должна быть светлее подложки блока, иначе её край не виден:
+   var(--panel) для этого слишком близок к var(--surface), поэтому подмешиваем цвет
+   текста. */
+html[data-theme="dark"] .model-page-numbers > div {
+  background: var(--model-nested-bg);
+}
+.model-page-numbers strong {
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+/* Подпись — не больше двух строк: иначе плитки в полосе получаются разной высоты
+   по содержанию, а полоса перестаёт читаться одним взглядом. */
+.model-page-numbers span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  /* Мелко, но плотно и темнее обычной серой подписи: короткую строку так читать
+     легче, чем светлый текст крупнее. */
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+/* Список — такие же карточки, как в сравнении: короткая метка сверху, пояснение
+   под ней. Каждый пункт на своей подложке, поэтому раздел не превращается в
+   простыню и пункты не сливаются друг с другом. */
+.model-page-points {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0 0;
+}
+.model-page-points > div {
+  padding: 18px 20px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
+}
+html[data-theme="dark"] .model-page-points > div {
+  background: var(--model-nested-bg);
+}
+/* Заголовок пункта — того же размера, что цифры в полосе выше: карточки читаются
+   как один набор. */
+.model-page-points dt {
+  margin-bottom: 10px;
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+.model-page-points dd {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+/* Две карточки рядом — когда выбор сводится к «или/или». */
+.model-page-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+/* Рамки нет ни в одной теме: карточку достаточно отделяет своя подложка — серая на
+   белом блоке в светлой теме и светлее блока в тёмной. */
+.model-page-compare > div {
+  padding: 18px 20px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
+}
+html[data-theme="dark"] .model-page-compare > div {
+  background: var(--model-nested-bg);
+}
+.model-page-compare strong {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+/* Текст карточки — не больше трёх строк, чтобы обе половины сравнения были одного
+   размера и читались как пара. */
+.model-page-compare p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+/* Врезка с заметкой: то, что легко упустить, читая по диагонали. */
+.model-page-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 18px 20px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--accent-soft);
+}
+html[data-theme="dark"] .model-page-callout {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+.model-page-callout > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent-dark);
+}
+html[data-theme="dark"] .model-page-callout > svg {
+  color: var(--accent-on-dark);
+}
+.model-page-callout strong {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+.model-page-callout p {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+/* Версии — карточки того же вида, что сравнение и списки: заголовок сверху, под ним
+   свойства строками «слева название, справа значение». Таблица на узком экране
+   всё равно уезжала в боковую прокрутку. */
+.model-page-versions-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+.model-page-versions-cards > div {
+  padding: 18px 20px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
+}
+html[data-theme="dark"] .model-page-versions-cards > div {
+  background: var(--model-nested-bg);
+}
+.model-page-versions-cards > div > strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+.model-page-versions-cards dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.model-page-versions-cards dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.model-page-versions-cards dt {
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 14px;
+  font-weight: 500;
+}
+.model-page-versions-cards dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+.model-page-versions-table {
+  overflow-x: auto;
+}
+.model-page-versions table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.model-page-versions th,
+.model-page-versions td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 16px;
+  text-align: left;
+  vertical-align: top;
+}
+.model-page-versions thead th {
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.model-page-versions tbody th {
+  font-weight: 800;
+  white-space: nowrap;
+}
+/* Приписка под версиями набрана как обычный текст статьи: это продолжение чтения,
+   а не служебная подпись. */
+/* Селектор с элементом: иначе общее правило абзацев статьи перебивает отступ. */
+.model-page-article p.model-page-versions-note {
+  /* Отступ больше, чем между карточками: иначе приписка липнет к сетке версий и
+     читается как часть последней карточки. */
+  margin: 32px 0 0;
+  font-family: var(--font-article);
+  font-size: 18px;
+  line-height: 26px;
+  letter-spacing: 0;
+}
+/* Поиск по обзорам: то же поле, что в полных данных карточки машины, но выше и без
+   обводки — от подложки блока его отделяет собственный фон. */
+.models-index-search {
+  margin: 18px 0 0;
+  min-height: 56px;
+  border: 0;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
+}
+/* В тёмной теме всем .select-search фон задаёт селектор с большей силой, поэтому
+   повторяем её вес: иначе поле поиска выходило темнее соседних списков. */
+html[data-theme="dark"] body #root .models-index-search {
+  background: var(--model-nested-bg);
+}
+.models-index-search:focus-within {
+  background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+}
+html[data-theme="dark"] body #root .models-index-search:focus-within {
+  background: color-mix(in srgb, var(--ink) 14%, var(--surface));
+}
+.models-index-search > svg {
+  margin-left: 18px;
+}
+.models-index-search input {
+  padding: 16px 40px 16px 12px;
+  font-size: 17px;
+}
+.models-index-search .select-search-clear {
+  right: 12px;
+}
+/* Под поиском ряд из двух выпадающих списков: марка слева, сортировка справа.
+   Подложка у них та же, что у поля поиска, — от белого блока страницы отделяет фон. */
+.models-index-controls {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 12px 0 0;
+}
+.models-index-select {
+  width: 230px;
+  max-width: 100%;
+  height: 50px;
+  background: var(--surface);
+}
+html[data-theme="dark"] .models-index-select {
+  background: var(--model-nested-bg);
+}
+/* Сортировка стоит у правого края ряда: она шире марки — названия вроде
+   «С наибольшим запасом хода» иначе обрезались бы. Список раскрывается от правого
+   края, чтобы не вылезать за границу блока. */
+.models-index-select-sort {
+  width: 262px;
+  margin-left: auto;
+}
+.models-index-select-sort .select-menu {
+  right: -1px;
+  left: auto;
+}
+@media (max-width: 560px) {
+  /* На узком экране два списка рядом не читаются — ставим друг под друга. */
+  .models-index-controls {
+    flex-direction: column;
+  }
+  .models-index-select {
+    width: 100%;
+  }
+}
+/* Список обзоров: плитка по три карточки в ряд, фото сверху, текст под ним. */
+.models-index-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.models-index-list > a {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 14px 18px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
+}
+html[data-theme="dark"] .models-index-list > a {
+  background: var(--model-nested-bg);
+}
+/* Под курсором карточка чуть приподнимается — отдельной кнопки в ней нет,
+   вся карточка и есть ссылка на обзор. В светлой теме она заодно белеет и получает
+   тонкую обводку: обводку рисуем тенью, чтобы карточка не подрастала на пиксель. */
+.models-index-list > a:hover {
+  transform: translateY(-3px);
+  background: var(--panel);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 14px 30px rgba(24, 27, 32, 0.12);
+}
+/* В тёмной теме подложка и обводка не меняются — только тень. */
+html[data-theme="dark"] .models-index-list > a:hover {
+  background: var(--model-nested-bg);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .models-index-list > a:hover {
+    transform: none;
+  }
+}
+.models-index-photo {
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--panel-soft);
+}
+html[data-theme="dark"] .models-index-photo {
+  background: var(--panel);
+}
+.models-index-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.models-index-list strong {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+/* Описание — не больше двух строк: длинные подписи обрезаем «…», иначе карточки
+   в ряду получаются разной высоты и плитка перестаёт читаться одним взглядом. */
+.models-index-list p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+@media (max-width: 980px) {
+  /* На узком экране три карточки в ряд становятся слишком тесными — две. */
+  .models-index-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  /* На телефоне и две в ряд не помещаются — одна колонка. */
+  .models-index-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Частые вопросы лежат в такой же подложке, как текстовые блоки страницы. */
+.model-page-faq {
+  width: min(860px, calc(100% - 48px));
+  padding: 40px;
+  border: 1px solid var(--line);
+  border-radius: calc(20px * var(--corner-scale));
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgba(24, 27, 32, 0.1);
+}
+html[data-theme="dark"] .model-page-faq {
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: none;
+}
+.model-page-faq h2 {
+  margin: 0 0 18px;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.model-page-faq-list {
+  display: grid;
+  gap: 10px;
+}
+/* Плашки внутри — как карточки сравнения: серые на белой подложке в светлой теме и
+   светлее подложки в тёмной. */
+.model-page-faq .home-faq-item {
+  background: var(--surface);
+  box-shadow: none;
+}
+html[data-theme="dark"] .model-page-faq .home-faq-item {
+  background: var(--model-nested-bg);
+}
+/* Ответ — обычный текст статьи: тот же шрифт с засечками, размер и цвет. */
+.model-page-faq .home-faq-item p {
+  max-width: none;
+  color: var(--ink);
+  font-family: var(--font-article);
+  font-size: 18px;
+  line-height: 26px;
+  letter-spacing: 0;
+}
+/* Сетка каталога в конце страницы идёт во всю ширину, как на главной. Перед ней
+   отступ больше: тут заканчивается статья и начинается другой по смыслу блок. */
+.model-page-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 40px;
+}
+/* Поисковый заголовок блока — по центру и крупно; под ним строка «Каталог» с
+   переключателем, как на главной. */
+.model-page-catalog-title {
+  margin: 0 auto;
+  max-width: 760px;
+  font-size: 32px;
+  line-height: 1.2;
+  letter-spacing: -1.2px;
+  text-align: center;
+}
+.model-page-catalog .section-heading {
+  margin-bottom: 0;
+}
+.model-page-catalog .section-heading h3 {
+  position: relative;
+  top: 2px;
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.6px;
+}
+.model-page-catalog .featured-load-more {
+  align-self: center;
+  text-decoration: none;
+}
+/* Лента идёт ровно по краям блока с текстом, а не во всю ширину страницы: иначе
+   она выпирала бы за колонку и разрывала строй страницы. */
+/* Рекламный блок в разрыве текста: слева иллюстрация со страницы «О сервисе»,
+   справа заголовок, короткое пояснение и кнопка. Оформлен как текстовый блок —
+   белый с рамкой и тенью в светлой теме, серый в тёмной. */
+.model-page-promo {
+  display: grid;
+  /* Картинка справа: текст читают слева направо, кнопка не должна прятаться за
+     иллюстрацией. */
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 24px;
+  align-items: center;
+  width: min(860px, calc(100% - 48px));
+  /* Поля как у текстовых блоков: заголовок и текст встают на ту же линию, что и
+     статья выше и ниже. */
+  padding: 40px;
+  border: 1px solid var(--line);
+  border-radius: calc(20px * var(--corner-scale));
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgba(24, 27, 32, 0.1);
+}
+html[data-theme="dark"] .model-page-promo {
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: none;
+}
+/* Иллюстрация без подложки: у картинки прозрачный фон, и она сама стоит на белом
+   или тёмном блоке. */
+.model-page-promo-visual {
+  order: 2;
+}
+.model-page-promo-copy {
+  order: 1;
+}
+.model-page-promo-visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* Заголовок и текст — тех же размеров, что заголовок раздела и абзац статьи. */
+.model-page-promo-copy strong {
+  display: block;
+  margin: 0 0 14px;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.model-page-promo-copy p {
+  margin: 0 0 20px;
+  font-family: var(--font-article);
+  font-size: 18px;
+  line-height: 26px;
+  letter-spacing: 0;
+}
+.model-page-promo-copy .primary {
+  min-height: 44px;
+  padding: 0 20px;
+  text-decoration: none;
+}
+.model-page-cars {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: min(860px, calc(100% - 48px));
+}
+.model-page-cars-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.model-page-cars-heading h2 {
+  margin: 0;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.model-page-cars-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Стрелки листания: те же кружки, что у кнопки «назад». На краю ленты кнопка
+   гаснет — дальше листать нечего. */
+.model-page-cars-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease);
+}
+.model-page-cars-nav:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+.model-page-cars-nav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+html[data-theme="dark"] .model-page-cars-nav {
+  border-color: transparent;
+  background: var(--surface);
+}
+/* Лента с прокруткой в сторону: карточки одинаковой ширины, полосу прокрутки
+   прячем. Поля сверху и снизу — чтобы при наведении карточка приподнималась и
+   её тень не обрезалась краем ленты. */
+.model-page-cars-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 300px;
+  gap: 16px;
+  overflow-x: auto;
+  /* Запас сверху и снизу — под подъём карточки и её тень при наведении: боковая
+     прокрутка обрезает всё, что выходит за края ленты. Лишнюю высоту забираем
+     обратно отрицательными полями, чтобы отступы блока не разъезжались. */
+  padding: 10px 2px 46px;
+  margin: -10px 0 -34px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+}
+.model-page-cars-track::-webkit-scrollbar {
+  display: none;
+}
+.model-page-cars-track > * {
+  scroll-snap-align: start;
+}
+/* Юридическая оговорка: без подложки и иконки, мелко и по центру — её читают в
+   последнюю очередь, но на странице она быть должна. */
+.model-page-disclaimer {
+  width: min(860px, calc(100% - 48px));
+  margin: 16px auto 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+}
+@media (max-width: 980px) {
+  .model-page {
+    gap: 14px;
+  }
+  .model-page-body {
+    gap: 30px;
+  }
+  .model-page-reading {
+    gap: 14px;
+  }
+}
+@media (max-width: 700px) {
+  .model-intro {
+    padding: 18px;
+  }
+  /* На узком экране фото встаёт над текстом: в колонку 240 пикселей она уже не влезает. */
+  .model-intro.has-photo {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .model-intro-photo {
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+  }
+  .model-intro-heading h2 {
+    font-size: 21px;
+  }
+  /* На узком экране рамка подложки только сужала бы текст: оставляем поля меньше. */
+  .model-page-body,
+  .model-page-faq {
+    padding: 20px 18px;
+  }
+  .model-page-article h2 {
+    font-size: 23px;
+  }
+  .model-page-cars-heading h2 {
+    font-size: 23px;
+  }
+  .model-page-catalog-title {
+    font-size: 25px;
+    letter-spacing: -0.8px;
+  }
+  .model-page-catalog .section-heading h3 {
+    font-size: 19px;
+  }
+  .model-page-cars-track {
+    grid-auto-columns: 268px;
+  }
+  .model-page-numbers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* На телефоне мозаика в две колонки: крупный кадр занимает всю ширину. */
+  .model-page-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 108px;
+    gap: 8px;
+  }
+  .model-page-compare,
+  .model-page-versions-cards,
+  .model-page-promo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .model-page-promo {
+    padding: 18px;
+  }
+  /* На узком экране картинка стоит под текстом и не растягивается на всю ширину. */
+  .model-page-promo-visual {
+    max-width: 240px;
+  }
+  .model-page-hero-copy > p {
+    font-size: 19px;
+    line-height: 28px;
+  }
+}
+
+/* ============================== Форма скруглений ========================== */
+
+/* Обычное скругление — дуга окружности: у угла виден стык с прямой стороной.
+   iOS рисует углы непрерывной кривой («squircle»), и переход глазом не читается.
+   Свойство `corner-shape` новое, поэтому включаем его только там, где браузер его
+   понимает: остальные рисуют прежнее скругление того же радиуса и ничего не теряют.
+   На элементах без скругления правило ни на что не влияет, поэтому применяем сразу
+   ко всему, а не перечисляем блоки по одному. */
+@supports (corner-shape: squircle) {
+  /* Углы непрерывной кривой и заодно радиусы крупнее: большой радиус хорошо выглядит
+     только вместе с непрерывной кривой, обычной дугой он «пузырится». Браузер без
+     поддержки этого правила не видит и рисует прежние скругления. */
+  :root {
+    --corner-scale: 2.4;
+  }
+  *,
+  *::before,
+  *::after {
+    corner-shape: squircle;
+  }
+  /* Круги и «пилюли» (радиус 50% или 999px) оставляем как есть: непрерывная кривая
+     превратила бы круглую кнопку или аватар в скруглённый квадрат. Новый круглый
+     элемент нужно дописать сюда — или задать ему `corner-shape: round` на месте. */
+  :is(
+    .icon-label b,
+    .hero-updated,
+    .featured-favorite,
+    .row-actions button,
+    .detail-actions button,
+    .saved-search-more-circle,
+    .detail-back,
+    .app-loader-spinner,
+    .modal-close,
+    .footer-socials a,
+    .gallery-controls button,
+    .price-info,
+    .gallery-modal > header button,
+    .progress-card li > span,
+    .progress-card li > svg,
+    .hover-image-segments i,
+    .mobile-filter-sheet-handle,
+    .account-sidebar-user > b,
+    .account-navigation button > b,
+    .customer-order-stage-heading > b,
+    .account-avatar,
+    .quick-view-close,
+    .quick-view-toggle .quick-view-toggle-track,
+    .quick-view-toggle .quick-view-toggle-track i,
+    .model-page-back,
+    .model-page-cars-nav
+  ) {
+    corner-shape: round;
+  }
+  /* Псевдоэлементы в :is() не принимаются, поэтому точка-разделитель — отдельно. */
+  .hero-updated::before {
+    corner-shape: round;
+  }
+}

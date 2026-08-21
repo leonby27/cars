@@ -32,7 +32,7 @@ const requestApi = async (path) => {
 };
 
 test("каталог отдаётся с общим кэшем, но браузер своей копии не держит", async () => {
-  for (const path of ["/api/cars?limit=24", "/api/cars?limit=60&sort=variety", "/api/catalog/meta"]) {
+  for (const path of ["/api/cars?limit=24", "/api/cars?limit=60&sort=variety", "/api/catalog/meta", "/api/model-facts"]) {
     const { status, cacheControl } = await requestApi(path);
     assert.equal(status, 200, path);
     assert.match(cacheControl, /\bpublic\b/, path);
