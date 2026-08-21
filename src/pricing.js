@@ -1,7 +1,7 @@
 import { chinaTransitFor } from "./china-logistics.js";
 
 export const PRICING = {
-  usdByn:3.0284, cnyBynPer10:4.5058, eurByn:3.5149, rateDate:"20.08.2026",
+  usdByn:2.9829, cnyBynPer10:4.4496, eurByn:3.4918, rateDate:"21.08.2026",
   serviceUsd:800, evCustomsUsd:350,
   // Этапы до СВХ, доллары [низ, верх]. Ориентиры — открытые тарифы перевозчиков
   // Китай→Минск и платёжных агентов (лето 2026): автовоз «под ключ» ≈ $3500,
