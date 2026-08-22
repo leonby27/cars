@@ -3236,12 +3236,19 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   border-radius: calc(14px * var(--corner-scale));
 }
 
-.footer-contacts a[href^="mailto:"] {
+.footer-contacts .footer-contact-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   color: var(--ink);
   font-size: 16px;
   font-weight: 750;
 }
-.footer-contacts span {
+.footer-contacts .footer-contact-line svg {
+  flex: none;
+  color: var(--accent);
+}
+.footer-contacts .footer-contact-address {
   max-width: 210px;
   line-height: 1.55;
 }
@@ -4305,6 +4312,16 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 }
 .price-currency-switch button {
   cursor: pointer;
+}
+/* Красная строка под растаможкой: тем же кеглем, что и «это не оферта», но
+   цветом — это не сноска, а изменение в цене. */
+.price-customs-alert {
+  /* Отрицательный отступ съедает нижний внутренний отступ строки выше: подпись
+     должна читаться как продолжение «Растаможки», а не как отдельный абзац. */
+  margin: -8px 0 4px;
+  color: var(--accent-dark);
+  font-size: 13px;
+  line-height: 1.45;
 }
 .price-assumption {
   display: block;
@@ -11356,6 +11373,228 @@ html[data-theme="dark"] .model-page-cars-nav {
   }
 }
 
+/* ===================== Остаток квоты на электромобили ===================== */
+
+/* Пока действует квота, пошлина на электромобиль — 0%, и вся цена «под ключ»
+   в каталоге считается по льготе. Поэтому остаток стоит в шапке: это и польза
+   посетителю, и причина не откладывать покупку. */
+.quota-shell {
+  position: relative;
+  display: flex;
+}
+.header-actions .quota-link {
+  height: 48px;
+  padding: 0 15px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--header-control-bg);
+  white-space: nowrap;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+.header-actions .quota-link > strong {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-dark);
+}
+.header-actions .quota-link:hover,
+.header-actions .quota-link.selected {
+  color: var(--accent-dark);
+}
+.header-actions .quota-link:hover {
+  transform: translateY(-1px);
+}
+.header-actions .quota-link:active {
+  transform: scale(0.97);
+}
+.header-actions .quota-link:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.quota-pop {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  z-index: 40;
+  width: 330px;
+  max-width: calc(100vw - 28px);
+  padding: 12px;
+  border-radius: calc(18px * var(--corner-scale));
+  background: var(--menu-popover-bg);
+  box-shadow: 0 18px 50px rgba(23, 25, 28, 0.16);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-7px) scale(0.98);
+  transform-origin: top left;
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-medium) var(--motion-ease),
+    visibility 0s linear var(--motion-medium);
+}
+.quota-pop.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  transition-delay: 0s;
+}
+
+/* Внутренние блоки карточки разделяем фоном, без обводок: в светлой теме они
+   темнее подложки, в тёмной — светлее, иначе на тёмном фоне меню блок пропадает. */
+.quota-panel {
+  display: grid;
+  gap: 8px;
+  --quota-block-bg: var(--panel-soft);
+  --quota-track-bg: var(--line);
+  --quota-tab-active-bg: var(--panel);
+}
+:root[data-theme="dark"] .quota-panel {
+  --quota-block-bg: #30343c;
+  --quota-track-bg: #454b55;
+  --quota-tab-active-bg: #3d424b;
+}
+/* Переключатель «кому квота» — как валютный в шапке: сегмент активной вкладки
+   светлее дорожки в тёмной теме и белый в светлой. */
+.quota-panel-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--quota-block-bg);
+}
+.quota-panel-tabs button {
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: calc(9px * var(--corner-scale));
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.quota-panel-tabs button:hover {
+  color: var(--ink);
+}
+.quota-panel-tabs button.active {
+  background: var(--quota-tab-active-bg);
+  color: var(--accent-dark);
+}
+.quota-panel-tabs button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.quota-panel-figure,
+.quota-panel-months {
+  padding: 12px 14px;
+  border-radius: calc(13px * var(--corner-scale));
+  background: var(--quota-block-bg);
+}
+.quota-panel-figure > b {
+  display: block;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-dark);
+}
+.quota-panel-bar {
+  display: block;
+  height: 12px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: var(--quota-track-bg);
+  overflow: hidden;
+}
+/* Полоса — тем же красным, что и заголовок в этой плашке. */
+.quota-panel-bar > b {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-dark);
+}
+.quota-panel-figure > small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.quota-panel-title {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.quota-panel-months ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.quota-panel-months li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 16px;
+}
+.quota-panel-months li > span {
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.15;
+}
+/* Месяцы, которые ещё не наступили, отличаются только цветом: они держат каркас
+   года, но спорить за внимание с реальными цифрами не должны. Начертание строго
+   такое же — прибавка веса на светлой теме сразу читается как жирный шрифт. */
+.quota-panel-months li.future > span,
+.quota-panel-months li.future > strong {
+  color: var(--muted);
+}
+.quota-panel-months li > strong {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.quota-panel-forecast {
+  margin: 2px 2px 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+/* В меню телефона карточка стоит раскрытой, без своей подложки: меню уже панель. */
+.header-menu-quota {
+  margin-bottom: 8px;
+}
+.header-menu-quota .quota-panel-figure > b {
+  font-size: 19px;
+}
+
+/* На планшете в шапке уже тесно, поэтому от кнопки остаётся молния и число —
+   что это за число, объясняет подсказка и сама карточка. */
+@media (max-width: 980px) {
+  .header-actions .quota-link {
+    gap: 6px;
+    padding: 0 12px;
+  }
+  .header-actions .quota-link > span {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  /* Четвёртая кнопка в шапку телефона не влезает — остаток квоты
+     показываем в том же меню, где валюта и «Мои поиски». */
+  .quota-shell {
+    display: none;
+  }
+}
+
 /* ============================== Форма скруглений ========================== */
 
 /* Обычное скругление — дуга окружности: у угла виден стык с прямой стороной.
@@ -11405,7 +11644,9 @@ html[data-theme="dark"] .model-page-cars-nav {
     .quick-view-toggle .quick-view-toggle-track,
     .quick-view-toggle .quick-view-toggle-track i,
     .model-page-back,
-    .model-page-cars-nav
+    .model-page-cars-nav,
+    .quota-panel-bar,
+    .quota-panel-bar > b
   ) {
     corner-shape: round;
   }

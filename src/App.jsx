@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, yuanToUsdAbout } from "./pricing.js";
+import { evQuotaState } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
@@ -787,6 +788,15 @@ const playRefreshPulse = (event) => {
   refreshPulseTimer = window.setTimeout(() => root.classList.remove("refresh-pulse"), refreshPulseMs);
 };
 
+// Viber нет в наборе Phosphor, поэтому фирменный контур храним здесь.
+function ViberLogo({ size = 27 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M11.4 0C9.473.028 5.333.344 3.02 2.467 1.302 4.187.696 6.7.633 9.817.57 12.933.488 18.776 6.12 20.36h.003l-.004 2.416s-.037.977.61 1.177c.777.242 1.234-.5 1.98-1.302.407-.44.972-1.084 1.397-1.58 3.85.326 6.812-.416 7.15-.525.776-.252 5.176-.816 5.892-6.657.74-6.02-.36-9.83-2.34-11.546-.596-.55-3.006-2.3-8.375-2.323 0 0-.395-.025-1.037-.017zm.058 1.693c.545-.004.88.017.88.017 4.542.02 6.717 1.388 7.222 1.846 1.675 1.435 2.53 4.868 1.906 9.897v.002c-.604 4.878-4.174 5.184-4.832 5.395-.28.09-2.882.737-6.153.524 0 0-2.436 2.94-3.197 3.704-.12.12-.26.167-.352.144-.13-.033-.166-.188-.165-.414l.02-4.018c-4.762-1.32-4.485-6.292-4.43-8.895.054-2.604.543-4.738 1.996-6.173 1.96-1.773 5.474-2.018 7.11-2.03zm.38 2.602c-.167 0-.303.135-.304.302 0 .167.133.303.3.305 1.624.01 2.946.537 4.028 1.592 1.073 1.046 1.62 2.468 1.633 4.334.002.167.14.3.307.3.166-.002.3-.138.3-.304-.014-1.984-.618-3.596-1.816-4.764-1.19-1.16-2.692-1.753-4.447-1.765zm-3.96.695c-.19-.032-.4.005-.616.117l-.01.002c-.43.247-.816.562-1.146.932-.002.004-.006.004-.008.008-.267.323-.42.638-.46.948-.008.046-.01.093-.007.14 0 .136.022.27.065.4l.013.01c.135.48.473 1.276 1.205 2.604.42.768.903 1.5 1.446 2.186.27.344.56.673.87.984l.132.132c.31.308.64.6.984.87.686.543 1.418 1.027 2.186 1.447 1.328.733 2.126 1.07 2.604 1.206l.01.014c.13.042.265.064.402.063.046.002.092 0 .138-.008.31-.036.627-.19.948-.46.004 0 .003-.002.008-.005.37-.33.683-.72.93-1.148l.003-.01c.225-.432.15-.842-.18-1.12-.004 0-.698-.58-1.037-.83-.36-.255-.73-.492-1.113-.71-.51-.285-1.032-.106-1.248.174l-.447.564c-.23.283-.657.246-.657.246-3.12-.796-3.955-3.955-3.955-3.955s-.037-.426.248-.656l.563-.448c.277-.215.456-.737.17-1.248-.217-.383-.454-.756-.71-1.115-.25-.34-.826-1.033-.83-1.035-.137-.165-.31-.265-.502-.297zm4.49.88c-.158.002-.29.124-.3.282-.01.167.115.312.282.324 1.16.085 2.017.466 2.645 1.15.63.688.93 1.524.906 2.57-.002.168.13.306.3.31.166.003.305-.13.31-.297.025-1.175-.334-2.193-1.067-2.994-.74-.81-1.777-1.253-3.05-1.346h-.024zm.463 1.63c-.16.002-.29.127-.3.287-.008.167.12.31.288.32.523.028.875.175 1.113.422.24.245.388.62.416 1.164.01.167.15.295.318.287.167-.008.295-.15.287-.317-.03-.644-.215-1.178-.58-1.557-.367-.378-.893-.574-1.52-.607h-.018z" />
+    </svg>
+  );
+}
+
 function SiteLogo() {
   return (
     <>
@@ -796,10 +806,116 @@ function SiteLogo() {
   );
 }
 
+// Остаток льготной квоты на электромобили. Пока она действует, пошлина 0% —
+// на этом держится вся цена «под ключ» в каталоге, поэтому цифра стоит в шапке.
+// Данные обновляются скриптом npm run quota из сводок таможни.
+const QUOTA_AUDIENCES = [["personal", "Физ. лица"], ["business", "Юр. лица"]];
+
+function EvQuotaPanel({ quotas }) {
+  const [audience, setAudience] = useState("personal");
+  const quota = quotas[audience];
+  const forecast = quota.exhausted
+    ? `Квота выбрана${quota.exhaustedOnLabel ? ` ${quota.exhaustedOnLabel}` : ""}: к цене каждого электромобиля добавляется ввозная пошлина 15%.`
+    : quota.stale || quota.overdue
+      ? "Сводка устарела — свежий остаток смотрите у таможни."
+      : `Расход держится около ${number(quota.perWeek)} машин в неделю. При таком темпе квота закончится примерно ${quota.runsOutLabel}, а дальше к цене добавится пошлина 15%.`;
+  return (
+    <div className="quota-panel">
+      <div className="quota-panel-tabs" role="group" aria-label="Чья квота">
+        {QUOTA_AUDIENCES.map(([code, label]) => (
+          <button
+            key={code}
+            type="button"
+            className={audience === code ? "active" : ""}
+            aria-pressed={audience === code}
+            onClick={() => setAudience(code)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="quota-panel-figure">
+        <b>Ост. {number(quota.remaining)} из {number(quota.total)}</b>
+        {/* Полоса заполняется израсходованным: почти полная — значит квота на исходе. */}
+        <i className="quota-panel-bar" aria-hidden="true">
+          <b style={{ width: `${Math.min(100, Math.max(2, Math.round(quota.usedShare * 100)))}%` }} />
+        </i>
+        <small>Данные за {quota.asOfLabel}</small>
+      </div>
+      <div className="quota-panel-months">
+        <span className="quota-panel-title">Расход квоты</span>
+        <ul>
+          {quota.periods.map((period) => (
+            <li key={period.key} className={period.future ? "future" : undefined}>
+              <span>{period.label}</span>
+              <strong>{number(period.spent)}</strong>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p className="quota-panel-forecast">{forecast}</p>
+    </div>
+  );
+}
+
+function EvQuotaButton({ quotas }) {
+  // В шапке — общий остаток по стране: физлица плюс юрлица. Разбивка по каждой
+  // половине лежит во вкладках карточки.
+  const remaining = quotas.personal.remaining + quotas.business.remaining;
+  const total = quotas.personal.total + quotas.business.total;
+  const [open, setOpen] = useState(false);
+  const shellRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => {
+      if (event.key === "Escape" || (event.type === "pointerdown" && !shellRef.current?.contains(event.target))) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  return (
+    <div className="quota-shell" ref={shellRef}>
+      <button
+        type="button"
+        className={`icon-label quota-link${open ? " selected" : ""}`}
+        aria-expanded={open}
+        aria-controls="ev-quota-panel"
+        title={`Осталось квот на беспошлинный ввоз электромобилей: ${number(remaining)} из ${number(total)}`}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Lightning size={20} weight="bold" />
+        <span>Осталось квот</span>
+        <strong>{number(remaining)}</strong>
+      </button>
+      <div
+        className={`quota-pop${open ? " open" : ""}`}
+        id="ev-quota-panel"
+        aria-hidden={!open}
+        inert={open ? undefined : true}
+      >
+        <EvQuotaPanel quotas={quotas} />
+      </div>
+    </div>
+  );
+}
+
 function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, setCurrency, user, theme, toggleTheme }) {
   const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  // Остаток квоты считается по вшитым в сборку сводкам — за сессию он не меняется.
+  const quotas = useMemo(() => ({
+    personal: evQuotaState({ audience: "personal" }),
+    business: evQuotaState({ audience: "business" }),
+  }), []);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -857,11 +973,17 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
                 </AppLink>
               </nav>
               <div className="header-menu-settings">
+                {/* На телефоне четвёртая кнопка в шапку не влезает, поэтому остаток
+                    квоты живёт здесь же, где валюта и «Мои поиски». */}
+                <div className="header-menu-quota">
+                  <EvQuotaPanel quotas={quotas} />
+                </div>
                 <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
               </div>
           </div>
         </div>
         <div className="header-actions">
+          <EvQuotaButton quotas={quotas} />
           <CurrencySwitch currency={currency} setCurrency={setCurrency} />
           <button
             type="button"
@@ -5354,6 +5476,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 <PriceLabel label="Растаможка и сборы" description={price.customsNote} />
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
+              {price.customsAlert && <p className="price-customs-alert">{price.customsAlert}</p>}
               <div>
                 <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
                 <strong>{money(price.serviceUsd, currency)}</strong>
@@ -5757,6 +5880,7 @@ function OrderDraft({ car, navigate }) {
                 <PriceLabel label="Таможня и сборы" description={price.customsNote} />
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
+              {price.customsAlert && <p className="price-customs-alert">{price.customsAlert}</p>}
               <div>
                 <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
                 <b>{money(price.serviceUsd, currency)}</b>
@@ -6357,8 +6481,7 @@ function ContactsPage({ navigate, theme }) {
           <span className="info-eyebrow">Контакты</span>
           <h1>Расскажем о процессе и ответим на ваши вопросы</h1>
           <p className="contact-office-summary">
-            <strong>Офис в Минске</strong>
-            <span>{COMPANY.address}. {COMPANY.hours}</span>
+            <span>Среднее время ответа — 10 минут</span>
           </p>
           <div className="info-actions">
             <a className="primary contact-telegram-cta" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer">
@@ -6461,11 +6584,17 @@ function SiteFooter({ navigate }) {
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
           <div className="footer-socials">
             <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramLogo size={27} weight="fill" /></a>
-            <a className="instagram-social-link" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" aria-label="Instagram"><InstagramLogo size={27} weight="bold" /></a>
+            <a className="viber-social-link" href={COMPANY.viberUrl} aria-label="Viber"><ViberLogo size={25} /></a>
           </div>
         </div>
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
-        <div className="footer-column footer-contacts"><b>Связаться</b><AppLink href="/contacts" navigate={navigate}>Контакты</AppLink><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a><span>{COMPANY.address}</span></div>
+        <div className="footer-column footer-contacts">
+          <b>Связаться</b>
+          <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
+          <a className="footer-contact-line" href={`mailto:${COMPANY.email}`}><EnvelopeSimple size={18} weight="duotone" /><span>{COMPANY.email}</span></a>
+          <a className="footer-contact-line" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer"><TelegramLogo size={18} weight="fill" /><span>{COMPANY.telegram}</span></a>
+          <span className="footer-contact-address">{COMPANY.address}</span>
+        </div>
       </div>
       <div className="page-width footer-bottom">
         <span>© 2026 {COMPANY.legalName}</span>

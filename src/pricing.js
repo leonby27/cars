@@ -1,8 +1,10 @@
 import { chinaTransitFor } from "./china-logistics.js";
+import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
   usdByn:2.9829, cnyBynPer10:4.4496, eurByn:3.4918, rateDate:"21.08.2026",
   serviceUsd:800, evCustomsUsd:350,
+  evDutyPercent:0.15, // пошлина на электромобиль после исчерпания квоты
   // Этапы до СВХ, доллары [низ, верх]. Ориентиры — открытые тарифы перевозчиков
   // Китай→Минск и платёжных агентов (лето 2026): автовоз «под ключ» ≈ $3500,
   // перевод через агента от 0,9%, внутрикитайское плечо 30–80 тыс. ₽ по удалённости.
@@ -14,6 +16,10 @@ export const PRICING = {
   svhUsd:[100, 200], // разгрузка и склад временного хранения в Минске до выдачи
 };
 const round50 = (value) => Math.round(value / 50) * 50;
+
+// Считаем один раз при загрузке: карточек в каталоге тысячи, а состояние квоты
+// за время просмотра страницы не меняется.
+const QUOTA_OVER = isEvQuotaOver();
 
 // Цену в юанях со страницы модели переводим в доллары по тому же курсу, что и
 // расчёт стоимости машины: юани человеку ни о чём не говорят. Округляем до сотни —
@@ -29,7 +35,7 @@ export const yuanToUsdAbout = (text) => {
   return prefix ? `${prefix[1]} ${money}` : `≈ ${money}`;
 };
 
-export function estimateLandedCost(car) {
+export function estimateLandedCost(car, { quotaOver = QUOTA_OVER } = {}) {
   const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
   // Che168 quotes its export price in dollars; storing it as yuan at 7.15 and
@@ -53,8 +59,14 @@ export function estimateLandedCost(car) {
   const intlNote = bigCar ? "Хоргос → Минск · крупный кузов, дороже место" : "Хоргос → Минск, через Казахстан и Россию";
 
   const age = 2026 - car.year;
-  let customsUsd = PRICING.evCustomsUsd;
-  let customsNote = "Льгота 0% · оформление и сборы";
+  // Пока действует квота, электромобиль ввозится без пошлины и в этой строке
+  // остаются только оформление и сборы. Когда квота выбрана — сверху ложится
+  // пошлина 15% от стоимости машины.
+  let customsUsd = quotaOver
+    ? round50(chinaUsd * PRICING.evDutyPercent + PRICING.evCustomsUsd)
+    : PRICING.evCustomsUsd;
+  let customsNote = quotaOver ? "Пошлина 15% · оформление и сборы" : "Льгота 0% · оформление и сборы";
+  let customsAlert = quotaOver ? "Квоты закончились" : null;
   let engineAssumed = false;
   if (car.type !== "Электромобиль") {
     const parsedEngine = Number(String(car.engine || "").match(/\d+(?:\.\d+)?/)?.[0]);
@@ -70,8 +82,11 @@ export function estimateLandedCost(car) {
     else dutyEur = engineCc * 3.2;
     customsUsd = round50(dutyEur * eurUsd + 300);
     customsNote = `Физлицо · ДВС ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (оценка)" : ""}`;
+    customsAlert = null;
   }
-  const customsSpread = car.type === "Электромобиль" ? 150 : Math.max(300, round50(customsUsd * .08));
+  const customsSpread = car.type !== "Электромобиль"
+    ? Math.max(300, round50(customsUsd * .08))
+    : quotaOver ? Math.max(200, round50(customsUsd * .05)) : 150;
   const customsLow = Math.max(0, customsUsd - customsSpread);
   const customsHigh = customsUsd + customsSpread;
 
@@ -83,7 +98,7 @@ export function estimateLandedCost(car) {
     chinaLegLow, chinaLegHigh, chinaLegNote,
     intlLow, intlHigh, intlNote,
     svhLow:PRICING.svhUsd[0], svhHigh:PRICING.svhUsd[1],
-    customsUsd, customsLow, customsHigh, customsNote,
+    customsUsd, customsLow, customsHigh, customsNote, customsAlert,
     serviceUsd:PRICING.serviceUsd,
     totalLow, totalHigh, totalUsd:round50((totalLow + totalHigh) / 2),
   };

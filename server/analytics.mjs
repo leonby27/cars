@@ -168,3 +168,112 @@ export async function getAnalyticsDashboard(daysValue) {
     recent:recentResult.rows.map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),
   };
 }
+
+// Заявки собираются из двух мест сразу: формы на сайте пишут в `order_drafts`, а
+// кабинет — в `customer_orders`. Менеджеру важен один список по дате, поэтому обе
+// таблицы приводятся к общей форме здесь, а не в браузере.
+const LEADS_LIMIT = 200;
+
+const leadCar = (row) => (row.listing_id ? {
+  id:row.listing_id,
+  title:row.title || row.listing_id,
+  brand:row.brand || "",
+  model:row.model || "",
+  year:row.model_year || null,
+  city:row.city || "",
+  mileage:Number(row.mileage_km) || 0,
+  estimatedTotalUsd:Number(row.estimated_total_usd) || null,
+  image:row.image || null,
+  // Объявление могли снять с продажи после заявки — тогда join не найдёт строку,
+  // но идентификатор всё равно показываем, чтобы заявка не осталась безымянной.
+  missing:!row.title,
+} : null);
+
+const leadPhone = (value) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits ? `+${digits}` : "";
+};
+
+const draftKind = (row) => {
+  const requestType = String(row.calculation?.requestType || "");
+  if (requestType === "catalog_search") return "custom_search";
+  if (requestType === "availability_check") return "availability";
+  return "listing_draft";
+};
+
+export async function getAnalyticsLeads() {
+  const [draftsResult, ordersResult] = await Promise.all([
+    pool.query(`SELECT d.id,d.listing_id,d.customer_name,d.contact,d.calculation,d.status,d.created_at,
+      l.title,l.estimated_total_usd,l.mileage_km,l.city,
+      v.brand,v.model,v.model_year,
+      (SELECT m.url FROM listing_media m WHERE m.listing_id=d.listing_id ORDER BY m.position LIMIT 1) AS image
+      FROM order_drafts d
+      LEFT JOIN listings l ON l.id=d.listing_id
+      LEFT JOIN vehicles v ON v.id=l.vehicle_id
+      ORDER BY d.created_at DESC LIMIT ${LEADS_LIMIT}`),
+    pool.query(`SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,
+      o.contact_name,o.contact_phone,o.contact_methods,o.contact_saved_at,
+      o.inspection_status,o.contract_status,o.payment_status,o.created_at,o.updated_at,
+      a.name AS account_name,a.phone AS account_phone,a.email AS account_email,a.telegram AS account_telegram,
+      a.city AS account_city,a.preferred_contact,
+      l.title,l.estimated_total_usd,l.mileage_km,l.city,
+      v.brand,v.model,v.model_year,
+      (SELECT m.url FROM listing_media m WHERE m.listing_id=o.listing_id ORDER BY m.position LIMIT 1) AS image
+      FROM customer_orders o
+      JOIN customer_accounts a ON a.id=o.customer_id
+      LEFT JOIN listings l ON l.id=o.listing_id
+      LEFT JOIN vehicles v ON v.id=l.vehicle_id
+      ORDER BY o.created_at DESC LIMIT ${LEADS_LIMIT}`),
+  ]);
+  const drafts = draftsResult.rows.map((row) => ({
+    id:`draft-${row.id}`,
+    source:"site",
+    kind:draftKind(row),
+    createdAt:row.created_at,
+    car:leadCar(row),
+    customer:{
+      name:row.customer_name || "",
+      phone:leadPhone(row.contact),
+      contact:String(row.contact || ""),
+      methods:Array.isArray(row.calculation?.contactMethods) ? row.calculation.contactMethods : [],
+      email:"",
+      telegram:"",
+      city:"",
+    },
+    comment:String(row.calculation?.preferences || "").trim(),
+    // Фильтры каталога — единственная подсказка, что человек искал, когда конкретного
+    // автомобиля в заявке нет.
+    filters:row.calculation?.catalogFilters && typeof row.calculation.catalogFilters === "object" ? row.calculation.catalogFilters : null,
+    stages:null,
+  }));
+  const orders = ordersResult.rows.map((row) => ({
+    id:`order-${row.id}`,
+    source:"account",
+    kind:row.availability_status === "decision" ? "order_started" : "availability",
+    orderNumber:`EV-${new Date(row.created_at).getUTCFullYear()}-${String(row.id).padStart(6, "0")}`,
+    createdAt:row.availability_requested_at || row.created_at,
+    updatedAt:row.updated_at,
+    car:leadCar(row),
+    customer:{
+      name:row.contact_name || row.account_name || "",
+      phone:leadPhone(row.contact_phone || row.account_phone),
+      contact:row.contact_phone || leadPhone(row.account_phone),
+      methods:Array.isArray(row.contact_methods) ? row.contact_methods : [],
+      email:row.account_email || "",
+      telegram:row.account_telegram || "",
+      city:row.account_city || "",
+      preferredContact:row.preferred_contact || "phone",
+      accountName:row.account_name || "",
+    },
+    comment:String(row.availability_comment || "").trim(),
+    filters:null,
+    stages:{
+      availability:row.availability_status,
+      inspection:row.inspection_status,
+      contract:row.contract_status,
+      payment:row.payment_status,
+    },
+  }));
+  const leads = [...drafts, ...orders].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)).slice(0, LEADS_LIMIT);
+  return { generatedAt:new Date().toISOString(), leads };
+}

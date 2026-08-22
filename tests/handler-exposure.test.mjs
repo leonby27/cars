@@ -49,3 +49,40 @@ test("с паролем аналитики состояние импорта в�
     else process.env.ANALYTICS_PASSWORD = previousPassword;
   }
 });
+
+// Заявки — самые чувствительные данные раздела: имя, телефон и комментарий живого
+// человека. Тест держит границу, что список отдаётся только по паролю аналитики.
+const requestLeads = async (headers = {}) => {
+  const previousQuery = pool.query;
+  pool.query = async () => ({ rows:[] });
+  let status = 0;
+  let body = "";
+  const response = {
+    req:{ headers:{} },
+    writeHead(code) { status = code; return this; },
+    end(chunk) { body = chunk ? chunk.toString("utf8") : ""; return this; },
+  };
+  try {
+    await handleApiRequest({ method:"GET", url:"/api/analytics/leads", headers:{ host:"example.test", ...headers } }, response);
+  } finally {
+    pool.query = previousQuery;
+  }
+  return { status, payload:JSON.parse(body) };
+};
+
+test("список заявок закрыт паролем аналитики", async () => {
+  const previousPassword = process.env.ANALYTICS_PASSWORD;
+  process.env.ANALYTICS_PASSWORD = "test-password";
+  try {
+    const anonymous = await requestLeads();
+    assert.equal(anonymous.status, 401);
+    assert.equal("leads" in anonymous.payload, false);
+
+    const authorized = await requestLeads({ cookie:`evcars_analytics=${encodeURIComponent(createAnalyticsToken())}` });
+    assert.equal(authorized.status, 200);
+    assert.deepEqual(authorized.payload.leads, []);
+  } finally {
+    if (previousPassword === undefined) delete process.env.ANALYTICS_PASSWORD;
+    else process.env.ANALYTICS_PASSWORD = previousPassword;
+  }
+});

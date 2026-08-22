@@ -155,6 +155,13 @@ export async function handleAnalyticsRequest(request, env, url) {
     if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
     return json(await dashboard(env.DB, daysValue(url)));
   }
+  // Заявки лежат в таблицах аккаунтов и заказов, а их на этом хостинге нет: отвечаем
+  // честным признаком «раздел недоступен», чтобы раздел не выглядел пустым по ошибке.
+  if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
+    const token = decodeURIComponent(cookieValue(request.headers.get("cookie"), COOKIE_NAME));
+    if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
+    return json({ generatedAt:new Date().toISOString(), leads:[], unavailable:true });
+  }
   if (request.method === "DELETE" && url.pathname === "/api/analytics/events") {
     const token = decodeURIComponent(cookieValue(request.headers.get("cookie"), COOKIE_NAME));
     if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);

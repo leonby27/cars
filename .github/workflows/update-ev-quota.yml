@@ -1,0 +1,41 @@
+# Каждый день подтягивает свежую сводку таможни об остатке квоты на ввоз
+# электромобилей в src/ev-quota.js и, если появились новые цифры, коммитит правку.
+# Пуш в main запускает обычную сборку на Vercel, так что сайт получает новый
+# остаток без участия человека — включая тот момент, когда квота дойдёт до нуля
+# и в цене электромобиля должна появиться пошлина 15%.
+#
+# Сводки выходят по пятницам, но при быстром исчерпании квоты таможня пишет и
+# в другие дни — поэтому проверяем ежедневно. Если новых цифр нет, скрипт молча
+# ничего не меняет.
+name: Квота на электромобили
+
+on:
+  schedule:
+    # 15:00 UTC = 18:00 по Минску: дневная сводка к этому времени уже опубликована.
+    - cron: "0 15 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update-ev-quota:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Прочитать сводки таможни
+        run: node scripts/update-ev-quota.mjs
+      - name: Закоммитить, если появилась новая сводка
+        run: |
+          if [ -z "$(git status --porcelain src/ev-quota.js)" ]; then
+            echo "Новых сводок нет — коммит не нужен."
+            exit 0
+          fi
+          git config user.name "ev-quota-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/ev-quota.js
+          git commit -m "Квота на электромобили: автообновление"
+          git push
