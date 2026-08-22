@@ -16,7 +16,7 @@ test("charges the 15% duty once the quota is gone", () => {
   const dutied = estimateLandedCost(car, { quotaOver:true });
   assert.equal(dutied.customsUsd, Math.round((free.chinaUsd * 0.15 + free.customsUsd) / 50) * 50);
   assert.equal(dutied.customsNote, "Пошлина 15% · оформление и сборы");
-  assert.equal(dutied.customsAlert, "Квоты закончились");
+  assert.equal(dutied.customsAlert, "Без квоты на льготный ввоз");
   assert.ok(dutied.totalUsd > free.totalUsd);
 });
 

@@ -6416,6 +6416,39 @@ html[data-theme="dark"] #root .spec-search,
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 8px;
 }
+/* Исключения из поиска («кроме 001»): отдельная строка фишек, каждую можно снять.
+   Держатся фоном, без обводки — как остальные блоки. */
+.filter-exclusions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.filter-exclusions-label {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+.filter-exclusions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(8px * var(--corner-scale));
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.filter-exclusions button svg {
+  color: var(--muted);
+}
+.filter-exclusions button:hover svg {
+  color: var(--text);
+}
 .filter-actions-row {
   display: flex;
   align-items: center;
@@ -9808,6 +9841,12 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   border-radius: calc(18px * var(--corner-scale));
   background: var(--menu-popover-bg);
   box-shadow: 0 18px 50px rgba(23, 25, 28, 0.16);
+  /* На телефоне внутри меню стоит карточка квоты — вместе с пунктами оно выше
+     экрана, поэтому прокрутка своя. */
+  max-height: calc(100vh - 106px);
+  max-height: calc(100dvh - 106px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -9976,6 +10015,12 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   }
   .site-header {
     height: 66px;
+  }
+  /* Шапка на телефоне ниже — выпадающим карточкам достаётся больше высоты. */
+  .quota-pop,
+  .header-menu {
+    max-height: calc(100vh - 90px);
+    max-height: calc(100dvh - 90px);
   }
   .header-inner {
     gap: 8px;
@@ -11433,6 +11478,13 @@ html[data-theme="dark"] .model-page-cars-nav {
   pointer-events: none;
   transform: translateY(-7px) scale(0.98);
   transform-origin: top left;
+  /* Карточка длинная: расход расписан по месяцам, и на невысоком экране она не
+     влезала целиком. Держим её в пределах экрана со своей прокруткой; 78 px —
+     шапка, к ней зазор сверху и снизу. */
+  max-height: calc(100vh - 106px);
+  max-height: calc(100dvh - 106px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   transition:
     opacity var(--motion-fast) ease,
     transform var(--motion-medium) var(--motion-ease),
@@ -11444,6 +11496,18 @@ html[data-theme="dark"] .model-page-cars-nav {
   pointer-events: auto;
   transform: translateY(0) scale(1);
   transition-delay: 0s;
+}
+/* В тёмной теме подложка карточки была намного светлее страницы и била в глаза.
+   Держим её ближе к фону, а форму отбиваем тенью — и на столько же приглушаем
+   каждый блок внутри, чтобы шаг «карточка → блок» остался прежним. */
+:root[data-theme="dark"] .quota-pop {
+  background: #1c1f23;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme="dark"] .quota-pop .quota-panel {
+  --quota-block-bg: #282c32;
+  --quota-track-bg: #3b414a;
+  --quota-tab-active-bg: #32373f;
 }
 
 /* Внутренние блоки карточки разделяем фоном, без обводок: в светлой теме они
@@ -11460,6 +11524,50 @@ html[data-theme="dark"] .model-page-cars-nav {
   --quota-track-bg: #454b55;
   --quota-tab-active-bg: #3d424b;
 }
+/* Режим цен — такой же блок, как остальные: подпись объясняет, что поменяется
+   в ценах каталога, поэтому строка с переключателем идёт первой. */
+.quota-panel-pricing {
+  padding: 11px 14px 12px;
+  border-radius: calc(13px * var(--corner-scale));
+  background: var(--quota-block-bg);
+}
+.quota-panel-pricing .quick-view-toggle {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+}
+.quota-panel-pricing .quick-view-toggle-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.quota-panel-pricing .quick-view-toggle-track {
+  order: 2;
+  margin-left: auto;
+}
+/* В тёмной теме дорожка выключенного переключателя берётся от блока, как полоса
+   расхода в плашке остатка: общий серый на этом фоне выглядел бы засветкой.
+   Включённая — тем же красным, что и полоса, а не тёмным фирменным. */
+:root[data-theme="dark"] .quota-panel-pricing .quick-view-toggle-track {
+  background: var(--quota-track-bg);
+}
+:root[data-theme="dark"] .quota-panel-pricing .quick-view-toggle input:checked + .quick-view-toggle-track {
+  background: var(--accent-dark);
+}
+.quota-panel-pricing .quick-view-toggle input:disabled ~ .quick-view-toggle-label {
+  color: var(--muted);
+}
+.quota-panel-pricing .quick-view-toggle:has(input:disabled) {
+  cursor: default;
+}
+.quota-panel-pricing > small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 /* Переключатель «кому квота» — как валютный в шапке: сегмент активной вкладки
    светлее дорожки в тёмной теме и белый в светлой. */
 .quota-panel-tabs {
@@ -11492,11 +11600,16 @@ html[data-theme="dark"] .model-page-cars-nav {
   outline: 3px solid var(--focus-ring);
   outline-offset: 1px;
 }
-.quota-panel-figure,
-.quota-panel-months {
+.quota-panel-figure {
   padding: 12px 14px;
   border-radius: calc(13px * var(--corner-scale));
   background: var(--quota-block-bg);
+}
+/* Расход по месяцам живёт в той же плашке, что и остаток: отделяем его отступом,
+   а не второй подложкой. Подпись над списком его же и вводит, поэтому зазор
+   небольшой — это подпись со своим списком, а не отдельный блок. */
+.quota-panel-months {
+  margin-top: 10px;
 }
 .quota-panel-figure > b {
   display: block;
@@ -11526,13 +11639,6 @@ html[data-theme="dark"] .model-page-cars-nav {
   margin-top: 8px;
   color: var(--muted);
   font-size: 13px;
-}
-.quota-panel-title {
-  display: block;
-  margin-bottom: 9px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 400;
 }
 .quota-panel-months ul {
   display: grid;
@@ -11571,20 +11677,10 @@ html[data-theme="dark"] .model-page-cars-nav {
   line-height: 1.45;
 }
 /* В меню телефона карточка стоит раскрытой, без своей подложки: меню уже панель.
-   Сверху — линия и заголовок: отделяют квоту от пунктов навигации. */
+   Ни линии, ни заголовка сверху нет — блоки самой карточки видно и так. */
 .header-menu-quota {
   margin-bottom: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-/* Отступ слева — как у текста ссылок меню, чтобы заголовки стояли по одной линии. */
-.header-menu-quota-title {
-  display: block;
-  margin-bottom: 13px;
-  padding: 0 14px;
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 700;
+  padding-top: 4px;
 }
 .header-menu-quota .quota-panel-figure > b {
   font-size: 19px;

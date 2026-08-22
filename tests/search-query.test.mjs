@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mileageBounds, mileageLabel, parseQueryRanges } from "../src/search-query.js";
+import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "../src/search-query.js";
 import { PRICING } from "../src/pricing.js";
 
 test("понимает цену «от … до …»", () => {
@@ -278,4 +278,73 @@ test("«зикр от 25к» — нижняя граница цены в вал�
   // «к» отделённое пробелом и явная валюта поверх переключателя.
   assert.equal(parseQueryRanges("зикр от 25 к").priceMinUsd, 25000);
   assert.equal(parseQueryRanges("зикр от 25к$", { currency: "BYN" }).priceMinUsd, 25000);
+});
+
+test("разгон: «до 5 сек» и его варианты", () => {
+  for (const query of ["разгон до 5 сек", "разгон до 5 секунд", "быстрее 5 сек", "ускорение 5с"]) {
+    const result = parseQueryRanges(query);
+    assert.equal(result.accelMax, 5, query);
+    assert.equal(result.rest, "");
+  }
+  assert.equal(parseQueryRanges("разгон до 3.5 сек").accelMax, 3.5);
+});
+
+test("батарея: «от 70» и киловатт-часы в любом написании", () => {
+  for (const query of ["батарея от 70", "аккумулятор больше 70 кВт·ч", "емкость батареи от 70 квтч"]) {
+    const result = parseQueryRanges(query);
+    assert.equal(result.batteryMin, 70, query);
+    assert.equal(result.rest, "");
+  }
+});
+
+test("запас хода в километрах не путается с пробегом", () => {
+  const result = parseQueryRanges("запас хода от 500 км пробег до 30 тыс");
+  assert.equal(result.rangeMin, 500);
+  assert.equal(result.mileageMax, 30000);
+  assert.equal(result.rest, "");
+});
+
+test("марка и модель остаются, когда рядом разгон и батарея", () => {
+  const result = parseQueryRanges("зикр 001 разгон до 4 сек батарея от 90");
+  assert.equal(result.rest, "зикр 001");
+  assert.equal(result.accelMax, 4);
+  assert.equal(result.batteryMin, 90);
+  assert.equal(result.hasRanges, true);
+});
+
+test("числа названий моделей не становятся разгоном и батареей", () => {
+  const result = parseQueryRanges("бмв 530");
+  assert.equal(result.rest, "бмв 530");
+  assert.equal(result.accelMax, null);
+  assert.equal(result.batteryMin, null);
+  assert.equal(result.rangeMin, null);
+});
+
+test("постороннее слово между границами не путает величины", () => {
+  const result = parseQueryRanges("лифтбэк от 2024 года, запас хода от 500 электро до 100к бел руб", { currency: "USD" });
+  assert.equal(result.yearFrom, "2024");
+  assert.equal(result.rangeMin, 500);
+  assert.equal(result.priceMaxUsd, Math.round(100000 / PRICING.usdByn));
+  assert.equal(result.rest, "лифтбэк или электро");
+});
+
+test("кириллица в названии модели читается латиницей", () => {
+  assert.deepEqual(latinVariants("8х"), ["8x"]);
+  assert.ok(latinVariants("007гт").includes("007gt"));
+  // «у» пишут и как u (по звучанию), и как y (по начертанию) — годятся оба.
+  assert.deepEqual(latinVariants("у"), ["u", "y"]);
+  assert.ok(latinVariants("ен7").includes("eh7"));
+});
+
+test("названия латинских букв словами", () => {
+  assert.ok(latinVariants("эль7").includes("l7"));
+  assert.ok(latinVariants("икс9").includes("x9"));
+  assert.ok(latinVariants("джи6").includes("g6"));
+  // Внутри слова название буквы не подменяется.
+  assert.ok(!latinVariants("иксбандит").some((item) => item.startsWith("x")));
+});
+
+test("латинский запрос не порождает лишних вариантов", () => {
+  assert.deepEqual(latinVariants("zeekr 8x"), []);
+  assert.deepEqual(latinVariants(""), []);
 });

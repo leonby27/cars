@@ -12,7 +12,7 @@
 // Проверка tests/ev-duty-copy.test.mjs падает, если после переписывания где-то
 // осталось обещание нулевой пошлины: так новая фраза в model-pages.js не сможет
 // проскочить мимо этих правил незамеченной.
-import { isEvQuotaOver } from "./ev-quota.js";
+import { isEvQuotaExhausted } from "./ev-quota.js";
 
 const DUTY = "пошлина 15% от стоимости";
 
@@ -75,8 +75,13 @@ export const rewriteEvDutyCopy = (text, { quotaOver }) => {
   return AFTER_QUOTA_RULES.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text);
 };
 
-/** То же самое для целого дерева данных: массивов, объектов и строк внутри них. */
-export const rewriteEvDutyCopyDeep = (value, { quotaOver = isEvQuotaOver() } = {}) => {
+/**
+ * То же самое для целого дерева данных: массивов, объектов и строк внутри них.
+ * По умолчанию смотрим на настоящее состояние квоты, а не на переключатель цен:
+ * пока льгота действует, тексты про нулевую пошлину — правда, даже если
+ * посетитель попросил показать цены с пошлиной.
+ */
+export const rewriteEvDutyCopyDeep = (value, { quotaOver = isEvQuotaExhausted() } = {}) => {
   if (!quotaOver) return value;
   if (typeof value === "string") return rewriteEvDutyCopy(value, { quotaOver });
   if (Array.isArray(value)) return value.map((item) => rewriteEvDutyCopyDeep(item, { quotaOver }));

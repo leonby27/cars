@@ -77,6 +77,27 @@ test("filters by acceleration ceiling, torque and tire rim floors", () => {
   assert.match(result.where, /\(v\.specifications->>'tireRim'\)::numeric>=\$3/);
 });
 
+test("фильтрует по запасу хода, как сортировка «наибольший запас»", () => {
+  const result = buildCarFilters(new URLSearchParams({ rangeMin:"500" }));
+  assert.deepEqual(result.values, [500]);
+  assert.match(result.where, /COALESCE\(v\.electric_range_km, v\.combined_range_km\)>=\$1/);
+});
+
+test("исключения из поиска: «кроме» по марке, модели, кузову и цвету", () => {
+  const params = new URLSearchParams();
+  params.append("brandNot", "Tesla");
+  params.append("modelNot", "001");
+  params.append("bodyTypeNot", "Седан");
+  params.append("colorNot", "White");
+  const result = buildCarFilters(params);
+  assert.deepEqual(result.values, [["Tesla"], ["001"], ["Седан"], ["White"]]);
+  assert.match(result.where, /v\.brand<>ALL\(\$1\)/);
+  assert.match(result.where, /v\.model<>ALL\(\$2\)/);
+  // COALESCE: машина без записанного кузова или цвета не должна выпадать из выдачи.
+  assert.match(result.where, /COALESCE\(v\.specifications->>'bodyType',''\)<>ALL\(\$3\)/);
+  assert.match(result.where, /COALESCE\(v\.specifications->>'bodyColor',''\)<>ALL\(\$4\)/);
+});
+
 test("ignores non-numeric acceleration, torque and tire parameters", () => {
   const result = buildCarFilters(new URLSearchParams({ accelMax:"быстро", torqueMin:"", tireRimMin:"R" }));
   assert.deepEqual(result.values, []);

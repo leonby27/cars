@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
-import { mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
+import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { estimateLandedCost, PRICING, yuanToUsdAbout } from "./pricing.js";
-import { evQuotaState } from "./ev-quota.js";
+import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
+import { evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
@@ -35,6 +35,11 @@ const sameListing = (left, right) => Boolean(left) && Boolean(right) && listingN
 const findCarByListing = (cars, id) => (id ? cars.find((item) => sameListing(item.id, id)) || null : null);
 const hasFavoriteListing = (favorites, id) => (id ? favorites.has(id) || [...favorites].some((item) => sameListing(item, id)) : false);
 const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, "ru"));
+// Режим цен — с льготной квотой или с пошлиной 15% — живёт в корне приложения:
+// переключение должно пересчитать цены на всех открытых экранах, ничего не
+// перезагружая и не сбивая ни выдачу, ни прокрутку.
+const QuotaPricingContext = createContext(null);
+
 const CurrencyContext = createContext("USD");
 // Валюту переключают не только в шапке: в быстром просмотре шапка недоступна,
 // поэтому сеттер доступен из любого места дерева.
@@ -68,6 +73,7 @@ const ANY_COLOR = "Все цвета";
 const ANY_ACCEL = "Разгон до";
 const ANY_TIRE = "Размер шин";
 const ANY_TORQUE = "Крутящий момент";
+const ANY_RANGE = "Запас хода";
 // Кузов и модель выбираются списком, поэтому их значение хранится массивом.
 // Пустой массив = «все»; строку принимаем ради старых ссылок и history.state.
 const multiValues = (value, anyLabel) => (Array.isArray(value) ? value : [value]).filter((item) => item && item !== anyLabel);
@@ -120,6 +126,14 @@ const batteryFloor = (value) => Number(String(value).replace(/\D/g, "")) || 0;
 const accelOptions = [ANY_ACCEL, ...[4, 5, 6, 7, 8].map((value) => `До ${value} с`)];
 const tireOptions = [ANY_TIRE, ...[16, 17, 18, 19, 20, 21].map((value) => `От R${value}`)];
 const torqueOptions = [ANY_TORQUE, ...[200, 300, 400, 500, 700].map((value) => `От ${value} Н·м`)];
+// Запас хода: у электромобиля берётся электрический, у гибрида — общий, как
+// в карточке и в сортировке «с наибольшим запасом хода».
+const rangeOptions = [ANY_RANGE, ...[300, 400, 500, 600, 700].map((value) => `От ${value} км`)];
+// Умный поиск задаёт свои границы («разгон до 4.5 сек», «батарея от 70»), поэтому
+// каталог принимает не только ступеньки списков, но и любую подпись такой же формы.
+const FREE_ACCEL_LABEL = /^До \d+(?:\.\d+)? с$/;
+const FREE_BATTERY_LABEL = /^От \d+ кВт·ч$/;
+const FREE_RANGE_LABEL = /^От \d+ км$/;
 const priceBound = (value, anyLabel) => (!value || value === anyLabel ? null : Number(value));
 // Половинки узкие, а порядок и так читается по паре — префиксы «от»/«до» не печатаем.
 const priceMinLabel = (value, currency) => (priceBound(value, ANY_PRICE_MIN) === null ? ANY_PRICE_MIN : money(Number(value), currency));
@@ -136,6 +150,7 @@ const clampPriceMax = (priceMin, priceMax) => {
 };
 const hasPriceRange = (priceMin, priceMax) => priceBound(priceMin, ANY_PRICE_MIN) !== null || priceBound(priceMax, ANY_PRICE_MAX) !== null;
 const useCurrency = () => useContext(CurrencyContext);
+const useQuotaPricing = () => useContext(QuotaPricingContext);
 const useSetCurrency = () => useContext(SetCurrencyContext);
 
 const displayValue = (value, fallback = "Не указано") => (value === null || value === undefined || value === "" ? fallback : value);
@@ -235,7 +250,8 @@ const translateClaims = (value) => {
   const word = count % 10 === 1 && count % 100 !== 11 ? "случай" : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? "случая" : "случаев";
   return `${count} страховой ${word}`;
 };
-const filterNumber = (value) => Number(String(value).replace(/\D/g, "")) || 0;
+// Из подписи фильтра берём число; дробное тоже («До 3.5 с» — умный поиск умеет).
+const filterNumber = (value) => Number(String(value).replace(/[^\d.]/g, "")) || 0;
 const matchesPriceRange = (car, priceMin, priceMax) => {
   const total = estimateLandedCost(car).totalUsd;
   const min = priceBound(priceMin, ANY_PRICE_MIN);
@@ -262,7 +278,7 @@ const appendMileageRange = (query, label) => {
   if (bounds?.min) query.set("mileageMin", String(bounds.min));
   if (bounds?.max) query.set("mileageMax", String(bounds.max));
 };
-const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION, accel = ANY_ACCEL, tire = ANY_TIRE, torque = ANY_TORQUE }) =>
+const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION, accel = ANY_ACCEL, tire = ANY_TIRE, torque = ANY_TORQUE, range = ANY_RANGE }) =>
   (drive === ANY_DRIVE || car.drive === drive) &&
   (owners === ANY_OWNERS || Number(car.owners) <= filterNumber(owners)) &&
   (battery === ANY_BATTERY || Number(car.battery) >= batteryFloor(battery)) &&
@@ -270,7 +286,39 @@ const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, con
   // Машину без значения фильтр отсеивает: Number(null) = 0 прошёл бы «до N с».
   (accel === ANY_ACCEL || (Number(car.acceleration) > 0 && Number(car.acceleration) <= filterNumber(accel))) &&
   (tire === ANY_TIRE || Number(car.tireRim) >= filterNumber(tire)) &&
-  (torque === ANY_TORQUE || Number(car.torqueNm) >= filterNumber(torque));
+  (torque === ANY_TORQUE || Number(car.torqueNm) >= filterNumber(torque)) &&
+  (range === ANY_RANGE || Number(car.electricRange || car.combinedRange || car.range) >= filterNumber(range));
+// Исключения: «зикр кроме 001», «электро кроме белых». Каждая величина живёт
+// отдельным списком — в ссылке и в запросе к серверу это парные «…Not»-параметры.
+// Цвет стоит особняком: в подписях он русский, в базе — английский.
+const EXCLUDE_FIELDS = [
+  { key:"excludeBrand", param:"brandNot", valueOf:(car) => car.brand },
+  { key:"excludeModel", param:"modelNot", valueOf:(car) => car.model },
+  { key:"excludeBodyType", param:"bodyTypeNot", valueOf:(car) => car.bodyType },
+  { key:"excludeType", param:"typeNot", valueOf:(car) => car.type },
+  { key:"excludeDrive", param:"driveNot", valueOf:(car) => car.drive },
+];
+const EXCLUDE_KEYS = [...EXCLUDE_FIELDS.map((item) => item.key), "excludeColor"];
+const emptyExclusions = () => Object.fromEntries(EXCLUDE_KEYS.map((key) => [key, []]));
+const exclusionValues = (filters, key) => (Array.isArray(filters?.[key]) ? filters[key] : []).filter(Boolean);
+const hasExclusions = (filters) => EXCLUDE_KEYS.some((key) => exclusionValues(filters, key).length > 0);
+const matchesExclusions = (car, filters = {}) =>
+  EXCLUDE_FIELDS.every(({ key, valueOf }) => !exclusionValues(filters, key).includes(valueOf(car))) &&
+  !(exclusionValues(filters, "excludeColor").length > 0 && matchesColorLabels(car.bodyColor, exclusionValues(filters, "excludeColor")));
+// В ссылку каталога цвета уходят русскими подписями, в API — английскими значениями.
+const appendExclusions = (query, filters, { api = false } = {}) => {
+  EXCLUDE_FIELDS.forEach(({ key, param }) => exclusionValues(filters, key).forEach((value) => query.append(param, value)));
+  const colors = exclusionValues(filters, "excludeColor");
+  (api ? colorValuesForLabels(colors) : colors).forEach((value) => query.append("colorNot", value));
+};
+const exclusionsFromParams = (params) => ({
+  excludeBrand: params.getAll("brandNot").filter(Boolean).slice(0, 12),
+  excludeModel: params.getAll("modelNot").filter(Boolean).slice(0, 24),
+  excludeBodyType: BODY_TYPES.filter((item) => params.getAll("bodyTypeNot").includes(item)),
+  excludeType: ["Электромобиль", "Гибрид"].filter((item) => params.getAll("typeNot").includes(item)),
+  excludeDrive: DRIVE_TYPES.filter((item) => params.getAll("driveNot").includes(item)),
+  excludeColor: COLOR_LABELS.filter((item) => params.getAll("colorNot").includes(item)),
+});
 const ownerOptions = [ANY_OWNERS, "1 владелец", "До 2 владельцев"];
 // Сеед перемешивания уходит в адрес запроса каталога. Полностью случайный делал адрес
 // уникальным для каждого посетителя, поэтому общий кэш по нему не срабатывал никогда.
@@ -811,6 +859,38 @@ function SiteLogo() {
 // Данные обновляются скриптом npm run quota из сводок таможни.
 const QUOTA_AUDIENCES = [["personal", "Физ. лица"], ["business", "Юр. лица"]];
 
+// Переключатель режима цен. Стоит над вкладками, потому что относится ко всему
+// сайту, а не к выбранной половине квоты: с ним видно цену по льготе, без него —
+// с пошлиной 15%, которая включится, когда квота кончится.
+function QuotaPricingToggle() {
+  const pricing = useQuotaPricing();
+  const available = Boolean(pricing?.available);
+  const on = Boolean(pricing?.on);
+  const hint = !available
+    ? "Квота выбрана — пошлина 15% уже в каждой цене."
+    : on
+      ? "Цены по льготе: пошлина 0%. Выключите — прибавится пошлина 15%."
+      : "В ценах пошлина 15%. Включите — вернутся цены по льготной квоте.";
+  return (
+    <div className="quota-panel-pricing">
+      <label className="quick-view-toggle quota-pricing-toggle">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={on}
+          disabled={!available}
+          onChange={(event) => pricing?.set(event.target.checked)}
+        />
+        <span className="quick-view-toggle-track" aria-hidden="true">
+          <i />
+        </span>
+        <span className="quick-view-toggle-label">Цены с квотами</span>
+      </label>
+      <small>{hint}</small>
+    </div>
+  );
+}
+
 function EvQuotaPanel({ quotas }) {
   const [audience, setAudience] = useState("personal");
   const quota = quotas[audience];
@@ -821,6 +901,7 @@ function EvQuotaPanel({ quotas }) {
       : `Расход держится около ${number(quota.perWeek)} машин в неделю. При таком темпе квота закончится примерно ${quota.runsOutLabel}, а дальше к цене добавится пошлина 15%.`;
   return (
     <div className="quota-panel">
+      <QuotaPricingToggle />
       <div className="quota-panel-tabs" role="group" aria-label="Чья квота">
         {QUOTA_AUDIENCES.map(([code, label]) => (
           <button
@@ -834,24 +915,25 @@ function EvQuotaPanel({ quotas }) {
           </button>
         ))}
       </div>
+      {/* Остаток и расход по месяцам — про одно и то же, поэтому лежат в одной
+          плашке: заголовок «Расход квоты» списку не нужен, месяцы говорят сами. */}
       <div className="quota-panel-figure">
         <b>Ост. {number(quota.remaining)} из {number(quota.total)}</b>
         {/* Полоса заполняется израсходованным: почти полная — значит квота на исходе. */}
         <i className="quota-panel-bar" aria-hidden="true">
           <b style={{ width: `${Math.min(100, Math.max(2, Math.round(quota.usedShare * 100)))}%` }} />
         </i>
-        <small>Данные за {quota.asOfLabel}</small>
-      </div>
-      <div className="quota-panel-months">
-        <span className="quota-panel-title">Расход квоты</span>
-        <ul>
-          {quota.periods.map((period) => (
-            <li key={period.key} className={period.future ? "future" : undefined}>
-              <span>{period.label}</span>
-              <strong>{number(period.spent)}</strong>
-            </li>
-          ))}
-        </ul>
+        <small>Данные за {quota.asOfLabel}. Потрачено квот:</small>
+        <div className="quota-panel-months">
+          <ul>
+            {quota.periods.map((period) => (
+              <li key={period.key} className={period.future ? "future" : undefined}>
+                <span>{period.label}</span>
+                <strong>{number(period.spent)}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
       <p className="quota-panel-forecast">{forecast}</p>
     </div>
@@ -976,7 +1058,6 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
                 {/* На телефоне четвёртая кнопка в шапку не влезает, поэтому остаток
                     квоты живёт здесь же, где валюта и «Мои поиски». */}
                 <div className="header-menu-quota">
-                  <span className="header-menu-quota-title">Осталось квот:</span>
                   <EvQuotaPanel quotas={quotas} />
                 </div>
                 <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
@@ -1306,6 +1387,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
       <SelectField className={className} label="Разгон до 100 км/ч" value={values.accel} onChange={actions.accel} options={accelOptions} />
       <SelectField className={className} label="Размер шин" value={values.tire} onChange={actions.tire} options={tireOptions} />
       <SelectField className={className} label="Крутящий момент" value={values.torque} onChange={actions.torque} options={torqueOptions} />
+      <SelectField className={className} label="Запас хода" value={values.range || ANY_RANGE} onChange={actions.range} options={rangeOptions} />
     </>
   );
 
@@ -1350,6 +1432,17 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
             </section>
           </div>
         </>
+      )}
+      {hasExclusions(values) && (
+        <div className="filter-exclusions">
+          <span className="filter-exclusions-label">Кроме</span>
+          {EXCLUDE_KEYS.flatMap((key) => exclusionValues(values, key).map((item) => (
+            <button type="button" key={`${key}-${item}`} onClick={() => actions.removeExclusion?.(key, item)} aria-label={`Вернуть в выдачу: ${item}`}>
+              {item}
+              <X size={14} weight="bold" />
+            </button>
+          )))}
+        </div>
       )}
       <div className="filter-actions-row">
         <button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls={`${extraFiltersId} ${mobileFiltersId}`} onClick={() => setMoreFiltersOpen((open) => !open)}>
@@ -1403,6 +1496,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [accel, setAccel] = useState(ANY_ACCEL);
   const [tire, setTire] = useState(ANY_TIRE);
   const [torque, setTorque] = useState(ANY_TORQUE);
+  const [range, setRange] = useState(ANY_RANGE);
   const [remoteMeta, setRemoteMeta] = useState({
     brands: [],
     models: [],
@@ -1435,8 +1529,8 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         battery: cars.filter((car) => Number(car.battery) > 0).length,
         condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
       };
-  const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesColorLabels(car.bodyColor, multiValues(color, ANY_COLOR)) && matchesYears(car, yearMin, yearMax) && matchesMileageRange(car, mileage) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition, accel, tire, torque })).length;
-  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || multiValues(color, ANY_COLOR).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION || accel !== ANY_ACCEL || tire !== ANY_TIRE || torque !== ANY_TORQUE;
+  const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesColorLabels(car.bodyColor, multiValues(color, ANY_COLOR)) && matchesYears(car, yearMin, yearMax) && matchesMileageRange(car, mileage) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition, accel, tire, torque, range })).length;
+  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || multiValues(color, ANY_COLOR).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION || accel !== ANY_ACCEL || tire !== ANY_TIRE || torque !== ANY_TORQUE || range !== ANY_RANGE;
   useEffect(() => {
     // Ждать загрузочный запрос незачем: справочник нужен сразу и уходит параллельно
     // с витриной. Останавливает его только выясненный статический режим.
@@ -1465,6 +1559,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     if (accel !== ANY_ACCEL) carsQuery.set("accelMax", String(filterNumber(accel)));
     if (tire !== ANY_TIRE) carsQuery.set("tireRimMin", String(filterNumber(tire)));
     if (torque !== ANY_TORQUE) carsQuery.set("torqueMin", String(filterNumber(torque)));
+    if (range !== ANY_RANGE) carsQuery.set("rangeMin", String(filterNumber(range)));
     // Числа для уже виденных комбинаций фильтров помним: повторное переключение
     // показывает счётчик сразу, без мигания. Прячем цифру только на первый подсчёт —
     // чужое число (или «0») на кнопке хуже, чем секунда без числа.
@@ -1494,7 +1589,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [apiMode, hasActiveFilters, normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, torque]);
+  }, [apiMode, hasActiveFilters, normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, torque, range]);
   const changeType = (value) => {
     setType(value);
     setModel([]);
@@ -1521,13 +1616,14 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     setAccel(ANY_ACCEL);
     setTire(ANY_TIRE);
     setTorque(ANY_TORQUE);
+    setRange(ANY_RANGE);
   };
   return (
     <VehicleSearch
       constrained
       selectedType={type}
       onTypeChange={changeType}
-      values={{ brand, model, yearMin, yearMax, priceMin, priceMax, mileage, bodyType, color, drive, owners, battery, condition, accel, tire, torque }}
+      values={{ brand, model, yearMin, yearMax, priceMin, priceMax, mileage, bodyType, color, drive, owners, battery, condition, accel, tire, torque, range }}
       actions={{
         brand: changeBrand,
         model: setModel,
@@ -1554,6 +1650,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         accel: setAccel,
         tire: setTire,
         torque: setTorque,
+        range: setRange,
       }}
       options={{ brands, models, bodyTypes, drives }}
       optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }}
@@ -1561,7 +1658,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : (totalCount || cars.length) ? formatRoundedListingCount(totalCount || cars.length) : null}
       hasActiveFilters={hasActiveFilters}
       onReset={resetFilters}
-      onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}${multiValues(model, ANY_MODEL).map((item) => `&model=${encodeURIComponent(item)}`).join("")}${multiValues(bodyType, ANY_BODY_TYPE).map((item) => `&body=${encodeURIComponent(item)}`).join("")}${multiValues(color, ANY_COLOR).map((item) => `&color=${encodeURIComponent(item)}`).join("")}${yearBound(yearMin, ANY_YEAR_MIN) === null ? "" : `&yearFrom=${yearMin}`}${yearBound(yearMax, ANY_YEAR_MAX) === null ? "" : `&yearTo=${yearMax}`}&mileage=${encodeURIComponent(mileage)}${priceBound(priceMin, ANY_PRICE_MIN) === null ? "" : `&priceFrom=${priceMin}`}${priceBound(priceMax, ANY_PRICE_MAX) === null ? "" : `&priceTo=${priceMax}`}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&battery=${encodeURIComponent(battery)}&condition=${encodeURIComponent(condition)}${accel === ANY_ACCEL ? "" : `&accel=${encodeURIComponent(accel)}`}${tire === ANY_TIRE ? "" : `&tire=${encodeURIComponent(tire)}`}${torque === ANY_TORQUE ? "" : `&torque=${encodeURIComponent(torque)}`}`)}
+      onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}${multiValues(model, ANY_MODEL).map((item) => `&model=${encodeURIComponent(item)}`).join("")}${multiValues(bodyType, ANY_BODY_TYPE).map((item) => `&body=${encodeURIComponent(item)}`).join("")}${multiValues(color, ANY_COLOR).map((item) => `&color=${encodeURIComponent(item)}`).join("")}${yearBound(yearMin, ANY_YEAR_MIN) === null ? "" : `&yearFrom=${yearMin}`}${yearBound(yearMax, ANY_YEAR_MAX) === null ? "" : `&yearTo=${yearMax}`}&mileage=${encodeURIComponent(mileage)}${priceBound(priceMin, ANY_PRICE_MIN) === null ? "" : `&priceFrom=${priceMin}`}${priceBound(priceMax, ANY_PRICE_MAX) === null ? "" : `&priceTo=${priceMax}`}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&battery=${encodeURIComponent(battery)}&condition=${encodeURIComponent(condition)}${accel === ANY_ACCEL ? "" : `&accel=${encodeURIComponent(accel)}`}${tire === ANY_TIRE ? "" : `&tire=${encodeURIComponent(tire)}`}${torque === ANY_TORQUE ? "" : `&torque=${encodeURIComponent(torque)}`}${range === ANY_RANGE ? "" : `&range=${encodeURIComponent(range)}`}`)}
     />
   );
 }
@@ -1581,11 +1678,15 @@ const searchMatchRank = (candidate, text) => {
   if (compact.includes(textCompact)) return 1;
   return 0;
 };
-const rankSearchEntries = (entries, text) =>
-  entries
-    .map((entry) => ({ ...entry, rank: searchMatchRank(entry.name, text) }))
+// Кроме набранного, пробуем его же латиницей: марки и модели в каталоге пишутся
+// латиницей, а «8х», «гт», «про» набирают русскими буквами.
+const rankSearchEntries = (entries, text) => {
+  const variants = [...new Set([text, ...latinVariants(text).map(searchNormalize)])].filter(Boolean);
+  return entries
+    .map((entry) => ({ ...entry, rank: Math.max(...variants.map((variant) => searchMatchRank(entry.name, variant))) }))
     .filter((entry) => entry.rank > 0)
     .sort((a, b) => b.rank - a.rank || b.count - a.count);
+};
 
 // Словари запроса: привод, кузов и тип двигателя словами — «задний», «седан»,
 // «гибрид». Сравниваем по началу слова, чтобы понимались и падежи с множественным
@@ -1607,20 +1708,30 @@ const HERO_BODY_ALIASES = [
   ["джип", "SUV / кроссовер"],
   ["внедорожник", "SUV / кроссовер"],
   ["паркетник", "SUV / кроссовер"],
+  ["кросс", "SUV / кроссовер"],
   ["хэтч", "Хэтчбек"],
   ["хетч", "Хэтчбек"],
+  ["хэч", "Хэтчбек"],
+  ["хеч", "Хэтчбек"],
   ["седан", "Седан"],
+  ["сидан", "Седан"],
+  // «Лифтбэк» через «э» и сокращённое «лифт» — тот же кузов.
+  ["лифт", "Лифтбек"],
   ["лифтбек", "Лифтбек"],
   ["хэтчбек", "Хэтчбек"],
   ["хетчбек", "Хэтчбек"],
   ["универсал", "Универсал"],
   ["минивэн", "Минивэн"],
   ["минивен", "Минивэн"],
+  ["вэн", "Минивэн"],
 ];
 const HERO_TYPE_ALIASES = [
   ["электро", "Электромобиль"],
   ["электри", "Электромобиль"],
   ["гибрид", "Гибрид"],
+  ["гибрет", "Гибрид"],
+  ["phev", "Гибрид"],
+  ["hev", "Гибрид"],
 ];
 const heroAliasValue = (word, aliases) => {
   for (const [alias, value] of aliases) if (word.startsWith(alias)) return value;
@@ -1657,6 +1768,9 @@ const HERO_BRAND_RU = [
   ["аватар", "Avatr"],
   ["бмв", "BMW"],
   ["бид", "BYD"],
+  ["бад", "BYD"],
+  ["буд", "BYD"],
+  ["биуайди", "BYD"],
   ["дипал", "Deepal"],
   ["денза", "Denza"],
   ["дунфэн", "Dongfeng"],
@@ -1681,6 +1795,13 @@ const HERO_BRAND_RU = [
   ["тоета", "Toyota"],
   ["фольксваген", "Volkswagen"],
   ["фольцваген", "Volkswagen"],
+  // Через «в» пишут не реже, чем через «ф».
+  ["волксваген", "Volkswagen"],
+  ["вольксваген", "Volkswagen"],
+  ["вольцваген", "Volkswagen"],
+  ["волсваген", "Volkswagen"],
+  ["вольсваген", "Volkswagen"],
+  ["воксваген", "Volkswagen"],
   ["воях", "Voyah"],
   ["воя", "Voyah"],
   ["икспенг", "XPeng"],
@@ -1699,6 +1820,8 @@ const HERO_BRAND_RU = [
   ["volswagen", "Volkswagen"],
   ["wolkswagen", "Volkswagen"],
   ["folkswagen", "Volkswagen"],
+  ["volksvagen", "Volkswagen"],
+  ["folksvagen", "Volkswagen"],
   ["mb", "Mercedes-Benz"],
   ["merc", "Mercedes-Benz"],
   ["benz", "Mercedes-Benz"],
@@ -1780,20 +1903,16 @@ const splitModelSegments = (value) => {
   return segments;
 };
 
-async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
-  // Сначала из запроса вынимаются цена, пробег и годы («от 25000 до 40000»,
-  // «пробег до 50 тыс», «2021-2023»), остаток разбирается как марка и модель.
-  const ranges = parseQueryRanges(query, { currency });
-  const tokens = searchNormalize(ranges.rest).split(" ").filter(Boolean);
-  if (!tokens.length && !ranges.hasRanges) return null;
-  // Номер объявления (например, 59116012) — ищем эту конкретную машину.
-  const idToken = tokens.find((token) => /^\d{6,}$/.test(token));
-  if (idToken) return { matched: true, listingId: idToken, brand: "", models: [], yearFrom: "", yearTo: "", drive: "", bodyType: "", powertrain: "", colors: [], priceMinUsd: null, priceMaxUsd: null, mileageMin: null, mileageMax: null };
-  const yearFrom = ranges.yearFrom;
-  const yearTo = ranges.yearTo;
-
-  // Сначала выбираем из запроса слова про привод, кузов, тип двигателя и цвет,
-  // остаток текста ищем как марку и модель.
+// Слова-исключения: всё, что стоит после них, попадает в списки «не показывать».
+// Отдельного окончания у этой части нет — она идёт до конца строки, поэтому такое
+// слово пишут последним. Голое «не» маркером не считаем: «не дорогой зикр» — это
+// не просьба убрать Zeekr; а вот «не считая» и «за исключением» узнаются по второму
+// слову («не» и «за» перед ним отбрасывает разбор чисел).
+const HERO_EXCLUDE_EXACT = new Set(["кроме", "окромя", "без", "минус", "помимо", "except"]);
+const HERO_EXCLUDE_STEMS = ["исключ", "убер", "убра", "убир", "выкин", "скрыт", "спрят", "счита", "отбро", "отсе"];
+const isHeroExcludeWord = (word) => HERO_EXCLUDE_EXACT.has(word) || HERO_EXCLUDE_STEMS.some((stem) => word.startsWith(stem));
+// Разбор слов запроса на привод, кузов, тип двигателя, цвет и остаток (марка с моделью).
+const collectHeroAliases = (tokens) => {
   let drive = "";
   let bodyType = "";
   let powertrain = "";
@@ -1834,6 +1953,27 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
   // марке и модели оно только мешает.
   while (words.length && MODEL_SEPARATORS.has(words[0])) words.shift();
   while (words.length && MODEL_SEPARATORS.has(words[words.length - 1])) words.pop();
+  return { drive, bodyType, powertrain, colors, words };
+};
+
+async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
+  // Сначала из запроса вынимаются цена, пробег и годы («от 25000 до 40000»,
+  // «пробег до 50 тыс», «2021-2023»), остаток разбирается как марка и модель.
+  const ranges = parseQueryRanges(query, { currency });
+  const tokens = searchNormalize(ranges.rest).split(" ").filter(Boolean);
+  if (!tokens.length && !ranges.hasRanges) return null;
+  // Номер объявления (например, 59116012) — ищем эту конкретную машину.
+  const idToken = tokens.find((token) => /^\d{6,}$/.test(token));
+  if (idToken) return { matched: true, listingId: idToken, brand: "", models: [], yearFrom: "", yearTo: "", drive: "", bodyType: "", powertrain: "", colors: [], priceMinUsd: null, priceMaxUsd: null, mileageMin: null, mileageMax: null, accelMax: null, batteryMin: null, rangeMin: null, ...emptyExclusions() };
+  const yearFrom = ranges.yearFrom;
+  const yearTo = ranges.yearTo;
+
+  // Слова про привод, кузов, тип двигателя и цвет разбираются отдельно — и до
+  // слова «кроме», и после него: то, что названо после, из выдачи убирается.
+  const excludeAt = tokens.findIndex(isHeroExcludeWord);
+  const wanted = collectHeroAliases(excludeAt === -1 ? tokens : tokens.slice(0, excludeAt));
+  const unwanted = collectHeroAliases(excludeAt === -1 ? [] : tokens.slice(excludeAt + 1).filter((token) => !isHeroExcludeWord(token)));
+  const { drive, bodyType, powertrain, colors, words } = wanted;
 
   let brandEntries = [];
   let modelEntries = [];
@@ -1857,10 +1997,31 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
     modelEntries = [...modelCounts].map(([name, count]) => ({ name, count }));
   }
 
+  // Названное после «кроме» раскладываем по тем же справочникам: сначала марка,
+  // если слово похоже на марку целиком, иначе — модели (столько же, сколько нашёл
+  // бы обычный поиск, чтобы «кроме 001» убирало и 001 FR).
+  const exclusions = {
+    ...emptyExclusions(),
+    excludeBodyType: unwanted.bodyType ? [unwanted.bodyType] : [],
+    excludeType: unwanted.powertrain ? [unwanted.powertrain] : [],
+    excludeDrive: unwanted.drive ? [unwanted.drive] : [],
+    excludeColor: unwanted.colors,
+  };
+  for (const segment of splitModelSegments(translateBrandWords(unwanted.words).join(" "))) {
+    const brandHit = rankSearchEntries(brandEntries, segment)[0];
+    if (brandHit && brandHit.rank >= 3) {
+      if (!exclusions.excludeBrand.includes(brandHit.name)) exclusions.excludeBrand.push(brandHit.name);
+      continue;
+    }
+    for (const entry of rankSearchEntries(modelEntries, segment).slice(0, 12)) {
+      if (!exclusions.excludeModel.includes(entry.name)) exclusions.excludeModel.push(entry.name);
+    }
+  }
+
   const text = translateBrandWords(words).join(" ");
-  const result = { matched: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain, colors, priceMinUsd: ranges.priceMinUsd, priceMaxUsd: ranges.priceMaxUsd, mileageMin: ranges.mileageMin, mileageMax: ranges.mileageMax };
+  const result = { matched: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain, colors, priceMinUsd: ranges.priceMinUsd, priceMaxUsd: ranges.priceMaxUsd, mileageMin: ranges.mileageMin, mileageMax: ranges.mileageMax, accelMax: ranges.accelMax, batteryMin: ranges.batteryMin, rangeMin: ranges.rangeMin, ...exclusions };
   if (!text) {
-    result.matched = Boolean(ranges.hasRanges || drive || bodyType || powertrain || colors.length);
+    result.matched = Boolean(ranges.hasRanges || drive || bodyType || powertrain || colors.length || hasExclusions(exclusions));
     return result;
   }
 
@@ -1962,6 +2123,10 @@ const heroCatalogHref = (parsed) => {
   if (mileage) params.set("mileage", mileage);
   (parsed.colors || []).forEach((color) => params.append("color", color));
   if (parsed.drive) params.set("drive", parsed.drive);
+  if (parsed.accelMax != null) params.set("accel", `До ${parsed.accelMax} с`);
+  if (parsed.batteryMin != null) params.set("battery", `От ${parsed.batteryMin} кВт·ч`);
+  if (parsed.rangeMin != null) params.set("range", `От ${parsed.rangeMin} км`);
+  appendExclusions(params, parsed);
   const search = params.toString();
   return `/catalog${search ? `?${search}` : ""}`;
 };
@@ -1986,6 +2151,8 @@ const savedFilterDefaults = {
   accel: ANY_ACCEL,
   tire: ANY_TIRE,
   torque: ANY_TORQUE,
+  range: ANY_RANGE,
+  ...emptyExclusions(),
   // Выбранная сортировка — часть поиска: открытый заново, он выглядит так же.
   sort: "default",
 };
@@ -2038,6 +2205,9 @@ const savedSearchChips = (filters) => {
   if (filters.accel && filters.accel !== ANY_ACCEL) chips.push(`разгон ${filters.accel.toLowerCase()}`);
   if (filters.tire && filters.tire !== ANY_TIRE) chips.push(`шины ${filters.tire.toLowerCase().replace("r", "R")}`);
   if (filters.torque && filters.torque !== ANY_TORQUE) chips.push(`момент ${filters.torque.toLowerCase().replace("н·м", "Н·м")}`);
+  if (filters.range && filters.range !== ANY_RANGE) chips.push(`запас хода ${filters.range.toLowerCase()}`);
+  const excluded = EXCLUDE_KEYS.flatMap((key) => exclusionValues(filters, key));
+  if (excluded.length) chips.push(`кроме ${excluded.join(", ").toLowerCase()}`);
   if (savedSearchSortLabels[filters.sort]) chips.push(savedSearchSortLabels[filters.sort]);
   return chips;
 };
@@ -2066,6 +2236,8 @@ const savedSearchCatalogHref = (filters) => {
   if (filters.accel && filters.accel !== ANY_ACCEL) params.set("accel", filters.accel);
   if (filters.tire && filters.tire !== ANY_TIRE) params.set("tire", filters.tire);
   if (filters.torque && filters.torque !== ANY_TORQUE) params.set("torque", filters.torque);
+  if (filters.range && filters.range !== ANY_RANGE) params.set("range", filters.range);
+  appendExclusions(params, filters);
   if (filters.sort && filters.sort !== "default") params.set("sort", filters.sort);
   const search = params.toString();
   return `/catalog${search ? `?${search}` : ""}`;
@@ -2085,6 +2257,8 @@ const savedSearchApiParams = (filters) => {
   if (filters.accel && filters.accel !== ANY_ACCEL) query.set("accelMax", String(filterNumber(filters.accel)));
   if (filters.tire && filters.tire !== ANY_TIRE) query.set("tireRimMin", String(filterNumber(filters.tire)));
   if (filters.torque && filters.torque !== ANY_TORQUE) query.set("torqueMin", String(filterNumber(filters.torque)));
+  if (filters.range && filters.range !== ANY_RANGE) query.set("rangeMin", String(filterNumber(filters.range)));
+  appendExclusions(query, filters, { api: true });
   appendYearRange(query, filters.yearMin, filters.yearMax);
   appendMileageRange(query, filters.mileage);
   appendPriceRange(query, filters.priceMin, filters.priceMax);
@@ -2092,6 +2266,7 @@ const savedSearchApiParams = (filters) => {
   return query;
 };
 const matchesSavedFilters = (car, filters) =>
+  matchesExclusions(car, filters) &&
   (filters.type === "Все" || car.type === filters.type) &&
   (filters.brand === "Все марки" || car.brand === filters.brand) &&
   matchesMulti(car.model, filters.model, ANY_MODEL) &&
@@ -2116,6 +2291,10 @@ const heroApiParams = (parsed) => {
   if (parsed.mileageMax != null) params.set("mileageMax", String(parsed.mileageMax));
   colorValuesForLabels(parsed.colors || []).forEach((value) => params.append("color", value));
   if (parsed.drive) params.set("drive", parsed.drive);
+  if (parsed.accelMax != null) params.set("accelMax", String(parsed.accelMax));
+  if (parsed.batteryMin != null) params.set("batteryMin", String(parsed.batteryMin));
+  if (parsed.rangeMin != null) params.set("rangeMin", String(parsed.rangeMin));
+  appendExclusions(params, parsed, { api: true });
   return params;
 };
 
@@ -2331,7 +2510,8 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
 const SIMILAR_CARS_BATCH = 20;
 
 function SimilarCars({ car, cars, onOpenCar }) {
-  const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars]);
+  const similarPricingOn = useQuotaPricing()?.on;
+  const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars, similarPricingOn]);
   const [visibleCount, setVisibleCount] = useState(SIMILAR_CARS_BATCH);
 
   useEffect(() => setVisibleCount(SIMILAR_CARS_BATCH), [car.id]);
@@ -3317,6 +3497,10 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   // и открывается иконкой в строке поиска.
   const [quickFiltersOpen, setQuickFiltersOpen] = useState(false);
   const [heroSort, setHeroSort] = useState(restoredHero?.sort || "default");
+  // «По умолчанию» в выдаче поиска — тот же замес, что и в каталоге: сервер
+  // раскладывает строки по зерну, а клиент разносит похожие карточки. Без этого
+  // «зикр» открывался десятком одинаковых дорогих машин подряд.
+  const [heroShuffleSeed] = useState(() => restoredHero?.shuffleSeed || randomShuffleSeed());
   // Вид выдачи общий с каталогом: переключили здесь — каталог откроется так же.
   const [heroView, setHeroView] = useState(readCatalogView);
   const updateHeroView = (value) => {
@@ -3373,14 +3557,18 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         const href = heroCatalogHref(parsed);
         if (apiMode !== false) {
           const apiParams = heroApiParams(parsed);
-          // «По умолчанию» — родной порядок сервера; остальное сервер сортирует сам.
-          if (heroSort !== "default") apiParams.set("sort", heroSort);
+          if (heroSort === "default") {
+            apiParams.set("sort", "default");
+            apiParams.set("seed", heroShuffleSeed);
+          } else apiParams.set("sort", heroSort);
           const apiQuery = apiParams.toString();
           const listParams = new URLSearchParams(apiQuery);
           listParams.set("limit", "24");
           const catalog = await fetchCarsJson(`/api/cars?${listParams}`, controller.signal);
           if (cancelled) return;
-          setHeroSearch({ ...emptyHeroResult, items: catalog.items.map(normalizeImportedCar), total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null });
+          const found = catalog.items.map(normalizeImportedCar);
+          const ordered = heroSort === "default" ? varietyOrder(found, seededRandom(`${heroShuffleSeed}:0`)) : found;
+          setHeroSearch({ ...emptyHeroResult, items: ordered, total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null });
         } else {
           const modelSet = new Set(parsed.models);
           // Итог «до Минска» есть не у всех статических карточек — для фильтра
@@ -3399,11 +3587,15 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
               matchesColorLabels(car.bodyColor, parsed.colors || []) &&
               (!parsed.drive || car.drive === parsed.drive) &&
               (!parsed.bodyType || car.bodyType === parsed.bodyType) &&
-              (!parsed.powertrain || car.type === parsed.powertrain)
+              (!parsed.powertrain || car.type === parsed.powertrain) &&
+              (parsed.accelMax == null || (Number(car.acceleration) > 0 && Number(car.acceleration) <= parsed.accelMax)) &&
+              (parsed.batteryMin == null || Number(car.battery) >= parsed.batteryMin) &&
+              (parsed.rangeMin == null || Number(car.electricRange || car.combinedRange || car.range) >= parsed.rangeMin) &&
+              matchesExclusions(car, parsed)
           );
           // Карточки из статического каталога не всегда несут готовый итог «до Минска» —
           // для сортировки по цене досчитываем его так же, как избранное.
-          const sorted = heroSort === "default" ? matches : sortCars(matches.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd })), heroSort);
+          const sorted = heroSort === "default" ? varietyOrder(matches, seededRandom(heroShuffleSeed)) : sortCars(matches.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd })), heroSort);
           setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null });
         }
       } catch {
@@ -3415,7 +3607,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [heroQuery, heroSort, apiMode, cars, currency]);
+  }, [heroQuery, heroSort, apiMode, cars, currency, heroShuffleSeed]);
   const searching = heroSearch !== null;
   // Уйти с главной можно куда угодно (карточка, «В каталог», меню), поэтому
   // признак «сюда вернутся к поиску» и снимок выдачи поддерживаем всё время,
@@ -3436,6 +3628,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         href: heroSearch.href,
         hasMore: heroSearch.hasMore,
         apiQuery: heroSearch.apiQuery,
+        shuffleSeed: heroShuffleSeed,
       });
     }
   }, [searching, heroSearch, heroSort, heroQuery]);
@@ -3465,7 +3658,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           if (!state) return state;
           // Выдача могла сдвинуться между страницами — повторы карточек не добавляем.
           const known = new Set(state.items.map((car) => car.id));
-          return { ...state, items: [...state.items, ...batch.filter((car) => !known.has(car.id))], total: Number(catalog.total) || state.total, hasMore: Boolean(catalog.hasMore), loadingMore: false };
+          const fresh = batch.filter((car) => !known.has(car.id));
+          const ordered = heroSort === "default" ? varietyOrder(fresh, seededRandom(`${heroShuffleSeed}:${state.items.length}`), state.items) : fresh;
+          return { ...state, items: [...state.items, ...ordered], total: Number(catalog.total) || state.total, hasMore: Boolean(catalog.hasMore), loadingMore: false };
         });
       } else {
         setHeroSearch((state) => {
@@ -3599,7 +3794,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           <div className="empty-state search-empty">
             <MagnifyingGlass size={26} />
             <h3>Ничего не найдено</h3>
-            <p>Попробуйте изменить запрос: марка, модель, год, цена («до 40 тыс»), пробег («до 50 тыс км») или номер объявления.</p>
+            <p>Попробуйте изменить запрос: марка, модель, год, цена («до 40 тыс»), пробег («до 50 тыс км»), запас хода («от 500 км»), разгон («до 5 сек»), батарея («от 70») или номер объявления. Лишнее убирает слово «кроме»: «зикр кроме 001».</p>
           </div>
         ) : (searching ? useCatalogCards || heroView === "list" : useCatalogCards) ? (
           <div className="car-list home-car-list" aria-busy={gridBusy ? "true" : undefined}>
@@ -3652,7 +3847,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
   const selectedType = filters.type === "Электромобиль" ? "Электромобили" : filters.type === "Гибрид" ? "Гибриды" : "Все";
   const selectType = (value) => changeType(value === "Электромобили" ? "Электромобиль" : value === "Гибриды" ? "Гибрид" : "Все");
-  const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || filters.torque !== ANY_TORQUE;
+  const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || filters.torque !== ANY_TORQUE || (filters.range || ANY_RANGE) !== ANY_RANGE || hasExclusions(filters);
   const resetFilters = () => setFilters(() => ({
     type: "Все",
     brand: "Все марки",
@@ -3671,6 +3866,8 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
     accel: ANY_ACCEL,
     tire: ANY_TIRE,
     torque: ANY_TORQUE,
+    range: ANY_RANGE,
+    ...emptyExclusions(),
   }));
   return (
     <VehicleSearch
@@ -3694,6 +3891,8 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
         accel: update("accel"),
         tire: update("tire"),
         torque: update("torque"),
+        range: update("range"),
+        removeExclusion: (key, value) => setFilters((old) => ({ ...old, [key]: exclusionValues(old, key).filter((item) => item !== value) })),
       }}
       options={{ brands: ["Все марки", ...brands], models, bodyTypes, drives }}
       optionCounts={optionCounts}
@@ -3704,7 +3903,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
       onSaveSearch={onSaveSearch}
       searchSaved={searchSaved}
       searchUpdate={searchUpdate}
-      initiallyExpanded={filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || filters.torque !== ANY_TORQUE}
+      initiallyExpanded={filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || filters.torque !== ANY_TORQUE || (filters.range || ANY_RANGE) !== ANY_RANGE}
     />
   );
 }
@@ -4204,6 +4403,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const rawAccel = params.get("accel");
   const rawTire = params.get("tire");
   const rawTorque = params.get("torque");
+  const rawRange = params.get("range");
   const initialFilters = {
     type: rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",
     brand: rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",
@@ -4220,11 +4420,15 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     priceMax: /^\d+$/.test(rawPriceTo || legacyPriceTo) && Number(rawPriceTo || legacyPriceTo) > 0 ? rawPriceTo || legacyPriceTo : ANY_PRICE_MAX,
     drive: DRIVE_TYPES.includes(rawDrive) ? rawDrive : ANY_DRIVE,
     owners: ownerOptions.includes(rawOwners) ? rawOwners : ANY_OWNERS,
-    battery: batteryOptions.includes(rawBattery) ? rawBattery : ANY_BATTERY,
+    battery: batteryOptions.includes(rawBattery) || FREE_BATTERY_LABEL.test(rawBattery || "") ? rawBattery : ANY_BATTERY,
     condition: conditionOptions.includes(rawCondition) ? rawCondition : ANY_CONDITION,
-    accel: accelOptions.includes(rawAccel) ? rawAccel : ANY_ACCEL,
+    accel: accelOptions.includes(rawAccel) || FREE_ACCEL_LABEL.test(rawAccel || "") ? rawAccel : ANY_ACCEL,
     tire: tireOptions.includes(rawTire) ? rawTire : ANY_TIRE,
     torque: torqueOptions.includes(rawTorque) ? rawTorque : ANY_TORQUE,
+    // Умный поиск приносит и свои ступеньки («до 4.5 с», «от 70 кВт·ч», «от 550 км») —
+    // принимаем любую подпись правильной формы, а не только из выпадающего списка.
+    range: rangeOptions.includes(rawRange) || FREE_RANGE_LABEL.test(rawRange || "") ? rawRange : ANY_RANGE,
+    ...exclusionsFromParams(params),
   };
   const restoredCatalog = window.history.state?.catalog || matchingCatalogReturn()?.catalog || null;
   const [filters, setFilters] = useState(() => ({
@@ -4340,11 +4544,14 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         battery: cars.filter((car) => Number(car.battery) > 0).length,
         condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
       };
+  // Цена в статическом режиме считается здесь же, поэтому смена режима цен
+  // (переключатель «Цены с квотами») должна пересчитать выдачу.
+  const quotaPricingOn = useQuotaPricing()?.on;
   const filtered = useMemo(
     () =>
       sortCars(
         cars
-          .filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.model, filters.model, ANY_MODEL) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) && matchesColorLabels(car.bodyColor, multiValues(filters.color, ANY_COLOR)) && matchesYears(car, filters.yearMin, filters.yearMax) && matchesMileageRange(car, filters.mileage) && matchesPriceRange(car, filters.priceMin, filters.priceMax) && matchesAdvancedFilters(car, filters))
+          .filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.model, filters.model, ANY_MODEL) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) && matchesColorLabels(car.bodyColor, multiValues(filters.color, ANY_COLOR)) && matchesYears(car, filters.yearMin, filters.yearMax) && matchesMileageRange(car, filters.mileage) && matchesPriceRange(car, filters.priceMin, filters.priceMax) && matchesAdvancedFilters(car, filters) && matchesExclusions(car, filters))
           .map((car) => ({
             ...car,
             estimatedTotalUsd: estimateLandedCost(car).totalUsd,
@@ -4352,7 +4559,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         sort,
         shuffleSeed,
       ),
-    [filters, cars, sort, shuffleSeed],
+    [filters, cars, sort, shuffleSeed, quotaPricingOn],
   );
   // The API returns the default order already shuffled, but only the client knows what
   // is on screen, so the variety pass that spaces out similar cards runs on each batch.
@@ -4389,6 +4596,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     if (filters.accel !== ANY_ACCEL) query.set("accelMax", String(filterNumber(filters.accel)));
     if (filters.tire !== ANY_TIRE) query.set("tireRimMin", String(filterNumber(filters.tire)));
     if (filters.torque !== ANY_TORQUE) query.set("torqueMin", String(filterNumber(filters.torque)));
+    if ((filters.range || ANY_RANGE) !== ANY_RANGE) query.set("rangeMin", String(filterNumber(filters.range)));
+    appendExclusions(query, filters, { api: true });
     appendYearRange(query, filters.yearMin, filters.yearMax);
     appendMileageRange(query, filters.mileage);
     appendPriceRange(query, filters.priceMin, filters.priceMax);
@@ -5426,7 +5635,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             )}
           </div>
           <strong className="detail-mobile-price">
-            {approximateMoney(price.totalLow, price.totalHigh, currency)}
+            ≈ {money(price.totalUsd, currency)}
           </strong>
           <p>
             {car.type} · {car.drive} привод · {number(car.mileage)} км
@@ -5472,7 +5681,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           )}
           <aside className="order-card">
             <div className={`price-total${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
-              <strong>{approximateMoney(price.totalLow, price.totalHigh, currency)}</strong>
+              <strong>≈ {money(price.totalUsd, currency)}</strong>
               {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
             </div>
             <div className="price-breakdown">
@@ -5912,7 +6121,7 @@ function OrderDraft({ car, navigate }) {
             </div>
             <div className="order-grand-total">
               <PriceLabel label="Ориентировочно до Минска" description="Без постановки на учёт и страховки" />
-              <b>{approximateMoney(price.totalLow, price.totalHigh, currency)}</b>
+              <b>≈ {money(price.totalUsd, currency)}</b>
             </div>
             <div className="order-disclaimer">
               <Info size={18} />
@@ -6736,7 +6945,7 @@ const createLocalOrder = (userId, car) => {
     paymentStatus:"locked",
     createdAt,
     updatedAt:createdAt,
-    car:{ id:car.id, title:car.title, brand:car.brand, model:car.model, year:car.year, type:car.type, mileage:car.mileage, city:car.city, drive:car.drive, battery:car.battery, range:car.electricRange || car.range, image:car.image, estimatedTotalUsd:Math.round((estimate.totalLow + estimate.totalHigh) / 2) },
+    car:{ id:car.id, title:car.title, brand:car.brand, model:car.model, year:car.year, type:car.type, mileage:car.mileage, city:car.city, drive:car.drive, battery:car.battery, range:car.electricRange || car.range, image:car.image, estimatedTotalUsd:estimate.totalUsd },
   };
   const next = [order,...orders];
   storeLocalOrders(userId, next);
@@ -7071,6 +7280,9 @@ function AccountRemovalModal({ pending, error, onCancel, onConfirm }) {
 }
 
 function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, authBackend, navigate }) {
+  // Цена заказа тоже слушается переключателя валюты в шапке: рубли в каталоге и
+  // доллары в заказе выглядели бы разными ценами.
+  const currency = useCurrency();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -7298,7 +7510,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         <img src={imageSource(order.car.image, IMAGE_WIDTH_TILE)} alt={order.car.title} onError={(event) => retryWithFullImage(event, order.car.image)} />
         <div className="customer-order-car-copy">
           <div className="customer-order-car-heading"><h2><a href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer" onClick={openCarPreview}>{order.car.title}</a></h2><p>{shortOrderNumber(order.orderNumber)}</p></div>
-          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b>≈ {number(order.car.estimatedTotalUsd)} USD</b></div> : null}
+          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b>≈ {money(order.car.estimatedTotalUsd, currency)}</b></div> : null}
         </div>
         <div className="customer-order-card-controls">
           <details className="order-car-menu">
@@ -7354,7 +7566,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
           {order.paymentStatus === "invoice_requested" ? (
             <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос на счёт получен.</b><span>После проверки цены продавца счёт появится здесь.</span></p></div>
           ) : (
-            <><p>Сначала подтвердим актуальную цену продавца, затем подготовим счёт.</p>{order.car.estimatedTotalUsd && <div className="order-estimate"><span>Ориентировочно до Минска</span><b>≈ {number(order.car.estimatedTotalUsd)} USD</b></div>}<button className="primary" type="button" disabled={saving} onClick={() => applyAction("request_invoice")}>Запросить счёт</button></>
+            <><p>Сначала подтвердим актуальную цену продавца, затем подготовим счёт.</p>{order.car.estimatedTotalUsd && <div className="order-estimate"><span>Ориентировочно до Минска</span><b>≈ {money(order.car.estimatedTotalUsd, currency)}</b></div>}<button className="primary" type="button" disabled={saving} onClick={() => applyAction("request_invoice")}>Запросить счёт</button></>
           )}
         </OrderStageRow>
       </div>
@@ -7583,6 +7795,19 @@ export function App() {
   const [savedSearchesReady, setSavedSearchesReady] = useState(false);
   const [pendingSavedSearch, setPendingSavedSearch] = useState(null);
   const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "BYN" ? "BYN" : "USD"));
+  // Режим цен: включённый переключатель — цены по льготной квоте, выключенный —
+  // с пошлиной 15%. Выбор запоминается в браузере, расчёту цен он передаётся
+  // отдельно: тот держит его в модуле, чтобы не тянуть флаг через все карточки.
+  const [quotaPricingOn, setQuotaPricingOn] = useState(isEvQuotaPricingOn);
+  const quotaPricing = useMemo(() => ({
+    on: quotaPricingOn,
+    available: evQuotaPricingAvailable(),
+    set: (on) => {
+      rememberEvQuotaPricing(on);
+      setPricingQuotaOver(!on);
+      setQuotaPricingOn(on);
+    },
+  }), [quotaPricingOn]);
   const [themeMode, setThemeMode] = useState(() => {
     const savedTheme = window.localStorage.getItem("evcars-theme");
     if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
@@ -8214,6 +8439,7 @@ export function App() {
       <NotFound navigate={navigate} />
     );
   return (
+    <QuotaPricingContext.Provider value={quotaPricing}>
     <CurrencyContext.Provider value={currency}>
      <SetCurrencyContext.Provider value={setCurrency}>
      <OrderedListingsContext.Provider value={orderedListings}>
@@ -8252,5 +8478,6 @@ export function App() {
      </OrderedListingsContext.Provider>
      </SetCurrencyContext.Provider>
     </CurrencyContext.Provider>
+    </QuotaPricingContext.Provider>
   );
 }

@@ -17,9 +17,15 @@ export const PRICING = {
 };
 const round50 = (value) => Math.round(value / 50) * 50;
 
-// Считаем один раз при загрузке: карточек в каталоге тысячи, а состояние квоты
-// за время просмотра страницы не меняется.
-const QUOTA_OVER = isEvQuotaOver();
+// Режим цен: с льготной квотой или с пошлиной 15%. Считанное при загрузке
+// значение держим в переменной, а не в константе, — переключатель «Цены с квотами»
+// меняет его на ходу, и следующая же перерисовка пересчитывает все карточки.
+let quotaOverNow = isEvQuotaOver();
+
+/** Переключение режима цен из интерфейса. */
+export const setPricingQuotaOver = (value) => {
+  quotaOverNow = Boolean(value);
+};
 
 // Цену в юанях со страницы модели переводим в доллары по тому же курсу, что и
 // расчёт стоимости машины: юани человеку ни о чём не говорят. Округляем до сотни —
@@ -35,7 +41,7 @@ export const yuanToUsdAbout = (text) => {
   return prefix ? `${prefix[1]} ${money}` : `≈ ${money}`;
 };
 
-export function estimateLandedCost(car, { quotaOver = QUOTA_OVER } = {}) {
+export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
   // Che168 quotes its export price in dollars; storing it as yuan at 7.15 and
@@ -66,7 +72,7 @@ export function estimateLandedCost(car, { quotaOver = QUOTA_OVER } = {}) {
     ? round50(chinaUsd * PRICING.evDutyPercent + PRICING.evCustomsUsd)
     : PRICING.evCustomsUsd;
   let customsNote = quotaOver ? "Пошлина 15% · оформление и сборы" : "Льгота 0% · оформление и сборы";
-  let customsAlert = quotaOver ? "Квоты закончились" : null;
+  let customsAlert = quotaOver ? "Без квоты на льготный ввоз" : null;
   let engineAssumed = false;
   if (car.type !== "Электромобиль") {
     const parsedEngine = Number(String(car.engine || "").match(/\d+(?:\.\d+)?/)?.[0]);

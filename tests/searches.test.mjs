@@ -23,6 +23,12 @@ const validFilters = {
   accel: "До 6 с",
   tire: "От R19",
   torque: "От 400 Н·м",
+  excludeBrand: [],
+  excludeModel: ["Q4 e-tron 40"],
+  excludeBodyType: [],
+  excludeColor: [],
+  excludeType: [],
+  excludeDrive: [],
   sort: "price_asc",
 };
 
@@ -60,4 +66,14 @@ test("старый клиент без новых ключей (разгон, ш
   assert.equal("torque" in normalized, false);
   // Но мусор в этих ключах по-прежнему отклоняется целиком.
   assert.equal(normalizeSearchFilters({ ...validFilters, accel: 6 }), null);
+});
+
+test("исключения сохраняются вместе с остальными фильтрами", () => {
+  const normalized = normalizeSearchFilters({ ...validFilters, excludeBrand: ["Tesla"] });
+  assert.deepEqual(normalized.excludeBrand, ["Tesla"]);
+  assert.deepEqual(normalized.excludeModel, ["Q4 e-tron 40"]);
+  // Старый клиент их не шлёт — это просто «ничего не исключаем».
+  const legacy = normalizeSearchFilters({ ...validFilters, excludeBrand: undefined, excludeModel: undefined });
+  assert.deepEqual(legacy.excludeBrand, []);
+  assert.deepEqual(legacy.excludeModel, []);
 });

@@ -85,12 +85,30 @@ export function buildCarFilters(searchParams) {
   if (Number(searchParams.get("landedMax"))) add("l.estimated_total_usd<=?", Number(searchParams.get("landedMax")));
   if (Number(searchParams.get("landedMin"))) add("l.estimated_total_usd>=?", Number(searchParams.get("landedMin")));
   if (Number(searchParams.get("batteryMin"))) add("v.battery_kwh>=?", Number(searchParams.get("batteryMin")));
+  // Запас хода: у гибридов заявлен общий, у электромобилей — электрический;
+  // сравниваем с тем, что показывает карточка, и тем же, по чему идёт сортировка.
+  if (Number(searchParams.get("rangeMin"))) add("COALESCE(v.electric_range_km, v.combined_range_km)>=?", Number(searchParams.get("rangeMin")));
   // Разгон, момент и шины перенесены из полной техкарты в specifications
   // скриптом backfill-spec-filters.mjs и пишутся туда же при импорте; машины
   // без значения фильтр честно отсеивает.
   if (Number(searchParams.get("accelMax"))) add("(v.specifications->>'acceleration')::numeric<=?", Number(searchParams.get("accelMax")));
   if (Number(searchParams.get("torqueMin"))) add("(v.specifications->>'torqueNm')::numeric>=?", Number(searchParams.get("torqueMin")));
   if (Number(searchParams.get("tireRimMin"))) add("(v.specifications->>'tireRim')::numeric>=?", Number(searchParams.get("tireRimMin")));
+  // Исключения из строки поиска («зикр кроме 001», «электро кроме белых»).
+  // COALESCE обязателен: без него машина с пустым кузовом или цветом выпадала бы
+  // из выдачи — сравнение с NULL не истинно и не ложно.
+  const brandsNot = multiParamValues(searchParams.getAll("brandNot"), "", { splitCommas:true });
+  if (brandsNot.length) add("v.brand<>ALL(?)", brandsNot);
+  const modelsNot = multiParamValues(searchParams.getAll("modelNot"), "", { splitCommas:true });
+  if (modelsNot.length) add("v.model<>ALL(?)", modelsNot);
+  const typesNot = multiParamValues(searchParams.getAll("typeNot"), "", { splitCommas:true });
+  if (typesNot.length) add("COALESCE(v.powertrain,'')<>ALL(?)", typesNot);
+  const drivesNot = multiParamValues(searchParams.getAll("driveNot"), "", { splitCommas:true });
+  if (drivesNot.length) add("COALESCE(v.drivetrain,'')<>ALL(?)", drivesNot);
+  const bodyTypesNot = multiParamValues(searchParams.getAll("bodyTypeNot"), "", { splitCommas:true });
+  if (bodyTypesNot.length) add("COALESCE(v.specifications->>'bodyType','')<>ALL(?)", bodyTypesNot);
+  const colorsNot = multiParamValues(searchParams.getAll("colorNot"), "", { splitCommas:true });
+  if (colorsNot.length) add("COALESCE(v.specifications->>'bodyColor','')<>ALL(?)", colorsNot);
   return { where:`WHERE ${clauses.join(" AND ")}`, values };
 }
 

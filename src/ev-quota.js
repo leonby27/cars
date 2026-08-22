@@ -55,11 +55,60 @@ const quotaOverrideFromUrl = () => {
   return null;
 };
 
+// Переключатель «Цены с квотами» в карточке остатка: посетитель может заранее
+// посмотреть, во сколько выйдет машина, когда льгота кончится. Выбор храним в
+// браузере, чтобы он не сбрасывался при переходах по сайту.
+const QUOTA_PRICING_KEY = "evcars-quota-pricing";
+
+// Льгота кончилась по данным сводок (или по аварийному рубильнику) — тогда
+// выбирать нечего: пошлина в ценах в любом случае.
+const quotaGone = () => EV_QUOTA_ASSUME_EXHAUSTED || evQuotaState({ audience: "personal" }).exhausted;
+
+/**
+ * Кончилась ли льгота на самом деле. Отличается от режима цен: переключатель
+ * показывает будущие цены, но тексты про действующую нулевую пошлину при этом
+ * остаются правдой, пока квота есть.
+ */
+export const isEvQuotaExhausted = () => {
+  const override = quotaOverrideFromUrl();
+  return override !== null ? override : quotaGone();
+};
+
+const quotaPricingChoice = () => {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(QUOTA_PRICING_KEY) !== "off";
+  } catch {
+    // Приватный режим Safari запрещает хранилище — тогда просто держим льготу.
+    return true;
+  }
+};
+
 /** Кончилась ли льгота для граждан — от этого зависит пошлина в расчёте цены. */
 export const isEvQuotaOver = () => {
   const override = quotaOverrideFromUrl();
   if (override !== null) return override;
-  return EV_QUOTA_ASSUME_EXHAUSTED || evQuotaState({ audience: "personal" }).exhausted;
+  if (quotaGone()) return true;
+  return !quotaPricingChoice();
+};
+
+/** Можно ли вообще выбирать режим цен: пока квота есть и адрес страницы не задаёт своё. */
+export const evQuotaPricingAvailable = () => quotaOverrideFromUrl() === null && !quotaGone();
+
+/** Включены ли сейчас цены по льготной квоте. По умолчанию — да, пока квота есть. */
+export const isEvQuotaPricingOn = () => !isEvQuotaOver();
+
+/**
+ * Запоминает выбранный режим цен. Сам пересчёт делает вызывающая сторона: цены
+ * считаются при перерисовке, страницу перезагружать не нужно.
+ */
+export const rememberEvQuotaPricing = (on) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(QUOTA_PRICING_KEY, on ? "on" : "off");
+  } catch {
+    // Хранилище запрещено — выбор проживёт до конца сессии, и только.
+  }
 };
 
 const DAY_MS = 86400000;
