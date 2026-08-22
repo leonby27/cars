@@ -2,7 +2,7 @@ import { chinaTransitFor } from "./china-logistics.js";
 import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
-  usdByn:2.9829, cnyBynPer10:4.4496, eurByn:3.4918, rateDate:"21.08.2026",
+  usdByn:2.9829, cnyBynPer10:4.4496, eurByn:3.4918, rateDate:"22.08.2026",
   serviceUsd:800, evCustomsUsd:350,
   evDutyPercent:0.15, // пошлина на электромобиль после исчерпания квоты
   // Этапы до СВХ, доллары [низ, верх]. Ориентиры — открытые тарифы перевозчиков
