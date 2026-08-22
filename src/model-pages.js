@@ -1,3 +1,4 @@
+import { rewriteEvDutyCopyDeep } from "./ev-duty-copy.js";
 // Страницы моделей: одна запись — одна страница /models/<slug> плюс блок «О модели»
 // в карточке каждой машины этой модели. Новая модель добавляется записью здесь,
 // без правок App.jsx: маршрут, заголовки для поисковиков, статическая страница в
@@ -16,7 +17,7 @@
 
 // Общая страница /models: вступление и список обзоров. Тексты держим здесь же, чтобы
 // приложение и статическая сборка брали их из одного места.
-export const MODELS_INDEX = {
+const MODELS_INDEX_SOURCE = {
   path: "/models",
   seoTitle: "Модели авто из Китая — обзоры, версии и цены | evcars.by",
   seoDescription:
@@ -58,7 +59,7 @@ export const MODELS_INDEX = {
   listTitle: "Обзоры моделей",
 };
 
-export const MODEL_PAGES = [
+const MODEL_PAGES_SOURCE = [
   {
     slug: "zeekr-007gt",
     path: "/models/zeekr-007gt",
@@ -12643,6 +12644,12 @@ export const MODEL_PAGES = [
       "Характеристики приведены для китайской версии по данным производителя и публикаций о старте продаж; модель новая, поэтому у конкретной машины комплектация и данные могут отличаться. evcars.by не является официальным дилером Tesla. Состояние, комплектацию и точную смету мы подтверждаем проверкой перед договором.",
   },
 ];
+
+// Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
+// фразы про нулевую пошлину переписываются под новую ставку — иначе страницы
+// обещали бы то, чего в расчёте цены уже нет.
+export const MODELS_INDEX = rewriteEvDutyCopyDeep(MODELS_INDEX_SOURCE);
+export const MODEL_PAGES = rewriteEvDutyCopyDeep(MODEL_PAGES_SOURCE);
 
 export const findModelPage = (path) => MODEL_PAGES.find((page) => page.path === path) || null;
 

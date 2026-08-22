@@ -11567,9 +11567,21 @@ html[data-theme="dark"] .model-page-cars-nav {
   font-size: 13px;
   line-height: 1.45;
 }
-/* В меню телефона карточка стоит раскрытой, без своей подложки: меню уже панель. */
+/* В меню телефона карточка стоит раскрытой, без своей подложки: меню уже панель.
+   Сверху — линия и заголовок: отделяют квоту от пунктов навигации. */
 .header-menu-quota {
   margin-bottom: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+/* Отступ слева — как у текста ссылок меню, чтобы заголовки стояли по одной линии. */
+.header-menu-quota-title {
+  display: block;
+  margin-bottom: 13px;
+  padding: 0 14px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
 }
 .header-menu-quota .quota-panel-figure > b {
   font-size: 19px;

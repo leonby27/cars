@@ -976,6 +976,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
                 {/* На телефоне четвёртая кнопка в шапку не влезает, поэтому остаток
                     квоты живёт здесь же, где валюта и «Мои поиски». */}
                 <div className="header-menu-quota">
+                  <span className="header-menu-quota-title">Осталось квот:</span>
                   <EvQuotaPanel quotas={quotas} />
                 </div>
                 <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
@@ -2153,7 +2154,7 @@ function HeroSearch({ value, onChange, filtersOpen = false, onToggleFilters = nu
         <input
           type="search"
           value={value}
-          placeholder="Что будем искать сегодня?"
+          placeholder="Очень умный поиск"
           aria-label="Поиск по каталогу"
           enterKeyHint="search"
           autoComplete="off"
