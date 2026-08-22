@@ -2147,6 +2147,28 @@ function HeroSearch({ value, onChange, filtersOpen = false, onToggleFilters = nu
     window.addEventListener("touchmove", hideKeyboard, { passive: true });
     return () => window.removeEventListener("touchmove", hideKeyboard);
   }, []);
+  // На телефоне строка поиска стоит посреди первого экрана: с открытой клавиатурой
+  // выдачи под ней просто не видно. При фокусе поднимаем строку под шапку.
+  // Высоту шапки меряем на месте — она разная на телефоне и на десктопе.
+  const liftFieldToTop = useCallback(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+    if (!window.matchMedia("(max-width: 900px), (pointer: coarse)").matches) return;
+    const header = document.querySelector(".site-header");
+    const top = Math.max(0, window.scrollY + field.getBoundingClientRect().top - ((header?.offsetHeight || 0) + 10));
+    if (Math.abs(top - window.scrollY) < 2) return;
+    window.scrollTo({ top, behavior: "smooth" });
+  }, []);
+  // Клавиатура выезжает уже после фокуса и сама двигает страницу, поэтому
+  // повторяем подъём, пока меняется видимая высота окна, — но не дольше секунды.
+  const handleFocus = () => {
+    liftFieldToTop();
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const repeat = () => liftFieldToTop();
+    viewport.addEventListener("resize", repeat);
+    window.setTimeout(() => viewport.removeEventListener("resize", repeat), 1000);
+  };
   return (
     <div className="hero-search">
       <div className="hero-search-field" ref={fieldRef}>
@@ -2158,6 +2180,7 @@ function HeroSearch({ value, onChange, filtersOpen = false, onToggleFilters = nu
           aria-label="Поиск по каталогу"
           enterKeyHint="search"
           autoComplete="off"
+          onFocus={handleFocus}
           onChange={(event) => onChange(event.target.value)}
         />
         {/* Одно «гнездо» на двоих: пока строка пустая — кнопка фильтров, появился
