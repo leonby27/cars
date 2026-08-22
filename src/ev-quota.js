@@ -172,10 +172,11 @@ const remainingAt = (points, ms) => {
   return last.remaining;
 };
 
-// Расход по месяцам. Первая сводка ГТК вышла только 7 мая 2026: ни у таможни, ни
-// в открытой статистике нет расхода квоты по январю — апрелю, поэтому начало года
-// идёт одной строкой, а по месяцам расписан весь остальной год. Разбить первые
-// месяцы значило бы придумать цифры, которых никто не публиковал.
+// Остаток квоты по месяцам: сколько машин оставалось к концу каждого месяца.
+// Первая сводка ГТК вышла только 7 мая 2026: ни у таможни, ни в открытой статистике
+// нет расхода квоты по январю — апрелю, поэтому начало года идёт одной строкой,
+// а по месяцам расписан весь остальной год. Разбить первые месяцы значило бы
+// придумать цифры, которых никто не публиковал.
 const spentByPeriod = (points) => {
   const first = points[0];
   const firstReport = points[1] || first;
@@ -192,10 +193,9 @@ const spentByPeriod = (points) => {
     const toMonth = new Date(monthsFrom - DAY_MS).getUTCMonth();
     periods.push({
       key: "before-reports",
-      label: fromMonth === toMonth
-        ? `за ${MONTHS_NOMINATIVE[fromMonth]}`
-        : `за ${MONTHS_NOMINATIVE[fromMonth]} — ${MONTHS_NOMINATIVE[toMonth]}`,
+      label: MONTHS_NOMINATIVE[toMonth],
       spent: usedBy(monthsFrom),
+      left: first.remaining - usedBy(monthsFrom),
       partial: true,
       future: false,
     });
@@ -209,8 +209,9 @@ const spentByPeriod = (points) => {
     const wholeMonth = from === start && to === nextMonthMs(start);
     periods.push({
       key: `${new Date(start).getUTCFullYear()}-${month + 1}`,
-      label: `за ${MONTHS_NOMINATIVE[month]}`,
+      label: MONTHS_NOMINATIVE[month],
       spent: usedBy(to) - usedBy(from),
+      left: first.remaining - usedBy(to),
       // Текущий месяц ещё не закрыт; дату, по которую он посчитан, карточка
       // показывает один раз в подписи к остатку.
       partial: !wholeMonth,
@@ -218,14 +219,15 @@ const spentByPeriod = (points) => {
     });
   }
 
-  // Оставшиеся месяцы года показываем нулями: видно, что квота рассчитана до
-  // декабря, а кончится сильно раньше.
+  // Оставшиеся месяцы года держат каркас года: квота расписана до декабря, а
+  // кончится сильно раньше. Остатка у них нет — прочерк вместо выдуманной цифры.
   const lastYear = new Date(last.ms).getUTCFullYear();
   for (let month = new Date(last.ms).getUTCMonth() + 1; month <= 11; month += 1) {
     periods.push({
       key: `${lastYear}-${month + 1}`,
-      label: `за ${MONTHS_NOMINATIVE[month]}`,
+      label: MONTHS_NOMINATIVE[month],
       spent: 0,
+      left: null,
       partial: false,
       future: true,
     });

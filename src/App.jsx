@@ -923,13 +923,13 @@ function EvQuotaPanel({ quotas }) {
         <i className="quota-panel-bar" aria-hidden="true">
           <b style={{ width: `${Math.min(100, Math.max(2, Math.round(quota.usedShare * 100)))}%` }} />
         </i>
-        <small>Данные за {quota.asOfLabel}. Потрачено квот:</small>
+        <small>Данные за {quota.asOfLabel}. Осталось квот:</small>
         <div className="quota-panel-months">
           <ul>
             {quota.periods.map((period) => (
               <li key={period.key} className={period.future ? "future" : undefined}>
                 <span>{period.label}</span>
-                <strong>{number(period.spent)}</strong>
+                <strong>{period.left == null ? "—" : number(period.left)}</strong>
               </li>
             ))}
           </ul>

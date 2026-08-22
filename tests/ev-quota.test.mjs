@@ -23,13 +23,13 @@ test("keeps the months the customs reports do cover", () => {
   const quota = state();
   // До 7 мая таможня остаток не публиковала, поэтому начало года — одной строкой.
   assert.deepEqual(quota.periods.map((period) => period.label), [
-    "за январь — апрель", "за май", "за июнь", "за июль", "за август",
-    "за сентябрь", "за октябрь", "за ноябрь", "за декабрь",
+    "апрель", "май", "июнь", "июль", "август",
+    "сентябрь", "октябрь", "ноябрь", "декабрь",
   ]);
-  // Ненаступившие месяцы держат каркас года и стоят нулями.
-  assert.deepEqual(quota.periods.filter((period) => period.future).map((period) => period.spent), [0, 0, 0, 0]);
+  // У ненаступивших месяцев остатка нет — в карточке там прочерк, а не выдуманный ноль.
+  assert.deepEqual(quota.periods.filter((period) => period.future).map((period) => period.left), [null, null, null, null]);
   // Август ещё не закрыт, предыдущие месяцы посчитаны целиком.
-  const august = quota.periods.find((period) => period.label === "за август");
+  const august = quota.periods.find((period) => period.label === "август");
   assert.equal(august.partial, true);
   assert.deepEqual(quota.periods.slice(1, 4).map((period) => period.partial), [false, false, false]);
 });
@@ -70,4 +70,17 @@ test("flags stale data when the reports stop coming", () => {
   const quota = evQuotaState({ today: new Date("2026-10-01T00:00:00Z") });
   assert.equal(quota.stale, true);
   assert.equal(quota.overdue, true);
+});
+
+test("остаток по месяцам убывает и сходится с текущим", () => {
+  const quota = state();
+  const known = quota.periods.filter((period) => period.left !== null);
+  // Каждая строка — остаток на конец периода: он только уменьшается.
+  known.forEach((period, index) => {
+    if (index > 0) assert.ok(period.left <= known[index - 1].left, period.label);
+    assert.ok(period.left >= 0, period.label);
+  });
+  // Последняя известная строка — это и есть сегодняшний остаток.
+  assert.equal(known[known.length - 1].left, quota.remaining);
+  assert.equal(known[0].left, quota.total - known[0].spent);
 });
