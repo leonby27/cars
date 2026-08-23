@@ -26,7 +26,8 @@ test("обзор модели показывает наличие и цену, �
   // в самой странице.
   const { html } = render().modelPage({ modelPage: page, cars, total: 616, siblings, brandLanding });
   assert.match(html, /в наличии: 616 автомобилей/);
-  assert.match(html, /от [\d\s  ]+ \$ с доставкой до Минска/);
+  // Одна цена, когда машина одна, и вилка «от … до …», когда цены разные.
+  assert.match(html, /от [\d\s  ]+(?: до [\d\s  ]+)? \$ с доставкой до Минска/);
   assert.match(html, /<h2>BYD Han в наличии — цены до Минска<\/h2>/);
   assert.match(html, /<a href="\/cars\/1">BYD Han 2023<\/a>/);
 });

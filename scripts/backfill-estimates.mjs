@@ -22,6 +22,7 @@ const { rows } = await pool.query(`SELECT l.id, l.estimated_total_usd, l.price_c
     COALESCE(l.source_payload->>'transmission', v.specifications->>'transmission') AS transmission,
     COALESCE(l.source_payload->>'engine', v.specifications->>'engine') AS engine,
     l.city,
+    l.source_payload->>'manufactureDate' AS manufacture_date,
     l.source_payload->>'dimensions' AS dimensions,
     (l.source_payload->>'curbWeight')::numeric AS curb_weight
   FROM listings l JOIN vehicles v ON v.id = l.vehicle_id`);
@@ -41,6 +42,12 @@ for (const row of rows) {
     sourceFuelType: row.fuel_type,
     transmission: row.transmission,
     city: row.city,
+    // Дата выпуска — не мелочь: возраст считается по ней, а на трёх и пяти годах
+    // стоят пороги ставок и порог НДС. Без неё расчёт откатывался на модельный год,
+    // и сохранённая цена расходилась с той, что видит человек в карточке, на ~20%
+    // у машин около пятилетнего рубежа. По этому же числу работают сортировка
+    // «дешёвые» и фильтр «цена до», поэтому расхождение видно и в выдаче каталога.
+    manufactureDate: row.manufacture_date,
     dimensions: row.dimensions,
     curbWeight: row.curb_weight,
   }).totalUsd;

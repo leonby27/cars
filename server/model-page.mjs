@@ -5,7 +5,7 @@
 // выдаче по нему каталоги с ценами, а мы приходили статьёй, имея 2 751 живую Model Y.
 // Держать цены в файлах нельзя: они устареют до следующей выкладки, а ссылки на
 // проданные машины начнут отвечать «страницы нет».
-import { listCars } from "./repository.mjs";
+import { listCars, priceEdges } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { MODEL_PAGES, findModelPage } from "../src/model-pages.js";
@@ -31,12 +31,14 @@ export async function renderModelPage(slug) {
 
   // Самые доступные машины модели: по ним считается «от такой-то цены».
   const params = new URLSearchParams({ brand: page.brand, model: page.model, sort: "price_asc", limit: String(offersOnPage) });
-  const { items, total } = await listCars(params);
+  // Вилка цен — по всем машинам модели: загруженная дюжина это самые доступные,
+  // и верхняя граница по ней вышла бы заниженной.
+  const [{ items, total }, edges] = await Promise.all([listCars(params), priceEdges(params)]);
 
   const siblings = MODEL_PAGES.filter((item) => item.brand === page.brand && item.path !== page.path).slice(0, siblingsOnPage);
   const brandPath = brandLandingPath(page.brand);
   const brandLanding = brandPath ? findCatalogLanding(brandPath) : null;
 
-  const rendered = renderer.modelPage({ modelPage: page, cars: items, total, siblings, brandLanding });
+  const rendered = renderer.modelPage({ modelPage: page, cars: items, total, siblings, brandLanding, edges });
   return { status: 200, html: rendered.html };
 }

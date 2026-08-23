@@ -330,6 +330,20 @@ test("с информационных страниц и расчётов вед�
   }
 });
 
+test("на каждой странице ровно один заголовок первого уровня", async () => {
+  // На главной их было два: один рисовал первый экран-заглушку до запуска приложения,
+  // второй стоял в версии страницы для поисковика. Человек видит один — приложение
+  // подменяет собой и то и другое, — а поисковик без скриптов видел оба.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const pages = ["index.html", "catalog/index.html", "models/index.html", "faq/index.html", "customs/index.html", "how-it-works/index.html", "ev-quota/index.html"];
+  for (const file of pages) {
+    const html = await read(file).catch(() => null);
+    if (html === null) continue;
+    const headings = (html.match(/<h1[\s>]/g) || []).length;
+    assert.equal(headings, 1, `${file}: заголовков первого уровня ${headings}`);
+  }
+});
+
 test("адреса не оканчиваются косой чертой ни в страницах, ни в карте сайта", async () => {
   // Хостинг настроен на адреса без черты и сам перебрасывает `/catalog/` на `/catalog`.
   // Пока черта оставалась, сайт указывал поисковику на адрес, которого нет: карта сайта

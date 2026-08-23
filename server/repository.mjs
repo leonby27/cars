@@ -149,8 +149,8 @@ export function withoutDetailPayload(car) {
   return { ...summary, _summary: true };
 }
 
-// Глубже этой позиции каталог не листается. Живой посетитель берёт по 24 карточки,
-// то есть потолок наступает после ~200 нажатий «Подгрузить ещё»; выкачка всех 33 тысяч
+// Глубже этой позиции каталог не листается. Посетитель берёт по 99 карточек, то есть
+// потолок наступает после полусотни нажатий «Подгрузить ещё»; выкачка всех 33 тысяч
 // объявлений постраничным перебором на этом заканчивается. Ответ всегда несёт
 // `hasMore`, поэтому приложение узнаёт про упор в потолок и прекращает подгрузку,
 // вместо того чтобы сравнивать загруженное с общим числом и биться в пустые страницы.
@@ -240,6 +240,40 @@ export async function countCars(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
   const result = await pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
   return result.rows[0].total;
+}
+
+/**
+ * Самая дешёвая и самая дорогая машина набора — чтобы показать вилку цен: «в наличии
+ * 5 673 автомобиля, от 14 900 до 78 300 $». Цену считаем тем же `estimateLandedCost`,
+ * что и карточка, поэтому берём строки целиком, а не столбец `estimated_total_usd`:
+ * тот пересчитывается только при обновлении объявления, и после смены правил расчёта
+ * (пошлина на последовательные гибриды, курс) он какое-то время отстаёт. Публиковать
+ * в разметке цену ниже той, что человек увидит на странице машины, нельзя.
+ *
+ * Обе строки достаём одним запросом: условия отбора в обеих половинах те же самые,
+ * поэтому и подстановки одни и те же.
+ */
+export async function priceEdges(searchParams) {
+  const { where, values } = buildCarFilters(searchParams);
+  const half = (direction) => `(${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY l.estimated_total_usd ${direction} NULLS LAST, l.id LIMIT 1)`;
+  const result = await pool.query(`${half("ASC")} UNION ALL ${half("DESC")}`, values);
+  const cars = result.rows.map((row) => withoutDetailPayload(rowToCar(row)));
+  return { cheapest: cars[0] || null, dearest: cars[1] || cars[0] || null };
+}
+
+/**
+ * Машины по списку номеров, в том же порядке. Нужно страницам-спискам: сам список
+ * собирается узкой выборкой (без исходного ответа источника — иначе глубокие страницы
+ * стоят полторы секунды), а для разметки цен у первых двух десятков нужны все поля,
+ * из которых считается стоимость до Минска. Поиск по номерам идёт по ключу и от
+ * глубины страницы не зависит.
+ */
+export async function carsByIds(ids) {
+  const list = [...new Set((ids || []).map((id) => String(id)))];
+  if (!list.length) return [];
+  const result = await pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id = ANY($1)`, [list]);
+  const cars = new Map(result.rows.map((row) => [String(row.id), withoutDetailPayload(rowToCar(row))]));
+  return list.map((id) => cars.get(id)).filter(Boolean);
 }
 
 export async function getCar(id) {

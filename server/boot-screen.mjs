@@ -57,12 +57,17 @@ function header(hrefRoute) {
 // Заголовок и подписи — те же слова, что показывает приложение, вместе с неразрывными
 // пробелами, которые оно расставляет само: иначе строки разошлись бы, и высота
 // заголовка при запуске изменилась бы.
+// Заголовок первого экрана рисуется не тегом h1, а обычным блоком с тем же
+// оформлением. Первый экран — это картинка-заглушка до запуска приложения, и она
+// лежит на странице рядом с версией для поисковика, у которой свой h1: поисковик,
+// который не выполняет скрипты, видел на главной сразу два заголовка первого уровня.
+// Приложение, запустившись, рисует настоящий h1 на этом же месте.
 const HERO_TITLE = "Доставим б/у авто из&nbsp;Китая в&nbsp;Беларусь";
 const HERO_BENEFITS = ["Без скрытых платежей", "Прозрачные договора", "Полное сопровождение"];
 
 function homeHero() {
   const benefits = HERO_BENEFITS.map((text) => `<li>${svg(21, ICON.check)}${text}</li>`).join("");
-  return `<main><section class="hero"><div class="hero-updated boot-invisible">&nbsp;</div><h1>${HERO_TITLE}</h1><ul class="hero-benefits" aria-label="Преимущества заказа">${benefits}</ul><div class="hero-search"><div class="hero-search-field">${svg(20, ICON.search)}<input placeholder="Очень умный поиск" aria-label="Поиск по каталогу" type="search" tabindex="-1" readonly /><button type="button" class="hero-search-filters" aria-label="Показать фильтры" aria-expanded="false">${svg(21, ICON.faders)}</button></div></div></section></main>`;
+  return `<main><section class="hero"><div class="hero-updated boot-invisible">&nbsp;</div><div class="hero-title">${HERO_TITLE}</div><ul class="hero-benefits" aria-label="Преимущества заказа">${benefits}</ul><div class="hero-search"><div class="hero-search-field">${svg(20, ICON.search)}<input placeholder="Очень умный поиск" aria-label="Поиск по каталогу" type="search" tabindex="-1" readonly /><button type="button" class="hero-search-filters" aria-label="Показать фильтры" aria-expanded="false">${svg(21, ICON.faders)}</button></div></div></section></main>`;
 }
 
 /**

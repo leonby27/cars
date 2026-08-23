@@ -162,6 +162,58 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return `<ul>${items.slice(0, limit).map((car) => `<li><a href="${hrefRoute(carRoute(car))}">${escapeHtml(carTitle(car))}</a> — ${number(car.mileage)} км</li>`).join("")}</ul>`;
   }
 
+  /**
+   * Предложение по конкретной машине для разметки списка. Цена — та же, что человек
+   * видит на странице машины: считаем её тем же `estimateLandedCost`, а не столбцом
+   * в базе, иначе в выдаче оказалась бы одна сумма, а на странице другая.
+   */
+  function carOffer(car) {
+    return {
+      "@type": "Offer",
+      url: routeUrl(carRoute(car)),
+      priceCurrency: "USD",
+      price: estimateLandedCost(car).totalUsd,
+      availability: "https://schema.org/InStock",
+      itemCondition: "https://schema.org/UsedCondition",
+    };
+  }
+
+  /** Позиция списка с ценой: машина как товар, а не просто ссылка с названием. */
+  function carListItem(car, position) {
+    return {
+      "@type": "ListItem",
+      position,
+      item: {
+        "@type": "Vehicle",
+        name: carTitle(car),
+        url: routeUrl(carRoute(car)),
+        brand: car.brand ? { "@type": "Brand", name: car.brand } : undefined,
+        vehicleModelDate: car.year ? String(car.year) : undefined,
+        mileageFromOdometer: car.mileage ? { "@type": "QuantitativeValue", value: Number(car.mileage), unitCode: "KMT" } : undefined,
+        offers: carOffer(car),
+      },
+    };
+  }
+
+  /**
+   * Вилка цен по набору: «в наличии 5 673 автомобиля, от 9 950 до 56 300 $».
+   * `edges` — самая дешёвая и самая дорогая машина набора, посчитанные тем же
+   * расчётом, что и карточка.
+   */
+  function priceSpread(edges, shown = []) {
+    const prices = [];
+    for (const car of [edges?.cheapest, edges?.dearest, ...shown]) if (car) prices.push(estimateLandedCost(car).totalUsd);
+    if (!prices.length) return null;
+    // Края набора выбираются по столбцу `estimated_total_usd`, а он пересчитывается
+    // только при обновлении объявления и после смены правил расчёта какое-то время
+    // отстаёт. Поэтому вилку раздвигаем ценами машин, показанных на этой же странице:
+    // иначе в разметке нижняя граница оказывалась выше, чем цена в списке под ней.
+    return { from: Math.min(...prices), to: Math.max(...prices) };
+  }
+
+  /** Словами: «от 9 950 $» или «от 9 950 до 56 300 $». */
+  const spreadText = (spread) => (spread.to > spread.from ? `от ${number(spread.from)} до ${number(spread.to)} $` : `от ${number(spread.from)} $`);
+
   function breadcrumbsSchema(items) {
     return {
       "@context": "https://schema.org",
@@ -392,11 +444,14 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * Общая страница каталога: заголовок, количество машин, ссылки на свежие объявления
    * и на все разделы. `sections` — разделы из `src/catalog-landings.js`.
    */
-  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length }) {
+  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [] }) {
     const canonical = routeUrl(pageRoute(CATALOG_INDEX.route, page));
     const first = (page - 1) * perPage;
+    const spread = priceSpread(edges, priced);
     const countLine = total
-      ? `<p>В каталоге ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")} — цены указаны с доставкой до Минска.${
+      ? `<p>В каталоге ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${
+          spread ? `, цены ${spreadText(spread)} с доставкой до Минска` : " — цены указаны с доставкой до Минска"
+        }.${
           pages > 1 ? ` Страница ${page} из ${pages}: автомобили с ${number(first + 1)}-го по ${number(first + items.length)}-й по возрастанию цены.` : ""
         }</p>`
       : "";
@@ -411,12 +466,11 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       name: CATALOG_INDEX.h1,
       url: canonical,
       numberOfItems: total || items.length,
-      itemListElement: items.slice(0, 24).map((car, index) => ({
-        "@type": "ListItem",
-        position: first + index + 1,
-        url: routeUrl(carRoute(car)),
-        name: carTitle(car),
-      })),
+      itemListElement: (priced.length ? priced : items.slice(0, 24)).map((car, index) =>
+        priced.length
+          ? carListItem(car, first + index + 1)
+          : { "@type": "ListItem", position: first + index + 1, url: routeUrl(carRoute(car)), name: carTitle(car) },
+      ),
     };
     return {
       canonical,
@@ -442,13 +496,16 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * и переходы на соседние разделы. Приложение поверх этого рисует обычный каталог с
    * выставленным фильтром.
    */
-  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length }) {
+  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [] }) {
     const canonical = routeUrl(pageRoute(landing.path, page));
     const first = (page - 1) * perPage;
-    // На первой странице — сколько всего машин в разделе; дальше ещё и какие именно
-    // здесь показаны, иначе страницы отличались бы друг от друга только списком ссылок.
+    const spread = priceSpread(edges, priced);
+    // На первой странице — сколько всего машин в разделе и почём они; дальше ещё и какие
+    // именно здесь показаны, иначе страницы отличались бы друг от друга только списком.
     const countLine = total
-      ? `<p>В наличии ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")} — цены указаны с доставкой до Минска.${
+      ? `<p>В наличии ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${
+          spread ? `, цены ${spreadText(spread)} с доставкой до Минска` : " — цены указаны с доставкой до Минска"
+        }.${
           pages > 1 ? ` Страница ${page} из ${pages}: автомобили с ${number(first + 1)}-го по ${number(first + items.length)}-й по возрастанию цены.` : ""
         }</p>`
       : "";
@@ -474,14 +531,15 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       name: landing.h1,
       url: canonical,
       numberOfItems: total || items.length,
-      itemListElement: items.slice(0, 24).map((car, index) => ({
-        "@type": "ListItem",
-        // Нумерация сквозная по всему разделу: на второй странице список начинается
-        // не с первого места, а с сто первого.
-        position: first + index + 1,
-        url: routeUrl(carRoute(car)),
-        name: carTitle(car),
-      })),
+      // Нумерация сквозная по всему разделу: на второй странице список начинается
+      // не с первого места, а со сто первого. У первых двух десятков стоит цена —
+      // ради неё в разметку и добавлены цены: по ней поисковик показывает подборку
+      // с суммами, а не просто список названий.
+      itemListElement: (priced.length ? priced : items.slice(0, 24)).map((car, index) =>
+        priced.length
+          ? carListItem(car, first + index + 1)
+          : { "@type": "ListItem", position: first + index + 1, url: routeUrl(carRoute(car)), name: carTitle(car) },
+      ),
     };
     return {
       canonical,
@@ -564,15 +622,14 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * `cars` — самые доступные машины этой модели, `total` — сколько их всего,
    * `siblings` — другие модели той же марки, `brandLanding` — раздел каталога марки.
    */
-  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing }) {
+  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing, edges = null }) {
     const canonical = routeUrl(page.path);
-    const cheapest = items.reduce((min, car) => {
-      const landed = estimateLandedCost(car).totalUsd;
-      return min === null || landed < min ? landed : min;
-    }, null);
+    // Вилку берём по всем машинам модели, а не по загруженной дюжине: дюжина — самые
+    // доступные, и верхняя граница по ней вышла бы заниженной.
+    const spread = priceSpread(edges, items);
     // Строка с наличием и ценой — то, чего человек ждёт от запроса «сколько стоит».
     const availability = total
-      ? `<p><strong>${escapeHtml(page.name)} в наличии: ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${cheapest ? `, от ${number(cheapest)} $ с доставкой до Минска` : ""}.</strong>${brandLanding ? ` Все <a href="${hrefRoute(brandLanding.path)}">автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`
+      ? `<p><strong>${escapeHtml(page.name)} в наличии: ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${spread ? `, ${spreadText(spread)} с доставкой до Минска` : ""}.</strong>${brandLanding ? ` Все <a href="${hrefRoute(brandLanding.path)}">автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`
       : `<p>Сейчас ${escapeHtml(page.name)} в наличии нет. <a href="${hrefRoute("/catalog/")}">Посмотрите каталог</a> — он обновляется ежедневно.</p>`;
     const offers = items.length
       ? `<section><h2>${escapeHtml(page.name)} в наличии — цены до Минска</h2>${carLinks(items, 12)}${brandLanding ? `<p><a href="${hrefRoute(brandLanding.path)}">Все ${escapeHtml(page.brand)} в каталоге</a></p>` : ""}</section>`
@@ -591,12 +648,30 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         name: `${page.name} в наличии`,
         url: canonical,
         numberOfItems: total || items.length,
-        itemListElement: items.slice(0, 12).map((car, index) => ({
-          "@type": "ListItem",
-          position: index + 1,
-          url: routeUrl(carRoute(car)),
-          name: carTitle(car),
-        })),
+        itemListElement: items.slice(0, 12).map((car, index) => carListItem(car, index + 1)),
+      });
+    }
+    // Вилка цен по модели. Здесь она уместна как нигде: страница про одну машину,
+    // и «BYD Han, 616 предложений, от 15 800 до 29 400 $» — это ровно то, что
+    // описывает `AggregateOffer`. На разделах каталога такой разметки нет намеренно:
+    // «Электромобили» — не товар, и вилка цен по ним была бы натяжкой.
+    if (total && spread && Number.isFinite(spread.from)) {
+      schemas.push({
+        "@context": "https://schema.org",
+        "@type": "Car",
+        name: page.name,
+        url: canonical,
+        brand: page.brand ? { "@type": "Brand", name: page.brand } : undefined,
+        model: page.model || undefined,
+        offers: {
+          "@type": "AggregateOffer",
+          priceCurrency: "USD",
+          lowPrice: spread.from,
+          highPrice: spread.to,
+          offerCount: total,
+          availability: "https://schema.org/InStock",
+          itemCondition: "https://schema.org/UsedCondition",
+        },
       });
     }
     return {

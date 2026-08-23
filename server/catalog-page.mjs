@@ -4,7 +4,7 @@
 // Зачем сервером, а не файлами: список машин в разделе меняется каждый день, а держать
 // тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
-import { listCarPage } from "./repository.mjs";
+import { carsByIds, listCarPage, priceEdges } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
@@ -69,11 +69,18 @@ export async function renderCatalogIndex(searchParams) {
   // Порядок по цене, а не выдача по умолчанию: та перемешана и от запроса к запросу
   // меняется, а страницы списка должны делить каталог на непересекающиеся куски.
   const query = new URLSearchParams({ sort: "price_asc" });
-  const { items, total } = await listCarPage(query, { limit: carsOnPage, offset: (number - 1) * carsOnPage });
+  const [{ items, total }, edges] = await Promise.all([
+    listCarPage(query, { limit: carsOnPage, offset: (number - 1) * carsOnPage }),
+    priceEdges(query),
+  ]);
   const pages = catalogPageCount(total);
   if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
 
-  const page = renderer.catalogIndexPage({ cars: items, total, sections: CATALOG_LANDINGS, page: number, pages, perPage: carsOnPage });
+  // Цены в разметке ставим у первых двух десятков машин страницы. Сам список собран
+  // узкой выборкой без полей, из которых считается цена, поэтому эти двадцать четыре
+  // машины дочитываем по номерам — поиск по ключу, от глубины страницы не зависит.
+  const priced = await carsByIds(items.slice(0, 24).map((car) => car.id));
+  const page = renderer.catalogIndexPage({ cars: items, total, sections: CATALOG_LANDINGS, page: number, pages, perPage: carsOnPage, edges, priced });
   return { status: 200, html: page.html };
 }
 
@@ -97,9 +104,13 @@ export async function renderCatalogPage(slug, searchParams) {
 
   const params = landingApiParams(landing);
   params.set("sort", "price_asc");
-  const { items, total } = await listCarPage(params, { limit: carsOnPage, offset: (number - 1) * carsOnPage });
+  const [{ items, total }, edges] = await Promise.all([
+    listCarPage(params, { limit: carsOnPage, offset: (number - 1) * carsOnPage }),
+    priceEdges(params),
+  ]);
   const pages = catalogPageCount(total);
   if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
+  const priced = await carsByIds(items.slice(0, 24).map((car) => car.id));
 
   // Обзоры моделей этой марки — сильные внутренние ссылки: у каждой такой страницы
   // около девятисот слов текста, и ведут они внутрь того же раздела.
@@ -109,6 +120,6 @@ export async function renderCatalogPage(slug, searchParams) {
   // и немного соседей. Одинаковый на всех страницах блок поисковик обесценивает.
   const others = relatedLandings(landing);
 
-  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage });
+  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage, edges, priced });
   return { status: 200, html: page.html };
 }

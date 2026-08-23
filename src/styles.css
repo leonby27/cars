@@ -304,7 +304,8 @@ button {
   border-radius: 50%;
   background: var(--green);
 }
-.hero h1 {
+.hero h1,
+.hero .hero-title {
   margin: 0;
   font-size: clamp(36px, 4vw, 46px);
   font-weight: 800;
@@ -3719,7 +3720,8 @@ body.header-menu-open .detail-floating-availability {
     padding: 26px 14px 13px;
     text-align: center;
   }
-  .hero h1 {
+  .hero h1,
+  .hero .hero-title {
     font-size: 34px;
     letter-spacing: -1.6px;
   }
