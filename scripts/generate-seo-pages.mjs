@@ -6,7 +6,6 @@ import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
-import { yuanToUsdAbout } from "../src/pricing.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
@@ -71,53 +70,13 @@ const publicPages = [
   { route: "/contacts/", title: "Контакты evcars.by — автомобили из Китая в Минске", description: "Контакты сервиса evcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая.", h1: "Контакты evcars.by", lead: "Обсудим бюджет, подбор, проверку, договор и доставку автомобиля из Китая в Беларусь." },
   { route: "/privacy/", title: "Политика конфиденциальности | evcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта evcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
   { route: "/terms/", title: "Условия использования сайта | evcars.by", description: "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая.", h1: "Условия использования сайта", lead: "Информация каталога и расчёты являются предварительными; финальные условия фиксируются после проверки и в договоре." },
-  // Общая страница «О моделях авто» и сами обзоры: конфиг живёт в src/model-pages.js,
-  // здесь они получают статический файл для хостинга и попадают в карту сайта наравне
-  // с разделами. В заготовке лежит весь текст — поисковику он виден без запуска
-  // приложения.
+  // Общая страница «О моделях авто». Сами обзоры файлами не собираются: их отдаёт
+  // сервер, потому что в них нужны живые цены и наличие. Готовый файл по такому адресу
+  // перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
   { route: `${MODELS_INDEX.path}/`, title: MODELS_INDEX.seoTitle, description: MODELS_INDEX.seoDescription, h1: MODELS_INDEX.h1, lead: MODELS_INDEX.lead, modelsIndex: true },
-  ...MODEL_PAGES.map((modelPage) => ({ route: `${modelPage.path}/`, title: modelPage.seoTitle, description: modelPage.seoDescription, h1: modelPage.h1, lead: modelPage.lead, modelPage })),
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
-
-function modelPageArticle(modelPage) {
-  const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
-  // Списки, карточки сравнения и врезки — такой же текст, как абзацы: в статической
-  // версии страницы они тоже должны быть, иначе поисковик увидит меньше, чем человек.
-  const extras = (section) =>
-    [
-      section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${escapeHtml(item.text)}</dd>`).join("")}</dl>` : "",
-      section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${escapeHtml(option.text)}</p>`).join("") : "",
-      section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${escapeHtml(section.callout.text)}</p>` : "",
-    ].join("");
-  const sections = modelPage.sections
-    .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}${extras(section)}</section>`)
-    .join("");
-  const versions = modelPage.versions
-    ? `<section><h2>${escapeHtml(modelPage.versions.title)}</h2><table><thead><tr>${modelPage.versions.columns.map((column) => `<th scope="col">${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${modelPage.versions.rows
-        .map(
-        (row) =>
-          `<tr>${row
-            .map((cell, index) => {
-              const text = escapeHtml(yuanToUsdAbout(cell) || cell);
-              return index === 0 ? `<th scope="row">${text}</th>` : `<td>${text}</td>`;
-            })
-            .join("")}</tr>`,
-      )
-        .join("")}</tbody></table><p>${escapeHtml(modelPage.versions.note)}</p></section>`
-    : "";
-  // Частые вопросы: в статической странице это обычный текст, а разметку FAQPage
-  // добавляем отдельным блоком в <head> — по ней вопросы попадают в выдачу.
-  const faq = modelPage.faq?.length
-    ? `<section><h2>Частые вопросы про ${escapeHtml(modelPage.name)}</h2>${modelPage.faq
-        .map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`)
-        .join("")}</section>`
-    : "";
-  const inStock = cars.filter((car) => car.brand === modelPage.brand && car.model === modelPage.model);
-  const stock = inStock.length ? `<section><h2>${escapeHtml(modelPage.name)} в каталоге</h2>${carLinks(inStock, 24)}</section>` : "";
-  return `${paragraphs(modelPage.intro)}${sections}${versions}${faq}${stock}<p>${escapeHtml(modelPage.disclaimer)}</p>`;
-}
 
 function modelsIndexArticle() {
   const intro = MODELS_INDEX.sections
@@ -135,14 +94,17 @@ function publicPageBody(page) {
   // над пустым списком читается поисковиком как сломанная страница.
   const linkLimit = page.route === "/" ? 20 : page.route === "/catalog/" ? 48 : 0;
   const links = linkLimit && cars.length ? carLinks(cars, linkLimit) : "";
-  const article = page.modelPage ? modelPageArticle(page.modelPage) : page.modelsIndex ? modelsIndexArticle() : "";
-  return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}</main>${footer()}`;
+  const article = page.modelsIndex ? modelsIndexArticle() : "";
+  // Ссылки на разделы каталога — на главной и в каталоге. Раньше с этих двух страниц
+  // вели ровно двенадцать ссылок (меню и подвал), и в 31 раздел нельзя было попасть
+  // ниоткуда, кроме карты сайта: плитку марок рисует скрипт, в разметке её нет.
+  const sections = page.route === "/" || page.route === "/catalog/" ? renderer.sectionLinks(CATALOG_LANDINGS, { heading: "Автомобили из Китая по маркам и типам" }) : "";
+  return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}${sections}</main>${footer()}`;
 }
 
 for (const page of publicPages) {
   const schemas = [renderer.breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
   if (page.route === "/") schemas.unshift(renderer.organizationSchema());
-  if (page.modelPage?.faq?.length) schemas.push(renderer.faqSchema(page.modelPage.faq));
   writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas }));
 }
 
@@ -230,6 +192,7 @@ async function carSitemapEntries() {
 // перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
 const pageEntries = [
   ...publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null })),
+  ...MODEL_PAGES.map((modelPage) => ({ loc: routeUrl(modelPage.path), lastmod: null })),
   ...CATALOG_LANDINGS.map((landing) => ({ loc: routeUrl(landing.path), lastmod: null })),
 ];
 writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
@@ -316,7 +279,7 @@ if (cars.length) {
 rmSync(path.join(clientDir, "data", "cars.json"), { force:true });
 
 const carsInSitemap = carEntries.length;
-console.log(`Generated ${publicPages.length} public pages, ${CATALOG_LANDINGS.length} catalog sections (server-rendered), ${cars.length} vehicle pages${vehiclePages ? "" : " (страницы машин собирает сервер в момент запроса)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
+console.log(`Generated ${publicPages.length} public pages, ${MODEL_PAGES.length} model reviews and ${CATALOG_LANDINGS.length} catalog sections (server-rendered), ${cars.length} vehicle pages${vehiclePages ? "" : " (страницы машин собирает сервер в момент запроса)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
 console.log(`Адресов машин в карте сайта: ${carsInSitemap}${carsSitemap ? "" : " (включается SEO_CARS_SITEMAP=1 или открытой индексацией)"}.`);
 // Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
 // вставляют в Google Search Console и Яндекс.Вебмастер.

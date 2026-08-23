@@ -258,6 +258,21 @@ export const findCatalogLanding = (path) => BY_PATH.get(String(path || "").repla
 export const brandLandingPath = (brandName) => CATALOG_LANDINGS.find((landing) => landing.brand === brandName)?.path || null;
 
 /**
+ * Разделы каталога, к которым относится машина: её марка, тип двигателя и тип кузова.
+ * Нужны ссылкам с карточки: без них из карточки роботу некуда идти, кроме соседних
+ * машин той же модели.
+ */
+export const landingsForCar = (car) => {
+  if (!car) return [];
+  return CATALOG_LANDINGS.filter(
+    (landing) =>
+      (landing.brand && landing.brand === car.brand) ||
+      (landing.powertrain && landing.powertrain === car.type) ||
+      (landing.bodyType && landing.bodyType === car.bodyType),
+  );
+};
+
+/**
  * Фильтры каталога, которые задаёт страница, — в том виде, в каком их читает каталог
  * из адреса. Благодаря этому страница марки остаётся обычным каталогом с выставленным
  * фильтром, а не отдельной вёрсткой.

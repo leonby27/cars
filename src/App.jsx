@@ -4810,11 +4810,37 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           </button>
         </aside>
       </div>
-      {landing && <CatalogLandingNotes landing={landing} models={models} navigate={navigate} />}
+      {landing ? <CatalogLandingNotes landing={landing} models={models} navigate={navigate} /> : <CatalogSectionLinks navigate={navigate} />}
       <ScrollToTopButton />
       {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
       {quickViewModal}
     </main>
+  );
+}
+
+/* Ссылки на разделы каталога под выдачей общего каталога. Раньше попасть в раздел можно
+   было только с главной, где плитку марок рисует скрипт, — то есть для поисковика
+   разделы были островом. Здесь те же ссылки видит и человек, и робот. */
+function CatalogSectionLinks({ navigate }) {
+  const groups = [
+    ["Марки", CATALOG_LANDINGS.filter((item) => item.kind === "brand")],
+    ["Тип двигателя", CATALOG_LANDINGS.filter((item) => item.kind === "powertrain")],
+    ["Тип кузова", CATALOG_LANDINGS.filter((item) => item.kind === "bodyType")],
+  ];
+  return (
+    <section className="catalog-landing-notes" aria-labelledby="catalog-sections-title">
+      <h2 id="catalog-sections-title">Автомобили из Китая по маркам и типам</h2>
+      {groups.map(([title, items]) => (
+        <div className="catalog-landing-links" key={title}>
+          <b>{title}</b>
+          <div>
+            {items.map((item) => (
+              <AppLink key={item.path} href={item.path} navigate={navigate}>{item.name}</AppLink>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
   );
 }
 

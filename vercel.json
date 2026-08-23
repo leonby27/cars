@@ -44,6 +44,10 @@
       "destination": "/api?path=pages/catalog&slug=:slug"
     },
     {
+      "source": "/models/:slug",
+      "destination": "/api?path=pages/model&slug=:slug"
+    },
+    {
       "source": "/analytics",
       "destination": "/analytics/index.html"
     }

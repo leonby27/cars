@@ -6,7 +6,7 @@
 //
 // Здесь нет ни файловых операций, ни обращений к базе: на вход заготовка страницы и данные,
 // на выходе строка. Поэтому модуль проверяется тестами без сборки и без Postgres.
-import { estimateLandedCost } from "../src/pricing.js";
+import { estimateLandedCost, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
 
 export const escapeHtml = (value) => String(value ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
@@ -186,7 +186,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * каталогу, которого иначе нет: списки в приложении рисует скрипт).
    * `modelPage` — обзор модели из `src/model-pages.js`, если он есть.
    */
-  function carPage({ car, related = [], modelPage = null, indexable = allowIndexing }) {
+  function carPage({ car, related = [], modelPage = null, sections = [], indexable = allowIndexing }) {
     const titleText = carTitle(car);
     const route = carRoute(car);
     const canonical = routeUrl(route);
@@ -224,7 +224,12 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const relatedBlock = related.length
       ? `<section><h2>Другие ${escapeHtml(modelName || "автомобили")} в наличии</h2>${carLinks(related, 12)}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>`
       : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${modelLink}</article>${relatedBlock}</main>${footer()}`;
+    // Разделы, к которым относится машина: её марка, тип двигателя, тип кузова. Без них
+    // из карточки роботу некуда идти, кроме соседних машин той же модели.
+    const sectionBlock = sections.length
+      ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
+      : "";
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${modelLink}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({
@@ -238,6 +243,34 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [titleText, route]]), schema],
       }),
     };
+  }
+
+  // ── Блоки ссылок ─────────────────────────────────────────────────────────────
+  // Главный разрыв с конкурентами был именно здесь: с их страницы ведут 300–570 ссылок
+  // на свои же разделы, с нашей — двенадцать. Причина не в дизайне: в приложении эти
+  // ссылки есть, но их рисует скрипт, и в разметке страницы их не было. Ниже —
+  // те же ссылки в самой странице.
+
+  /**
+   * Ссылки на разделы каталога: марки, типы двигателя, кузова. `sections` — список
+   * разделов из `src/catalog-landings.js`, `skip` — адрес текущей страницы.
+   */
+  function sectionLinks(sections, { skip = null, heading = "Разделы каталога" } = {}) {
+    const groups = [
+      ["Марки", sections.filter((item) => item.kind === "brand")],
+      ["Тип двигателя", sections.filter((item) => item.kind === "powertrain")],
+      ["Тип кузова", sections.filter((item) => item.kind === "bodyType")],
+    ].filter(([, items]) => items.length);
+    if (!groups.length) return "";
+    const list = (items) => `<ul>${items.filter((item) => item.path !== skip).map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.name)}</a></li>`).join("")}</ul>`;
+    return `<section><h2>${escapeHtml(heading)}</h2>${groups.map(([title, items]) => `<h3>${escapeHtml(title)}</h3>${list(items)}`).join("")}</section>`;
+  }
+
+  /** Ссылки на обзоры моделей — по ним поисковик уходит в самые содержательные страницы. */
+  function modelLinks(modelPages, { heading, skip = null } = {}) {
+    const items = modelPages.filter((page) => page.path !== skip);
+    if (!items.length) return "";
+    return `<section><h2>${escapeHtml(heading)}</h2><ul>${items.map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a></li>`).join("")}</ul></section>`;
   }
 
   // ── Страница каталога под марку, тип двигателя или кузов ──────────────────────
@@ -302,6 +335,105 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     });
   }
 
+  // ── Обзор модели ──────────────────────────────────────────────────────────────
+  // Раньше эти 130 страниц собирались файлами при сборке, и живых машин в них не было:
+  // список под текстом рисует скрипт. Запрос «Tesla Model Y из Китая цена»
+  // покупательский, в выдаче по нему каталоги с ценами — а мы приходили статьёй без
+  // единой цены, имея 2 751 живую Model Y. Теперь страницу собирает сервер и цены в ней
+  // настоящие.
+
+  /** Текст обзора: абзацы, разделы, врезки, таблица версий и частые вопросы. */
+  function modelPageArticle(modelPage, { cars: inStock = [] } = {}) {
+    const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+    // Списки, карточки сравнения и врезки — такой же текст, как абзацы: в статической
+    // версии страницы они тоже должны быть, иначе поисковик увидит меньше, чем человек.
+    const extras = (section) =>
+      [
+        section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${escapeHtml(item.text)}</dd>`).join("")}</dl>` : "",
+        section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${escapeHtml(option.text)}</p>`).join("") : "",
+        section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${escapeHtml(section.callout.text)}</p>` : "",
+      ].join("");
+    const sections = modelPage.sections
+      .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}${extras(section)}</section>`)
+      .join("");
+    const versions = modelPage.versions
+      ? `<section><h2>${escapeHtml(modelPage.versions.title)}</h2><table><thead><tr>${modelPage.versions.columns.map((column) => `<th scope="col">${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${modelPage.versions.rows
+          .map(
+            (row) =>
+              `<tr>${row
+                .map((cell, index) => {
+                  const text = escapeHtml(yuanToUsdAbout(cell) || cell);
+                  return index === 0 ? `<th scope="row">${text}</th>` : `<td>${text}</td>`;
+                })
+                .join("")}</tr>`,
+          )
+          .join("")}</tbody></table><p>${escapeHtml(modelPage.versions.note)}</p></section>`
+      : "";
+    // Частые вопросы: в странице это обычный текст, а разметку FAQPage добавляем
+    // отдельным блоком в <head> — по ней вопросы попадают в выдачу.
+    const faq = modelPage.faq?.length
+      ? `<section><h2>Частые вопросы про ${escapeHtml(modelPage.name)}</h2>${modelPage.faq
+          .map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`)
+          .join("")}</section>`
+      : "";
+    const stock = inStock.length ? `<section><h2>${escapeHtml(modelPage.name)} в каталоге</h2>${carLinks(inStock, 24)}</section>` : "";
+    return `${paragraphs(modelPage.intro)}${sections}${versions}${faq}${stock}<p>${escapeHtml(modelPage.disclaimer)}</p>`;
+  }
+
+  /**
+   * Обзор модели целиком, с живыми предложениями.
+   * `cars` — самые доступные машины этой модели, `total` — сколько их всего,
+   * `siblings` — другие модели той же марки, `brandLanding` — раздел каталога марки.
+   */
+  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing }) {
+    const canonical = routeUrl(page.path);
+    const cheapest = items.reduce((min, car) => {
+      const landed = estimateLandedCost(car).totalUsd;
+      return min === null || landed < min ? landed : min;
+    }, null);
+    // Строка с наличием и ценой — то, чего человек ждёт от запроса «сколько стоит».
+    const availability = total
+      ? `<p><strong>${escapeHtml(page.name)} в наличии: ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${cheapest ? `, от ${number(cheapest)} $ с доставкой до Минска` : ""}.</strong>${brandLanding ? ` Все <a href="${hrefRoute(brandLanding.path)}">автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`
+      : `<p>Сейчас ${escapeHtml(page.name)} в наличии нет. <a href="${hrefRoute("/catalog/")}">Посмотрите каталог</a> — он обновляется ежедневно.</p>`;
+    const offers = items.length
+      ? `<section><h2>${escapeHtml(page.name)} в наличии — цены до Минска</h2>${carLinks(items, 12)}${brandLanding ? `<p><a href="${hrefRoute(brandLanding.path)}">Все ${escapeHtml(page.brand)} в каталоге</a></p>` : ""}</section>`
+      : "";
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/models/")}">О моделях авто</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${availability}${modelPageArticle(page)}${offers}${modelLinks(siblings, { heading: `Другие модели ${page.brand}`, skip: page.path })}</main>${footer()}`;
+    const schemas = [
+      breadcrumbsSchema([["Главная", "/"], ["О моделях авто", "/models/"], [page.name, page.path]]),
+    ];
+    if (page.faq?.length) schemas.push(faqSchema(page.faq));
+    // Разметка списка предложений: по ней поисковик понимает, что на странице не только
+    // статья, но и живые машины с ценами.
+    if (items.length) {
+      schemas.push({
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        name: `${page.name} в наличии`,
+        url: canonical,
+        numberOfItems: total || items.length,
+        itemListElement: items.slice(0, 12).map((car, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          url: routeUrl(carRoute(car)),
+          name: carTitle(car),
+        })),
+      });
+    }
+    return {
+      canonical,
+      html: renderHtml({
+        title: page.seoTitle,
+        description: page.seoDescription,
+        canonical,
+        body,
+        type: "website",
+        indexable,
+        schemas,
+      }),
+    };
+  }
+
   /**
    * Страница снятого или несуществующего объявления. Отдаётся с кодом 404: иначе
    * поисковик держит в индексе тысячи адресов проданных машин, каждый из которых
@@ -319,5 +451,5 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     });
   }
 
-  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, breadcrumbsSchema, organizationSchema, faqSchema, renderHtml, carPage, carGonePage, carDescription, landingPage, landingMissingPage };
+  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, breadcrumbsSchema, organizationSchema, faqSchema, renderHtml, carPage, carGonePage, carDescription, landingPage, landingMissingPage, modelPageArticle, modelPage };
 }

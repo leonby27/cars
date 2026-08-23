@@ -321,6 +321,21 @@ export async function handleApiRequest(request, response) {
         return html(response, status, fallback, { "cache-control":"no-store" });
       }
     }
+    // Готовый обзор модели: `/models/byd-han`. Текст статьи плюс живые предложения с ценами.
+    if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/model") {
+      try {
+        const { renderModelPage } = await import("./model-page.mjs");
+        const page = await renderModelPage(url.searchParams.get("slug"));
+        return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+      } catch (error) {
+        console.error(error);
+        const { appShell } = await import("./dist-files.mjs");
+        const fallback = await appShell().catch(() => null);
+        const status = isDatabaseUnavailable(error) ? 503 : 500;
+        if (!fallback) return json(response, status, { error:isDatabaseUnavailable(error) ? "service_unavailable" : "internal_error" });
+        return html(response, status, fallback, { "cache-control":"no-store" });
+      }
+    }
     // Готовая страница раздела каталога: `/catalog/byd`, `/catalog/electric`, `/catalog/suv`.
     // Адрес переводит сюда правило в `vercel.json`.
     if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/catalog") {

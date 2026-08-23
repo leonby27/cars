@@ -177,21 +177,32 @@ test("static fallback ships a compact catalog and addressable full records", asy
   assert.equal(Array.isArray(detail.images) && detail.images.length > 1, true);
 });
 
-test("страница модели попадает в сборку с текстом и в карту сайта", async () => {
-  // Страницу модели описывает один конфиг; сборка обязана превратить его в готовый
-  // файл с текстом — поисковик читает его, не запуская приложение.
-  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
-  const [page, pagesXml] = await Promise.all([read("models/zeekr-007gt/index.html"), read(`sitemap-${sitemapToken}-pages.xml`)]);
-  assert.match(page, /<h1>Zeekr 007 GT из Китая — купить с доставкой в Минск<\/h1>/);
-  assert.match(page, /<link rel="canonical" href="https:\/\/evcars\.by\/models\/zeekr-007gt"/);
-  assert.match(page, /<meta name="robots" content="index, follow/);
-  // Текст статьи, врезки внутри разделов и таблица версий лежат в самом файле,
-  // а не подгружаются скриптом.
-  assert.match(page, /<h2>Кузов и багажник<\/h2>/);
-  assert.match(page, /Zeekr 7 GT/);
-  // Цены версий пересчитаны в доллары — юани на странице не показываем.
-  assert.match(page, /≈ \$\d/);
+test("обзоры моделей файлами не собираются, но остаются в карте сайта", async () => {
+  // Обзор модели отдаёт сервер: в нём нужны живые цены и наличие, а готовый файл по
+  // этому адресу перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
+  // Содержимое обзора проверяется в tests/model-page.test.mjs.
+  const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
+  await missing("models/zeekr-007gt/index.html");
+  const [index, pagesXml] = await Promise.all([read("models/index.html"), read(`sitemap-${sitemapToken}-pages.xml`)]);
+  // Общая страница «О моделях авто» файлом остаётся: она не зависит от каталога.
+  assert.match(index, /<h1>/);
+  assert.match(index, /<a href="\/models\/zeekr-007gt">/);
   assert.match(pagesXml, /<loc>https:\/\/evcars\.by\/models\/zeekr-007gt<\/loc>/);
+});
+
+test("на главной и в каталоге есть ссылки на разделы каталога", async () => {
+  // Раньше с этих двух страниц вели ровно двенадцать ссылок — меню и подвал, — и в
+  // разделы нельзя было попасть ниоткуда, кроме карты сайта.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  for (const file of ["index.html", "catalog/index.html"]) {
+    const html = await read(file);
+    const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
+    const sections = [...body.matchAll(/<a href="\/catalog\/[a-z0-9-]+"/g)];
+    assert.ok(sections.length >= 25, `${file}: ссылок на разделы ${sections.length}, ожидалось не меньше 25`);
+    assert.match(body, /<a href="\/catalog\/byd">/);
+    assert.match(body, /<a href="\/catalog\/electric">/);
+    assert.match(body, /<a href="\/catalog\/suv">/);
+  }
 });
 
 test("адреса не оканчиваются косой чертой ни в страницах, ни в карте сайта", async () => {

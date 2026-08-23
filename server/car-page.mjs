@@ -14,6 +14,7 @@ import { createSeoRenderer } from "./seo-render.mjs";
 // по требованию — из обработчика запросов страницы машины. Обычные запросы к каталогу
 // его не загружают, а сборщик функции видит обе зависимости и точно их упакует.
 import { modelPageForCar } from "../src/model-pages.js";
+import { landingsForCar } from "../src/catalog-landings.js";
 import { normalizeDrive } from "../src/drive-types.js";
 
 const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
@@ -45,6 +46,7 @@ export async function renderCarPage(id) {
     car: { ...car, drive: normalizeDrive(car.drive) },
     related,
     modelPage: modelPageForCar(car),
+    sections: landingsForCar(car),
   });
   return { status: 200, html: page.html };
 }
