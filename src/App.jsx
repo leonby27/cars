@@ -4400,16 +4400,15 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   useEffect(() => {
     if (!searchQuery) return;
     let cancelled = false;
+    // Заменяем адрес честной перезагрузкой, а не переходом внутри приложения: фильтры
+    // каталог читает из адреса один раз, при создании, и от смены только параметров
+    // он не пересоздаётся — заголовок и адрес менялись бы, а выдача оставалась общей.
+    const go = (href) => { if (!cancelled) window.location.replace(href); };
     parseHeroSearchOnce(searchQuery, { apiMode, cars, currency })
-      .then((parsed) => {
-        if (cancelled) return;
-        // Не разобрали — оставляем каталог как есть, но убираем строку из адреса,
-        // чтобы она не попала в сохранённый поиск и в возврат из карточки.
-        navigate(parsed?.matched ? heroCatalogHref(parsed) : "/catalog", { replace: true });
-      })
-      .catch(() => {
-        if (!cancelled) navigate("/catalog", { replace: true });
-      });
+      // Не разобрали — открываем обычный каталог: строка не должна остаться в адресе,
+      // иначе она попадёт в сохранённый поиск и в возврат из карточки.
+      .then((parsed) => go(parsed?.matched ? heroCatalogHref(parsed) : "/catalog"))
+      .catch(() => go("/catalog"));
     return () => { cancelled = true; };
   }, [searchQuery]);
 
