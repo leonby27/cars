@@ -31,9 +31,14 @@ export function clearCatalogReturn() {
 
 // Позицию прокрутки каталога обновляем часто, а history такого не выдерживает:
 // в sessionStorage её можно освежать без ограничений.
-export function saveCatalogReturnScroll(scrollY, search) {
+//
+// Сверяем и адрес страницы, и параметры. Одних параметров мало с тех пор, как у каталога
+// появились разделы (`/catalog/byd`, `/catalog/suv`): параметров у них нет, поэтому по
+// одному только совпадению пустых параметров раздел получал бы сохранённые фильтры
+// соседнего — заголовок менялся, а выдача оставалась прежней.
+export function saveCatalogReturnScroll(scrollY, path, search) {
   const stored = readCatalogReturn();
-  if (!stored || stored.search !== search) return;
+  if (!stored || stored.path !== path || stored.search !== search) return;
   saveCatalogReturn({ ...stored, scrollY });
 }
 

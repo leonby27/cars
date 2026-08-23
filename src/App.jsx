@@ -387,9 +387,12 @@ const pushHistoryEntry = (state, url) => {
   }
 };
 // Снимок относится к этому же экрану каталога, только если совпадает поисковая строка.
+// Сохранённое состояние каталога подходит только той же странице: у разделов каталога
+// («/catalog/byd», «/catalog/suv») своих параметров в адресе нет, и сравнения одних
+// параметров было недостаточно — раздел подхватывал фильтры соседнего.
 const matchingCatalogReturn = () => {
   const stored = readCatalogReturn();
-  return stored && stored.search === window.location.search ? stored : null;
+  return stored && stored.path === currentAppPath() && stored.search === window.location.search ? stored : null;
 };
 
 function useRoute() {
@@ -418,7 +421,7 @@ function useRoute() {
     lastScrollSave.current = Date.now();
     patchHistoryState({ scrollY: window.scrollY });
     // sessionStorage частотой не ограничен, поэтому позиция каталога всегда свежая.
-    if (isCatalogPath(appPath(window.location.pathname))) saveCatalogReturnScroll(window.scrollY, window.location.search);
+    if (isCatalogPath(appPath(window.location.pathname))) saveCatalogReturnScroll(window.scrollY, appPath(window.location.pathname), window.location.search);
   };
   useEffect(() => {
     if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
@@ -4437,7 +4440,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       order: remoteCars.slice(0, 600).map((car) => car.id),
     };
     patchHistoryState({ catalog, scrollAnchor, scrollAnchorOffset, openedCarId });
-    saveCatalogReturn({ catalog, scrollAnchor, scrollAnchorOffset, openedCarId, scrollY: window.scrollY, search: window.location.search });
+    saveCatalogReturn({ catalog, scrollAnchor, scrollAnchorOffset, openedCarId, scrollY: window.scrollY, path: currentAppPath(), search: window.location.search });
   };
   // Новая выдача — старый якорь и старый порядок уже ни на что не указывают.
   const dropScrollAnchor = () => {
