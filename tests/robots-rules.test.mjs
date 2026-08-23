@@ -70,7 +70,7 @@ test("карточки машин, разделы каталога и обзор
     "/models/byd-han",
     "/faq",
     "/contacts",
-    "/og.png",
+    "/og.jpg",
     "/fonts/manrope-latin.woff2",
     "/sitemap-testtoken.xml",
   ]) {

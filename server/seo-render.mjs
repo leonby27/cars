@@ -142,7 +142,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       "@type": "Organization",
       name: "evcars.by",
       url: routeUrl("/"),
-      logo: `${base}/og.png`,
+      logo: `${base}/og.jpg`,
       areaServed: { "@type": "Country", name: "Беларусь" },
     };
   }
@@ -183,7 +183,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     };
   }
 
-  function renderHtml({ title, description, canonical, body, image = `${base}/og.png`, type, indexable = allowIndexing, schemas = [] }) {
+  function renderHtml({ title, description, canonical, body, image = `${base}/og.jpg`, type, indexable = allowIndexing, schemas = [] }) {
     const head = metadata({ title, description, canonical, image, type, indexable, schemas });
     return stripSeoHead(shell)
       .replace(/<html\s+lang="ru"[^>]*>/i, `<html lang="ru" data-seo-indexing="${indexable}">`)
