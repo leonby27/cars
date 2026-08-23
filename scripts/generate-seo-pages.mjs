@@ -249,7 +249,7 @@ const robots = allowIndexing
   // Карту сайта в robots.txt не упоминаем: эта строка публично показала бы, где лежит
   // список всех адресов каталога. Поисковикам её адрес задают вручную — один раз, в
   // Google Search Console и Яндекс.Вебмастере; на обход и индексацию это не влияет.
-  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /searches/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\nDisallow: /app-shell.html\nDisallow: /car.html\n`
+  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /searches/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\nDisallow: /app-shell.html\nDisallow: /app-shell\nDisallow: /car.html\nDisallow: /car\n`
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;
 writeFileSync(path.join(clientDir, "robots.txt"), robots);
 

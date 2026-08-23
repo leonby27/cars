@@ -302,7 +302,9 @@ export async function handleApiRequest(request, response) {
     // Готовая страница машины. Адрес `/cars/<номер>` переводит сюда правило в `vercel.json`:
     // поисковик и человек получают страницу с настоящим заголовком, ценой и разметкой, а не
     // общую заготовку, которую заполняет скрипт уже в браузере.
-    if (request.method === "GET" && url.pathname === "/api/pages/car") {
+    // HEAD обрабатываем наравне с GET: проверялки ссылок и часть роботов спрашивают
+    // страницу именно так, а без этого адрес карточки отвечал им «страницы нет».
+    if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/car") {
       const { renderCarPage, carShell } = await import("./car-page.mjs");
       try {
         const page = await renderCarPage(url.searchParams.get("id"));
