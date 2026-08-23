@@ -13,6 +13,14 @@ export const escapeHtml = (value) => String(value ?? "").replace(/[&<>"]/g, (cha
 export const escapeXml = (value) => escapeHtml(value).replace(/'/g, "&apos;");
 export const jsonLd = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
 export const number = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
+/** Склонение существительного при числе: 1 автомобиль, 2 автомобиля, 5 автомобилей. */
+export const plural = (count, one, few, many) => {
+  const value = Math.abs(Math.floor(Number(count) || 0));
+  if (value % 100 >= 11 && value % 100 <= 14) return many;
+  if (value % 10 === 1) return one;
+  if (value % 10 >= 2 && value % 10 <= 4) return few;
+  return many;
+};
 export const isoDate = (value) => {
   const date = new Date(value || "");
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
@@ -232,6 +240,68 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     };
   }
 
+  // ── Страница каталога под марку, тип двигателя или кузов ──────────────────────
+
+  /**
+   * Страница вида `/catalog/byd` или `/catalog/electric`. Здесь она отдаётся поисковику
+   * готовой: заголовок, короткий текст, список машин ссылками, обзоры моделей этой марки
+   * и переходы на соседние разделы. Приложение поверх этого рисует обычный каталог с
+   * выставленным фильтром.
+   */
+  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], others = [], indexable = allowIndexing }) {
+    const canonical = routeUrl(landing.path);
+    const countLine = total ? `<p>В наличии ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")} — цены указаны с доставкой до Минска.</p>` : "";
+    const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
+    const notes = `<section><h2>${escapeHtml(landing.name)} из Китая: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}</section>`;
+    const reviews = modelPages.length
+      ? `<section><h2>Обзоры моделей ${escapeHtml(landing.brand || landing.name)}</h2><ul>${modelPages.map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a></li>`).join("")}</ul></section>`
+      : "";
+    const near = others.length
+      ? `<section><h2>Другие разделы каталога</h2><ul>${others.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.name)}</a></li>`).join("")}</ul></section>`
+      : "";
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(landing.h1)}</h1><p>${escapeHtml(landing.lead)}</p>${countLine}${list}${notes}${reviews}${near}</main>${footer()}`;
+    // Разметка списка: по ней поисковик понимает, что это подборка предложений, а не
+    // одна страница товара.
+    const itemList = {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: landing.h1,
+      url: canonical,
+      numberOfItems: total || items.length,
+      itemListElement: items.slice(0, 24).map((car, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: routeUrl(carRoute(car)),
+        name: carTitle(car),
+      })),
+    };
+    return {
+      canonical,
+      html: renderHtml({
+        title: landing.seoTitle,
+        description: landing.seoDescription,
+        canonical,
+        body,
+        type: "website",
+        indexable,
+        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [landing.name, landing.path]]), itemList],
+      }),
+    };
+  }
+
+  /** Раздел каталога, которого нет: отвечаем 404, а не пустым каталогом. */
+  function landingMissingPage() {
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Такого раздела каталога нет</h1><p>Возможно, ссылка устарела. Все автомобили с пробегом из Китая собраны в каталоге.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей из Китая</a></p></main>${footer()}`;
+    return renderHtml({
+      title: "Раздел каталога не найден | evcars.by",
+      description: "Такого раздела каталога нет. Все автомобили с пробегом из Китая собраны в каталоге evcars.by.",
+      canonical: null,
+      body,
+      image: null,
+      indexable: false,
+    });
+  }
+
   /**
    * Страница снятого или несуществующего объявления. Отдаётся с кодом 404: иначе
    * поисковик держит в индексе тысячи адресов проданных машин, каждый из которых
@@ -249,5 +319,5 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     });
   }
 
-  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, breadcrumbsSchema, organizationSchema, faqSchema, renderHtml, carPage, carGonePage, carDescription };
+  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, breadcrumbsSchema, organizationSchema, faqSchema, renderHtml, carPage, carGonePage, carDescription, landingPage, landingMissingPage };
 }

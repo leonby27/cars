@@ -305,7 +305,8 @@ export async function handleApiRequest(request, response) {
     // HEAD обрабатываем наравне с GET: проверялки ссылок и часть роботов спрашивают
     // страницу именно так, а без этого адрес карточки отвечал им «страницы нет».
     if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/car") {
-      const { renderCarPage, carShell } = await import("./car-page.mjs");
+      const { renderCarPage } = await import("./car-page.mjs");
+      const { carShell } = await import("./dist-files.mjs");
       try {
         const page = await renderCarPage(url.searchParams.get("id"));
         return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
@@ -315,6 +316,24 @@ export async function handleApiRequest(request, response) {
         // приложение всё же загрузилось и показало свою ошибку, но с честным кодом —
         // по нему поисковик придёт позже, а не запомнит пустую карточку.
         const fallback = await carShell().catch(() => null);
+        const status = isDatabaseUnavailable(error) ? 503 : 500;
+        if (!fallback) return json(response, status, { error:isDatabaseUnavailable(error) ? "service_unavailable" : "internal_error" });
+        return html(response, status, fallback, { "cache-control":"no-store" });
+      }
+    }
+    // Готовая страница раздела каталога: `/catalog/byd`, `/catalog/electric`, `/catalog/suv`.
+    // Адрес переводит сюда правило в `vercel.json`.
+    if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/catalog") {
+      try {
+        const { renderCatalogPage } = await import("./catalog-page.mjs");
+        const page = await renderCatalogPage(url.searchParams.get("slug"));
+        return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+      } catch (error) {
+        console.error(error);
+        // Раздел каталога без данных показывать нечем: отдаём обычную страницу каталога,
+        // чтобы приложение загрузилось и показало выдачу само.
+        const { appShell } = await import("./dist-files.mjs");
+        const fallback = await appShell().catch(() => null);
         const status = isDatabaseUnavailable(error) ? 503 : 500;
         if (!fallback) return json(response, status, { error:isDatabaseUnavailable(error) ? "service_unavailable" : "internal_error" });
         return html(response, status, fallback, { "cache-control":"no-store" });

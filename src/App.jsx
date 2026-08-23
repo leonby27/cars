@@ -4,6 +4,7 @@ import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
+import { CATALOG_LANDINGS, brandLandingPath, findCatalogLanding, landingFilterParams } from "./catalog-landings.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
 import { evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
@@ -417,7 +418,7 @@ function useRoute() {
     lastScrollSave.current = Date.now();
     patchHistoryState({ scrollY: window.scrollY });
     // sessionStorage частотой не ограничен, поэтому позиция каталога всегда свежая.
-    if (appPath(window.location.pathname) === "/catalog") saveCatalogReturnScroll(window.scrollY, window.location.search);
+    if (isCatalogPath(appPath(window.location.pathname))) saveCatalogReturnScroll(window.scrollY, window.location.search);
   };
   useEffect(() => {
     if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
@@ -441,7 +442,7 @@ function useRoute() {
       dropScrollSave();
       const path = appPath(window.location.pathname);
       const state = event.state || window.history.state || {};
-      const stored = (state.catalog || path !== "/catalog") ? null : matchingCatalogReturn();
+      const stored = (state.catalog || !isCatalogPath(path)) ? null : matchingCatalogReturn();
       const source = stored || state;
       setRoute((current) => ({
         path,
@@ -546,7 +547,7 @@ function useRoute() {
       patchHistoryState({ scrollY: window.scrollY });
       // Свежий заход в каталог (меню, ссылка с главной) — не возврат: прошлый
       // снимок фильтров к этому экрану уже не относится.
-      if (targetPath === "/catalog" && !catalogState) clearCatalogReturn();
+      if (isCatalogPath(targetPath) && !catalogState) clearCatalogReturn();
       pushHistoryEntry(
         {
           fromPath: currentPath,
@@ -572,7 +573,7 @@ function useRoute() {
   // состояние сами — но только когда уходили из каталога именно в эту карточку,
   // иначе показали бы фильтры от какого-то прошлого поиска.
   const backToCatalog = (carId = null) => {
-    if (window.history.state?.fromPath === "/catalog") {
+    if (isCatalogPath(window.history.state?.fromPath || "")) {
       navigate(-1);
       return;
     }
@@ -587,6 +588,11 @@ function useRoute() {
 }
 
 const appHref = (path) => `${import.meta.env.BASE_URL.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+
+// Страницы марок, типов двигателя и кузова — это тот же каталог с выставленным фильтром,
+// поэтому всё, что каталог делает со своим адресом (сохраняет прокрутку, помнит фильтры
+// при возврате из карточки, подсвечивает пункт меню), должно работать и на них.
+const isCatalogPath = (path) => path === "/catalog" || Boolean(findCatalogLanding(path));
 
 // Адрес текущей страницы в том же виде, в каком его хранят маршруты: без базового
 // префикса сборки и без косой черты на конце.
@@ -697,11 +703,10 @@ function ClientSeo({ path, car, landing }) {
   useEffect(() => {
     const privatePage = ["/favorites", "/searches", "/login", "/register", "/account", "/analytics"].includes(path) || path.startsWith("/orders/");
     const detailTitle = car?.title || (car ? `${car.brand} ${car.model} ${car.year}` : null);
-    const landingSeo = landing
-      ? landing.model
-        ? [`${landing.brand} ${landing.model} с пробегом из Китая — цены | evcars.by`, `${landing.count} предложений ${landing.brand} ${landing.model} с пробегом: характеристики, цены и предварительный расчёт доставки до Минска.`]
-        : [`Автомобили ${landing.brand} из Китая — каталог и цены | evcars.by`, `${landing.count} автомобилей ${landing.brand} из Китая: модели, пробег, характеристики и ориентировочная стоимость доставки в Беларусь.`]
-      : null;
+    // Заголовок и описание страницы марки, типа двигателя или кузова лежат в её
+    // описании (src/catalog-landings.js) — там же, откуда их берёт сервер, когда
+    // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
+    const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
     const [title, description] = detailTitle
       ? [`${detailTitle}, ${number(car.mileage)} км — цена до Минска | evcars.by`, `${detailTitle}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены до Минска.`]
       : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | evcars.by", "Оформление и статус заказа автомобиля в личном кабинете evcars.by."] : null) || routeSeo[path] || ["Страница не найдена | evcars.by", "Запрошенная страница не найдена."];
@@ -3200,7 +3205,10 @@ function PopularBrands({ navigate, cars, apiMode }) {
       </div>
       <div className="popular-brands-grid">
         {brands.map(({ brand, count }) => (
-          <AppLink className="brand-link" key={brand} href={`/catalog?brand=${encodeURIComponent(brand)}`} navigate={navigate} aria-label={countsKnown ? `Перейти к предложениям ${brand}, объявлений: ${number(count)}` : `Перейти к предложениям ${brand}`}>
+          // Ссылка ведёт на страницу марки, если она у нас есть: адрес с параметром
+          // (`/catalog?brand=BYD`) для поисковика указывает на общий каталог, то есть
+          // отдельной страницы под марку по такой ссылке не существует.
+          <AppLink className="brand-link" key={brand} href={brandLandingPath(brand) || `/catalog?brand=${encodeURIComponent(brand)}`} navigate={navigate} aria-label={countsKnown ? `Перейти к предложениям ${brand}, объявлений: ${number(count)}` : `Перейти к предложениям ${brand}`}>
             <BrandMark brand={brand} />
             <span className="brand-name" title={brand}>{brand}</span>
             <span className="brand-count" aria-hidden="true">{countsKnown ? number(count) : ""}</span>
@@ -4305,7 +4313,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
 const catalogViewKey = "navostok-catalog-view";
 const readCatalogView = () => (window.localStorage.getItem(catalogViewKey) === "grid" ? "grid" : "list");
 
-function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearch, updateSavedSearch, savedSearches }) {
+function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearch, updateSavedSearch, savedSearches, landing = null }) {
   const pageSize = 24;
   // Pending and api resolve to the same value, so the boot request answering does not
   // retrigger the query this component already issued at mount.
@@ -4320,7 +4328,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     { value: "year_desc", label: "Новые по году" },
     { value: "year_asc", label: "Старые по году" },
   ];
+  // Страница марки или типа задаёт свой фильтр самим адресом. Параметры в адресе имеют
+  // приоритет: с них работают ссылки из умного поиска и сохранённые поиски.
   const params = new URLSearchParams(window.location.search);
+  for (const [key, value] of landingFilterParams(landing)) if (!params.has(key)) params.set(key, value);
   const rawType = params.get("type");
   const rawBrand = params.get("brand");
   const rawModels = params.getAll("model");
@@ -4668,10 +4679,23 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       <div className="breadcrumbs">
         <button onClick={() => navigate("/")}>Главная</button>
         <CaretRight size={13} />
-        Автомобили из Китая
+        {landing ? (
+          <>
+            <button onClick={() => navigate("/catalog")}>Автомобили из Китая</button>
+            <CaretRight size={13} />
+            {landing.name}
+          </>
+        ) : (
+          "Автомобили из Китая"
+        )}
       </div>
       <div className="catalog-heading">
-        <h1>Автомобили с пробегом из Китая</h1>
+        {/* Заголовок и подзаголовок — один блок: у полосы заголовка выкладка в строку,
+            и без обёртки подзаголовок встал бы рядом с заголовком, а не под ним. */}
+        <div className="catalog-heading-text">
+          <h1>{landing ? landing.h1 : "Автомобили с пробегом из Китая"}</h1>
+          {landing && <p>{landing.lead}</p>}
+        </div>
       </div>
       <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} />
       {filters.brand !== "Все марки" && models.length > 1 && (
@@ -4783,10 +4807,49 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           </button>
         </aside>
       </div>
+      {landing && <CatalogLandingNotes landing={landing} models={models} navigate={navigate} />}
       <ScrollToTopButton />
       {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
       {quickViewModal}
     </main>
+  );
+}
+
+/* Текст страницы марки или типа стоит под выдачей, а не над ней: сверху человеку нужны
+   машины, а не чтение. Здесь же ссылки на обзоры моделей этой марки и на соседние
+   страницы каталога — по ним поисковик обходит раздел, а человек переходит к похожему. */
+function CatalogLandingNotes({ landing, models, navigate }) {
+  const modelPages = landing.brand ? MODEL_PAGES.filter((page) => page.brand === landing.brand) : [];
+  const available = new Set((models || []).filter((model) => model !== ANY_MODEL));
+  const reviews = modelPages.filter((page) => !available.size || available.has(page.model));
+  const others = CATALOG_LANDINGS.filter((item) => item.path !== landing.path && item.kind === landing.kind).slice(0, 12);
+  return (
+    <section className="catalog-landing-notes" aria-labelledby="catalog-landing-notes-title">
+      <h2 id="catalog-landing-notes-title">{landing.name} из Китая: что важно знать</h2>
+      {landing.notes.map((text) => (
+        <p key={text.slice(0, 40)}>{text}</p>
+      ))}
+      {reviews.length > 0 && (
+        <div className="catalog-landing-links">
+          <b>Обзоры моделей {landing.brand}</b>
+          <div>
+            {reviews.map((page) => (
+              <AppLink key={page.path} href={page.path} navigate={navigate}>{page.name}</AppLink>
+            ))}
+          </div>
+        </div>
+      )}
+      {others.length > 0 && (
+        <div className="catalog-landing-links">
+          <b>{landing.kind === "brand" ? "Другие марки" : landing.kind === "powertrain" ? "Другие типы" : "Другие кузова"}</b>
+          <div>
+            {others.map((item) => (
+              <AppLink key={item.path} href={item.path} navigate={navigate}>{item.name}</AppLink>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -7698,13 +7761,16 @@ const requestCatalogMeta = (query = "") => {
 let catalogRequest = null;
 // Same split as the inline script in index.html: the 60-card list is only read by the
 // home showcase and by "похожие автомобили", so the catalog asks for a single card.
-const bootCatalogUrl = () => (window.location.pathname === "/catalog" ? "/api/cars?limit=1&sort=newest" : "/api/cars?limit=60&sort=variety");
+// Каталог и страницы марок/типов открывают свой запрос с фильтрами, поэтому список
+// из шестидесяти карточек им не нужен: просим одну — её достаточно, чтобы узнать
+// размер каталога и что база отвечает.
+const bootCatalogUrl = () => (isCatalogPath(currentAppPath()) ? "/api/cars?limit=1&sort=newest" : "/api/cars?limit=60&sort=variety");
 // Memoised so StrictMode's double effect invocation does not fire the request twice.
 const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || fetchCarsJson(bootCatalogUrl()));
 // Загрузившись на /catalog, приложение знает одну машину — витрину главной и блок
 // похожих из такого списка не собрать: они крутили бы по кругу пару просмотренных
 // карточек. Флаг помнит этот урезанный старт, а запрос мемоизирован от StrictMode.
-let bootListMinimal = window.location.pathname === "/catalog";
+let bootListMinimal = isCatalogPath(currentAppPath());
 let showcaseListRequest = null;
 const requestShowcaseList = () => (showcaseListRequest ||= fetchCarsJson("/api/cars?limit=60&sort=variety"));
 const requestBootCar = (id) => (window.__boot?.carId === id && window.__boot.car) || fetchCarsJson(`/api/cars/${encodeURIComponent(id)}`);
@@ -7969,7 +8035,7 @@ export function App() {
   // Первый уход со страницы каталога после урезанного старта: дозапрашиваем
   // обычный список витрины, чтобы главной и похожим было из чего собираться.
   useEffect(() => {
-    if (!apiMode || !bootListMinimal || dataPath === "/catalog") return;
+    if (!apiMode || !bootListMinimal || isCatalogPath(dataPath)) return;
     let cancelled = false;
     requestShowcaseList()
       .then((payload) => {
@@ -8359,10 +8425,12 @@ export function App() {
       staticPage
     ) : !showAccountFromAuthRoute && contentPath === "/" && !loadError ? (
       <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} catalogUpdatedAt={catalogUpdatedAt} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} />
-    ) : !showAccountFromAuthRoute && contentPath === "/catalog" && !loadError ? (
+    ) : !showAccountFromAuthRoute && isCatalogPath(contentPath) && !loadError ? (
       // Catalog issues its own filtered query, so it starts at mount rather than queueing
       // behind the boot request it never reads.
-      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} savedSearches={savedSearches} />
+      // Страница марки, типа двигателя или кузова — тот же каталог с выставленным
+      // фильтром и своим заголовком: отдельной вёрстки у неё нет.
+      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath)} />
     ) : loading || routeLoading ? (
       <AppLoader />
     ) : loadError ? (
@@ -8392,7 +8460,7 @@ export function App() {
      <SetCurrencyContext.Provider value={setCurrency}>
      <OrderedListingsContext.Provider value={orderedListings}>
      <SetOrderedListingsContext.Provider value={publishOrderedListings}>
-      <ClientSeo path={path} car={findCarByListing(cars, detailId)} />
+      <ClientSeo path={path} car={findCarByListing(cars, detailId)} landing={findCatalogLanding(path)} />
       <div className="app-content" aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
+import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
 import { yuanToUsdAbout } from "../src/pricing.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
@@ -224,7 +225,13 @@ async function carSitemapEntries() {
   }
 }
 
-const pageEntries = publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null }));
+// Разделы каталога (`/catalog/byd`, `/catalog/electric`, `/catalog/suv`) в карту сайта
+// попадают, а файлами не собираются: их отдаёт сервер. Готовый файл по такому адресу
+// перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
+const pageEntries = [
+  ...publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null })),
+  ...CATALOG_LANDINGS.map((landing) => ({ loc: routeUrl(landing.path), lastmod: null })),
+];
 writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
 
 const carEntries = await carSitemapEntries();
@@ -288,7 +295,7 @@ if (cars.length) {
 rmSync(path.join(clientDir, "data", "cars.json"), { force:true });
 
 const carsInSitemap = carEntries.length;
-console.log(`Generated ${publicPages.length} public pages, ${cars.length} vehicle pages${vehiclePages ? "" : " (страницы машин собирает сервер в момент запроса)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
+console.log(`Generated ${publicPages.length} public pages, ${CATALOG_LANDINGS.length} catalog sections (server-rendered), ${cars.length} vehicle pages${vehiclePages ? "" : " (страницы машин собирает сервер в момент запроса)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
 console.log(`Адресов машин в карте сайта: ${carsInSitemap}${carsSitemap ? "" : " (включается SEO_CARS_SITEMAP=1 или открытой индексацией)"}.`);
 // Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
 // вставляют в Google Search Console и Яндекс.Вебмастер.

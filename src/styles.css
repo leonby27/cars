@@ -1153,6 +1153,54 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   color: var(--muted);
   font-size: 16px;
 }
+/* Текст страницы марки, типа двигателя или кузова. Блок отделён от страницы подложкой,
+   без рамки — как блок вопросов на главной. Строка чтения ограничена: во всю ширину
+   каталога текст читался бы тяжело. */
+.catalog-landing-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 46px;
+  padding: 40px;
+  border-radius: calc(20px * var(--corner-scale));
+  background: var(--header-control-bg);
+}
+.catalog-landing-notes h2 {
+  max-width: 34em;
+  margin: 0 0 4px;
+  font-size: 25px;
+  letter-spacing: -0.7px;
+}
+.catalog-landing-notes p {
+  max-width: 34em;
+  margin: 0;
+  color: var(--muted);
+}
+.catalog-landing-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.catalog-landing-links b {
+  font-size: 16px;
+}
+.catalog-landing-links > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.catalog-landing-links a {
+  padding: 8px 14px;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel);
+  color: inherit;
+  font-size: 16px;
+  text-decoration: none;
+}
+.catalog-landing-links a:hover {
+  background: var(--panel-soft);
+}
 .filter-panel {
   padding: 18px;
   border: 1px solid var(--line);
@@ -3807,6 +3855,13 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
     justify-content: center;
     text-align: center;
     margin-bottom: 16px;
+  }
+  .catalog-landing-notes {
+    margin-top: 32px;
+    padding: 24px;
+  }
+  .catalog-landing-notes h2 {
+    font-size: 21px;
   }
   .catalog-heading h1 {
     font-size: 27px;

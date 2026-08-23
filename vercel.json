@@ -36,6 +36,10 @@
       "destination": "/api?path=pages/car&id=:id"
     },
     {
+      "source": "/catalog/:slug",
+      "destination": "/api?path=pages/catalog&slug=:slug"
+    },
+    {
       "source": "/analytics",
       "destination": "/analytics/index.html"
     }
