@@ -242,10 +242,12 @@ async function carSitemapEntries() {
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
-    // `imported_at` — дата последней записи объявления: обновление цены переписывает
-    // карточку, и поисковику стоит зайти заново.
-    const result = await pool.query("SELECT l.id, l.imported_at FROM listings l WHERE l.status='active'");
-    return result.rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.imported_at) }));
+    // `content_changed_at` ставится только когда данные объявления действительно
+    // изменились (см. миграцию 021). `imported_at` для этого не годится: она одинаковая
+    // у всех карточек, потому что приходит из последнего полного импорта, — и поисковику
+    // мы сообщали «ничего не менялось» даже при изменении цены.
+    const result = await pool.query("SELECT l.id, COALESCE(l.content_changed_at, l.imported_at) AS changed_at FROM listings l WHERE l.status='active'");
+    return result.rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) }));
   } catch (error) {
     console.warn(`Карта сайта с машинами не собрана: база недоступна (${error.code || error.message}).`);
     return [];
@@ -307,6 +309,10 @@ const robots = allowIndexing
       "Disallow: /app-shell",
       "Disallow: /car$",
       "Disallow: /car.html$",
+      // Clean-param — правило Яндекса: он склеивает адреса, отличающиеся только этими
+      // параметрами, с чистым адресом раздела. Первоисточник у нас и так указан, но
+      // Яндекс по Clean-param не тратит на такие адреса обход вообще.
+      "Clean-param: sort&brand&model&type&body&color&drive&yearFrom&yearTo&priceFrom&priceTo&mileage&owners&battery&range&accel&tire&torque&condition&q /catalog",
       "",
     ].join("\n")
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;

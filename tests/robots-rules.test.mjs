@@ -100,6 +100,21 @@ test("личные разделы и служебные заготовки за�
   }
 });
 
+test("для Яндекса склеены адреса каталога с фильтрами", async () => {
+  // Clean-param — правило Яндекса: он не тратит обход на адреса, отличающиеся только
+  // этими параметрами. Правило не должно ломать разбор остальных строк.
+  const rules = await robots({ SEO_ALLOW_INDEXING: "1" });
+  const line = rules.split("\n").find((row) => row.startsWith("Clean-param:"));
+  assert.ok(line, "правила Clean-param нет");
+  assert.match(line, /\/catalog$/);
+  for (const param of ["brand", "model", "type", "body", "priceTo", "sort"]) {
+    assert.ok(line.includes(param), `в Clean-param нет параметра ${param}`);
+  }
+  // Само правило не запрещает обход каталога.
+  assert.equal(allowed(rules, "/catalog"), true);
+  assert.equal(allowed(rules, "/catalog/byd"), true);
+});
+
 test("на тестовой сборке закрыто всё", async () => {
   const rules = await robots();
   assert.match(rules, /^Disallow: \/$/m);
