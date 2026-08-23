@@ -41,6 +41,8 @@
   --menu-popover-bg: #fff;
   --header-control-bg: #eff1f3;
   --yellow-ink: #17191c;
+  /* Оранжевый для предупреждений, которые не про квоту на электромобили. */
+  --warn-ink: #b45309;
   --green: #1b8b55;
   --motion-fast: 140ms;
   --motion-medium: 190ms;
@@ -1158,73 +1160,6 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 /* Текст страницы марки, типа двигателя или кузова. Блок отделён от страницы подложкой,
    без рамки — как блок вопросов на главной. Строка чтения ограничена: во всю ширину
    каталога текст читался бы тяжело. */
-/* Таблицы и форма на страницах-инструментах. Они стоят внутри текстового блока
-   страницы, но это не проза: шрифт интерфейсный, цифры — с одинаковой шириной,
-   чтобы столбцы выстраивались. */
-.quota-history,
-.cost-calculator-form {
-  font-family: "Manrope", system-ui, sans-serif;
-}
-.quota-history {
-  width: 100%;
-  margin: 6px 0 0;
-  border-collapse: collapse;
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
-}
-.quota-history th,
-.quota-history td {
-  padding: 9px 12px 9px 0;
-  text-align: left;
-  border-bottom: 1px solid var(--line);
-}
-.quota-history td { text-align: right; }
-.quota-history tr:last-child th,
-.quota-history tr:last-child td { border-bottom: none; }
-.quota-history thead th {
-  color: var(--muted);
-  font-size: 15px;
-  font-weight: 600;
-}
-/* Форма калькулятора: поля в две колонки, на телефоне в одну. */
-.cost-calculator-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
-  margin: 8px 0 20px;
-}
-.cost-calculator-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 16px;
-  color: var(--muted);
-}
-.cost-calculator-form input[type="number"],
-.cost-calculator-form select {
-  min-height: 46px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: calc(10px * var(--corner-scale));
-  background: var(--panel);
-  color: inherit;
-  font: inherit;
-  font-size: 16px;
-}
-.cost-calculator-check {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  grid-column: 1 / -1;
-}
-.cost-calculator-check input { width: 18px; height: 18px; }
-/* Итоговая строка расчёта: её читают первой, поэтому она заметнее остальных. */
-.cost-calculator .quota-history tr:last-child th,
-.cost-calculator .quota-history tr:last-child td {
-  padding-top: 14px;
-  font-size: 18px;
-}
-
 .catalog-landing-notes {
   display: flex;
   flex-direction: column;
@@ -1266,9 +1201,36 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   color: inherit;
   font-size: 16px;
   text-decoration: none;
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
 }
+/* Под курсором ссылка должна быть заметнее спокойного состояния. Прежний фон
+   совпадал с подложкой блока — ссылка под курсором наоборот пропадала. */
 .catalog-landing-links a:hover {
-  background: var(--panel-soft);
+  background: var(--model-chip-hover-bg);
+  color: var(--ink);
+}
+/* Текст страницы марки, типа двигателя или кузова набран как статья про модель:
+   тот же засечный шрифт и кегль. Строку не сужаем — ширину задаёт сам блок, а он
+   стоит в колонке выдачи. */
+.catalog-landing-article h2 {
+  max-width: none;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.catalog-landing-article p {
+  max-width: none;
+  color: var(--ink);
+  font-family: var(--font-article);
+  font-size: 18px;
+  line-height: 26px;
+  letter-spacing: 0;
+}
+/* Блок живёт в первой колонке каталога — под выдачей, а карточка сервиса остаётся
+   справа от него. Верхний отступ меньше прежнего: часть зазора даёт сама сетка. */
+.catalog-layout > .catalog-landing-notes {
+  grid-column: 1;
+  margin-top: 22px;
 }
 .filter-panel {
   padding: 18px;
@@ -3934,6 +3896,12 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   .catalog-landing-notes h2 {
     font-size: 21px;
   }
+  .catalog-landing-article h2 {
+    font-size: 23px;
+  }
+  .catalog-layout > .catalog-landing-notes {
+    margin-top: 8px;
+  }
   .catalog-heading h1 {
     font-size: 27px;
   }
@@ -4448,6 +4416,12 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   color: var(--accent-dark);
   font-size: 13px;
   line-height: 1.45;
+}
+/* Не про квоту (гибрид с генератором, машина старше пяти лет): та же подпись, но
+   оранжевая. Красным на сайте помечена история с квотой на электромобили — если и
+   здесь взять красный, разные случаи сольются в один. */
+.price-customs-alert-warn {
+  color: var(--warn-ink);
 }
 .price-assumption {
   display: block;
@@ -9726,6 +9700,7 @@ html[data-theme="dark"] .modal-close {
 
 /* Dark theme component states: keep interaction hierarchy deliberate. */
 html[data-theme="dark"] {
+  --warn-ink: #f0a34a;
   --line-strong: #454b55;
   --focus-ring: #59616c;
   --page: #111315;
@@ -11252,8 +11227,10 @@ html[data-theme="dark"] .models-index-photo {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* Частые вопросы лежат в такой же подложке, как текстовые блоки страницы. */
-.model-page-faq {
+/* Частые вопросы и переходы к другим расчётам лежат в такой же подложке, как
+   текстовые блоки страницы. */
+.model-page-faq,
+.tool-page-links {
   width: min(860px, calc(100% - 48px));
   padding: 40px;
   border: 1px solid var(--line);
@@ -11261,7 +11238,8 @@ html[data-theme="dark"] .models-index-photo {
   background: var(--panel);
   box-shadow: 0 18px 50px rgba(24, 27, 32, 0.1);
 }
-html[data-theme="dark"] .model-page-faq {
+html[data-theme="dark"] .model-page-faq,
+html[data-theme="dark"] .tool-page-links {
   border-color: transparent;
   background: var(--surface);
   box-shadow: none;
@@ -11502,7 +11480,8 @@ html[data-theme="dark"] .model-page-cars-nav {
   }
   /* На узком экране рамка подложки только сужала бы текст: оставляем поля меньше. */
   .model-page-body,
-  .model-page-faq {
+  .model-page-faq,
+  .tool-page-links {
     padding: 20px 18px;
   }
   .model-page-article h2 {
@@ -11545,6 +11524,439 @@ html[data-theme="dark"] .model-page-cars-nav {
   .model-page-hero-copy > p {
     font-size: 19px;
     line-height: 28px;
+  }
+}
+
+/* ===================== Страницы расчётов ===================== */
+
+/* Квота, растаможка, стоимость доставки и калькулятор верстаются как обзоры моделей:
+   те же блоки-подложки, а внутри них вложенные плашки. Ниже — только про эти плашки:
+   живые цифры квоты, форма и итог калькулятора, переходы к остальным расчётам.
+   Отделяем их фоном, без обводок: в светлой теме плашка темнее подложки блока,
+   в тёмной — светлее, иначе её край не виден. */
+.model-page-article h3 {
+  margin: 0 0 12px;
+  font-size: 19px;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+.tool-live-main,
+.tool-live-side,
+.tool-live-months,
+.tool-live-table,
+.cost-calculator-form,
+.cost-calculator-rows {
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
+}
+html[data-theme="dark"] .tool-live-main,
+html[data-theme="dark"] .tool-live-side,
+html[data-theme="dark"] .tool-live-months,
+html[data-theme="dark"] .tool-live-table,
+html[data-theme="dark"] .cost-calculator-form,
+html[data-theme="dark"] .cost-calculator-rows {
+  background: var(--model-nested-bg);
+}
+/* Цифры в этих плашках стоят столбиком друг под другом, поэтому у всех одинаковая
+   ширина знака: иначе колонки разъезжаются. */
+.tool-live,
+.cost-calculator-form,
+.cost-calculator-result {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Остаток квоты: слева крупная цифра с полосой расхода, справа темп, прогноз и
+   квота юрлиц. На узком экране встают друг под друга. */
+.tool-live-figure {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+.tool-live-main {
+  padding: 22px 24px 24px;
+}
+.tool-live-main > span {
+  display: block;
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 14px;
+  font-weight: 600;
+}
+/* Сам остаток — самая крупная цифра на странице: за ней сюда и приходят. */
+.tool-live-main > strong {
+  display: block;
+  margin: 6px 0 8px;
+  color: var(--accent-dark);
+  font-size: clamp(38px, 6vw, 52px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+.tool-live-main > small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+/* Полоса заполняется израсходованным: почти полная — квота на исходе. */
+.tool-live-bar {
+  display: block;
+  height: 10px;
+  margin: 14px 0 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+html[data-theme="dark"] .tool-live-bar {
+  background: #454b55;
+}
+.tool-live-bar > b {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-dark);
+}
+/* Три строки «свойство — значение»: та же разметка, что в карточках версий. */
+.tool-live-side {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  margin: 0;
+  padding: 18px 20px;
+}
+.tool-live-side > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tool-live-side dt {
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 14px;
+  font-weight: 500;
+}
+.tool-live-side dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+.model-page-article p.tool-live-forecast {
+  margin: 18px 0 0;
+}
+.tool-live-months,
+.tool-live-table {
+  margin-top: 14px;
+  padding: 18px 20px 20px;
+}
+/* Остаток по месяцам: три колонки, чтобы весь год читался одним взглядом. */
+.tool-live-months ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tool-live-months li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 16px;
+}
+.tool-live-months li > span {
+  font-weight: 600;
+  line-height: 1.15;
+}
+.tool-live-months li > strong {
+  font-weight: 800;
+}
+/* Месяцы, которые ещё не наступили, отличаются только цветом: они держат каркас
+   года, но спорить за внимание с реальными цифрами не должны. */
+.tool-live-months li.future > span,
+.tool-live-months li.future > strong {
+  color: var(--muted);
+}
+.tool-live-source {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+/* Таблица сводок: шрифт интерфейсный, цифры одинаковой ширины — столбцы
+   выстраиваются. Это не проза, поэтому засечного шрифта статьи здесь нет. */
+.quota-history {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.quota-history th,
+.quota-history td {
+  padding: 9px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.quota-history td {
+  text-align: right;
+}
+.quota-history tr:last-child th,
+.quota-history tr:last-child td {
+  border-bottom: none;
+}
+.quota-history thead th {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Калькулятор: форма отдельной плашкой, под ней итог и разбивка по этапам.
+   Ровно две колонки: при автоподборе ширины поля вставали то по три, то по четыре,
+   и последнее оставалось одно в ряду. Переключатель «крупный кузов» идёт следующим
+   в том же потоке и занимает свободное место в последнем ряду. */
+.cost-calculator-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 18px 0 14px;
+  padding: 20px;
+  font-family: "Manrope", system-ui, sans-serif;
+}
+.cost-calculator-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cost-calculator-field > span {
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 14px;
+  font-weight: 600;
+}
+/* Поле ввода и список выбора — одного вида и одной высоты. Подложка ещё на шаг
+   светлее плашки формы: в светлой теме белая, в тёмной — заметно светлее серого. */
+.cost-calculator-field input[type="number"],
+#root .cost-calculator-select {
+  height: 50px;
+  border: 0;
+  border-radius: calc(11px * var(--corner-scale));
+  background: var(--panel);
+}
+html[data-theme="dark"] .cost-calculator-field input[type="number"],
+html[data-theme="dark"] body #root .cost-calculator-select,
+html[data-theme="dark"] body #root .cost-calculator-select.open {
+  background: #353a43;
+}
+.cost-calculator-field input[type="number"] {
+  padding: 0 16px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  /* Стрелки-«крутилки» браузера в этом поле не нужны: рядом стоят списки выбора,
+     и поле цены должно читаться так же, а не как счётчик. */
+  appearance: textfield;
+}
+.cost-calculator-field input[type="number"]::-webkit-inner-spin-button,
+.cost-calculator-field input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+/* Переключатель встаёт по центру своей ячейки — так он на одной линии с полями. */
+.cost-calculator-toggle {
+  align-self: center;
+}
+.cost-calculator-toggle .quick-view-toggle-label {
+  font-size: 15px;
+  line-height: 1.35;
+}
+/* Итог слева, этапы справа: сумму читают первой, разбивку — если она понадобилась. */
+.cost-calculator-result {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+  gap: 14px;
+  font-family: "Manrope", system-ui, sans-serif;
+}
+/* Единственная плашка на странице с цветным фоном: это ответ на вопрос, с которым
+   пришли на страницу. */
+.cost-calculator-total {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 22px 24px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--accent-soft);
+}
+.cost-calculator-total > span {
+  color: var(--accent-dark);
+  font-size: 14px;
+  font-weight: 700;
+}
+.cost-calculator-total > strong {
+  margin: 6px 0 8px;
+  color: var(--accent-dark);
+  font-size: clamp(26px, 3.4vw, 34px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -1.2px;
+}
+.cost-calculator-total > small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+html[data-theme="dark"] .cost-calculator-total > small {
+  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
+}
+.cost-calculator-rows {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 18px 20px;
+}
+.cost-calculator-rows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cost-calculator-rows dt {
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 14px;
+  font-weight: 500;
+}
+.cost-calculator-rows dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Переходы к остальным расчётам: три карточки-ссылки. Подложку блока задаёт то же
+   правило, что у блока вопросов, — оно выше. */
+.tool-page-links h2 {
+  margin: 0 0 18px;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.tool-page-links-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.tool-page-links-list > a {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 20px 20px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
+}
+html[data-theme="dark"] .tool-page-links-list > a {
+  background: var(--model-nested-bg);
+}
+/* Под курсором карточка чуть приподнимается: отдельной кнопки в ней нет, вся
+   карточка и есть ссылка. Обводку в светлой теме рисуем тенью, чтобы карточка
+   не подрастала на пиксель. */
+.tool-page-links-list > a:hover {
+  transform: translateY(-3px);
+  background: var(--panel);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 14px 30px rgba(24, 27, 32, 0.12);
+}
+html[data-theme="dark"] .tool-page-links-list > a:hover {
+  background: var(--model-nested-bg);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-page-links-list > a:hover {
+    transform: none;
+  }
+}
+.tool-page-links-list strong {
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+/* Подпись — не больше трёх строк: длинные обрезаем, иначе карточки в ряду
+   получаются разной высоты. */
+.tool-page-links-list p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin: 0;
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.tool-page-links-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 6px;
+  color: var(--accent-dark);
+  font-size: 14px;
+  font-weight: 700;
+}
+@media (max-width: 860px) {
+  /* На узком экране пары «цифра — расшифровка» и колонки итога встают друг под
+     друга: рядом они становятся слишком тесными. */
+  .tool-live-figure,
+  .cost-calculator-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tool-live-months ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tool-page-links-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tool-page-links-list p {
+    -webkit-line-clamp: 2;
+  }
+}
+@media (max-width: 700px) {
+  .tool-page-links h2 {
+    font-size: 23px;
+  }
+  /* На телефоне поля калькулятора идут в одну колонку. */
+  .cost-calculator-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tool-live-main,
+  .cost-calculator-total {
+    padding: 18px;
+  }
+  .tool-live-side,
+  .tool-live-months,
+  .tool-live-table,
+  .cost-calculator-form,
+  .cost-calculator-rows {
+    padding: 16px 18px;
+  }
+  /* Таблица сводок на телефоне: три колонки цифр в 320 точек не влезают, поэтому
+     шрифт мельче, а заголовки короче не сделать — оставляем боковую прокрутку
+     только ей, а не всей странице. */
+  .tool-live-table {
+    overflow-x: auto;
+  }
+  .quota-history {
+    font-size: 15px;
   }
 }
 
@@ -11884,7 +12296,9 @@ html[data-theme="dark"] .model-page-cars-nav {
     .model-page-back,
     .model-page-cars-nav,
     .quota-panel-bar,
-    .quota-panel-bar > b
+    .quota-panel-bar > b,
+    .tool-live-bar,
+    .tool-live-bar > b
   ) {
     corner-shape: round;
   }

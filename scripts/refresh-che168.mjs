@@ -81,6 +81,9 @@ const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_
     (source_payload->>'year')::int AS year,
     source_payload->>'type' AS type,
     source_payload->>'engine' AS engine,
+    source_payload->>'sourceFuelType' AS fuel_type,
+    source_payload->>'transmission' AS transmission,
+    source_payload->>'manufactureDate' AS manufacture_date,
     source_payload->>'city' AS city,
     source_payload->>'dimensions' AS dimensions,
     (source_payload->>'curbWeight')::numeric AS curb_weight,
@@ -162,6 +165,11 @@ const landedTotal = (row, usd) => estimateLandedCost({
   year: row.year,
   type: row.type,
   engine: row.engine,
+  // Без этих полей расчёт не узнает гибрид с генератором и не увидит настоящий
+  // возраст машины — и переписал бы цену по старым правилам.
+  sourceFuelType: row.fuel_type,
+  transmission: row.transmission,
+  manufactureDate: row.manufacture_date,
   city: row.city,
   dimensions: row.dimensions,
   curbWeight: row.curb_weight,
@@ -206,9 +214,13 @@ try {
   const flushWrites = async () => {
     if (!dryRun) {
       for (const batch of chunk(priceUpdates, 1000)) {
+        // `content_changed_at` — дата настоящего изменения объявления, её берёт карта
+        // сайта. Двигаем её только здесь: цена у продавца действительно изменилась.
+        // Ниже, где меняется лишь наш расчёт (курс сдвинулся), дату не трогаем — иначе
+        // она станет одинаковой у всего каталога и снова перестанет что-то значить.
         await pool.query(`UPDATE listings l SET price_cny=v.cny, estimated_total_usd=v.est,
             source_payload = l.source_payload || jsonb_build_object('usdPrice', v.usd, 'sourcePriceUsd', v.usd, 'chinaPrice', v.cny),
-            last_seen_at=now(), last_checked_at=now()
+            last_seen_at=now(), last_checked_at=now(), content_changed_at=now()
           FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer, usd numeric, est numeric)
           WHERE l.id = v.id`, [JSON.stringify(batch.map(({ id, cny, usd, est }) => ({ id, cny, usd, est })))]);
         await pool.query(`INSERT INTO price_history (listing_id, observed_at, price_cny)

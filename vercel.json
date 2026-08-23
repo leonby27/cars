@@ -26,6 +26,13 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     }
   ],
+  "redirects": [
+    {
+      "source": "/about",
+      "destination": "/how-it-works",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -38,6 +45,10 @@
     {
       "source": "/cars/:id",
       "destination": "/api?path=pages/car&id=:id"
+    },
+    {
+      "source": "/catalog",
+      "destination": "/api?path=pages/catalog"
     },
     {
       "source": "/catalog/:slug",

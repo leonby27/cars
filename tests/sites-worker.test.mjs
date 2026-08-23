@@ -185,3 +185,39 @@ test("emits the files required by Sites packaging", async () => {
   await access(new URL("../dist/server/index.js", import.meta.url));
   await access(new URL("../dist/.openai/hosting.json", import.meta.url));
 });
+
+test("каталог без готового файла отдаёт заготовку приложения, а не 404", async () => {
+  // Каталог и его разделы собирает сервер по данным базы; на статическом хостинге его
+  // нет, и своего файла у `/catalog` тоже нет. Заготовка приложения показывает выдачу
+  // по API — иначе главная страница каталога отвечала бы «страница не найдена».
+  const calls = [];
+  const response = await worker.fetch(new Request("https://example.test/catalog/byd", { headers:{ accept:"text/html" } }), {
+    ASSETS: {
+      fetch: async (request) => {
+        const url = new URL(request.url);
+        calls.push(url.pathname);
+        return new Response(url.pathname === "/app-shell.html" ? "shell" : "missing", {
+          status: url.pathname === "/app-shell.html" ? 200 : 404,
+          headers: { "content-type":"text/html" },
+        });
+      },
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "shell");
+  assert.deepEqual(calls, ["/catalog/byd", "/catalog/byd/index.html", "/app-shell.html"]);
+});
+
+test("старый адрес «О нас» перебрасывается на «О сервисе»", async () => {
+  // Страницы `/about` больше нет: её заголовок дублировал `/how-it-works`, содержимое
+  // перенесено туда. Без переброса адрес отвечал бы «страницы нет» — и старые ссылки,
+  // и то, что уже попало в индекс поисковика, вели бы в пустоту.
+  for (const path of ["/about", "/about/"]) {
+    const response = await worker.fetch(new Request(`https://example.test${path}`, { headers: { accept: "text/html" } }), {
+      ASSETS: { fetch: async () => new Response("не должно вызываться", { status: 200 }) },
+    });
+    assert.equal(response.status, 301);
+    assert.equal(new URL(response.headers.get("location")).pathname, "/how-it-works");
+  }
+});

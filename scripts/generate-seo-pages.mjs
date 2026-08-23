@@ -6,7 +6,7 @@ import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
-import { TOOL_PAGES } from "../src/tool-pages.js";
+import { TOOL_PAGES, customsExample, deliveryStages, toolPageStats } from "../src/tool-pages.js";
 import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
@@ -15,7 +15,7 @@ import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_
 import { DELIVERY_CASES, DELIVERY_STATS } from "../src/delivery-cases.js";
 import { LEGAL_COPY } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
-import { ABOUT_LIMITS, ABOUT_PIPELINE, ABOUT_PRINCIPLES, ABOUT_PURPOSE, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
+import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
@@ -68,11 +68,17 @@ if (vehiclePages && !hasCatalog) console.warn(`Каталог ${path.relative(ro
 const catalog = vehiclePages && hasCatalog ? JSON.parse(readFileSync(catalogPath, "utf8")) : {};
 const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id).map((car) => ({ ...car, drive:normalizeDrive(car.drive) }));
 
+// Общей страницы каталога здесь нет: её, как и разделы, отдаёт сервер. Файлами она
+// собиралась вхолостую — на хостинге дампа каталога нет, и в странице не оставалось ни
+// одной ссылки на машину. Готовый файл вдобавок перекрыл бы правило переадресации, и
+// адрес с фильтрами (`/catalog?brand=BYD`) не дошёл бы до переброса на свой раздел.
 const publicPages = [
   { route: "/", title: "Автомобили из Китая в Беларусь — evcars.by", description: "Автомобили с пробегом из Китая с проверкой, расчётом стоимости и доставкой в Минск и Беларусь.", h1: "Автомобили с пробегом из Китая с доставкой в Беларусь", lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },
-  { route: "/catalog/", title: "Автомобили с пробегом из Китая — каталог и цены | evcars.by", description: "Каталог автомобилей с пробегом из Китая: электромобили и гибриды, характеристики, пробег и ориентировочная стоимость доставки в Беларусь.", h1: "Автомобили с пробегом из Китая", lead: "Выберите автомобиль, изучите характеристики и получите предварительный расчёт стоимости до Минска." },
   { route: "/how-it-works/", title: "О сервисе покупки автомобилей из Китая | evcars.by", description: "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске.", h1: "О сервисе evcars.by", lead: "Сначала подтверждаем наличие, состояние и полную смету. После согласования заключаем договор, выкупаем автомобиль и доставляем его в Минск." },
-  { route: "/about/", title: "О сервисе доставки автомобилей из Китая | evcars.by", description: "evcars.by помогает выбрать, проверить, выкупить и доставить автомобиль с пробегом из Китая в Беларусь.", h1: "О сервисе evcars.by", lead: "Мы собираем объявления китайского вторичного рынка, переводим данные и сопровождаем покупку до выдачи автомобиля в Минске." },
+  // Страницы `/about` больше нет: у неё был тот же заголовок «О сервисе evcars.by», что
+  // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
+  // подход и «чего мы не обещаем» — перенесены вниз `/how-it-works`, а сам адрес
+  // перебрасывается туда навсегда (правило в vercel.json).
   { route: "/delivered/", title: "Доставленные автомобили из Китая — примеры и цены | evcars.by", description: "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска.", h1: "Доставленные автомобили из Китая", lead: "Истории доставки с маршрутом, сроками, итоговой стоимостью и решениями, принятыми после проверки автомобиля." },
   { route: "/payment-and-contract/", title: "Оплата и договор при покупке авто из Китая | evcars.by", description: "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы.", h1: "Оплата и договор", lead: "До оплаты фиксируем выбранный автомобиль, состав услуг, порядок расчётов и ответственность сторон." },
   { route: "/guarantees/", title: "Гарантии при покупке автомобиля из Китая | evcars.by", description: "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает evcars.by и какие риски обсуждаются до договора.", h1: "Гарантии и ответственность", lead: "Фиксируем проверку, документы, платежи и сопровождение доставки, не подменяя факты обещаниями." },
@@ -95,12 +101,31 @@ const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/a
 // Текст информационной страницы из тех же данных, что показывает приложение. Ничего
 // нового здесь не пишется: это ровно то, что видит человек.
 // Текст страницы-инструмента. Цифры берутся из тех же данных, что и расчёт в карточке,
-// поэтому страница не расходится с каталогом.
+// поэтому страница не расходится с каталогом. Вложенные блоки разделов — списки, врезки
+// и карточки сравнения — здесь тоже текст: иначе поисковик увидел бы меньше, чем человек.
 function toolArticle(tool) {
   const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+  const extras = (section) =>
+    [
+      section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${escapeHtml(item.text)}</dd>`).join("")}</dl>` : "",
+      section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${escapeHtml(option.text)}</p>`).join("") : "",
+      section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${escapeHtml(section.callout.text)}</p>` : "",
+    ].join("");
   const sections = tool.sections
-    .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}</section>`)
+    .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}${extras(section)}</section>`)
     .join("");
+  // Полоса главных цифр: у человека это плитки под вступлением, здесь — строки списка.
+  const stats = toolPageStats(tool.kind);
+  const numbers = stats.length
+    ? `<ul>${stats.map((stat) => `<li><strong>${escapeHtml(stat.value)}</strong> — ${escapeHtml(stat.label)}</li>`).join("")}</ul>`
+    : "";
+  // Таблица собирается из тех же функций, что и в приложении: одна цифра — одно место.
+  const table = (data) =>
+    `<section><h2>${escapeHtml(data.title)}</h2><table><thead><tr>${data.columns
+      .map((column) => `<th scope="col">${escapeHtml(column)}</th>`)
+      .join("")}</tr></thead><tbody>${data.rows
+      .map((row) => `<tr>${row.map((cell, index) => (index === 0 ? `<th scope="row">${escapeHtml(cell)}</th>` : `<td>${escapeHtml(cell)}</td>`)).join("")}</tr>`)
+      .join("")}</tbody></table><p>${escapeHtml(data.note)}</p></section>`;
   let live = "";
   if (tool.kind === "quota") {
     const state = evQuotaState();
@@ -108,11 +133,24 @@ function toolArticle(tool) {
     // Живая часть страницы: остаток, темп и история сводок. Это то, за чем сюда придут.
     live = `<section><h2>Сколько осталось сейчас</h2><p><strong>Гражданам доступно ещё ${number(state.remaining)} ${plural(state.remaining, "электромобиль", "электромобиля", "электромобилей")}</strong> из ${number(state.total)} по квоте ${EV_QUOTA.year} года — по сводке на ${escapeHtml(state.asOfLabel)}.</p>${
       state.perWeek ? `<p>Темп расхода — около ${number(state.perWeek)} машин в неделю.${state.runsOutLabel && !state.overdue ? ` При таком темпе квота заканчивается около ${escapeHtml(state.runsOutLabel)}.` : ""}</p>` : ""
-    }<p>Квота для торгового оборота (юридические лица) объёмом ${number(EV_QUOTA.businessTotal)} машин выбрана полностью${state.exhaustedOnLabel ? "" : ""}.</p></section><section><h2>История сводок таможни</h2><table><thead><tr><th scope="col">Дата сводки</th><th scope="col">Осталось у граждан</th><th scope="col">Осталось у юрлиц</th></tr></thead><tbody>${rows
+    }<p>Квота для торгового оборота (юридические лица) объёмом ${number(EV_QUOTA.businessTotal)} машин выбрана полностью.</p></section><section><h2>Остаток по месяцам</h2><dl>${state.periods
+      .map((period) => `<dt>${escapeHtml(period.label)}</dt><dd>${period.left == null ? "нет данных" : number(period.left)}</dd>`)
+      .join("")}</dl></section><section><h2>История сводок таможни</h2><table><thead><tr><th scope="col">Дата сводки</th><th scope="col">Осталось у граждан</th><th scope="col">Осталось у юрлиц</th></tr></thead><tbody>${rows
       .map(([date, personal, business]) => `<tr><th scope="row">${escapeHtml(date)}</th><td>${personal === null ? "не названо" : number(personal)}</td><td>${business === null ? "не названо" : number(business)}</td></tr>`)
       .join("")}</tbody></table><p>Источник — недельные сводки Государственного таможенного комитета. Квота ${EV_QUOTA.year} года действует с ${escapeHtml(EV_QUOTA.startedOn)}.</p></section>`;
   }
-  return `${paragraphs(tool.intro)}${live}${sections}<p>${escapeHtml(tool.disclaimer)}</p>`;
+  if (tool.kind === "customs") live = table(customsExample());
+  if (tool.kind === "cost") live = table(deliveryStages());
+  // Частые вопросы: в странице это обычный текст, разметку FAQPage добавляем отдельно.
+  const faq = tool.faq?.length
+    ? `<section><h2>Частые вопросы</h2>${tool.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
+    : "";
+  // Переходы к остальным расчётам: у человека это карточки-ссылки в конце страницы.
+  const others = TOOL_PAGES.filter((page) => page.path !== tool.path);
+  const links = `<section><h2>Другие расчёты</h2><ul>${others
+    .map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a> — ${escapeHtml(page.lead)}</li>`)
+    .join("")}</ul></section>`;
+  return `${paragraphs(tool.intro)}${numbers}${live}${sections}${faq}${links}<p>${escapeHtml(tool.disclaimer)}</p>`;
 }
 
 function infoArticle(route) {
@@ -158,10 +196,7 @@ function infoArticle(route) {
   if (route === "/how-it-works/") {
     return `<section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p>${PURCHASE_STEPS.map(
       (step, index) => `<h3>${index + 1}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.text)}</p>`,
-    ).join("")}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[1].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[1].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`;
-  }
-  if (route === "/about/") {
-    return `<p>${escapeHtml(ABOUT_PURPOSE)}</p><section><h2>Как мы работаем</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(ABOUT_PIPELINE.title)}</h2><p>${escapeHtml(ABOUT_PIPELINE.text)}</p><ul>${ABOUT_PIPELINE.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul></section><section><h2>Чего мы не делаем</h2>${list(ABOUT_LIMITS.map((item) => [item.title, item.text]))}</section>`;
+    ).join("")}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[1].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[1].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Прозрачность на каждом шаге</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Чего мы не обещаем</h2>${list(ABOUT_LIMITS.map((item) => [item.title, item.text]))}</section>`;
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {
@@ -184,13 +219,17 @@ function modelsIndexArticle() {
 function publicPageBody(page) {
   // Блок с предложениями появляется только когда есть что в него положить: заголовок
   // над пустым списком читается поисковиком как сломанная страница.
-  const linkLimit = page.route === "/" ? 20 : page.route === "/catalog/" ? 48 : 0;
+  const linkLimit = page.route === "/" ? 20 : 0;
   const links = linkLimit && cars.length ? carLinks(cars, linkLimit) : "";
   const article = page.tool ? toolArticle(page.tool) : page.modelsIndex ? modelsIndexArticle() : infoArticle(page.route);
   // Ссылки на разделы каталога — на главной и в каталоге. Раньше с этих двух страниц
   // вели ровно двенадцать ссылок (меню и подвал), и в 31 раздел нельзя было попасть
   // ниоткуда, кроме карты сайта: плитку марок рисует скрипт, в разметке её нет.
-  const sections = page.route === "/" || page.route === "/catalog/" ? renderer.sectionLinks(CATALOG_LANDINGS, { heading: "Автомобили из Китая по маркам и типам" }) : "";
+  // На главной — только марки, типы двигателя и кузова. Полный список всех 57 разделов
+  // лежит в каталоге: у главной самый ценный вес, и тратить его на ценовые полосы и
+  // сочетания незачем — свои ссылки они получают из каталога и друг от друга.
+  const homeKinds = new Set(["brand", "powertrain", "bodyType"]);
+  const sections = page.route === "/" ? renderer.sectionLinks(CATALOG_LANDINGS.filter((item) => homeKinds.has(item.kind)), { heading: "Автомобили из Китая по маркам и типам" }) : "";
   return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}${sections}</main>${footer()}`;
 }
 
@@ -200,6 +239,8 @@ for (const page of publicPages) {
   // Вопросы со страницы «Вопросы и ответы» — по этой разметке они попадают
   // в выдачу раскрывающимся списком. На страницах моделей это уже работает.
   if (page.route === "/faq/") schemas.push(renderer.faqSchema(FAQ_GROUPS.flatMap((group) => group.items.map((item) => ({ q: item.question, a: item.answer })))));
+  // Вопросы страниц расчётов — той же разметкой, что на страницах моделей.
+  if (page.tool?.faq?.length) schemas.push(renderer.faqSchema(page.tool.faq));
   writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas }));
 }
 
@@ -289,6 +330,8 @@ async function carSitemapEntries() {
 // перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
 const pageEntries = [
   ...publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null })),
+  // Каталог и его разделы файлами не собираются, но в карте сайта им место.
+  { loc: routeUrl("/catalog/"), lastmod: null },
   ...MODEL_PAGES.map((modelPage) => ({ loc: routeUrl(modelPage.path), lastmod: null })),
   ...CATALOG_LANDINGS.map((landing) => ({ loc: routeUrl(landing.path), lastmod: null })),
 ];
@@ -337,9 +380,12 @@ const robots = allowIndexing
       "Disallow: /car$",
       "Disallow: /car.html$",
       // Clean-param — правило Яндекса: он склеивает адреса, отличающиеся только этими
-      // параметрами, с чистым адресом раздела. Первоисточник у нас и так указан, но
-      // Яндекс по Clean-param не тратит на такие адреса обход вообще.
-      "Clean-param: sort&brand&model&type&body&color&drive&yearFrom&yearTo&priceFrom&priceTo&mileage&owners&battery&range&accel&tire&torque&condition&q /catalog",
+      // параметрами, с чистым адресом раздела, и обход на них не тратит.
+      // Марки, типа двигателя и кузова в списке нет намеренно: адрес с такими фильтрами
+      // сервер перебрасывает на готовый раздел (`/catalog?brand=BYD` → `/catalog/byd`),
+      // а склеенный с общим каталогом адрес до этого переброса не дошёл бы. Остальные
+      // параметры своей страницы не имеют, поэтому их по-прежнему склеиваем.
+      "Clean-param: sort&model&color&drive&yearFrom&yearTo&priceFrom&priceTo&mileage&owners&battery&range&accel&tire&torque&condition&q /catalog",
       "",
     ].join("\n")
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;

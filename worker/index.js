@@ -27,6 +27,12 @@ export default {
       }
       return new Response(response.body, { status:response.status, statusText:response.statusText, headers });
     };
+    // Страницы `/about` больше нет: её заголовок дублировал `/how-it-works`, а содержимое
+    // перенесено туда. Старый адрес перебрасываем навсегда — то же правило задано и для
+    // основного хостинга в `vercel.json`.
+    if (["GET", "HEAD"].includes(request.method) && requestUrl.pathname.replace(/\/+$/, "") === "/about") {
+      return Response.redirect(new URL("/how-it-works", requestUrl).toString(), 301);
+    }
     if (request.method === "GET" && requestUrl.pathname === "/api/image") {
       const allowedHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
       const allowed = (candidate) => candidate.protocol === "https:" && allowedHosts.has(candidate.hostname);
@@ -82,6 +88,17 @@ export default {
       carShellUrl.search = "";
       const carShell = await env.ASSETS.fetch(new Request(carShellUrl, request));
       if (carShell.status !== 404) return withSeoHeaders(carShell);
+    }
+
+    // Каталог и его разделы тоже собираются сервером по данным базы, а на статическом
+    // хостинге сервера нет: отдаём заготовку приложения — выдачу дорисует скрипт по API.
+    // Без этого главная страница каталога отвечала бы «страница не найдена».
+    if (cleanPath === "/catalog" || cleanPath.startsWith("/catalog/")) {
+      const shellUrl = new URL(request.url);
+      shellUrl.pathname = "/app-shell.html";
+      shellUrl.search = "";
+      const appShell = await env.ASSETS.fetch(new Request(shellUrl, request));
+      if (appShell.status !== 404) return withSeoHeaders(appShell);
     }
 
     const privateRoute = ["/account", "/favorites", "/login", "/register", "/analytics"].includes(cleanPath) || cleanPath.startsWith("/orders/");

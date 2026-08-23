@@ -17,6 +17,8 @@
     "db:import": "node scripts/db-import-json.mjs",
     "db:discover": "node scripts/import-guazi.mjs --database-only",
     "db:expire": "node scripts/db-expire.mjs",
+    "db:estimates": "node scripts/backfill-estimates.mjs",
+    "db:engine": "node scripts/backfill-engine.mjs",
     "db:setup": "npm run db:up && npm run db:migrate && npm run db:import",
     "db:schedule": "node scripts/db-schedule.mjs",
     "worker": "node scripts/db-worker.mjs",

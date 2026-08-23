@@ -8,6 +8,8 @@
 // на выходе строка. Поэтому модуль проверяется тестами без сборки и без Postgres.
 import { estimateLandedCost, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
+// Страницы-расчёты нужны подвалу: ссылки на них должны стоять на каждой странице сайта.
+import { TOOL_PAGES } from "../src/tool-pages.js";
 
 export const escapeHtml = (value) => String(value ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
 export const escapeXml = (value) => escapeHtml(value).replace(/'/g, "&apos;");
@@ -100,14 +102,25 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   </nav></header>`;
   }
 
+  // Подвал повторяет подвал приложения — вплоть до страниц-расчётов. Пока их здесь не
+  // было, четыре самые содержательные страницы (квота, растаможка, стоимость, калькулятор)
+  // ссылались только друг на друга: в приложении подвал есть, но его рисует скрипт, и в
+  // разметке страницы этих ссылок не оставалось. Теперь на них ведут все страницы сайта.
   function footer() {
+    const links = [
+      ["/catalog/", "Автомобили"],
+      ["/how-it-works/", "О сервисе"],
+      ["/delivered/", "Доставленные автомобили"],
+      ["/payment-and-contract/", "Оплата и договор"],
+      ["/guarantees/", "Гарантии"],
+      ["/faq/", "Вопросы и ответы"],
+      ...TOOL_PAGES.map((tool) => [`${tool.path}/`, tool.name]),
+      ["/contacts/", "Контакты"],
+      ["/privacy/", "Политика конфиденциальности"],
+      ["/terms/", "Условия использования"],
+    ];
     return `<footer class="site-footer"><nav class="page-width" aria-label="Информация для покупателя">
-    <a href="${hrefRoute("/delivered/")}">Доставленные автомобили</a>
-    <a href="${hrefRoute("/payment-and-contract/")}">Оплата и договор</a>
-    <a href="${hrefRoute("/guarantees/")}">Гарантии</a>
-    <a href="${hrefRoute("/faq/")}">Вопросы и ответы</a>
-    <a href="${hrefRoute("/privacy/")}">Политика конфиденциальности</a>
-    <a href="${hrefRoute("/terms/")}">Условия использования</a>
+    ${links.map(([route, name]) => `<a href="${hrefRoute(route)}">${escapeHtml(name)}</a>`).join("\n    ")}
   </nav></footer>`;
   }
 
@@ -300,6 +313,61 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return `<section><h2>${escapeHtml(heading)}</h2><ul>${items.map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a></li>`).join("")}</ul></section>`;
   }
 
+  // ── Общая страница каталога ───────────────────────────────────────────────────
+  // Раньше она собиралась файлом. Из-за этого, во-первых, на хостинге в ней не было
+  // ни одной ссылки на машину (дампа каталога при сборке там нет), а во-вторых, любой
+  // адрес с фильтрами — `/catalog?brand=BYD` — отдавал тот же файл с первоисточником
+  // «общий каталог», хотя для половины таких адресов у нас есть готовый раздел.
+  // Теперь страницу собирает сервер: список машин настоящий, а адрес с фильтрами,
+  // совпадающими с разделом, до отрисовки не доходит — сервер перебрасывает на раздел.
+
+  const CATALOG_INDEX = {
+    route: "/catalog/",
+    title: "Автомобили с пробегом из Китая — каталог и цены | evcars.by",
+    description: "Каталог автомобилей с пробегом из Китая: электромобили и гибриды, характеристики, пробег и ориентировочная стоимость доставки в Беларусь.",
+    h1: "Автомобили с пробегом из Китая",
+    lead: "Выберите автомобиль, изучите характеристики и получите предварительный расчёт стоимости до Минска.",
+  };
+
+  /**
+   * Общая страница каталога: заголовок, количество машин, ссылки на свежие объявления
+   * и на все разделы. `sections` — разделы из `src/catalog-landings.js`.
+   */
+  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing }) {
+    const canonical = routeUrl(CATALOG_INDEX.route);
+    const countLine = total
+      ? `<p>В каталоге ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")} — цены указаны с доставкой до Минска.</p>`
+      : "";
+    const list = items.length ? `<section><h2>Актуальные предложения</h2>${carLinks(items)}</section>` : "";
+    const sectionBlock = sections.length ? sectionLinks(sections, { heading: "Автомобили из Китая по маркам и типам" }) : "";
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(CATALOG_INDEX.h1)}</h1><p>${escapeHtml(CATALOG_INDEX.lead)}</p>${countLine}${list}${sectionBlock}</main>${footer()}`;
+    const itemList = {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: CATALOG_INDEX.h1,
+      url: canonical,
+      numberOfItems: total || items.length,
+      itemListElement: items.slice(0, 24).map((car, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: routeUrl(carRoute(car)),
+        name: carTitle(car),
+      })),
+    };
+    return {
+      canonical,
+      html: renderHtml({
+        title: CATALOG_INDEX.title,
+        description: CATALOG_INDEX.description,
+        canonical,
+        body,
+        type: "website",
+        indexable,
+        schemas: [breadcrumbsSchema([["Главная", "/"], [CATALOG_INDEX.h1, CATALOG_INDEX.route]]), itemList],
+      }),
+    };
+  }
+
   // ── Страница каталога под марку, тип двигателя или кузов ──────────────────────
 
   /**
@@ -320,7 +388,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // их всего два, и раздел электромобилей — самый ценный на сайте — получал ровно
     // одну входящую ссылку.
     const near = others.length ? sectionLinks(others, { skip: landing.path, heading: "Другие разделы каталога" }) : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(landing.h1)}</h1><p>${escapeHtml(landing.lead)}</p>${countLine}${list}${notes}${reviews}${near}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(landing.h1)}</h1>${countLine}${list}${notes}${reviews}${near}</main>${footer()}`;
     // Разметка списка: по ней поисковик понимает, что это подборка предложений, а не
     // одна страница товара.
     const itemList = {
@@ -479,5 +547,5 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     });
   }
 
-  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, carPage, carGonePage, carDescription, landingPage, landingMissingPage, modelPageArticle, modelPage };
+  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, catalogIndexPage, carPage, carGonePage, carDescription, landingPage, landingMissingPage, modelPageArticle, modelPage };
 }

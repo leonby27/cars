@@ -211,6 +211,11 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     .filter((value) => value !== null);
   const torqueNm = torqueValues.length ? Math.max(...torqueValues) : null;
   const tireSizeFront = specValue(specs, [/^Front Tire Specification$/i]);
+  // Объём двигателя нужен расчёту пошлины у гибридов с розеткой: ставка за см³
+  // растёт ступенями, и 2,0 л обходятся дороже 1,5 л почти вдвое. В характеристиках
+  // это строка вида «1.5T 156HP L4»; у машин с генератором вместо объёма стоит
+  // «Range Extender 160 Horsepower» — такую строку расчёт не примет за объём.
+  const engine = specValue(specs, [/^Engine$/i]);
   const tireRim = numeric(String(tireSizeFront || "").match(/R\s*(\d{2})/i)?.[1]);
 
   return {
@@ -248,6 +253,7 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     electricRange,
     range: electricRange,
     horsepower,
+    engine,
     transmission: detail.gearbox || null,
     bodyColor: detail.color || null,
     vehicleClass: detail.level || null,

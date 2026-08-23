@@ -107,8 +107,14 @@ test("для Яндекса склеены адреса каталога с фи
   const line = rules.split("\n").find((row) => row.startsWith("Clean-param:"));
   assert.ok(line, "правила Clean-param нет");
   assert.match(line, /\/catalog$/);
-  for (const param of ["brand", "model", "type", "body", "priceTo", "sort"]) {
-    assert.ok(line.includes(param), `в Clean-param нет параметра ${param}`);
+  const params = line.replace(/^Clean-param:\s*/, "").split(" ")[0].split("&");
+  for (const param of ["model", "priceTo", "sort", "color", "q"]) {
+    assert.ok(params.includes(param), `в Clean-param нет параметра ${param}`);
+  }
+  // Марку, тип двигателя и кузов сюда возвращать нельзя: у таких адресов есть свой
+  // раздел, и сервер перебрасывает на него. Склеенный адрес до переброса не дойдёт.
+  for (const param of ["brand", "type", "body"]) {
+    assert.equal(params.includes(param), false, `параметр ${param} в Clean-param перекрывает переброс на раздел`);
   }
   // Само правило не запрещает обход каталога.
   assert.equal(allowed(rules, "/catalog"), true);

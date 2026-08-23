@@ -4,7 +4,7 @@ import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
-import { CATALOG_LANDINGS, brandLandingPath, findCatalogLanding, landingFilterParams } from "./catalog-landings.js";
+import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, relatedLandings } from "./catalog-landings.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
 import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
@@ -20,8 +20,8 @@ import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_COPY } from "./legal-copy.js";
-import { ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
-import { TOOL_PAGES, findToolPage } from "./tool-pages.js";
+import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
+import { TOOL_PAGES, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
 import { trackEvent } from "./analytics.js";
@@ -546,7 +546,15 @@ function useRoute() {
     if (replace) {
       const currentIsAuthRoute = currentPath === "/login" || currentPath === "/register";
       replaceHistoryEntry(
-        { ...window.history.state, fromPath: currentIsAuthRoute ? window.history.state?.fromPath || "/" : currentPath, scrollY: window.scrollY },
+        {
+          ...window.history.state,
+          fromPath: currentIsAuthRoute ? window.history.state?.fromPath || "/" : currentPath,
+          scrollY: window.scrollY,
+          // Замена адреса тоже умеет переносить снимок каталога: на нём держится
+          // переход между разделами при смене фильтра — фильтры и сортировка
+          // переезжают на новый адрес, а не сбрасываются к тем, что задаёт раздел.
+          ...(catalogState ? { catalog: catalogState.catalog, scrollAnchor: catalogState.scrollAnchor || null, scrollAnchorOffset: Number(catalogState.scrollAnchorOffset) || 0 } : {}),
+        },
         targetUrl,
       );
     } else {
@@ -683,7 +691,6 @@ const routeSeo = {
   "/": ["Автомобили из Китая в Беларусь — evcars.by", "Автомобили с пробегом из Китая с проверкой, расчётом стоимости и доставкой в Минск и Беларусь."],
   "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | evcars.by", "Каталог автомобилей с пробегом из Китая: электромобили и гибриды, характеристики, пробег и ориентировочная стоимость доставки в Беларусь."],
   "/how-it-works": ["О сервисе покупки автомобилей из Китая | evcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
-  "/about": ["О сервисе доставки автомобилей из Китая | evcars.by", "evcars.by помогает выбрать, проверить, выкупить и доставить автомобиль с пробегом из Китая в Беларусь."],
   "/delivered": ["Доставленные автомобили из Китая — примеры и цены | evcars.by", "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска."],
   "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | evcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
   "/guarantees": ["Гарантии при покупке автомобиля из Китая | evcars.by", "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает evcars.by и какие риски обсуждаются до договора."],
@@ -2196,6 +2203,20 @@ const savedSearchCatalogHref = (filters) => {
   const search = params.toString();
   return `/catalog${search ? `?${search}` : ""}`;
 };
+
+// ── Страница раздела и фильтры ────────────────────────────────────────────────
+// Раздел каталога — это тот же каталог с выставленным фильтром, поэтому фильтр можно
+// поменять прямо на нём. Пока это никак не отслеживалось, страница марки Audi после
+// переключения на BMW оставалась «Автомобилями Audi» — и заголовком, и адресом,
+// и текстом внизу, — хотя показывала BMW.
+
+/**
+ * Раздел, под которым уместно показывать выдачу с такими фильтрами. Разбор общий с
+ * сервером: фильтры превращаются в тот же адрес каталога, который разбирает он.
+ * `preferPath` — раздел, открытый сейчас: пока он остаётся правдой, никуда не уходим.
+ */
+const landingForFilters = (filters, preferPath = null) => catalogLandingForFilters(savedSearchCatalogHref(filters).split("?")[1] || "", preferPath);
+
 // Запрос числа подходящих машин — те же имена параметров, что собирает каталог.
 const savedSearchApiParams = (filters) => {
   const query = new URLSearchParams();
@@ -2616,12 +2637,15 @@ function ModelPageCars({ modelPage, carsState, navigate, favorites, toggleFavori
 
 // Частые вопросы по модели: те же плашки, что на главной, плюс разметка для
 // поисковика — по ней вопросы и ответы попадают прямо в выдачу.
-function ModelPageFaq({ modelPage }) {
-  if (!modelPage.faq?.length) return null;
+// Частые вопросы в конце статьи — и в обзорах моделей, и на страницах расчётов.
+// Кроме самого блока отдаём разметку FAQPage: по ней вопросы попадают в выдачу
+// раскрывающимся списком.
+function ArticleFaq({ faq, title }) {
+  if (!faq?.length) return null;
   const schema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: modelPage.faq.map((item) => ({
+    mainEntity: faq.map((item) => ({
       "@type": "Question",
       name: item.q,
       acceptedAnswer: { "@type": "Answer", text: item.a },
@@ -2629,9 +2653,9 @@ function ModelPageFaq({ modelPage }) {
   };
   return (
     <section className="model-page-faq page-width" aria-labelledby="model-page-faq-title">
-      <h2 id="model-page-faq-title">Частые вопросы про {modelPage.name}</h2>
+      <h2 id="model-page-faq-title">{title}</h2>
       <div className="model-page-faq-list">
-        {modelPage.faq.map((item, index) => (
+        {faq.map((item, index) => (
           <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} />
         ))}
       </div>
@@ -3074,7 +3098,7 @@ function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
           )}
         </article>
       </div>
-      <ModelPageFaq modelPage={modelPage} />
+      <ArticleFaq faq={modelPage.faq} title={`Частые вопросы про ${modelPage.name}`} />
       </div>
       <ModelPageCatalog modelPage={modelPage} carsState={carsState} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpenCar={openCar} quickViewToggle={quickViewToggle} />
       <p className="model-page-disclaimer page-width">{modelPage.disclaimer}</p>
@@ -4486,6 +4510,38 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     if (openQuickView(car)) return;
     navigate(carHref(car));
   };
+  // Адрес, заголовок и текст страницы обязаны совпадать с тем, что показано. Как только
+  // фильтр уводит с раздела — переходим на тот раздел, которому фильтры соответствуют,
+  // а если такого нет, в общий каталог. Фильтры, сортировка и порядок перемешивания
+  // переезжают снимком, поэтому выбранное не теряется.
+  const landingPath = landing?.path || "/catalog";
+  useEffect(() => {
+    // Раздел, который описывает выбранное точнее всего и при этом остаётся правдой:
+    // на странице BYD можно выбрать модель или год, а выбрать к седанам ещё и
+    // кроссоверы — уже нет, такую выдачу раздел седанов не описывает.
+    const target = landingForFilters(filters, landingPath)?.path || "/catalog";
+    if (target === landingPath) return undefined;
+    const move = () =>
+      navigate(target, {
+        replace: true,
+        preserveScroll: true,
+        catalogState: { catalog: { filters, sort, shuffleSeed, loadedCount: pageSize, order: [] }, scrollY: window.scrollY },
+      });
+    // Пока открыт список фильтра, страницу не переключаем: кузова и цвета выбирают
+    // галочками по нескольку штук, и переход посреди выбора закрывал бы список после
+    // первой же галочки, которая уводит с раздела.
+    const listOpen = () => Boolean(document.querySelector(".select-menu.open"));
+    if (!listOpen()) {
+      move();
+      return undefined;
+    }
+    const waiting = setInterval(() => {
+      if (listOpen()) return;
+      clearInterval(waiting);
+      move();
+    }, 250);
+    return () => clearInterval(waiting);
+  }, [filters]);
   const updateFilters = (updater) => {
     loadMoreRequest.current?.abort();
     loadMoreRequest.current = null;
@@ -4719,12 +4775,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         )}
       </div>
       <div className="catalog-heading">
-        {/* Заголовок и подзаголовок — один блок: у полосы заголовка выкладка в строку,
-            и без обёртки подзаголовок встал бы рядом с заголовком, а не под ним. */}
-        <div className="catalog-heading-text">
-          <h1>{landing ? landing.h1 : "Автомобили с пробегом из Китая"}</h1>
-          {landing && <p>{landing.lead}</p>}
-        </div>
+        <h1>{landing ? landing.h1 : "Автомобили с пробегом из Китая"}</h1>
       </div>
       <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} />
       {filters.brand !== "Все марки" && models.length > 1 && (
@@ -4835,8 +4886,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             О сервисе
           </button>
         </aside>
+        {/* Текстовый блок стоит в той же колонке, что выдача: справа от него —
+            карточка сервиса, и правый край блока совпадает с правым краем выдачи. */}
+        {landing ? <CatalogLandingNotes landing={landing} models={models} navigate={navigate} /> : <CatalogSectionLinks navigate={navigate} />}
       </div>
-      {landing ? <CatalogLandingNotes landing={landing} models={models} navigate={navigate} /> : <CatalogSectionLinks navigate={navigate} />}
       <ScrollToTopButton />
       {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
       {quickViewModal}
@@ -4880,9 +4933,12 @@ function CatalogLandingNotes({ landing, models, navigate }) {
   const modelPages = landing.brand ? MODEL_PAGES.filter((page) => page.brand === landing.brand) : [];
   const available = new Set((models || []).filter((model) => model !== ANY_MODEL));
   const reviews = modelPages.filter((page) => !available.size || available.has(page.model));
-  const others = CATALOG_LANDINGS.filter((item) => item.path !== landing.path && item.kind === landing.kind);
+  // Разделы по смыслу, а не все подряд: полный список всех 55 лежит в каталоге — это его
+  // естественное место. Одинаковый на всех страницах блок ссылок поисковик со временем
+  // считает частью шаблона и обесценивает, а вес размазывается ровным слоем.
+  const others = relatedLandings(landing);
   return (
-    <section className="catalog-landing-notes" aria-labelledby="catalog-landing-notes-title">
+    <section className="catalog-landing-notes catalog-landing-article" aria-labelledby="catalog-landing-notes-title">
       <h2 id="catalog-landing-notes-title">{landing.name} из Китая: что важно знать</h2>
       {landing.notes.map((text) => (
         <p key={text.slice(0, 40)}>{text}</p>
@@ -5769,10 +5825,10 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 <strong>{approximateMoney(price.svhLow, price.svhHigh, currency)}</strong>
               </div>
               <div>
-                <PriceLabel label="Растаможка и сборы" description={price.customsNote} />
+                <PriceLabel label="Растаможка и сборы" description={price.customsHint || price.customsNote} />
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
-              {price.customsAlert && <p className="price-customs-alert">{price.customsAlert}</p>}
+              {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
               <div>
                 <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
                 <strong>{money(price.serviceUsd, currency)}</strong>
@@ -6173,10 +6229,10 @@ function OrderDraft({ car, navigate }) {
                 <b>{approximateMoney(price.svhLow, price.svhHigh, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Таможня и сборы" description={price.customsNote} />
+                <PriceLabel label="Таможня и сборы" description={price.customsHint || price.customsNote} />
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
-              {price.customsAlert && <p className="price-customs-alert">{price.customsAlert}</p>}
+              {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
               <div>
                 <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
                 <b>{money(price.serviceUsd, currency)}</b>
@@ -6334,6 +6390,7 @@ const purchaseStepIcons = [MagnifyingGlass, ChatCircleText, ShieldCheck, ListChe
 const purchaseSteps = PURCHASE_STEPS.map((step, index) => ({ ...step, icon: purchaseStepIcons[index] }));
 
 function HowItWorksPage({ navigate }) {
+  const principleIcons = [ListChecks, ShieldCheck, Lightning];
   return (
     <main className="info-page">
       <section className="info-hero page-width">
@@ -6429,89 +6486,28 @@ function HowItWorksPage({ navigate }) {
           </div>
         </div>
       </section>
-      <InfoCta navigate={navigate} title="Начните с подходящего автомобиля" text="В каталоге уже собраны объявления и предварительные расчёты до Минска." />
-    </main>
-  );
-}
-
-function AboutPage({ navigate }) {
-  const principleIcons = [ListChecks, ShieldCheck, Lightning];
-  const principles = ABOUT_PRINCIPLES.map((item, index) => ({ ...item, icon: principleIcons[index] }));
-  return (
-    <main className="info-page">
-      <section className="about-hero page-width">
-        <div>
-          <button className="back-mobile" onClick={() => navigate("/")}>
-            <ArrowLeft size={18} />
-            На главную
-          </button>
-          <span className="info-eyebrow">О сервисе</span>
-          <h1>evcars.by помогает осознанно выбрать автомобиль из Китая</h1>
-          <p>Мы собираем объявления китайского вторичного рынка, приводим данные к понятному виду и сопровождаем путь от первой проверки до доставки в Минск.</p>
-          <button className="primary" onClick={() => navigate("/catalog")}>
-            Открыть каталог <ArrowRight size={18} />
-          </button>
-        </div>
-        <aside className="about-statement">
-          <span>Наша роль</span>
-          <blockquote>Не просто показать объявление, а дать достаточно проверяемой информации для спокойного решения.</blockquote>
-          <small>Команда evcars.by</small>
-        </aside>
-      </section>
+      {/* Наш подход и «чего мы не обещаем» переехали сюда с отдельной страницы «О нас»:
+          у неё был тот же заголовок «О сервисе evcars.by», и обе страницы отвечали на
+          один запрос. Тексты берём из src/service-copy.js — оттуда же их берёт разметка
+          для поисковика, поэтому страница и её видимая роботу версия не разойдутся. */}
       <section className="info-section page-width">
         <div className="info-section-heading compact">
           <span>Наш подход</span>
           <h2>Прозрачность на каждом шаге</h2>
         </div>
         <div className="principles-grid">
-          {principles.map(({ icon: Icon, title, text }) => (
-            <article key={title}>
-              <span>
-                <Icon size={25} weight="duotone" />
-              </span>
-              <h3>{title}</h3>
-              <p>{text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="service-scope">
-        <div className="page-width service-scope-grid">
-          <div>
-            <span className="info-eyebrow">Что делает сервис</span>
-            <h2>Из объявления — в понятную карточку</h2>
-            <p>Мы структурируем параметры автомобиля, переводим данные, рассчитываем ориентир стоимости до Минска и показываем свежесть источника.</p>
-          </div>
-          <div className="scope-list">
-            <div>
-              <b>01</b>
-              <p>
-                <strong>Собираем</strong>
-                <span>Характеристики, фото и данные продавца</span>
-              </p>
-            </div>
-            <div>
-              <b>02</b>
-              <p>
-                <strong>Объясняем</strong>
-                <span>Состояние, комплектацию и структуру цены</span>
-              </p>
-            </div>
-            <div>
-              <b>03</b>
-              <p>
-                <strong>Проверяем</strong>
-                <span>Наличие, VIN, экспорт и техническое состояние</span>
-              </p>
-            </div>
-            <div>
-              <b>04</b>
-              <p>
-                <strong>Сопровождаем</strong>
-                <span>Выкуп, документы и доставку</span>
-              </p>
-            </div>
-          </div>
+          {ABOUT_PRINCIPLES.map(({ title, text }, index) => {
+            const Icon = principleIcons[index];
+            return (
+              <article key={title}>
+                <span>
+                  <Icon size={25} weight="duotone" />
+                </span>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            );
+          })}
         </div>
       </section>
       <section className="honesty-section page-width">
@@ -6520,27 +6516,17 @@ function AboutPage({ navigate }) {
           <h2>Чего мы не обещаем</h2>
         </div>
         <div className="honesty-list">
-          <p>
-            <X size={19} weight="bold" />
-            <span>
-              <b>Не выдаём данные продавца за независимую проверку.</b> Всё, что ещё не подтверждено, прямо так и обозначено.
-            </span>
-          </p>
-          <p>
-            <X size={19} weight="bold" />
-            <span>
-              <b>Не фиксируем цену раньше времени.</b> Курс, логистика и таможенные параметры уточняются перед договором.
-            </span>
-          </p>
-          <p>
-            <X size={19} weight="bold" />
-            <span>
-              <b>Не подбираем «любой ценой».</b> Если вариант сомнительный, честный результат — отказаться от него.
-            </span>
-          </p>
+          {ABOUT_LIMITS.map(({ title, text }) => (
+            <p key={title}>
+              <X size={19} weight="bold" />
+              <span>
+                <b>{title}</b> {text}
+              </span>
+            </p>
+          ))}
         </div>
       </section>
-      <InfoCta navigate={navigate} title="Посмотрите, как это выглядит на реальных авто" text="Выберите объявление и изучите характеристики, источник и предварительный расчёт." />
+      <InfoCta navigate={navigate} title="Начните с подходящего автомобиля" text="В каталоге уже собраны объявления и предварительные расчёты до Минска." />
     </main>
   );
 }
@@ -6793,14 +6779,32 @@ function ContactsPage({ navigate, theme }) {
 }
 
 
-/* Страницы-инструменты: квота, растаможка, стоимость доставки, калькулятор. Верстка та
-   же, что у юридических страниц — это текстовые страницы, своего дизайна им не нужно.
-   Тексты и разделы лежат в src/tool-pages.js, оттуда же их берёт страница для
-   поисковика: два места писали бы по-разному. */
+/* Страницы-инструменты: квота, растаможка, стоимость доставки, калькулятор. Верстка
+   такая же, как у обзоров моделей, — блоки в блоках: под заголовком полоса главных
+   цифр, следом живой блок с расчётом, дальше разделы с вложенными списками, врезками
+   и карточками сравнения, в конце частые вопросы и переходы к остальным расчётам.
+   Раньше это были простыни абзацев, как у юридических страниц.
+
+   Тексты, разделы и живые цифры лежат в src/tool-pages.js, оттуда же их берёт
+   страница для поисковика: два места писали бы по-разному. */
 function ToolPage({ tool, navigate }) {
+  const stats = toolPageStats(tool.kind);
+  // Текст разрываем примерно посередине, как в обзорах моделей: между половинами
+  // встаёт блок про сервис.
+  const splitAt = Math.ceil(tool.sections.length / 2);
+  const firstSections = tool.sections.slice(0, splitAt);
+  const restSections = tool.sections.slice(splitAt);
+  // Шаг назад работает, только если на страницу пришли с другой страницы сайта. По
+  // прямой ссылке из поиска возвращаться некуда — ведём на главную.
+  const goBack = () => (window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : navigate("/"));
   return (
-    <main className="model-page">
+    <main className="model-page tool-page">
       <div className="model-page-reading">
+        <div className="model-page-back-rail">
+          <button type="button" className="model-page-back" aria-label="Назад" onClick={goBack}>
+            <ArrowLeft size={24} />
+          </button>
+        </div>
         <div className="model-page-body page-width">
           <section className="model-page-hero">
             <div className="model-page-hero-copy">
@@ -6808,50 +6812,159 @@ function ToolPage({ tool, navigate }) {
               <p>{tool.lead}</p>
             </div>
           </section>
+          <article className="model-page-article">
+            <div className="model-page-intro">
+              {tool.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
+            </div>
+            {/* Полоса главных цифр сразу под вступлением: то, за чем приходят, видно
+                не вчитываясь. У калькулятора её нет — там сразу форма. */}
+            {stats.length > 0 && (
+              <div className="model-page-numbers">
+                {stats.map((stat) => (
+                  <div key={stat.label}>
+                    <strong>{stat.value}</strong>
+                    <span>{stat.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
         </div>
-        {/* Сам инструмент идёт первым блоком: за живой цифрой квоты и за расчётом сюда
-            и приходят, объяснения читают уже потом. */}
+        {/* Сам инструмент — отдельным блоком: за живой цифрой квоты, примером платежа
+            и расчётом сюда и приходят, объяснения читают уже потом. */}
         <div className="model-page-body page-width">
           <article className="model-page-article">
-            {tool.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
             {tool.kind === "quota" && <QuotaFigures />}
+            {tool.kind === "customs" && <ToolPageTable table={customsExample()} />}
+            {tool.kind === "cost" && <ToolPageTable table={deliveryStages()} />}
             {tool.kind === "calculator" && <LandedCostCalculator />}
           </article>
         </div>
         <div className="model-page-body page-width">
           <article className="model-page-article">
-            {tool.sections.map((section) => <ModelPageSection key={section.title} section={section} />)}
+            {firstSections.map((section) => <ModelPageSection key={section.title} section={section} />)}
           </article>
         </div>
+        <ModelPagePromo navigate={navigate} />
+        {restSections.length > 0 && (
+          <div className="model-page-body page-width">
+            <article className="model-page-article">
+              {restSections.map((section) => <ModelPageSection key={section.title} section={section} />)}
+            </article>
+          </div>
+        )}
+        <ArticleFaq faq={tool.faq} title="Частые вопросы" />
       </div>
+      <ToolPageLinks tool={tool} navigate={navigate} />
       <p className="model-page-disclaimer page-width">{tool.disclaimer}</p>
-      <ModelPagePromo navigate={navigate} />
     </main>
   );
 }
 
-/* Живые цифры квоты: остаток, темп и история сводок таможни. Данные обновляет
-   ежедневная задача в src/ev-quota.js — здесь только показ. */
+/* Таблица-карточки: первая ячейка строки становится заголовком, остальные читаются
+   как «свойство — значение». Так же показаны версии в обзорах моделей: настоящая
+   таблица на телефоне уезжала в боковую прокрутку. */
+function ToolPageTable({ table }) {
+  return (
+    <section className="model-page-versions">
+      <h2>{table.title}</h2>
+      <div className="model-page-versions-cards">
+        {table.rows.map((row) => (
+          <div key={row[0]}>
+            <strong>{row[0]}</strong>
+            <dl>
+              {table.columns.slice(1).map((column, index) => (
+                <div key={column}>
+                  <dt>{column}</dt>
+                  <dd>{row[index + 1]}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+      <p className="model-page-versions-note">{table.note}</p>
+    </section>
+  );
+}
+
+/* Переходы к остальным расчётам в конце страницы: человек, который считал доставку,
+   почти всегда идёт потом смотреть растаможку или квоту. */
+function ToolPageLinks({ tool, navigate }) {
+  return (
+    <section className="tool-page-links page-width" aria-labelledby="tool-page-links-title">
+      <h2 id="tool-page-links-title">Другие расчёты</h2>
+      <div className="tool-page-links-list">
+        {TOOL_PAGES.filter((page) => page.path !== tool.path).map((page) => (
+          <AppLink key={page.path} href={page.path} navigate={navigate}>
+            <strong>{page.name}</strong>
+            <p>{page.lead}</p>
+            <span>Открыть <ArrowRight size={16} /></span>
+          </AppLink>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* Живые цифры квоты: остаток с полосой расхода, темп и прогноз, остаток по месяцам и
+   история сводок таможни. Данные обновляет ежедневная задача в src/ev-quota.js —
+   здесь только показ. */
 function QuotaFigures() {
   const state = evQuotaState();
+  const businessQuota = evQuotaState({ audience: "business" });
   const rows = [...EV_QUOTA.reports].reverse().slice(0, 12);
+  const usedPercent = Math.min(100, Math.max(2, Math.round(state.usedShare * 100)));
+  // Прогноз обещаем только пока он правда: на исчерпанной квоте и на устаревшей
+  // сводке вместо даты стоит честное объяснение.
+  const forecast = state.exhausted
+    ? `Квота выбрана${state.exhaustedOnLabel ? ` ${state.exhaustedOnLabel}` : ""}: к цене каждого электромобиля добавляется ввозная пошлина 15%.`
+    : state.stale || state.overdue
+      ? "Свежей сводки таможни пока нет, поэтому прогноз мог сдвинуться. Цифра выше — последняя официальная."
+      : `При таком темпе квота заканчивается около ${state.runsOutLabel}, а дальше к цене каждого электромобиля добавляется ввозная пошлина 15%.`;
   return (
-    <>
-      <section>
-        <h2>Сколько осталось сейчас</h2>
-        <p>
-          <b>Гражданам доступно ещё {number(state.remaining)} {pluralRu(state.remaining, "электромобиль", "электромобиля", "электромобилей")}</b> из {number(state.total)} по квоте {EV_QUOTA.year} года — по сводке на {state.asOfLabel}.
-        </p>
-        {state.perWeek ? (
-          <p>
-            Темп расхода — около {number(state.perWeek)} машин в неделю.
-            {state.runsOutLabel && !state.overdue ? ` При таком темпе квота заканчивается около ${state.runsOutLabel}.` : ""}
-          </p>
-        ) : null}
-        <p>Квота для торгового оборота объёмом {number(EV_QUOTA.businessTotal)} машин выбрана полностью.</p>
-      </section>
-      <section>
-        <h2>История сводок таможни</h2>
+    <section className="tool-live">
+      <h2>Сколько осталось сейчас</h2>
+      <div className="tool-live-figure">
+        <div className="tool-live-main">
+          <span>Осталось у граждан</span>
+          <strong>{number(state.remaining)}</strong>
+          <small>из {number(state.total)} по квоте {EV_QUOTA.year} года · сводка на {state.asOfLabel}</small>
+          {/* Полоса заполняется израсходованным: почти полная — значит квота на исходе. */}
+          <i className="tool-live-bar" aria-hidden="true">
+            <b style={{ width: `${usedPercent}%` }} />
+          </i>
+          <small>Выбрано {number(state.spent)} {pluralRu(state.spent, "машина", "машины", "машин")} — это {usedPercent}% квоты для граждан</small>
+        </div>
+        <dl className="tool-live-side">
+          <div>
+            <dt>Темп расхода</dt>
+            <dd>{state.perWeek ? `≈ ${number(state.perWeek)} машин в неделю` : "по сводкам не считается"}</dd>
+          </div>
+          <div>
+            <dt>Хватит примерно до</dt>
+            <dd>{state.exhausted ? "квота выбрана" : state.runsOutLabel && !state.overdue && !state.stale ? state.runsOutLabel : "нужна свежая сводка"}</dd>
+          </div>
+          <div>
+            <dt>Квота юрлиц</dt>
+            <dd>{businessQuota.exhausted ? `выбрана${businessQuota.exhaustedOnLabel ? ` ${businessQuota.exhaustedOnLabel}` : ""}` : `осталось ${number(businessQuota.remaining)}`}</dd>
+          </div>
+        </dl>
+      </div>
+      <p className="tool-live-forecast">{forecast}</p>
+      <div className="tool-live-months">
+        <h3>Остаток по месяцам</h3>
+        <ul>
+          {state.periods.map((period) => (
+            <li key={period.key} className={period.future ? "future" : undefined}>
+              <span>{period.label}</span>
+              <strong>{period.left == null ? "—" : number(period.left)}</strong>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="tool-live-table">
+        <h3>История сводок таможни</h3>
         <table className="quota-history">
           <thead>
             <tr><th scope="col">Дата сводки</th><th scope="col">Осталось у граждан</th><th scope="col">Осталось у юрлиц</th></tr>
@@ -6866,25 +6979,45 @@ function QuotaFigures() {
             ))}
           </tbody>
         </table>
-        <p>Источник — недельные сводки Государственного таможенного комитета.</p>
-      </section>
-    </>
+        <p className="tool-live-source">Источник — недельные сводки Государственного таможенного комитета.</p>
+      </div>
+    </section>
   );
 }
 
+// Варианты ответов калькулятора. Списки отдельно от разметки: те же значения нужны
+// и в расчёте, и в подписях, а город приходит кодом, а не названием.
+// Три типа двигателя, а не два: у гибрида с генератором (Li Auto, AITO и другие, где
+// бензиновый мотор не связан с колёсами) таможня считает не по объёму двигателя,
+// а от цены машины.
+const CALC_KINDS = ["Электромобиль", "Гибрид с розеткой", "Гибрид с генератором"];
+const CALC_YEARS = ["2026", "2025", "2024", "2023", "2022", "2021", "2020"];
+const CALC_ENGINES = ["1,0", "1,5", "2,0", "2,5", "3,0"];
+const CALC_CITIES = [["guangzhou", "Гуанчжоу"], ["shanghai", "Шанхай"], ["beijing", "Пекин"], ["chengdu", "Чэнду"], ["urumqi", "Урумчи"], ["haerbin", "Харбин"]];
+
 /* Калькулятор: собирает из ответов «машину» и считает её тем же расчётом, что и
    карточка каталога. Отдельной механики расчёта здесь нет — иначе калькулятор и
-   каталог разошлись бы в цифрах. */
+   каталог разошлись бы в цифрах. Поля, итог и разбивка по этапам — три вложенных
+   блока: итог читают первым, этапы лежат рядом.
+
+   Списки выбора — те же, что в фильтрах каталога: свой вид у выпадающего списка на
+   одной странице сразу выбивался бы из сайта. */
 function LandedCostCalculator() {
   const [priceUsd, setPriceUsd] = useState("20000");
-  const [type, setType] = useState("Электромобиль");
+  const [kind, setKind] = useState(CALC_KINDS[0]);
   const [year, setYear] = useState("2023");
-  const [engine, setEngine] = useState("1.5");
-  const [city, setCity] = useState("guangzhou");
+  const [engine, setEngine] = useState("1,5");
+  const [sellerCity, setSellerCity] = useState(CALC_CITIES[0][1]);
   const [bigCar, setBigCar] = useState(false);
   const price = Number(priceUsd) || 0;
+  const byGenerator = kind === "Гибрид с генератором";
+  const type = kind === "Электромобиль" ? "Электромобиль" : "Гибрид";
+  const city = (CALC_CITIES.find(([, label]) => label === sellerCity) || CALC_CITIES[0])[0];
+  // Объём двигателя расчёт узнаёт по строке вида «1.5L»: без буквы он считал бы любую
+  // машину полуторалитровой, и выбор объёма в калькуляторе ничего бы не менял.
+  const engineSpec = type === "Электромобиль" || byGenerator ? "" : `${engine.replace(",", ".")}L`;
   const estimate = price > 0
-    ? estimateLandedCost({ source: "Che168", usdPrice: price, chinaPrice: 0, type, year: Number(year) || 2023, engine: type === "Электромобиль" ? "" : engine, city, curbWeight: bigCar ? 2300 : 1500 })
+    ? estimateLandedCost({ source: "Che168", usdPrice: price, chinaPrice: 0, type, sourceFuelType: byGenerator ? "Range Extender" : null, year: Number(year) || 2023, engine: engineSpec, city, curbWeight: bigCar ? 2300 : 1500 })
     : null;
   const rows = estimate
     ? [
@@ -6901,55 +7034,56 @@ function LandedCostCalculator() {
     <section className="cost-calculator">
       <h2>Посчитать</h2>
       <div className="cost-calculator-form">
-        <label>Цена у продавца, $<input type="number" inputMode="numeric" min="1000" step="500" value={priceUsd} onChange={(event) => setPriceUsd(event.target.value)} /></label>
-        <label>Тип двигателя
-          <select value={type} onChange={(event) => setType(event.target.value)}>
-            <option value="Электромобиль">Электромобиль</option>
-            <option value="Гибрид">Гибрид</option>
-          </select>
+        <label className="cost-calculator-field">
+          <span>Цена у продавца, $</span>
+          <input type="number" inputMode="numeric" min="1000" step="500" value={priceUsd} onChange={(event) => setPriceUsd(event.target.value)} />
         </label>
-        <label>Год выпуска
-          <select value={year} onChange={(event) => setYear(event.target.value)}>
-            {["2026", "2025", "2024", "2023", "2022", "2021", "2020"].map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
-        {type !== "Электромобиль" && (
-          <label>Объём двигателя, л
-            <select value={engine} onChange={(event) => setEngine(event.target.value)}>
-              {["1.0", "1.5", "2.0", "2.5", "3.0"].map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
+        {/* У списков подпись — обычный текст, а не <label>: нажимать в этой строке
+            нечего, выбор открывает сама кнопка списка. */}
+        <div className="cost-calculator-field">
+          <span>Тип двигателя</span>
+          <SelectField className="cost-calculator-select" label="Тип двигателя" value={kind} options={CALC_KINDS} onChange={setKind} />
+        </div>
+        <div className="cost-calculator-field">
+          <span>Год выпуска</span>
+          <SelectField className="cost-calculator-select" label="Год выпуска" value={year} options={CALC_YEARS} onChange={setYear} />
+        </div>
+        {type !== "Электромобиль" && !byGenerator && (
+          <div className="cost-calculator-field">
+            <span>Объём двигателя</span>
+            <SelectField className="cost-calculator-select" label="Объём двигателя" value={engine} options={CALC_ENGINES} onChange={setEngine} formatOption={(item) => `${item} л`} />
+          </div>
         )}
-        <label>Город продавца
-          <select value={city} onChange={(event) => setCity(event.target.value)}>
-            {[["guangzhou", "Гуанчжоу"], ["shanghai", "Шанхай"], ["beijing", "Пекин"], ["chengdu", "Чэнду"], ["urumqi", "Урумчи"], ["haerbin", "Харбин"]].map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="cost-calculator-check">
-          <input type="checkbox" checked={bigCar} onChange={(event) => setBigCar(event.target.checked)} />
-          Крупный кузов: длиннее 4,95 м или тяжелее 2,3 т
+        <div className="cost-calculator-field">
+          <span>Город продавца</span>
+          <SelectField className="cost-calculator-select" label="Город продавца" value={sellerCity} options={CALC_CITIES.map(([, label]) => label)} onChange={setSellerCity} />
+        </div>
+        {/* Крупный кузов — такой же переключатель, как «Быстрый просмотр» и «Цены
+            с квотами»: обычная галочка была единственной на сайте. */}
+        <label className="quick-view-toggle cost-calculator-toggle">
+          <input type="checkbox" role="switch" checked={bigCar} onChange={(event) => setBigCar(event.target.checked)} />
+          <span className="quick-view-toggle-track" aria-hidden="true">
+            <i />
+          </span>
+          <span className="quick-view-toggle-label">Крупный кузов: длиннее 4,95 м или тяжелее 2,3 т</span>
         </label>
       </div>
       {estimate ? (
-        <>
-          <table className="quota-history">
-            <tbody>
-              {rows.map(([label, single, range]) => (
-                <tr key={label}>
-                  <th scope="row">{label}</th>
-                  <td>{single !== null ? `${number(single)} $` : `${number(range[0])}–${number(range[1])} $`}</td>
-                </tr>
-              ))}
-              <tr>
-                <th scope="row"><b>Итого до Минска</b></th>
-                <td><b>{number(estimate.totalLow)}–{number(estimate.totalHigh)} $</b></td>
-              </tr>
-            </tbody>
-          </table>
-          <p>{estimate.customsNote}. Ориентир — около {number(estimate.totalUsd)} $.</p>
-        </>
+        <div className="cost-calculator-result">
+          <div className="cost-calculator-total">
+            <span>Итого до Минска</span>
+            <strong>{number(estimate.totalLow)}–{number(estimate.totalHigh)} $</strong>
+            <small>Ориентир — около {number(estimate.totalUsd)} $. {estimate.customsNote}.</small>
+          </div>
+          <dl className="cost-calculator-rows">
+            {rows.map(([label, single, range]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{single !== null ? `${number(single)} $` : `${number(range[0])}–${number(range[1])} $`}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       ) : (
         <p>Укажите цену у продавца, чтобы увидеть расчёт.</p>
       )}
@@ -8557,8 +8691,6 @@ export function App() {
   const staticPage =
     contentPath === "/how-it-works" ? (
       <HowItWorksPage navigate={navigate} />
-    ) : contentPath === "/about" ? (
-      <AboutPage navigate={navigate} />
     ) : contentPath === "/delivered" ? (
       <DeliveredCarsPage navigate={navigate} />
     ) : contentPath === "/payment-and-contract" ? (

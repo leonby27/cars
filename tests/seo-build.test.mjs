@@ -92,10 +92,13 @@ const sitemapCars = `sitemap-${sitemapToken}-cars.xml`;
 
 test("preview build ships public pages as noindex and no vehicle pages", async () => {
   const { read, missing } = await build();
-  const [home, catalog, robots, sitemap] = await Promise.all([read("index.html"), read("catalog/index.html"), read("robots.txt"), read(sitemapIndex)]);
+  const [home, robots, sitemap] = await Promise.all([read("index.html"), read("robots.txt"), read(sitemapIndex)]);
   assert.match(home, /<h1>Автомобили с пробегом из Китая/);
-  assert.match(catalog, /<link rel="canonical" href="https:\/\/evcars\.by\/catalog"/);
-  assert.match(catalog, /<meta name="robots" content="noindex, nofollow, noarchive"/);
+  assert.match(home, /<meta name="robots" content="noindex, nofollow, noarchive"/);
+  // Общая страница каталога файлом не собирается: её отдаёт сервер, а готовый файл
+  // перекрыл бы и переброс адресов с фильтрами на разделы. В карте сайта она есть.
+  await missing("catalog/index.html");
+  assert.match(sitemap, /sitemap-testtoken-pages\.xml/);
   assert.match(robots, /Disallow: \/$/m);
   // Страницы машин выключены — ни ссылок на них, ни карты, ни статического каталога.
   assert.doesNotMatch(home, /<a href="\/cars\//);
@@ -218,6 +221,34 @@ test("страницы-инструменты собираются с живым
   }
 });
 
+test("на страницы-инструменты ведёт подвал каждой страницы", async () => {
+  // Иначе эти четыре страницы ссылаются только друг на друга: в подвале приложения они
+  // есть, но его рисует скрипт, и в разметке страницы ссылок не остаётся. Тогда вес с
+  // остального сайта на них не приходит вовсе.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  for (const file of ["index.html", "faq/index.html", "delivered/index.html"]) {
+    const html = await read(file);
+    for (const path of ["/ev-quota", "/customs", "/delivery-cost", "/calculator", "/contacts", "/catalog"]) {
+      assert.match(html, new RegExp(`href="${path}"`), `${file}: нет ссылки на ${path}`);
+    }
+  }
+});
+
+test("страницы «О нас» больше нет, а её содержимое живёт на странице «О сервисе»", async () => {
+  // Дубль заголовка: у `/about` и `/how-it-works` был один и тот же h1 «О сервисе
+  // evcars.by», и обе отвечали на один запрос. Адрес перебрасывается на хостинге
+  // (vercel.json), поэтому страницы в сборке быть не должно — иначе готовый файл
+  // окажется в карте сайта и снова начнёт соревноваться со «О сервисе».
+  const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
+  await missing("about/index.html");
+  const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
+  assert.doesNotMatch(pagesXml, /<loc>https:\/\/evcars\.by\/about<\/loc>/);
+  const service = await read("how-it-works/index.html");
+  assert.match(service, /Прозрачность на каждом шаге/);
+  assert.match(service, /Чего мы не обещаем/);
+  assert.match(service, /Факты отдельно от оценки/);
+});
+
 test("на главной есть разметка сайта и поиска по нему", async () => {
   // По этой разметке Google иногда показывает строку поиска прямо в выдаче.
   // Адрес поиска обязан работать: каталог разбирает `?q=` тем же разбором,
@@ -241,7 +272,7 @@ test("тексты информационных страниц лежат в с�
     const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
     return body.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
   };
-  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 150], ["about/index.html", 150], ["delivered/index.html", 150], ["payment-and-contract/index.html", 120], ["guarantees/index.html", 110], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
+  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 250], ["delivered/index.html", 150], ["payment-and-contract/index.html", 120], ["guarantees/index.html", 110], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
     const count = await words(file);
     assert.ok(count >= least, `${file}: слов ${count}, ожидалось не меньше ${least}`);
   }
@@ -253,11 +284,12 @@ test("тексты информационных страниц лежат в с�
   assert.doesNotMatch(delivered, /Алексей, Минск/);
 });
 
-test("на главной и в каталоге есть ссылки на разделы каталога", async () => {
-  // Раньше с этих двух страниц вели ровно двенадцать ссылок — меню и подвал, — и в
-  // разделы нельзя было попасть ниоткуда, кроме карты сайта.
+test("на главной есть ссылки на разделы каталога", async () => {
+  // Раньше с главной вели ровно двенадцать ссылок — меню и подвал, — и в разделы
+  // нельзя было попасть ниоткуда, кроме карты сайта. Те же ссылки есть и в каталоге,
+  // но он собирается сервером — это проверяет tests/catalog-landings.test.mjs.
   const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
-  for (const file of ["index.html", "catalog/index.html"]) {
+  for (const file of ["index.html"]) {
     const html = await read(file);
     const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
     const sections = [...body.matchAll(/<a href="\/catalog\/[a-z0-9-]+"/g)];
@@ -273,12 +305,12 @@ test("адреса не оканчиваются косой чертой ни в
   // Пока черта оставалась, сайт указывал поисковику на адрес, которого нет: карта сайта
   // вела на перебросы, а внутренние ссылки добавляли лишний шаг на каждом переходе.
   const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
-  const [home, catalog, car, pagesXml, carsXml] = await Promise.all([
-    read("index.html"), read("catalog/index.html"), read("cars/170268619192114/index.html"),
+  const [home, car, pagesXml, carsXml] = await Promise.all([
+    read("index.html"), read("cars/170268619192114/index.html"),
     read(`sitemap-${sitemapToken}-pages.xml`), read(sitemapCars),
   ]);
   // Главная — единственный адрес, у которого черта на конце законна.
-  for (const [name, html] of [["главная", home], ["каталог", catalog], ["машина", car]]) {
+  for (const [name, html] of [["главная", home], ["машина", car]]) {
     const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
     assert.ok(canonical, `${name}: адрес-первоисточник должен быть указан`);
     if (canonical !== "https://evcars.by/") assert.doesNotMatch(canonical, /\/$/, `${name}: ${canonical}`);

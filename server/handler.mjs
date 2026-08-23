@@ -340,8 +340,23 @@ export async function handleApiRequest(request, response) {
     // Адрес переводит сюда правило в `vercel.json`.
     if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/catalog") {
       try {
-        const { renderCatalogPage } = await import("./catalog-page.mjs");
-        const page = await renderCatalogPage(url.searchParams.get("slug"));
+        const { renderCatalogIndex, renderCatalogPage } = await import("./catalog-page.mjs");
+        const slug = url.searchParams.get("slug");
+        // Без раздела в адресе это общий каталог `/catalog`, возможно с фильтрами.
+        // Фильтры, повторяющие готовый раздел, уводят на него постоянным перебросом:
+        // иначе у поисковика оставались бы два адреса с одной и той же выдачей.
+        if (!slug) {
+          const params = new URLSearchParams(url.searchParams);
+          params.delete("path");
+          params.delete("slug");
+          const index = await renderCatalogIndex(params);
+          if (index.location) {
+            response.writeHead(301, { location: index.location, ...seoPageCache });
+            return response.end();
+          }
+          return html(response, index.status, index.html, index.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+        }
+        const page = await renderCatalogPage(slug);
         return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
       } catch (error) {
         console.error(error);
