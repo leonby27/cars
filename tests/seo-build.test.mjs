@@ -139,7 +139,9 @@ test("сборка кладёт пустую заготовку приложен
   assert.match(appShell, /<div id="root"><\/div>/);
   assert.match(appShell, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   // Файл нигде не связан ссылками, но на всякий случай закрыт и в robots.txt.
-  assert.match(await read("robots.txt"), /^Disallow: \/app-shell\.html$/m);
+  // Одной строки без расширения достаточно: адрес там сравнивается по началу строки.
+  // Полный разбор правил — в tests/robots-rules.test.mjs.
+  assert.match(await read("robots.txt"), /^Disallow: \/app-shell$/m);
 });
 
 test("на тестовой сборке заготовка машины закрыта от индексации", async () => {

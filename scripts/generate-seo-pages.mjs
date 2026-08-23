@@ -256,7 +256,28 @@ const robots = allowIndexing
   // Карту сайта в robots.txt не упоминаем: эта строка публично показала бы, где лежит
   // список всех адресов каталога. Поисковикам её адрес задают вручную — один раз, в
   // Google Search Console и Яндекс.Вебмастере; на обход и индексацию это не влияет.
-  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /searches/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\nDisallow: /app-shell.html\nDisallow: /app-shell\nDisallow: /car.html\nDisallow: /car\n`
+  // Запреты пишем без косой черты на конце и с якорем `$`, где нужно точное совпадение.
+  // Это не мелочь: в robots.txt адрес сравнивается по началу строки, поэтому «/car»
+  // запрещал заодно и «/cars/59372753» — то есть все 31 тысячу карточек, ради которых
+  // всё и делалось. А «/account/» наоборот не покрывал сам «/account»: хостинг настроен
+  // на адреса без черты. Проверка правил живёт в tests/robots-rules.test.mjs.
+  ? [
+      "User-agent: *",
+      "Allow: /",
+      "Disallow: /api",
+      "Disallow: /data",
+      "Disallow: /account",
+      "Disallow: /favorites",
+      "Disallow: /searches",
+      "Disallow: /login",
+      "Disallow: /register",
+      "Disallow: /orders",
+      "Disallow: /analytics",
+      "Disallow: /app-shell",
+      "Disallow: /car$",
+      "Disallow: /car.html$",
+      "",
+    ].join("\n")
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;
 writeFileSync(path.join(clientDir, "robots.txt"), robots);
 
