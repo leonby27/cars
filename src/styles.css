@@ -1,4 +1,6 @@
-@import url("https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700;1,400&family=Manrope:wght@400;500;600;700;800&display=swap");
+/* Шрифты — свои, с нашего домена: см. fonts.css. Сборщик вклеивает их правила сюда,
+   отдельного запроса не появляется. */
+@import "./fonts.css";
 :root {
   font-family:
     "Manrope",

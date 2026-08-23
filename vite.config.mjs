@@ -19,5 +19,25 @@ export default defineConfig({
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Стили обычной ссылкой на время разработки.
+    //
+    // В собранном сайте файл стилей подключён ссылкой в <head>: браузер не рисует
+    // страницу, пока его не получит, и мерцания нет. А на локальной версии стили
+    // приезжают внутри скрипта приложения, поэтому первая отрисовка успевает
+    // пройти без них. Чтобы локальная версия вела себя как боевая, здесь те же
+    // файлы дополнительно подключаются ссылкой. В сборку это не попадает.
+    {
+      name: "dev-blocking-css",
+      apply: "serve",
+      transformIndexHtml() {
+        return ["/src/styles.css", "/src/order-contact.css", "/src/analytics.css"].map((href) => ({
+          tag: "link",
+          attrs: { rel: "stylesheet", href: `${href}?direct` },
+          injectTo: "head",
+        }));
+      },
+    },
+  ],
 });

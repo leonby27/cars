@@ -7,6 +7,13 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#ffffff" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Шрифт интерфейса начинаем скачивать сразу, не дожидаясь файла стилей: иначе
+         страница успевает нарисоваться системным шрифтом и текст на первой загрузке
+         заметно прыгает. Два файла — кириллица и латиница с цифрами; обе части нужны
+         на любой странице сайта. Насыщенности внутри одного файла, отдельных нет.
+         `crossorigin` обязателен: без него браузер скачает файл второй раз. -->
+    <link rel="preload" href="/fonts/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
     <meta property="og:title" content="Автомобили из Китая в Беларусь — evcars.by" />
     <meta property="og:description" content="Актуальные объявления, проверка и ориентировочная цена до Минска." />
     <meta property="og:image" content="https://evcars.by/og.png" />
