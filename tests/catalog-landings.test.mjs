@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, findCatalogLanding, landingApiParams, landingFilterParams, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
 
 const shell = `<!doctype html>
@@ -182,6 +182,32 @@ test("часть раздела и лишние фильтры разделом 
   assert.equal(catalogLandingForParams("q=byd han до 25000"), null);
   assert.equal(catalogLandingForParams(""), null);
   assert.equal(catalogLandingForParams("sort=price_asc"), null);
+});
+
+test("адрес с одними подписями «не выбрано» уводит на чистый каталог", () => {
+  // Ссылки такого вида остались в закладках и в переписке с тех пор, как поиск на
+  // главной уносил в адрес весь набор списков. Раздела в них нет, чистить есть что.
+  const junk = "type=Все&brand=Все марки&mileage=Пробег&drive=Привод&owners=Владельцы&battery=Батарея&condition=Состояние";
+  assert.equal(catalogPlaceholderRedirect("/catalog", junk), "/catalog");
+  // Метки переходов, страница списка и порядок — не фильтры, они остаются.
+  assert.equal(catalogPlaceholderRedirect("/catalog", `${junk}&utm_source=telegram&page=2&sort=price_desc`), "/catalog?utm_source=telegram&page=2&sort=price_desc");
+  // Настоящий выбор в адресе — тоже остаётся, уходят только подписи.
+  assert.equal(catalogPlaceholderRedirect("/catalog", "brand=BYD&model=Han&mileage=Пробег&drive=Привод"), "/catalog?brand=BYD&model=Han");
+  assert.equal(catalogPlaceholderRedirect("/catalog/byd", "mileage=Пробег&yearFrom=2023"), "/catalog/byd?yearFrom=2023");
+  // Чистить нечего — переброса нет.
+  assert.equal(catalogPlaceholderRedirect("/catalog", ""), null);
+  assert.equal(catalogPlaceholderRedirect("/catalog", "brand=BYD&yearFrom=2023"), null);
+  assert.equal(catalogPlaceholderRedirect("/catalog", "page=2&utm_source=telegram"), null);
+});
+
+test("поиск с главной не пишет в адрес подписи «не выбрано»", () => {
+  // Ссылку собирает та же функция, что и сохранённый поиск: пустой набор фильтров
+  // даёт «/catalog», выбранная марка — адрес, который сервер уводит на её раздел.
+  const code = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const submit = code.split("\n").filter((line) => line.includes("onSubmit={() => navigate("));
+  assert.equal(submit.length, 1, `строк с переходом из поиска найдено ${submit.length}`);
+  assert.match(submit[0], /savedSearchCatalogHref\(/);
+  assert.ok(!submit[0].includes("mileage="), "в адрес снова уходит пробег без выбора");
 });
 
 test("переброс сохраняет метки переходов и порядок сортировки", () => {

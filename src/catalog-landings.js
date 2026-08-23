@@ -118,6 +118,24 @@ const priceBand = (slug, landedMax, { name, h1, seoTitle, seoDescription, lead, 
   notes,
 });
 
+// Сколько машин на одной странице списка — и в каталоге у посетителя, и в той версии
+// страницы, которую собирает сервер для поисковика. Одно число на оба места: если они
+// разойдутся, поисковик будет ходить по страницам, которых у посетителя нет.
+// Девяносто девять, а не сотня: сетка каталога в три карточки, и 99 — это ровно
+// тридцать три полных ряда, без одинокой карточки в последнем.
+export const CATALOG_PAGE_SIZE = 99;
+
+// Глубже пятидесятой страницы список не листается — ни у посетителя, ни у поисковика.
+// Потолок стоит в `maxOffset` (server/repository.mjs) и бережёт базу от выборок
+// с огромным пропуском; поисковику дальше и не нужно. Проверено на боевом каталоге:
+// каждая из 31 332 машин попадает в первые пять тысяч хотя бы одного раздела — машина
+// из середины «Электромобилей» находится через раздел своей марки или марки с кузовом.
+// Совпадение потолков закрепляет tests/catalog-pagination.test.mjs.
+export const CATALOG_MAX_PAGES = 50;
+
+/** Сколько страниц у списка из `total` машин — с учётом потолка глубины. */
+export const catalogPageCount = (total) => Math.min(CATALOG_MAX_PAGES, Math.max(1, Math.ceil((Number(total) || 0) / CATALOG_PAGE_SIZE)));
+
 export const CATALOG_LANDINGS = Object.freeze([
   // ── Марки ───────────────────────────────────────────────────────────────────
   brand("byd", "BYD", [
@@ -791,6 +809,33 @@ export const catalogLandingRedirect = (search) => {
   }
   const query = kept.toString();
   return `${landing.path}${query ? `?${query}` : ""}`;
+};
+
+/**
+ * Тот же адрес без подписей «не выбрано» — или null, если чистить нечего.
+ *
+ * Поиск на главной когда-то уносил в адрес весь набор списков сразу, поэтому по сайту
+ * и в закладках остались ссылки вида `/catalog?type=Все&mileage=Пробег&drive=Привод`:
+ * длинная строка, которая ничего не фильтрует. Выдачу такие подписи не меняли — их
+ * пропускает и сервер, и каталог, — но адрес у одной и той же страницы получался
+ * разный, и отправить его человеку было нельзя. Теперь такой адрес перебрасывается
+ * на чистый; всё остальное (метки переходов, страница списка, порядок) остаётся.
+ */
+export const catalogPlaceholderRedirect = (path, search) => {
+  const params = asSearchParams(search);
+  const kept = new URLSearchParams();
+  let dropped = false;
+  for (const [key, value] of params) {
+    const trimmed = String(value).trim();
+    if (CATALOG_FILTER_KEYS.includes(key) && (!trimmed || ANY_FILTER_VALUES.has(trimmed))) {
+      dropped = true;
+      continue;
+    }
+    kept.append(key, value);
+  }
+  if (!dropped) return null;
+  const query = kept.toString();
+  return `${path}${query ? `?${query}` : ""}`;
 };
 
 /**

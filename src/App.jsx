@@ -4,7 +4,7 @@ import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
-import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, relatedLandings } from "./catalog-landings.js";
+import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, relatedLandings } from "./catalog-landings.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
 import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
@@ -300,7 +300,11 @@ const imageSource = (source, width) => {
 };
 // Ширины под места, где показываем фото: с запасом для экранов с двойной плотностью.
 // Большое фото в галерее оставляем как есть — там оригинал и нужен.
-const IMAGE_WIDTH_CARD = 800;
+// Кадр карточки на широком экране занимает 250 точек, лента фото на телефоне — около
+// 190: просить 800 значило качать снимок в четыре раза крупнее, чем он показан. На
+// главной это была ровно половина её веса — 68 фотографий вместо 1,4 МБ дают 0,4 МБ.
+const IMAGE_WIDTH_CARD = 600;
+const IMAGE_WIDTH_STRIP = 400;
 const IMAGE_WIDTH_TILE = 600;
 const IMAGE_WIDTH_THUMB = 240;
 // Страховка: если хранилище не отдало уменьшенный кадр, подставляем оригинал —
@@ -1629,7 +1633,12 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : (totalCount || cars.length) ? formatRoundedListingCount(totalCount || cars.length) : null}
       hasActiveFilters={hasActiveFilters}
       onReset={resetFilters}
-      onSubmit={() => navigate(`/catalog?type=${encodeURIComponent(type)}&brand=${encodeURIComponent(brand)}${multiValues(model, ANY_MODEL).map((item) => `&model=${encodeURIComponent(item)}`).join("")}${multiValues(bodyType, ANY_BODY_TYPE).map((item) => `&body=${encodeURIComponent(item)}`).join("")}${multiValues(color, ANY_COLOR).map((item) => `&color=${encodeURIComponent(item)}`).join("")}${yearBound(yearMin, ANY_YEAR_MIN) === null ? "" : `&yearFrom=${yearMin}`}${yearBound(yearMax, ANY_YEAR_MAX) === null ? "" : `&yearTo=${yearMax}`}&mileage=${encodeURIComponent(mileage)}${priceBound(priceMin, ANY_PRICE_MIN) === null ? "" : `&priceFrom=${priceMin}`}${priceBound(priceMax, ANY_PRICE_MAX) === null ? "" : `&priceTo=${priceMax}`}&drive=${encodeURIComponent(drive)}&owners=${encodeURIComponent(owners)}&battery=${encodeURIComponent(battery)}&condition=${encodeURIComponent(condition)}${accel === ANY_ACCEL ? "" : `&accel=${encodeURIComponent(accel)}`}${tire === ANY_TIRE ? "" : `&tire=${encodeURIComponent(tire)}`}${torque === ANY_TORQUE ? "" : `&torque=${encodeURIComponent(torque)}`}${range === ANY_RANGE ? "" : `&range=${encodeURIComponent(range)}`}`)}
+      // Адрес собираем без подписей «не выбрано». Раньше в ссылку уходил весь набор
+      // списков сразу, и с главной без фильтров уезжало «?type=Все&mileage=Пробег&…» —
+      // строка на две сотни символов вместо «/catalog». Выдачу это не меняло: подписи
+      // и сервер, и каталог пропускают, — но такую ссылку нельзя ни отправить, ни
+      // выложить. Сборка общая с сохранённым поиском, поэтому имена параметров совпадают.
+      onSubmit={() => navigate(savedSearchCatalogHref({ type: normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, torque, range }))}
     />
   );
 }
@@ -2364,8 +2373,24 @@ function HeroSearch({ value, onChange, filtersOpen = false, onToggleFilters = nu
   );
 }
 
+// Порог тот же, что в стилях: до 700 точек карточка показывает ленту фотографий,
+// выше — один кадр, который меняется под курсором.
+const NARROW_VIEWPORT = "(max-width: 700px)";
+
+function useNarrowViewport() {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW_VIEWPORT).matches);
+  useEffect(() => {
+    const media = window.matchMedia(NARROW_VIEWPORT);
+    const update = () => setNarrow(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
 function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }) {
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
+  const narrow = useNarrowViewport();
   const [active, setActive] = useState(0);
   const preloadStarted = useRef(false);
   const frameRef = useRef(null);
@@ -2404,10 +2429,15 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
     };
   }, [car.id, images.length]);
 
+  // Одну из двух половин рисуем, а не прячем стилями. Кадр под курсором на телефоне
+  // скрыт (`display: none`), но браузер всё равно его качал: на главной это двадцать
+  // невидимых снимков и почти мегабайт мимо экрана.
+  const strip = mobileStrip && narrow;
+
   return (
     <div className={`${className} hover-image-preview`} ref={frameRef}>
-      <img src={imageSource(images[active], IMAGE_WIDTH_CARD)} alt={car.title} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
-      {mobileStrip && (
+      {!strip && <img src={imageSource(images[active], IMAGE_WIDTH_CARD)} alt={car.title} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />}
+      {strip && (
         <div
           className="car-row-mobile-image-strip"
           ref={mobileStripRef}
@@ -2426,11 +2456,11 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
         >
           {images.map((image, index) => (
             <img
-              src={imageSource(image, IMAGE_WIDTH_CARD)}
+              src={imageSource(image, IMAGE_WIDTH_STRIP)}
               alt={index === 0 ? car.title : ""}
               draggable="false"
               onError={(event) => retryWithFullImage(event, image)}
-              loading={index === 0 ? "eager" : "lazy"}
+              loading="lazy"
               key={`${image}-mobile-${index}`}
             />
           ))}
@@ -2519,7 +2549,7 @@ function SimilarCars({ car, cars, onOpenCar }) {
           className="load-more featured-load-more"
           onClick={() => setVisibleCount((current) => current + SIMILAR_CARS_BATCH)}
         >
-          Показать ещё
+          Подгрузить ещё
         </button>
       )}
     </section>
@@ -2562,7 +2592,7 @@ function useModelPageCars(modelPage) {
       });
     return () => controller.abort();
   }, [modelPage]);
-  // «Показать ещё» подгружает следующие двадцать машин к уже показанным. Совпадения
+  // «Подгрузить ещё» подгружает следующие двадцать машин к уже показанным. Совпадения
   // по идентификатору отбрасываем: пока человек читает, срез каталога мог сдвинуться.
   const loadMore = () => {
     if (loading || loadingMore || failed) return;
@@ -2711,7 +2741,7 @@ function ModelPageCatalog({ modelPage, carsState, navigate, favorites, toggleFav
       )}
       {!failed && !loading && hasMore && (
         <button type="button" className="load-more featured-load-more" onClick={loadMore} disabled={loadingMore}>
-          {loadingMore ? "Загружаем…" : "Показать ещё"}
+          {loadingMore ? "Загружаем…" : "Подгрузить ещё"}
         </button>
       )}
     </section>
@@ -3382,7 +3412,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     while (batch.length < count) {
       refill();
       // Compare against the three cards before this slot, including the tail of
-      // the previous batch so "Показать ещё" does not seam two similar cards.
+      // the previous batch so "Подгрузить ещё" does not seam two similar cards.
       const recent = [...precedingCars, ...batch.map((item) => item.car)].slice(-3);
       let bestIndex = 0;
       let bestScore = -Infinity;
@@ -3631,7 +3661,6 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   const searchEmpty = searching && !heroSearch.loading && !heroSearch.total;
   // Выдача поиска листается бесконечно, как каталог: невидимая метка под карточками
   // попадает в экран — и подгружается следующая пачка.
-  const searchMoreTarget = useRef(null);
   const loadMoreSearch = async () => {
     const current = heroSearch;
     if (!current || current.loading || current.loadingMore || !current.hasMore) return;
@@ -3665,24 +3694,19 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
       if (heroSeq.current === seq) setHeroSearch((state) => (state ? { ...state, loadingMore: false, hasMore: false } : state));
     }
   };
-  useEffect(() => {
-    const target = searchMoreTarget.current;
-    if (!searching || !target) return undefined;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) loadMoreSearch();
-      },
-      { rootMargin: "0px 0px 700px", threshold: 0 },
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [searching, heroSearch]);
 
   return (
     <main>
       <section className={searching ? "hero hero--searching" : "hero"}>
-        {Boolean(catalogUpdatedAt) && Boolean(catalogUpdatedDate(catalogUpdatedAt)) && (
+        {/* Плашка держит своё место, даже когда даты обновления ещё нет: она стоит над
+            заголовком, и если появляться на готовой странице, весь первый экран
+            съезжает вниз на 50 точек. Пустую плашку не видно — видно только то, что
+            страница не дёргается. Тот же приём в первом экране до запуска приложения
+            (server/boot-screen.mjs): там даты не существует в принципе. */}
+        {Boolean(catalogUpdatedAt) && Boolean(catalogUpdatedDate(catalogUpdatedAt)) ? (
           <div className="hero-updated">Каталог авто обновлён {catalogUpdatedDate(catalogUpdatedAt)}</div>
+        ) : (
+          <div className="hero-updated boot-invisible">&nbsp;</div>
         )}
         <h1>Доставим б/у авто из Китая в Беларусь</h1>
         <ul className="hero-benefits" aria-label="Преимущества заказа">
@@ -3815,12 +3839,16 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         {searching ? (
           <>
             {heroSearch.loadingMore && <div className="catalog-message">Загружаем объявления…</div>}
-            {heroSearch.hasMore && !heroSearch.loading && !heroSearch.loadingMore && <div ref={searchMoreTarget} className="catalog-scroll-sentinel" aria-hidden="true" />}
+            {heroSearch.hasMore && !heroSearch.loading && !heroSearch.loadingMore && (
+              <button type="button" className="load-more featured-load-more" onClick={loadMoreSearch}>
+                Подгрузить ещё
+              </button>
+            )}
           </>
         ) : (
           !showSkeletons && (
             <button type="button" className="load-more featured-load-more" onClick={loadMore}>
-              Показать ещё
+              Подгрузить ещё
             </button>
           )
         )}
@@ -4355,7 +4383,10 @@ const catalogViewKey = "navostok-catalog-view";
 const readCatalogView = () => (window.localStorage.getItem(catalogViewKey) === "grid" ? "grid" : "list");
 
 function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearch, updateSavedSearch, savedSearches, landing = null }) {
-  const pageSize = 24;
+  // Сотня машин на страницу — то же число, по которому сервер режет список для
+  // поисковика. Если развести эти числа, адрес «?page=2» из выдачи покажет человеку
+  // не те машины, которые по нему проиндексированы.
+  const pageSize = CATALOG_PAGE_SIZE;
   const currency = useCurrency();
   // Pending and api resolve to the same value, so the boot request answering does not
   // retrigger the query this component already issued at mount.
@@ -4469,18 +4500,38 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const [customSearchOpen, setCustomSearchOpen] = useState(false);
   // Сортировку может нести и ссылка (например, из сохранённого поиска); снимок
   // истории при возврате важнее — он описывает то, что было на экране.
-  const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : "default";
+  // Адрес со страницей списка («?page=7») приходит из поисковой выдачи, а сервер режет
+  // список по возрастанию цены. Оставить здесь перемешанный порядок по умолчанию значит
+  // показать человеку на этой странице совсем не те машины, за которыми он пришёл.
+  const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : params.get("page") ? "price_asc" : "default";
   const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : urlSort));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
   // mix in place while paging and when a visitor comes back from a vehicle page.
   const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || randomShuffleSeed());
-  const [loadedLimit, setLoadedLimit] = useState(() => Math.max(pageSize, Number(restoredCatalog?.loadedCount) || pageSize));
+  // Первый запрос — всегда одна страница. Больше сотни машин за раз каталог не отдаёт
+  // (потолок в `catalogPaging`), поэтому при возврате из карточки с двумя-тремя
+  // подгруженными страницами запрос на 300 машин молча превращался в сотню: список
+  // схлопывался, а прокрутка возвращалась не к той машине.
+  const [loadedLimit, setLoadedLimit] = useState(pageSize);
+  // Сколько страниц дозапросить при возврате, чтобы на экране снова оказалось то же,
+  // что было. Счётчик убывает при каждой попытке — так дозагрузка не может зациклиться,
+  // если каталог перестал отдавать машины.
+  const restorePages = useRef(Math.max(0, Math.ceil(((Number(restoredCatalog?.loadedCount) || 0) - pageSize) / pageSize)));
+  // Страница списка из адреса. По адресам вида `/catalog/electric?page=7` поисковик
+  // обходит каталог вглубь — их отдаёт сервер, — и человек, пришедший по такому адресу
+  // из выдачи, должен увидеть те же машины, а не начало каталога. Любая смена фильтров
+  // или сортировки сбрасывает отступ: к другой выдаче прежний номер страницы отношения
+  // не имеет.
+  const [startOffset, setStartOffset] = useState(() => {
+    const requested = String(params.get("page") || "");
+    if (!/^[1-9]\d{0,4}$/.test(requested)) return 0;
+    return Math.min(Number(requested) - 1, CATALOG_MAX_PAGES - 1) * pageSize;
+  });
   const restoredOrder = useRef(restoredCatalog?.order || null);
   const [view, setView] = useState(readCatalogView);
   // На телефоне переключателя вида нет и выдача всегда списочными карточками.
   const [mobileCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
   const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:useApi, favorites, toggleFavorite, navigate });
-  const loadMoreTarget = useRef(null);
   const loadMoreRequest = useRef(null);
   const loadingMore = useRef(false);
   const persistCatalogState = (anchor = {}) => {
@@ -4557,6 +4608,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     loadMoreRequest.current = null;
     loadingMore.current = false;
     setLoadedLimit(pageSize);
+    setStartOffset(0);
+    restorePages.current = 0;
     dropScrollAnchor();
     setFilters(updater);
   };
@@ -4569,6 +4622,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     loadMoreRequest.current = null;
     loadingMore.current = false;
     setLoadedLimit(pageSize);
+    setStartOffset(0);
+    restorePages.current = 0;
     dropScrollAnchor();
     setSort(value);
   };
@@ -4615,7 +4670,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // карточка уезжает в другое место списка. Раньше здесь был Math.random.
   const orderRemoteBatch = (items, preceding = []) => (sort === "default" ? varietyOrder(items, seededRandom(`${shuffleSeed}:${preceding.length}`), preceding) : items);
   // При возврате порядок берём тот, что был на экране: одна выдача на N карточек
-  // не повторяет склейку из нескольких страниц «Показать ещё».
+  // не повторяет склейку из нескольких страниц «Подгрузить ещё».
   const restoreRemoteOrder = (items) => {
     const order = restoredOrder.current;
     if (!order?.length) return orderRemoteBatch(items);
@@ -4628,7 +4683,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const requestParams = () => {
     const query = new URLSearchParams({
       limit: String(loadedLimit),
-      offset: "0",
+      offset: String(startOffset),
     });
     query.set("sort", sort);
     if (sort === "default") query.set("seed", shuffleSeed);
@@ -4683,7 +4738,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   }, [useApi, filters, sort]);
   useEffect(() => {
     persistCatalogState();
-  }, [filters, sort, loadedLimit, remoteCars.length]);
+  }, [filters, sort, loadedLimit, remoteCars.length, startOffset]);
   useEffect(
     () => () => {
       const controller = loadMoreRequest.current;
@@ -4694,7 +4749,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   );
   const loadMore = async () => {
     if (!useApi) {
-      setLoadedLimit((current) => Math.min(current + pageSize, filtered.length));
+      setLoadedLimit((current) => Math.min(current + pageSize, filtered.length - startOffset));
       return;
     }
     if (loadingMore.current || remoteLoading || !remoteHasMore) return;
@@ -4703,7 +4758,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     loadingMore.current = true;
     const query = requestParams();
     query.set("limit", String(pageSize));
-    query.set("offset", String(remoteCars.length));
+    query.set("offset", String(startOffset + remoteCars.length));
     setRemoteLoading(true);
     setRemoteError(false);
     try {
@@ -4724,23 +4779,19 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       }
     }
   };
-  const displayed = useApi ? remoteCars : filtered.slice(0, loadedLimit);
+  useEffect(() => {
+    if (!useApi || restorePages.current <= 0 || remoteLoading || remoteError || !remoteHasMore) return;
+    restorePages.current -= 1;
+    loadMore();
+  }, [useApi, remoteLoading, remoteError, remoteHasMore, remoteCars.length]);
+  const displayed = useApi ? remoteCars : filtered.slice(startOffset, startOffset + loadedLimit);
   const resultCount = useApi ? remoteTotal : filtered.length;
   // Until the first page answers there is no count yet, and "0" reads as an empty result.
   const knownResultCount = remoteLoading && !remoteCars.length ? null : resultCount;
-  const hasMore = useApi ? remoteHasMore : displayed.length < resultCount;
-  useEffect(() => {
-    const target = loadMoreTarget.current;
-    if (!target || !hasMore || remoteLoading || remoteError) return undefined;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) loadMore();
-      },
-      { rootMargin: "0px 0px 700px", threshold: 0 },
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [useApi, filters, sort, displayed.length, resultCount, remoteLoading, remoteError]);
+  // Без API считаем от начала списка, а не от показанного: при заходе по адресу со
+  // страницей («?page=7») первые шестьсот машин в выдачу не попадают, и сравнение
+  // «показано меньше, чем найдено» оставляло бы кнопку висеть на конце списка.
+  const hasMore = useApi ? remoteHasMore : startOffset + displayed.length < resultCount;
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
   const selectedModels = multiValues(filters.model, ANY_MODEL);
   // Чипы моделей работают как мультивыбор без чекбоксов: клик добавляет модель,
@@ -4862,7 +4913,11 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             <CustomSearchCta variant="empty" onOpen={() => setCustomSearchOpen(true)} />
           )}
           {remoteLoading && displayed.length > 0 && <div className="catalog-message">Загружаем объявления…</div>}
-          {hasMore && !remoteLoading && !remoteError && <div ref={loadMoreTarget} className="catalog-scroll-sentinel" aria-hidden="true" />}
+          {hasMore && !remoteLoading && !remoteError && (
+            <button type="button" className="load-more" onClick={loadMore}>
+              Подгрузить ещё
+            </button>
+          )}
           {useApi && hasMore && !remoteLoading && remoteError && (
             <button className="load-more" onClick={loadMore}>
               Повторить загрузку

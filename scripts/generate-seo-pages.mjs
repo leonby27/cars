@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
-import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, catalogPageCount, landingApiParams } from "../src/catalog-landings.js";
 import { TOOL_PAGES, customsExample, deliveryStages, toolPageStats } from "../src/tool-pages.js";
 import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
@@ -19,7 +19,7 @@ import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
-import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, listingNumber, number, plural, stripSeoHead } from "../server/seo-render.mjs";
+import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, listingNumber, number, plural, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
@@ -50,6 +50,10 @@ const carsPerSitemap = 45_000;
 const shell = readFileSync(shellPath, "utf8");
 const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
 const { carLinks, footer, hrefRoute, navigation, renderHtml, routeUrl } = renderer;
+// Сколько машин показываем на главной. Витрина берёт по одной машине на модель,
+// поэтому двадцать ссылок ведут в двадцать разных моделей, а не в двадцать почти
+// одинаковых объявлений из последнего импорта.
+const showcaseSize = 20;
 // Страницы автомобилей и статический каталог собираются только по явному
 // `SEO_VEHICLE_PAGES=1`. По умолчанию их нет: на хостинге карточки собирает сервер
 // в момент запроса поверх базы, дампа каталога там вообще не бывает, — то есть
@@ -97,6 +101,92 @@ const publicPages = [
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
+
+// ── Куда идти дальше с информационной страницы ────────────────────────────────
+// Страницы про растаможку, квоту, стоимость доставки, расчёт, гарантии и вопросы —
+// самые содержательные на сайте, от 1 100 до 1 800 слов. При этом они были тупиками:
+// ни одной ссылки в каталог, только меню и подвал. Человеку после «на электромобиль
+// пошлины нет» некуда нажать, а поисковик не переносит вес этих страниц на
+// коммерческие разделы. Подборка на каждой странице своя и по теме страницы:
+// одинаковый на всех страницах блок поисковик обесценивает. На страницах-расчётах
+// ссылок на соседние расчёты здесь нет: их уже даёт блок «Другие расчёты» в самом
+// тексте страницы, и второй раз теми же словами — это повтор, а не путь.
+const PATHWAYS = {
+  "/how-it-works/": {
+    heading: "С чего начать выбор",
+    intro: "Порядок покупки одинаковый для любой машины, а вот пошлина, сроки и итоговая сумма зависят от того, что вы выбрали.",
+    links: ["electric", "hybrid", "suv", "sedan", "/calculator", "/catalog"],
+  },
+  "/faq/": {
+    heading: "Ответы, которые видно в каталоге",
+    intro: "Большинство вопросов упирается в конкретную машину: её возраст, тип двигателя и цену. В этих разделах ответ виден цифрами.",
+    links: ["electric", "hybrid", "under-20000", "under-30000", "byd", "tesla", "/catalog"],
+  },
+  "/payment-and-contract/": {
+    heading: "Сколько это выходит в деньгах",
+    intro: "Порядок расчётов от машины не зависит, а сумма зависит. Подборки собраны по итоговой цене до Минска — со всеми платежами.",
+    links: ["under-15000", "under-20000", "under-25000", "under-30000", "under-40000", "/calculator", "/delivery-cost"],
+  },
+  "/guarantees/": {
+    heading: "Что именно мы проверяем",
+    intro: "Проверка одна для всех машин, но смотреть в электромобиле и в гибриде приходится на разное: там батарея и её остаточная ёмкость, тут двигатель и обслуживание.",
+    links: ["electric", "hybrid", "electric-suv", "hybrid-suv", "/models", "/catalog"],
+  },
+  "/delivered/": {
+    heading: "Где выбрать такую же",
+    intro: "Доставленные автомобили — это те же объявления из каталога, только уже приехавшие. Вот откуда их выбирают.",
+    links: ["suv", "sedan", "electric", "hybrid", "/catalog"],
+  },
+  "/contacts/": {
+    heading: "Пока мы отвечаем — посмотрите каталог",
+    intro: "Разговор выходит предметнее, когда есть две-три машины на примете.",
+    links: ["electric", "hybrid", "byd", "tesla", "li-auto", "zeekr", "/catalog"],
+  },
+  "/customs/": {
+    heading: "Растаможка по типам машин",
+    intro: "Сумма зависит от двух вещей: электромобиль это или гибрид и сколько машине лет. Каталог уже разделён по этому признаку.",
+    links: ["electric", "hybrid", "electric-suv", "hybrid-suv", "under-20000", "under-30000", "/catalog"],
+  },
+  "/ev-quota/": {
+    heading: "Что можно ввезти по квоте",
+    intro: "Льгота действует только на электромобили. Вот они — с ценами уже до Минска.",
+    links: ["electric", "electric-suv", "electric-sedan", "electric-hatchback", "under-20000", "under-30000", "/catalog"],
+  },
+  "/delivery-cost/": {
+    heading: "Машины, для которых считаем доставку",
+    intro: "Сама доставка почти не зависит от машины, а итоговая сумма — зависит. Подборки собраны по конечной цене.",
+    links: ["under-15000", "under-20000", "under-25000", "under-30000", "under-40000", "/catalog"],
+  },
+  "/calculator/": {
+    heading: "Посчитать на конкретной машине",
+    intro: "Расчёт получается точнее, когда есть объявление: год, тип двигателя и цену продавца берём из него.",
+    links: ["electric", "hybrid", "under-20000", "under-30000", "byd", "tesla", "/customs", "/catalog"],
+  },
+};
+
+const landingBySlug = new Map(CATALOG_LANDINGS.map((landing) => [landing.slug, landing]));
+// Текст ссылки. «BYD» само по себе поисковику почти ничего не говорит, а заголовок
+// раздела целиком — «Автомобили BYD из Китая с доставкой в Беларусь» — в списке из
+// восьми строк читается тяжело.
+const landingAnchor = (landing) =>
+  landing.kind === "brand" ? `Автомобили ${landing.name} из Китая` : landing.kind === "price" ? landing.name : `${landing.name} из Китая`;
+
+/** Блок ссылок в каталог для одной информационной страницы или расчёта. */
+function pathwayFor(route) {
+  const plan = PATHWAYS[route];
+  if (!plan) return "";
+  const links = plan.links
+    .map((item) => {
+      if (item === "/catalog") return ["/catalog/", "Весь каталог автомобилей из Китая", null];
+      if (item === "/models") return [`${MODELS_INDEX.path}/`, "Обзоры моделей", "Что за машина, чем отличаются версии и на что смотреть при выборе"];
+      const tool = TOOL_PAGES.find((page) => page.path === item);
+      if (tool) return [`${tool.path}/`, tool.name, tool.lead];
+      const landing = landingBySlug.get(item);
+      return landing ? [`${landing.path}/`, landingAnchor(landing), null] : null;
+    })
+    .filter(Boolean);
+  return renderer.pathwayLinks({ heading: plan.heading, intro: plan.intro, links });
+}
 
 // Текст информационной страницы из тех же данных, что показывает приложение. Ничего
 // нового здесь не пишется: это ровно то, что видит человек.
@@ -216,22 +306,50 @@ function modelsIndexArticle() {
   return `${intro}<section><h2>${escapeHtml(MODELS_INDEX.listTitle)}</h2><ul>${list}</ul></section>`;
 }
 
+/**
+ * Обзоры моделей на главной. Раньше с главной не вело ни одной ссылки на обзор, хотя
+ * это самые содержательные страницы сайта — от 665 до 993 слов, с ценами и наличием.
+ * Порядок — по числу машин в каталоге: если база при сборке недоступна, счётчиков нет
+ * и берём как есть, ссылки важнее сортировки.
+ */
+function popularModelLinks(limit = 24) {
+  const counted = MODEL_PAGES.map((modelPage) => ({ modelPage, count: live.models.get(`${modelPage.brand}|${modelPage.model}`) || 0 }));
+  const ordered = counted.some((item) => item.count) ? counted.filter((item) => item.count).sort((a, b) => b.count - a.count) : counted;
+  const links = ordered.slice(0, limit).map(({ modelPage, count }) => [
+    `${modelPage.path}/`,
+    modelPage.name,
+    count ? `${number(count)} ${plural(count, "автомобиль", "автомобиля", "автомобилей")} в наличии` : null,
+  ]);
+  return renderer.pathwayLinks({
+    heading: "Обзоры популярных моделей",
+    intro: "Что это за машина, чем отличаются версии, что менялось по годам и сколько такая стоит с доставкой до Минска.",
+    links,
+  });
+}
+
 function publicPageBody(page) {
   // Блок с предложениями появляется только когда есть что в него положить: заголовок
-  // над пустым списком читается поисковиком как сломанная страница.
-  const linkLimit = page.route === "/" ? 20 : 0;
-  const links = linkLimit && cars.length ? carLinks(cars, linkLimit) : "";
+  // над пустым списком читается поисковиком как сломанная страница. На хостинге дампа
+  // каталога нет, поэтому витрину главной берём из базы — иначе самая массовая
+  // страница сайта не ссылалась бы ни на одну машину, что и было до 23.08.2026.
+  const links = page.route === "/" && live.showcase.length ? carLinks(live.showcase, showcaseSize) : "";
   const article = page.tool ? toolArticle(page.tool) : page.modelsIndex ? modelsIndexArticle() : infoArticle(page.route);
-  // Ссылки на разделы каталога — на главной и в каталоге. Раньше с этих двух страниц
-  // вели ровно двенадцать ссылок (меню и подвал), и в 31 раздел нельзя было попасть
-  // ниоткуда, кроме карты сайта: плитку марок рисует скрипт, в разметке её нет.
-  // На главной — только марки, типы двигателя и кузова. Полный список всех 57 разделов
-  // лежит в каталоге: у главной самый ценный вес, и тратить его на ценовые полосы и
-  // сочетания незачем — свои ссылки они получают из каталога и друг от друга.
-  const homeKinds = new Set(["brand", "powertrain", "bodyType"]);
-  const sections = page.route === "/" ? renderer.sectionLinks(CATALOG_LANDINGS.filter((item) => homeKinds.has(item.kind)), { heading: "Автомобили из Китая по маркам и типам" }) : "";
-  return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}${sections}</main>${footer()}`;
+  // Ссылки на разделы каталога. Раньше с главной вели ровно двенадцать ссылок (меню и
+  // подвал), и в разделы нельзя было попасть ниоткуда, кроме карты сайта: плитку марок
+  // рисует скрипт, в разметке её нет. Сначала на главной были только марки, типы
+  // двигателя и кузова — 33 раздела из 57; ценовые полосы и сочетания («электрические
+  // кроссоверы», «седаны BYD») получали ссылки только друг от друга, хотя запросы
+  // «электромобиль до 20 000» и «китайский кроссовер» — самые покупательские. Теперь
+  // на главной и на странице обзоров стоит полный список.
+  const sections = page.route === "/" || page.modelsIndex
+    ? renderer.sectionLinks(CATALOG_LANDINGS, { heading: page.modelsIndex ? "Разделы каталога" : "Автомобили из Китая по маркам, типам и цене" })
+    : "";
+  const models = page.route === "/" ? popularModelLinks() : "";
+  return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}${models}${pathwayFor(page.route)}${sections}</main>${footer()}`;
 }
+
+// Живые данные читаем до отрисовки страниц: витрина и счётчики моделей нужны главной.
+const live = await readLiveCatalog();
 
 for (const page of publicPages) {
   const schemas = [renderer.breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
@@ -241,7 +359,9 @@ for (const page of publicPages) {
   if (page.route === "/faq/") schemas.push(renderer.faqSchema(FAQ_GROUPS.flatMap((group) => group.items.map((item) => ({ q: item.question, a: item.answer })))));
   // Вопросы страниц расчётов — той же разметкой, что на страницах моделей.
   if (page.tool?.faq?.length) schemas.push(renderer.faqSchema(page.tool.faq));
-  writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas }));
+  // Первый экран главной браузер рисует целиком — заголовок с поиском, а не только
+  // шапку: главная и есть та страница, куда приходят по ссылке из поиска.
+  writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas, boot: page.route === "/" ? "home" : "header" }));
 }
 
 function writeRoute(route, html) {
@@ -295,30 +415,69 @@ writeFileSync(path.join(clientDir, "car.html"), carShellHtml);
 const urlset = (entries) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(({ loc, lastmod }) => `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`).join("\n")}\n</urlset>\n`;
 
 /**
- * Адреса машин для карты сайта. Из дампа каталога, если он есть; иначе — из базы,
- * одним запросом за номером объявления и датой последней записи. База может быть
- * недоступна (сборка без доступа к ней) — тогда карта машин просто не пишется, и в
- * выводе об этом сказано: молча отдать поисковику сайт без тридцати тысяч карточек хуже.
+ * Живые данные каталога для сборки: витрина главной, число машин по каждой модели и
+ * адреса машин для карты сайта. Одно соединение с базой на всю сборку — поэтому всё
+ * читается разом, а не тремя функциями по очереди.
+ *
+ * Источник — дамп каталога, если он есть; иначе база, и только по явному
+ * `SEO_CARS_FROM_DB=1`: `server/db.mjs` сам подхватывает `.env.local` с боевым адресом,
+ * то есть без этого условия обычный локальный прогон и тесты читали бы прод.
+ * База может быть недоступна — тогда блоки просто не появятся, а в выводе будет
+ * сказано, чего не хватило: молча отдать поисковику пустую главную хуже.
  */
-async function carSitemapEntries() {
-  if (!carsSitemap) return [];
-  if (cars.length) return cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) }));
+async function readLiveCatalog() {
+  const countByModel = (list) => {
+    const counts = new Map();
+    for (const car of list) {
+      const key = `${car.brand}|${car.model}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  };
+  const nothing = { showcase: [], models: new Map(), carEntries: [], listPages: new Map() };
+  if (cars.length) {
+    return {
+      showcase: cars.slice(0, showcaseSize),
+      models: countByModel(cars),
+      carEntries: carsSitemap ? cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) })) : [],
+      listPages: new Map(),
+    };
+  }
   if (!carsFromDatabase) {
-    console.warn("Карта сайта с машинами не собрана: дампа каталога нет, а чтение из базы не разрешено (SEO_CARS_FROM_DB=1).");
-    return [];
+    console.warn("Витрина главной, счётчики моделей и карта сайта с машинами не собраны: дампа каталога нет, а чтение из базы не разрешено (SEO_CARS_FROM_DB=1).");
+    return nothing;
   }
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
+    const { countCars, getModelFacts, listCars } = await import("../server/repository.mjs");
+    // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
+    // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
+    // модель займёт весь блок.
+    const showcase = (await listCars(new URLSearchParams({ sort: "variety", limit: String(showcaseSize) }))).items;
+    const facts = await getModelFacts();
     // `content_changed_at` ставится только когда данные объявления действительно
     // изменились (см. миграцию 021). `imported_at` для этого не годится: она одинаковая
     // у всех карточек, потому что приходит из последнего полного импорта, — и поисковику
     // мы сообщали «ничего не менялось» даже при изменении цены.
-    const result = await pool.query("SELECT l.id, COALESCE(l.content_changed_at, l.imported_at) AS changed_at FROM listings l WHERE l.status='active'");
-    return result.rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) }));
+    const rows = carsSitemap
+      ? (await pool.query("SELECT l.id, COALESCE(l.content_changed_at, l.imported_at) AS changed_at FROM listings l WHERE l.status='active'")).rows
+      : [];
+    // Сколько страниц в каждом разделе. Нужно карте сайта: страницы списка робот иначе
+    // находит только переходами «дальше», а в разделе электромобилей их две сотни —
+    // до середины он дошёл бы нескоро.
+    const listPages = new Map();
+    listPages.set("/catalog", catalogPageCount(await countCars(new URLSearchParams())));
+    for (const landing of CATALOG_LANDINGS) listPages.set(landing.path, catalogPageCount(await countCars(landingApiParams(landing))));
+    return {
+      showcase,
+      models: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.count])),
+      carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) })),
+      listPages,
+    };
   } catch (error) {
-    console.warn(`Карта сайта с машинами не собрана: база недоступна (${error.code || error.message}).`);
-    return [];
+    console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);
+    return nothing;
   } finally {
     // Соединение закрываем всегда: иначе сборка висела бы, ожидая простаивающий пул.
     await pool?.end().catch(() => {});
@@ -328,16 +487,24 @@ async function carSitemapEntries() {
 // Разделы каталога (`/catalog/byd`, `/catalog/electric`, `/catalog/suv`) в карту сайта
 // попадают, а файлами не собираются: их отдаёт сервер. Готовый файл по такому адресу
 // перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
+// Страницы списка со второй и дальше: `/catalog/electric?page=2`. Каждая — свой
+// первоисточник и живой список машин, поэтому в карте сайта им место наравне с первой.
+const listPageEntries = (route) => {
+  const pages = live.listPages.get(trimRoute(route)) || 1;
+  return Array.from({ length: Math.max(0, pages - 1) }, (_, index) => ({ loc: `${routeUrl(route)}?page=${index + 2}`, lastmod: null }));
+};
+
 const pageEntries = [
   ...publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null })),
   // Каталог и его разделы файлами не собираются, но в карте сайта им место.
   { loc: routeUrl("/catalog/"), lastmod: null },
+  ...listPageEntries("/catalog/"),
   ...MODEL_PAGES.map((modelPage) => ({ loc: routeUrl(modelPage.path), lastmod: null })),
-  ...CATALOG_LANDINGS.map((landing) => ({ loc: routeUrl(landing.path), lastmod: null })),
+  ...CATALOG_LANDINGS.flatMap((landing) => [{ loc: routeUrl(landing.path), lastmod: null }, ...listPageEntries(landing.path)]),
 ];
 writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
 
-const carEntries = await carSitemapEntries();
+const carEntries = live.carEntries;
 const carChunks = [];
 for (let offset = 0; offset < carEntries.length; offset += carsPerSitemap) carChunks.push(carEntries.slice(offset, offset + carsPerSitemap));
 carChunks.forEach((chunk, index) => writeFileSync(path.join(clientDir, carsSitemapName(index)), urlset(chunk)));

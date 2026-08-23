@@ -150,7 +150,7 @@ export function withoutDetailPayload(car) {
 }
 
 // Глубже этой позиции каталог не листается. Живой посетитель берёт по 24 карточки,
-// то есть потолок наступает после ~200 нажатий «Показать ещё»; выкачка всех 33 тысяч
+// то есть потолок наступает после ~200 нажатий «Подгрузить ещё»; выкачка всех 33 тысяч
 // объявлений постраничным перебором на этом заканчивается. Ответ всегда несёт
 // `hasMore`, поэтому приложение узнаёт про упор в потолок и прекращает подгрузку,
 // вместо того чтобы сравнивать загруженное с общим числом и биться в пустые страницы.
@@ -209,6 +209,39 @@ export async function listCars(searchParams) {
 // Адрес карточки несёт короткий номер объявления («/cars/59334290»), а идентификатор
 // в базе — с приставкой источника («che168-59334290»). Ищем по обоим: короткий номер
 // приходит из новых ссылок, полный — из старых, из закладок и из заказов.
+/**
+ * Узкая выборка для страниц-списков, которые сервер собирает для поисковика: там из
+ * машины нужны только название, пробег и адрес. Обычная `listCars` берёт строку
+ * целиком вместе с `source_payload` — всем исходным ответом источника, — и на глубоких
+ * страницах раздела это стоило дорого: «страница 50» отвечала 1,5 секунды против
+ * 70 миллисекунд узкой выборки. Постраничный обход раздела должен быть дешёвым:
+ * страниц по всем разделам больше двух тысяч.
+ *
+ * Потолка глубины здесь нет намеренно: `catalogPaging` бережёт живого посетителя от
+ * бесконечной подгрузки, а поисковику нужен путь до последней машины в разделе.
+ */
+export async function listCarPage(searchParams, { limit = 100, offset = 0 } = {}) {
+  const { where, values } = buildCarFilters(searchParams);
+  const order = buildCarOrder(searchParams);
+  const [itemsResult, countResult] = await Promise.all([
+    pool.query(`SELECT l.id, l.title, l.mileage_km, v.brand, v.model, v.model_year
+      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
+      ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, offset]),
+    pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+  ]);
+  return {
+    items: itemsResult.rows.map((row) => ({ id:row.id, title:row.title, brand:row.brand, model:row.model, year:row.model_year, mileage:row.mileage_km })),
+    total: countResult.rows[0].total,
+  };
+}
+
+/** Сколько машин в разделе. Нужно сборке: по этому числу в карту сайта попадают страницы раздела. */
+export async function countCars(searchParams) {
+  const { where, values } = buildCarFilters(searchParams);
+  const result = await pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
+  return result.rows[0].total;
+}
+
 export async function getCar(id) {
   const result = await pool.query(`${carSelect}, COALESCE((SELECT json_agg(json_build_object('at',p.observed_at,'priceCny',p.price_cny) ORDER BY p.observed_at) FROM price_history p WHERE p.listing_id=l.id), '[]'::json) AS price_history FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id=$1 OR l.external_id=$1 ORDER BY (l.id=$1) DESC LIMIT 1`, [id]);
   return result.rows[0] ? { ...rowToCar(result.rows[0]), priceHistory:result.rows[0].price_history } : null;

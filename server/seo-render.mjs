@@ -10,6 +10,8 @@ import { estimateLandedCost, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
 // Страницы-расчёты нужны подвалу: ссылки на них должны стоять на каждой странице сайта.
 import { TOOL_PAGES } from "../src/tool-pages.js";
+// Первый экран, который браузер показывает до запуска приложения.
+import { bootScreen } from "./boot-screen.mjs";
 
 export const escapeHtml = (value) => String(value ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
 export const escapeXml = (value) => escapeHtml(value).replace(/'/g, "&apos;");
@@ -63,7 +65,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   const routeUrl = (route) => `${base}${trimRoute(route)}`;
   const hrefRoute = (route) => `${siteBasePath}${trimRoute(route)}` || "/";
 
-  function metadata({ title, description, canonical, image, type = "website", indexable, schemas = [] }) {
+  function metadata({ title, description, canonical, image, type = "website", indexable, schemas = [], prev = null, next = null }) {
     const robots = indexable ? "index, follow, max-image-preview:large" : "noindex, nofollow, noarchive";
     const imageTags = image ? `
     <meta property="og:image" content="${escapeHtml(image)}" />
@@ -77,10 +79,15 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     <link rel="alternate" hreflang="ru-BY" href="${escapeHtml(canonical)}" />` : "";
     const urlTag = canonical ? `
     <meta property="og:url" content="${escapeHtml(canonical)}" />` : "";
+    // Соседние страницы списка. Google эти подсказки больше не использует, Яндекс —
+    // использует; стоят они одну строку, поэтому пусть будут.
+    const pagingTags = [prev ? `
+    <link rel="prev" href="${escapeHtml(prev)}" />` : "", next ? `
+    <link rel="next" href="${escapeHtml(next)}" />` : ""].join("");
     return `
     <title>${escapeHtml(title)}</title>
     <meta name="description" content="${escapeHtml(description)}" />
-    <meta name="robots" content="${robots}" />${canonicalTags}
+    <meta name="robots" content="${robots}" />${canonicalTags}${pagingTags}
     <meta property="og:locale" content="ru_BY" />
     <meta property="og:type" content="${type}" />
     <meta property="og:site_name" content="evcars.by" />
@@ -122,6 +129,33 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return `<footer class="site-footer"><nav class="page-width" aria-label="Информация для покупателя">
     ${links.map(([route, name]) => `<a href="${hrefRoute(route)}">${escapeHtml(name)}</a>`).join("\n    ")}
   </nav></footer>`;
+  }
+
+  // ── Постраничный обход списка ────────────────────────────────────────────────
+  // Человек эту навигацию не видит: в приложении список догружается кнопкой
+  // «Подгрузить ещё». Роботу кнопка не даёт ничего — ему нужен обычный адрес, иначе
+  // из тридцати одной тысячи машин путь по ссылкам ведёт лишь к нескольким тысячам.
+  // Первая страница живёт по адресу раздела без параметров, дальше — `?page=2`.
+
+  /** Адрес N-й страницы списка. */
+  const pageRoute = (route, page) => (page > 1 ? `${trimRoute(route)}?page=${page}` : trimRoute(route));
+
+  /**
+   * Ссылки на соседние страницы: край, окно вокруг текущей и другой край. Только
+   * «вперёд» мало: до двухсотой страницы раздела робот шёл бы двести переходов.
+   */
+  function paginationLinks({ route, page, pages }) {
+    if (pages < 2) return "";
+    const numbers = new Set([1, pages]);
+    for (let near = Math.max(1, page - 4); near <= Math.min(pages, page + 4); near += 1) numbers.add(near);
+    const item = (number_) =>
+      number_ === page
+        ? `<li><strong>${number_}</strong></li>`
+        : `<li><a href="${hrefRoute(pageRoute(route, number_))}">${number_}</a></li>`;
+    const around = [...numbers].sort((left, right) => left - right).map(item).join("");
+    const back = page > 1 ? `<p><a href="${hrefRoute(pageRoute(route, page - 1))}" rel="prev">Предыдущая страница</a></p>` : "";
+    const forward = page < pages ? `<p><a href="${hrefRoute(pageRoute(route, page + 1))}" rel="next">Следующая страница</a></p>` : "";
+    return `<nav aria-label="Страницы каталога">${back}<ul>${around}</ul>${forward}</nav>`;
   }
 
   function carLinks(items, limit = items.length) {
@@ -183,12 +217,16 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     };
   }
 
-  function renderHtml({ title, description, canonical, body, image = `${base}/og.jpg`, type, indexable = allowIndexing, schemas = [] }) {
-    const head = metadata({ title, description, canonical, image, type, indexable, schemas });
+  // Текст для поисковиков лежит в `.seo-body`: браузер с работающим скриптом прячет
+  // его до запуска приложения (правило `html.booting` в index.html), а перед ним рисует
+  // первый экран из `boot-screen.mjs`. Поисковику и браузеру без скриптов видно всё.
+  function renderHtml({ title, description, canonical, body, image = `${base}/og.jpg`, type, indexable = allowIndexing, schemas = [], boot = "header", prev = null, next = null }) {
+    const head = metadata({ title, description, canonical, image, type, indexable, schemas, prev, next });
+    const first = bootScreen({ kind: boot, hrefRoute });
     return stripSeoHead(shell)
       .replace(/<html\s+lang="ru"[^>]*>/i, `<html lang="ru" data-seo-indexing="${indexable}">`)
       .replace("</head>", `${head}\n  </head>`)
-      .replace(/<div id="root"><\/div>/, `<div id="root">${body}</div>`);
+      .replace(/<div id="root"><\/div>/, `<div id="root">${first}<div class="seo-body">${body}</div></div>`);
   }
 
   // ── Страница машины ───────────────────────────────────────────────────────────
@@ -306,6 +344,27 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return `<section><h2>${escapeHtml(heading)}</h2>${groups.map(([title, items]) => `<h3>${escapeHtml(title)}</h3>${list(items)}`).join("")}</section>`;
   }
 
+  /**
+   * Блок «куда идти дальше» для информационной страницы или расчёта: одна фраза и
+   * список ссылок в каталог.
+   *
+   * Зачем: страницы про растаможку, квоту, стоимость доставки, расчёт и вопросы —
+   * самые содержательные на сайте (1 100–1 800 слов), и при этом они были тупиками:
+   * ни одной ссылки в каталог, только меню и подвал. Человеку после «пошлины на
+   * электромобиль нет» некуда нажать, а поисковик не переносит вес этих страниц на
+   * коммерческие. Блок на каждой странице свой: одинаковый на всех поисковик
+   * обесценивает, поэтому разделы подобраны под тему страницы.
+   *
+   * `links` — массив `[адрес, текст ссылки, пояснение или null]`.
+   */
+  function pathwayLinks({ heading, intro = null, links = [] }) {
+    if (!links.length) return "";
+    const items = links
+      .map(([route, name, note]) => `<li><a href="${hrefRoute(route)}">${escapeHtml(name)}</a>${note ? ` — ${escapeHtml(note)}` : ""}</li>`)
+      .join("");
+    return `<section><h2>${escapeHtml(heading)}</h2>${intro ? `<p>${escapeHtml(intro)}</p>` : ""}<ul>${items}</ul></section>`;
+  }
+
   /** Ссылки на обзоры моделей — по ним поисковик уходит в самые содержательные страницы. */
   function modelLinks(modelPages, { heading, skip = null } = {}) {
     const items = modelPages.filter((page) => page.path !== skip);
@@ -333,14 +392,19 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * Общая страница каталога: заголовок, количество машин, ссылки на свежие объявления
    * и на все разделы. `sections` — разделы из `src/catalog-landings.js`.
    */
-  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing }) {
-    const canonical = routeUrl(CATALOG_INDEX.route);
+  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length }) {
+    const canonical = routeUrl(pageRoute(CATALOG_INDEX.route, page));
+    const first = (page - 1) * perPage;
     const countLine = total
-      ? `<p>В каталоге ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")} — цены указаны с доставкой до Минска.</p>`
+      ? `<p>В каталоге ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")} — цены указаны с доставкой до Минска.${
+          pages > 1 ? ` Страница ${page} из ${pages}: автомобили с ${number(first + 1)}-го по ${number(first + items.length)}-й по возрастанию цены.` : ""
+        }</p>`
       : "";
-    const list = items.length ? `<section><h2>Актуальные предложения</h2>${carLinks(items)}</section>` : "";
+    const paging = paginationLinks({ route: CATALOG_INDEX.route, page, pages });
+    const list = items.length ? `<section><h2>Актуальные предложения</h2>${carLinks(items)}${paging}</section>` : "";
     const sectionBlock = sections.length ? sectionLinks(sections, { heading: "Автомобили из Китая по маркам и типам" }) : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(CATALOG_INDEX.h1)}</h1><p>${escapeHtml(CATALOG_INDEX.lead)}</p>${countLine}${list}${sectionBlock}</main>${footer()}`;
+    const heading = page > 1 ? `${CATALOG_INDEX.h1} — страница ${page}` : CATALOG_INDEX.h1;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(CATALOG_INDEX.lead)}</p>${countLine}${list}${sectionBlock}</main>${footer()}`;
     const itemList = {
       "@context": "https://schema.org",
       "@type": "ItemList",
@@ -349,7 +413,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       numberOfItems: total || items.length,
       itemListElement: items.slice(0, 24).map((car, index) => ({
         "@type": "ListItem",
-        position: index + 1,
+        position: first + index + 1,
         url: routeUrl(carRoute(car)),
         name: carTitle(car),
       })),
@@ -357,13 +421,15 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: CATALOG_INDEX.title,
-        description: CATALOG_INDEX.description,
+        title: page > 1 ? `${CATALOG_INDEX.h1} — страница ${page} | evcars.by` : CATALOG_INDEX.title,
+        description: page > 1 ? `${CATALOG_INDEX.description} Страница ${page} из ${pages}.` : CATALOG_INDEX.description,
         canonical,
         body,
         type: "website",
         indexable,
-        schemas: [breadcrumbsSchema([["Главная", "/"], [CATALOG_INDEX.h1, CATALOG_INDEX.route]]), itemList],
+        prev: page > 1 ? routeUrl(pageRoute(CATALOG_INDEX.route, page - 1)) : null,
+        next: page < pages ? routeUrl(pageRoute(CATALOG_INDEX.route, page + 1)) : null,
+        schemas: [breadcrumbsSchema([["Главная", "/"], [CATALOG_INDEX.h1, pageRoute(CATALOG_INDEX.route, page)]]), itemList],
       }),
     };
   }
@@ -376,10 +442,18 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * и переходы на соседние разделы. Приложение поверх этого рисует обычный каталог с
    * выставленным фильтром.
    */
-  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], others = [], indexable = allowIndexing }) {
-    const canonical = routeUrl(landing.path);
-    const countLine = total ? `<p>В наличии ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")} — цены указаны с доставкой до Минска.</p>` : "";
-    const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
+  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length }) {
+    const canonical = routeUrl(pageRoute(landing.path, page));
+    const first = (page - 1) * perPage;
+    // На первой странице — сколько всего машин в разделе; дальше ещё и какие именно
+    // здесь показаны, иначе страницы отличались бы друг от друга только списком ссылок.
+    const countLine = total
+      ? `<p>В наличии ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")} — цены указаны с доставкой до Минска.${
+          pages > 1 ? ` Страница ${page} из ${pages}: автомобили с ${number(first + 1)}-го по ${number(first + items.length)}-й по возрастанию цены.` : ""
+        }</p>`
+      : "";
+    const paging = paginationLinks({ route: landing.path, page, pages });
+    const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}${paging}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
     const notes = `<section><h2>${escapeHtml(landing.name)} из Китая: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}</section>`;
     const reviews = modelPages.length
       ? `<section><h2>Обзоры моделей ${escapeHtml(landing.brand || landing.name)}</h2><ul>${modelPages.map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a></li>`).join("")}</ul></section>`
@@ -388,7 +462,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // их всего два, и раздел электромобилей — самый ценный на сайте — получал ровно
     // одну входящую ссылку.
     const near = others.length ? sectionLinks(others, { skip: landing.path, heading: "Другие разделы каталога" }) : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(landing.h1)}</h1>${countLine}${list}${notes}${reviews}${near}</main>${footer()}`;
+    // Заголовок страницы повторяет заголовок раздела: это один и тот же раздел, просто
+    // другой его кусок. Номер страницы стоит рядом, в строке с количеством.
+    const heading = page > 1 ? `${landing.h1} — страница ${page}` : landing.h1;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(heading)}</h1>${countLine}${list}${notes}${reviews}${near}</main>${footer()}`;
     // Разметка списка: по ней поисковик понимает, что это подборка предложений, а не
     // одна страница товара.
     const itemList = {
@@ -399,7 +476,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       numberOfItems: total || items.length,
       itemListElement: items.slice(0, 24).map((car, index) => ({
         "@type": "ListItem",
-        position: index + 1,
+        // Нумерация сквозная по всему разделу: на второй странице список начинается
+        // не с первого места, а с сто первого.
+        position: first + index + 1,
         url: routeUrl(carRoute(car)),
         name: carTitle(car),
       })),
@@ -407,13 +486,17 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: landing.seoTitle,
-        description: landing.seoDescription,
+        title: page > 1 ? `${landing.h1} — страница ${page} | evcars.by` : landing.seoTitle,
+        description: page > 1 ? `${landing.seoDescription} Страница ${page} из ${pages}.` : landing.seoDescription,
         canonical,
         body,
         type: "website",
         indexable,
-        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [landing.name, landing.path]]), itemList],
+        // Каждая страница списка сама себе первоисточник: сводить их к первой значит
+        // сказать поисковику, что машин со второй страницы не существует.
+        prev: page > 1 ? routeUrl(pageRoute(landing.path, page - 1)) : null,
+        next: page < pages ? routeUrl(pageRoute(landing.path, page + 1)) : null,
+        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]), itemList],
       }),
     };
   }
@@ -547,5 +630,5 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     });
   }
 
-  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, catalogIndexPage, carPage, carGonePage, carDescription, landingPage, landingMissingPage, modelPageArticle, modelPage };
+  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, pathwayLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, catalogIndexPage, carPage, carGonePage, carDescription, landingPage, landingMissingPage, modelPageArticle, modelPage };
 }

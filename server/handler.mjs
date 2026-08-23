@@ -356,7 +356,16 @@ export async function handleApiRequest(request, response) {
           }
           return html(response, index.status, index.html, index.status === 200 ? seoPageCache : { "cache-control":"no-store" });
         }
-        const page = await renderCatalogPage(slug);
+        // Параметры адреса нужны разделу так же, как каталогу: по ним выбирается
+        // страница списка («?page=2»), а «?page=1» уводит на адрес без параметра.
+        const sectionParams = new URLSearchParams(url.searchParams);
+        sectionParams.delete("path");
+        sectionParams.delete("slug");
+        const page = await renderCatalogPage(slug, sectionParams);
+        if (page.location) {
+          response.writeHead(301, { location: page.location, ...seoPageCache });
+          return response.end();
+        }
         return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
       } catch (error) {
         console.error(error);

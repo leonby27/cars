@@ -4,17 +4,39 @@
 // Зачем сервером, а не файлами: список машин в разделе меняется каждый день, а держать
 // тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
-import { listCars } from "./repository.mjs";
+import { listCarPage } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
-import { CATALOG_LANDINGS, catalogLandingRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
 
 const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
-// Сколько машин перечисляем ссылками. Это путь, по которому поисковик уходит из раздела
-// в карточки; больше пятидесяти ссылок на странице он всё равно обходит неохотно.
-const carsOnPage = 48;
+// Сколько машин на одной странице раздела — столько же, сколько догружает кнопка
+// «Подгрузить ещё» в каталоге. Раньше здесь было 48 и следующей страницы не было вовсе:
+// из 31 332 машин внутренние ссылки вели примерно к 4 300, остальные поисковик знал
+// только из карты сайта и заходил на них редко.
+const carsOnPage = CATALOG_PAGE_SIZE;
+
+/**
+ * Номер страницы из адреса. `null` — адрес испорчен («?page=абв», «?page=0»),
+ * такие страницы отвечают 404, а не молча показывают первую: иначе у каждой страницы
+ * раздела появился бы бесконечный хвост адресов с одной и той же выдачей.
+ */
+function requestedPage(params) {
+  const raw = params.get("page");
+  if (raw === null || raw === "") return 1;
+  if (!/^[1-9]\d{0,4}$/.test(String(raw))) return null;
+  return Number(raw);
+}
+
+/** Адрес страницы списка: первая — без параметра, дальше `?page=2`. */
+const pageLocation = (path, page, params) => {
+  const rest = new URLSearchParams();
+  for (const [key, value] of params) if (key !== "page" && key !== "path" && key !== "slug") rest.append(key, value);
+  const query = [page > 1 ? `page=${page}` : "", rest.toString()].filter(Boolean).join("&");
+  return `${path}${query ? `?${query}` : ""}`;
+};
 
 /**
  * Общая страница каталога `/catalog` — тоже в момент запроса, вместе с фильтрами из адреса.
@@ -31,12 +53,27 @@ export async function renderCatalogIndex(searchParams) {
   const params = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams(searchParams || "");
   const location = catalogLandingRedirect(params);
   if (location) return { status: 301, location };
+  // Раздела в фильтрах нет, а подписи «не выбрано» в адресе есть — убираем их.
+  // Переброс тут один: адрес раздела выше собирается уже без них.
+  const cleaned = catalogPlaceholderRedirect("/catalog", params);
+  if (cleaned) return { status: 301, location: cleaned };
 
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
-  const query = new URLSearchParams({ sort: "default", limit: String(carsOnPage) });
-  const { items, total } = await listCars(query);
-  const page = renderer.catalogIndexPage({ cars: items, total, sections: CATALOG_LANDINGS });
+  const number = requestedPage(params);
+  if (number === null) return { status: 404, html: renderer.landingMissingPage() };
+  // «?page=1» — тот же самый каталог, что и без параметра: два адреса с одной выдачей
+  // поисковику не нужны.
+  if (params.get("page") !== null && number === 1) return { status: 301, location: pageLocation("/catalog", 1, params) };
+
+  // Порядок по цене, а не выдача по умолчанию: та перемешана и от запроса к запросу
+  // меняется, а страницы списка должны делить каталог на непересекающиеся куски.
+  const query = new URLSearchParams({ sort: "price_asc" });
+  const { items, total } = await listCarPage(query, { limit: carsOnPage, offset: (number - 1) * carsOnPage });
+  const pages = catalogPageCount(total);
+  if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
+
+  const page = renderer.catalogIndexPage({ cars: items, total, sections: CATALOG_LANDINGS, page: number, pages, perPage: carsOnPage });
   return { status: 200, html: page.html };
 }
 
@@ -45,16 +82,24 @@ export async function renderCatalogIndex(searchParams) {
  * Неизвестный раздел отвечает 404 — иначе любой адрес вида `/catalog/что-угодно`
  * притворялся бы существующей страницей.
  */
-export async function renderCatalogPage(slug) {
+export async function renderCatalogPage(slug, searchParams) {
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
   const landing = findCatalogLanding(`/catalog/${String(slug || "").trim()}`);
   if (!landing) return { status: 404, html: renderer.landingMissingPage() };
 
+  const query = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams(searchParams || "");
+  const cleaned = catalogPlaceholderRedirect(landing.path, query);
+  if (cleaned) return { status: 301, location: cleaned };
+  const number = requestedPage(query);
+  if (number === null) return { status: 404, html: renderer.landingMissingPage() };
+  if (query.get("page") !== null && number === 1) return { status: 301, location: pageLocation(landing.path, 1, query) };
+
   const params = landingApiParams(landing);
   params.set("sort", "price_asc");
-  params.set("limit", String(carsOnPage));
-  const { items, total } = await listCars(params);
+  const { items, total } = await listCarPage(params, { limit: carsOnPage, offset: (number - 1) * carsOnPage });
+  const pages = catalogPageCount(total);
+  if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
 
   // Обзоры моделей этой марки — сильные внутренние ссылки: у каждой такой страницы
   // около девятисот слов текста, и ведут они внутрь того же раздела.
@@ -64,6 +109,6 @@ export async function renderCatalogPage(slug) {
   // и немного соседей. Одинаковый на всех страницах блок поисковик обесценивает.
   const others = relatedLandings(landing);
 
-  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others });
+  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage });
   return { status: 200, html: page.html };
 }

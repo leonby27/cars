@@ -194,6 +194,29 @@ button {
 :root[data-theme="dark"] .wordmark-image-dark {
   display: block;
 }
+
+/* Первый экран, нарисованный до запуска приложения (server/boot-screen.mjs).
+   Значок темы там стоит сразу в двух видах — луна и солнце: какая тема выбрана,
+   известно ещё до стилей, а какой значок покажет приложение — нет. Показываем тот
+   же, что и оно. Плашка «Каталог обновлён» держит своё место, но не видна: даты
+   на момент сборки не существует, а без плашки заголовок стоял бы выше, и при
+   запуске приложения страница дёрнулась бы. */
+.boot-theme-light,
+.boot-theme-dark {
+  display: grid;
+}
+.boot-theme-dark {
+  display: none;
+}
+:root[data-theme="dark"] .boot-theme-light {
+  display: none;
+}
+:root[data-theme="dark"] .boot-theme-dark {
+  display: grid;
+}
+.boot-invisible {
+  visibility: hidden;
+}
 .desktop-nav {
   display: flex;
   gap: 27px;
@@ -776,9 +799,6 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--muted);
-}
-.catalog-scroll-sentinel {
-  height: 1px;
 }
 .trust-strip {
   display: grid;

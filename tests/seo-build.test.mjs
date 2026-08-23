@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
 
 // Генератор прогоняем на трёх машинах в своей папке. Раньше тесты читали общий
 // `dist/`, поэтому зависели и от дампа каталога (441 МБ вне git), и от того,
@@ -284,19 +285,48 @@ test("тексты информационных страниц лежат в с�
   assert.doesNotMatch(delivered, /Алексей, Минск/);
 });
 
-test("на главной есть ссылки на разделы каталога", async () => {
+test("на главной есть ссылки на все разделы каталога и на обзоры моделей", async () => {
   // Раньше с главной вели ровно двенадцать ссылок — меню и подвал, — и в разделы
-  // нельзя было попасть ниоткуда, кроме карты сайта. Те же ссылки есть и в каталоге,
-  // но он собирается сервером — это проверяет tests/catalog-landings.test.mjs.
+  // нельзя было попасть ниоткуда, кроме карты сайта. Потом появились 33 раздела из 57:
+  // ценовые полосы и сочетания («электрические кроссоверы», «седаны BYD») ссылок с
+  // главной не получали, хотя запросы «электромобиль до 20 000» — самые покупательские.
+  // Обзоров моделей на главной не было вовсе, хотя это самые содержательные страницы.
+  // Те же ссылки есть и в каталоге, но он собирается сервером — это проверяет
+  // tests/catalog-landings.test.mjs.
   const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
-  for (const file of ["index.html"]) {
+  const html = await read("index.html");
+  const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
+  const sections = new Set([...body.matchAll(/<a href="(\/catalog\/[a-z0-9-]+)"/g)].map((match) => match[1]));
+  assert.equal(sections.size, CATALOG_LANDINGS.length, `ссылок на разделы ${sections.size}, а разделов ${CATALOG_LANDINGS.length}`);
+  for (const landing of CATALOG_LANDINGS) assert.ok(sections.has(landing.path), `на главной нет ссылки на ${landing.path}`);
+  const reviews = [...body.matchAll(/<a href="\/models\/[a-z0-9-]+"/g)];
+  assert.ok(reviews.length >= 20, `ссылок на обзоры моделей ${reviews.length}, ожидалось не меньше 20`);
+});
+
+test("с информационных страниц и расчётов ведут ссылки в каталог", async () => {
+  // Пять самых содержательных страниц сайта (от 1 100 до 1 800 слов) были тупиками:
+  // ни одной ссылки в каталог, только меню и подвал. Вес с них никуда не переносился,
+  // а человеку после «на электромобиль пошлины нет» некуда было нажать.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const pages = [
+    ["customs/index.html", "Растаможка по типам машин"],
+    ["ev-quota/index.html", "Что можно ввезти по квоте"],
+    ["delivery-cost/index.html", "Машины, для которых считаем доставку"],
+    ["calculator/index.html", "Посчитать на конкретной машине"],
+    ["faq/index.html", "Ответы, которые видно в каталоге"],
+    ["how-it-works/index.html", "С чего начать выбор"],
+    ["guarantees/index.html", "Что именно мы проверяем"],
+    ["payment-and-contract/index.html", "Сколько это выходит в деньгах"],
+    ["delivered/index.html", "Где выбрать такую же"],
+    ["contacts/index.html", "Пока мы отвечаем"],
+  ];
+  for (const [file, heading] of pages) {
     const html = await read(file);
     const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
-    const sections = [...body.matchAll(/<a href="\/catalog\/[a-z0-9-]+"/g)];
-    assert.ok(sections.length >= 25, `${file}: ссылок на разделы ${sections.length}, ожидалось не меньше 25`);
-    assert.match(body, /<a href="\/catalog\/byd">/);
-    assert.match(body, /<a href="\/catalog\/electric">/);
-    assert.match(body, /<a href="\/catalog\/suv">/);
+    assert.match(body, new RegExp(heading), `${file}: нет блока «${heading}»`);
+    const sections = new Set([...body.matchAll(/<a href="(\/catalog\/[a-z0-9-]+)"/g)].map((match) => match[1]));
+    assert.ok(sections.size >= 4, `${file}: ссылок на разделы каталога ${sections.size}, ожидалось не меньше четырёх`);
+    for (const path of sections) assert.ok(CATALOG_LANDINGS.some((landing) => landing.path === path), `${file}: ссылка на несуществующий раздел ${path}`);
   }
 });
 

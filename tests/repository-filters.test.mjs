@@ -144,7 +144,7 @@ test("omits heavy technical specifications from catalog summaries", () => {
 
 test("листает каталог до потолка и честно сообщает, что дальше ничего нет", () => {
   // Потолок защищает каталог от постраничной выкачки: обычный посетитель берёт по 24
-  // карточки, то есть до упора ему нужно больше двухсот нажатий «Показать ещё».
+  // карточки, то есть до упора ему нужно больше двухсот нажатий «Подгрузить ещё».
   const page = catalogPaging(new URLSearchParams({ limit:"24", offset:"48" }));
   assert.deepEqual(page, { limit:24, offset:48, beyondCap:false });
   assert.equal(catalogHasMore(48, 24, 32916), true);
