@@ -260,6 +260,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       ["Марки", sections.filter((item) => item.kind === "brand")],
       ["Тип двигателя", sections.filter((item) => item.kind === "powertrain")],
       ["Тип кузова", sections.filter((item) => item.kind === "bodyType")],
+      ["Двигатель и кузов", sections.filter((item) => item.kind === "combo")],
+      ["Марка и кузов", sections.filter((item) => item.kind === "brandBody")],
+      ["По цене до Минска", sections.filter((item) => item.kind === "price")],
     ].filter(([, items]) => items.length);
     if (!groups.length) return "";
     const list = (items) => `<ul>${items.filter((item) => item.path !== skip).map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.name)}</a></li>`).join("")}</ul>`;

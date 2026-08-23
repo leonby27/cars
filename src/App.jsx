@@ -4828,6 +4828,9 @@ function CatalogSectionLinks({ navigate }) {
     ["Марки", CATALOG_LANDINGS.filter((item) => item.kind === "brand")],
     ["Тип двигателя", CATALOG_LANDINGS.filter((item) => item.kind === "powertrain")],
     ["Тип кузова", CATALOG_LANDINGS.filter((item) => item.kind === "bodyType")],
+    ["Двигатель и кузов", CATALOG_LANDINGS.filter((item) => item.kind === "combo")],
+    ["Марка и кузов", CATALOG_LANDINGS.filter((item) => item.kind === "brandBody")],
+    ["По цене до Минска", CATALOG_LANDINGS.filter((item) => item.kind === "price")],
   ];
   return (
     <section className="catalog-landing-notes" aria-labelledby="catalog-sections-title">

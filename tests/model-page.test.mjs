@@ -64,7 +64,13 @@ test("модель без машин в наличии не обещает пр�
 test("страница машины ведёт в разделы своей марки, типа и кузова", () => {
   const car = { id: "che168-9", title: "BYD Han 2023", brand: "BYD", model: "Han", year: 2023, mileage: 21400, chinaPrice: 128000, type: "Электромобиль", bodyType: "Седан" };
   const sections = landingsForCar(car);
-  assert.deepEqual(sections.map((s) => s.path).sort(), ["/catalog/byd", "/catalog/electric", "/catalog/sedan"]);
+  // Совпасть должны все условия раздела: электрический седан BYD попадает и в раздел
+  // марки, и в раздел типа, и в раздел кузова, и в оба сочетания — но не в «гибридные
+  // седаны» и не в «хэтчбеки BYD».
+  assert.deepEqual(sections.map((item) => item.path).sort(), ["/catalog/byd", "/catalog/byd-sedan", "/catalog/electric", "/catalog/electric-sedan", "/catalog/sedan"]);
+  const hybridSedan = landingsForCar({ ...car, type: "Гибрид" });
+  assert.equal(hybridSedan.some((item) => item.path === "/catalog/electric-sedan"), false);
+  assert.equal(hybridSedan.some((item) => item.path === "/catalog/hybrid-sedan"), true);
   const { html } = render().carPage({ car, related: [], sections });
   assert.match(html, /<h2>Похожие подборки<\/h2>/);
   for (const path of ["/catalog/byd", "/catalog/electric", "/catalog/sedan"]) {
