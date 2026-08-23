@@ -6976,7 +6976,7 @@ function SiteFooter({ navigate }) {
           </div>
         </div>
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
-        <div className="footer-column footer-navigation"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
+        <div className="footer-column footer-tools"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
         <div className="footer-column footer-contacts">
           <b>Связаться</b>
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
