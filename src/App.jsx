@@ -8430,7 +8430,12 @@ export function App() {
       // behind the boot request it never reads.
       // Страница марки, типа двигателя или кузова — тот же каталог с выставленным
       // фильтром и своим заголовком: отдельной вёрстки у неё нет.
-      <Catalog navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath)} />
+      //
+      // `key` по адресу обязателен. Фильтры каталог берёт из адреса один раз, при
+      // создании, а при переходе с одного раздела на другой React оставил бы тот же
+      // экземпляр: заголовок менялся, а выдача оставалась от прежней марки. С разным
+      // ключом каждый раздел создаётся заново и читает свой фильтр.
+      <Catalog key={contentPath} navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath)} />
     ) : loading || routeLoading ? (
       <AppLoader />
     ) : loadError ? (
