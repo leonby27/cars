@@ -6799,23 +6799,33 @@ function ContactsPage({ navigate, theme }) {
    поисковика: два места писали бы по-разному. */
 function ToolPage({ tool, navigate }) {
   return (
-    <main className="legal-page page-width">
-      <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
-      <span className="info-eyebrow">{tool.name}</span>
-      <h1>{tool.h1}</h1>
-      <p className="legal-intro">{tool.lead}</p>
-      <div className="legal-sections">
-        {tool.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
-        {tool.kind === "quota" && <QuotaFigures />}
-        {tool.kind === "calculator" && <LandedCostCalculator />}
-        {tool.sections.map((section) => (
-          <section key={section.title}>
-            <h2>{section.title}</h2>
-            {section.paragraphs.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
+    <main className="model-page">
+      <div className="model-page-reading">
+        <div className="model-page-body page-width">
+          <section className="model-page-hero">
+            <div className="model-page-hero-copy">
+              <h1>{tool.h1}</h1>
+              <p>{tool.lead}</p>
+            </div>
           </section>
-        ))}
+        </div>
+        {/* Сам инструмент идёт первым блоком: за живой цифрой квоты и за расчётом сюда
+            и приходят, объяснения читают уже потом. */}
+        <div className="model-page-body page-width">
+          <article className="model-page-article">
+            {tool.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
+            {tool.kind === "quota" && <QuotaFigures />}
+            {tool.kind === "calculator" && <LandedCostCalculator />}
+          </article>
+        </div>
+        <div className="model-page-body page-width">
+          <article className="model-page-article">
+            {tool.sections.map((section) => <ModelPageSection key={section.title} section={section} />)}
+          </article>
+        </div>
       </div>
-      <p className="legal-updated">{tool.disclaimer}</p>
+      <p className="model-page-disclaimer page-width">{tool.disclaimer}</p>
+      <ModelPagePromo navigate={navigate} />
     </main>
   );
 }

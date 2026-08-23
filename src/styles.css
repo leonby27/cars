@@ -1158,8 +1158,13 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 /* Текст страницы марки, типа двигателя или кузова. Блок отделён от страницы подложкой,
    без рамки — как блок вопросов на главной. Строка чтения ограничена: во всю ширину
    каталога текст читался бы тяжело. */
-/* Таблицы на страницах-инструментах: история сводок квоты и разбор расчёта.
-   Отдельной подложки им не нужно — они стоят внутри текстового блока страницы. */
+/* Таблицы и форма на страницах-инструментах. Они стоят внутри текстового блока
+   страницы, но это не проза: шрифт интерфейсный, цифры — с одинаковой шириной,
+   чтобы столбцы выстраивались. */
+.quota-history,
+.cost-calculator-form {
+  font-family: "Manrope", system-ui, sans-serif;
+}
 .quota-history {
   width: 100%;
   margin: 6px 0 0;
@@ -1213,6 +1218,12 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   grid-column: 1 / -1;
 }
 .cost-calculator-check input { width: 18px; height: 18px; }
+/* Итоговая строка расчёта: её читают первой, поэтому она заметнее остальных. */
+.cost-calculator .quota-history tr:last-child th,
+.cost-calculator .quota-history tr:last-child td {
+  padding-top: 14px;
+  font-size: 18px;
+}
 
 .catalog-landing-notes {
   display: flex;

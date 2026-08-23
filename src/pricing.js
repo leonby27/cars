@@ -5,6 +5,7 @@ export const PRICING = {
   usdByn:2.9829, cnyBynPer10:4.4496, eurByn:3.4918, rateDate:"23.08.2026",
   serviceUsd:800, evCustomsUsd:350,
   evDutyPercent:0.15, // пошлина на электромобиль после исчерпания квоты
+  vatPercent:0.20, // НДС при ввозе: платят последовательные гибриды, у электромобилей ставка нулевая
   // Этапы до СВХ, доллары [низ, верх]. Ориентиры — открытые тарифы перевозчиков
   // Китай→Минск и платёжных агентов (лето 2026): автовоз «под ключ» ≈ $3500,
   // перевод через агента от 0,9%, внутрикитайское плечо 30–80 тыс. ₽ по удалённости.
@@ -41,6 +42,25 @@ export const yuanToUsdAbout = (text) => {
   return prefix ? `${prefix[1]} ${money}` : `≈ ${money}`;
 };
 
+/**
+ * Последовательный гибрид: бензиновый мотор не связан с колёсами, он только крутит
+ * генератор. Таможня оформляет такую машину по коду электромобиля (8703 80 000 5,
+ * выделен решениями ЕЭК № 81 и № 110 с 22.01.2026), но льгота на неё не действует:
+ * указ № 428 от 11.12.2025 исключил из льготы «транспортные средства с гибридными
+ * силовыми установками всех типов», а беспошлинная квота 2026 года выписана только
+ * на чистые электромобили. Значит, пошлина 15% и НДС 20% сверху вместо ставки по
+ * объёму двигателя.
+ *
+ * Признак — тип топлива источника (Range Extender). Если пометки нет, выдаёт
+ * односкоростная коробка: в каталоге она стоит у всех 5 369 машин с генератором и
+ * ни у одной из 5 849 с розеткой, где бензиновый мотор крутит колёса сам.
+ */
+export const isSeriesHybrid = (car) => {
+  if (!car || car.type === "Электромобиль") return false;
+  if (/range\s*extender|extended\s*range/i.test(String(car.sourceFuelType || ""))) return true;
+  return /single[-\s]?speed/i.test(String(car.transmission || ""));
+};
+
 export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
@@ -73,8 +93,22 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     : PRICING.evCustomsUsd;
   let customsNote = quotaOver ? "Пошлина 15% · оформление и сборы" : "Льгота 0% · оформление и сборы";
   let customsAlert = quotaOver ? "Без квоты на льготный ввоз" : null;
+  // Тон подписи под строкой: красная — про квоту на электромобили, оранжевая — про
+  // гибрид с генератором. Разный цвет нужен, чтобы эти два случая не читались как один.
+  let customsAlertTone = quotaOver ? "quota" : null;
+  // Подробное объяснение для подсказки. Пусто — в подсказке остаётся короткая строка.
+  let customsHint = null;
   let engineAssumed = false;
-  if (car.type !== "Электромобиль") {
+  const seriesHybrid = isSeriesHybrid(car);
+  if (seriesHybrid) {
+    const dutyUsd = chinaUsd * PRICING.evDutyPercent;
+    const vatUsd = (chinaUsd + dutyUsd) * PRICING.vatPercent;
+    customsUsd = round50(dutyUsd + vatUsd + PRICING.evCustomsUsd);
+    customsNote = "Гибрид с генератором · пошлина 15% и НДС 20%";
+    customsHint = "Бензиновый мотор здесь только крутит генератор, колёс он не касается, поэтому таможня оформляет машину как электромобиль. Но льготу на такие гибриды отменили с 1 января 2026 года: пошлина 15% от цены машины плюс НДС 20% — вместе около 38%. Плюс оформление и сборы.";
+    customsAlert = "Гибрид с генератором — льготы нет с 2026 года";
+    customsAlertTone = "hybrid";
+  } else if (car.type !== "Электромобиль") {
     const parsedEngine = Number(String(car.engine || "").match(/\d+(?:\.\d+)?/)?.[0]);
     const engineCc = parsedEngine ? Math.round(parsedEngine * 1000) : 1500;
     engineAssumed = !parsedEngine;
