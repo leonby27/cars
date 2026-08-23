@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimp
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
+import { cityName } from "./city-names.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
 import { evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
@@ -154,66 +155,7 @@ const useQuotaPricing = () => useContext(QuotaPricingContext);
 const useSetCurrency = () => useContext(SetCurrencyContext);
 
 const displayValue = (value, fallback = "Не указано") => (value === null || value === undefined || value === "" ? fallback : value);
-const cityNames = {
-  东莞: "Дунгуань",
-  中山: "Чжуншань",
-  临汾: "Линьфэнь",
-  乐山: "Лэшань",
-  佛山: "Фошань",
-  保定: "Баодин",
-  包头: "Баотоу",
-  北京: "Пекин",
-  南京: "Нанкин",
-  南宁: "Наньнин",
-  合肥: "Хэфэй",
-  呼和浩特: "Хух-Хото",
-  哈尔滨: "Харбин",
-  唐山: "Таншань",
-  大连: "Далянь",
-  天津: "Тяньцзинь",
-  太原: "Тайюань",
-  安阳: "Аньян",
-  宜昌: "Ичан",
-  广州: "Гуанчжоу",
-  廊坊: "Ланфан",
-  惠州: "Хуэйчжоу",
-  成都: "Чэнду",
-  昆明: "Куньмин",
-  晋中: "Цзиньчжун",
-  晋城: "Цзиньчэн",
-  朝阳市: "Чаоян",
-  柳州: "Лючжоу",
-  武汉: "Ухань",
-  沈阳: "Шэньян",
-  沧州: "Цанчжоу",
-  河源: "Хэюань",
-  济南: "Цзинань",
-  深圳: "Шэньчжэнь",
-  温州: "Вэньчжоу",
-  潍坊: "Вэйфан",
-  牡丹江: "Муданьцзян",
-  珠海: "Чжухай",
-  盘锦: "Паньцзинь",
-  眉山: "Мэйшань",
-  石家庄: "Шицзячжуан",
-  绵阳: "Мяньян",
-  苏州: "Сучжоу",
-  营口: "Инкоу",
-  襄阳: "Сянъян",
-  西安: "Сиань",
-  贵阳: "Гуйян",
-  达州: "Дачжоу",
-  运城: "Юньчэн",
-  邢台: "Синтай",
-  邯郸: "Ханьдань",
-  郑州: "Чжэнчжоу",
-  重庆: "Чунцин",
-  锦州: "Цзиньчжоу",
-  长春: "Чанчунь",
-  长沙: "Чанша",
-  长治: "Чанчжи",
-};
-const translateCity = (value) => cityNames[value] || displayValue(value);
+const translateCity = (value) => cityName(value) || displayValue(value);
 const conditionLabels = {
   S: "Превосходное состояние",
   A: "Отличное состояние",
