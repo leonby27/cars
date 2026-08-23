@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, recordAnalyticsEvent, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { isLocalVisit, isRepeatEvent } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
   const event = normalizeAnalyticsEvent({
@@ -38,4 +39,43 @@ test("analytics tokens expire and reject tampering", () => {
     if (previousPassword === undefined) delete process.env.ANALYTICS_PASSWORD;
     else process.env.ANALYTICS_PASSWORD = previousPassword;
   }
+});
+
+test("одно и то же событие не записывается дважды подряд", async () => {
+  const calls = [];
+  const db = { query: async (sql, values) => { calls.push({ sql, values }); return { rowCount: 1 }; } };
+  const event = { eventId:"e1", visitorId:"v1", sessionId:"s1", eventName:"vehicle_view", path:"/cars/1", listingId:"che168-1" };
+  const result = await recordAnalyticsEvent(event, { db });
+  assert.equal(result.ok, true);
+  // Запись идёт только если такого же события от этого посетителя не было пару секунд назад.
+  assert.match(calls[0].sql, /WHERE NOT EXISTS/);
+  assert.match(calls[0].sql, /created_at > now\(\) - interval '5 seconds'/);
+  assert.match(calls[0].sql, /visitor_id=\$2 AND event_name=\$4/);
+  // Отброшенный повтор виден в ответе: rowCount 0 — значит не записали.
+  const quiet = { query: async () => ({ rowCount: 0 }) };
+  assert.deepEqual(await recordAnalyticsEvent(event, { db: quiet }), { ok:true, recorded:false });
+});
+
+test("браузер не шлёт повтор события в течение пяти секунд", () => {
+  const key = "vehicle_view|che168-1|/cars/1";
+  assert.equal(isRepeatEvent(key, 1_000), false);
+  assert.equal(isRepeatEvent(key, 2_000), true);
+  assert.equal(isRepeatEvent(key, 7_500), false);
+  // Разные машины считаются отдельно.
+  assert.equal(isRepeatEvent("vehicle_view|che168-2|/cars/2", 7_500), false);
+});
+
+test("заходы с рабочего компьютера в аналитику не попадают", () => {
+  for (const host of ["localhost", "127.0.0.1", "192.168.1.9", "10.14.0.2", "mac.local"]) {
+    assert.equal(isLocalVisit(host), true, host);
+  }
+  for (const host of ["evcars.by", "chinacar-mvp.vercel.app", "www.evcars.by"]) {
+    assert.equal(isLocalVisit(host), false, host);
+  }
+});
+
+test("быстрый просмотр и открытая следом карточка — один взгляд", () => {
+  // Ключ повтора у события про машину строится по машине, а не по адресу страницы.
+  assert.equal(isRepeatEvent("vehicle_view|che168-77", 1_000), false);
+  assert.equal(isRepeatEvent("vehicle_view|che168-77", 3_000), true);
 });

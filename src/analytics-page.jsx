@@ -254,12 +254,13 @@ function OverviewSection({ data }) {
   const summary = data.summary || {};
   const daily = data.daily || [];
   const maxDaily = Math.max(1, ...daily.map((item) => Number(item.visitors) || 0));
-  const leads = (Number(summary.registrations) || 0) + (Number(summary.custom_searches) || 0);
+  // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
+  // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
   const cards = [
     ["Уникальные посетители", summary.visitors, `${formatNumber(summary.sessions)} сессий`],
     ["Просмотры автомобилей", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
-    ["Уточнения актуальности", summary.availability_clicks, `${percent(summary.availability_clicks, summary.vehicle_views)} от просмотров авто`],
-    ["Регистрации и заявки", leads, `${summary.registrations || 0} регистраций · ${summary.custom_searches || 0} заявок`],
+    ["Заявки по автомобилю", summary.availability_clicks, `${percent(summary.availability_clicks, summary.vehicle_views)} от просмотров авто${summary.custom_searches ? ` · ещё ${formatNumber(summary.custom_searches)} на подбор` : ""}`],
+    ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} машин держат в избранном`],
   ];
   return (
     <>
@@ -280,8 +281,8 @@ function OverviewSection({ data }) {
 function VehiclesSection({ data }) {
   return (
     <section className="analytics-panel">
-      <div className="analytics-panel-heading"><div><h2>Интерес по автомобилям</h2><p>Показывает, какие объявления вызывают не просто просмотры, а намерение связаться</p></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr><th>Автомобиль</th><th>Просмотры</th><th>Уточнения</th><th>Избранное</th><th>Конверсия</th></tr></thead><tbody>{data.vehicles?.length ? data.vehicles.map((item) => <tr key={item.listingId}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle || item.listingId}</a></td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td></tr>) : <tr><td colSpan="5">Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
+      <div className="analytics-panel-heading"><div><h2>Интерес по автомобилям</h2><p>«Люди» — сколько разных посетителей открывали карточку; «просмотры» считают каждое открытие</p></div></div>
+      <div className="analytics-table-wrap"><table><thead><tr><th>Автомобиль</th><th>Люди</th><th>Просмотры</th><th>Уточнения</th><th>Избранное</th><th>Конверсия</th></tr></thead><tbody>{data.vehicles?.length ? data.vehicles.map((item) => <tr key={item.listingId}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle || item.listingId}</a></td><td>{formatNumber(item.viewers ?? 0)}</td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td></tr>) : <tr><td colSpan="6">Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
     </section>
   );
 }

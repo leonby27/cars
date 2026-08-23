@@ -42,16 +42,31 @@ export function normalizeAnalyticsEvent(body = {}) {
   };
 }
 
-export async function recordAnalyticsEvent(body) {
+// Одно и то же действие иногда приходит дважды подряд: страница из старого кэша
+// браузера, повторный рендер, двойной клик. Такой повтор — не второй просмотр,
+// поэтому в пределах нескольких секунд одинаковые события не записываем. Проверка
+// стоит на сервере, а не только в браузере: у части посетителей загружен старый
+// код сайта, и починить их можно только здесь.
+export const ANALYTICS_REPEAT_SECONDS = 5;
+const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties)
+     SELECT $1,$2,$3,$4,$5,$6,$7,$8
+     WHERE NOT EXISTS (
+       SELECT 1 FROM analytics_events
+       WHERE visitor_id=$2 AND event_name=$4 AND coalesce(listing_id,'')=coalesce($6,'')
+         -- У события про машину примета — сама машина: «быстрый просмотр» в каталоге
+         -- и открытая следом карточка лежат на разных адресах, но взгляд один.
+         AND ($6 IS NOT NULL OR path=$5)
+         AND created_at > now() - interval '${ANALYTICS_REPEAT_SECONDS} seconds'
+     )
+     ON CONFLICT (event_id) DO NOTHING`;
+
+export async function recordAnalyticsEvent(body, { db = pool } = {}) {
   const event = normalizeAnalyticsEvent(body);
   if (event.error) return event;
-  await pool.query(
-    `INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-     ON CONFLICT (event_id) DO NOTHING`,
+  const result = await db.query(INSERT_EVENT_SQL,
     [event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties)],
   );
-  return { ok:true };
+  return { ok:true, recorded:result.rowCount > 0 };
 }
 
 export async function resetAnalyticsData() {
@@ -109,30 +124,54 @@ export function normalizeAnalyticsDays(value) {
 export async function getAnalyticsDashboard(daysValue) {
   const days = normalizeAnalyticsDays(daysValue);
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
-  const [summaryResult,dailyResult,vehiclesResult,registrationsResult,recentResult,accountsResult] = await Promise.all([
+  // Всё, что оставило след в базе — заявки, избранное, регистрации, — считаем по самим
+  // таблицам, а не по событиям из браузера: событие может не дойти (блокировщик, старая
+  // вкладка, закрытая страница) и его может подделать кто угодно, а строка в таблице
+  // появляется только от настоящего действия. Из событий берём лишь то, чего в базе нет:
+  // посетителей, заходы и просмотры карточек.
+  const [summaryResult,actionsResult,dailyResult,vehiclesResult,registrationsResult,recentResult,accountsResult,actionsDailyResult] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id)::int AS visitors,
       count(DISTINCT session_id)::int AS sessions,
       count(*) FILTER (WHERE event_name='page_view')::int AS page_views,
-      count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views,
-      count(*) FILTER (WHERE event_name='availability_click')::int AS availability_clicks,
-      count(*) FILTER (WHERE event_name='registration_completed')::int AS registrations,
-      count(*) FILTER (WHERE event_name='custom_search_submitted')::int AS custom_searches,
-      count(*) FILTER (WHERE event_name='favorite_added')::int AS favorites
+      count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views
       FROM analytics_events WHERE created_at >= $1`, [cutoff]),
+    pool.query(`SELECT
+      (SELECT count(*) FROM customer_orders WHERE created_at >= $1)::int
+        + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND coalesce(calculation->>'requestType','') <> 'catalog_search')::int AS availability_clicks,
+      (SELECT count(*) FROM customer_favorites WHERE created_at >= $1)::int AS favorites,
+      (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND calculation->>'requestType' = 'catalog_search')::int AS custom_searches`, [cutoff]),
     pool.query(`SELECT created_at::date::text AS day,
       count(DISTINCT visitor_id)::int AS visitors,
-      count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views,
-      count(*) FILTER (WHERE event_name='availability_click')::int AS availability_clicks,
-      count(*) FILTER (WHERE event_name='registration_completed')::int AS registrations,
-      count(*) FILTER (WHERE event_name='custom_search_submitted')::int AS custom_searches
+      count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views
       FROM analytics_events WHERE created_at >= $1 GROUP BY created_at::date ORDER BY created_at::date`, [cutoff]),
-    pool.query(`SELECT listing_id, max(listing_title) AS listing_title,
-      count(*) FILTER (WHERE event_name='vehicle_view')::int AS views,
-      count(*) FILTER (WHERE event_name='availability_click')::int AS availability_clicks,
-      count(*) FILTER (WHERE event_name='favorite_added')::int AS favorites
-      FROM analytics_events WHERE created_at >= $1 AND listing_id IS NOT NULL
-      GROUP BY listing_id ORDER BY availability_clicks DESC, views DESC LIMIT 30`, [cutoff]),
+    pool.query(`WITH views AS (
+        SELECT listing_id, max(listing_title) AS listing_title,
+          count(*) FILTER (WHERE event_name='vehicle_view')::int AS views,
+          count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers
+        FROM analytics_events WHERE created_at >= $1 AND listing_id IS NOT NULL GROUP BY listing_id
+      ), asks AS (
+        SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND listing_id IS NOT NULL GROUP BY listing_id
+      ), drafts AS (
+        SELECT listing_id, count(*)::int AS n FROM order_drafts WHERE created_at >= $1 AND listing_id IS NOT NULL GROUP BY listing_id
+      ), favs AS (
+        SELECT listing_id, count(*)::int AS n FROM customer_favorites WHERE created_at >= $1 GROUP BY listing_id
+      ), ids AS (
+        SELECT listing_id FROM views UNION SELECT listing_id FROM asks UNION SELECT listing_id FROM drafts UNION SELECT listing_id FROM favs
+      )
+      SELECT ids.listing_id,
+        COALESCE(views.listing_title, l.title) AS listing_title,
+        COALESCE(views.views, 0) AS views,
+        COALESCE(views.viewers, 0) AS viewers,
+        COALESCE(asks.n, 0) + COALESCE(drafts.n, 0) AS availability_clicks,
+        COALESCE(favs.n, 0) AS favorites
+      FROM ids
+      LEFT JOIN views ON views.listing_id = ids.listing_id
+      LEFT JOIN asks ON asks.listing_id = ids.listing_id
+      LEFT JOIN drafts ON drafts.listing_id = ids.listing_id
+      LEFT JOIN favs ON favs.listing_id = ids.listing_id
+      LEFT JOIN listings l ON l.id = ids.listing_id
+      ORDER BY availability_clicks DESC, favorites DESC, views DESC LIMIT 30`, [cutoff]),
     // Список регистраций читаем из таблицы аккаунтов, а не из событий: события
     // принимаются без пароля и подделываются, а аккаунт создаётся только настоящей
     // регистрацией. Заодно личные данные остаются в одном месте.
@@ -146,22 +185,48 @@ export async function getAnalyticsDashboard(daysValue) {
     // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
     pool.query(`SELECT created_at::date::text AS day, count(*)::int AS registrations
       FROM customer_accounts WHERE created_at >= $1 GROUP BY 1`, [cutoff]),
+    pool.query(`SELECT day, sum(availability_clicks)::int AS availability_clicks, sum(custom_searches)::int AS custom_searches FROM (
+        SELECT created_at::date::text AS day, count(*)::int AS availability_clicks, 0 AS custom_searches
+          FROM customer_orders WHERE created_at >= $1 GROUP BY 1
+        UNION ALL
+        SELECT created_at::date::text AS day,
+          count(*) FILTER (WHERE coalesce(calculation->>'requestType','') <> 'catalog_search')::int,
+          count(*) FILTER (WHERE calculation->>'requestType' = 'catalog_search')::int
+          FROM order_drafts WHERE created_at >= $1 GROUP BY 1
+      ) t GROUP BY day`, [cutoff]),
   ]);
+  const actionsByDay = new Map(actionsDailyResult.rows.map((row) => [row.day, row]));
   const registrationsByDay = new Map(accountsResult.rows.map((row) => [row.day, row.registrations]));
   const registrations = [...registrationsByDay.values()].reduce((total, value) => total + value, 0);
   // День с регистрацией, но без событий, в выборке событий не появится — добавляем его сами,
   // иначе регистрация исчезла бы из графика.
-  const daily = dailyResult.rows.map((row) => ({ ...row, registrations:registrationsByDay.get(row.day) || 0 }));
-  for (const [day, count] of registrationsByDay) {
-    if (!daily.some((row) => row.day === day)) daily.push({ day, visitors:0, vehicle_views:0, availability_clicks:0, registrations:count, custom_searches:0 });
+  const dayAction = (day, key) => Number(actionsByDay.get(day)?.[key]) || 0;
+  const daily = dailyResult.rows.map((row) => ({
+    ...row,
+    availability_clicks:dayAction(row.day, "availability_clicks"),
+    custom_searches:dayAction(row.day, "custom_searches"),
+    registrations:registrationsByDay.get(row.day) || 0,
+  }));
+  // День с заявкой или регистрацией, но без событий, в выборке событий не появится —
+  // добавляем его сами, иначе действие исчезло бы из графика.
+  for (const day of new Set([...registrationsByDay.keys(), ...actionsByDay.keys()])) {
+    if (daily.some((row) => row.day === day)) continue;
+    daily.push({
+      day,
+      visitors:0,
+      vehicle_views:0,
+      availability_clicks:dayAction(day, "availability_clicks"),
+      registrations:registrationsByDay.get(day) || 0,
+      custom_searches:dayAction(day, "custom_searches"),
+    });
   }
   daily.sort((left, right) => left.day.localeCompare(right.day));
   return {
     days,
     generatedAt:new Date().toISOString(),
-    summary:{ ...summaryResult.rows[0], registrations },
+    summary:{ ...summaryResult.rows[0], ...actionsResult.rows[0], registrations },
     daily,
-    vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, availabilityClicks:row.availability_clicks, favorites:row.favorites })),
+    vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, favorites:row.favorites })),
     // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
