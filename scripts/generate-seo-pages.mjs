@@ -6,6 +6,14 @@ import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
+// Тексты информационных страниц берём из тех же данных, по которым их рисует
+// приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
+// фраза, — а всё остальное появлялось только после запуска сайта в браузере.
+import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "../src/purchase-info.js";
+import { DELIVERY_CASES, DELIVERY_STATS } from "../src/delivery-cases.js";
+import { LEGAL_COPY } from "../src/legal-copy.js";
+import { COMPANY } from "../src/company-data.js";
+import { ABOUT_LIMITS, ABOUT_PIPELINE, ABOUT_PRINCIPLES, ABOUT_PURPOSE, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
@@ -78,6 +86,63 @@ const publicPages = [
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
 
+// Текст информационной страницы из тех же данных, что показывает приложение. Ничего
+// нового здесь не пишется: это ровно то, что видит человек.
+function infoArticle(route) {
+  const list = (items) => `<dl>${items.map(([term, text]) => `<dt>${escapeHtml(term)}</dt><dd>${escapeHtml(text)}</dd>`).join("")}</dl>`;
+  if (route === "/") {
+    // Главная — самая массовая страница по запросам и была самой пустой: 44 слова.
+    return `<section><h2>Как проходит покупка</h2>${HOME_ORDER_STEPS.map(
+      (step) => `<h3>${escapeHtml(step.number)}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.description)}</p>`,
+    ).join("")}</section><section><h2>Частые вопросы</h2>${HOME_FAQ.map(
+      (item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`,
+    ).join("")}<p><a href="${hrefRoute("/faq/")}">Все вопросы и ответы</a></p></section>`;
+  }
+  if (route === "/faq/") {
+    return FAQ_GROUPS.map(
+      (group) => `<section><h2>${escapeHtml(group.title)}</h2>${group.items.map((item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`).join("")}</section>`,
+    ).join("");
+  }
+  if (route === "/payment-and-contract/") {
+    return `<section><h2>Этапы оплаты</h2>${PAYMENT_STAGES.map(
+      (stage) => `<h3>${escapeHtml(stage.title)}</h3><p>${escapeHtml(stage.description)}</p><p><strong>Платёж:</strong> ${escapeHtml(stage.payment)}. <strong>Когда:</strong> ${escapeHtml(stage.timing)}.</p>`,
+    ).join("")}</section>`;
+  }
+  if (route === "/guarantees/") {
+    return `<section><h2>Кто за что отвечает</h2>${list(RESPONSIBILITY_ITEMS.map((item) => [`${item.title} — ${item.owner}`, item.result]))}</section>`;
+  }
+  if (route === "/delivered/") {
+    // Имена и отзывы клиентов в разметку не выносим: в данных они помечены как
+    // демонстрационные, а тащить непроверенные отзывы в поисковую выдачу нельзя.
+    return `<section><h2>Коротко о доставках</h2>${list(DELIVERY_STATS.map((stat) => [stat.value, stat.label]))}</section><section><h2>Примеры доставленных автомобилей</h2>${DELIVERY_CASES.map(
+      (item) => `<h3>${escapeHtml(item.vehicle)}</h3><p>${escapeHtml(item.summary)}</p><p><strong>Маршрут:</strong> ${escapeHtml(item.route)}. <strong>Срок:</strong> ${escapeHtml(item.duration)} дней. <strong>Пробег:</strong> ${escapeHtml(item.mileage)}. <strong>Итого:</strong> ${escapeHtml(item.total)}. <strong>Доставлен:</strong> ${escapeHtml(item.delivered)}.</p>`,
+    ).join("")}</section>`;
+  }
+  if (route === "/contacts/") {
+    const rows = [
+      ["Компания", COMPANY.legalName],
+      ["Адрес", COMPANY.address],
+      ["Время работы", COMPANY.hours],
+      ["Электронная почта", COMPANY.email],
+      ["Telegram", COMPANY.telegram],
+    ].filter(([, value]) => value);
+    return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства оформлять заказ.</p></section>`;
+  }
+  if (route === "/how-it-works/") {
+    return `<section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p>${PURCHASE_STEPS.map(
+      (step, index) => `<h3>${index + 1}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.text)}</p>`,
+    ).join("")}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[1].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[1].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`;
+  }
+  if (route === "/about/") {
+    return `<p>${escapeHtml(ABOUT_PURPOSE)}</p><section><h2>Как мы работаем</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(ABOUT_PIPELINE.title)}</h2><p>${escapeHtml(ABOUT_PIPELINE.text)}</p><ul>${ABOUT_PIPELINE.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul></section><section><h2>Чего мы не делаем</h2>${list(ABOUT_LIMITS.map((item) => [item.title, item.text]))}</section>`;
+  }
+  const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
+  if (legal) {
+    return `<p>${escapeHtml(legal.intro)}</p>${legal.sections.map(([title, text]) => `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p></section>`).join("")}<p>Редакция от 15 августа 2026 года.</p>`;
+  }
+  return "";
+}
+
 function modelsIndexArticle() {
   const intro = MODELS_INDEX.sections
     .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${section.paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}</section>`)
@@ -94,7 +159,7 @@ function publicPageBody(page) {
   // над пустым списком читается поисковиком как сломанная страница.
   const linkLimit = page.route === "/" ? 20 : page.route === "/catalog/" ? 48 : 0;
   const links = linkLimit && cars.length ? carLinks(cars, linkLimit) : "";
-  const article = page.modelsIndex ? modelsIndexArticle() : "";
+  const article = page.modelsIndex ? modelsIndexArticle() : infoArticle(page.route);
   // Ссылки на разделы каталога — на главной и в каталоге. Раньше с этих двух страниц
   // вели ровно двенадцать ссылок (меню и подвал), и в 31 раздел нельзя было попасть
   // ниоткуда, кроме карты сайта: плитку марок рисует скрипт, в разметке её нет.
@@ -105,6 +170,9 @@ function publicPageBody(page) {
 for (const page of publicPages) {
   const schemas = [renderer.breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
   if (page.route === "/") schemas.unshift(renderer.organizationSchema());
+  // Вопросы со страницы «Вопросы и ответы» — по этой разметке они попадают
+  // в выдачу раскрывающимся списком. На страницах моделей это уже работает.
+  if (page.route === "/faq/") schemas.push(renderer.faqSchema(FAQ_GROUPS.flatMap((group) => group.items.map((item) => ({ q: item.question, a: item.answer })))));
   writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas }));
 }
 

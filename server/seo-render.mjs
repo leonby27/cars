@@ -289,9 +289,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const reviews = modelPages.length
       ? `<section><h2>Обзоры моделей ${escapeHtml(landing.brand || landing.name)}</h2><ul>${modelPages.map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a></li>`).join("")}</ul></section>`
       : "";
-    const near = others.length
-      ? `<section><h2>Другие разделы каталога</h2><ul>${others.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.name)}</a></li>`).join("")}</ul></section>`
-      : "";
+    // Ссылки на все остальные разделы, а не только на однотипные: у типов двигателя
+    // их всего два, и раздел электромобилей — самый ценный на сайте — получал ровно
+    // одну входящую ссылку.
+    const near = others.length ? sectionLinks(others, { skip: landing.path, heading: "Другие разделы каталога" }) : "";
     const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(landing.h1)}</h1><p>${escapeHtml(landing.lead)}</p>${countLine}${list}${notes}${reviews}${near}</main>${footer()}`;
     // Разметка списка: по ней поисковик понимает, что это подборка предложений, а не
     // одна страница товара.

@@ -190,6 +190,27 @@ test("обзоры моделей файлами не собираются, но
   assert.match(pagesXml, /<loc>https:\/\/evcars\.by\/models\/zeekr-007gt<\/loc>/);
 });
 
+test("тексты информационных страниц лежат в самой странице", async () => {
+  // Раньше поисковик видел на этих страницах 32–43 слова — заголовок и одну фразу, —
+  // а всё остальное появлялось только после запуска приложения в браузере.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const words = async (file) => {
+    const html = await read(file);
+    const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
+    return body.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
+  };
+  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 150], ["about/index.html", 150], ["delivered/index.html", 150], ["payment-and-contract/index.html", 120], ["guarantees/index.html", 110], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
+    const count = await words(file);
+    assert.ok(count >= least, `${file}: слов ${count}, ожидалось не меньше ${least}`);
+  }
+  // Вопросы попадают в разметку — по ней они показываются в выдаче списком.
+  assert.match(await read("faq/index.html"), /"@type":"FAQPage"/);
+  // Отзывы и имена клиентов в разметку не тащим: в данных они помечены как
+  // демонстрационные.
+  const delivered = await read("delivered/index.html");
+  assert.doesNotMatch(delivered, /Алексей, Минск/);
+});
+
 test("на главной и в каталоге есть ссылки на разделы каталога", async () => {
   // Раньше с этих двух страниц вели ровно двенадцать ссылок — меню и подвал, — и в
   // разделы нельзя было попасть ниоткуда, кроме карты сайта.

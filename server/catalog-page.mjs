@@ -35,9 +35,9 @@ export async function renderCatalogPage(slug) {
   // Обзоры моделей этой марки — сильные внутренние ссылки: у каждой такой страницы
   // около девятисот слов текста, и ведут они внутрь того же раздела.
   const modelPages = landing.brand ? MODEL_PAGES.filter((page) => page.brand === landing.brand) : [];
-  // Соседние разделы того же вида: с марки на марку, с кузова на кузов. Так поисковик
-  // обходит все тридцать один раздел, начав с любого.
-  const others = CATALOG_LANDINGS.filter((item) => item.path !== landing.path && item.kind === landing.kind).slice(0, 12);
+  // Все остальные разделы, а не только однотипные: типов двигателя всего два, и раздел
+  // электромобилей — самый ценный на сайте — получал ровно одну входящую ссылку.
+  const others = CATALOG_LANDINGS.filter((item) => item.path !== landing.path);
 
   const page = renderer.landingPage({ landing, cars: items, total, modelPages, others });
   return { status: 200, html: page.html };

@@ -19,6 +19,8 @@ import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
+import { LEGAL_COPY } from "./legal-copy.js";
+import { ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
 import { trackEvent } from "./analytics.js";
@@ -4851,7 +4853,7 @@ function CatalogLandingNotes({ landing, models, navigate }) {
   const modelPages = landing.brand ? MODEL_PAGES.filter((page) => page.brand === landing.brand) : [];
   const available = new Set((models || []).filter((model) => model !== ANY_MODEL));
   const reviews = modelPages.filter((page) => !available.size || available.has(page.model));
-  const others = CATALOG_LANDINGS.filter((item) => item.path !== landing.path && item.kind === landing.kind).slice(0, 12);
+  const others = CATALOG_LANDINGS.filter((item) => item.path !== landing.path && item.kind === landing.kind);
   return (
     <section className="catalog-landing-notes" aria-labelledby="catalog-landing-notes-title">
       <h2 id="catalog-landing-notes-title">{landing.name} из Китая: что важно знать</h2>
@@ -6299,33 +6301,10 @@ function OrderDraft({ car, navigate }) {
   );
 }
 
-const purchaseSteps = [
-  {
-    icon: MagnifyingGlass,
-    title: "Вы выбираете автомобиль",
-    text: "Сравниваете объявления, комплектации и предварительную цену до Минска.",
-  },
-  {
-    icon: ChatCircleText,
-    title: "Мы подтверждаем объявление",
-    text: "Подтверждаем наличие, цену, VIN и возможность экспорта.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Проверяем автомобиль",
-    text: "Проводим независимую диагностику кузова, техники и батареи.",
-  },
-  {
-    icon: ListChecks,
-    title: "Фиксируем смету",
-    text: "Согласовываем автомобиль, логистику, платежи и услуги.",
-  },
-  {
-    icon: CarProfile,
-    title: "Выкупаем и доставляем",
-    text: "Сопровождаем оплату, документы и доставку автомобиля в Минск.",
-  },
-];
+// Значки к этапам покупки; сами тексты — в src/service-copy.js, потому что теми же
+// текстами заполняется страница для поисковика.
+const purchaseStepIcons = [MagnifyingGlass, ChatCircleText, ShieldCheck, ListChecks, CarProfile];
+const purchaseSteps = PURCHASE_STEPS.map((step, index) => ({ ...step, icon: purchaseStepIcons[index] }));
 
 function HowItWorksPage({ navigate }) {
   return (
@@ -6429,23 +6408,8 @@ function HowItWorksPage({ navigate }) {
 }
 
 function AboutPage({ navigate }) {
-  const principles = [
-    {
-      icon: ListChecks,
-      title: "Факты отдельно от оценки",
-      text: "Показываем данные объявления, наши расчёты и то, что ещё требует подтверждения, как разные вещи.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Проверка важнее обещаний",
-      text: "Не называем автомобиль проверенным, пока нет подтверждения продавца и независимой диагностики.",
-    },
-    {
-      icon: Lightning,
-      title: "Сложное — простым языком",
-      text: "Переводим характеристики, документы и расходы в понятный формат без китайских обозначений и скрытых строк.",
-    },
-  ];
+  const principleIcons = [ListChecks, ShieldCheck, Lightning];
+  const principles = ABOUT_PRINCIPLES.map((item, index) => ({ ...item, icon: principleIcons[index] }));
   return (
     <main className="info-page">
       <section className="about-hero page-width">
@@ -6801,33 +6765,9 @@ function ContactsPage({ navigate, theme }) {
   );
 }
 
-const legalContent = {
-  privacy: {
-    eyebrow: "Защита данных",
-    title: "Политика конфиденциальности",
-    intro: `${COMPANY.legalName} использует персональные данные только для ответа на обращение, подготовки расчёта и сопровождения сделки.`,
-    sections: [
-      ["Какие данные мы получаем", "Имя, телефон, адрес электронной почты или имя пользователя в мессенджере, а также сведения, которые вы добровольно указываете в обращении."],
-      ["Зачем они нужны", "Чтобы связаться с вами, подобрать автомобиль, подготовить расчёт, оформить договор и сообщать о ходе заказа."],
-      ["Передача и хранение", "Мы не продаём персональные данные. Доступ получают только сотрудники и подрядчики, которым информация необходима для оказания согласованной услуги."],
-      ["Ваши права", `Вы можете уточнить, изменить или удалить свои данные, написав на ${COMPANY.email}.`],
-    ],
-  },
-  terms: {
-    eyebrow: "Правовая информация",
-    title: "Условия использования сайта",
-    intro: "Каталог помогает предварительно оценить варианты автомобилей и расходы. Финальные условия фиксируются только после проверки объявления и подписания договора.",
-    sections: [
-      ["Информация в каталоге", "Характеристики и фотографии поступают из объявлений продавцов. Мы уточняем наличие, состояние, VIN и возможность экспорта перед оформлением."],
-      ["Предварительный расчёт", "Цена до Минска является ориентировочной и может измениться из-за курса валют, логистики, таможенных платежей и фактической комплектации автомобиля."],
-      ["Оформление сделки", `Услуги оказывает ${COMPANY.legalName}. Состав услуг, стоимость, сроки и ответственность сторон определяются индивидуальным договором.`],
-      ["Обратная связь", `Вопросы по работе сайта и условиям услуг можно направить на ${COMPANY.email}.`],
-    ],
-  },
-};
 
 function LegalPage({ navigate, kind }) {
-  const content = legalContent[kind];
+  const content = LEGAL_COPY[kind];
   return (
     <main className="legal-page page-width">
       <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>

@@ -65,7 +65,8 @@ test("ссылка на марку с главной ведёт на её стр
 test("страница раздела отдаётся с текстом, машинами и разметкой списка", () => {
   const landing = findCatalogLanding("/catalog/byd");
   const modelPages = [{ path: "/models/byd-han", name: "BYD Han" }];
-  const others = [{ path: "/catalog/tesla", name: "Tesla" }];
+  // Блок «другие разделы» группирует их по виду, поэтому нужен настоящий раздел.
+  const others = [findCatalogLanding("/catalog/tesla"), findCatalogLanding("/catalog/electric")];
   const { html } = render().landingPage({ landing, cars, total: 5673, modelPages, others });
   assert.match(html, /<title>BYD из Китая — каталог с ценами до Минска \| evcars\.by<\/title>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/catalog\/byd"/);
