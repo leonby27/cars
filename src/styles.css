@@ -1158,6 +1158,62 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 /* Текст страницы марки, типа двигателя или кузова. Блок отделён от страницы подложкой,
    без рамки — как блок вопросов на главной. Строка чтения ограничена: во всю ширину
    каталога текст читался бы тяжело. */
+/* Таблицы на страницах-инструментах: история сводок квоты и разбор расчёта.
+   Отдельной подложки им не нужно — они стоят внутри текстового блока страницы. */
+.quota-history {
+  width: 100%;
+  margin: 6px 0 0;
+  border-collapse: collapse;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.quota-history th,
+.quota-history td {
+  padding: 9px 12px 9px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.quota-history td { text-align: right; }
+.quota-history tr:last-child th,
+.quota-history tr:last-child td { border-bottom: none; }
+.quota-history thead th {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+/* Форма калькулятора: поля в две колонки, на телефоне в одну. */
+.cost-calculator-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 8px 0 20px;
+}
+.cost-calculator-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 16px;
+  color: var(--muted);
+}
+.cost-calculator-form input[type="number"],
+.cost-calculator-form select {
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+.cost-calculator-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+.cost-calculator-check input { width: 18px; height: 18px; }
+
 .catalog-landing-notes {
   display: flex;
   flex-direction: column;

@@ -6,6 +6,8 @@ import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
+import { TOOL_PAGES } from "../src/tool-pages.js";
+import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
@@ -17,7 +19,7 @@ import { ABOUT_LIMITS, ABOUT_PIPELINE, ABOUT_PRINCIPLES, ABOUT_PURPOSE, BEFORE_P
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
-import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, listingNumber, stripSeoHead } from "../server/seo-render.mjs";
+import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, listingNumber, number, plural, stripSeoHead } from "../server/seo-render.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
@@ -82,12 +84,37 @@ const publicPages = [
   // сервер, потому что в них нужны живые цены и наличие. Готовый файл по такому адресу
   // перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
   { route: `${MODELS_INDEX.path}/`, title: MODELS_INDEX.seoTitle, description: MODELS_INDEX.seoDescription, h1: MODELS_INDEX.h1, lead: MODELS_INDEX.lead, modelsIndex: true },
+  // Страницы-инструменты: квота, растаможка, стоимость доставки, калькулятор. Файлами,
+  // а не сервером: их содержимое не зависит от каталога, а остаток квоты обновляется
+  // ежедневной задачей, которая и так пересобирает сайт.
+  ...TOOL_PAGES.map((tool) => ({ route: `${tool.path}/`, title: tool.seoTitle, description: tool.seoDescription, h1: tool.h1, lead: tool.lead, tool })),
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
 
 // Текст информационной страницы из тех же данных, что показывает приложение. Ничего
 // нового здесь не пишется: это ровно то, что видит человек.
+// Текст страницы-инструмента. Цифры берутся из тех же данных, что и расчёт в карточке,
+// поэтому страница не расходится с каталогом.
+function toolArticle(tool) {
+  const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+  const sections = tool.sections
+    .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}</section>`)
+    .join("");
+  let live = "";
+  if (tool.kind === "quota") {
+    const state = evQuotaState();
+    const rows = [...EV_QUOTA.reports].reverse().slice(0, 12);
+    // Живая часть страницы: остаток, темп и история сводок. Это то, за чем сюда придут.
+    live = `<section><h2>Сколько осталось сейчас</h2><p><strong>Гражданам доступно ещё ${number(state.remaining)} ${plural(state.remaining, "электромобиль", "электромобиля", "электромобилей")}</strong> из ${number(state.total)} по квоте ${EV_QUOTA.year} года — по сводке на ${escapeHtml(state.asOfLabel)}.</p>${
+      state.perWeek ? `<p>Темп расхода — около ${number(state.perWeek)} машин в неделю.${state.runsOutLabel && !state.overdue ? ` При таком темпе квота заканчивается около ${escapeHtml(state.runsOutLabel)}.` : ""}</p>` : ""
+    }<p>Квота для торгового оборота (юридические лица) объёмом ${number(EV_QUOTA.businessTotal)} машин выбрана полностью${state.exhaustedOnLabel ? "" : ""}.</p></section><section><h2>История сводок таможни</h2><table><thead><tr><th scope="col">Дата сводки</th><th scope="col">Осталось у граждан</th><th scope="col">Осталось у юрлиц</th></tr></thead><tbody>${rows
+      .map(([date, personal, business]) => `<tr><th scope="row">${escapeHtml(date)}</th><td>${personal === null ? "не названо" : number(personal)}</td><td>${business === null ? "не названо" : number(business)}</td></tr>`)
+      .join("")}</tbody></table><p>Источник — недельные сводки Государственного таможенного комитета. Квота ${EV_QUOTA.year} года действует с ${escapeHtml(EV_QUOTA.startedOn)}.</p></section>`;
+  }
+  return `${paragraphs(tool.intro)}${live}${sections}<p>${escapeHtml(tool.disclaimer)}</p>`;
+}
+
 function infoArticle(route) {
   const list = (items) => `<dl>${items.map(([term, text]) => `<dt>${escapeHtml(term)}</dt><dd>${escapeHtml(text)}</dd>`).join("")}</dl>`;
   if (route === "/") {
@@ -159,7 +186,7 @@ function publicPageBody(page) {
   // над пустым списком читается поисковиком как сломанная страница.
   const linkLimit = page.route === "/" ? 20 : page.route === "/catalog/" ? 48 : 0;
   const links = linkLimit && cars.length ? carLinks(cars, linkLimit) : "";
-  const article = page.modelsIndex ? modelsIndexArticle() : infoArticle(page.route);
+  const article = page.tool ? toolArticle(page.tool) : page.modelsIndex ? modelsIndexArticle() : infoArticle(page.route);
   // Ссылки на разделы каталога — на главной и в каталоге. Раньше с этих двух страниц
   // вели ровно двенадцать ссылок (меню и подвал), и в 31 раздел нельзя было попасть
   // ниоткуда, кроме карты сайта: плитку марок рисует скрипт, в разметке её нет.

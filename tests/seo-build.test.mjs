@@ -190,6 +190,34 @@ test("обзоры моделей файлами не собираются, но
   assert.match(pagesXml, /<loc>https:\/\/evcars\.by\/models\/zeekr-007gt<\/loc>/);
 });
 
+test("страницы-инструменты собираются с живыми цифрами", async () => {
+  // Квота, растаможка, стоимость доставки и калькулятор — отдельные запросы, и у
+  // конкурентов такие страницы есть. Цифры на них берутся из тех же данных, что расчёт
+  // в карточке, поэтому страница не может разойтись с каталогом.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const quota = await read("ev-quota/index.html");
+  assert.match(quota, /<h1>Квота на беспошлинный ввоз электромобилей в Беларусь<\/h1>/);
+  assert.match(quota, /Гражданам доступно ещё [\d\s  ]+ электромобил/);
+  assert.match(quota, /История сводок таможни/);
+  for (const [file, heading] of [
+    ["customs/index.html", "Растаможка авто из Китая"],
+    ["delivery-cost/index.html", "Сколько стоит привезти авто из Китая"],
+    ["calculator/index.html", "Калькулятор стоимости авто из Китая"],
+  ]) {
+    const html = await read(file);
+    assert.match(html, new RegExp(heading));
+    assert.match(html, /<meta name="robots" content="index, follow/);
+    const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
+    const words = body.replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
+    assert.ok(words >= 150, `${file}: слов ${words}, ожидалось не меньше 150`);
+  }
+  // Все четыре попадают в карту сайта.
+  const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
+  for (const path of ["/ev-quota", "/customs", "/delivery-cost", "/calculator"]) {
+    assert.match(pagesXml, new RegExp(`<loc>https://evcars\\.by${path}</loc>`));
+  }
+});
+
 test("на главной есть разметка сайта и поиска по нему", async () => {
   // По этой разметке Google иногда показывает строку поиска прямо в выдаче.
   // Адрес поиска обязан работать: каталог разбирает `?q=` тем же разбором,

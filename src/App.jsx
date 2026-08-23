@@ -7,7 +7,7 @@ import { cityName } from "./city-names.js";
 import { CATALOG_LANDINGS, brandLandingPath, findCatalogLanding, landingFilterParams } from "./catalog-landings.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
-import { evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
+import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
@@ -21,6 +21,7 @@ import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_COPY } from "./legal-copy.js";
 import { ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
+import { TOOL_PAGES, findToolPage } from "./tool-pages.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
 import { trackEvent } from "./analytics.js";
@@ -695,6 +696,7 @@ const routeSeo = {
 // чтобы SEO-механика работала для них без отдельной ветки.
 routeSeo[MODELS_INDEX.path] = [MODELS_INDEX.seoTitle, MODELS_INDEX.seoDescription];
 for (const modelPage of MODEL_PAGES) routeSeo[modelPage.path] = [modelPage.seoTitle, modelPage.seoDescription];
+for (const tool of TOOL_PAGES) routeSeo[tool.path] = [tool.seoTitle, tool.seoDescription];
 
 const privateRouteSeo = {
   "/favorites": ["Избранные автомобили | evcars.by", "Сохранённые автомобили в вашем личном кабинете evcars.by."],
@@ -6792,6 +6794,160 @@ function ContactsPage({ navigate, theme }) {
 }
 
 
+/* Страницы-инструменты: квота, растаможка, стоимость доставки, калькулятор. Верстка та
+   же, что у юридических страниц — это текстовые страницы, своего дизайна им не нужно.
+   Тексты и разделы лежат в src/tool-pages.js, оттуда же их берёт страница для
+   поисковика: два места писали бы по-разному. */
+function ToolPage({ tool, navigate }) {
+  return (
+    <main className="legal-page page-width">
+      <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
+      <span className="info-eyebrow">{tool.name}</span>
+      <h1>{tool.h1}</h1>
+      <p className="legal-intro">{tool.lead}</p>
+      <div className="legal-sections">
+        {tool.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
+        {tool.kind === "quota" && <QuotaFigures />}
+        {tool.kind === "calculator" && <LandedCostCalculator />}
+        {tool.sections.map((section) => (
+          <section key={section.title}>
+            <h2>{section.title}</h2>
+            {section.paragraphs.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
+          </section>
+        ))}
+      </div>
+      <p className="legal-updated">{tool.disclaimer}</p>
+    </main>
+  );
+}
+
+/* Живые цифры квоты: остаток, темп и история сводок таможни. Данные обновляет
+   ежедневная задача в src/ev-quota.js — здесь только показ. */
+function QuotaFigures() {
+  const state = evQuotaState();
+  const rows = [...EV_QUOTA.reports].reverse().slice(0, 12);
+  return (
+    <>
+      <section>
+        <h2>Сколько осталось сейчас</h2>
+        <p>
+          <b>Гражданам доступно ещё {number(state.remaining)} {pluralRu(state.remaining, "электромобиль", "электромобиля", "электромобилей")}</b> из {number(state.total)} по квоте {EV_QUOTA.year} года — по сводке на {state.asOfLabel}.
+        </p>
+        {state.perWeek ? (
+          <p>
+            Темп расхода — около {number(state.perWeek)} машин в неделю.
+            {state.runsOutLabel && !state.overdue ? ` При таком темпе квота заканчивается около ${state.runsOutLabel}.` : ""}
+          </p>
+        ) : null}
+        <p>Квота для торгового оборота объёмом {number(EV_QUOTA.businessTotal)} машин выбрана полностью.</p>
+      </section>
+      <section>
+        <h2>История сводок таможни</h2>
+        <table className="quota-history">
+          <thead>
+            <tr><th scope="col">Дата сводки</th><th scope="col">Осталось у граждан</th><th scope="col">Осталось у юрлиц</th></tr>
+          </thead>
+          <tbody>
+            {rows.map(([date, personal, business]) => (
+              <tr key={date}>
+                <th scope="row">{date}</th>
+                <td>{personal === null ? "не названо" : number(personal)}</td>
+                <td>{business === null ? "не названо" : number(business)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p>Источник — недельные сводки Государственного таможенного комитета.</p>
+      </section>
+    </>
+  );
+}
+
+/* Калькулятор: собирает из ответов «машину» и считает её тем же расчётом, что и
+   карточка каталога. Отдельной механики расчёта здесь нет — иначе калькулятор и
+   каталог разошлись бы в цифрах. */
+function LandedCostCalculator() {
+  const [priceUsd, setPriceUsd] = useState("20000");
+  const [type, setType] = useState("Электромобиль");
+  const [year, setYear] = useState("2023");
+  const [engine, setEngine] = useState("1.5");
+  const [city, setCity] = useState("guangzhou");
+  const [bigCar, setBigCar] = useState(false);
+  const price = Number(priceUsd) || 0;
+  const estimate = price > 0
+    ? estimateLandedCost({ source: "Che168", usdPrice: price, chinaPrice: 0, type, year: Number(year) || 2023, engine: type === "Электромобиль" ? "" : engine, city, curbWeight: bigCar ? 2300 : 1500 })
+    : null;
+  const rows = estimate
+    ? [
+        ["Автомобиль у продавца", estimate.chinaUsd, null],
+        ["Выкуп и перевод денег", null, [estimate.buyoutLow, estimate.buyoutHigh]],
+        ["Документы и плечо в Китае", null, [estimate.chinaLegLow, estimate.chinaLegHigh]],
+        ["Автовоз до Минска", null, [estimate.intlLow, estimate.intlHigh]],
+        ["Таможня и оформление", null, [estimate.customsLow, estimate.customsHigh]],
+        ["Склад в Минске", null, [estimate.svhLow, estimate.svhHigh]],
+        ["Наши услуги", estimate.serviceUsd, null],
+      ]
+    : [];
+  return (
+    <section className="cost-calculator">
+      <h2>Посчитать</h2>
+      <div className="cost-calculator-form">
+        <label>Цена у продавца, $<input type="number" inputMode="numeric" min="1000" step="500" value={priceUsd} onChange={(event) => setPriceUsd(event.target.value)} /></label>
+        <label>Тип двигателя
+          <select value={type} onChange={(event) => setType(event.target.value)}>
+            <option value="Электромобиль">Электромобиль</option>
+            <option value="Гибрид">Гибрид</option>
+          </select>
+        </label>
+        <label>Год выпуска
+          <select value={year} onChange={(event) => setYear(event.target.value)}>
+            {["2026", "2025", "2024", "2023", "2022", "2021", "2020"].map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        {type !== "Электромобиль" && (
+          <label>Объём двигателя, л
+            <select value={engine} onChange={(event) => setEngine(event.target.value)}>
+              {["1.0", "1.5", "2.0", "2.5", "3.0"].map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+        )}
+        <label>Город продавца
+          <select value={city} onChange={(event) => setCity(event.target.value)}>
+            {[["guangzhou", "Гуанчжоу"], ["shanghai", "Шанхай"], ["beijing", "Пекин"], ["chengdu", "Чэнду"], ["urumqi", "Урумчи"], ["haerbin", "Харбин"]].map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="cost-calculator-check">
+          <input type="checkbox" checked={bigCar} onChange={(event) => setBigCar(event.target.checked)} />
+          Крупный кузов: длиннее 4,95 м или тяжелее 2,3 т
+        </label>
+      </div>
+      {estimate ? (
+        <>
+          <table className="quota-history">
+            <tbody>
+              {rows.map(([label, single, range]) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+                  <td>{single !== null ? `${number(single)} $` : `${number(range[0])}–${number(range[1])} $`}</td>
+                </tr>
+              ))}
+              <tr>
+                <th scope="row"><b>Итого до Минска</b></th>
+                <td><b>{number(estimate.totalLow)}–{number(estimate.totalHigh)} $</b></td>
+              </tr>
+            </tbody>
+          </table>
+          <p>{estimate.customsNote}. Ориентир — около {number(estimate.totalUsd)} $.</p>
+        </>
+      ) : (
+        <p>Укажите цену у продавца, чтобы увидеть расчёт.</p>
+      )}
+    </section>
+  );
+}
+
 function LegalPage({ navigate, kind }) {
   const content = LEGAL_COPY[kind];
   return (
@@ -6821,6 +6977,7 @@ function SiteFooter({ navigate }) {
           </div>
         </div>
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
+        <div className="footer-column footer-navigation"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
         <div className="footer-column footer-contacts">
           <b>Связаться</b>
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
@@ -8409,6 +8566,8 @@ export function App() {
       <LegalPage navigate={navigate} kind="terms" />
     ) : contentPath === MODELS_INDEX.path ? (
       <ModelsIndexPage navigate={navigate} />
+    ) : findToolPage(contentPath) ? (
+      <ToolPage tool={findToolPage(contentPath)} navigate={navigate} />
     ) : findModelPage(contentPath) ? (
       // Страница модели запрашивает свой срез каталога сама и не ждёт boot-запроса.
       <ModelPage modelPage={findModelPage(contentPath)} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
