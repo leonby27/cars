@@ -1930,6 +1930,18 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   opacity: 1;
   transform: translateY(0) scale(1);
 }
+/* Пока раскрыто меню шапки, плавающие кнопки внизу экрана прячем: на телефоне
+   они ложатся поверх пунктов меню. */
+body.header-menu-open .mobile-scroll-top {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(12px) scale(0.94);
+}
+body.header-menu-open .detail-floating-availability {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(14px);
+}
 .detail-title p {
   margin: 0;
   color: var(--muted);
@@ -10161,6 +10173,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .header-menu-currency {
     width: 100%;
     height: 40px;
+    margin-bottom: 4px;
     grid-template-columns: 1fr 1fr;
     padding: 4px;
     border: 0;
@@ -12218,7 +12231,6 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 /* В меню телефона карточка стоит раскрытой, без своей подложки: меню уже панель.
    Ни линии, ни заголовка сверху нет — блоки самой карточки видно и так. */
 .header-menu-quota {
-  margin-bottom: 8px;
   padding-top: 4px;
 }
 .header-menu-quota .quota-panel-figure > b {

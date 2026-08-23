@@ -964,6 +964,14 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
     setMenuOpen(false);
   }, [path]);
 
+  // Пока меню раскрыто, плавающие кнопки внизу экрана убираем — иначе на
+  // телефоне они накрывают его нижние пункты.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    document.body.classList.add("header-menu-open");
+    return () => document.body.classList.remove("header-menu-open");
+  }, [menuOpen]);
+
   useEffect(() => {
     if (!menuOpen) return undefined;
     const closeMenu = (event) => {
@@ -1017,11 +1025,13 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
               </nav>
               <div className="header-menu-settings">
                 {/* На телефоне четвёртая кнопка в шапку не влезает, поэтому остаток
-                    квоты живёт здесь же, где валюта и «Мои поиски». */}
+                    квоты живёт здесь же, где валюта и «Мои поиски». Валюта стоит
+                    первой: карточка квоты длинная, и переключатель под ней
+                    оказывался за пределами экрана. */}
+                <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
                 <div className="header-menu-quota">
                   <EvQuotaPanel quotas={quotas} />
                 </div>
-                <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
               </div>
           </div>
         </div>

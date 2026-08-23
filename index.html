@@ -28,6 +28,20 @@
         document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#111315" : "#ffffff";
       })();
     </script>
+    <!-- Текст для поисковиков сервер кладёт прямо в страницу, и браузер успевает
+         нарисовать его раньше, чем загрузится приложение: получается вспышка простой
+         вёрстки без стилей сайта. Прячем этот текст, пока приложение не встало —
+         фон страницы уже правильный, и сайт появляется сразу собранным.
+         Прячет только браузер с JavaScript: у поисковиков и без скриптов текст
+         остаётся на месте. Если приложение почему-то не запустилось, через пять
+         секунд текст показывается снова — лучше простая страница, чем пустая. -->
+    <style>
+      html.booting #root { display: none; }
+    </style>
+    <script>
+      document.documentElement.classList.add("booting");
+      setTimeout(() => document.documentElement.classList.remove("booting"), 5000);
+    </script>
     <script>
       // Start the catalog requests before the application bundle is downloaded and parsed.
       // Waiting for React to mount first put the whole bundle on the critical path of the
