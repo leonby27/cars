@@ -130,6 +130,18 @@ test("заготовка страницы машины отдаётся без �
   assert.match(shell, /<div id="root">/);
 });
 
+test("сборка кладёт пустую заготовку приложения для серверных страниц", async () => {
+  // Страницу машины собирает сервер и вставляет содержимое в это место. Если заготовка
+  // окажется непустой (например, сборка возьмёт за неё готовую главную), вставка молча
+  // не сработает и все карточки покажут чужой текст.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const appShell = await read("app-shell.html");
+  assert.match(appShell, /<div id="root"><\/div>/);
+  assert.match(appShell, /<meta name="robots" content="noindex, nofollow, noarchive"/);
+  // Файл нигде не связан ссылками, но на всякий случай закрыт и в robots.txt.
+  assert.match(await read("robots.txt"), /^Disallow: \/app-shell\.html$/m);
+});
+
 test("на тестовой сборке заготовка машины закрыта от индексации", async () => {
   const { read } = await build();
   assert.match(await read("car.html"), /<meta name="robots" content="noindex, nofollow, noarchive"/);

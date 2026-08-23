@@ -55,6 +55,10 @@ const acceptsGzip = (response) => /\bgzip\b/.test(String(response.req?.headers?.
 // Помечаем так только чтение каталога: у него нет ничего личного и он не зависит от
 // сессии, поэтому общий на всех кэш безопасен.
 const catalogCache = { "cache-control":"public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
+// Страницу машины собирает робот десятками тысяч раз. Без общего кэша каждый его заход —
+// это запрос к базе; с ним сеть Vercel десять минут отдаёт готовый ответ, а сутки после
+// этого показывает прежний, пока в фоне готовится новый.
+const seoPageCache = { "cache-control":"public, max-age=0, s-maxage=600, stale-while-revalidate=86400" };
 
 // Каталог нужен только собственным страницам, поэтому разрешения на сторонние
 // запросы больше нет: с `access-control-allow-origin: *` любой чужой сайт мог
@@ -77,6 +81,19 @@ const json = async (response, status, payload, headers = {}) => {
   response.writeHead(status, { ...responseHeaders, "content-length":String(body.length) });
   return response.end(body);
 };
+// Страницы для поисковика отдаются HTML, а не JSON: то же сжатие, но свой тип и свой кэш.
+const html = async (response, status, markup, headers = {}) => {
+  const responseHeaders = { "content-type":"text/html; charset=utf-8", "cache-control":"no-store", ...headers };
+  let body = Buffer.from(markup, "utf8");
+  if (body.length >= compressFromBytes && acceptsGzip(response)) {
+    body = await gzipAsync(body);
+    responseHeaders["content-encoding"] = "gzip";
+    responseHeaders.vary = responseHeaders.vary ? `${responseHeaders.vary}, accept-encoding` : "accept-encoding";
+  }
+  response.writeHead(status, { ...responseHeaders, "content-length":String(body.length) });
+  return response.end(body);
+};
+
 const readJson = async (request) => {
   if (request.body !== undefined) {
     if (request.body === null || request.body === "") return {};
@@ -281,6 +298,25 @@ export async function handleApiRequest(request, response) {
       if (!listingId || listingId.length > 200) return json(response, 400, { error:"invalid_listing_id" });
       const result = await setAccountFavorite(request, listingId, request.method === "PUT");
       return result.error ? json(response, 401, result) : json(response, 200, result);
+    }
+    // Готовая страница машины. Адрес `/cars/<номер>` переводит сюда правило в `vercel.json`:
+    // поисковик и человек получают страницу с настоящим заголовком, ценой и разметкой, а не
+    // общую заготовку, которую заполняет скрипт уже в браузере.
+    if (request.method === "GET" && url.pathname === "/api/pages/car") {
+      const { renderCarPage, carShell } = await import("./car-page.mjs");
+      try {
+        const page = await renderCarPage(url.searchParams.get("id"));
+        return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+      } catch (error) {
+        console.error(error);
+        // База или заготовка недоступны: отдаём обычную заготовку страницы, чтобы
+        // приложение всё же загрузилось и показало свою ошибку, но с честным кодом —
+        // по нему поисковик придёт позже, а не запомнит пустую карточку.
+        const fallback = await carShell().catch(() => null);
+        const status = isDatabaseUnavailable(error) ? 503 : 500;
+        if (!fallback) return json(response, status, { error:isDatabaseUnavailable(error) ? "service_unavailable" : "internal_error" });
+        return html(response, status, fallback, { "cache-control":"no-store" });
+      }
     }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams), catalogCache);
     if (request.method === "GET" && url.pathname === "/api/model-facts") return json(response, 200, await getModelFacts(), catalogCache);

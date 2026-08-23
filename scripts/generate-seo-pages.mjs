@@ -1,21 +1,28 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { yuanToUsdAbout } from "../src/pricing.js";
+// Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
+// машины в момент запроса. Пока разметка жила только здесь, серверная страница
+// расходилась бы со статической при каждой правке.
+import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, listingNumber, stripSeoHead } from "../server/seo-render.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
 // временной папке, чтобы не зависеть ни от дампа каталога, ни от общей сборки.
 const clientDir = process.env.SEO_OUTPUT_DIR ? path.resolve(process.env.SEO_OUTPUT_DIR) : path.join(root, "dist", "client");
-const shellPath = path.join(clientDir, "index.html");
+// Заготовку читаем из `app-shell.html`, если он уже есть, и только иначе из
+// `index.html`. Причина: генератор перезаписывает `index.html` готовой главной
+// страницей, поэтому повторный запуск на той же сборке брал бы за заготовку страницу
+// с текстом главной — и этот текст попал бы во все остальные страницы.
+const appShellPath = path.join(clientDir, "app-shell.html");
+const shellPath = existsSync(appShellPath) ? appShellPath : path.join(clientDir, "index.html");
 const catalogPath = process.env.SEO_CATALOG ? path.resolve(process.env.SEO_CATALOG) : path.join(root, "public", "data", "cars.json");
 const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
-const siteBasePath = new URL(siteUrl).pathname.replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
 // Карта сайта лежит под неочевидным именем и не упомянута в robots.txt. Причина не в
 // поисковиках — им адрес задают вручную в Search Console и Вебмастере, — а в том, что
@@ -26,20 +33,29 @@ const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXI
 const sitemapToken = String(process.env.SEO_SITEMAP_TOKEN || "7c4f19b2").replace(/[^a-z0-9-]/gi, "") || "7c4f19b2";
 const sitemapIndexName = `sitemap-${sitemapToken}.xml`;
 const pagesSitemapName = `sitemap-${sitemapToken}-pages.xml`;
-const carsSitemapName = `sitemap-${sitemapToken}-cars.xml`;
-const sitemapNames = [sitemapIndexName, pagesSitemapName, carsSitemapName];
+// Первый файл машин сохраняет привычное имя, следующие получают номер: в одну карту
+// по стандарту влезает 50 000 адресов, и при росте каталога её придётся делить.
+const carsSitemapName = (index) => (index === 0 ? `sitemap-${sitemapToken}-cars.xml` : `sitemap-${sitemapToken}-cars-${index + 1}.xml`);
+const carsPerSitemap = 45_000;
 const shell = readFileSync(shellPath, "utf8");
+const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
+const { carLinks, footer, hrefRoute, navigation, renderHtml, routeUrl } = renderer;
 // Страницы автомобилей и статический каталог собираются только по явному
-// `SEO_VEHICLE_PAGES=1`. По умолчанию их нет: на хостинге карточки отдаёт API
-// поверх базы, дампа каталога там вообще не бывает, а индексация выключена —
-// то есть 30 тысяч noindex-страниц и столько же JSON-файлов давали лишь гигабайт
-// в `dist/` и получасовую сборку. Когда страницы машин понадобятся поисковикам,
-// флаг включается вместе с `SEO_ALLOW_INDEXING=1`, и тогда же нужно решить,
-// откуда сборка берёт каталог — дамп или база.
+// `SEO_VEHICLE_PAGES=1`. По умолчанию их нет: на хостинге карточки собирает сервер
+// в момент запроса поверх базы, дампа каталога там вообще не бывает, — то есть
+// 30 тысяч файлов давали лишь гигабайт в `dist/` и получасовую сборку.
 const vehiclePages = /^(1|true|yes)$/i.test(String(process.env.SEO_VEHICLE_PAGES || "false"));
-const hasCatalog = vehiclePages && existsSync(catalogPath);
+// Адреса машин в карте сайта нужны, как только открыта индексация: иначе поисковику
+// неоткуда узнать про тридцать тысяч карточек — ссылок на них в разметке почти нет.
+const carsSitemap = /^(1|true|yes)$/i.test(String(process.env.SEO_CARS_SITEMAP || "")) || allowIndexing;
+// Список машин для карты берётся из дампа каталога, а на хостинге дампа нет — там его
+// даёт база, но только по явному `SEO_CARS_FROM_DB=1`. Без этого условия сборка ходила бы
+// в базу и с рабочей машины: `server/db.mjs` сам подхватывает `.env.local` с боевым
+// адресом, то есть обычный локальный прогон и тесты читали бы прод.
+const carsFromDatabase = /^(1|true|yes)$/i.test(String(process.env.SEO_CARS_FROM_DB || "false"));
+const hasCatalog = existsSync(catalogPath);
 if (vehiclePages && !hasCatalog) console.warn(`Каталог ${path.relative(root, catalogPath)} не найден: страницы автомобилей и статический каталог собраны не будут.`);
-const catalog = hasCatalog ? JSON.parse(readFileSync(catalogPath, "utf8")) : {};
+const catalog = vehiclePages && hasCatalog ? JSON.parse(readFileSync(catalogPath, "utf8")) : {};
 const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id).map((car) => ({ ...car, drive:normalizeDrive(car.drive) }));
 
 const publicPages = [
@@ -63,93 +79,6 @@ const publicPages = [
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
-const escapeHtml = (value) => String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
-const escapeXml = (value) => escapeHtml(value).replace(/'/g, "&apos;");
-const jsonLd = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
-// Адреса отдаём без косой черты на конце: хостинг настроен на `trailingSlash: false`
-// и сам перебрасывает `/catalog/` на `/catalog`. Пока адреса-первоисточники, карта сайта
-// и внутренние ссылки писались с чертой, сайт указывал поисковику на адрес, которого нет:
-// каждая ссылка была лишним перебросом, а первоисточник — обещанием, что настоящая
-// страница лежит там, откуда его перебрасывают. Внутри маршруты по-прежнему можно писать
-// с чертой — папки для файлов от этого не зависят, `writeRoute` их всё равно обрезает.
-const trimRoute = (route) => {
-  const trimmed = String(route).replace(/\/+$/, "");
-  return trimmed || "/";
-};
-const routeUrl = (route) => `${siteUrl}${trimRoute(route)}`;
-const hrefRoute = (route) => `${siteBasePath}${trimRoute(route)}` || "/";
-// Адрес карточки — короткий номер объявления, без приставки источника; сервер
-// понимает и полный идентификатор, поэтому старые ссылки не ломаются.
-const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
-const carRoute = (car) => `/cars/${encodeURIComponent(listingNumber(car.id))}/`;
-const carTitle = (car) => car.title || [car.brand, car.model, car.year].filter(Boolean).join(" ");
-const number = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
-const isoDate = (value) => {
-  const date = new Date(value || "");
-  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
-};
-
-function stripSeoHead(html) {
-  return html
-    .replace(/\s*<title>[\s\S]*?<\/title>/gi, "")
-    .replace(/\s*<meta\s+(?:name|property)=["'](?:description|robots|googlebot|og:[^"']+|twitter:[^"']+)["'][^>]*>/gi, "")
-    .replace(/\s*<link\s+rel=["']canonical["'][^>]*>/gi, "")
-    .replace(/\s*<script\s+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi, "");
-}
-
-function metadata({ title, description, canonical, image, type = "website", indexable, schemas = [] }) {
-  const robots = indexable ? "index, follow, max-image-preview:large" : "noindex, nofollow, noarchive";
-  const imageTags = image ? `
-    <meta property="og:image" content="${escapeHtml(image)}" />
-    <meta name="twitter:image" content="${escapeHtml(image)}" />` : "";
-  // Заготовка страницы машины собирается без адреса-первоисточника: на этапе сборки
-  // неизвестно, какую машину откроют, а подставить сюда главную или /404/ — значит
-  // сказать поисковику, что настоящей страницы нет. Адрес дописывает приложение,
-  // когда узнает машину.
-  const canonicalTags = canonical ? `
-    <link rel="canonical" href="${escapeHtml(canonical)}" />
-    <link rel="alternate" hreflang="ru-BY" href="${escapeHtml(canonical)}" />` : "";
-  const urlTag = canonical ? `
-    <meta property="og:url" content="${escapeHtml(canonical)}" />` : "";
-  return `
-    <title>${escapeHtml(title)}</title>
-    <meta name="description" content="${escapeHtml(description)}" />
-    <meta name="robots" content="${robots}" />${canonicalTags}
-    <meta property="og:locale" content="ru_BY" />
-    <meta property="og:type" content="${type}" />
-    <meta property="og:site_name" content="evcars.by" />
-    <meta property="og:title" content="${escapeHtml(title)}" />
-    <meta property="og:description" content="${escapeHtml(description)}" />${urlTag}${imageTags}
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${escapeHtml(title)}" />
-    <meta name="twitter:description" content="${escapeHtml(description)}" />
-    ${schemas.map((schema) => `<script type="application/ld+json">${jsonLd(schema)}</script>`).join("\n    ")}`;
-}
-
-function navigation() {
-  return `<header class="site-header"><nav class="page-width" aria-label="Основная навигация">
-    <a href="${hrefRoute("/")}">evcars.by</a>
-    <a href="${hrefRoute("/catalog/")}">Автомобили</a>
-    <a href="${hrefRoute("/how-it-works/")}">О сервисе</a>
-    <a href="${hrefRoute(`${MODELS_INDEX.path}/`)}">О моделях авто</a>
-    <a href="${hrefRoute("/contacts/")}">Контакты</a>
-  </nav></header>`;
-}
-
-function footer() {
-  return `<footer class="site-footer"><nav class="page-width" aria-label="Информация для покупателя">
-    <a href="${hrefRoute("/delivered/")}">Доставленные автомобили</a>
-    <a href="${hrefRoute("/payment-and-contract/")}">Оплата и договор</a>
-    <a href="${hrefRoute("/guarantees/")}">Гарантии</a>
-    <a href="${hrefRoute("/faq/")}">Вопросы и ответы</a>
-    <a href="${hrefRoute("/privacy/")}">Политика конфиденциальности</a>
-    <a href="${hrefRoute("/terms/")}">Условия использования</a>
-  </nav></footer>`;
-}
-
-function carLinks(items, limit = items.length) {
-  return `<ul>${items.slice(0, limit).map((car) => `<li><a href="${hrefRoute(carRoute(car))}">${escapeHtml(carTitle(car))}</a> — ${number(car.mileage)} км</li>`).join("")}</ul>`;
-}
 
 function modelPageArticle(modelPage) {
   const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
@@ -201,48 +130,19 @@ function modelsIndexArticle() {
 }
 
 function publicPageBody(page) {
-  const links = page.route === "/" ? carLinks(cars, 20) : page.route === "/catalog/" ? carLinks(cars, 48) : "";
+  // Блок с предложениями появляется только когда есть что в него положить: заголовок
+  // над пустым списком читается поисковиком как сломанная страница.
+  const linkLimit = page.route === "/" ? 20 : page.route === "/catalog/" ? 48 : 0;
+  const links = linkLimit && cars.length ? carLinks(cars, linkLimit) : "";
   const article = page.modelPage ? modelPageArticle(page.modelPage) : page.modelsIndex ? modelsIndexArticle() : "";
-  return `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}</main>${footer()}`;
+  return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}</main>${footer()}`;
 }
 
-function breadcrumbsSchema(items) {
-  return {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: items.map(([name, route], index) => ({ "@type": "ListItem", position: index + 1, name, item: routeUrl(route) })),
-  };
-}
-
-function faqSchema(modelPage) {
-  return {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: modelPage.faq.map((item) => ({
-      "@type": "Question",
-      name: item.q,
-      acceptedAnswer: { "@type": "Answer", text: item.a },
-    })),
-  };
-}
-
-function organizationSchema() {
-  return {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    name: "evcars.by",
-    url: routeUrl("/"),
-    logo: `${siteUrl}/og.png`,
-    areaServed: { "@type": "Country", name: "Беларусь" },
-  };
-}
-
-function renderHtml({ title, description, canonical, body, image = `${siteUrl}/og.png`, type, indexable = allowIndexing, schemas = [] }) {
-  const head = metadata({ title, description, canonical, image, type, indexable, schemas });
-  return stripSeoHead(shell)
-    .replace(/<html\s+lang="ru"[^>]*>/i, `<html lang="ru" data-seo-indexing="${indexable}">`)
-    .replace("</head>", `${head}\n  </head>`)
-    .replace(/<div id="root"><\/div>/, `<div id="root">${body}</div>`);
+for (const page of publicPages) {
+  const schemas = [renderer.breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
+  if (page.route === "/") schemas.unshift(renderer.organizationSchema());
+  if (page.modelPage?.faq?.length) schemas.push(renderer.faqSchema(page.modelPage.faq));
+  writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas }));
 }
 
 function writeRoute(route, html) {
@@ -252,42 +152,11 @@ function writeRoute(route, html) {
   writeFileSync(target, html);
 }
 
-for (const page of publicPages) {
-  const schemas = [breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
-  if (page.route === "/") schemas.unshift(organizationSchema());
-  if (page.modelPage?.faq?.length) schemas.push(faqSchema(page.modelPage));
-  writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas }));
-}
-
+// Страницы машин файлами. По умолчанию выключено: на хостинге их собирает сервер.
 for (const car of cars) {
-  const titleText = carTitle(car);
-  const route = carRoute(car);
-  const canonical = routeUrl(route);
-  const landed = estimateLandedCost(car);
-  const description = `${titleText}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}, ориентировочная цена до Минска — ${number(landed.totalUsd)} $. Проверка перед покупкой.`;
-  const image = /^https:\/\//.test(String(car.image || "")) ? car.image : null;
-  const related = cars.filter((candidate) => candidate.id !== car.id && candidate.brand === car.brand).slice(0, 8);
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "Vehicle",
-    name: titleText,
-    url: canonical,
-    image: image ? [image] : undefined,
-    vehicleModelDate: String(car.year || ""),
-    mileageFromOdometer: { "@type": "QuantitativeValue", value: Number(car.mileage) || 0, unitCode: "KMT" },
-    fuelType: car.type || undefined,
-    description,
-    offers: {
-      "@type": "Offer",
-      url: canonical,
-      priceCurrency: "USD",
-      price: landed.totalUsd,
-      availability: "https://schema.org/InStock",
-      itemCondition: "https://schema.org/UsedCondition",
-    },
-  };
-  const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2><dl><dt>Год</dt><dd>${escapeHtml(car.year)}</dd><dt>Пробег</dt><dd>${number(car.mileage)} км</dd><dt>Тип</dt><dd>${escapeHtml(car.type)}</dd><dt>Привод</dt><dd>${escapeHtml(car.drive)}</dd><dt>Ориентировочная цена до Минска</dt><dd>${number(landed.totalUsd)} $</dd></dl></article>${related.length ? `<section><h2>Другие автомобили ${escapeHtml(car.brand)}</h2>${carLinks(related)}</section>` : ""}</main>${footer()}`;
-  writeRoute(route, renderHtml({ title: `${titleText}, ${number(car.mileage)} км — цена до Минска | evcars.by`, description, canonical, body, image, type: "product", schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [titleText, route]]), schema] }));
+  const related = cars.filter((candidate) => candidate.id !== car.id && candidate.brand === car.brand && candidate.model === car.model).slice(0, 12);
+  const modelPage = MODEL_PAGES.find((page) => page.brand === car.brand && page.model === car.model) || null;
+  writeRoute(carRoute(car), renderer.carPage({ car, related, modelPage }).html);
 }
 
 for (const route of privateRoutes) {
@@ -298,48 +167,89 @@ for (const route of privateRoutes) {
 const privateHtml = renderHtml({ title: "Личный раздел | evcars.by", description: "Личный раздел пользователя evcars.by.", canonical: routeUrl("/account/"), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
 writeFileSync(path.join(clientDir, "private.html"), privateHtml);
 
-const notFoundHtml = renderHtml({ title: "Страница не найдена | evcars.by", description: "Запрошенная страница не найдена.", canonical: routeUrl("/404/"), body: `${navigation()}<main class="page-width"><h1>Страница не найдена</h1><p><a href="${hrefRoute("/")}">Вернуться на главную</a></p></main>${footer()}`, image: null, indexable: false });
+const notFoundHtml = renderHtml({ title: "Страница не найдена | evcars.by", description: "Запрошенная страница не найдена.", canonical: routeUrl("/404/"), body: `${navigation(MODELS_INDEX.path)}<main class="page-width"><h1>Страница не найдена</h1><p><a href="${hrefRoute("/")}">Вернуться на главную</a></p></main>${footer()}`, image: null, indexable: false });
 writeFileSync(path.join(clientDir, "404.html"), notFoundHtml);
 
-// Заготовка страницы машины. Без неё адреса `/cars/<id>` отдавали 404: статических
-// страниц машин в сборке нет (их включает только `SEO_VEHICLE_PAGES=1`), а на хостинге
-// не осталось ничего, чем ответить, — карточку рисует приложение поверх API. Правило
-// в `vercel.json` отдаёт этот файл на такие адреса, поэтому ответ становится обычным
-// 200, а заголовок, описание и адрес-первоисточник дописывает приложение, когда
-// получит машину. Запрет индексации здесь общий, по `SEO_ALLOW_INDEXING`: оставить
-// `noindex` в готовом HTML насовсем нельзя — поисковик выбрасывает страницу, не
-// дожидаясь, пока скрипт этот запрет снимет. Если страницы машин всё же собраны
-// заранее, они лежат по своим адресам и правило до заготовки не доходит.
+// Пустая заготовка приложения. Её читает сервер, когда собирает страницу машины:
+// в ней лежат ссылки на стили и скрипты с хешами этой сборки, а место под содержимое
+// оставлено пустым. Собранный `index.html` для этого не подходит — в нём уже лежит
+// текст главной страницы. Файл нигде не упомянут ссылками и закрыт от индексации.
+const appShellHtml = stripSeoHead(shell).replace("</head>", `    <meta name="robots" content="noindex, nofollow, noarchive" />\n  </head>`);
+writeFileSync(appShellPath, appShellHtml);
+
+// Заготовка страницы машины на случай, когда собрать её сервером не удалось (база
+// недоступна): приложение всё равно загрузится и покажет свою ошибку. Адрес-первоисточник
+// здесь не ставим — на этапе сборки неизвестно, какую машину откроют, а подставить
+// главную значит сказать поисковику, что настоящей страницы нет. Запрет индексации
+// здесь общий, по `SEO_ALLOW_INDEXING`: оставить `noindex` в готовом HTML насовсем
+// нельзя — поисковик выбрасывает страницу, не дожидаясь, пока скрипт запрет снимет.
 const carShellHtml = renderHtml({
   title: "Автомобиль с пробегом из Китая — цена до Минска | evcars.by",
   description: "Характеристики, пробег, состояние и ориентировочная стоимость автомобиля с пробегом из Китая с доставкой в Минск.",
   canonical: null,
-  body: `${navigation()}<main class="page-width"><h1>Автомобиль с пробегом из Китая</h1><p>Загружаем карточку автомобиля: характеристики, фотографии и ориентировочную стоимость до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Все автомобили в каталоге</a></p></main>${footer()}`,
+  body: `${navigation(MODELS_INDEX.path)}<main class="page-width"><h1>Автомобиль с пробегом из Китая</h1><p>Загружаем карточку автомобиля: характеристики, фотографии и ориентировочную стоимость до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Все автомобили в каталоге</a></p></main>${footer()}`,
   type: "product",
 });
 writeFileSync(path.join(clientDir, "car.html"), carShellHtml);
 
-const pageEntries = publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null }));
-const carEntries = cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) }));
+// ── Карты сайта ───────────────────────────────────────────────────────────────
 const urlset = (entries) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(({ loc, lastmod }) => `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`).join("\n")}\n</urlset>\n`;
+
+/**
+ * Адреса машин для карты сайта. Из дампа каталога, если он есть; иначе — из базы,
+ * одним запросом за номером объявления и датой последней записи. База может быть
+ * недоступна (сборка без доступа к ней) — тогда карта машин просто не пишется, и в
+ * выводе об этом сказано: молча отдать поисковику сайт без тридцати тысяч карточек хуже.
+ */
+async function carSitemapEntries() {
+  if (!carsSitemap) return [];
+  if (cars.length) return cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) }));
+  if (!carsFromDatabase) {
+    console.warn("Карта сайта с машинами не собрана: дампа каталога нет, а чтение из базы не разрешено (SEO_CARS_FROM_DB=1).");
+    return [];
+  }
+  let pool = null;
+  try {
+    ({ pool } = await import("../server/db.mjs"));
+    // `imported_at` — дата последней записи объявления: обновление цены переписывает
+    // карточку, и поисковику стоит зайти заново.
+    const result = await pool.query("SELECT l.id, l.imported_at FROM listings l WHERE l.status='active'");
+    return result.rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.imported_at) }));
+  } catch (error) {
+    console.warn(`Карта сайта с машинами не собрана: база недоступна (${error.code || error.message}).`);
+    return [];
+  } finally {
+    // Соединение закрываем всегда: иначе сборка висела бы, ожидая простаивающий пул.
+    await pool?.end().catch(() => {});
+  }
+}
+
+const pageEntries = publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null }));
 writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
-// Пустую карту машин не публикуем и в индекс не вписываем: без страниц машин
-// ссылаться в ней не на что.
-if (carEntries.length) writeFileSync(path.join(clientDir, carsSitemapName), urlset(carEntries));
-else rmSync(path.join(clientDir, carsSitemapName), { force:true });
-const sitemaps = [pagesSitemapName, ...(carEntries.length ? [carsSitemapName] : [])];
+
+const carEntries = await carSitemapEntries();
+const carChunks = [];
+for (let offset = 0; offset < carEntries.length; offset += carsPerSitemap) carChunks.push(carEntries.slice(offset, offset + carsPerSitemap));
+carChunks.forEach((chunk, index) => writeFileSync(path.join(clientDir, carsSitemapName(index)), urlset(chunk)));
+// Лишние файлы прошлых сборок убираем: пустая или устаревшая карта машин уводила бы
+// поисковика на адреса, которых уже нет.
+for (const stale of readdirSync(clientDir).filter((name) => /^sitemap-.*-cars(-\d+)?\.xml$/.test(name))) {
+  if (!carChunks.some((_, index) => carsSitemapName(index) === stale)) rmSync(path.join(clientDir, stale), { force:true });
+}
+
+const sitemaps = [pagesSitemapName, ...carChunks.map((_, index) => carsSitemapName(index))];
 writeFileSync(path.join(clientDir, sitemapIndexName), `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps.map((name) => `  <sitemap><loc>${escapeXml(siteUrl)}/${name}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`);
 // Прежние предсказуемые имена в сборке не оставляем: файл с адресами всех машин по
 // адресу `/sitemap.xml` — готовый список для выкачки конкурентом.
 for (const stale of ["sitemap.xml", "sitemap-pages.xml", "sitemap-cars.xml"]) {
-  if (!sitemapNames.includes(stale)) rmSync(path.join(clientDir, stale), { force:true });
+  if (!sitemaps.includes(stale) && stale !== sitemapIndexName) rmSync(path.join(clientDir, stale), { force:true });
 }
 
 const robots = allowIndexing
   // Карту сайта в robots.txt не упоминаем: эта строка публично показала бы, где лежит
   // список всех адресов каталога. Поисковикам её адрес задают вручную — один раз, в
   // Google Search Console и Яндекс.Вебмастере; на обход и индексацию это не влияет.
-  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /searches/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\n`
+  ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/\nDisallow: /account/\nDisallow: /favorites/\nDisallow: /searches/\nDisallow: /login/\nDisallow: /register/\nDisallow: /orders/\nDisallow: /analytics/\nDisallow: /app-shell.html\nDisallow: /car.html\n`
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;
 writeFileSync(path.join(clientDir, "robots.txt"), robots);
 
@@ -377,7 +287,9 @@ if (cars.length) {
 }
 rmSync(path.join(clientDir, "data", "cars.json"), { force:true });
 
-console.log(`Generated ${publicPages.length} public pages, ${cars.length} vehicle pages${vehiclePages ? "" : " (SEO_VEHICLE_PAGES=1 включает страницы машин и статический каталог)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
+const carsInSitemap = carEntries.length;
+console.log(`Generated ${publicPages.length} public pages, ${cars.length} vehicle pages${vehiclePages ? "" : " (страницы машин собирает сервер в момент запроса)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
+console.log(`Адресов машин в карте сайта: ${carsInSitemap}${carsSitemap ? "" : " (включается SEO_CARS_SITEMAP=1 или открытой индексацией)"}.`);
 // Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
 // вставляют в Google Search Console и Яндекс.Вебмастер.
 console.log(`Карта сайта (в robots.txt не указана, добавить вручную в Search Console и Вебмастер): ${siteUrl}/${sitemapIndexName}`);

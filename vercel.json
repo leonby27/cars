@@ -33,7 +33,7 @@
     },
     {
       "source": "/cars/:id",
-      "destination": "/car"
+      "destination": "/api?path=pages/car&id=:id"
     },
     {
       "source": "/analytics",
