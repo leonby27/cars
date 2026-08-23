@@ -25,6 +25,8 @@ test("правила безопасности пускают Метрику", ()
   const rule = (name) => csp.split(";").map((part) => part.trim()).find((part) => part.startsWith(name)) || "";
   assert.ok(rule("script-src").includes("https://mc.yandex.ru"), "скрипт счётчика заблокирован");
   assert.ok(rule("connect-src").includes("https://mc.yandex.ru"), "отправка данных заблокирована");
+  // Вебвизор (запись действий на странице) держит постоянное соединение по wss.
+  assert.ok(rule("connect-src").includes("wss://mc.yandex.com"), "вебвизор заблокирован");
   // Картинка-счётчик и кадр синхронизации Яндекса.
   assert.ok(rule("img-src").includes("https:"), "картинка счётчика заблокирована");
   assert.ok(rule("frame-src").includes("https://*.yandex.ru"), "кадр синхронизации заблокирован");
