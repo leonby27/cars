@@ -7836,8 +7836,14 @@ export function App() {
   // кнопка меняется на «Добавлено в заказ». Держим здесь список её номеров.
   const [orderedListings, setOrderedListings] = useState(EMPTY_ORDERED_LISTINGS);
   const publishOrderedListings = useCallback((orders) => setOrderedListings(orderedListingsFrom(orders)), []);
+  // Метрика засчитывает первый заход сама при запуске счётчика. Дальше страницы
+  // меняются без перезагрузки, и о каждом переходе ей нужно сказать отдельно —
+  // иначе весь визит выглядит как одна страница.
+  const metrikaStarted = useRef(false);
   useEffect(() => {
     if (path !== "/analytics") trackEvent("page_view");
+    if (metrikaStarted.current && window.__ym) window.ym?.(window.__ym, "hit", window.location.href);
+    metrikaStarted.current = true;
   }, [path]);
   useEffect(() => {
     window.localStorage.setItem("navostok-currency", currency);
