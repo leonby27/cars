@@ -134,6 +134,30 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     };
   }
 
+  /**
+   * Разметка сайта и поиска по нему. По ней Google иногда показывает строку поиска
+   * прямо в выдаче: человек ищет из результатов, не заходя на сайт. Адрес поиска —
+   * `/catalog?q=…`, каталог разбирает эту строку тем же разбором, что поиск на главной.
+   */
+  function webSiteSchema() {
+    return {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "evcars.by",
+      alternateName: "Автомобили из Китая в Беларусь",
+      url: routeUrl("/"),
+      inLanguage: "ru-BY",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: `${base}/catalog?q={search_term_string}`,
+        },
+        "query-input": "required name=search_term_string",
+      },
+    };
+  }
+
   function faqSchema(faq) {
     return {
       "@context": "https://schema.org",
@@ -455,5 +479,5 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     });
   }
 
-  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, breadcrumbsSchema, organizationSchema, faqSchema, renderHtml, carPage, carGonePage, carDescription, landingPage, landingMissingPage, modelPageArticle, modelPage };
+  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, carPage, carGonePage, carDescription, landingPage, landingMissingPage, modelPageArticle, modelPage };
 }

@@ -169,7 +169,7 @@ function publicPageBody(page) {
 
 for (const page of publicPages) {
   const schemas = [renderer.breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
-  if (page.route === "/") schemas.unshift(renderer.organizationSchema());
+  if (page.route === "/") schemas.unshift(renderer.organizationSchema(), renderer.webSiteSchema());
   // Вопросы со страницы «Вопросы и ответы» — по этой разметке они попадают
   // в выдачу раскрывающимся списком. На страницах моделей это уже работает.
   if (page.route === "/faq/") schemas.push(renderer.faqSchema(FAQ_GROUPS.flatMap((group) => group.items.map((item) => ({ q: item.question, a: item.answer })))));

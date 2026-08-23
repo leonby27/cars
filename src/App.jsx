@@ -4320,6 +4320,7 @@ const readCatalogView = () => (window.localStorage.getItem(catalogViewKey) === "
 
 function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearch, updateSavedSearch, savedSearches, landing = null }) {
   const pageSize = 24;
+  const currency = useCurrency();
   // Pending and api resolve to the same value, so the boot request answering does not
   // retrigger the query this component already issued at mount.
   const useApi = apiMode !== false;
@@ -4388,6 +4389,28 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     range: rangeOptions.includes(rawRange) || FREE_RANGE_LABEL.test(rawRange || "") ? rawRange : ANY_RANGE,
     ...exclusionsFromParams(params),
   };
+  // Поисковая строка в адресе: `/catalog?q=byd han до 25000`. Нужна двум вещам —
+  // разметке «поиск по сайту», по которой Google показывает строку поиска прямо
+  // в выдаче, и внешним ссылкам на готовый поиск. Разбираем ту же строку тем же
+  // разбором, что и поиск на главной, и заменяем адрес на обычный набор фильтров:
+  // дальше страница ведёт себя как всегда, а `?q=` в истории не остаётся.
+  const searchQuery = params.get("q");
+  useEffect(() => {
+    if (!searchQuery) return;
+    let cancelled = false;
+    parseHeroSearchOnce(searchQuery, { apiMode, cars, currency })
+      .then((parsed) => {
+        if (cancelled) return;
+        // Не разобрали — оставляем каталог как есть, но убираем строку из адреса,
+        // чтобы она не попала в сохранённый поиск и в возврат из карточки.
+        navigate(parsed?.matched ? heroCatalogHref(parsed) : "/catalog", { replace: true });
+      })
+      .catch(() => {
+        if (!cancelled) navigate("/catalog", { replace: true });
+      });
+    return () => { cancelled = true; };
+  }, [searchQuery]);
+
   const restoredCatalog = window.history.state?.catalog || matchingCatalogReturn()?.catalog || null;
   const [filters, setFilters] = useState(() => ({
     ...initialFilters,

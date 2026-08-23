@@ -190,6 +190,20 @@ test("обзоры моделей файлами не собираются, но
   assert.match(pagesXml, /<loc>https:\/\/evcars\.by\/models\/zeekr-007gt<\/loc>/);
 });
 
+test("на главной есть разметка сайта и поиска по нему", async () => {
+  // По этой разметке Google иногда показывает строку поиска прямо в выдаче.
+  // Адрес поиска обязан работать: каталог разбирает `?q=` тем же разбором,
+  // что и поиск на главной.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const home = await read("index.html");
+  assert.match(home, /"@type":"WebSite"/);
+  assert.match(home, /"@type":"SearchAction"/);
+  assert.match(home, /"urlTemplate":"https:\/\/evcars\.by\/catalog\?q=\{search_term_string\}"/);
+  assert.match(home, /"query-input":"required name=search_term_string"/);
+  // Только на главной: на остальных страницах эта разметка не нужна.
+  assert.doesNotMatch(await read("faq/index.html"), /"@type":"SearchAction"/);
+});
+
 test("тексты информационных страниц лежат в самой странице", async () => {
   // Раньше поисковик видел на этих страницах 32–43 слова — заголовок и одну фразу, —
   // а всё остальное появлялось только после запуска приложения в браузере.
