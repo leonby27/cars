@@ -5694,20 +5694,25 @@ function ActionTooltip({ text, className = "", tapToOpen = false }) {
     };
   }, [place]);
   // На телефоне наведения нет, поэтому подсказку у стрелки цены открывает касание.
+  // Повторное касание по той же стрелке подсказку убирает.
   // Событие дальше не пускаем: иначе вместе с подсказкой откроется и сама карточка.
   useEffect(() => {
     if (!tapToOpen) return undefined;
     const button = anchorRef.current?.parentElement;
     if (!button) return undefined;
-    const open = (event) => {
+    const toggle = (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (visible) {
+        setVisible(false);
+        return;
+      }
       place();
       setVisible(true);
     };
-    button.addEventListener("click", open);
-    return () => button.removeEventListener("click", open);
-  }, [tapToOpen, place]);
+    button.addEventListener("click", toggle);
+    return () => button.removeEventListener("click", toggle);
+  }, [tapToOpen, place, visible]);
   // Открытую касанием подсказку закрывает следующее касание в любом другом месте.
   useEffect(() => {
     if (!tapToOpen || !visible) return undefined;
@@ -5723,16 +5728,19 @@ function ActionTooltip({ text, className = "", tapToOpen = false }) {
   useEffect(() => {
     if (visible) place();
   }, [text, visible, place]);
+  // Подсказку, открытую касанием, прокрутка закрывает: тянуть её за карточкой
+  // по экрану незачем. Подсказки при наведении, наоборот, едут вместе с кнопкой.
   useEffect(() => {
     if (!visible) return undefined;
     const update = () => place();
-    window.addEventListener("scroll", update, { passive:true, capture:true });
+    const onScroll = tapToOpen ? () => setVisible(false) : update;
+    window.addEventListener("scroll", onScroll, { passive:true, capture:true });
     window.addEventListener("resize", update);
     return () => {
-      window.removeEventListener("scroll", update, { capture:true });
+      window.removeEventListener("scroll", onScroll, { capture:true });
       window.removeEventListener("resize", update);
     };
-  }, [visible, place]);
+  }, [visible, place, tapToOpen]);
   return (
     <>
       <span ref={anchorRef} hidden />
