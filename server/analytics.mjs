@@ -12,7 +12,7 @@ export const ANALYTICS_EVENTS = new Set([
   "custom_search_submitted",
 ]);
 
-const COOKIE_NAME = "evcars_analytics";
+const COOKIE_NAME = "abcars_analytics";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 const text = (value, max) => String(value || "").trim().slice(0, max);
 

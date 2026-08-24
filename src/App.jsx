@@ -6018,7 +6018,7 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
 
 // Быстрый просмотр включён по умолчанию, но это дополнение к странице
 // автомобиля: свитчер рядом с выдачей возвращает обычный переход по клику.
-const quickViewKey = "evcars-quick-view";
+const quickViewKey = "abcars-quick-view";
 const readQuickViewEnabled = () => window.localStorage.getItem(quickViewKey) !== "off";
 
 function QuickViewToggle({ checked, onChange }) {
@@ -7215,14 +7215,14 @@ function NotFound({ navigate }) {
 const localAuthKey = "navostok-local-auth";
 const localAccountsKey = "navostok-local-accounts";
 const localAccountResetKey = "navostok-account-reset-2026-08-15";
-const catalogTotalKey = "evcars-catalog-total";
-const catalogUpdatedKey = "evcars-catalog-updated";
+const catalogTotalKey = "abcars-catalog-total";
+const catalogUpdatedKey = "abcars-catalog-updated";
 const guestFavoritesKey = "navostok-favorites";
 const favoritesMigrationKey = "navostok-favorites-account-migration";
 const accountFavoritesKey = (userId) => `navostok-account-favorites:${userId}`;
-const pendingOrderKey = "evcars-pending-order-listing";
-const accountOrdersKey = (userId) => `evcars-account-orders:${userId}`;
-const accountSearchesKey = (userId) => `evcars-account-searches:${userId}`;
+const pendingOrderKey = "abcars-pending-order-listing";
+const accountOrdersKey = (userId) => `abcars-account-orders:${userId}`;
+const accountSearchesKey = (userId) => `abcars-account-searches:${userId}`;
 const readLocalSearches = (userId) => {
   try {
     const searches = JSON.parse(window.localStorage.getItem(accountSearchesKey(userId)) || "[]");
@@ -8161,7 +8161,7 @@ export function App() {
     },
   }), [quotaPricingOn]);
   const [themeMode, setThemeMode] = useState(() => {
-    const savedTheme = window.localStorage.getItem("evcars-theme");
+    const savedTheme = window.localStorage.getItem("abcars-theme");
     if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
     return "system";
   });
@@ -8822,7 +8822,7 @@ export function App() {
           theme={theme}
           toggleTheme={() => {
             const nextTheme = theme === "dark" ? "light" : "dark";
-            window.localStorage.setItem("evcars-theme", nextTheme);
+            window.localStorage.setItem("abcars-theme", nextTheme);
             setThemeMode(nextTheme);
           }}
         />

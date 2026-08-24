@@ -23,7 +23,7 @@ async function fetchAllowedImage(source) {
   for (let hop = 0; hop < 3; hop += 1) {
     const response = await fetch(current, {
       redirect:"manual",
-      headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"evcars.by-image-proxy/1.0" },
+      headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"abcars.by-image-proxy/1.0" },
     });
     const location = response.headers.get("location");
     if (response.status >= 300 && response.status < 400 && location) {

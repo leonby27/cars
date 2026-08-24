@@ -1,5 +1,5 @@
 const EVENTS = new Set(["page_view", "vehicle_view", "availability_click", "registration_completed", "favorite_added", "custom_search_submitted"]);
-const COOKIE_NAME = "evcars_analytics";
+const COOKIE_NAME = "abcars_analytics";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 const encoder = new TextEncoder();
 const clean = (value, max) => String(value || "").trim().slice(0, max);

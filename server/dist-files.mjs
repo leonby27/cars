@@ -39,7 +39,7 @@ async function readDistFile(name) {
     try {
       // Хостинг настроен на адреса без «.html» и сам перебрасывает с расширения на
       // короткий адрес, поэтому переброс здесь проходим (`fetch` делает это сам).
-      const response = await fetch(`https://${host}/${name}`, { redirect: "follow", headers: { "user-agent": "evcars.by-seo-render/1.0" } });
+      const response = await fetch(`https://${host}/${name}`, { redirect: "follow", headers: { "user-agent": "abcars.by-seo-render/1.0" } });
       if (response.ok) return response.text();
       failures.push(`${host}: ${response.status}`);
     } catch (error) {

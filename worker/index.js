@@ -47,7 +47,7 @@ export default {
       // разрешённый сервер источника мог перебросить запрос на любой другой.
       let current = source;
       for (let hop = 0; hop < 3; hop += 1) {
-        const upstream = await fetch(current, { redirect:"manual", headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"evcars.by-image-proxy/1.0" } });
+        const upstream = await fetch(current, { redirect:"manual", headers:{ accept:"image/avif,image/webp,image/apng,image/*,*/*;q=0.8", "user-agent":"abcars.by-image-proxy/1.0" } });
         const location = upstream.headers.get("location");
         if (upstream.status >= 300 && upstream.status < 400 && location) {
           let next;

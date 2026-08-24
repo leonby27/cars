@@ -40,7 +40,7 @@ test("с паролем аналитики состояние импорта в�
   const previousPassword = process.env.ANALYTICS_PASSWORD;
   process.env.ANALYTICS_PASSWORD = "test-password";
   try {
-    const payload = await requestHealth({ cookie:`evcars_analytics=${encodeURIComponent(createAnalyticsToken())}` });
+    const payload = await requestHealth({ cookie:`abcars_analytics=${encodeURIComponent(createAnalyticsToken())}` });
     assert.equal(payload.cars, 32916);
     assert.equal(payload.jobs.failed, 2);
     assert.equal(payload.sources[0].status, "blocked");
@@ -78,7 +78,7 @@ test("список заявок закрыт паролем аналитики",
     assert.equal(anonymous.status, 401);
     assert.equal("leads" in anonymous.payload, false);
 
-    const authorized = await requestLeads({ cookie:`evcars_analytics=${encodeURIComponent(createAnalyticsToken())}` });
+    const authorized = await requestLeads({ cookie:`abcars_analytics=${encodeURIComponent(createAnalyticsToken())}` });
     assert.equal(authorized.status, 200);
     assert.deepEqual(authorized.payload.leads, []);
   } finally {
