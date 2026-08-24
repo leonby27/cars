@@ -2,7 +2,7 @@ import { chinaTransitFor } from "./china-logistics.js";
 import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
-  usdByn:2.9829, cnyBynPer10:4.4496, eurByn:3.4918, rateDate:"23.08.2026",
+  usdByn:2.9756, cnyBynPer10:4.44, eurByn:3.4815, rateDate:"24.08.2026",
   serviceUsd:800, evCustomsUsd:350,
   evDutyPercent:0.15, // пошлина на электромобиль после исчерпания квоты
   vatPercent:0.20, // НДС при ввозе: платят последовательные гибриды, у электромобилей ставка нулевая
