@@ -1,6 +1,6 @@
 // Demo company details for the prototype. Replace every value in this object before publication.
 export const COMPANY = Object.freeze({
-  brand: "evcars.by",
+  brand: "abcars.by",
   legalName: "ООО «Евкарс»",
   address: "Минск, ул. Тимирязева, 65Б",
   hours: "Пн–Пт: 10:00–18:00 · Сб, Вс: Выходной",

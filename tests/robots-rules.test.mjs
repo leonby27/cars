@@ -14,7 +14,7 @@ const run = promisify(execFile);
 const script = new URL("../scripts/generate-seo-pages.mjs", import.meta.url).pathname;
 const shell = `<!doctype html>
 <html lang="ru">
-  <head><meta charset="utf-8" /><title>evcars.by</title></head>
+  <head><meta charset="utf-8" /><title>abcars.by</title></head>
   <body><div id="root"></div></body>
 </html>
 `;
@@ -25,7 +25,7 @@ async function robots(env = {}) {
   await mkdir(clientDir, { recursive: true });
   await writeFile(path.join(clientDir, "index.html"), shell);
   await run(process.execPath, [script], {
-    env: { ...process.env, SEO_OUTPUT_DIR: clientDir, SITE_URL: "https://evcars.by", SEO_VEHICLE_PAGES: "", SEO_CARS_SITEMAP: "", SEO_CARS_FROM_DB: "", SEO_SITEMAP_TOKEN: "testtoken", ...env },
+    env: { ...process.env, SEO_OUTPUT_DIR: clientDir, SITE_URL: "https://abcars.by", SEO_VEHICLE_PAGES: "", SEO_CARS_SITEMAP: "", SEO_CARS_FROM_DB: "", SEO_SITEMAP_TOKEN: "testtoken", ...env },
   });
   return readFile(path.join(clientDir, "robots.txt"), "utf8");
 }

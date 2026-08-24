@@ -77,7 +77,6 @@ const ANY_MODEL = "Все модели";
 const ANY_COLOR = "Все цвета";
 const ANY_ACCEL = "Разгон до";
 const ANY_TIRE = "Размер шин";
-const ANY_TORQUE = "Крутящий момент";
 const ANY_RANGE = "Запас хода";
 // Кузов и модель выбираются списком, поэтому их значение хранится массивом.
 // Пустой массив = «все»; строку принимаем ради старых ссылок и history.state.
@@ -125,12 +124,12 @@ const priceMaxOptions = [ANY_PRICE_MAX, ...priceSteps];
 const mileageOptions = [ANY_MILEAGE, ...[100000, 70000, 50000, 30000, 20000, 15000, 10000, 5000].map((value) => `до ${String(value).replace(/\B(?=(\d{3})+$)/g, " ")} км`)];
 const batteryOptions = [ANY_BATTERY, ...[40, 60, 80, 100].map((value) => `От ${value} кВт·ч`)];
 const batteryFloor = (value) => Number(String(value).replace(/\D/g, "")) || 0;
-// Разгон, шины и момент лежат в specifications каждой машины (перенесены из полной
+// Разгон и шины лежат в specifications каждой машины (перенесены из полной
 // техкарты источника). Ступени подобраны по живому каталогу: медианный разгон 6,1 с,
-// медианный момент около 400 Н·м, диски от R13 до R23 с горбом на R18–R20.
+// диски от R13 до R23 с горбом на R18–R20. Фильтр по моменту убран 24.08.2026:
+// значение в базе остаётся и показывается в характеристиках, выбирать по нему нельзя.
 const accelOptions = [ANY_ACCEL, ...[4, 5, 6, 7, 8].map((value) => `До ${value} с`)];
 const tireOptions = [ANY_TIRE, ...[16, 17, 18, 19, 20, 21].map((value) => `От R${value}`)];
-const torqueOptions = [ANY_TORQUE, ...[200, 300, 400, 500, 700].map((value) => `От ${value} Н·м`)];
 // Запас хода: у электромобиля берётся электрический, у гибрида — общий, как
 // в карточке и в сортировке «с наибольшим запасом хода».
 const rangeOptions = [ANY_RANGE, ...[300, 400, 500, 600, 700].map((value) => `От ${value} км`)];
@@ -224,7 +223,7 @@ const appendMileageRange = (query, label) => {
   if (bounds?.min) query.set("mileageMin", String(bounds.min));
   if (bounds?.max) query.set("mileageMax", String(bounds.max));
 };
-const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION, accel = ANY_ACCEL, tire = ANY_TIRE, torque = ANY_TORQUE, range = ANY_RANGE }) =>
+const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION, accel = ANY_ACCEL, tire = ANY_TIRE, range = ANY_RANGE }) =>
   (drive === ANY_DRIVE || car.drive === drive) &&
   (owners === ANY_OWNERS || Number(car.owners) <= filterNumber(owners)) &&
   (battery === ANY_BATTERY || Number(car.battery) >= batteryFloor(battery)) &&
@@ -232,7 +231,6 @@ const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, con
   // Машину без значения фильтр отсеивает: Number(null) = 0 прошёл бы «до N с».
   (accel === ANY_ACCEL || (Number(car.acceleration) > 0 && Number(car.acceleration) <= filterNumber(accel))) &&
   (tire === ANY_TIRE || Number(car.tireRim) >= filterNumber(tire)) &&
-  (torque === ANY_TORQUE || Number(car.torqueNm) >= filterNumber(torque)) &&
   (range === ANY_RANGE || Number(car.electricRange || car.combinedRange || car.range) >= filterNumber(range));
 // Исключения: «зикр кроме 001», «электро кроме белых». Каждая величина живёт
 // отдельным списком — в ссылке и в запросе к серверу это парные «…Not»-параметры.
@@ -692,16 +690,16 @@ function ScrollToTopButton() {
 }
 
 const routeSeo = {
-  "/": ["Автомобили из Китая в Беларусь — evcars.by", "Автомобили с пробегом из Китая с проверкой, расчётом стоимости и доставкой в Минск и Беларусь."],
-  "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | evcars.by", "Каталог автомобилей с пробегом из Китая: электромобили и гибриды, характеристики, пробег и ориентировочная стоимость доставки в Беларусь."],
-  "/how-it-works": ["О сервисе покупки автомобилей из Китая | evcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
-  "/delivered": ["Доставленные автомобили из Китая — примеры и цены | evcars.by", "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска."],
-  "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | evcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
-  "/guarantees": ["Гарантии при покупке автомобиля из Китая | evcars.by", "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает evcars.by и какие риски обсуждаются до договора."],
-  "/faq": ["Вопросы о покупке и доставке авто из Китая | evcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
-  "/contacts": ["Контакты evcars.by — автомобили из Китая в Минске", "Контакты сервиса evcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая."],
-  "/privacy": ["Политика конфиденциальности | evcars.by", "Политика обработки и защиты персональных данных пользователей сайта evcars.by."],
-  "/terms": ["Условия использования сайта | evcars.by", "Условия использования каталога evcars.by, предварительных расчётов и информации об автомобилях из Китая."],
+  "/": ["Автомобили из Китая в Беларусь — abcars.by", "Автомобили с пробегом из Китая с проверкой, расчётом стоимости и доставкой в Минск и Беларусь."],
+  "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | abcars.by", "Каталог автомобилей с пробегом из Китая: электромобили и гибриды, характеристики, пробег и ориентировочная стоимость доставки в Беларусь."],
+  "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
+  "/delivered": ["Доставленные автомобили из Китая — примеры и цены | abcars.by", "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска."],
+  "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | abcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
+  "/guarantees": ["Гарантии при покупке автомобиля из Китая | abcars.by", "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает abcars.by и какие риски обсуждаются до договора."],
+  "/faq": ["Вопросы о покупке и доставке авто из Китая | abcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
+  "/contacts": ["Контакты abcars.by — автомобили из Китая в Минске", "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая."],
+  "/privacy": ["Политика конфиденциальности | abcars.by", "Политика обработки и защиты персональных данных пользователей сайта abcars.by."],
+  "/terms": ["Условия использования сайта | abcars.by", "Условия использования каталога abcars.by, предварительных расчётов и информации об автомобилях из Китая."],
 };
 // Страницы моделей описаны в model-pages.js; их заголовки попадают в ту же карту,
 // чтобы SEO-механика работала для них без отдельной ветки.
@@ -710,11 +708,11 @@ for (const modelPage of MODEL_PAGES) routeSeo[modelPage.path] = [modelPage.seoTi
 for (const tool of TOOL_PAGES) routeSeo[tool.path] = [tool.seoTitle, tool.seoDescription];
 
 const privateRouteSeo = {
-  "/favorites": ["Избранные автомобили | evcars.by", "Сохранённые автомобили в вашем личном кабинете evcars.by."],
-  "/searches": ["Мои поиски | evcars.by", "Сохранённые поиски автомобилей в вашем личном кабинете evcars.by."],
-  "/login": ["Вход в личный кабинет | evcars.by", "Вход в личный кабинет клиента evcars.by."],
-  "/register": ["Регистрация личного кабинета | evcars.by", "Создание личного кабинета клиента evcars.by."],
-  "/account": ["Личный кабинет | evcars.by", "Заказы, избранные автомобили и личные данные клиента evcars.by."],
+  "/favorites": ["Избранные автомобили | abcars.by", "Сохранённые автомобили в вашем личном кабинете abcars.by."],
+  "/searches": ["Мои поиски | abcars.by", "Сохранённые поиски автомобилей в вашем личном кабинете abcars.by."],
+  "/login": ["Вход в личный кабинет | abcars.by", "Вход в личный кабинет клиента abcars.by."],
+  "/register": ["Регистрация личного кабинета | abcars.by", "Создание личного кабинета клиента abcars.by."],
+  "/account": ["Личный кабинет | abcars.by", "Заказы, избранные автомобили и личные данные клиента abcars.by."],
 };
 
 function ClientSeo({ path, car, landing }) {
@@ -726,8 +724,8 @@ function ClientSeo({ path, car, landing }) {
     // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
     const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
     const [title, description] = detailTitle
-      ? [`${detailTitle}, ${number(car.mileage)} км — цена до Минска | evcars.by`, `${detailTitle}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены до Минска.`]
-      : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | evcars.by", "Оформление и статус заказа автомобиля в личном кабинете evcars.by."] : null) || routeSeo[path] || ["Страница не найдена | evcars.by", "Запрошенная страница не найдена."];
+      ? [`${detailTitle}, ${number(car.mileage)} км — цена до Минска | abcars.by`, `${detailTitle}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены до Минска.`]
+      : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | abcars.by", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена | abcars.by", "Запрошенная страница не найдена."];
     const canonicalRoot = document.querySelector('link[rel="canonical"]')?.href || `${window.location.origin}${import.meta.env.BASE_URL}`;
     const canonicalBase = new URL(canonicalRoot);
     canonicalBase.pathname = "/";
@@ -994,7 +992,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
   return (
     <header className="site-header">
       <div className="header-inner">
-        <AppLink className="wordmark" href="/" navigate={navigate} onClick={playRefreshPulse} aria-label="evcars.by — на главную">
+        <AppLink className="wordmark" href="/" navigate={navigate} onClick={playRefreshPulse} aria-label="abcars.by — на главную">
           <SiteLogo />
         </AppLink>
         <div className="header-menu-shell" ref={menuRef}>
@@ -1361,7 +1359,6 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
       {Number(availability.condition) > 0 && <SelectField className={className} label="Состояние" value={values.condition} onChange={actions.condition} options={conditionOptions} />}
       <SelectField className={className} label="Разгон до 100 км/ч" value={values.accel} onChange={actions.accel} options={accelOptions} />
       <SelectField className={className} label="Размер шин" value={values.tire} onChange={actions.tire} options={tireOptions} />
-      <SelectField className={className} label="Крутящий момент" value={values.torque} onChange={actions.torque} options={torqueOptions} />
       <SelectField className={className} label="Запас хода" value={values.range || ANY_RANGE} onChange={actions.range} options={rangeOptions} />
     </>
   );
@@ -1470,7 +1467,6 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [condition, setCondition] = useState(ANY_CONDITION);
   const [accel, setAccel] = useState(ANY_ACCEL);
   const [tire, setTire] = useState(ANY_TIRE);
-  const [torque, setTorque] = useState(ANY_TORQUE);
   const [range, setRange] = useState(ANY_RANGE);
   const [remoteMeta, setRemoteMeta] = useState({
     brands: [],
@@ -1504,8 +1500,8 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         battery: cars.filter((car) => Number(car.battery) > 0).length,
         condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
       };
-  const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesColorLabels(car.bodyColor, multiValues(color, ANY_COLOR)) && matchesYears(car, yearMin, yearMax) && matchesMileageRange(car, mileage) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition, accel, tire, torque, range })).length;
-  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || multiValues(color, ANY_COLOR).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION || accel !== ANY_ACCEL || tire !== ANY_TIRE || torque !== ANY_TORQUE || range !== ANY_RANGE;
+  const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesColorLabels(car.bodyColor, multiValues(color, ANY_COLOR)) && matchesYears(car, yearMin, yearMax) && matchesMileageRange(car, mileage) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition, accel, tire, range })).length;
+  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || multiValues(color, ANY_COLOR).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION || accel !== ANY_ACCEL || tire !== ANY_TIRE || range !== ANY_RANGE;
   useEffect(() => {
     // Ждать загрузочный запрос незачем: справочник нужен сразу и уходит параллельно
     // с витриной. Останавливает его только выясненный статический режим.
@@ -1533,7 +1529,6 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     if (condition !== ANY_CONDITION) carsQuery.set("conditionGrade", conditionGrades[condition]);
     if (accel !== ANY_ACCEL) carsQuery.set("accelMax", String(filterNumber(accel)));
     if (tire !== ANY_TIRE) carsQuery.set("tireRimMin", String(filterNumber(tire)));
-    if (torque !== ANY_TORQUE) carsQuery.set("torqueMin", String(filterNumber(torque)));
     if (range !== ANY_RANGE) carsQuery.set("rangeMin", String(filterNumber(range)));
     // Числа для уже виденных комбинаций фильтров помним: повторное переключение
     // показывает счётчик сразу, без мигания. Прячем цифру только на первый подсчёт —
@@ -1564,7 +1559,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [apiMode, hasActiveFilters, normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, torque, range]);
+  }, [apiMode, hasActiveFilters, normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, range]);
   const changeType = (value) => {
     setType(value);
     setModel([]);
@@ -1590,7 +1585,6 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     setCondition(ANY_CONDITION);
     setAccel(ANY_ACCEL);
     setTire(ANY_TIRE);
-    setTorque(ANY_TORQUE);
     setRange(ANY_RANGE);
   };
   return (
@@ -1598,7 +1592,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       constrained
       selectedType={type}
       onTypeChange={changeType}
-      values={{ brand, model, yearMin, yearMax, priceMin, priceMax, mileage, bodyType, color, drive, owners, battery, condition, accel, tire, torque, range }}
+      values={{ brand, model, yearMin, yearMax, priceMin, priceMax, mileage, bodyType, color, drive, owners, battery, condition, accel, tire, range }}
       actions={{
         brand: changeBrand,
         model: setModel,
@@ -1624,7 +1618,6 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         condition: setCondition,
         accel: setAccel,
         tire: setTire,
-        torque: setTorque,
         range: setRange,
       }}
       options={{ brands, models, bodyTypes, drives }}
@@ -1638,7 +1631,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       // строка на две сотни символов вместо «/catalog». Выдачу это не меняло: подписи
       // и сервер, и каталог пропускают, — но такую ссылку нельзя ни отправить, ни
       // выложить. Сборка общая с сохранённым поиском, поэтому имена параметров совпадают.
-      onSubmit={() => navigate(savedSearchCatalogHref({ type: normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, torque, range }))}
+      onSubmit={() => navigate(savedSearchCatalogHref({ type: normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, range }))}
     />
   );
 }
@@ -2130,7 +2123,6 @@ const savedFilterDefaults = {
   condition: ANY_CONDITION,
   accel: ANY_ACCEL,
   tire: ANY_TIRE,
-  torque: ANY_TORQUE,
   range: ANY_RANGE,
   ...emptyExclusions(),
   // Выбранная сортировка — часть поиска: открытый заново, он выглядит так же.
@@ -2184,7 +2176,6 @@ const savedSearchChips = (filters) => {
   if (filters.condition !== ANY_CONDITION) chips.push(filters.condition.toLowerCase());
   if (filters.accel && filters.accel !== ANY_ACCEL) chips.push(`разгон ${filters.accel.toLowerCase()}`);
   if (filters.tire && filters.tire !== ANY_TIRE) chips.push(`шины ${filters.tire.toLowerCase().replace("r", "R")}`);
-  if (filters.torque && filters.torque !== ANY_TORQUE) chips.push(`момент ${filters.torque.toLowerCase().replace("н·м", "Н·м")}`);
   if (filters.range && filters.range !== ANY_RANGE) chips.push(`запас хода ${filters.range.toLowerCase()}`);
   const excluded = EXCLUDE_KEYS.flatMap((key) => exclusionValues(filters, key));
   if (excluded.length) chips.push(`кроме ${excluded.join(", ").toLowerCase()}`);
@@ -2215,7 +2206,6 @@ const savedSearchCatalogHref = (filters) => {
   if (filters.condition !== ANY_CONDITION) params.set("condition", filters.condition);
   if (filters.accel && filters.accel !== ANY_ACCEL) params.set("accel", filters.accel);
   if (filters.tire && filters.tire !== ANY_TIRE) params.set("tire", filters.tire);
-  if (filters.torque && filters.torque !== ANY_TORQUE) params.set("torque", filters.torque);
   if (filters.range && filters.range !== ANY_RANGE) params.set("range", filters.range);
   appendExclusions(params, filters);
   if (filters.sort && filters.sort !== "default") params.set("sort", filters.sort);
@@ -2250,7 +2240,6 @@ const savedSearchApiParams = (filters) => {
   if (filters.condition !== ANY_CONDITION) query.set("conditionGrade", conditionGrades[filters.condition]);
   if (filters.accel && filters.accel !== ANY_ACCEL) query.set("accelMax", String(filterNumber(filters.accel)));
   if (filters.tire && filters.tire !== ANY_TIRE) query.set("tireRimMin", String(filterNumber(filters.tire)));
-  if (filters.torque && filters.torque !== ANY_TORQUE) query.set("torqueMin", String(filterNumber(filters.torque)));
   if (filters.range && filters.range !== ANY_RANGE) query.set("rangeMin", String(filterNumber(filters.range)));
   appendExclusions(query, filters, { api: true });
   appendYearRange(query, filters.yearMin, filters.yearMax);
@@ -3866,7 +3855,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
   const selectedType = filters.type === "Электромобиль" ? "Электромобили" : filters.type === "Гибрид" ? "Гибриды" : "Все";
   const selectType = (value) => changeType(value === "Электромобили" ? "Электромобиль" : value === "Гибриды" ? "Гибрид" : "Все");
-  const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || filters.torque !== ANY_TORQUE || (filters.range || ANY_RANGE) !== ANY_RANGE || hasExclusions(filters);
+  const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || hasExclusions(filters);
   const resetFilters = () => setFilters(() => ({
     type: "Все",
     brand: "Все марки",
@@ -3884,7 +3873,6 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
     condition: ANY_CONDITION,
     accel: ANY_ACCEL,
     tire: ANY_TIRE,
-    torque: ANY_TORQUE,
     range: ANY_RANGE,
     ...emptyExclusions(),
   }));
@@ -3909,7 +3897,6 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
         condition: update("condition"),
         accel: update("accel"),
         tire: update("tire"),
-        torque: update("torque"),
         range: update("range"),
         removeExclusion: (key, value) => setFilters((old) => ({ ...old, [key]: exclusionValues(old, key).filter((item) => item !== value) })),
       }}
@@ -3922,7 +3909,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
       onSaveSearch={onSaveSearch}
       searchSaved={searchSaved}
       searchUpdate={searchUpdate}
-      initiallyExpanded={filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || filters.torque !== ANY_TORQUE || (filters.range || ANY_RANGE) !== ANY_RANGE}
+      initiallyExpanded={filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE}
     />
   );
 }
@@ -4428,7 +4415,6 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const rawCondition = params.get("condition");
   const rawAccel = params.get("accel");
   const rawTire = params.get("tire");
-  const rawTorque = params.get("torque");
   const rawRange = params.get("range");
   const initialFilters = {
     type: rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",
@@ -4450,7 +4436,6 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     condition: conditionOptions.includes(rawCondition) ? rawCondition : ANY_CONDITION,
     accel: accelOptions.includes(rawAccel) || FREE_ACCEL_LABEL.test(rawAccel || "") ? rawAccel : ANY_ACCEL,
     tire: tireOptions.includes(rawTire) ? rawTire : ANY_TIRE,
-    torque: torqueOptions.includes(rawTorque) ? rawTorque : ANY_TORQUE,
     // Умный поиск приносит и свои ступеньки («до 4.5 с», «от 70 кВт·ч», «от 550 км») —
     // принимаем любую подпись правильной формы, а не только из выпадающего списка.
     range: rangeOptions.includes(rawRange) || FREE_RANGE_LABEL.test(rawRange || "") ? rawRange : ANY_RANGE,
@@ -4698,7 +4683,6 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     if (filters.condition !== ANY_CONDITION) query.set("conditionGrade", conditionGrades[filters.condition]);
     if (filters.accel !== ANY_ACCEL) query.set("accelMax", String(filterNumber(filters.accel)));
     if (filters.tire !== ANY_TIRE) query.set("tireRimMin", String(filterNumber(filters.tire)));
-    if (filters.torque !== ANY_TORQUE) query.set("torqueMin", String(filterNumber(filters.torque)));
     if ((filters.range || ANY_RANGE) !== ANY_RANGE) query.set("rangeMin", String(filterNumber(filters.range)));
     appendExclusions(query, filters, { api: true });
     appendYearRange(query, filters.yearMin, filters.yearMax);
@@ -5895,7 +5879,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </div>
               {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
               <div>
-                <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
+                <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
                 <strong>{money(price.serviceUsd, currency)}</strong>
               </div>
             </div>
@@ -6299,7 +6283,7 @@ function OrderDraft({ car, navigate }) {
               </div>
               {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
               <div>
-                <PriceLabel label="Услуги evcars.by" description="Проверка, выкуп и документы" />
+                <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
                 <b>{money(price.serviceUsd, currency)}</b>
               </div>
             </div>
@@ -6349,7 +6333,7 @@ function OrderDraft({ car, navigate }) {
             )}
             <p className="source-warning">
               <Info size={17} />
-              Это заявление площадки и продавца, не независимая проверка evcars.by.
+              Это заявление площадки и продавца, не независимая проверка abcars.by.
             </p>
           </section>
           <section className="order-section">
@@ -6552,7 +6536,7 @@ function HowItWorksPage({ navigate }) {
         </div>
       </section>
       {/* Наш подход и «чего мы не обещаем» переехали сюда с отдельной страницы «О нас»:
-          у неё был тот же заголовок «О сервисе evcars.by», и обе страницы отвечали на
+          у неё был тот же заголовок «О сервисе abcars.by», и обе страницы отвечали на
           один запрос. Тексты берём из src/service-copy.js — оттуда же их берёт разметка
           для поисковика, поэтому страница и её видимая роботу версия не разойдутся. */}
       <section className="info-section page-width">
@@ -6814,11 +6798,11 @@ function ContactsPage({ navigate, theme }) {
         </a>
       </section>
 
-      <section className="contact-map page-width" aria-label="Офис evcars.by на карте">
+      <section className="contact-map page-width" aria-label="Офис abcars.by на карте">
         <iframe
           key={theme}
           src={mapSrc}
-          title="Офис evcars.by на Яндекс Картах"
+          title="Офис abcars.by на Яндекс Картах"
           loading="lazy"
           allowFullScreen
         />
@@ -7177,7 +7161,7 @@ function SiteFooter({ navigate }) {
     <footer className="site-footer">
       <div className="page-width footer-main">
         <div className="footer-brand">
-          <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="evcars.by — на главную"><SiteLogo /></AppLink>
+          <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="abcars.by — на главную"><SiteLogo /></AppLink>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
           <div className="footer-socials">
             <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramLogo size={27} weight="fill" /></a>
@@ -7206,7 +7190,7 @@ function InfoCta({ navigate, title, text }) {
   return (
     <section className="info-cta page-width">
       <div>
-        <span>Каталог evcars.by</span>
+        <span>Каталог abcars.by</span>
         <h2>{title}</h2>
         <p>{text}</p>
       </div>

@@ -13,7 +13,7 @@ const shell = `<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <title>evcars.by</title>
+    <title>abcars.by</title>
   </head>
   <body>
     <div id="root"></div>
@@ -21,7 +21,7 @@ const shell = `<!doctype html>
 </html>
 `;
 
-const renderer = createSeoRenderer({ shell, siteUrl: "https://evcars.by", allowIndexing: true });
+const renderer = createSeoRenderer({ shell, siteUrl: "https://abcars.by", allowIndexing: true });
 const car = (id, chinaPrice, year = 2023) => ({
   id: `che168-${id}`,
   title: `BYD Han ${year}`,

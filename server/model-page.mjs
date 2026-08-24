@@ -11,7 +11,7 @@ import { createSeoRenderer } from "./seo-render.mjs";
 import { MODEL_PAGES, findModelPage } from "../src/model-pages.js";
 import { brandLandingPath, findCatalogLanding } from "../src/catalog-landings.js";
 
-const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
+const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
 // Сколько машин перечисляем ссылками. Двенадцать — столько же, сколько на странице
 // машины: этого хватает, чтобы показать разброс цен и дать роботу путь в карточки.

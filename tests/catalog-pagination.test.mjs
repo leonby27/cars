@@ -21,7 +21,7 @@ const shell = `<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <title>evcars.by</title>
+    <title>abcars.by</title>
   </head>
   <body>
     <div id="root"></div>
@@ -29,7 +29,7 @@ const shell = `<!doctype html>
 </html>
 `;
 
-const renderer = createSeoRenderer({ shell, siteUrl: "https://evcars.by", allowIndexing: true });
+const renderer = createSeoRenderer({ shell, siteUrl: "https://abcars.by", allowIndexing: true });
 const landing = findCatalogLanding("/catalog/electric");
 const cars = (from, count) =>
   Array.from({ length: count }, (_, index) => ({
@@ -53,20 +53,20 @@ test("страниц у списка ровно столько, сколько �
 
 test("первая страница раздела — обычный адрес, без номера", () => {
   const page = renderer.landingPage({ landing, cars: cars(1, CATALOG_PAGE_SIZE), total: 20114, page: 1, pages: 50, perPage: CATALOG_PAGE_SIZE });
-  assert.equal(page.canonical, "https://evcars.by/catalog/electric");
+  assert.equal(page.canonical, "https://abcars.by/catalog/electric");
   assert.doesNotMatch(page.html, /rel="prev"/);
-  assert.match(page.html, /<link rel="next" href="https:\/\/evcars\.by\/catalog\/electric\?page=2"/);
+  assert.match(page.html, /<link rel="next" href="https:\/\/abcars\.by\/catalog\/electric\?page=2"/);
   assert.match(page.html, /<a href="\/catalog\/electric\?page=2">2<\/a>/);
   assert.match(page.html, rangeLine(1, 50, CATALOG_PAGE_SIZE));
 });
 
 test("вторая страница сама себе первоисточник и знает соседей", () => {
   const page = renderer.landingPage({ landing, cars: cars(101, CATALOG_PAGE_SIZE), total: 20114, page: 2, pages: 50, perPage: CATALOG_PAGE_SIZE });
-  assert.equal(page.canonical, "https://evcars.by/catalog/electric?page=2");
-  assert.match(page.html, /<link rel="canonical" href="https:\/\/evcars\.by\/catalog\/electric\?page=2"/);
-  assert.match(page.html, /<link rel="prev" href="https:\/\/evcars\.by\/catalog\/electric"/);
-  assert.match(page.html, /<link rel="next" href="https:\/\/evcars\.by\/catalog\/electric\?page=3"/);
-  assert.match(page.html, /<title>[^<]*— страница 2 \| evcars\.by<\/title>/);
+  assert.equal(page.canonical, "https://abcars.by/catalog/electric?page=2");
+  assert.match(page.html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog\/electric\?page=2"/);
+  assert.match(page.html, /<link rel="prev" href="https:\/\/abcars\.by\/catalog\/electric"/);
+  assert.match(page.html, /<link rel="next" href="https:\/\/abcars\.by\/catalog\/electric\?page=3"/);
+  assert.match(page.html, /<title>[^<]*— страница 2 \| abcars\.by<\/title>/);
   assert.match(page.html, /<h1>[^<]*— страница 2<\/h1>/);
   assert.match(page.html, rangeLine(2, 50, CATALOG_PAGE_SIZE));
   assert.match(page.html, /<meta name="robots" content="index, follow/, "страницы списка закрывать от индексации нечем");
@@ -90,12 +90,12 @@ test("список из одной страницы обходится без н
   const page = renderer.landingPage({ landing, cars: cars(1, 12), total: 12, page: 1, pages: 1, perPage: CATALOG_PAGE_SIZE });
   assert.doesNotMatch(page.html, /Страницы каталога/);
   assert.doesNotMatch(page.html, /rel="next"/);
-  assert.equal(page.canonical, "https://evcars.by/catalog/electric");
+  assert.equal(page.canonical, "https://abcars.by/catalog/electric");
 });
 
 test("у каждого раздела свой постраничный адрес", () => {
   for (const item of CATALOG_LANDINGS) {
     const page = renderer.landingPage({ landing: item, cars: cars(101, 10), total: 5000, page: 2, pages: 50, perPage: CATALOG_PAGE_SIZE });
-    assert.equal(page.canonical, `https://evcars.by${item.path}?page=2`);
+    assert.equal(page.canonical, `https://abcars.by${item.path}?page=2`);
   }
 });

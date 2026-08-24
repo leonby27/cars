@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
+const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const distFile = (name) => fileURLToPath(new URL(`../dist/client/${name}`, import.meta.url));
 const files = new Map();
 

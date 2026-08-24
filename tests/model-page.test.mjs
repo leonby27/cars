@@ -6,11 +6,11 @@ import { CATALOG_LANDINGS, findCatalogLanding, landingsForCar } from "../src/cat
 
 const shell = `<!doctype html>
 <html lang="ru">
-  <head><meta charset="utf-8" /><title>evcars.by</title></head>
+  <head><meta charset="utf-8" /><title>abcars.by</title></head>
   <body><div id="root"></div></body>
 </html>
 `;
-const render = (options = {}) => createSeoRenderer({ shell, siteUrl: "https://evcars.by", allowIndexing: true, ...options });
+const render = (options = {}) => createSeoRenderer({ shell, siteUrl: "https://abcars.by", allowIndexing: true, ...options });
 
 const page = findModelPage("/models/byd-han");
 const cars = [
@@ -50,7 +50,7 @@ test("текст обзора и частые вопросы остаются в
   assert.match(html, /"@type":"FAQPage"/);
   assert.match(html, /"@type":"ItemList"/);
   assert.match(html, /"@type":"BreadcrumbList"/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/models\/byd-han"/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/models\/byd-han"/);
   // Внутренние ссылки без косой черты на конце — хостинг с чертой перебрасывает.
   assert.doesNotMatch(html, /<a href="\/[^"]+\/"/);
 });

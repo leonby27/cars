@@ -16,7 +16,7 @@ const shell = `<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <title>evcars.by</title>
+    <title>abcars.by</title>
   </head>
   <body>
     <div id="root"></div>
@@ -75,7 +75,7 @@ async function build(env = {}) {
   const catalogPath = path.join(dir, "cars.json");
   await writeFile(catalogPath, JSON.stringify({ generatedAt: "2026-08-18T19:18:05.086Z", cars: fixtureCars }));
   await run(process.execPath, [script], {
-    env: { ...process.env, SEO_OUTPUT_DIR: clientDir, SEO_CATALOG: catalogPath, SITE_URL: "https://evcars.by", SEO_ALLOW_INDEXING: "", SEO_VEHICLE_PAGES: "", SEO_SITEMAP_TOKEN: "testtoken", ...env },
+    env: { ...process.env, SEO_OUTPUT_DIR: clientDir, SEO_CATALOG: catalogPath, SITE_URL: "https://abcars.by", SEO_ALLOW_INDEXING: "", SEO_VEHICLE_PAGES: "", SEO_SITEMAP_TOKEN: "testtoken", ...env },
   });
   return {
     read: (relative) => readFile(path.join(clientDir, relative), "utf8"),
@@ -117,7 +117,7 @@ test("предсказуемых имён карты сайта в сборке 
   await missing("sitemap-pages.xml");
   const [robots, sitemap] = await Promise.all([read("robots.txt"), read(sitemapIndex)]);
   assert.doesNotMatch(robots, /Sitemap:/i);
-  assert.match(sitemap, /<loc>https:\/\/evcars\.by\/sitemap-testtoken-pages\.xml<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/abcars\.by\/sitemap-testtoken-pages\.xml<\/loc>/);
 });
 
 test("заготовка страницы машины отдаётся без чужого адреса-первоисточника", async () => {
@@ -160,7 +160,7 @@ test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", asyn
   assert.match(home, /<a href="\/cars\/170268619192114"/);
   assert.doesNotMatch(home, /<a href="\/cars\/guazi-/);
   assert.match(html, /<title>BYD Song Pro 2024, 21[^<]*400 км — цена до Минска/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/cars\/170268619192114"/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/cars\/170268619192114"/);
   assert.match(html, /<meta name="robots" content="index, follow/);
   assert.match(html, /"@type":"Vehicle"/);
   assert.match(html, /<h1>BYD Song Pro 2024<\/h1>/);
@@ -191,7 +191,7 @@ test("обзоры моделей файлами не собираются, но
   // Общая страница «О моделях авто» файлом остаётся: она не зависит от каталога.
   assert.match(index, /<h1>/);
   assert.match(index, /<a href="\/models\/zeekr-007gt">/);
-  assert.match(pagesXml, /<loc>https:\/\/evcars\.by\/models\/zeekr-007gt<\/loc>/);
+  assert.match(pagesXml, /<loc>https:\/\/abcars\.by\/models\/zeekr-007gt<\/loc>/);
 });
 
 test("страницы-инструменты собираются с живыми цифрами", async () => {
@@ -218,7 +218,7 @@ test("страницы-инструменты собираются с живым
   // Все четыре попадают в карту сайта.
   const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
   for (const path of ["/ev-quota", "/customs", "/delivery-cost", "/calculator"]) {
-    assert.match(pagesXml, new RegExp(`<loc>https://evcars\\.by${path}</loc>`));
+    assert.match(pagesXml, new RegExp(`<loc>https://abcars\\.by${path}</loc>`));
   }
 });
 
@@ -237,13 +237,13 @@ test("на страницы-инструменты ведёт подвал ка�
 
 test("страницы «О нас» больше нет, а её содержимое живёт на странице «О сервисе»", async () => {
   // Дубль заголовка: у `/about` и `/how-it-works` был один и тот же h1 «О сервисе
-  // evcars.by», и обе отвечали на один запрос. Адрес перебрасывается на хостинге
+  // abcars.by», и обе отвечали на один запрос. Адрес перебрасывается на хостинге
   // (vercel.json), поэтому страницы в сборке быть не должно — иначе готовый файл
   // окажется в карте сайта и снова начнёт соревноваться со «О сервисе».
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
   await missing("about/index.html");
   const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
-  assert.doesNotMatch(pagesXml, /<loc>https:\/\/evcars\.by\/about<\/loc>/);
+  assert.doesNotMatch(pagesXml, /<loc>https:\/\/abcars\.by\/about<\/loc>/);
   const service = await read("how-it-works/index.html");
   assert.match(service, /Прозрачность на каждом шаге/);
   assert.match(service, /Чего мы не обещаем/);
@@ -258,7 +258,7 @@ test("на главной есть разметка сайта и поиска �
   const home = await read("index.html");
   assert.match(home, /"@type":"WebSite"/);
   assert.match(home, /"@type":"SearchAction"/);
-  assert.match(home, /"urlTemplate":"https:\/\/evcars\.by\/catalog\?q=\{search_term_string\}"/);
+  assert.match(home, /"urlTemplate":"https:\/\/abcars\.by\/catalog\?q=\{search_term_string\}"/);
   assert.match(home, /"query-input":"required name=search_term_string"/);
   // Только на главной: на остальных страницах эта разметка не нужна.
   assert.doesNotMatch(await read("faq/index.html"), /"@type":"SearchAction"/);
@@ -357,10 +357,10 @@ test("адреса не оканчиваются косой чертой ни в
   for (const [name, html] of [["главная", home], ["машина", car]]) {
     const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
     assert.ok(canonical, `${name}: адрес-первоисточник должен быть указан`);
-    if (canonical !== "https://evcars.by/") assert.doesNotMatch(canonical, /\/$/, `${name}: ${canonical}`);
+    if (canonical !== "https://abcars.by/") assert.doesNotMatch(canonical, /\/$/, `${name}: ${canonical}`);
     // Хлебные крошки и og:url ссылаются на те же адреса, что и первоисточник.
-    assert.doesNotMatch(html, /"item":"https:\/\/evcars\.by\/[^"]+\/"/, `${name}: крошки с чертой`);
-    assert.doesNotMatch(html, /<meta property="og:url" content="https:\/\/evcars\.by\/[^"]+\/"/, `${name}: og:url с чертой`);
+    assert.doesNotMatch(html, /"item":"https:\/\/abcars\.by\/[^"]+\/"/, `${name}: крошки с чертой`);
+    assert.doesNotMatch(html, /<meta property="og:url" content="https:\/\/abcars\.by\/[^"]+\/"/, `${name}: og:url с чертой`);
     // Внутренние ссылки ведут туда же, куда указывает первоисточник.
     assert.doesNotMatch(html, /<a href="\/[^"]+\/"/, `${name}: внутренняя ссылка с чертой`);
   }
@@ -368,7 +368,7 @@ test("адреса не оканчиваются косой чертой ни в
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
     assert.ok(locs.length, `карта «${name}» не должна быть пустой`);
     for (const loc of locs) {
-      if (loc !== "https://evcars.by/") assert.doesNotMatch(loc, /\/$/, `карта «${name}»: ${loc}`);
+      if (loc !== "https://abcars.by/") assert.doesNotMatch(loc, /\/$/, `карта «${name}»: ${loc}`);
     }
   }
 });

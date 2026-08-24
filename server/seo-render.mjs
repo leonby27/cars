@@ -90,7 +90,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     <meta name="robots" content="${robots}" />${canonicalTags}${pagingTags}
     <meta property="og:locale" content="ru_BY" />
     <meta property="og:type" content="${type}" />
-    <meta property="og:site_name" content="evcars.by" />
+    <meta property="og:site_name" content="abcars.by" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />${urlTag}${imageTags}
     <meta name="twitter:card" content="summary_large_image" />
@@ -101,7 +101,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
 
   function navigation(modelsPath = "/models") {
     return `<header class="site-header"><nav class="page-width" aria-label="Основная навигация">
-    <a href="${hrefRoute("/")}">evcars.by</a>
+    <a href="${hrefRoute("/")}">abcars.by</a>
     <a href="${hrefRoute("/catalog/")}">Автомобили</a>
     <a href="${hrefRoute("/how-it-works/")}">О сервисе</a>
     <a href="${hrefRoute(`${modelsPath}/`)}">О моделях авто</a>
@@ -226,7 +226,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       "@context": "https://schema.org",
       "@type": "Organization",
-      name: "evcars.by",
+      name: "abcars.by",
       url: routeUrl("/"),
       logo: `${base}/og.jpg`,
       areaServed: { "@type": "Country", name: "Беларусь" },
@@ -242,7 +242,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      name: "evcars.by",
+      name: "abcars.by",
       alternateName: "Автомобили из Китая в Беларусь",
       url: routeUrl("/"),
       inLanguage: "ru-BY",
@@ -342,7 +342,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         price: landed.totalUsd,
         availability: "https://schema.org/InStock",
         itemCondition: "https://schema.org/UsedCondition",
-        seller: { "@type": "Organization", name: "evcars.by", url: routeUrl("/") },
+        seller: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
       },
     };
     const modelLink = modelPage
@@ -360,7 +360,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: `${titleText}, ${number(car.mileage)} км — цена до Минска | evcars.by`,
+        title: `${titleText}, ${number(car.mileage)} км — цена до Минска | abcars.by`,
         description,
         canonical,
         body,
@@ -434,7 +434,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
 
   const CATALOG_INDEX = {
     route: "/catalog/",
-    title: "Автомобили с пробегом из Китая — каталог и цены | evcars.by",
+    title: "Автомобили с пробегом из Китая — каталог и цены | abcars.by",
     description: "Каталог автомобилей с пробегом из Китая: электромобили и гибриды, характеристики, пробег и ориентировочная стоимость доставки в Беларусь.",
     h1: "Автомобили с пробегом из Китая",
     lead: "Выберите автомобиль, изучите характеристики и получите предварительный расчёт стоимости до Минска.",
@@ -475,7 +475,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: page > 1 ? `${CATALOG_INDEX.h1} — страница ${page} | evcars.by` : CATALOG_INDEX.title,
+        title: page > 1 ? `${CATALOG_INDEX.h1} — страница ${page} | abcars.by` : CATALOG_INDEX.title,
         description: page > 1 ? `${CATALOG_INDEX.description} Страница ${page} из ${pages}.` : CATALOG_INDEX.description,
         canonical,
         body,
@@ -544,7 +544,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: page > 1 ? `${landing.h1} — страница ${page} | evcars.by` : landing.seoTitle,
+        title: page > 1 ? `${landing.h1} — страница ${page} | abcars.by` : landing.seoTitle,
         description: page > 1 ? `${landing.seoDescription} Страница ${page} из ${pages}.` : landing.seoDescription,
         canonical,
         body,
@@ -563,8 +563,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   function landingMissingPage() {
     const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Такого раздела каталога нет</h1><p>Возможно, ссылка устарела. Все автомобили с пробегом из Китая собраны в каталоге.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей из Китая</a></p></main>${footer()}`;
     return renderHtml({
-      title: "Раздел каталога не найден | evcars.by",
-      description: "Такого раздела каталога нет. Все автомобили с пробегом из Китая собраны в каталоге evcars.by.",
+      title: "Раздел каталога не найден | abcars.by",
+      description: "Такого раздела каталога нет. Все автомобили с пробегом из Китая собраны в каталоге abcars.by.",
       canonical: null,
       body,
       image: null,
@@ -696,8 +696,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   function carGonePage() {
     const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Объявление больше не доступно</h1><p>Эта машина продана или снята с продажи в Китае. Похожие автомобили с пробегом есть в каталоге — там же можно получить расчёт стоимости до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей из Китая</a></p></main>${footer()}`;
     return renderHtml({
-      title: "Объявление больше не доступно | evcars.by",
-      description: "Это объявление снято с продажи. Похожие автомобили с пробегом из Китая есть в каталоге evcars.by.",
+      title: "Объявление больше не доступно | abcars.by",
+      description: "Это объявление снято с продажи. Похожие автомобили с пробегом из Китая есть в каталоге abcars.by.",
       canonical: null,
       body,
       image: null,

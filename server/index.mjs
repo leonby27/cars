@@ -40,7 +40,7 @@ server.on("error", (error) => {
   setTimeout(() => server.listen(port, "0.0.0.0"), 250);
 });
 
-server.listen(port, "0.0.0.0", () => console.log(`evcars.by API: http://127.0.0.1:${port}`));
+server.listen(port, "0.0.0.0", () => console.log(`abcars.by API: http://127.0.0.1:${port}`));
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

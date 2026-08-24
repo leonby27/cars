@@ -10,7 +10,7 @@ import { createSeoRenderer } from "./seo-render.mjs";
 import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
 
-const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
+const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
 // Сколько машин на одной странице раздела — столько же, сколько догружает кнопка
 // «Подгрузить ещё» в каталоге. Раньше здесь было 48 и следующей страницы не было вовсе:

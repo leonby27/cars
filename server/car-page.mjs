@@ -17,7 +17,7 @@ import { modelPageForCar } from "../src/model-pages.js";
 import { landingsForCar } from "../src/catalog-landings.js";
 import { normalizeDrive } from "../src/drive-types.js";
 
-const siteUrl = String(process.env.SITE_URL || "https://evcars.by").replace(/\/+$/, "");
+const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
 // Сколько ссылок на другие машины той же модели ставим внизу страницы. Это единственный
 // путь, по которому робот переходит из карточки в карточку: списки в приложении рисует

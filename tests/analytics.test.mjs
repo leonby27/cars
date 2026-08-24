@@ -69,7 +69,7 @@ test("заходы с рабочего компьютера в аналитик�
   for (const host of ["localhost", "127.0.0.1", "192.168.1.9", "10.14.0.2", "mac.local"]) {
     assert.equal(isLocalVisit(host), true, host);
   }
-  for (const host of ["evcars.by", "chinacar-mvp.vercel.app", "www.evcars.by"]) {
+  for (const host of ["abcars.by", "chinacar-mvp.vercel.app", "www.abcars.by"]) {
     assert.equal(isLocalVisit(host), false, host);
   }
 });

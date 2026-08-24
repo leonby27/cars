@@ -8,7 +8,7 @@ const shell = `<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <title>evcars.by</title>
+    <title>abcars.by</title>
   </head>
   <body>
     <div id="root"></div>
@@ -16,7 +16,7 @@ const shell = `<!doctype html>
 </html>
 `;
 
-const render = (options = {}) => createSeoRenderer({ shell, siteUrl: "https://evcars.by", allowIndexing: true, ...options });
+const render = (options = {}) => createSeoRenderer({ shell, siteUrl: "https://abcars.by", allowIndexing: true, ...options });
 
 const cars = [
   { id: "che168-1", title: "BYD Han 2023", brand: "BYD", model: "Han", year: 2023, mileage: 21400, chinaPrice: 128000, type: "Электромобиль" },
@@ -69,8 +69,8 @@ test("страница раздела отдаётся с текстом, маш
   // Блок «другие разделы» группирует их по виду, поэтому нужен настоящий раздел.
   const others = [findCatalogLanding("/catalog/tesla"), findCatalogLanding("/catalog/electric")];
   const { html } = render().landingPage({ landing, cars, total: 5673, modelPages, others });
-  assert.match(html, /<title>BYD из Китая — каталог с ценами до Минска \| evcars\.by<\/title>/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/catalog\/byd"/);
+  assert.match(html, /<title>BYD из Китая — каталог с ценами до Минска \| abcars\.by<\/title>/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog\/byd"/);
   assert.match(html, /<h1>Автомобили BYD из Китая с доставкой в Беларусь<\/h1>/);
   assert.match(html, /В наличии 5[^<]*673 автомобиля/);
   // Текст раздела лежит в самой странице, а не подгружается скриптом.
@@ -84,7 +84,7 @@ test("страница раздела отдаётся с текстом, маш
   assert.match(html, /"@type":"BreadcrumbList"/);
   // Адреса без косой черты на конце — хостинг с чертой перебрасывает.
   assert.doesNotMatch(html, /<a href="\/[^"]+\/"/);
-  assert.doesNotMatch(html, /"item":"https:\/\/evcars\.by\/[^"]+\/"/);
+  assert.doesNotMatch(html, /"item":"https:\/\/abcars\.by\/[^"]+\/"/);
 });
 
 test("пустой раздел не показывает пустой список", () => {
@@ -124,7 +124,7 @@ test("общая страница каталога показывает маши
   assert.match(html, /<h1>Автомобили с пробегом из Китая<\/h1>/);
   assert.match(html, /В каталоге 32[\s\u00a0\u202f]916 автомобилей/);
   assert.match(html, /<a href="\/cars\/1">BYD Han 2023<\/a>/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/catalog"/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog"/);
   assert.match(html, /"@type":"ItemList"/);
   const sections = [...html.matchAll(/<a href="\/catalog\/[a-z0-9-]+"/g)];
   assert.ok(sections.length >= 25, `ссылок на разделы ${sections.length}, ожидалось не меньше 25`);

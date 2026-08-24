@@ -103,7 +103,7 @@ export default {
 
     const privateRoute = ["/account", "/favorites", "/login", "/register", "/analytics"].includes(cleanPath) || cleanPath.startsWith("/orders/");
     if (!privateRoute) {
-      const body = request.method === "HEAD" ? null : '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="robots" content="noindex, nofollow"><title>Страница не найдена | evcars.by</title></head><body><main><h1>Страница не найдена</h1><p><a href="/">Вернуться на главную</a></p></main></body></html>';
+      const body = request.method === "HEAD" ? null : '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="robots" content="noindex, nofollow"><title>Страница не найдена | abcars.by</title></head><body><main><h1>Страница не найдена</h1><p><a href="/">Вернуться на главную</a></p></main></body></html>';
       return new Response(body, { status:404, headers:{ ...SECURITY_HEADERS, "content-type":"text/html; charset=utf-8", "x-robots-tag":"noindex, nofollow, noarchive" } });
     }
     const fallbackUrl = new URL(request.url);

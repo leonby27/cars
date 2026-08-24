@@ -9,7 +9,7 @@ const shell = `<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <title>evcars.by</title>
+    <title>abcars.by</title>
   </head>
   <body>
     <div id="root"></div>
@@ -43,15 +43,15 @@ const related = [
 const modelPage = { path: "/models/byd-han", name: "BYD Han", brand: "BYD", model: "Han" };
 
 const render = (options = {}) =>
-  createSeoRenderer({ shell, siteUrl: "https://evcars.by", allowIndexing: true, ...options });
+  createSeoRenderer({ shell, siteUrl: "https://abcars.by", allowIndexing: true, ...options });
 
 test("страница машины несёт свой заголовок, описание и адрес-первоисточник", () => {
   const { html } = render().carPage({ car });
-  assert.match(html, /<title>BYD Han 2023, 21[^<]*400 км — цена до Минска \| evcars\.by<\/title>/);
+  assert.match(html, /<title>BYD Han 2023, 21[^<]*400 км — цена до Минска \| abcars\.by<\/title>/);
   assert.match(html, /<meta name="description" content="BYD Han 2023: пробег 21[^"]*400 км, электромобиль, ориентировочная цена до Минска — [^"]+\$\. Проверка перед покупкой\."/);
   // Приставка источника из адреса убрана, косой черты на конце нет.
-  assert.match(html, /<link rel="canonical" href="https:\/\/evcars\.by\/cars\/56135000"/);
-  assert.match(html, /<meta property="og:url" content="https:\/\/evcars\.by\/cars\/56135000"/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/cars\/56135000"/);
+  assert.match(html, /<meta property="og:url" content="https:\/\/abcars\.by\/cars\/56135000"/);
   assert.match(html, /<meta property="og:image" content="https:\/\/example\.com\/han-1\.jpg"/);
 });
 
@@ -77,7 +77,7 @@ test("поисковик получает разметку машины, пре�
   assert.match(html, /"@type":"Brand","name":"BYD"/);
   assert.match(html, /"mileageFromOdometer":\{"@type":"QuantitativeValue","value":21400,"unitCode":"KMT"\}/);
   // Крошки ведут на те же адреса, что и первоисточник: без косой черты на конце.
-  assert.doesNotMatch(html, /"item":"https:\/\/evcars\.by\/[^"]+\/"/);
+  assert.doesNotMatch(html, /"item":"https:\/\/abcars\.by\/[^"]+\/"/);
 });
 
 test("страница ссылается на другие машины модели и на обзор модели", () => {

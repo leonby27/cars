@@ -1,11 +1,11 @@
-# Design QA — evcars.by MVP
+# Design QA — abcars.by MVP
 
 Date: 2026-08-13
 
 ## Scope and evidence
 
 - Reference: Auto.ru home, results, listing, and vehicle-detail captures at 1280×720.
-- Implementation: evcars.by home, catalog, vehicle detail, and lead-success state.
+- Implementation: abcars.by home, catalog, vehicle detail, and lead-success state.
 - Responsive checks: desktop 1280×720 and mobile 390×844.
 - Side-by-side visual evidence: `qa-comparison.png`.
 
@@ -38,7 +38,7 @@ Passed after fixes. Desktop and mobile layouts have no overlap or clipped primar
 
 ## Intentional product deviations
 
-- Temporary `evcars.by` wordmark and coral accent establish the MVP's own identity.
+- Temporary `abcars.by` wordmark and coral accent establish the MVP's own identity.
 - No advertising column; it is replaced by an explanation of the vehicle-check service.
 - Destination price is explicitly approximate, matching the agreed MVP scope.
 
