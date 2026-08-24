@@ -333,6 +333,15 @@ try {
 
   await flushWrites();
 
+  // Проданная машина уходит и из избранного: каталог её больше не показывает, и в
+  // личном кабинете она висела бы карточкой, которую уже нельзя открыть. Чистим не
+  // только помеченные этим прогоном, а всё избранное с неживыми объявлениями —
+  // состояние снимает и `db:expire`, а до этого места чистка не доходила.
+  // Заказы не трогаем: по ним человек уже общается с нами, там машина должна остаться.
+  const favoritesCleared = dryRun ? 0 : (await pool.query(`DELETE FROM customer_favorites f
+    USING listings l WHERE l.id = f.listing_id AND l.status <> 'active'`)).rowCount;
+  if (favoritesCleared) console.log(`[favorites] ${favoritesCleared} saved cards removed: their listings are gone`);
+
   const drops = stats.drops;
   const report = {
     startedAt: new Date(startedAt).toISOString(),
@@ -352,6 +361,7 @@ try {
     detailChecked: skipDetail ? 0 : prioritized.size + Math.min(missing.length, detailLimit),
     sold: stats.sold,
     noAnswer: unknown,
+    favoritesCleared,
     biggestDrops: [...drops].sort((a, b) => (a.usd - a.oldUsd) - (b.usd - b.oldUsd)).slice(0, 10)
       .map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })),
   };

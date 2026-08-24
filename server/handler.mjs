@@ -384,7 +384,12 @@ export async function handleApiRequest(request, response) {
     const carMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)$/);
     if (carMatch) {
       const car = await getCar(decodeURIComponent(carMatch[1]));
+      // Проданная машина отвечает так же, как несуществующая: каталог её уже не
+      // показывает, и карточка не должна обещать то, чего в Китае больше нет.
+      // На этом же ответе держится чистка избранного: страница «Избранное» убирает
+      // из списка машину, за которой пришло «объявления нет».
       // Ненайденную карточку не кэшируем: объявление может появиться следующим импортом.
+      if (car && car.available === false) return json(response, 404, { error:"listing_unavailable" });
       return car ? json(response, 200, car, catalogCache) : json(response, 404, { error:"car_not_found" });
     }
     if (request.method === "POST" && url.pathname === "/api/order-drafts") {

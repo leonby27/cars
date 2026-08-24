@@ -138,7 +138,13 @@ export function buildCarOrder(searchParams) {
 
 export function rowToCar(row) {
   const raw = row.source_payload || {};
-  return normalizeCar({ ...raw, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:"Карточка доступна", statusTone:"green", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, previousPriceUsd:Number(row.previous_price_usd) || null, priceChangedAt:row.price_changed_at, sourceId:raw.sourceId || `${row.source === "Che168" ? "CH" : "GZ"}-${row.external_id}`, ...row.specifications });
+  // Проданное объявление тоже доходит сюда: карточку по номеру спрашивают заявки и
+  // служебные скрипты, поэтому `getCar` не фильтрует по состоянию. Признак
+  // `available` — единственное место, где настоящее состояние строки видно снаружи:
+  // по нему и `/api/cars/<номер>`, и готовая страница машины отвечают «объявления
+  // больше нет». Строка без столбца состояния (узкие выборки) считается живой.
+  const available = row.status === undefined || row.status === "active";
+  return normalizeCar({ ...raw, available, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:available ? "Карточка доступна" : "Объявление снято с продажи", statusTone:available ? "green" : "red", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, previousPriceUsd:Number(row.previous_price_usd) || null, priceChangedAt:row.price_changed_at, sourceId:raw.sourceId || `${row.source === "Che168" ? "CH" : "GZ"}-${row.external_id}`, ...row.specifications });
 }
 
 export function withoutDetailPayload(car) {

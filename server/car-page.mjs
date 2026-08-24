@@ -40,7 +40,9 @@ export async function renderCarPage(id) {
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
   const car = await getCar(String(id || "").trim());
-  if (!car) return { status: 404, html: renderer.carGonePage() };
+  // Проданная машина здесь равна несуществующей: страница с честной ценой и наличием
+  // из неё уже не получится, а 200 держал бы её в индексе поисковика как живую.
+  if (!car || car.available === false) return { status: 404, html: renderer.carGonePage() };
   const related = await relatedCars(car);
   const page = renderer.carPage({
     car: { ...car, drive: normalizeDrive(car.drive) },

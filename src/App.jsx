@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
@@ -12,7 +13,7 @@ import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
 import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
-import { formatListingAge, getSourceListedAt, isNewListing } from "./listing-age.js";
+import { formatListingAge, getListingAddedAt, getSourceListedAt, isNewListing } from "./listing-age.js";
 import { formatChangeDate, getPriceChange } from "./price-change.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar } from "./model-pages.js";
@@ -300,10 +301,10 @@ const imageSource = (source, width) => {
 // Ширины под места, где показываем фото: с запасом для экранов с двойной плотностью.
 // Большое фото в галерее оставляем как есть — там оригинал и нужен.
 // Кадр карточки на широком экране занимает 250 точек, лента фото на телефоне — около
-// 190: просить 800 значило качать снимок в четыре раза крупнее, чем он показан. На
+// 250: просить 800 значило качать снимок в четыре раза крупнее, чем он показан. На
 // главной это была ровно половина её веса — 68 фотографий вместо 1,4 МБ дают 0,4 МБ.
 const IMAGE_WIDTH_CARD = 600;
-const IMAGE_WIDTH_STRIP = 400;
+const IMAGE_WIDTH_STRIP = 500;
 const IMAGE_WIDTH_TILE = 600;
 const IMAGE_WIDTH_THUMB = 240;
 // Страховка: если хранилище не отдало уменьшенный кадр, подставляем оригинал —
@@ -347,16 +348,35 @@ const pluralRu = (count, one, few, many) => {
 };
 const daysRange = ([low, high]) => `${low}–${high} ${pluralRu(high, "день", "дня", "дней")}`;
 
-// Дата последней сверки карточки с источником (npm run refresh пишет её в
-// last_checked_at); у карточек, которые ещё ни разу не сверяли, — дата импорта.
-function formatCheckedAgo(value) {
+const startOfDayMs = (value) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+
+// «сегодня» / «вчера» / «5 дней назад», а для давних дат — число и месяц:
+// «143 дня назад» посетителю ничего не говорит, «18 августа» — говорит.
+function formatDayAgo(value) {
   const at = new Date(value || "");
   if (!Number.isFinite(at.getTime())) return null;
-  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const days = Math.round((startOfDay(new Date()) - startOfDay(at)) / 86400000);
-  if (days <= 0) return "Обновлено сегодня";
-  if (days === 1) return "Обновлено вчера";
-  return `Обновлено ${days} ${pluralRu(days, "день", "дня", "дней")} назад`;
+  const now = new Date();
+  const days = Math.round((startOfDayMs(now) - startOfDayMs(at)) / 86400000);
+  if (days <= 0) return "сегодня";
+  if (days === 1) return "вчера";
+  if (days <= 30) return `${days} ${pluralRu(days, "день", "дня", "дней")} назад`;
+  const date = formatChangeDate(at);
+  return at.getFullYear() === now.getFullYear() ? date : `${date} ${at.getFullYear()}`;
+}
+
+// Строка дат карточки: когда машина попала в наш каталог (firstSeenAt) и когда мы
+// последний раз сверяли её с источником (last_checked_at, его пишет npm run refresh;
+// у ни разу не сверённых карточек — дата импорта). Сверку показываем, только если она
+// была позже добавления, иначе строка дважды повторяет один и тот же день.
+function carDatesLine(car) {
+  const addedValue = getListingAddedAt(car);
+  const added = formatDayAgo(addedValue);
+  const checked = formatDayAgo(car?.checkedAt);
+  if (!added) return checked ? `Обновлено ${checked}` : null;
+  const addedAt = new Date(addedValue);
+  const checkedAt = new Date(car?.checkedAt || "");
+  const updated = checked && Number.isFinite(checkedAt.getTime()) && startOfDayMs(checkedAt) > startOfDayMs(addedAt);
+  return `Добавлено ${added}${updated ? ` · Обновлено ${checked}` : ""}`;
 }
 
 // Safari отменяет history.replaceState/pushState чаще ~100 раз за 30 секунд
@@ -631,10 +651,11 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
 }
 
 // Ярлык новой машины. Показывается только у карточек, попавших в каталог за
-// последние дни (см. src/listing-age.js). Оформление временное.
-function NewListingBadge({ car }) {
+// последние дни (см. src/listing-age.js). В карточках каталога он лежит поверх
+// фотографии, в свободном углу: в списке — сверху справа, в плитке — снизу справа.
+function NewListingBadge({ car, className }) {
   if (!isNewListing(car)) return null;
-  return <span className="new-listing-badge">Новинка</span>;
+  return <span className={`new-listing-badge${className ? ` ${className}` : ""}`}>Новое</span>;
 }
 
 // Стрелка изменения цены: вверх красная, вниз зелёная. По наведению — цена до
@@ -655,7 +676,7 @@ function PriceChangeMark({ car }) {
   return (
     <span className={`price-change-mark price-change-${change.direction}`} role="img" aria-label={hint} tabIndex="0">
       {change.direction === "up" ? <ArrowUp weight="bold" /> : <ArrowDown weight="bold" />}
-      <ActionTooltip className="price-change-tooltip" text={tooltip} />
+      <ActionTooltip className="price-change-tooltip" text={tooltip} tapToOpen />
     </span>
   );
 }
@@ -2408,7 +2429,7 @@ function useNarrowViewport() {
   return narrow;
 }
 
-function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }) {
+function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, badge = null }) {
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
   const narrow = useNarrowViewport();
   const [active, setActive] = useState(0);
@@ -2497,6 +2518,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen }
         <Images size={15} />
         {car.images?.length || 1}
       </span>
+      {badge}
     </div>
   );
 }
@@ -2508,7 +2530,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
   return (
     <article className="featured-card" data-car-id={car.id} data-feed-key={anchorKey} onClick={onClick} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}>
       <CardLinkOverlay car={car} open={onClick} />
-      <HoverImagePreview car={car} className="featured-image" />
+      <HoverImagePreview car={car} className="featured-image" badge={<NewListingBadge car={car} />} />
       {toggleFavorite && (
         <button
           type="button"
@@ -2523,7 +2545,6 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
         </button>
       )}
       <div className="featured-body">
-        <NewListingBadge car={car} />
         <h3><AppLink href={carHref(car)} navigate={onClick} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
         <p>
           {number(car.mileage)} км · {car.type} · {car.drive}
@@ -3956,7 +3977,6 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <CardLinkOverlay car={car} open={open} />
       <div className="car-row-mobile-header">
         <div>
-          <NewListingBadge car={car} />
           <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
           <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
         </div>
@@ -3972,11 +3992,14 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
           <Heart size={22} weight={favorite ? "fill" : "regular"} />
         </button>
       </div>
-      <HoverImagePreview car={car} className="car-row-image" mobileStrip onMobileOpen={open} />
+      <HoverImagePreview car={car} className="car-row-image" mobileStrip onMobileOpen={open} badge={<NewListingBadge car={car} />} />
       <div className="car-row-info">
+        {/* На узком экране фотографии идут лентой во всю ширину, и ярлык поверх
+            них попадал на соседний кадр — там он стоит строкой под лентой. Какой
+            из двух показать, решает ширина экрана в стилях. */}
+        <NewListingBadge car={car} className="car-row-info-badge" />
         <div className="row-title">
           <div>
-            <NewListingBadge car={car} />
             <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
           </div>
           <div className="row-actions">
@@ -5258,6 +5281,10 @@ function VehicleGallery({ car }) {
         <button className={`gallery-open${dragging ? " dragging" : ""}`} style={{ "--gallery-drag-x": `${dragOffset}px` }} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}>
           <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active])} alt={`${car.title}, фото ${active + 1}`} draggable="false" />
         </button>
+        {/* Ярлык «Новое» поверх фотографии — только для узкого экрана: там строка
+            ярлыка над заголовком отодвигала цену вниз. На широком экране виден
+            ярлык у заголовка, а этот скрыт стилями. */}
+        <NewListingBadge car={car} />
         <span aria-live="polite">
           <Images size={17} />
           {active + 1} из {images.length}
@@ -5622,14 +5649,18 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
 // места нет — под ней. Координаты считаем от кнопки в координатах окна: в быстром
 // просмотре строка действий стоит у самого края прокручиваемой области, и
 // подсказка внутри потока обрезалась бы её границами — и сверху, и справа.
-function ActionTooltip({ text, className = "" }) {
+// Саму подсказку выносим в конец страницы: внутри карусели и других блоков, у
+// которых есть свой сдвиг или обрезка по краям, координаты окна считались бы от
+// этого блока, и подсказка уезжала за экран.
+function ActionTooltip({ text, className = "", tapToOpen = false }) {
+  const anchorRef = useRef(null);
   const tooltipRef = useRef(null);
   const [visible, setVisible] = useState(false);
   const [box, setBox] = useState(null);
   const place = useCallback(() => {
     const tooltip = tooltipRef.current;
-    const button = tooltip?.parentElement;
-    if (!button) return;
+    const button = anchorRef.current?.parentElement;
+    if (!tooltip || !button) return;
     const anchor = button.getBoundingClientRect();
     const gap = 8;
     const edge = 10;
@@ -5644,7 +5675,7 @@ function ActionTooltip({ text, className = "" }) {
     });
   }, []);
   useEffect(() => {
-    const button = tooltipRef.current?.parentElement;
+    const button = anchorRef.current?.parentElement;
     if (!button) return undefined;
     const show = () => {
       place();
@@ -5662,6 +5693,32 @@ function ActionTooltip({ text, className = "" }) {
       button.removeEventListener("blur", hide);
     };
   }, [place]);
+  // На телефоне наведения нет, поэтому подсказку у стрелки цены открывает касание.
+  // Событие дальше не пускаем: иначе вместе с подсказкой откроется и сама карточка.
+  useEffect(() => {
+    if (!tapToOpen) return undefined;
+    const button = anchorRef.current?.parentElement;
+    if (!button) return undefined;
+    const open = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      place();
+      setVisible(true);
+    };
+    button.addEventListener("click", open);
+    return () => button.removeEventListener("click", open);
+  }, [tapToOpen, place]);
+  // Открытую касанием подсказку закрывает следующее касание в любом другом месте.
+  useEffect(() => {
+    if (!tapToOpen || !visible) return undefined;
+    const close = (event) => {
+      const button = anchorRef.current?.parentElement;
+      if (button && button.contains(event.target)) return;
+      setVisible(false);
+    };
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [tapToOpen, visible]);
   // Текст меняется на «Ссылка скопирована» — вместе с ним меняется и ширина.
   useEffect(() => {
     if (visible) place();
@@ -5677,14 +5734,20 @@ function ActionTooltip({ text, className = "" }) {
     };
   }, [visible, place]);
   return (
-    <span
-      ref={tooltipRef}
-      className={`detail-action-tooltip${className ? ` ${className}` : ""}${box?.above === false ? " is-below" : ""}${visible ? " is-visible" : ""}`}
-      style={box ? { top:`${box.top}px`, left:`${box.left}px` } : undefined}
-      aria-hidden="true"
-    >
-      {text}
-    </span>
+    <>
+      <span ref={anchorRef} hidden />
+      {createPortal(
+        <span
+          ref={tooltipRef}
+          className={`detail-action-tooltip${className ? ` ${className}` : ""}${box?.above === false ? " is-below" : ""}${visible ? " is-visible" : ""}`}
+          style={box ? { top:`${box.top}px`, left:`${box.left}px` } : undefined}
+          aria-hidden="true"
+        >
+          {text}
+        </span>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -5810,6 +5873,10 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // батареи и так виден в «Полных характеристиках». Пустые строки не показываем,
   // а без единой строки исчезает и весь блок — вместе с дисклеймером-заглушкой.
   const sourceClaims = translateClaims(car.claims || car.incident);
+  // Когда машина появилась в каталоге и когда мы её последний раз сверяли.
+  // На широком экране строка идёт в подзаголовке, на телефоне подзаголовок скрыт —
+  // там та же строка стоит отдельно, между фотографиями и характеристиками.
+  const datesLine = carDatesLine(car);
   const conditionFacts = [
     [CarProfile, "Владельцы в Китае", car.owners],
     [ShieldCheck, "Страховые случаи", sourceClaims === "Отчёт источника может быть неполным" ? null : sourceClaims],
@@ -5821,6 +5888,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
     <>
       <div className="detail-title">
         <div>
+          {/* Ярлык «Новое» стоит над заголовком отдельной строкой, а не рядом с
+              названием: в строке заголовка он спорил за место со стрелками. */}
+          <NewListingBadge car={car} />
           <div className="detail-title-line">
             {goBack && (
               <button type="button" className="detail-back" aria-label="Назад" onClick={goBack}>
@@ -5829,7 +5899,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </button>
             )}
             <h1>{car.title}</h1>
-            <NewListingBadge car={car} />
             {openFull && (
               <AppLink className="detail-back detail-open-full" href={carHref(car)} navigate={openFull} aria-label="Открыть полную страницу автомобиля">
                 <ArrowUpRight size={20} />
@@ -5838,12 +5907,11 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             )}
           </div>
           <strong className="detail-mobile-price">
-            ≈ {money(price.totalUsd, currency)}
+            ≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} />
           </strong>
-          <p>
-            {car.type} · {car.drive} привод · {number(car.mileage)} км
-            {formatCheckedAgo(car.checkedAt) ? ` · ${formatCheckedAgo(car.checkedAt)}` : ""}
-          </p>
+          {/* Тип, привод и пробег из подзаголовка убраны: они и так стоят
+              строкой ниже, в «Характеристиках». Остались только даты. */}
+          {datesLine && <p>{datesLine}</p>}
         </div>
         <div className="detail-actions">
           <CopyLinkButton car={car} />
@@ -5856,6 +5924,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
       <div className="detail-main">
         <div className="detail-content">
           <VehicleGallery car={car} />
+          {datesLine && <p className="detail-dates">{datesLine}</p>}
           <section className="detail-facts-section">
             <h2>Характеристики</h2>
             <FactList items={specs} />

@@ -1886,6 +1886,14 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   gap: 12px;
   margin: 10px 0 5px;
 }
+/* Ярлык над заголовком: у самого заголовка сверху свой отступ, поэтому здесь
+   зазор нужен только снизу. */
+.detail-title > div > .new-listing-badge {
+  margin: 0;
+}
+.detail-title > div > .new-listing-badge + .detail-title-line {
+  margin-top: 6px;
+}
 .detail-title .detail-title-line h1 {
   margin: 0;
 }
@@ -1968,6 +1976,11 @@ body.header-menu-open .detail-floating-availability {
   color: var(--muted);
   font-size: 16px;
 }
+/* Даты «Добавлено … · Обновлено …» на широком экране стоят в подзаголовке под
+   названием; отдельная строка нужна только на телефоне, где подзаголовок скрыт. */
+.detail-dates {
+  display: none;
+}
 .detail-actions {
   display: flex;
   gap: 6px;
@@ -2002,6 +2015,11 @@ body.header-menu-open .detail-floating-availability {
   color: #fff;
   font-size: 16px;
   font-weight: 700;
+}
+/* Ярлык «Новое» на фотографии машины нужен только на узком экране (см. правило
+   в блоке для 700 точек): на широком его место — над заголовком. */
+.gallery-panel > span.new-listing-badge {
+  display: none;
 }
 .gallery-badges {
   position: absolute;
@@ -4085,7 +4103,7 @@ body.header-menu-open .detail-floating-availability {
   }
   .car-row-image {
     width: calc(100% + 28px);
-    height: 138px;
+    height: 198px;
     max-width: none;
     margin-inline: -14px;
     border-radius: 0;
@@ -4109,10 +4127,10 @@ body.header-menu-open .detail-floating-availability {
     display: none;
   }
   .car-row-mobile-image-strip > img {
-    width: 46%;
-    min-width: 46%;
+    width: 66%;
+    min-width: 66%;
     height: 100%;
-    flex: 0 0 46%;
+    flex: 0 0 66%;
     object-fit: cover;
     scroll-snap-align: start;
     user-select: none;
@@ -4132,6 +4150,17 @@ body.header-menu-open .detail-floating-availability {
   }
   .car-row-info .row-title {
     display: none;
+  }
+  /* Лента фотографий занимает всю ширину, поэтому ярлык на ней перекрывал бы
+     соседний кадр: на узком экране он стоит отдельной строкой под лентой. */
+  .car-row-image > span.new-listing-badge {
+    display: none;
+  }
+  .car-row-info > .car-row-info-badge {
+    display: inline-flex;
+    margin: 10px 0 0;
+    padding: 4px 8px;
+    font-size: 14px;
   }
   .car-row-price {
     display: none;
@@ -4232,6 +4261,15 @@ body.header-menu-open .detail-floating-availability {
   .detail-title p {
     display: none;
   }
+  /* Строка идёт отдельной ячейкой сетки с шагом 30px — сверху его подбираем,
+     чтобы даты стояли под фотографиями, а не висели ровно между блоками. */
+  .detail-dates {
+    display: block;
+    margin: -18px 0 0;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.4;
+  }
   .detail-kicker > span:last-child {
     display: none;
   }
@@ -4245,6 +4283,30 @@ body.header-menu-open .detail-floating-availability {
   }
   .gallery-badges {
     display: none;
+  }
+  /* Над заголовком ярлык прячем — он занимал отдельную строку и отодвигал цену;
+     вместо него зелёный чип стоит поверх фотографии в свободном левом верхнем
+     углу (справа сверху — счётчик кадров). */
+  .detail-title > div > .new-listing-badge {
+    display: none;
+  }
+  .gallery-panel > span.new-listing-badge {
+    top: 12px;
+    right: auto;
+    bottom: auto;
+    left: 12px;
+    display: inline-flex;
+    width: fit-content;
+    height: fit-content;
+    margin: 0;
+    padding: 5px 9px;
+    border-radius: calc(7px * var(--corner-scale));
+    background: #1b8b55;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+    box-shadow: 0 2px 8px rgba(14, 16, 19, 0.28);
   }
   .order-card {
     display: block;
@@ -12405,27 +12467,70 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   }
 }
 
-/* Ярлык «Новинка» — чип на фоне, без обводки. Стиль временный: цвет и форма
-   меняются в одном месте, разметка карточек этого не заметит. */
+/* Ярлык «Новое» — зелёный чип с белым текстом. Цвет задан числом, а не темовой
+   переменной: в тёмной теме --green светлый, и белые буквы на нём терялись бы. */
 .new-listing-badge {
   display: inline-flex;
   align-items: center;
   margin-bottom: 4px;
   padding: 3px 8px;
   border-radius: calc(6px * var(--corner-scale));
-  background: var(--accent-soft);
-  color: var(--accent-dark);
+  background: #1b8b55;
+  color: #ffffff;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
 }
+/* В карточках каталога чип лежит поверх фотографии, в свободном углу: у карточки
+   списка счётчик кадров стоит слева сверху, поэтому ярлык уходит вправо вверх;
+   у плитки правый верх занят сердцем, поэтому ярлык внизу справа — выше полосок
+   перелистывания. Событий мыши чип не ловит: под ним ссылка на карточку.
+
+   Селектор обязан быть точнее, чем `.car-row-image > span` у счётчика кадров:
+   тот задаёт всем прямым потомкам-span тёмный фон и привязку к нижнему краю, и
+   ярлык растягивался на всю высоту фотографии, перекрасившись в тёмный. Поэтому
+   здесь заданы оба вертикальных края и собственный фон. */
+.car-row-image > span.new-listing-badge,
+.featured-image > span.new-listing-badge {
+  position: absolute;
+  z-index: 2;
+  width: fit-content;
+  height: fit-content;
+  margin: 0;
+  padding: 5px 8px;
+  border-radius: calc(7px * var(--corner-scale));
+  background: #1b8b55;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  box-shadow: 0 2px 8px rgba(14, 16, 19, 0.28);
+  pointer-events: none;
+}
+.car-row-image > span.new-listing-badge {
+  top: 9px;
+  right: 9px;
+  bottom: auto;
+  left: auto;
+}
+/* Второй ярлык — для узкого экрана; на широком видно только тот, что на фото. */
+.car-row-info-badge {
+  display: none;
+}
+.featured-image > span.new-listing-badge {
+  top: auto;
+  right: 12px;
+  bottom: 18px;
+  left: auto;
+}
 
 /* Стрелка изменения цены. Вверх — подорожала (красная), вниз — подешевела
-   (зелёная). Размер задан в долях шрифта цены: кружок получается по высоте цифр
-   и на карточке, и в крупном итоге на странице машины. Цвета — прямыми
-   значениями, а не общими переменными темы: в тёмной теме общий зелёный
-   становится светло-мятным, и белая стрелка на нём почти исчезала. */
+   (зелёная). Круг по высоте примерно как шрифт цены — размер в долях этого
+   шрифта, поэтому одинаково смотрится и на карточке, и в крупном итоге на
+   странице машины. Сама стрелка цветная, подложка — тот же цвет с прозрачностью.
+   Цвета прямыми значениями, а не общими переменными темы: в тёмной теме общий
+   зелёный уходит в светло-мятный. */
 .price-change-mark {
   position: relative;
   z-index: 2;
@@ -12433,41 +12538,74 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 0.8em;
-  height: 0.8em;
-  margin-left: 0.24em;
-  border-radius: 50%;
-  color: #fff;
-  vertical-align: baseline;
-  transform: translateY(0.06em);
+  width: 1.14em;
+  height: 1.14em;
+  margin-left: 0.28em;
+  border-radius: 999px;
+  /* Выравниваем по середине строки, а не по базовой линии: у круга внутри только
+     картинка, своей базовой линии у неё нет, и браузер прижимал низ стрелки к
+     базовой линии цифр — круг съезжал вниз. От середины строки поднимаем его до
+     оптического центра цифр. */
+  vertical-align: middle;
+  /* Сдвигаем через position, а не transform: любой transform делает круг точкой
+     отсчёта для подсказки, а она позиционируется от окна — подсказка уезжала за
+     пределы экрана и не показывалась. */
+  top: -0.1em;
   cursor: default;
 }
 .price-change-mark svg {
-  width: 0.55em;
-  height: 0.55em;
+  width: 0.9em;
+  height: 0.9em;
 }
-.price-change-up {
-  background: #e0242c;
+/* Цвет стрелки в светлой теме взят звонче, чем фирменные красный и зелёный:
+   на бледной подложке того же тона тёмная стрелка читалась как серая. */
+/* Класс намеренно повторён: в строке каталога цвет всех вложенных span задан
+   правилом .car-row-price span, и оно перебивало одиночный класс — стрелка
+   выходила серой. Двойной класс делает правило весомее. */
+.price-change-mark.price-change-up {
+  color: #e11d25;
+  background: rgba(224, 36, 44, 0.16);
 }
-.price-change-down {
-  background: #168b58;
+.price-change-mark.price-change-down {
+  color: #06a361;
+  background: rgba(6, 163, 97, 0.16);
 }
-/* На тёмной подложке те же цвета выглядят глуше — берём на тон светлее. */
-:root[data-theme="dark"] .price-change-up {
-  background: #f4353d;
+/* На тёмной подложке те же цвета выглядят глуше — берём на тон светлее, а
+   подложку чуть плотнее. */
+:root[data-theme="dark"] .price-change-mark.price-change-up {
+  color: #ff6167;
+  background: rgba(255, 97, 103, 0.22);
 }
-:root[data-theme="dark"] .price-change-down {
-  background: #1da76a;
+:root[data-theme="dark"] .price-change-mark.price-change-down {
+  color: #3ddb90;
+  background: rgba(61, 219, 144, 0.22);
+}
+/* У крупной итоговой цены на странице машины и в быстром просмотре шрифт
+   заметно больше, и круг того же размера в долях выглядел бы громоздким —
+   уменьшаем. */
+.price-total .price-change-mark,
+.detail-mobile-price .price-change-mark {
+  width: 0.82em;
+  height: 0.82em;
+  margin-left: 0.22em;
+}
+.price-total .price-change-mark svg,
+.detail-mobile-price .price-change-mark svg {
+  width: 0.6em;
+  height: 0.6em;
 }
 /* Подсказка к стрелке: слева цена до переоценки, справа дата. */
 .price-change-tooltip {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   max-width: min(320px, calc(100vw - 20px));
-  padding: 8px 12px;
-  font-size: 16px;
+  /* Отступы и кегль — как у остальных подсказок на сайте: раньше здесь были свои,
+     крупнее, и плашка выглядела непривычно высокой. */
+  padding: 5px 10px;
+  font-size: 14px;
+  line-height: 1.2;
 }
 .price-change-tooltip b {
   font-weight: 600;
