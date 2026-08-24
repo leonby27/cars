@@ -566,7 +566,7 @@ const summaryKeys = [
   "seats", "doors", "engine", "battery", "batteryType", "range", "electricRange",
   "combinedRange", "batteryHealth", "claims", "incident", "conditionGrade", "appearanceScore",
   "image", "status", "statusTone", "sourceListedAt", "listedAt", "publicationDate", "publishedAt",
-  "firstSeenAt", "importedAt",
+  "firstSeenAt", "importedAt", "previousPriceUsd", "priceChangedAt",
 ];
 const compactCars = cars.map((car) => ({
   ...Object.fromEntries(summaryKeys.filter((key) => car[key] !== undefined).map((key) => [key, car[key]])),

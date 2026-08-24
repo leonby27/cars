@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
@@ -12,7 +12,8 @@ import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
 import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
-import { formatListingAge, getSourceListedAt } from "./listing-age.js";
+import { formatListingAge, getSourceListedAt, isNewListing } from "./listing-age.js";
+import { formatChangeDate, getPriceChange } from "./price-change.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar } from "./model-pages.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
@@ -627,6 +628,36 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
     navigate(href);
   };
   return <a href={appHref(href)} onClick={handleClick} {...props}>{children}</a>;
+}
+
+// Ярлык новой машины. Показывается только у карточек, попавших в каталог за
+// последние дни (см. src/listing-age.js). Оформление временное.
+function NewListingBadge({ car }) {
+  if (!isNewListing(car)) return null;
+  return <span className="new-listing-badge">Новинка</span>;
+}
+
+// Стрелка изменения цены: вверх красная, вниз зелёная. По наведению — цена до
+// переоценки и её дата. Старая цена пересчитывается тем же расчётом, что и
+// текущая, поэтому в подсказке она в выбранной валюте.
+function PriceChangeMark({ car }) {
+  const currency = useCurrency();
+  const change = getPriceChange(car);
+  if (!change) return null;
+  const date = formatChangeDate(change.changedAt);
+  const hint = `Было ${money(change.previousTotalUsd, currency)}${date ? ` · ${date}` : ""}`;
+  const tooltip = (
+    <>
+      <b>Было {money(change.previousTotalUsd, currency)}</b>
+      {date && <i>{date}</i>}
+    </>
+  );
+  return (
+    <span className={`price-change-mark price-change-${change.direction}`} role="img" aria-label={hint} tabIndex="0">
+      {change.direction === "up" ? <ArrowUp weight="bold" /> : <ArrowDown weight="bold" />}
+      <ActionTooltip className="price-change-tooltip" text={tooltip} />
+    </span>
+  );
 }
 
 // Карточка должна вести себя как ссылка целиком: правый клик по любому её месту
@@ -2492,6 +2523,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
         </button>
       )}
       <div className="featured-body">
+        <NewListingBadge car={car} />
         <h3><AppLink href={carHref(car)} navigate={onClick} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
         <p>
           {number(car.mileage)} км · {car.type} · {car.drive}
@@ -2503,7 +2535,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
           </div>
         )}
         <div className="featured-price">
-          <strong>≈ {money(price.totalUsd, currency)}</strong>
+          <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
         </div>
       </div>
     </article>
@@ -3924,8 +3956,9 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <CardLinkOverlay car={car} open={open} />
       <div className="car-row-mobile-header">
         <div>
+          <NewListingBadge car={car} />
           <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
-          <strong>≈ {money(price.totalUsd, currency)}</strong>
+          <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
         </div>
         <button
           type="button"
@@ -3943,6 +3976,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <div className="car-row-info">
         <div className="row-title">
           <div>
+            <NewListingBadge car={car} />
             <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
           </div>
           <div className="row-actions">
@@ -3992,7 +4026,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
         </div>
       </div>
       <div className="car-row-price">
-        <strong>≈ {money(price.totalUsd, currency)}</strong>
+        <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
         <span>Под ключ</span>
         <b>{number(car.chinaPrice)} ¥</b>
         <small>цена в Китае</small>
@@ -5588,7 +5622,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
 // места нет — под ней. Координаты считаем от кнопки в координатах окна: в быстром
 // просмотре строка действий стоит у самого края прокручиваемой области, и
 // подсказка внутри потока обрезалась бы её границами — и сверху, и справа.
-function ActionTooltip({ text }) {
+function ActionTooltip({ text, className = "" }) {
   const tooltipRef = useRef(null);
   const [visible, setVisible] = useState(false);
   const [box, setBox] = useState(null);
@@ -5645,7 +5679,7 @@ function ActionTooltip({ text }) {
   return (
     <span
       ref={tooltipRef}
-      className={`detail-action-tooltip${box?.above === false ? " is-below" : ""}${visible ? " is-visible" : ""}`}
+      className={`detail-action-tooltip${className ? ` ${className}` : ""}${box?.above === false ? " is-below" : ""}${visible ? " is-visible" : ""}`}
       style={box ? { top:`${box.top}px`, left:`${box.left}px` } : undefined}
       aria-hidden="true"
     >
@@ -5795,6 +5829,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </button>
             )}
             <h1>{car.title}</h1>
+            <NewListingBadge car={car} />
             {openFull && (
               <AppLink className="detail-back detail-open-full" href={carHref(car)} navigate={openFull} aria-label="Открыть полную страницу автомобиля">
                 <ArrowUpRight size={20} />
@@ -5849,7 +5884,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           )}
           <aside className="order-card">
             <div className={`price-total${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
-              <strong>≈ {money(price.totalUsd, currency)}</strong>
+              <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
               {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
             </div>
             <div className="price-breakdown">
@@ -7200,6 +7235,26 @@ function InfoCta({ navigate, title, text }) {
     </section>
   );
 }
+// Каталог не отвечает — например, база на обслуживании. Показываем не ошибку импорта,
+// а спокойную заглушку по центру экрана: посетителю важно понять, что сайт живой и
+// стоит зайти позже, а не что у нас не нашёлся последний импорт.
+function MaintenancePage() {
+  return (
+    <main className="maintenance-page" aria-live="polite">
+      <div className="maintenance-card">
+        <span className="maintenance-icon" aria-hidden="true">
+          <Gear size={44} weight="fill" />
+        </span>
+        <h1>Идут технические работы</h1>
+        <p>Обновляем каталог — скоро всё вернётся. Зайдите, пожалуйста, через несколько минут.</p>
+        <button className="primary" onClick={() => window.location.reload()}>
+          Обновить страницу
+        </button>
+      </div>
+    </main>
+  );
+}
+
 function NotFound({ navigate }) {
   return (
     <main className="simple-page page-width">
@@ -8783,11 +8838,7 @@ export function App() {
     ) : loading || routeLoading ? (
       <AppLoader />
     ) : loadError ? (
-      <main className="simple-page page-width">
-        <span>Импорт временно недоступен</span>
-        <h1>Не удалось загрузить каталог</h1>
-        <p>Последний импорт не найден. Запустите синхронизацию источника повторно.</p>
-      </main>
+      <MaintenancePage />
     ) : showAccountFromAuthRoute ? (
       <AccountPage user={user} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} />
     ) : contentPath === "/favorites" ? (

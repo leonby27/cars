@@ -2292,6 +2292,57 @@ body.header-menu-open .detail-floating-availability {
   to { transform: rotate(360deg); }
 }
 
+/* Заглушка на время работ: тот же приём, что у загрузчика — блок стоит по центру
+   свободного экрана, поэтому шапка остаётся на месте и сайт не выглядит упавшим. */
+.maintenance-page {
+  min-height: calc(100dvh - 78px);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 24px;
+  padding-bottom: 78px;
+  background: var(--page);
+}
+.maintenance-card {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  max-width: 460px;
+  padding: 44px 36px 40px;
+  border-radius: calc(20px * var(--corner-scale));
+  background: var(--surface);
+  text-align: center;
+}
+.maintenance-icon {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  animation: maintenance-gear-spin 9s linear infinite;
+}
+.maintenance-card h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -1px;
+}
+.maintenance-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.maintenance-card .primary {
+  margin-top: 4px;
+  padding: 0 22px;
+}
+@keyframes maintenance-gear-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Informational pages */
 .desktop-nav button,
 .desktop-nav a {
@@ -10256,10 +10307,21 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     min-height: calc(100dvh - 66px);
     padding-bottom: 66px;
   }
+  .maintenance-page {
+    min-height: calc(100dvh - 66px);
+    padding-bottom: 66px;
+  }
+  .maintenance-card {
+    padding: 34px 24px 30px;
+  }
+  .maintenance-card h1 {
+    font-size: 25px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .app-loader-spinner,
+  .maintenance-icon,
   .animated-disclosure,
   .custom-select,
   .custom-select .select-trigger svg,
@@ -12311,6 +12373,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
     .saved-search-more-circle,
     .detail-back,
     .app-loader-spinner,
+    .maintenance-icon,
     .modal-close,
     .footer-socials a,
     .gallery-controls button,
@@ -12340,4 +12403,76 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   .hero-updated::before {
     corner-shape: round;
   }
+}
+
+/* Ярлык «Новинка» — чип на фоне, без обводки. Стиль временный: цвет и форма
+   меняются в одном месте, разметка карточек этого не заметит. */
+.new-listing-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 4px;
+  padding: 3px 8px;
+  border-radius: calc(6px * var(--corner-scale));
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+/* Стрелка изменения цены. Вверх — подорожала (красная), вниз — подешевела
+   (зелёная). Размер задан в долях шрифта цены: кружок получается по высоте цифр
+   и на карточке, и в крупном итоге на странице машины. Цвета — прямыми
+   значениями, а не общими переменными темы: в тёмной теме общий зелёный
+   становится светло-мятным, и белая стрелка на нём почти исчезала. */
+.price-change-mark {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 0.8em;
+  height: 0.8em;
+  margin-left: 0.24em;
+  border-radius: 50%;
+  color: #fff;
+  vertical-align: baseline;
+  transform: translateY(0.06em);
+  cursor: default;
+}
+.price-change-mark svg {
+  width: 0.55em;
+  height: 0.55em;
+}
+.price-change-up {
+  background: #e0242c;
+}
+.price-change-down {
+  background: #168b58;
+}
+/* На тёмной подложке те же цвета выглядят глуше — берём на тон светлее. */
+:root[data-theme="dark"] .price-change-up {
+  background: #f4353d;
+}
+:root[data-theme="dark"] .price-change-down {
+  background: #1da76a;
+}
+/* Подсказка к стрелке: слева цена до переоценки, справа дата. */
+.price-change-tooltip {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: min(320px, calc(100vw - 20px));
+  padding: 8px 12px;
+  font-size: 16px;
+}
+.price-change-tooltip b {
+  font-weight: 600;
+}
+.price-change-tooltip i {
+  color: rgba(255, 255, 255, 0.65);
+  font-style: normal;
 }

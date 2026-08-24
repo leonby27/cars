@@ -58,7 +58,16 @@ async function flight(page, url, expectMarker) {
   return page.evaluate(async ([target, marker]) => {
     let last = { status: 0, text: "" };
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      const response = await fetch(target, { credentials: "include", headers: { RSC: "1" } });
+      // Сорванное соединение — обычное дело на длинном прогоне. Раньше такая
+      // ошибка выбрасывалась наружу и роняла весь скрипт вместе с несохранёнными
+      // результатами; теперь это просто ещё одна попытка.
+      let response;
+      try {
+        response = await fetch(target, { credentials: "include", headers: { RSC: "1" } });
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+        continue;
+      }
       if (!response.ok) {
         if (response.status !== 429) return { status: response.status, text: "" };
         await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
@@ -151,7 +160,15 @@ async function sweepLists() {
 // after retries) stays untouched and is only counted: guessing here would
 // either hide a live car or keep advertising a sold one.
 async function checkDetail(externalId) {
-  const { status, text } = await flight(page, `/en/detail/${externalId}?_rsc=rfd${externalId}`, "ssrCarDetail");
+  let status = 0;
+  let text = "";
+  try {
+    ({ status, text } = await flight(page, `/en/detail/${externalId}?_rsc=rfd${externalId}`, "ssrCarDetail"));
+  } catch {
+    // Ни одна сетевая ошибка не должна прерывать прогон: машина уходит в
+    // «без ответа» и остаётся на витрине нетронутой до следующего раза.
+    return { verdict: "unknown", status: 0 };
+  }
   const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
   if (!payload?.detail) return { verdict: "unknown", status };
   const price = Number(String(payload.detail.price ?? "").replace(/[^\d.]/g, "")) || null;
@@ -212,42 +229,48 @@ try {
   // Totals survive across flushes; the working arrays are drained by each one.
   const stats = { rePriced: 0, priceUpdates: [], drops: [], estimateOnly: 0, unchanged: 0, sold: 0 };
   const flushWrites = async () => {
+    // Снимок делаем синхронно: пока идёт запись, воркеры продолжают складывать
+    // сюда новые машины, и без снимка очистка в конце потеряла бы их.
+    const prices = priceUpdates.splice(0);
+    const estimates = estimateUpdates.splice(0);
+    const touches = touchIds.splice(0);
+    const sold = soldIds.splice(0);
     if (!dryRun) {
-      for (const batch of chunk(priceUpdates, 1000)) {
+      for (const batch of chunk(prices, 1000)) {
         // `content_changed_at` — дата настоящего изменения объявления, её берёт карта
         // сайта. Двигаем её только здесь: цена у продавца действительно изменилась.
         // Ниже, где меняется лишь наш расчёт (курс сдвинулся), дату не трогаем — иначе
         // она станет одинаковой у всего каталога и снова перестанет что-то значить.
+        // `previous_price_usd` и `price_changed_at` — для стрелки изменения цены на
+        // карточке: карточка показывает прошлую цену и дату в подсказке. Прошлую
+        // цену пишем в долларах, как её отдал источник, без пересчёта через юани.
         await pool.query(`UPDATE listings l SET price_cny=v.cny, estimated_total_usd=v.est,
             source_payload = l.source_payload || jsonb_build_object('usdPrice', v.usd, 'sourcePriceUsd', v.usd, 'chinaPrice', v.cny),
+            previous_price_usd=v.old_usd, price_changed_at=now(),
             last_seen_at=now(), last_checked_at=now(), content_changed_at=now()
-          FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer, usd numeric, est numeric)
-          WHERE l.id = v.id`, [JSON.stringify(batch.map(({ id, cny, usd, est }) => ({ id, cny, usd, est })))]);
+          FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer, usd numeric, est numeric, old_usd numeric)
+          WHERE l.id = v.id`, [JSON.stringify(batch.map(({ id, cny, usd, est, oldUsd }) => ({ id, cny, usd, est, old_usd: oldUsd })))]);
         await pool.query(`INSERT INTO price_history (listing_id, observed_at, price_cny)
           SELECT v.id, now(), v.cny FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer)
           ON CONFLICT DO NOTHING`, [JSON.stringify(batch.map(({ id, cny }) => ({ id, cny })))]);
       }
-      for (const batch of chunk(estimateUpdates, 2000)) {
+      for (const batch of chunk(estimates, 2000)) {
         await pool.query(`UPDATE listings l SET estimated_total_usd=v.est, last_seen_at=now(), last_checked_at=now()
           FROM jsonb_to_recordset($1::jsonb) AS v(id text, est numeric) WHERE l.id = v.id`, [JSON.stringify(batch)]);
       }
-      for (const batch of chunk(touchIds, 5000)) {
+      for (const batch of chunk(touches, 5000)) {
         await pool.query(`UPDATE listings SET last_seen_at=now(), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
       }
-      for (const batch of chunk(soldIds, 5000)) {
+      for (const batch of chunk(sold, 5000)) {
         await pool.query(`UPDATE listings SET status='unavailable', last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
       }
     }
-    stats.rePriced += priceUpdates.length;
-    stats.priceUpdates.push(...priceUpdates);
-    stats.drops.push(...priceUpdates.filter((u) => u.usd < u.oldUsd));
-    stats.estimateOnly += estimateUpdates.length;
-    stats.unchanged += touchIds.length;
-    stats.sold += soldIds.length;
-    priceUpdates.length = 0;
-    estimateUpdates.length = 0;
-    touchIds.length = 0;
-    soldIds.length = 0;
+    stats.rePriced += prices.length;
+    stats.priceUpdates.push(...prices);
+    stats.drops.push(...prices.filter((u) => u.usd < u.oldUsd));
+    stats.estimateOnly += estimates.length;
+    stats.unchanged += touches.length;
+    stats.sold += sold.length;
   };
 
   // Priority pass: the cars visitors opened get their authoritative detail
@@ -281,6 +304,8 @@ try {
     else missing.push(row);
   }
   console.log(`[match] ${rows.length - prioritized.size - missing.length} in lists · ${priceUpdates.length} re-priced · ${missing.length} need a detail check`);
+  // Всё, что списки подтвердили, записываем сразу — до долгой детальной фазы.
+  await flushWrites();
 
   if (!skipDetail) {
     const queue = missing.slice(0, detailLimit);
@@ -295,7 +320,10 @@ try {
         else if (result.verdict === "alive") classify(row, result.price);
         else unknown += 1;
         checked += 1;
-        if (checked % 200 === 0) console.log(`[detail] ${checked} checked · ${soldIds.length} sold · ${unknown} no answer · ${Math.round((Date.now() - startedAt) / 60000)}min`);
+        if (checked % 200 === 0) console.log(`[detail] ${checked} checked · ${stats.sold + soldIds.length} sold · ${unknown} no answer · ${Math.round((Date.now() - startedAt) / 60000)}min`);
+        // Пишем по ходу дела: прогон длинный, и прерванный на середине он должен
+        // оставить в базе всё, что успел проверить, а не выбросить результат.
+        if (checked % 1000 === 0) await flushWrites();
         await sleep(60);
       }
     };
