@@ -69,6 +69,20 @@ const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,sess
      )
      ON CONFLICT (event_id) DO NOTHING`;
 
+// Событие со страницы сайта браузер всегда сопровождает отметкой, откуда оно
+// отправлено (Origin, а в редких случаях только Referer). Запрос, посланный
+// напрямую — командой из терминала, роботом, кем-то посторонним, — такой отметки
+// не несёт: наши собственные проверки и чужие подделки в статистику не пойдут.
+// Фильтры «свой заход» живут в браузере, и обойти их можно только так.
+export const fromOwnPage = (headers = {}, host = "") => {
+  const site = String(host || headers.host || "").toLowerCase();
+  if (!site) return false;
+  const origin = String(headers.origin || "").toLowerCase();
+  if (origin) return origin === `https://${site}` || origin === `http://${site}`;
+  const referer = String(headers.referer || "").toLowerCase();
+  return referer.startsWith(`https://${site}/`) || referer.startsWith(`http://${site}/`) || referer === `https://${site}` || referer === `http://${site}`;
+};
+
 export async function recordAnalyticsEvent(body, { db = pool } = {}) {
   const event = normalizeAnalyticsEvent(body);
   if (event.error) return event;

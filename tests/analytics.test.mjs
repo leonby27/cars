@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ANALYTICS_SECTIONS, createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, createAnalyticsToken, fromOwnPage, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
@@ -136,5 +136,20 @@ test("момент последнего захода приводится к р�
   // Дальше месяца назад не заглядываем: цифра на ярлыке должна оставаться понятной.
   assert.equal(seenMoment("2020-01-01T00:00:00Z", now), new Date(now - 30 * 86_400_000).toISOString());
   assert.deepEqual(ANALYTICS_SECTIONS, ["overview", "leads", "vehicles", "searches", "customers"]);
+});
+
+// Приём событий открыт без пароля, поэтому записываем только то, что прислала
+// страница сайта: фильтры «не считать свой заход» живут в браузере, и запрос,
+// посланный мимо браузера, обошёл бы их все.
+test("событие принимается только со страницы сайта", () => {
+  const site = "abcars.by";
+  assert.equal(fromOwnPage({ origin:"https://abcars.by" }, site), true);
+  assert.equal(fromOwnPage({ referer:"https://abcars.by/catalog" }, site), true, "браузер без Origin, но с Referer");
+  // Запрос из терминала или от робота: отметки нет вовсе.
+  assert.equal(fromOwnPage({}, site), false);
+  // Чужой сайт и похожий домен — не мы.
+  assert.equal(fromOwnPage({ origin:"https://abcars.by.evil.com" }, site), false);
+  assert.equal(fromOwnPage({ referer:"https://evil.com/abcars.by/" }, site), false);
+  assert.equal(fromOwnPage({ origin:"https://abcars.by" }, ""), false, "без известного адреса сайта ничего не принимаем");
 });
 
