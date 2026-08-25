@@ -744,7 +744,12 @@ function TotalPrice({ car, price, currency, className = "" }) {
   }, [text]);
   return (
     <strong ref={boxRef} className={className || undefined}>
-      <span ref={lineRef}>{text}<PriceChangeMark car={car} /></span>
+      {/* Обёртка нужна только для замера: у блочного `strong` ширина всегда во всю
+          колонку, а перенос виден лишь по строчному элементу вокруг самой надписи.
+          Класс на ней — чтобы правила вида «любой span внутри цены — серый и мелкий»
+          (а такие есть и в строке каталога, и в карточке на главной) не покрасили
+          саму цену: см. .price-line в стилях. */}
+      <span ref={lineRef} className="price-line">{text}<PriceChangeMark car={car} /></span>
     </strong>
   );
 }
