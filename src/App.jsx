@@ -2812,6 +2812,7 @@ function useModelPageGalleryCars(modelPage) {
 }
 
 function ModelPageGallery({ cars, onOpenCar }) {
+  const currency = useCurrency();
   const shots = cars
     .map((car, index) => {
       const gallery = car.images?.length ? car.images : [car.image].filter(Boolean);
@@ -2829,6 +2830,12 @@ function ModelPageGallery({ cars, onOpenCar }) {
       {shots.map(({ car, source, image }) => (
         <button type="button" key={car.id} onClick={() => onOpenCar(car)} aria-label={`Открыть объявление: ${car.title}`}>
           <img src={image} alt={car.title} loading="lazy" onError={(event) => retryWithFullImage(event, source)} />
+          {/* Две плашки по углам снимка: сверху цена до Минска, снизу пробег. Раньше
+              мозаика была просто набором фотографий и не говорила, за сколько эта
+              машина и сколько она прошла. Цена считается так же, как в карточках,
+              пробег написан без слова «пробег» — по «км» и так понятно. */}
+          <span className="model-page-gallery-price">≈ {money(estimateLandedCost(car).totalUsd, currency)}</span>
+          {car.mileage ? <span className="model-page-gallery-mileage">{number(car.mileage)} км</span> : null}
         </button>
       ))}
     </div>
@@ -8278,7 +8285,10 @@ export function App() {
   const [savedSearches, setSavedSearches] = useState([]);
   const [savedSearchesReady, setSavedSearchesReady] = useState(false);
   const [pendingSavedSearch, setPendingSavedSearch] = useState(null);
-  const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "BYN" ? "BYN" : "USD"));
+  // По умолчанию цены в белорусских рублях: сайт для покупателей в Беларуси, и
+  // в рублях сумма понятнее без пересчёта в уме. Доллары остаются в переключателе,
+  // и выбранная валюта запоминается в браузере.
+  const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "USD" ? "USD" : "BYN"));
   // Режим цен: включённый переключатель — цены по льготной квоте, выключенный —
   // с пошлиной 15%. Выбор запоминается в браузере, расчёту цен он передаётся
   // отдельно: тот держит его в модуле, чтобы не тянуть флаг через все карточки.
@@ -8298,6 +8308,15 @@ export function App() {
     return "system";
   });
   const [systemTheme, setSystemTheme] = useState(() => (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  // Пока вкладка открыта, система может переключиться на тёмное оформление (по
+  // расписанию или вручную). Слушаем это и переключаемся следом — иначе «системная»
+  // тема была бы системной только в момент загрузки страницы.
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const follow = (event) => setSystemTheme(event.matches ? "dark" : "light");
+    media.addEventListener("change", follow);
+    return () => media.removeEventListener("change", follow);
+  }, []);
   const theme = themeMode === "system" ? systemTheme : themeMode;
   const [cars, setCars] = useState([]);
   // Three states, not two: null means the boot request has not answered yet. Routes that can
@@ -8950,6 +8969,14 @@ export function App() {
           theme={theme}
           toggleTheme={() => {
             const nextTheme = theme === "dark" ? "light" : "dark";
+            // Если выбранное совпало с системным оформлением, запоминаем не саму тему,
+            // а «как в системе»: тогда сайт снова следует за настройками устройства,
+            // и вернуться к ним можно тем же переключателем, без скрытых настроек.
+            if (nextTheme === systemTheme) {
+              window.localStorage.removeItem("abcars-theme");
+              setThemeMode("system");
+              return;
+            }
             window.localStorage.setItem("abcars-theme", nextTheme);
             setThemeMode(nextTheme);
           }}

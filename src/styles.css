@@ -1349,9 +1349,12 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 }
 .car-row {
   position: relative;
-  min-height: 216px;
+  /* Фотография занимает всю высоту строки, поэтому её размер задают ширина
+     первой колонки и min-height строки — их меняем вместе, чтобы кадр остался
+     в тех же пропорциях 4:3 и не обрезался иначе, чем раньше. */
+  min-height: 248px;
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 170px;
+  grid-template-columns: 288px minmax(0, 1fr) 170px;
   gap: 18px;
   padding: 14px;
   border-top: 1px solid var(--line);
@@ -3728,7 +3731,7 @@ body.header-menu-open .detail-floating-availability {
     display: none;
   }
   .car-row {
-    grid-template-columns: 250px 1fr;
+    grid-template-columns: 288px 1fr;
   }
   .car-row-price {
     grid-column: 2;
@@ -10978,12 +10981,41 @@ html[data-theme="dark"] .model-page-back:hover {
   margin-inline: auto;
 }
 .model-page-gallery > button {
+  position: relative;
   overflow: hidden;
   padding: 0;
   border: 0;
   border-radius: calc(12px * var(--corner-scale));
   background: var(--surface);
   cursor: pointer;
+}
+/* Цена до Минска поверх снимка — тем же тёмным чипом, что и счётчик кадров в
+   карточках каталога. Стоит в левом верхнем углу: правый угол на широком кадре
+   чаще занят самой машиной. Событий мыши чип не ловит — клик уходит на плитку. */
+.model-page-gallery-price,
+.model-page-gallery-mileage {
+  position: absolute;
+  left: 9px;
+  padding: 5px 8px;
+  border-radius: calc(7px * var(--corner-scale));
+  background: rgba(14, 16, 19, 0.75);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.model-page-gallery-price {
+  top: 9px;
+}
+/* Пробег — отдельной плашкой в нижнем углу снимка: рядом с ценой он спорил бы
+   с ней за внимание. Поэтому написан мельче и чуть приглушённее. */
+.model-page-gallery-mileage {
+  bottom: 9px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
 }
 html[data-theme="dark"] .model-page-gallery > button {
   background: var(--model-nested-bg);
@@ -11667,6 +11699,20 @@ html[data-theme="dark"] .model-page-cars-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-rows: 108px;
     gap: 8px;
+  }
+  /* Плитки вдвое меньше, поэтому чип с ценой тоже ужимается. */
+  .model-page-gallery-price,
+  .model-page-gallery-mileage {
+    left: 6px;
+    padding: 3px 6px;
+    font-size: 14px;
+  }
+  .model-page-gallery-price {
+    top: 6px;
+  }
+  .model-page-gallery-mileage {
+    bottom: 6px;
+    font-size: 12px;
   }
   .model-page-compare,
   .model-page-versions-cards,
@@ -12629,4 +12675,30 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 .price-change-tooltip i {
   color: rgba(255, 255, 255, 0.65);
   font-style: normal;
+}
+
+/* Размытая подложка у плашек поверх фотографий.
+
+   Все эти чипы — цена и пробег на мозаике страницы модели, счётчик кадров,
+   ярлыки на фотографии машины, сердце избранного, кнопка «Все фото» — лежат
+   на снимке и подкрашены полупрозрачным тёмным (у ярлыков на карточке машины —
+   светлым). На пёстром кадре текст на них читался хуже: под цифрами могли
+   оказаться и блик, и тень. Размытие снимка под плашкой убирает эту пестроту,
+   плашка выглядит стеклянной, а фотография из-под неё остаётся узнаваемой.
+
+   Свойство перечислено дважды: в Safari оно до сих пор работает только со
+   своей приставкой. Браузер, который не умеет размывать, просто покажет
+   плашку как раньше — сплошной полупрозрачной подложкой. */
+.model-page-gallery-price,
+.model-page-gallery-mileage,
+.hover-image-count,
+.car-row-image > .hover-image-count,
+.car-row-image > span,
+.saved-search-preview-price,
+.gallery-panel > span,
+.gallery-badges b,
+.gallery-view-all,
+.featured-favorite {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
