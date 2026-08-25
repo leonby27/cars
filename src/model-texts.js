@@ -233,6 +233,11 @@ import porsche_cayenne from "./model-texts/porsche-cayenne.js";
 import land_rover_range_rover_evoque from "./model-texts/land-rover-range-rover-evoque.js";
 import honda_fit from "./model-texts/honda-fit.js";
 import bmw_1_series from "./model-texts/bmw-1-series.js";
+import cadillac_xt4 from "./model-texts/cadillac-xt4.js";
+import bmw_x2 from "./model-texts/bmw-x2.js";
+import changan_uni_t from "./model-texts/changan-uni-t.js";
+import audi_a8 from "./model-texts/audi-a8.js";
+import changan_cs55_plus from "./model-texts/changan-cs55-plus.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -457,6 +462,11 @@ export const MODEL_TEXTS_RAW = {
   "land-rover-range-rover-evoque": land_rover_range_rover_evoque,
   "honda-fit": honda_fit,
   "bmw-1-series": bmw_1_series,
+  "cadillac-xt4": cadillac_xt4,
+  "bmw-x2": bmw_x2,
+  "changan-uni-t": changan_uni_t,
+  "audi-a8": audi_a8,
+  "changan-cs55-plus": changan_cs55_plus,
 };
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
