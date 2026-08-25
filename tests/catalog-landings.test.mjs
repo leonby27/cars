@@ -353,3 +353,17 @@ test("вопросы раздела зависят от типа двигате�
   assert.ok(!second.includes("Частые вопросы"));
   assert.ok(!second.includes("FAQPage"));
 });
+
+test("в разметке списка у машины есть фотография и описание", () => {
+  // Проверка страницы раздела в Search Console 25.08.2026: у всех 24 машин
+  // «отсутствует поле image», и Google браковал позиции целиком — подборка не могла
+  // показаться карточками с ценами. Фотография и описание теперь в разметке всегда,
+  // когда они есть у объявления.
+  const priced = [{ ...cars[0], images: ["https://example.com/photo.jpg"] }];
+  const { html } = render().landingPage({ landing: findCatalogLanding("/catalog/byd"), cars, total: 5673, priced });
+  const list = JSON.parse(html.match(/<script type="application\/ld\+json">(\{"@context":"https:\/\/schema\.org","@type":"ItemList".*?)<\/script>/)[1]);
+  const first = list.itemListElement[0].item;
+  assert.deepEqual(first.image, ["https://example.com/photo.jpg"]);
+  assert.match(first.description, /пробег .* км/);
+  assert.equal(first.offers.price, list.itemListElement[0].item.offers.price);
+});

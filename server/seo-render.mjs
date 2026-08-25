@@ -169,19 +169,34 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * видит на странице машины: считаем её тем же `estimateLandedCost`, а не столбцом
    * в базе, иначе в выдаче оказалась бы одна сумма, а на странице другая.
    */
-  function carOffer(car) {
+  function carOffer(car, landed = estimateLandedCost(car)) {
     return {
       "@type": "Offer",
       url: routeUrl(carRoute(car)),
       priceCurrency: "USD",
-      price: estimateLandedCost(car).totalUsd,
+      price: landed.totalUsd,
       availability: "https://schema.org/InStock",
       itemCondition: "https://schema.org/UsedCondition",
     };
   }
 
-  /** Позиция списка с ценой: машина как товар, а не просто ссылка с названием. */
+  /** Фотография объявления для разметки: только настоящий внешний адрес. */
+  const carPhoto = (car) => {
+    const url = String(car.image || car.images?.[0] || "");
+    return /^https:\/\//.test(url) ? url : null;
+  };
+
+  /**
+   * Позиция списка с ценой: машина как товар, а не просто ссылка с названием.
+   *
+   * Фотография и описание здесь обязательны по делу: без поля `image` Google бракует
+   * позицию целиком (проверка страницы раздела Toyota 25.08.2026 — «отсутствует поле
+   * image» у всех 24 машин) и не показывает подборку карточками с ценами. Описание —
+   * та же строка, что стоит описанием страницы самой машины.
+   */
   function carListItem(car, position) {
+    const landed = estimateLandedCost(car);
+    const photo = carPhoto(car);
     return {
       "@type": "ListItem",
       position,
@@ -189,10 +204,12 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         "@type": "Vehicle",
         name: carTitle(car),
         url: routeUrl(carRoute(car)),
+        image: photo ? [photo] : undefined,
+        description: carDescription(car, landed),
         brand: car.brand ? { "@type": "Brand", name: car.brand } : undefined,
         vehicleModelDate: car.year ? String(car.year) : undefined,
         mileageFromOdometer: car.mileage ? { "@type": "QuantitativeValue", value: Number(car.mileage), unitCode: "KMT" } : undefined,
-        offers: carOffer(car),
+        offers: carOffer(car, landed),
       },
     };
   }
