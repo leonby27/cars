@@ -19,6 +19,11 @@ test("счётчик Метрики стоит на странице", () => {
   // Заходы с рабочего компьютера в счётчик не идут.
   assert.match(html, /localhost/);
   assert.match(html, /192\\\.168\\\./);
+  // И есть выключатель для своего браузера: ?nocount=1 запоминается навсегда.
+  assert.match(html, /nocount/);
+  assert.ok(html.includes("localStorage.getItem('nocount')"), "выключатель своих заходов пропал");
+  // Автоматические браузеры (проверки и роботы) в статистику тоже не идут.
+  assert.match(html, /navigator\.webdriver/);
 });
 
 test("правила безопасности пускают Метрику", () => {
