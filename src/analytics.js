@@ -31,8 +31,21 @@ export const isRepeatEvent = (key, now = Date.now()) => {
   return previous !== undefined && now - previous < REPEAT_WINDOW_MS;
 };
 
+// Свои заходы с обычного адреса сайта исключаем той же меткой, что и в Метрике:
+// браузер, в котором хоть раз открыли сайт с ?nocount=1, помнит это насовсем
+// (метку ставит счётчик в index.html). Плюс молчим в браузерах под управлением
+// программы — это автоматические проверки и роботы, а не живые люди.
+export const isSkippedVisit = ({ hostname, nocount, automated }) =>
+  isLocalVisit(hostname) || nocount === "1" || Boolean(automated);
+
+const skipThisVisit = () => {
+  let nocount = null;
+  try { nocount = window.localStorage.getItem("nocount"); } catch { nocount = null; }
+  return isSkippedVisit({ hostname:window.location.hostname, nocount, automated:window.navigator?.webdriver });
+};
+
 export function trackEvent(eventName, details = {}) {
-  if (isLocalVisit(window.location.hostname)) return;
+  if (skipThisVisit()) return;
   // У события про машину примета — сама машина: «быстрый просмотр» из каталога и
   // открытая следом карточка — это один и тот же взгляд, а не два.
   if (isRepeatEvent(`${eventName}|${details.listingId || window.location.pathname}`)) return;

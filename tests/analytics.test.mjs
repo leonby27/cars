@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, recordAnalyticsEvent, verifyAnalyticsToken } from "../server/analytics.mjs";
-import { isLocalVisit, isRepeatEvent } from "../src/analytics.js";
+import { isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
   const event = normalizeAnalyticsEvent({
@@ -78,4 +78,16 @@ test("быстрый просмотр и открытая следом карт�
   // Ключ повтора у события про машину строится по машине, а не по адресу страницы.
   assert.equal(isRepeatEvent("vehicle_view|che168-77", 1_000), false);
   assert.equal(isRepeatEvent("vehicle_view|che168-77", 3_000), true);
+});
+
+// Своя статистика молчит там же, где и Метрика: помеченный браузер (?nocount=1),
+// автоматический браузер и запуск сайта на рабочем компьютере.
+test("свои заходы не попадают в собственную статистику", () => {
+  const live = { hostname:"abcars.by", nocount:null, automated:false };
+  assert.equal(isSkippedVisit(live), false);
+  assert.equal(isSkippedVisit({ ...live, nocount:"1" }), true, "метка ?nocount=1 не сработала");
+  assert.equal(isSkippedVisit({ ...live, automated:true }), true, "автоматический браузер считается");
+  assert.equal(isSkippedVisit({ ...live, hostname:"localhost" }), true, "рабочий компьютер считается");
+  // Снятая метка возвращает учёт: ?nocount=0 стирает её, и остаётся пустое значение.
+  assert.equal(isSkippedVisit({ ...live, nocount:"0" }), false, "снятая метка всё ещё выключает учёт");
 });
