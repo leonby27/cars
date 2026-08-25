@@ -46,7 +46,7 @@ function quotaButton() {
   const business = evQuotaState("business");
   const remaining = personal.remaining + business.remaining;
   const total = personal.total + business.total;
-  return `<div class="quota-shell"><button type="button" class="icon-label quota-link" aria-expanded="false" aria-controls="ev-quota-panel" title="Осталось квот на беспошлинный ввоз электромобилей: ${spaced(remaining)} из ${spaced(total)}">${svg(20, ICON.lightning)}<span>Осталось квот</span><strong>${spaced(remaining)}</strong></button></div>`;
+  return `<div class="quota-shell"><button type="button" class="icon-label quota-link" aria-expanded="false" aria-controls="ev-quota-panel">${svg(20, ICON.lightning)}<span>Осталось квот</span><strong>${spaced(remaining)}</strong></button></div>`;
 }
 
 function header(hrefRoute) {

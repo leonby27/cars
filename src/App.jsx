@@ -955,6 +955,13 @@ function EvQuotaPanel({ quotas }) {
   );
 }
 
+const QUOTA_TOOLTIP = (
+  <>
+    <b>Что за квоты</b>
+    <span>Беларусь пускает без пошлины ограниченное число электромобилей в год. Пока квота есть, машина дешевле на 15%.</span>
+  </>
+);
+
 function EvQuotaButton({ quotas }) {
   // В шапке — общий остаток по стране: физлица плюс юрлица. Разбивка по каждой
   // половине лежит во вкладках карточки.
@@ -985,12 +992,17 @@ function EvQuotaButton({ quotas }) {
         className={`icon-label quota-link${open ? " selected" : ""}`}
         aria-expanded={open}
         aria-controls="ev-quota-panel"
-        title={`Осталось квот на беспошлинный ввоз электромобилей: ${number(remaining)} из ${number(total)}`}
+        aria-label={`Осталось квот на беспошлинный ввоз электромобилей: ${number(remaining)} из ${number(total)}`}
         onClick={() => setOpen((value) => !value)}
       >
         <Lightning size={20} weight="bold" />
         <span>Осталось квот</span>
         <strong>{number(remaining)}</strong>
+        {/* Слово «квота» само себя не объясняет, поэтому по наведению — короткий
+            рассказ о том, что это и зачем на него смотреть. Пока карточка открыта,
+            подсказки нет: цифры и прогноз уже перед глазами. Своя подсказка вместо
+            title у кнопки — иначе браузер показал бы рядом вторую, системную. */}
+        {!open && <ActionTooltip className="quota-link-tooltip" text={QUOTA_TOOLTIP} />}
       </button>
       <div
         className={`quota-pop${open ? " open" : ""}`}

@@ -12676,6 +12676,28 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   color: rgba(255, 255, 255, 0.65);
   font-style: normal;
 }
+/* Подсказка у остатка квоты в шапке: здесь не два слова, а объяснение в пару строк,
+   поэтому плашка шире остальных, а внутри — заголовок и текст. */
+.quota-link-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: min(340px, calc(100vw - 20px));
+  padding: 11px 14px;
+  text-align: left;
+  /* Кегль крупнее остальных подсказок: там два слова у кнопки, а здесь связный
+     текст, который читают, а не узнают по форме. */
+  font-size: 16px;
+  line-height: 1.45;
+}
+.quota-link-tooltip b {
+  font-size: 17px;
+  font-weight: 600;
+}
+.quota-link-tooltip span {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.82);
+}
 
 /* Размытая подложка у плашек поверх фотографий.
 
