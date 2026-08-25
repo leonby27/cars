@@ -302,6 +302,56 @@ import kia_k3 from "./model-texts/kia-k3.js";
 import buick_enclave from "./model-texts/buick-enclave.js";
 import zeekr_mix from "./model-texts/zeekr-mix.js";
 import mercedes_benz_e_class_new_energy from "./model-texts/mercedes-benz-e-class-new-energy.js";
+import kia_k5 from "./model-texts/kia-k5.js";
+import jetour_x70 from "./model-texts/jetour-x70.js";
+import ford_escape from "./model-texts/ford-escape.js";
+import bmw_x6 from "./model-texts/bmw-x6.js";
+import mini_clubman from "./model-texts/mini-clubman.js";
+import haval_chitu from "./model-texts/haval-chitu.js";
+import volkswagen_golf_gti from "./model-texts/volkswagen-golf-gti.js";
+import li_auto_i8 from "./model-texts/li-auto-i8.js";
+import mini_countryman from "./model-texts/mini-countryman.js";
+import denza_n8l from "./model-texts/denza-n8l.js";
+import mazda_cx_50_xingye from "./model-texts/mazda-cx-50-xingye.js";
+import changan_uni_k from "./model-texts/changan-uni-k.js";
+import chery_tiggo_3x from "./model-texts/chery-tiggo-3x.js";
+import haval_h9 from "./model-texts/haval-h9.js";
+import chery_arrizo_8_pro from "./model-texts/chery-arrizo-8-pro.js";
+import aion_s_plus from "./model-texts/aion-s-plus.js";
+import mercedes_benz_cla from "./model-texts/mercedes-benz-cla.js";
+import buick_envision_s from "./model-texts/buick-envision-s.js";
+import peugeot_2008 from "./model-texts/peugeot-2008.js";
+import jeep_wrangler from "./model-texts/jeep-wrangler.js";
+import ford_escort from "./model-texts/ford-escort.js";
+import audi_q8 from "./model-texts/audi-q8.js";
+import mini_jcw from "./model-texts/mini-jcw.js";
+import great_wall_pao from "./model-texts/great-wall-pao.js";
+import geely_emgrand_s from "./model-texts/geely-emgrand-s.js";
+import nissan_terra from "./model-texts/nissan-terra.js";
+import jaguar_f_pace from "./model-texts/jaguar-f-pace.js";
+import ford_bronco from "./model-texts/ford-bronco.js";
+import deepal_g318 from "./model-texts/deepal-g318.js";
+import hima_s9t from "./model-texts/hima-s9t.js";
+import volkswagen_santana from "./model-texts/volkswagen-santana.js";
+import honda_ur_v from "./model-texts/honda-ur-v.js";
+import volvo_xc40 from "./model-texts/volvo-xc40.js";
+import toyota_corolla_cross from "./model-texts/toyota-corolla-cross.js";
+import bmw_x4 from "./model-texts/bmw-x4.js";
+import audi_a5l from "./model-texts/audi-a5l.js";
+import mercedes_benz_cls from "./model-texts/mercedes-benz-cls.js";
+import aion_v from "./model-texts/aion-v.js";
+import volkswagen_tiguan_l_phev from "./model-texts/volkswagen-tiguan-l-phev.js";
+import hongqi_hq9_phev from "./model-texts/hongqi-hq9-phev.js";
+import audi_a6 from "./model-texts/audi-a6.js";
+import chery_tiggo_7_plus from "./model-texts/chery-tiggo-7-plus.js";
+import volkswagen_t_cross from "./model-texts/volkswagen-t-cross.js";
+import subaru_forester from "./model-texts/subaru-forester.js";
+import chevrolet_cavalier from "./model-texts/chevrolet-cavalier.js";
+import lynk_co_01 from "./model-texts/lynk-co-01.js";
+import buick_century from "./model-texts/buick-century.js";
+import chevrolet_equinox from "./model-texts/chevrolet-equinox.js";
+import nio_es7 from "./model-texts/nio-es7.js";
+import aion_ut from "./model-texts/aion-ut.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -595,7 +645,57 @@ export const MODEL_TEXTS_RAW = {
   "buick-enclave": buick_enclave,
   "zeekr-mix": zeekr_mix,
   "mercedes-benz-e-class-new-energy": mercedes_benz_e_class_new_energy,
-};
+  "kia-k5": kia_k5,
+  "jetour-x70": jetour_x70,
+  "ford-escape": ford_escape,
+  "bmw-x6": bmw_x6,
+  "mini-clubman": mini_clubman,
+  "haval-chitu": haval_chitu,
+  "volkswagen-golf-gti": volkswagen_golf_gti,
+  "li-auto-i8": li_auto_i8,
+  "mini-countryman": mini_countryman,
+  "denza-n8l": denza_n8l,
+  "mazda-cx-50-xingye": mazda_cx_50_xingye,
+  "changan-uni-k": changan_uni_k,
+  "chery-tiggo-3x": chery_tiggo_3x,
+  "haval-h9": haval_h9,
+  "chery-arrizo-8-pro": chery_arrizo_8_pro,
+  "aion-s-plus": aion_s_plus,
+  "mercedes-benz-cla": mercedes_benz_cla,
+  "buick-envision-s": buick_envision_s,
+  "peugeot-2008": peugeot_2008,
+  "jeep-wrangler": jeep_wrangler,
+  "ford-escort": ford_escort,
+  "audi-q8": audi_q8,
+  "mini-jcw": mini_jcw,
+  "great-wall-pao": great_wall_pao,
+  "geely-emgrand-s": geely_emgrand_s,
+  "nissan-terra": nissan_terra,
+  "jaguar-f-pace": jaguar_f_pace,
+  "ford-bronco": ford_bronco,
+  "deepal-g318": deepal_g318,
+  "hima-s9t": hima_s9t,
+  "volkswagen-santana": volkswagen_santana,
+  "honda-ur-v": honda_ur_v,
+  "volvo-xc40": volvo_xc40,
+  "toyota-corolla-cross": toyota_corolla_cross,
+  "bmw-x4": bmw_x4,
+  "audi-a5l": audi_a5l,
+  "mercedes-benz-cls": mercedes_benz_cls,
+  "aion-v": aion_v,
+  "volkswagen-tiguan-l-phev": volkswagen_tiguan_l_phev,
+  "hongqi-hq9-phev": hongqi_hq9_phev,
+  "audi-a6": audi_a6,
+  "chery-tiggo-7-plus": chery_tiggo_7_plus,
+  "volkswagen-t-cross": volkswagen_t_cross,
+  "subaru-forester": subaru_forester,
+  "chevrolet-cavalier": chevrolet_cavalier,
+  "lynk-co-01": lynk_co_01,
+  "buick-century": buick_century,
+  "chevrolet-equinox": chevrolet_equinox,
+  "nio-es7": nio_es7,
+  "aion-ut": aion_ut,
+}
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
 // фразы про нулевую пошлину переписываются под новую ставку — так же, как в
