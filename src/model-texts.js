@@ -243,7 +243,6 @@ import geely_binrui from "./model-texts/geely-binrui.js";
 import hongqi_h9 from "./model-texts/hongqi-h9.js";
 import buick_lacrosse from "./model-texts/buick-lacrosse.js";
 import toyota_levin from "./model-texts/toyota-levin.js";
-import skoda_kamiq from "./model-texts/skoda-kamiq.js";
 import toyota_avalon from "./model-texts/toyota-avalon.js";
 import buick_verano from "./model-texts/buick-verano.js";
 import jetour_traveler from "./model-texts/jetour-traveler.js";
@@ -487,7 +486,6 @@ export const MODEL_TEXTS_RAW = {
   "hongqi-h9": hongqi_h9,
   "buick-lacrosse": buick_lacrosse,
   "toyota-levin": toyota_levin,
-  "skoda-kamiq": skoda_kamiq,
   "toyota-avalon": toyota_avalon,
   "buick-verano": buick_verano,
   "jetour-traveler": jetour_traveler,

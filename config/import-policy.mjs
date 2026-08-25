@@ -24,7 +24,7 @@ export const IMPORTABLE_POWERTRAINS = Object.freeze(["Электромобиль
 export const ICE_IMPORT_BRANDS = Object.freeze([
   "Volkswagen", "Mercedes-Benz", "BMW", "Audi", "Toyota", "Honda", "Buick", "Porsche",
   "Geely", "Nissan", "Land Rover", "Ford", "Haval", "Changan", "Hyundai",
-  "Mazda", "Chevrolet", "Chery", "Volvo", "Lexus", "Kia", "MINI", "Škoda", "MG",
+  "Mazda", "Chevrolet", "Chery", "Volvo", "Lexus", "Kia", "MINI", "MG",
   "Peugeot", "Jaguar", "Jeep", "Jetour", "BYD", "Maserati",
   "Infiniti", "Mitsubishi", "Subaru", "Suzuki", "smart", "Great Wall",
   "Renault", "Chrysler", "GMC", "Fiat",
@@ -37,6 +37,9 @@ export const ICE_IMPORT_BRANDS = Object.freeze([
 // списка. Заведённые машины этих марок из базы удалены.
 export const EXCLUDED_BRANDS = Object.freeze([
   "Acura", "Alfa Romeo", "Bentley", "Cadillac", "Citroën", "DS", "Lincoln",
+  // Škoda вычеркнута 25.08.2026: в Китае марку почти не покупают, а в Беларуси
+  // её же модели есть из Европы. Заведённые машины из базы удалены.
+  "Škoda",
 ]);
 
 // Потолок итоговой цены. Считается по стоимости «под ключ» в Беларуси, а не по

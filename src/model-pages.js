@@ -3289,20 +3289,6 @@ const MODEL_PAGES_SOURCE = [
     teaser: "Это Corolla от второго завода Toyota: ресурс тот же, цена иногда ниже.",
   },
   {
-    slug: "skoda-kamiq",
-    path: "/models/skoda-kamiq",
-    brand: "Škoda",
-    model: "Kamiq",
-    name: "Škoda Kamiq",
-    tagline: "Техника Volkswagen дешевле",
-    seoTitle: "Škoda Kamiq из Китая: купить с доставкой в Минск | abcars.by",
-    seoDescription:
-      "Škoda Kamiq из Китая: компактный кроссовер на технике Volkswagen, моторы 1,2–1,5 л, почти минимальная пошлина, цена до Минска.",
-    h1: "Škoda Kamiq из Китая — купить с доставкой в Минск",
-    lead: "Те же агрегаты, что у массовых Volkswagen, но дешевле: марка в Китае менее популярна, и вторичные цены это отражают.",
-    teaser: "Техника концерна VW по цене ниже: моторы 1,2–1,5, почти минимальная пошлина.",
-  },
-  {
     slug: "toyota-avalon",
     path: "/models/toyota-avalon",
     brand: "Toyota",
