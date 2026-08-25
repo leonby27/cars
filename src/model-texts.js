@@ -203,6 +203,36 @@ import volvo_xc60 from "./model-texts/volvo-xc60.js";
 import honda_xr_v from "./model-texts/honda-xr-v.js";
 import land_rover_range_rover_sport from "./model-texts/land-rover-range-rover-sport.js";
 import nissan_teana from "./model-texts/nissan-teana.js";
+import land_rover_discovery_sport from "./model-texts/land-rover-discovery-sport.js";
+import buick_excelle from "./model-texts/buick-excelle.js";
+import chery_arrizo_8 from "./model-texts/chery-arrizo-8.js";
+import hongqi_hs5 from "./model-texts/hongqi-hs5.js";
+import honda_vezel from "./model-texts/honda-vezel.js";
+import nissan_x_trail from "./model-texts/nissan-x-trail.js";
+import mg_mg5 from "./model-texts/mg-mg5.js";
+import volvo_s90 from "./model-texts/volvo-s90.js";
+import nissan_qashqai from "./model-texts/nissan-qashqai.js";
+import lexus_es from "./model-texts/lexus-es.js";
+import mercedes_benz_v_class from "./model-texts/mercedes-benz-v-class.js";
+import geely_boyue from "./model-texts/geely-boyue.js";
+import honda_cr_v from "./model-texts/honda-cr-v.js";
+import haval_big_dog from "./model-texts/haval-big-dog.js";
+import bmw_4_series from "./model-texts/bmw-4-series.js";
+import porsche_718 from "./model-texts/porsche-718.js";
+import ford_mondeo from "./model-texts/ford-mondeo.js";
+import honda_haoying from "./model-texts/honda-haoying.js";
+import geely_emgrand from "./model-texts/geely-emgrand.js";
+import geely_binyue from "./model-texts/geely-binyue.js";
+import jetour_x70_plus from "./model-texts/jetour-x70-plus.js";
+import cadillac_xt5 from "./model-texts/cadillac-xt5.js";
+import toyota_rav4_rongfang from "./model-texts/toyota-rav4-rongfang.js";
+import audi_q7 from "./model-texts/audi-q7.js";
+import volkswagen_cc from "./model-texts/volkswagen-cc.js";
+import buick_regal from "./model-texts/buick-regal.js";
+import porsche_cayenne from "./model-texts/porsche-cayenne.js";
+import land_rover_range_rover_evoque from "./model-texts/land-rover-range-rover-evoque.js";
+import honda_fit from "./model-texts/honda-fit.js";
+import bmw_1_series from "./model-texts/bmw-1-series.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -397,6 +427,36 @@ export const MODEL_TEXTS_RAW = {
   "honda-xr-v": honda_xr_v,
   "land-rover-range-rover-sport": land_rover_range_rover_sport,
   "nissan-teana": nissan_teana,
+  "land-rover-discovery-sport": land_rover_discovery_sport,
+  "buick-excelle": buick_excelle,
+  "chery-arrizo-8": chery_arrizo_8,
+  "hongqi-hs5": hongqi_hs5,
+  "honda-vezel": honda_vezel,
+  "nissan-x-trail": nissan_x_trail,
+  "mg-mg5": mg_mg5,
+  "volvo-s90": volvo_s90,
+  "nissan-qashqai": nissan_qashqai,
+  "lexus-es": lexus_es,
+  "mercedes-benz-v-class": mercedes_benz_v_class,
+  "geely-boyue": geely_boyue,
+  "honda-cr-v": honda_cr_v,
+  "haval-big-dog": haval_big_dog,
+  "bmw-4-series": bmw_4_series,
+  "porsche-718": porsche_718,
+  "ford-mondeo": ford_mondeo,
+  "honda-haoying": honda_haoying,
+  "geely-emgrand": geely_emgrand,
+  "geely-binyue": geely_binyue,
+  "jetour-x70-plus": jetour_x70_plus,
+  "cadillac-xt5": cadillac_xt5,
+  "toyota-rav4-rongfang": toyota_rav4_rongfang,
+  "audi-q7": audi_q7,
+  "volkswagen-cc": volkswagen_cc,
+  "buick-regal": buick_regal,
+  "porsche-cayenne": porsche_cayenne,
+  "land-rover-range-rover-evoque": land_rover_range_rover_evoque,
+  "honda-fit": honda_fit,
+  "bmw-1-series": bmw_1_series,
 };
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,

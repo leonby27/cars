@@ -805,6 +805,29 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   height: 100%;
   object-fit: contain;
 }
+/* Cadillac is intentionally presented as a neutral badge in both themes. */
+.brand-logo img[src$="/cadillac.svg"] {
+  filter: grayscale(1) brightness(0);
+}
+/* These source files are combination marks. In the compact brand list keep
+   only the emblem portion at the left; the adjacent brand name is rendered by
+   the list itself. */
+.brand-logo img[src$="/leapmotor.svg"],
+.brand-logo img[src$="/lexus.svg"],
+.brand-logo img[src$="/lincoln.svg"] {
+  height: 100%;
+  object-fit: cover;
+  object-position: left center;
+}
+.brand-logo img[src$="/leapmotor.svg"] {
+  width: 18px;
+}
+.brand-logo img[src$="/lexus.svg"] {
+  width: 30px;
+}
+.brand-logo img[src$="/lincoln.svg"] {
+  width: 28px;
+}
 /* Stands in for a brand whose mark is not in public/brands yet. Deliberately a
    monogram rather than an approximated logo: a wrong mark reads as a mistake. */
 .brand-logo-fallback {
@@ -3209,9 +3232,37 @@ body.header-menu-open .detail-floating-availability {
   .brand-logo.brand-logo-colored img[src$="/honda.svg"],
   .brand-logo.brand-logo-colored img[src$="/hyundai.svg"],
   .brand-logo.brand-logo-colored img[src$="/nissan.svg"],
-  .brand-logo.brand-logo-colored img[src$="/porsche.svg"]
+  .brand-logo.brand-logo-colored img[src$="/porsche.svg"],
+  .brand-logo.brand-logo-colored img[src$="/alfa-romeo.svg"],
+  .brand-logo.brand-logo-colored img[src$="/great-wall.svg"],
+  .brand-logo.brand-logo-colored img[src$="/skoda.svg"],
+  .brand-logo.brand-logo-colored img[src$="/subaru.svg"],
+  .brand-logo.brand-logo-colored img[src$="/maserati.svg"],
+  .brand-logo.brand-logo-colored img[src$="/volvo.svg"],
+  .brand-logo.brand-logo-colored img[src$="/infiniti.svg"],
+  .brand-logo.brand-logo-colored img[src$="/mg.svg"],
+  .brand-logo.brand-logo-colored img[src$="/mitsubishi.svg"],
+  .brand-logo.brand-logo-colored img[src$="/citroen.svg"],
+  .brand-logo.brand-logo-colored img[src$="/kia.svg"]
 ) {
   filter: brightness(1.55) saturate(1.05);
+  opacity: 1;
+}
+/* A few brand palettes are deep navy/green at source resolution. They keep
+   their hue, but need a stronger lift to remain legible on the night surface. */
+:root[data-theme="dark"] :where(
+  .brand-logo.brand-logo-colored img[src$="/ford.svg"],
+  .brand-logo.brand-logo-colored img[src$="/changan.svg"],
+  .brand-logo.brand-logo-colored img[src$="/hyundai.svg"],
+  .brand-logo.brand-logo-colored img[src$="/skoda.svg"],
+  .brand-logo.brand-logo-colored img[src$="/subaru.svg"],
+  .brand-logo.brand-logo-colored img[src$="/maserati.svg"],
+  .brand-logo.brand-logo-colored img[src$="/volvo.svg"],
+  .brand-logo.brand-logo-colored img[src$="/infiniti.svg"],
+  .brand-logo.brand-logo-colored img[src$="/kia.svg"],
+  .brand-logo.brand-logo-colored img[src$="/voyah.svg"]
+) {
+  filter: brightness(3) saturate(1.1);
   opacity: 1;
 }
 :root[data-theme="dark"] :where(.status.green, .report-badge, .data-tag.ready, .hero-updated) {

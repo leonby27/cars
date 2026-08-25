@@ -3195,6 +3195,28 @@ const brandLogos = {
   Honda: "honda.svg",
   Hyundai: "hyundai.svg",
   Nissan: "nissan.svg",
+  Acura: "acura.svg",
+  "Alfa Romeo": "alfa-romeo.svg",
+  DS: "ds.svg",
+  Peugeot: "peugeot.svg",
+  Lexus: "lexus.svg",
+  "Škoda": "skoda.svg",
+  Subaru: "subaru.svg",
+  Bentley: "bentley.svg",
+  "Great Wall": "great-wall.svg",
+  Lincoln: "lincoln.svg",
+  Maserati: "maserati.svg",
+  Volvo: "volvo.svg",
+  Infiniti: "infiniti.svg",
+  MG: "mg.svg",
+  Chery: "chery.svg",
+  Jaguar: "jaguar.svg",
+  MINI: "mini.svg",
+  Mitsubishi: "mitsubishi.svg",
+  Jeep: "jeep.svg",
+  "Citroën": "citroen.svg",
+  Jetour: "jetour.svg",
+  Kia: "kia.svg",
 };
 
 // Brands the importer keeps supplying, but the home page showcase leaves out.
@@ -3206,8 +3228,10 @@ const showcaseHiddenBrands = new Set(["AION", "Denza", "Dongfeng", "Hongqi", "OR
 // black artwork stays readable on a dark surface; applying that to these fixed-
 // colour marks would repaint the brand, so they opt out.
 const coloredBrandLogos = new Set([
-  "BMW", "BYD", "Cadillac", "Changan", "Chevrolet", "Denza", "Dongfeng", "Ford", "Geely Galaxy",
+  "BMW", "BYD", "Changan", "Chevrolet", "Denza", "Dongfeng", "Ford", "Geely Galaxy",
   "Honda", "Hongqi", "Hyundai", "Nissan", "Porsche", "Tesla", "Toyota", "Voyah", "Xiaomi",
+  "Alfa Romeo", "Great Wall", "Škoda", "Subaru", "Maserati", "Volvo", "Infiniti", "MG", "Mitsubishi",
+  "Citroën", "Kia",
 ]);
 
 // Two letters, so brands sharing an initial stay apart (Tesla/Toyota).
