@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, recordAnalyticsEvent, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
@@ -90,4 +90,14 @@ test("свои заходы не попадают в собственную ст
   assert.equal(isSkippedVisit({ ...live, hostname:"localhost" }), true, "рабочий компьютер считается");
   // Снятая метка возвращает учёт: ?nocount=0 стирает её, и остаётся пустое значение.
   assert.equal(isSkippedVisit({ ...live, nocount:"0" }), false, "снятая метка всё ещё выключает учёт");
+});
+
+// Свои регистрации, избранное и пробные заявки в раздел не идут: аккаунт помечен
+// служебным, а заявку с сайта опознаём по телефону — она заводится без входа в кабинет.
+test("служебные аккаунты вырезаются из подсчёта", () => {
+  assert.equal(notStaffAccount("customer_id"), "customer_id NOT IN (SELECT id FROM customer_accounts WHERE staff)");
+  // Телефон в заявке приходит как придётся (+375, скобки, пробелы), а в аккаунте
+  // лежит одними цифрами — сравнивать можно только после очистки.
+  assert.match(notStaffContact("contact"), /regexp_replace\(contact, '\\D', '', 'g'\) NOT IN/);
+  assert.match(notStaffContact("d.contact"), /SELECT phone FROM customer_accounts WHERE staff AND phone <> ''/);
 });

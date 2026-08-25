@@ -117,6 +117,15 @@ export function clearAnalyticsCookie(request) {
   return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secureRequest(request) ? "; Secure" : ""}`;
 }
 
+// Свои собственные аккаунты помечены в базе как служебные: без этого наша
+// регистрация, наше избранное и пробные заявки попадают в раздел как интерес
+// клиентов. Заявку с сайта опознаём по телефону: форму заполняют без входа
+// в кабинет, аккаунт к ней не привязан.
+const STAFF_IDS = "SELECT id FROM customer_accounts WHERE staff";
+const STAFF_PHONES = "SELECT phone FROM customer_accounts WHERE staff AND phone <> ''";
+export const notStaffAccount = (column) => `${column} NOT IN (${STAFF_IDS})`;
+export const notStaffContact = (column) => `regexp_replace(${column}, '\\D', '', 'g') NOT IN (${STAFF_PHONES})`;
+
 export function normalizeAnalyticsDays(value) {
   return [7, 30, 90].includes(Number(value)) ? Number(value) : 30;
 }
@@ -137,10 +146,10 @@ export async function getAnalyticsDashboard(daysValue) {
       count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views
       FROM analytics_events WHERE created_at >= $1`, [cutoff]),
     pool.query(`SELECT
-      (SELECT count(*) FROM customer_orders WHERE created_at >= $1)::int
-        + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND coalesce(calculation->>'requestType','') <> 'catalog_search')::int AS availability_clicks,
-      (SELECT count(*) FROM customer_favorites WHERE created_at >= $1)::int AS favorites,
-      (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND calculation->>'requestType' = 'catalog_search')::int AS custom_searches`, [cutoff]),
+      (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND ${notStaffAccount("customer_id")})::int
+        + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
+      (SELECT count(*) FROM customer_favorites WHERE created_at >= $1 AND ${notStaffAccount("customer_id")})::int AS favorites,
+      (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND calculation->>'requestType' = 'catalog_search' AND ${notStaffContact("contact")})::int AS custom_searches`, [cutoff]),
     pool.query(`SELECT created_at::date::text AS day,
       count(DISTINCT visitor_id)::int AS visitors,
       count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views
@@ -151,11 +160,11 @@ export async function getAnalyticsDashboard(daysValue) {
           count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers
         FROM analytics_events WHERE created_at >= $1 AND listing_id IS NOT NULL GROUP BY listing_id
       ), asks AS (
-        SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND listing_id IS NOT NULL GROUP BY listing_id
+        SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND listing_id IS NOT NULL AND ${notStaffAccount("customer_id")} GROUP BY listing_id
       ), drafts AS (
-        SELECT listing_id, count(*)::int AS n FROM order_drafts WHERE created_at >= $1 AND listing_id IS NOT NULL GROUP BY listing_id
+        SELECT listing_id, count(*)::int AS n FROM order_drafts WHERE created_at >= $1 AND listing_id IS NOT NULL AND ${notStaffContact("contact")} GROUP BY listing_id
       ), favs AS (
-        SELECT listing_id, count(*)::int AS n FROM customer_favorites WHERE created_at >= $1 GROUP BY listing_id
+        SELECT listing_id, count(*)::int AS n FROM customer_favorites WHERE created_at >= $1 AND ${notStaffAccount("customer_id")} GROUP BY listing_id
       ), ids AS (
         SELECT listing_id FROM views UNION SELECT listing_id FROM asks UNION SELECT listing_id FROM drafts UNION SELECT listing_id FROM favs
       )
@@ -176,7 +185,7 @@ export async function getAnalyticsDashboard(daysValue) {
     // принимаются без пароля и подделываются, а аккаунт создаётся только настоящей
     // регистрацией. Заодно личные данные остаются в одном месте.
     pool.query(`SELECT name, phone, created_at
-      FROM customer_accounts WHERE created_at >= $1
+      FROM customer_accounts WHERE created_at >= $1 AND NOT staff
       ORDER BY created_at DESC LIMIT 100`, [cutoff]),
     pool.query(`SELECT event_name,listing_id,listing_title,path,created_at
       FROM analytics_events WHERE created_at >= $1 ORDER BY created_at DESC LIMIT 30`, [cutoff]),
@@ -184,15 +193,15 @@ export async function getAnalyticsDashboard(daysValue) {
     // берётся список ниже. Иначе счётчик и список расходятся: событий может не быть вовсе
     // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
     pool.query(`SELECT created_at::date::text AS day, count(*)::int AS registrations
-      FROM customer_accounts WHERE created_at >= $1 GROUP BY 1`, [cutoff]),
+      FROM customer_accounts WHERE created_at >= $1 AND NOT staff GROUP BY 1`, [cutoff]),
     pool.query(`SELECT day, sum(availability_clicks)::int AS availability_clicks, sum(custom_searches)::int AS custom_searches FROM (
         SELECT created_at::date::text AS day, count(*)::int AS availability_clicks, 0 AS custom_searches
-          FROM customer_orders WHERE created_at >= $1 GROUP BY 1
+          FROM customer_orders WHERE created_at >= $1 AND ${notStaffAccount("customer_id")} GROUP BY 1
         UNION ALL
         SELECT created_at::date::text AS day,
           count(*) FILTER (WHERE coalesce(calculation->>'requestType','') <> 'catalog_search')::int,
           count(*) FILTER (WHERE calculation->>'requestType' = 'catalog_search')::int
-          FROM order_drafts WHERE created_at >= $1 GROUP BY 1
+          FROM order_drafts WHERE created_at >= $1 AND ${notStaffContact("contact")} GROUP BY 1
       ) t GROUP BY day`, [cutoff]),
   ]);
   const actionsByDay = new Map(actionsDailyResult.rows.map((row) => [row.day, row]));
@@ -275,6 +284,7 @@ export async function getAnalyticsLeads() {
       FROM order_drafts d
       LEFT JOIN listings l ON l.id=d.listing_id
       LEFT JOIN vehicles v ON v.id=l.vehicle_id
+      WHERE ${notStaffContact("d.contact")}
       ORDER BY d.created_at DESC LIMIT ${LEADS_LIMIT}`),
     pool.query(`SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,
       o.contact_name,o.contact_phone,o.contact_methods,o.contact_saved_at,
@@ -288,6 +298,7 @@ export async function getAnalyticsLeads() {
       JOIN customer_accounts a ON a.id=o.customer_id
       LEFT JOIN listings l ON l.id=o.listing_id
       LEFT JOIN vehicles v ON v.id=l.vehicle_id
+      WHERE ${notStaffAccount("o.customer_id")}
       ORDER BY o.created_at DESC LIMIT ${LEADS_LIMIT}`),
   ]);
   const drafts = draftsResult.rows.map((row) => ({

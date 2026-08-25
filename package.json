@@ -21,6 +21,7 @@
     "db:engine": "node scripts/backfill-engine.mjs",
     "db:setup": "npm run db:up && npm run db:migrate && npm run db:import",
     "db:schedule": "node scripts/db-schedule.mjs",
+    "db:staff": "node scripts/db-staff.mjs",
     "worker": "node scripts/db-worker.mjs",
     "worker:once": "node scripts/db-worker.mjs --once",
     "build": "vite build && node scripts/generate-seo-pages.mjs && node scripts/prepare-sites-build.mjs",
