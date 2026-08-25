@@ -66,6 +66,18 @@ const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORD
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? Math.round(usd * PRICING.usdByn) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
+// Итог «под ключ» стоит в строку с кружком стрелки переоценки, а в карточке заказа —
+// ещё и с переключателем валюты. Семизначная сумма в рублях («≈ 1 521 424 BYN» —
+// пятнадцать знаков) в строку уже не влезала, и стрелка съезжала под цену. Меру
+// берём по длине готовой надписи: в долларах таких длинных цен не бывает, в рублях
+// они начинаются с миллиона. Насколько уменьшить кегль — решают стили того места,
+// где цена нарисована.
+const priceFitClass = (usd, currency) => {
+  const length = `≈ ${money(usd, currency)}`.length;
+  if (length >= 16) return "price-very-long";
+  if (length >= 14) return "price-long";
+  return "";
+};
 const ANY_YEAR_MIN = "Год от";
 const ANY_YEAR_MAX = "До";
 const ANY_PRICE_MIN = "Цена от";
@@ -2568,7 +2580,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
           </div>
         )}
         <div className="featured-price">
-          <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
+          <strong className={priceFitClass(price.totalUsd, currency)}>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
         </div>
       </div>
     </article>
@@ -4015,7 +4027,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <div className="car-row-mobile-header">
         <div>
           <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
-          <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
+          <strong className={priceFitClass(price.totalUsd, currency)}>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
         </div>
         <button
           type="button"
@@ -4086,7 +4098,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
         </div>
       </div>
       <div className="car-row-price">
-        <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
+        <strong className={priceFitClass(price.totalUsd, currency)}>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
         <span>Под ключ</span>
         <b>{number(car.chinaPrice)} ¥</b>
         <small>цена в Китае</small>
@@ -5951,7 +5963,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </AppLink>
             )}
           </div>
-          <strong className="detail-mobile-price">
+          <strong className={`detail-mobile-price ${priceFitClass(price.totalUsd, currency)}`.trim()}>
             ≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} />
           </strong>
           {/* Тип, привод и пробег из подзаголовка убраны: они и так стоят
@@ -5998,7 +6010,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           )}
           <aside className="order-card">
             <div className={`price-total${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
-              <strong>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
+              <strong className={priceFitClass(price.totalUsd, currency)}>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
               {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
             </div>
             <div className="price-breakdown">

@@ -47,6 +47,15 @@
   --motion-fast: 140ms;
   --motion-medium: 190ms;
   --motion-ease: cubic-bezier(0.2, 0.72, 0.2, 1);
+  /* Подсказки при наведении всегда идут наперекор теме: на светлом сайте тёмные,
+     на тёмном — светлые. Так подсказка читается как всплывшая поверх страницы,
+     а не как ещё одна её плашка. Полупрозрачные оттенки текста — для второй
+     строки внутри подсказки (дата, пояснение). */
+  --tooltip-bg: #17191c;
+  --tooltip-ink: #fff;
+  --tooltip-ink-soft: rgba(255, 255, 255, 0.82);
+  --tooltip-ink-muted: rgba(255, 255, 255, 0.65);
+  --tooltip-shadow: 0 8px 24px rgba(18, 20, 24, 0.22);
 }
 
 /* Keep dark surfaces authoritative over feature styles declared above. */
@@ -961,7 +970,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   justify-content: space-between;
 }
 .featured-body strong {
-  font-size: 20px;
+  font-size: calc(20px * var(--price-fit, 1));
 }
 .featured-body span {
   color: var(--muted);
@@ -1519,7 +1528,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   text-align: right;
 }
 .car-row-price strong {
-  font-size: 21px;
+  font-size: calc(21px * var(--price-fit, 1));
 }
 .car-row-price span,
 .car-row-price small {
@@ -3033,6 +3042,11 @@ body.header-menu-open .detail-floating-availability {
   --page: #111315;
   --panel: #22262b;
   --panel-soft: #1b1e22;
+  --tooltip-bg: #f3f4f6;
+  --tooltip-ink: #17191c;
+  --tooltip-ink-soft: rgba(23, 25, 28, 0.78);
+  --tooltip-ink-muted: rgba(23, 25, 28, 0.58);
+  --tooltip-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
 }
 :root[data-theme="dark"] body {
   background: var(--page);
@@ -4088,7 +4102,7 @@ body.header-menu-open .detail-floating-availability {
   .car-row-mobile-header strong {
     display: block;
     margin-top: 4px;
-    font-size: 21px;
+    font-size: calc(21px * var(--price-fit, 1));
     font-weight: 800;
     line-height: 1.2;
     -webkit-text-stroke: 0.3px currentColor;
@@ -4256,7 +4270,7 @@ body.header-menu-open .detail-floating-availability {
     grid-row: 2;
     margin-bottom: 0;
     color: var(--ink);
-    font-size: 24px;
+    font-size: calc(24px * var(--price-fit, 1));
     font-weight: 800;
     line-height: 1.12;
     letter-spacing: -1px;
@@ -4539,7 +4553,7 @@ body.header-menu-open .detail-floating-availability {
 }
 .price-total strong {
   display: block;
-  font-size: 28px;
+  font-size: calc(28px * var(--price-fit, 1));
   letter-spacing: -0.8px;
 }
 /* В быстром просмотре шапка сайта закрыта модалкой, поэтому валюту переключают
@@ -4664,7 +4678,7 @@ body.header-menu-open .detail-floating-availability {
     padding: 18px;
   }
   .price-total strong {
-    font-size: 23px;
+    font-size: calc(23px * var(--price-fit, 1));
   }
   .delivery-card-heading h2 {
     font-size: 18px;
@@ -10570,9 +10584,9 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
   max-width: min(240px, calc(100vw - 20px));
   padding: 7px 10px;
   border-radius: calc(9px * var(--corner-scale));
-  background: #17191c;
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(18, 20, 24, 0.22);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
+  box-shadow: var(--tooltip-shadow);
   font-size: 14px;
   font-weight: 500;
   line-height: 1.4;
@@ -10593,10 +10607,6 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
   visibility: visible;
   opacity: 1;
   transform: translateY(0);
-}
-/* На тёмном фоне подсказка должна быть светлее подложки, а не темнее её. */
-:root[data-theme="dark"] .detail-action-tooltip {
-  background: var(--filter-field-open-bg);
 }
 /* Свитчер «Быстрый просмотр» рядом с выдачей: на главной — у заголовка каталога,
    в каталоге — у счётчика найденного. */
@@ -12629,6 +12639,17 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 /* У крупной итоговой цены на странице машины и в быстром просмотре шрифт
    заметно больше, и круг того же размера в долях выглядел бы громоздким —
    уменьшаем. */
+/* Кегль длинных цен. Итог «под ключ» стоит в строку с кружком стрелки переоценки,
+   а в карточке заказа — ещё и с переключателем валюты. Семизначная сумма в рублях
+   («≈ 1 521 424 BYN») в строку уже не влезала, и стрелка съезжала под цену.
+   Класс ставит только множитель, а на сколько это точек — решает то место, где
+   цена нарисована: свой кегль у каталога, у карточки заказа и у телефона. */
+.price-long {
+  --price-fit: 0.88;
+}
+.price-very-long {
+  --price-fit: 0.78;
+}
 .price-total .price-change-mark,
 .detail-mobile-price .price-change-mark {
   width: 0.82em;
@@ -12673,7 +12694,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   font-weight: 600;
 }
 .price-change-tooltip i {
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--tooltip-ink-muted);
   font-style: normal;
 }
 /* Подсказка у остатка квоты в шапке: здесь не два слова, а объяснение в пару строк,
@@ -12696,7 +12717,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 }
 .quota-link-tooltip span {
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--tooltip-ink-soft);
 }
 
 /* Размытая подложка у плашек поверх фотографий.
