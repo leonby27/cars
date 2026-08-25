@@ -399,6 +399,17 @@ import xpeng_x9 from "./model-texts/xpeng-x9.js";
 import byd_seal_06_dmi_touring from "./model-texts/byd-seal-06-dmi-touring.js";
 import byd_xia from "./model-texts/byd-xia.js";
 import honda_lingpai from "./model-texts/honda-lingpai.js";
+import toyota_yaris_l_zhi_xuan from "./model-texts/toyota-yaris-l-zhi-xuan.js";
+import chery_tiggo_9 from "./model-texts/chery-tiggo-9.js";
+import bmw_2_series from "./model-texts/bmw-2-series.js";
+import mazda_cx_30 from "./model-texts/mazda-cx-30.js";
+import hongqi_hs7_phev from "./model-texts/hongqi-hs7-phev.js";
+import hyundai_tucson from "./model-texts/hyundai-tucson.js";
+import bmw_x7 from "./model-texts/bmw-x7.js";
+import kia_seltos from "./model-texts/kia-seltos.js";
+import audi_s4 from "./model-texts/audi-s4.js";
+import chery_tiggo_5x from "./model-texts/chery-tiggo-5x.js";
+import haval_da_gou from "./model-texts/haval-da-gou.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -789,6 +800,17 @@ export const MODEL_TEXTS_RAW = {
   "byd-seal-06-dmi-touring": byd_seal_06_dmi_touring,
   "byd-xia": byd_xia,
   "honda-lingpai": honda_lingpai,
+  "toyota-yaris-l-zhi-xuan": toyota_yaris_l_zhi_xuan,
+  "chery-tiggo-9": chery_tiggo_9,
+  "bmw-2-series": bmw_2_series,
+  "mazda-cx-30": mazda_cx_30,
+  "hongqi-hs7-phev": hongqi_hs7_phev,
+  "hyundai-tucson": hyundai_tucson,
+  "bmw-x7": bmw_x7,
+  "kia-seltos": kia_seltos,
+  "audi-s4": audi_s4,
+  "chery-tiggo-5x": chery_tiggo_5x,
+  "haval-da-gou": haval_da_gou,
 };
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
