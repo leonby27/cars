@@ -352,6 +352,53 @@ import buick_century from "./model-texts/buick-century.js";
 import chevrolet_equinox from "./model-texts/chevrolet-equinox.js";
 import nio_es7 from "./model-texts/nio-es7.js";
 import aion_ut from "./model-texts/aion-ut.js";
+import volkswagen_tayron_gte from "./model-texts/volkswagen-tayron-gte.js";
+import haval_f7 from "./model-texts/haval-f7.js";
+import jetour_x90_plus from "./model-texts/jetour-x90-plus.js";
+import ora_white_cat from "./model-texts/ora-white-cat.js";
+import byd_e2 from "./model-texts/byd-e2.js";
+import lynk_co_02 from "./model-texts/lynk-co-02.js";
+import mercedes_benz_gle_amg from "./model-texts/mercedes-benz-gle-amg.js";
+import kia_sportage from "./model-texts/kia-sportage.js";
+import mg_mg5_scorpio from "./model-texts/mg-mg5-scorpio.js";
+import ford_ranger from "./model-texts/ford-ranger.js";
+import honda_life from "./model-texts/honda-life.js";
+import bmw_ix1 from "./model-texts/bmw-ix1.js";
+import bmw_3_series_gt from "./model-texts/bmw-3-series-gt.js";
+import geely_haoyue from "./model-texts/geely-haoyue.js";
+import hongqi_h6 from "./model-texts/hongqi-h6.js";
+import mercedes_benz_c_class_amg from "./model-texts/mercedes-benz-c-class-amg.js";
+import hongqi_h5_phev from "./model-texts/hongqi-h5-phev.js";
+import chery_arrizo_5_plus from "./model-texts/chery-arrizo-5-plus.js";
+import byd_frigate_07 from "./model-texts/byd-frigate-07.js";
+import hongqi_hs3_phev from "./model-texts/hongqi-hs3-phev.js";
+import toyota_vios from "./model-texts/toyota-vios.js";
+import hongqi_hs3 from "./model-texts/hongqi-hs3.js";
+import mercedes_benz_glc_amg from "./model-texts/mercedes-benz-glc-amg.js";
+import kia_kx3 from "./model-texts/kia-kx3.js";
+import geely_borui from "./model-texts/geely-borui.js";
+import mercedes_benz_gle_coupe from "./model-texts/mercedes-benz-gle-coupe.js";
+import changan_ruicheng_cc from "./model-texts/changan-ruicheng-cc.js";
+import nissan_kicks from "./model-texts/nissan-kicks.js";
+import bmw_z4 from "./model-texts/bmw-z4.js";
+import ford_territory from "./model-texts/ford-territory.js";
+import volkswagen_passat_new_energy from "./model-texts/volkswagen-passat-new-energy.js";
+import volkswagen_tayron_x from "./model-texts/volkswagen-tayron-x.js";
+import changan_yida from "./model-texts/changan-yida.js";
+import bmw_ix from "./model-texts/bmw-ix.js";
+import mg_zs from "./model-texts/mg-zs.js";
+import maserati_levante from "./model-texts/maserati-levante.js";
+import toyota_c_hr from "./model-texts/toyota-c-hr.js";
+import hyundai_kustu from "./model-texts/hyundai-kustu.js";
+import buick_gl6 from "./model-texts/buick-gl6.js";
+import lynk_co_900 from "./model-texts/lynk-co-900.js";
+import ford_mustang from "./model-texts/ford-mustang.js";
+import mercedes_benz_gls from "./model-texts/mercedes-benz-gls.js";
+import audi_q5l_sportback from "./model-texts/audi-q5l-sportback.js";
+import xpeng_x9 from "./model-texts/xpeng-x9.js";
+import byd_seal_06_dmi_touring from "./model-texts/byd-seal-06-dmi-touring.js";
+import byd_xia from "./model-texts/byd-xia.js";
+import honda_lingpai from "./model-texts/honda-lingpai.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -695,7 +742,54 @@ export const MODEL_TEXTS_RAW = {
   "chevrolet-equinox": chevrolet_equinox,
   "nio-es7": nio_es7,
   "aion-ut": aion_ut,
-}
+  "volkswagen-tayron-gte": volkswagen_tayron_gte,
+  "haval-f7": haval_f7,
+  "jetour-x90-plus": jetour_x90_plus,
+  "ora-white-cat": ora_white_cat,
+  "byd-e2": byd_e2,
+  "lynk-co-02": lynk_co_02,
+  "mercedes-benz-gle-amg": mercedes_benz_gle_amg,
+  "kia-sportage": kia_sportage,
+  "mg-mg5-scorpio": mg_mg5_scorpio,
+  "ford-ranger": ford_ranger,
+  "honda-life": honda_life,
+  "bmw-ix1": bmw_ix1,
+  "bmw-3-series-gt": bmw_3_series_gt,
+  "geely-haoyue": geely_haoyue,
+  "hongqi-h6": hongqi_h6,
+  "mercedes-benz-c-class-amg": mercedes_benz_c_class_amg,
+  "hongqi-h5-phev": hongqi_h5_phev,
+  "chery-arrizo-5-plus": chery_arrizo_5_plus,
+  "byd-frigate-07": byd_frigate_07,
+  "hongqi-hs3-phev": hongqi_hs3_phev,
+  "toyota-vios": toyota_vios,
+  "hongqi-hs3": hongqi_hs3,
+  "mercedes-benz-glc-amg": mercedes_benz_glc_amg,
+  "kia-kx3": kia_kx3,
+  "geely-borui": geely_borui,
+  "mercedes-benz-gle-coupe": mercedes_benz_gle_coupe,
+  "changan-ruicheng-cc": changan_ruicheng_cc,
+  "nissan-kicks": nissan_kicks,
+  "bmw-z4": bmw_z4,
+  "ford-territory": ford_territory,
+  "volkswagen-passat-new-energy": volkswagen_passat_new_energy,
+  "volkswagen-tayron-x": volkswagen_tayron_x,
+  "changan-yida": changan_yida,
+  "bmw-ix": bmw_ix,
+  "mg-zs": mg_zs,
+  "maserati-levante": maserati_levante,
+  "toyota-c-hr": toyota_c_hr,
+  "hyundai-kustu": hyundai_kustu,
+  "buick-gl6": buick_gl6,
+  "lynk-co-900": lynk_co_900,
+  "ford-mustang": ford_mustang,
+  "mercedes-benz-gls": mercedes_benz_gls,
+  "audi-q5l-sportback": audi_q5l_sportback,
+  "xpeng-x9": xpeng_x9,
+  "byd-seal-06-dmi-touring": byd_seal_06_dmi_touring,
+  "byd-xia": byd_xia,
+  "honda-lingpai": honda_lingpai,
+};
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
 // фразы про нулевую пошлину переписываются под новую ставку — так же, как в
