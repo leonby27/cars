@@ -6,11 +6,11 @@ const MAX_SAVED_SEARCHES = 30;
 
 // Форму набора фильтров задаёт фронтенд; сервер принимает только известные ключи
 // и строковые значения разумной длины, чтобы в базу не попадал произвольный JSON.
-const FILTER_KEYS = ["type", "brand", "model", "bodyType", "color", "yearMin", "yearMax", "mileage", "priceMin", "priceMax", "drive", "owners", "battery", "condition", "accel", "tire", "torque", "range", "excludeBrand", "excludeModel", "excludeBodyType", "excludeColor", "excludeType", "excludeDrive", "sort"];
+const FILTER_KEYS = ["type", "brand", "model", "bodyType", "color", "yearMin", "yearMax", "mileage", "priceMin", "priceMax", "drive", "owners", "battery", "condition", "accel", "tire", "torque", "range", "engine", "power", "gearbox", "fuel", "excludeBrand", "excludeModel", "excludeBodyType", "excludeColor", "excludeType", "excludeDrive", "sort"];
 const LIST_KEYS = new Set(["model", "bodyType", "color", "excludeBrand", "excludeModel", "excludeBodyType", "excludeColor", "excludeType", "excludeDrive"]);
 // Ключи, появившиеся позже запуска сохранённых поисков: вкладка со старой сборкой
 // их не шлёт, и это не повод отклонять весь набор — просто ключа не будет.
-const OPTIONAL_KEYS = new Set(["accel", "tire", "torque", "range"]);
+const OPTIONAL_KEYS = new Set(["accel", "tire", "torque", "range", "engine", "power", "gearbox", "fuel"]);
 const MAX_FILTER_VALUE = 80;
 const MAX_FILTER_LIST = 30;
 

@@ -348,3 +348,48 @@ test("латинский запрос не порождает лишних ва�
   assert.deepEqual(latinVariants("zeekr 8x"), []);
   assert.deepEqual(latinVariants(""), []);
 });
+
+test("объём мотора: литры не путаются с ценой", () => {
+  // Раньше «до 2 литров» читалось как цена в 2000 долларов и выдавало пустой каталог.
+  const result = parseQueryRanges("бензин до 2 литров");
+  assert.equal(result.rest, "бензин");
+  assert.equal(result.engineMax, 2);
+  assert.equal(result.priceMaxUsd, null);
+  assert.equal(parseQueryRanges("объем двигателя от 1.6 л").engineMin, 1.6);
+  const range = parseQueryRanges("от 1.6 до 2 л");
+  assert.equal(range.engineMin, 1.6);
+  assert.equal(range.engineMax, 2);
+});
+
+test("дробное число рядом с моделью — это объём мотора", () => {
+  const result = parseQueryRanges("гольф 1.4");
+  assert.equal(result.rest, "гольф");
+  assert.equal(result.engineMin, 1.4);
+  assert.equal(result.engineMax, 1.4);
+  // Сумма с множителем объёмом не становится.
+  const price = parseQueryRanges("до 1.5 млн", { currency: "BYN" });
+  assert.equal(price.engineMax, null);
+  assert.ok(price.priceMaxUsd > 0);
+});
+
+test("мощность в лошадиных силах", () => {
+  assert.equal(parseQueryRanges("от 150 л.с.").powerMin, 150);
+  assert.equal(parseQueryRanges("от 150 лс").powerMin, 150);
+  assert.equal(parseQueryRanges("200 сил").powerMin, 200);
+  assert.equal(parseQueryRanges("мощность от 180").powerMin, 180);
+  assert.equal(parseQueryRanges("до 200 л.с.").powerMax, 200);
+  // Силы не превращаются в цену.
+  assert.equal(parseQueryRanges("от 150 л.с.").priceMinUsd, null);
+});
+
+test("мотор, коробка и цена в одной строке", () => {
+  const result = parseQueryRanges("фольксваген гольф 1.4 автомат от 150 л.с. до 25000");
+  assert.equal(result.rest, "фольксваген гольф автомат");
+  assert.equal(result.engineMin, 1.4);
+  assert.equal(result.powerMin, 150);
+  assert.equal(result.priceMaxUsd, 25000);
+});
+
+test("«турбо» не мешает искать модель", () => {
+  assert.equal(parseQueryRanges("хонда 1.5 турбо").rest, "хонда");
+});

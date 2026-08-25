@@ -1,4 +1,7 @@
-export const BODY_TYPES = ["SUV / кроссовер", "Седан", "Лифтбек", "Хэтчбек", "Универсал", "Минивэн"];
+// Купе, кабриолет и пикап появились вместе с бензиновым каталогом: у Mercedes-Benz
+// и BMW на такие кузова приходится под тысячу машин, и без этих значений они висели
+// в каталоге как «кузов не определён» — мимо фильтра и мимо разделов сайта.
+export const BODY_TYPES = ["SUV / кроссовер", "Седан", "Лифтбек", "Хэтчбек", "Универсал", "Минивэн", "Купе", "Кабриолет", "Пикап"];
 
 const modelRules = [
   [/^BYD$/i, /^(Song Pro)$/i, "SUV / кроссовер"],
@@ -33,7 +36,14 @@ export function normalizeSourceBodyType(value) {
   if (!source) return null;
   if (BODY_TYPES.includes(source)) return source;
   if (/MPV|Mini\s*Van|Minivan|商务车|多用途/i.test(source)) return "Минивэн";
+  // Кабриолет проверяем раньше кроссовера: у источника это «Soft-top Convertible»
+  // и «Hardtop Convertible», и слово Hardtop в них ни на что не намекает.
+  if (/Convertible|Cabrio|Roadster|Spyder|敞篷/i.test(source)) return "Кабриолет";
+  if (/Pickup|Pick-up|Truck|皮卡/i.test(source)) return "Пикап";
   if (/SUV|Crossover|越野/i.test(source)) return "SUV / кроссовер";
+  // А купе — после кроссовера: «купе-кроссоверы» вроде GLC Coupe и X6 остаются
+  // кроссоверами, покупатель ищет их именно там.
+  if (/Coupe|Coup\u00e9|双门|轿跑/i.test(source)) return "Купе";
   if (/Station\s*Wagon|Wagon|Touring|旅行|猎装/i.test(source)) return "Универсал";
   if (/Liftback|掀背/i.test(source)) return "Лифтбек";
   if (/Hatchback|两厢/i.test(source)) return "Хэтчбек";

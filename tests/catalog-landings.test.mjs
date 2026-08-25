@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { ICE_IMPORT_BRANDS, IMPORT_BRANDS } from "../config/import-policy.mjs";
+import { visibleLandings } from "../server/catalog-page.mjs";
 import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
 
@@ -295,4 +297,33 @@ test("каждый раздел остаётся собой при своих ж
     const found = catalogLandingForFilters(landingFilterParams(landing), landing.path);
     assert.equal(found?.path, landing.path, `раздел ${landing.path} при своих фильтрах превращается в ${found?.path ?? "общий каталог"}`);
   }
+});
+
+test("у каждой марки из списка ввоза есть свой раздел", () => {
+  // Разделы марок заведены заранее, под загрузку бензинового каталога: марка приезжает
+  // ночным импортом, и страница под неё должна быть уже готова, иначе ссылки с главной
+  // ведут на адрес с фильтром, а отдельной страницы под запрос «Honda из Китая» нет.
+  const sections = new Set(CATALOG_LANDINGS.filter((landing) => landing.kind === "brand").map((landing) => landing.brand));
+  const missing = ICE_IMPORT_BRANDS.filter((brand) => !sections.has(brand));
+  assert.deepEqual(missing, [], `марки без раздела: ${missing.join(", ")}`);
+});
+
+test("марка раздела написана ровно так же, как в базе", () => {
+  // Иначе раздел останется пустым навсегда: фильтр ищет точное совпадение, а опечатку
+  // видно только по нулю машин на странице.
+  const allowed = new Set([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS]);
+  const strange = CATALOG_LANDINGS.filter((landing) => landing.brand && !allowed.has(landing.brand)).map((landing) => landing.brand);
+  assert.deepEqual(strange, [], `таких марок в списке ввоза нет: ${strange.join(", ")}`);
+});
+
+test("раздел марки без машин не показывается", () => {
+  // Пока импорт до марки не дошёл, её раздел пуст. Пустая страница поисковику не нужна:
+  // она не попадает ни в ссылки, ни в карту сайта, а сервер отдаёт по ней 404.
+  const stock = new Map([["BYD", 120]]);
+  const visible = visibleLandings(stock);
+  assert.equal(visible(findCatalogLanding("/catalog/byd")), true);
+  assert.equal(visible(findCatalogLanding("/catalog/honda")), false);
+  // Разделы без марки — тип двигателя, кузов, цена — проверки не требуют.
+  assert.equal(visible(findCatalogLanding("/catalog/electric")), true);
+  assert.equal(visible(findCatalogLanding("/catalog/petrol")), true);
 });

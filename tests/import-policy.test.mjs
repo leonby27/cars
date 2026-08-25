@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  ICE_IMPORT_MIN_YEAR,
   IMPORT_MIN_YEAR,
   IMPORT_BRAND_SLUGS,
   canonicalImportBrand,
+  canonicalImportModel,
   importPolicyViolation,
   isAllowedImportBrand,
   isEligibleNewImport,
@@ -56,4 +58,37 @@ test("keeps combustion cars out, including 48V mild hybrids", () => {
   assert.equal(normalizeChe168Energy({ fuelname: "Plug-in Hybrid" }, []), "Гибрид");
   assert.equal(normalizeChe168Energy({ fuelname: "Range Extender" }, []), "Гибрид");
   assert.equal(normalizeChe168Energy({ fuelname: "Pure Electric" }, []), "Электромобиль");
+});
+
+test("starts the petrol import a year later than the electric one", () => {
+  assert.equal(ICE_IMPORT_MIN_YEAR, 2021);
+  // Машина 2020 года к оформлению уже старше пяти лет: ставка за кубический
+  // сантиметр вдвое выше, и такую машину в Беларуси не купят.
+  assert.match(importPolicyViolation({ brand: "BMW", year: 2020, type: "ДВС" }, { combustion: true }), /2021/);
+  assert.equal(isEligibleNewImport({ brand: "BMW", year: 2021, type: "ДВС" }, { combustion: true }), true);
+  // Электромобилям и гибридам граница не меняется.
+  assert.equal(isEligibleNewImport({ brand: "BYD", year: 2020, type: "Электромобиль" }), true);
+  assert.equal(isEligibleNewImport({ brand: "Li Auto", year: 2020, type: "Гибрид" }), true);
+});
+
+test("«(Import)» — не отдельная модель", () => {
+  // Так источник помечает машины, привезённые в Китай целиком, а не собранные на
+  // месте. Модель от этого не меняется, а без склейки одна и та же машина стоит
+  // в каталоге двумя строками: у немецких марок так разъехалось больше тысячи
+  // объявлений, и обзор модели собирал бы половину наличия.
+  assert.equal(canonicalImportModel("Mercedes-Benz", "E-Class (Import)"), "E-Class");
+  assert.equal(canonicalImportModel("Mercedes-Benz", "A-Class AMG (Import)"), "A-Class AMG");
+  assert.equal(canonicalImportModel("BMW", "X5 (Import)"), "X5");
+  assert.equal(canonicalImportModel("Audi", "A6 (Import)"), "A6");
+  // Версию с розеткой пометка не съедает: у неё свой обзор и свой расчёт таможни.
+  assert.equal(canonicalImportModel("BMW", "X5 New Energy(Imported)"), "X5 New Energy");
+  assert.equal(canonicalImportModel("BMW", "5 Series New Energy"), "5 Series New Energy");
+});
+
+test("завод в названии модели отбрасывается", () => {
+  // Один и тот же CC собирают два совместных предприятия, и источник приклеивает
+  // к названию имя завода.
+  assert.equal(canonicalImportModel("Volkswagen", "FAW-Volkswagen CC"), "CC");
+  assert.equal(canonicalImportModel("Volkswagen", "SAIC-Volkswagen Lavida"), "Lavida");
+  assert.equal(canonicalImportModel("Volkswagen", "Golf"), "Golf");
 });

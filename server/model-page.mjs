@@ -9,6 +9,9 @@ import { listCars, priceEdges } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { MODEL_PAGES, findModelPage } from "../src/model-pages.js";
+// Текст обзора лежит отдельным файлом на модель: браузеру мы отдаём только нужный,
+// а здесь нужен весь текст сразу — страницу для поисковика собираем целиком.
+import { modelPageWithText } from "../src/model-texts.js";
 import { brandLandingPath, findCatalogLanding } from "../src/catalog-landings.js";
 
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
@@ -26,8 +29,9 @@ const siblingsOnPage = 12;
 export async function renderModelPage(slug) {
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
-  const page = findModelPage(`/models/${String(slug || "").trim()}`);
-  if (!page) return { status: 404, html: renderer.landingMissingPage() };
+  const found = findModelPage(`/models/${String(slug || "").trim()}`);
+  if (!found) return { status: 404, html: renderer.landingMissingPage() };
+  const page = modelPageWithText(found);
 
   // Самые доступные машины модели: по ним считается «от такой-то цены».
   const params = new URLSearchParams({ brand: page.brand, model: page.model, sort: "price_asc", limit: String(offersOnPage) });

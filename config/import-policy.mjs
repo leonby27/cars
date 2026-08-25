@@ -1,5 +1,15 @@
 export const IMPORT_MIN_YEAR = 2020;
 
+// У бензиновых машин граница на год выше. Пороги пошлины стоят на трёх и пяти
+// годах с даты выпуска, и машина 2020 года к моменту оформления этот порог уже
+// прошла: ставка за кубический сантиметр у неё вдвое выше, чем у машины
+// 2021 года. Трёхлитровая машина за 20 тысяч приезжает почти за 43 — такую
+// в Беларуси не купят, а карточка занимает место в каталоге и в выдаче.
+export const ICE_IMPORT_MIN_YEAR = 2021;
+
+// Нижняя граница года по типу машины: бензиновой — своя, остальным — общая.
+export const importMinYear = (type) => (type === "ДВС" ? ICE_IMPORT_MIN_YEAR : IMPORT_MIN_YEAR);
+
 // Electric and hybrid both belong in the catalog; a plain combustion car does
 // not. A mild-hybrid petrol car reads as "Gasoline + 48V Mild Hybrid System" at
 // the source and must not slip in on the word "hybrid" alone — the parser
@@ -150,7 +160,18 @@ export function canonicalImportBrand(value) {
 // import and on read alike. New source spellings land here as they show up.
 const MODEL_PREFIX_STRIPS = new Map([
   ["Deepal", ["Deep Blue", "DeepBlue", "Shenlan", "深蓝"]],
+  // Один и тот же CC собирают два совместных предприятия, и источник приклеивает
+  // к названию завод: «FAW-Volkswagen CC». Для покупателя это просто CC.
+  ["Volkswagen", ["FAW-Volkswagen", "FAW Volkswagen", "SAIC-Volkswagen", "SAIC Volkswagen", "Shanghai Volkswagen"]],
 ]);
+
+// Пометка «(Import)» у источника значит, что машину привезли в Китай целиком, а не
+// собрали на месте. Модель от этого не меняется: «Mercedes-Benz E-Class (Import)» —
+// тот же E-Class, только с обычной колёсной базой вместо удлинённой китайской.
+// Без склейки одна модель стоит в каталоге двумя строками, фильтр показывает её
+// дважды, а обзор собирает половину машин: у Mercedes-Benz, BMW и Audi так
+// разъехалось больше тысячи объявлений.
+const IMPORT_SUFFIX = /\s*\((?:import|imported)\)\s*$/i;
 
 const MODEL_ALIASES = new Map([
   // BMW splits its M performance trims into separate series; the catalog files
@@ -200,6 +221,8 @@ export function canonicalImportModel(brandValue, modelValue) {
       if (rest) model = rest;
     }
   }
+  const withoutImport = model.replace(IMPORT_SUFFIX, "").trim();
+  if (withoutImport) model = withoutImport;
   return MODEL_ALIASES.get(`${brand.toLocaleLowerCase("en-US")}|${model.toLocaleLowerCase("en-US")}`) || model;
 }
 
@@ -213,7 +236,8 @@ export function isAllowedImportBrand(value, { combustion = false } = {}) {
 // ночной импорт электромобилей не начинает тянуть бензин сам собой.
 export function importPolicyViolation(car, { combustion = false } = {}) {
   if (!isAllowedImportBrand(car?.brand, { combustion })) return "brand is outside the Belarus import list";
-  if (!Number.isFinite(Number(car?.year)) || Number(car.year) < IMPORT_MIN_YEAR) return `model year is below ${IMPORT_MIN_YEAR}`;
+  const minYear = importMinYear(car?.type);
+  if (!Number.isFinite(Number(car?.year)) || Number(car.year) < minYear) return `model year is below ${minYear}`;
   const powertrains = combustion ? [...IMPORTABLE_POWERTRAINS, "ДВС"] : IMPORTABLE_POWERTRAINS;
   if (!powertrains.includes(car?.type)) return combustion ? "unknown powertrain" : "new imports must be electric or hybrid";
   return null;

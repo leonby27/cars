@@ -26,6 +26,11 @@
   --accent-secondary: #f4d90e;
   --ink: #17191c;
   --muted: #747a83;
+  /* Тот же приглушённый серый, но чуть темнее — для мест, где он красит целые
+     фразы (пункты под заголовком главной, счётчики у марок): обычный --muted
+     на белом не дотягивает до нормы читаемости 4,5:1, из-за чего проверка
+     доступности Lighthouse снимала баллы. Разница на глаз почти незаметна. */
+  --muted-contrast: #6a7079;
   --line: #e7e9ec;
   --line-strong: #d8dadd;
   --focus-ring: #aeb3ba;
@@ -781,7 +786,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 .brand-count {
   flex: 0 0 auto;
   margin-left: -5px;
-  color: var(--muted);
+  color: var(--muted-contrast);
   font-size: 16px;
   font-weight: 500;
   line-height: 1;
@@ -3029,6 +3034,8 @@ body.header-menu-open .detail-floating-availability {
   --accent-soft: rgba(238, 28, 37, 0.16);
   --ink: #f3f4f6;
   --muted: #aeb4bd;
+  /* В тёмной теме обычный --muted и так контрастный (8,9:1) — темнее не нужно. */
+  --muted-contrast: #aeb4bd;
   --line: #30353c;
   --focus-ring: #59616c;
   --surface: #202329;
@@ -3190,6 +3197,22 @@ body.header-menu-open .detail-floating-availability {
 :root[data-theme="dark"] .brand-logo:not(.brand-logo-colored) img {
   filter: grayscale(1) brightness(0) invert(1);
   opacity: 0.88;
+}
+/* The new coloured marks keep their hue, but the source brand blues and reds
+   are too dark against the night surface at their native brightness. Lift only
+   their luminance; unlike the monochrome rule above, never invert them. */
+:root[data-theme="dark"] :where(
+  .brand-logo.brand-logo-colored img[src$="/cadillac.svg"],
+  .brand-logo.brand-logo-colored img[src$="/changan.svg"],
+  .brand-logo.brand-logo-colored img[src$="/chevrolet.svg"],
+  .brand-logo.brand-logo-colored img[src$="/ford.svg"],
+  .brand-logo.brand-logo-colored img[src$="/honda.svg"],
+  .brand-logo.brand-logo-colored img[src$="/hyundai.svg"],
+  .brand-logo.brand-logo-colored img[src$="/nissan.svg"],
+  .brand-logo.brand-logo-colored img[src$="/porsche.svg"]
+) {
+  filter: brightness(1.55) saturate(1.05);
+  opacity: 1;
 }
 :root[data-theme="dark"] :where(.status.green, .report-badge, .data-tag.ready, .hero-updated) {
   background: rgba(50, 170, 107, 0.16);
@@ -3820,7 +3843,7 @@ body.header-menu-open .detail-floating-availability {
     width: 100%;
     max-width: 100%;
     margin-top: 20px;
-    color: var(--muted);
+    color: var(--muted-contrast);
     text-align: center;
   }
   .hero-benefits li {

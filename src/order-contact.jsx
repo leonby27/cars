@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { X } from "@phosphor-icons/react";
+import { X } from "./icons.jsx";
 
 const contactOptions = [
   ["phone", "Телефон"],

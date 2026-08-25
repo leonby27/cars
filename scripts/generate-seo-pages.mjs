@@ -7,6 +7,9 @@ import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS, catalogPageCount, landingApiParams } from "../src/catalog-landings.js";
 import { TOOL_PAGES, customsExample, deliveryStages, toolPageStats } from "../src/tool-pages.js";
+// Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
+// отдельным файлом, а сборке нужны целиком — склеиваем запись с её текстами.
+import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
 import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
@@ -97,7 +100,10 @@ const publicPages = [
   // Страницы-инструменты: квота, растаможка, стоимость доставки, калькулятор. Файлами,
   // а не сервером: их содержимое не зависит от каталога, а остаток квоты обновляется
   // ежедневной задачей, которая и так пересобирает сайт.
-  ...TOOL_PAGES.map((tool) => ({ route: `${tool.path}/`, title: tool.seoTitle, description: tool.seoDescription, h1: tool.h1, lead: tool.lead, tool })),
+  ...TOOL_PAGES.map((cover) => {
+    const tool = { ...cover, ...TOOL_PAGE_TEXTS[cover.path] };
+    return { route: `${tool.path}/`, title: tool.seoTitle, description: tool.seoDescription, h1: tool.h1, lead: tool.lead, tool };
+  }),
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
@@ -115,52 +121,52 @@ const PATHWAYS = {
   "/how-it-works/": {
     heading: "С чего начать выбор",
     intro: "Порядок покупки одинаковый для любой машины, а вот пошлина, сроки и итоговая сумма зависят от того, что вы выбрали.",
-    links: ["electric", "hybrid", "suv", "sedan", "/calculator", "/catalog"],
+    links: ["electric", "hybrid", "petrol", "suv", "sedan", "/calculator", "/catalog"],
   },
   "/faq/": {
     heading: "Ответы, которые видно в каталоге",
     intro: "Большинство вопросов упирается в конкретную машину: её возраст, тип двигателя и цену. В этих разделах ответ виден цифрами.",
-    links: ["electric", "hybrid", "under-20000", "under-30000", "byd", "tesla", "/catalog"],
+    links: ["electric", "hybrid", "petrol", "under-20000", "petrol-under-30000", "byd", "volkswagen", "/catalog"],
   },
   "/payment-and-contract/": {
     heading: "Сколько это выходит в деньгах",
     intro: "Порядок расчётов от машины не зависит, а сумма зависит. Подборки собраны по итоговой цене до Минска — со всеми платежами.",
-    links: ["under-15000", "under-20000", "under-25000", "under-30000", "under-40000", "/calculator", "/delivery-cost"],
+    links: ["under-15000", "under-20000", "under-30000", "petrol-under-25000", "petrol-under-30000", "petrol-under-40000", "/calculator", "/delivery-cost"],
   },
   "/guarantees/": {
     heading: "Что именно мы проверяем",
-    intro: "Проверка одна для всех машин, но смотреть в электромобиле и в гибриде приходится на разное: там батарея и её остаточная ёмкость, тут двигатель и обслуживание.",
-    links: ["electric", "hybrid", "electric-suv", "hybrid-suv", "/models", "/catalog"],
+    intro: "Проверка одна для всех машин, но смотреть приходится на разное: в электромобиле — батарея и её остаточная ёмкость, в гибриде — обе системы сразу, в бензиновой машине — двигатель, коробка и история обслуживания.",
+    links: ["electric", "hybrid", "petrol", "electric-suv", "petrol-suv", "/models", "/catalog"],
   },
   "/delivered/": {
     heading: "Где выбрать такую же",
     intro: "Доставленные автомобили — это те же объявления из каталога, только уже приехавшие. Вот откуда их выбирают.",
-    links: ["suv", "sedan", "electric", "hybrid", "/catalog"],
+    links: ["suv", "sedan", "electric", "hybrid", "petrol", "/catalog"],
   },
   "/contacts/": {
     heading: "Пока мы отвечаем — посмотрите каталог",
     intro: "Разговор выходит предметнее, когда есть две-три машины на примете.",
-    links: ["electric", "hybrid", "byd", "tesla", "li-auto", "zeekr", "/catalog"],
+    links: ["electric", "hybrid", "petrol", "byd", "tesla", "volkswagen", "mercedes-benz", "/catalog"],
   },
   "/customs/": {
     heading: "Растаможка по типам машин",
-    intro: "Сумма зависит от двух вещей: электромобиль это или гибрид и сколько машине лет. Каталог уже разделён по этому признаку.",
-    links: ["electric", "hybrid", "electric-suv", "hybrid-suv", "under-20000", "under-30000", "/catalog"],
+    intro: "Сумма зависит от того, что у машины под капотом и сколько ей лет: электромобиль, гибрид и бензиновая машина считаются по разным правилам. Каталог уже разделён по этому признаку.",
+    links: ["electric", "hybrid", "petrol", "petrol-suv", "petrol-sedan", "under-30000", "/catalog"],
   },
   "/ev-quota/": {
     heading: "Что можно ввезти по квоте",
-    intro: "Льгота действует только на электромобили. Вот они — с ценами уже до Минска.",
-    links: ["electric", "electric-suv", "electric-sedan", "electric-hatchback", "under-20000", "under-30000", "/catalog"],
+    intro: "Льгота действует только на электромобили. Вот они — с ценами уже до Минска. Рядом — бензиновые машины: на них квота не влияла никогда, и от её остатка их цена не зависит.",
+    links: ["electric", "electric-suv", "electric-sedan", "under-20000", "petrol", "petrol-under-30000", "/catalog"],
   },
   "/delivery-cost/": {
     heading: "Машины, для которых считаем доставку",
     intro: "Сама доставка почти не зависит от машины, а итоговая сумма — зависит. Подборки собраны по конечной цене.",
-    links: ["under-15000", "under-20000", "under-25000", "under-30000", "under-40000", "/catalog"],
+    links: ["under-15000", "under-20000", "under-25000", "under-40000", "petrol-under-25000", "petrol-under-40000", "/catalog"],
   },
   "/calculator/": {
     heading: "Посчитать на конкретной машине",
-    intro: "Расчёт получается точнее, когда есть объявление: год, тип двигателя и цену продавца берём из него.",
-    links: ["electric", "hybrid", "under-20000", "under-30000", "byd", "tesla", "/customs", "/catalog"],
+    intro: "Расчёт получается точнее, когда есть объявление: год, тип двигателя, объём мотора и цену продавца берём из него.",
+    links: ["electric", "hybrid", "petrol", "under-30000", "petrol-under-30000", "byd", "/customs", "/catalog"],
   },
 };
 
@@ -342,7 +348,7 @@ function publicPageBody(page) {
   // «электромобиль до 20 000» и «китайский кроссовер» — самые покупательские. Теперь
   // на главной и на странице обзоров стоит полный список.
   const sections = page.route === "/" || page.modelsIndex
-    ? renderer.sectionLinks(CATALOG_LANDINGS, { heading: page.modelsIndex ? "Разделы каталога" : "Автомобили из Китая по маркам, типам и цене" })
+    ? renderer.sectionLinks(liveSections, { heading: page.modelsIndex ? "Разделы каталога" : "Автомобили из Китая по маркам, типам и цене" })
     : "";
   const models = page.route === "/" ? popularModelLinks() : "";
   return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}${models}${pathwayFor(page.route)}${sections}</main>${footer()}`;
@@ -350,6 +356,15 @@ function publicPageBody(page) {
 
 // Живые данные читаем до отрисовки страниц: витрина и счётчики моделей нужны главной.
 const live = await readLiveCatalog();
+
+// Разделы, в которых есть хотя бы одна машина. Марки заведены заранее, под загрузку
+// каталога: пока импорт до марки не дошёл, её раздел пуст — в карту сайта и в ссылки
+// он не попадает, а сервер отдаёт по нему 404. Когда база при сборке недоступна,
+// наличие неизвестно и берём все разделы: так было до появления этой проверки.
+const liveSections = live.stock.size
+  ? CATALOG_LANDINGS.filter((landing) => (live.stock.get(landing.path) || 0) > 0)
+  : CATALOG_LANDINGS;
+
 
 for (const page of publicPages) {
   const schemas = [renderer.breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
@@ -434,13 +449,14 @@ async function readLiveCatalog() {
     }
     return counts;
   };
-  const nothing = { showcase: [], models: new Map(), carEntries: [], listPages: new Map() };
+  const nothing = { showcase: [], models: new Map(), carEntries: [], listPages: new Map(), stock: new Map() };
   if (cars.length) {
     return {
       showcase: cars.slice(0, showcaseSize),
       models: countByModel(cars),
       carEntries: carsSitemap ? cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) })) : [],
       listPages: new Map(),
+      stock: new Map(),
     };
   }
   if (!carsFromDatabase) {
@@ -467,13 +483,19 @@ async function readLiveCatalog() {
     // находит только переходами «дальше», а в разделе электромобилей их две сотни —
     // до середины он дошёл бы нескоро.
     const listPages = new Map();
+    const stock = new Map();
     listPages.set("/catalog", catalogPageCount(await countCars(new URLSearchParams())));
-    for (const landing of CATALOG_LANDINGS) listPages.set(landing.path, catalogPageCount(await countCars(landingApiParams(landing))));
+    for (const landing of CATALOG_LANDINGS) {
+      const total = await countCars(landingApiParams(landing));
+      stock.set(landing.path, total);
+      listPages.set(landing.path, catalogPageCount(total));
+    }
     return {
       showcase,
       models: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.count])),
       carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) })),
       listPages,
+      stock,
     };
   } catch (error) {
     console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);
@@ -500,7 +522,7 @@ const pageEntries = [
   { loc: routeUrl("/catalog/"), lastmod: null },
   ...listPageEntries("/catalog/"),
   ...MODEL_PAGES.map((modelPage) => ({ loc: routeUrl(modelPage.path), lastmod: null })),
-  ...CATALOG_LANDINGS.flatMap((landing) => [{ loc: routeUrl(landing.path), lastmod: null }, ...listPageEntries(landing.path)]),
+  ...liveSections.flatMap((landing) => [{ loc: routeUrl(landing.path), lastmod: null }, ...listPageEntries(landing.path)]),
 ];
 writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
 
@@ -629,7 +651,7 @@ if (cars.length) {
 rmSync(path.join(clientDir, "data", "cars.json"), { force:true });
 
 const carsInSitemap = carEntries.length;
-console.log(`Generated ${publicPages.length} public pages, ${MODEL_PAGES.length} model reviews and ${CATALOG_LANDINGS.length} catalog sections (server-rendered), ${cars.length} vehicle pages${vehiclePages ? "" : " (страницы машин собирает сервер в момент запроса)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
+console.log(`Generated ${publicPages.length} public pages, ${MODEL_PAGES.length} model reviews and ${liveSections.length} catalog sections (server-rendered), ${cars.length} vehicle pages${vehiclePages ? "" : " (страницы машин собирает сервер в момент запроса)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
 console.log(`Адресов машин в карте сайта: ${carsInSitemap}${carsSitemap ? "" : " (включается SEO_CARS_SITEMAP=1 или открытой индексацией)"}.`);
 // Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
 // вставляют в Google Search Console и Яндекс.Вебмастер.

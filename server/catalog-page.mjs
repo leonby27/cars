@@ -4,7 +4,7 @@
 // Зачем сервером, а не файлами: список машин в разделе меняется каждый день, а держать
 // тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
-import { carsByIds, listCarPage, priceEdges } from "./repository.mjs";
+import { brandStock, carsByIds, listCarPage, priceEdges } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
@@ -37,6 +37,12 @@ const pageLocation = (path, page, params) => {
   const query = [page > 1 ? `page=${page}` : "", rest.toString()].filter(Boolean).join("&");
   return `${path}${query ? `?${query}` : ""}`;
 };
+
+// Раздел марки, которой в каталоге ещё нет, не показываем и не отдаём: страницы марок
+// заведены заранее, под загрузку каталога, а пустой раздел для поисковика — тонкая
+// страница без содержания. Разделы без марки (тип двигателя, кузов, цена) собраны из
+// того, что в каталоге есть всегда, и проверки не требуют.
+export const visibleLandings = (stock) => (landing) => !landing.brand || (stock.get(landing.brand) || 0) > 0;
 
 /**
  * Общая страница каталога `/catalog` — тоже в момент запроса, вместе с фильтрами из адреса.
@@ -80,7 +86,8 @@ export async function renderCatalogIndex(searchParams) {
   // узкой выборкой без полей, из которых считается цена, поэтому эти двадцать четыре
   // машины дочитываем по номерам — поиск по ключу, от глубины страницы не зависит.
   const priced = await carsByIds(items.slice(0, 24).map((car) => car.id));
-  const page = renderer.catalogIndexPage({ cars: items, total, sections: CATALOG_LANDINGS, page: number, pages, perPage: carsOnPage, edges, priced });
+  const stock = await brandStock();
+  const page = renderer.catalogIndexPage({ cars: items, total, sections: CATALOG_LANDINGS.filter(visibleLandings(stock)), page: number, pages, perPage: carsOnPage, edges, priced });
   return { status: 200, html: page.html };
 }
 
@@ -110,6 +117,8 @@ export async function renderCatalogPage(slug, searchParams) {
   ]);
   const pages = catalogPageCount(total);
   if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
+  // Раздел без единой машины — пустая страница: пока марку не загрузили, её здесь нет.
+  if (!total) return { status: 404, html: renderer.landingMissingPage() };
   const priced = await carsByIds(items.slice(0, 24).map((car) => car.id));
 
   // Обзоры моделей этой марки — сильные внутренние ссылки: у каждой такой страницы
@@ -118,7 +127,8 @@ export async function renderCatalogPage(slug, searchParams) {
   // Разделы по смыслу, а не все подряд: полный список всех 57 лежит в каталоге, а здесь
   // сначала то, что связано с этим разделом (та же марка, тот же кузов, тот же тип),
   // и немного соседей. Одинаковый на всех страницах блок поисковик обесценивает.
-  const others = relatedLandings(landing);
+  const stock = await brandStock();
+  const others = relatedLandings(landing).filter(visibleLandings(stock));
 
   const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage, edges, priced });
   return { status: 200, html: page.html };

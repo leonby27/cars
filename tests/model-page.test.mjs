@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSeoRenderer } from "../server/seo-render.mjs";
 import { MODEL_PAGES, findModelPage } from "../src/model-pages.js";
+import { modelPageWithText } from "../src/model-texts.js";
 import { CATALOG_LANDINGS, findCatalogLanding, landingsForCar } from "../src/catalog-landings.js";
 
 const shell = `<!doctype html>
@@ -12,7 +13,8 @@ const shell = `<!doctype html>
 `;
 const render = (options = {}) => createSeoRenderer({ shell, siteUrl: "https://abcars.by", allowIndexing: true, ...options });
 
-const page = findModelPage("/models/byd-han");
+// Странице для поисковика нужен обзор целиком: обложка из model-pages.js плюс текст.
+const page = modelPageWithText(findModelPage("/models/byd-han"));
 const cars = [
   { id: "che168-1", title: "BYD Han 2023", brand: "BYD", model: "Han", year: 2023, mileage: 21400, chinaPrice: 128000, type: "Электромобиль" },
   { id: "che168-2", title: "BYD Han 2022", brand: "BYD", model: "Han", year: 2022, mileage: 54000, chinaPrice: 96000, type: "Электромобиль" },

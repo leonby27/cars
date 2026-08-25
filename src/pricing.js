@@ -1,9 +1,16 @@
 import { chinaTransitFor } from "./china-logistics.js";
+import { engineVolume } from "./engine-spec.js";
 import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
   usdByn:2.982, cnyBynPer10:4.4517, eurByn:3.4782, rateDate:"25.08.2026",
-  serviceUsd:800, evCustomsUsd:350,
+  serviceUsd:800,
+  // Обязательные сборы при оформлении: утилизационный сбор, таможенный сбор и
+  // оформление. Утильсбор с 23.04.2026 (постановление Совета Министров № 195)
+  // по льготной ставке для физлиц — 624,92 руб. машине до трёх лет и 1282,02 руб.
+  // старше трёх, то есть примерно 210 и 430 долларов. Раньше здесь стояла одна
+  // цифра на любой возраст, и у машины старше трёх лет сборы были занижены.
+  customsFeesUsd:{ upTo3Years:350, over3Years:500 },
   evDutyPercent:0.15, // пошлина на электромобиль после исчерпания квоты
   vatPercent:0.20, // НДС при ввозе: платят последовательные гибриды, у электромобилей ставка нулевая
   // Этапы до СВХ, доллары [низ, верх]. Ориентиры — открытые тарифы перевозчиков
@@ -18,26 +25,40 @@ export const PRICING = {
 };
 const round50 = (value) => Math.round(value / 50) * 50;
 
-// «Сегодня» для расчёта возраста — дата курса: она обновляется вместе с курсами
-// (npm run rates), и цены не начинают тихо ехать сами по себе между обновлениями.
-const [RATE_MONTH, RATE_YEAR] = (() => {
+// Объём, по которому считается пошлина, когда в объявлении его нет. Такая карточка
+// помечается предупреждением: у мотора побольше платёж будет выше.
+const ASSUMED_ENGINE_CC = 1500;
+
+// Пороги ставок считаются на дату оформления на таможне, а машина приезжает
+// через полтора-два месяца после покупки. Поэтому возраст считаем не на сегодня,
+// а на ожидаемую дату оформления: иначе машина у самого пятилетнего порога
+// показывала бы дешёвую ставку, а к оформлению действовала бы дорогая — у
+// двухлитрового мотора это около пяти тысяч долларов сюрпризом после договора.
+export const CLEARANCE_MONTHS = 2;
+
+// Ожидаемая дата оформления: дата курса плюс срок доставки. Дата курса
+// обновляется вместе с курсами (npm run rates), поэтому цены не начинают тихо
+// ехать сами по себе между обновлениями.
+const [CLEARANCE_MONTH, CLEARANCE_YEAR] = (() => {
   const [, month, year] = PRICING.rateDate.split(".").map(Number);
-  return [month, year];
+  const shifted = month + CLEARANCE_MONTHS;
+  return shifted > 12 ? [shifted - 12, year + 1] : [shifted, year];
 })();
 
 /**
- * Сколько лет машине по документам таможни. Возраст считается от даты выпуска, а
- * не от модельного года: в каталоге они расходятся у каждой третьей машины (модель
- * 2022 года, выпуск 2023-го), а на трёх и пяти годах стоят пороги ставок. Если
- * даты выпуска нет, остаётся модельный год — как считалось раньше.
+ * Сколько лет будет машине по документам таможни к дате оформления. Возраст
+ * считается от даты выпуска, а не от модельного года: в каталоге они расходятся у
+ * каждой третьей машины (модель 2022 года, выпуск 2023-го), а на трёх и пяти годах
+ * стоят пороги ставок. Если даты выпуска нет, остаётся модельный год — как
+ * считалось раньше.
  */
 export const carAgeYears = (car) => {
   const parts = String(car?.manufactureDate || "").match(/(\d{4})[.\-/](\d{1,2})/);
   if (parts) {
-    const months = (RATE_YEAR - Number(parts[1])) * 12 + (RATE_MONTH - Number(parts[2]));
+    const months = (CLEARANCE_YEAR - Number(parts[1])) * 12 + (CLEARANCE_MONTH - Number(parts[2]));
     if (months >= 0 && months <= 480) return months / 12;
   }
-  return RATE_YEAR - (Number(car?.year) || RATE_YEAR);
+  return CLEARANCE_YEAR - (Number(car?.year) || CLEARANCE_YEAR);
 };
 
 // Ставки для физлиц из решения Совета ЕЭК № 107: за 1 см³ объёма двигателя.
@@ -118,16 +139,25 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const intlNote = bigCar ? "Хоргос → Минск · крупный кузов, дороже место" : "Хоргос → Минск, через Казахстан и Россию";
 
   const age = carAgeYears(car);
+  // Сборы за оформление: у машины старше трёх лет утилизационный сбор вдвое выше.
+  const feesUsd = age < 3 ? PRICING.customsFeesUsd.upTo3Years : PRICING.customsFeesUsd.over3Years;
+  // Таможенная стоимость — не цена продавца, а цена плюс доставка до границы ЕАЭС:
+  // экспортные документы и плечо до Хоргоса. Дальше Хоргоса дорога идёт уже внутри
+  // союза и в стоимость не входит. Считаем по середине вилки этапа: это оценка, а
+  // не счёт перевозчика. От неё считаются все проценты — пошлина 15%, НДС и доля от
+  // стоимости у машин младше трёх лет; ставка за кубический сантиметр от неё не
+  // зависит вообще.
+  const customsValueUsd = chinaUsd + (chinaLegLow + chinaLegHigh) / 2;
   // Нулевой НДС дают только машинам не старше пяти лет с даты выпуска (указ № 92
-  // с правками указа № 428). Машина старше — НДС 20% от цены вместе с пошлиной,
+  // с правками указа № 428). Машина старше — НДС 20% от стоимости вместе с пошлиной,
   // даже когда льготная квота ещё действует.
   const overFiveYears = age > 5;
   // Пока действует квота, электромобиль ввозится без пошлины и в этой строке
   // остаются только оформление и сборы. Когда квота выбрана — сверху ложится
-  // пошлина 15% от стоимости машины.
-  const evDutyUsd = quotaOver ? chinaUsd * PRICING.evDutyPercent : 0;
-  const evVatUsd = overFiveYears ? (chinaUsd + evDutyUsd) * PRICING.vatPercent : 0;
-  let customsUsd = round50(evDutyUsd + evVatUsd + PRICING.evCustomsUsd);
+  // пошлина 15% от таможенной стоимости.
+  const evDutyUsd = quotaOver ? customsValueUsd * PRICING.evDutyPercent : 0;
+  const evVatUsd = overFiveYears ? (customsValueUsd + evDutyUsd) * PRICING.vatPercent : 0;
+  let customsUsd = round50(evDutyUsd + evVatUsd + feesUsd);
   let customsNote = quotaOver
     ? (overFiveYears ? "Пошлина 15% и НДС 20% · старше 5 лет" : "Пошлина 15% · оформление и сборы")
     : (overFiveYears ? "НДС 20% · машина старше 5 лет" : "Льгота 0% · оформление и сборы");
@@ -146,32 +176,41 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   let engineAssumed = false;
   const seriesHybrid = isSeriesHybrid(car);
   if (seriesHybrid) {
-    const dutyUsd = chinaUsd * PRICING.evDutyPercent;
-    const vatUsd = (chinaUsd + dutyUsd) * PRICING.vatPercent;
-    customsUsd = round50(dutyUsd + vatUsd + PRICING.evCustomsUsd);
+    const dutyUsd = customsValueUsd * PRICING.evDutyPercent;
+    const vatUsd = (customsValueUsd + dutyUsd) * PRICING.vatPercent;
+    customsUsd = round50(dutyUsd + vatUsd + feesUsd);
     customsNote = "Гибрид с генератором · пошлина 15% и НДС 20%";
     customsHint = "Бензиновый мотор здесь только крутит генератор, колёс он не касается, поэтому таможня оформляет машину как электромобиль. Но льготу на такие гибриды отменили с 1 января 2026 года: пошлина 15% и НДС 20% сверху — около 38% от цены машины, плюс сборы за оформление.";
     customsAlert = "Гибрид с генератором — льготы нет с 2026 года";
     customsAlertTone = "warn";
   } else if (car.type !== "Электромобиль") {
-    // Объём берём только из строки вида «1.5T», «2.0L», «4.4T»: у машин с генератором
-    // в том же поле стоит мощность («Range Extender 160 Horsepower»), и прежний разбор
-    // «первое число в строке» превратил бы её в мотор на 160 литров.
-    const parsedEngine = Number(String(car.engine || "").match(/(\d(?:\.\d)?)\s*[LT]/i)?.[1]);
-    const engineCc = parsedEngine >= 0.5 && parsedEngine <= 8 ? Math.round(parsedEngine * 1000) : 1500;
-    const engineAssumedNow = !(parsedEngine >= 0.5 && parsedEngine <= 8);
-    engineAssumed = engineAssumedNow;
-    const chinaEur = chinaUsd / eurUsd;
+    // Объём разбирает engineVolume — тот же разбор, по которому работает фильтр
+    // объёма в каталоге. Свой разбор здесь читал «1.33T» как трёхлитровый мотор
+    // (Mercedes A, CLA, GLA, GLB), а «6.75T» Bentley — как пятилитровый: пошлина
+    // расходилась в разы, и фильтр показывал одно, а расчёт считал по другому.
+    const parsedEngine = engineVolume(car);
+    const engineCc = parsedEngine ? Math.round(parsedEngine * 1000) : ASSUMED_ENGINE_CC;
+    engineAssumed = !parsedEngine;
+    const chinaEur = customsValueUsd / eurUsd;
     let dutyEur;
     if (age < 3) {
       const [, percent, minRate] = NEW_CAR_DUTY.find(([limit]) => chinaEur <= limit);
       dutyEur = Math.max(chinaEur * percent, engineCc * minRate);
     } else if (age <= 5) dutyEur = engineCc * dutyPerCc(DUTY_EUR_PER_CC.from3to5, engineCc);
     else dutyEur = engineCc * dutyPerCc(DUTY_EUR_PER_CC.over5, engineCc);
-    customsUsd = round50(dutyEur * eurUsd + 300);
-    customsNote = `Физлицо · ДВС ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (оценка)" : ""}`;
-    customsAlert = null;
-    customsAlertTone = null;
+    customsUsd = round50(dutyEur * eurUsd + feesUsd);
+    customsNote = `Пошлина по объёму · ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (оценка)" : ""}`;
+    // Подсказку про квоту и НДС здесь оставлять нельзя: она написана про
+    // электромобиль, а машине с двигателем ставку считают по объёму и возрасту.
+    customsHint = engineAssumed
+      ? "В объявлении не указан объём двигателя, а пошлина считается именно по нему. В расчёте взято 1,5 литра — у мотора побольше платёж будет выше. Точную сумму подтверждаем по документам машины до договора."
+      : age < 3
+        ? "Машине меньше трёх лет: пошлину считают как долю от стоимости, но не меньше ставки за кубический сантиметр объёма. Это самая дорогая из трёх возрастных ступеней."
+        : age <= 5
+          ? "Пошлину считают по ставке за кубический сантиметр объёма двигателя — стоимость машины на неё уже не влияет. Это самая выгодная возрастная ступень."
+          : "Машине больше пяти лет: ставка за кубический сантиметр примерно вдвое выше, чем у машины от трёх до пяти лет. Плюс сборы за оформление.";
+    customsAlert = engineAssumed ? "Объём двигателя не указан — платёж посчитан по 1,5 л" : null;
+    customsAlertTone = engineAssumed ? "warn" : null;
   }
   // У гибрида с генератором пошлина считается от известной цены машины, а не от
   // предполагаемого объёма двигателя, — разброс здесь такой же узкий, как у
@@ -191,6 +230,7 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     intlLow, intlHigh, intlNote,
     svhLow:PRICING.svhUsd[0], svhHigh:PRICING.svhUsd[1],
     customsUsd, customsLow, customsHigh, customsNote, customsHint, customsAlert, customsAlertTone, seriesHybrid, ageYears:age,
+    customsValueUsd, customsFeesUsd:feesUsd,
     serviceUsd:PRICING.serviceUsd,
     totalLow, totalHigh, totalUsd:round50((totalLow + totalHigh) / 2),
   };

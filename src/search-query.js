@@ -33,6 +33,10 @@ const isKmWord = (word) => word === "км" || word === "km" || word.startsWith("
 const isSecWord = (word) => word === "сек" || word === "s" || word === "с" || word.startsWith("секунд");
 const isKwhWord = (word) => word === "квт" || word === "квтч" || word === "кв" || word === "kwh" || word === "kw" || word === "kwt" || word.startsWith("киловатт");
 const isYearWord = (word) => word === "г" || word === "гг" || word.startsWith("год");
+// Объём мотора и мощность бензиновой машины: «до 2 литров», «от 150 л.с.», «200 сил».
+// Одинокая «л» — литры: как буква модели она приходит словом («эль7»), а не отдельно.
+const isLiterWord = (word) => word === "л" || word.startsWith("литр");
+const isPowerWord = (word) => word === "лс" || word === "hp" || word.startsWith("сил") || word.startsWith("лошад");
 // Слова-границы. «С» и «по» — слабые: они часты в обычной речи, поэтому
 // применяются только к похожим на сумму или год числам (см. ниже).
 const boundOf = (word) =>
@@ -52,24 +56,24 @@ const isInvertibleBoundWord = (word) => word === "дороже" || word === "д�
 const yearBoundOf = (word) => (word === "новее" || word === "свежее" || word === "моложе" ? "min" : word === "старше" || word === "старее" ? "max" : "");
 // «Около 30000» — не граница, а окрестность: диапазон ±15% от названного.
 const isNearWord = (word) => word === "около" || word === "примерно" || word === "порядка" || word === "приблизительно";
-// «Пробег», «цена» и «год» перед числами говорят, к чему относится диапазон.
-const domainHintOf = (word) =>
-  word.startsWith("разгон") || word.startsWith("ускорен") || word.startsWith("сотн")
-    ? "accel"
-    : word.startsWith("батаре") || word.startsWith("аккум") || word.startsWith("емкост")
-      ? "battery"
-      : word.startsWith("запас") || word === "хода" || word.startsWith("зарядк") || word.startsWith("автономн") || word.startsWith("дальност")
-        ? "range"
-        : word.startsWith("пробег")
-          ? "mileage"
-          : word.startsWith("цен") || word.startsWith("стои") || word === "бюджет"
-            ? "price"
-            : word.startsWith("год")
-              ? "year"
-              : "";
+// Слово перед числом говорит, к чему относится диапазон: «пробег до 50 тыс»,
+// «объём от 1.6», «мощность от 150». Порядок в списке не важен — основы не пересекаются.
+const DOMAIN_HINTS = [
+  ["accel", ["разгон", "ускорен", "сотн"]],
+  ["battery", ["батаре", "аккум", "емкост"]],
+  ["range", ["запас", "хода", "зарядк", "автономн", "дальност"]],
+  ["engine", ["объем", "обьем", "двигател", "мотор"]],
+  ["power", ["мощност", "сил", "лошад"]],
+  ["mileage", ["пробег"]],
+  ["price", ["цен", "стои", "бюджет"]],
+  ["year", ["год"]],
+];
+const domainHintOf = (word) => DOMAIN_HINTS.find(([, stems]) => stems.some((stem) => word.startsWith(stem)))?.[0] || "";
 // Слова, которые ничего не уточняют и только мешают искать марку:
 // «машина до 30000», «в рублях», «за 30к».
-const isNoiseWord = (word) => word === "бу" || word === "в" || word === "за" || word === "на" || word === "одной" || word.startsWith("автомобил") || word.startsWith("машин") || word.startsWith("тачк");
+// «Турбо» и «атмосферник» отдельным фильтром не стали: наддув виден в объёме
+// мотора («1.4T»), а в тексте запроса такое слово только мешает искать модель.
+const isNoiseWord = (word) => word === "бу" || word === "в" || word === "за" || word === "на" || word === "одной" || word.startsWith("турбо") || word.startsWith("атмосферн") || word.startsWith("автомобил") || word.startsWith("машин") || word.startsWith("тачк");
 
 const prepare = (query) =>
   String(query ?? "")
@@ -77,6 +81,9 @@ const prepare = (query) =>
     .replace(/ё/g, "е")
     // Десятичная запятая — часть числа («1,5 млн»), остальные запятые перечисляют модели.
     .replace(/(\d),(\d)/g, "$1.$2")
+    // «Л.с.», «л/с», «л. с.» — одно слово: иначе косая черта станет «или», а точки
+    // разделителями, и мощность прочиталась бы литрами.
+    .replace(/(?<![а-я])л\s*[./]\s*с\.?(?![а-я])/g, " лс ")
     // «Б/у» — просто слово-паразит, а не перечисление «б или у».
     .replace(/(^|[^0-9a-zа-я])б\/у([^0-9a-zа-я]|$)/g, "$1 $2")
     .replace(/[,/]/g, " или ")
@@ -100,7 +107,7 @@ const parseToken = (raw) => {
   const match = raw.match(/^(\$?)(\d+(?:\.\d+)?)([a-zа-я$]*)$/);
   if (!match) return { type: "word", raw };
   const [, dollar, digits, tail] = match;
-  const token = { type: "num", raw, digits, mult: 0, currency: dollar || tail.includes("$") ? "USD" : "", km: false, yearWord: false, sec: false, kwh: false };
+  const token = { type: "num", raw, digits, mult: 0, currency: dollar || tail.includes("$") ? "USD" : "", km: false, yearWord: false, sec: false, kwh: false, liter: false, power: false };
   const suffix = tail.replace(/\$/g, "");
   if (suffix) {
     if (multiplierOf(suffix)) token.mult = multiplierOf(suffix);
@@ -108,6 +115,8 @@ const parseToken = (raw) => {
     else if (isKmWord(suffix)) token.km = true;
     else if (isKwhWord(suffix)) token.kwh = true;
     else if (isSecWord(suffix)) token.sec = true;
+    else if (isPowerWord(suffix)) token.power = true;
+    else if (isLiterWord(suffix)) token.liter = true;
     else if (isYearWord(suffix)) token.yearWord = true;
     // Цифры с непонятным хвостом («5i») — часть названия модели, не сумма.
     else return { type: "word", raw };
@@ -126,7 +135,7 @@ const mergeDigitGroups = (tokens) => {
       token.type === "num" &&
       prev?.type === "num" &&
       /^\d{3}$/.test(token.digits) &&
-      !prev.mult && !prev.currency && !prev.km && !prev.yearWord && !prev.sec && !prev.kwh &&
+      !prev.mult && !prev.currency && !prev.km && !prev.yearWord && !prev.sec && !prev.kwh && !prev.liter && !prev.power &&
       !prev.digits.startsWith("0") &&
       !prev.digits.includes(".") &&
       !isYearLike(prev.digits)
@@ -139,6 +148,8 @@ const mergeDigitGroups = (tokens) => {
       prev.yearWord = token.yearWord;
       prev.sec = token.sec;
       prev.kwh = token.kwh;
+      prev.liter = token.liter;
+      prev.power = token.power;
     } else merged.push(token);
   }
   return merged;
@@ -173,6 +184,8 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
         target.km = true;
       }
       else if (isKwhWord(word)) target.kwh = true;
+      else if (isPowerWord(word)) target.power = true;
+      else if (isLiterWord(word)) target.liter = true;
       // «кВт·ч» после чистки знаков распадается на два слова — хвост «ч» доедаем.
       else if (word === "ч" && target.kwh) { /* единица уже отмечена */ }
       // Одинокое «с» считаем секундами только в разговоре о разгоне.
@@ -240,8 +253,8 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
     // запросу. Признаком считается и единица следом («150000 км»), и дефис
     // диапазона («100000-150000»).
     const next = tokens[index + 1];
-    const nextIsUnit = next?.type === "word" && Boolean(multiplierOf(next.raw) || currencyOf(next.raw) || isKmWord(next.raw) || isYearWord(next.raw) || isKwhWord(next.raw) || (isSecWord(next.raw) && next.raw !== "с"));
-    const anyMark = pendingBound || domainHint || token.mult || token.currency || pendingCurrency || token.km || token.sec || token.kwh;
+    const nextIsUnit = next?.type === "word" && Boolean(multiplierOf(next.raw) || currencyOf(next.raw) || isKmWord(next.raw) || isYearWord(next.raw) || isKwhWord(next.raw) || isLiterWord(next.raw) || isPowerWord(next.raw) || (isSecWord(next.raw) && next.raw !== "с"));
+    const anyMark = pendingBound || domainHint || token.mult || token.currency || pendingCurrency || token.km || token.sec || token.kwh || token.liter || token.power;
     if (!anyMark && !nextIsUnit && next?.type !== "dash" && token.digits.split(".")[0].length >= 6) { rest.push(token.raw); continue; }
     // Ноль впереди — номер модели («001»), суммы так не пишут («0.5 млн» — пишут).
     if (token.digits.startsWith("0") && !token.digits.includes(".") && !token.mult && !token.currency && !token.km) {
@@ -251,10 +264,17 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
       pendingCurrency = "";
       continue;
     }
+    // Дробное число без единиц и без слов вокруг — объём мотора: «гольф 1.4»,
+    // «пассат 2.0». Названия моделей дробными не бывают, а цену так не пишут
+    // («1.5 млн» приходит с множителем, «цена 1.5» — с подсказкой).
+    if (!anyMark && !nextIsUnit && next?.type !== "dash" && token.digits.includes(".") && Number(token.digits) >= 0.8 && Number(token.digits) <= 8) {
+      constructs.push({ bound: "", digits: token.digits, mult: 0, currency: "", km: false, sec: false, kwh: false, liter: true, power: false, yearWord: false, hint: "" });
+      continue;
+    }
     // Небольшое число — скорее часть названия («530», «7»). Границей его делает
     // только сильный признак («от», «пробег», валюта, множитель), единица следом
     // («20 к пробега») или дефис диапазона («20-40 тыс»); слабых «с»/«по» недостаточно.
-    const strongMark = (pendingBound && !pendingWeak) || domainHint || token.mult || token.currency || pendingCurrency || token.km || token.sec || token.kwh;
+    const strongMark = (pendingBound && !pendingWeak) || domainHint || token.mult || token.currency || pendingCurrency || token.km || token.sec || token.kwh || token.liter || token.power;
     const small = !token.yearWord && !isYearLike(token.digits) && Number(token.digits) < 1000;
     if (small && !strongMark && !nextIsUnit && tokens[index + 1]?.type !== "dash") {
       rest.push(token.raw);
@@ -266,7 +286,7 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
 
     // Валюта «на подходе» («в рублях …») не приклеивается к голому году:
     // «в рублях 2022» — это всё ещё год, а не сумма.
-    const construct = { bound: pendingBound, digits: token.digits, mult: token.mult, currency: token.currency || (isYearLike(token.digits) && !token.mult ? "" : pendingCurrency), km: token.km, sec: token.sec, kwh: token.kwh, yearWord: token.yearWord, hint: domainHint };
+    const construct = { bound: pendingBound, digits: token.digits, mult: token.mult, currency: token.currency || (isYearLike(token.digits) && !token.mult ? "" : pendingCurrency), km: token.km, sec: token.sec, kwh: token.kwh, liter: token.liter, power: token.power, yearWord: token.yearWord, hint: domainHint };
     pendingBound = "";
     pendingWeak = false;
     pendingCurrency = "";
@@ -276,7 +296,7 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
     // «25000-40000» и «2021-2023»: пара границ одного диапазона.
     if (tokens[index + 1]?.type === "dash" && tokens[index + 2]?.type === "num") {
       const second = tokens[index + 2];
-      const partner = { bound: "max", digits: second.digits, mult: second.mult, currency: second.currency, km: second.km, sec: second.sec, kwh: second.kwh, yearWord: second.yearWord, hint: domainHint };
+      const partner = { bound: "max", digits: second.digits, mult: second.mult, currency: second.currency, km: second.km, sec: second.sec, kwh: second.kwh, liter: second.liter, power: second.power, yearWord: second.yearWord, hint: domainHint };
       index = absorbUnits(partner, index + 2);
       construct.bound = construct.bound && construct.bound !== "near" ? construct.bound : "min";
       constructs.push(construct, partner);
@@ -291,29 +311,21 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
   // «От 20 до 40 тысяч», «в рублях от 20 до 40 тыс»: множитель, валюта и «км»,
   // названные у одной границы, относятся к обеим. Год они не переозначивают:
   // «от 2020 до 45000» — это «год от» плюс «цена до».
+  const itemValue = (item) => Number(item.digits) * (item.mult || 1);
+  const fitsDomain = (item, domain) => (domain === "engine" ? itemValue(item) >= 0.5 && itemValue(item) <= 8 : itemValue(item) >= 30 && itemValue(item) <= 2000);
   const willBeYear = (item) => item.yearWord || item.hint === "year" || (!item.mult && !item.currency && !item.km && !item.hint && isYearLike(item.digits));
   // Своя мера у каждой границы: «запас хода от 500 км» и «пробег до 30 тыс» —
   // две разные величины рядом, а не один диапазон, и делиться единицами им нельзя.
-  const ownDomain = (item) =>
-    item.sec
-      ? "accel"
-      : item.kwh
-        ? "battery"
-        : item.currency
-          ? "price"
-          : item.hint === "accel"
-            ? "accel"
-            : item.hint === "battery"
-              ? "battery"
-              : item.hint === "range"
-                ? "range"
-                : item.km || item.hint === "mileage"
-                  ? "mileage"
-                  : item.hint === "price"
-                    ? "price"
-                    : item.yearWord || (!item.mult && isYearLike(item.digits))
-                      ? "year"
-                      : "";
+  // Единица при числе сильнее слова перед ним, но «запас хода от 500 км» остаётся
+  // запасом хода: подсказки разбираются раньше километров пробега.
+  const ownDomain = (item) => {
+    const unit = item.sec ? "accel" : item.kwh ? "battery" : item.liter ? "engine" : item.power ? "power" : item.currency ? "price" : "";
+    if (unit) return unit;
+    if (["accel", "battery", "range", "engine", "power"].includes(item.hint)) return item.hint;
+    if (item.km || item.hint === "mileage") return "mileage";
+    if (item.hint === "price") return "price";
+    return item.yearWord || (!item.mult && isYearLike(item.digits)) ? "year" : "";
+  };
   for (let i = 0; i + 1 < constructs.length; i += 1) {
     const a = constructs[i];
     const b = constructs[i + 1];
@@ -328,6 +340,13 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
       if (!b.currency) b.currency = a.currency;
       a.km = a.km || b.km;
       b.km = a.km;
+      // Литры и силы, названные у одной границы, относятся к обеим — но только
+      // если вторая на них похожа: «от 150 л.с. до 25000» — это мощность и цена,
+      // а не мощность в двадцать пять тысяч сил.
+      if (b.liter && !a.liter && fitsDomain(a, "engine")) a.liter = true;
+      if (a.liter && !b.liter && fitsDomain(b, "engine")) b.liter = true;
+      if (b.power && !a.power && fitsDomain(a, "power")) a.power = true;
+      if (a.power && !b.power && fitsDomain(b, "power")) b.power = true;
     }
     if (a.hint && !b.hint) b.hint = a.hint;
     if (b.hint && !a.hint) a.hint = b.hint;
@@ -335,28 +354,16 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
 
   // Разгон и батарея узнаются по своей единице или по слову перед числом; «запас
   // хода 500 км» тоже мерится километрами, поэтому его подсказка идёт раньше пробега.
-  const classify = (item) =>
-    item.sec
-      ? "accel"
-      : item.kwh
-        ? "battery"
-        : item.currency
-          ? "price"
-          : item.hint === "accel"
-            ? "accel"
-            : item.hint === "battery"
-              ? "battery"
-              : item.hint === "range"
-                ? "range"
-                : item.km
-                  ? "mileage"
-                  : item.hint
-                    ? item.hint
-                    : item.yearWord || (!item.mult && isYearLike(item.digits))
-                      ? "year"
-                      : "price";
+  const classify = (item) => {
+    const unit = item.sec ? "accel" : item.kwh ? "battery" : item.liter ? "engine" : item.power ? "power" : item.currency ? "price" : "";
+    if (unit) return unit;
+    if (["accel", "battery", "range", "engine", "power"].includes(item.hint)) return item.hint;
+    if (item.km) return "mileage";
+    if (item.hint) return item.hint;
+    return item.yearWord || (!item.mult && isYearLike(item.digits)) ? "year" : "price";
+  };
 
-  const result = { rest: rest.join(" "), yearFrom: "", yearTo: "", priceMinUsd: null, priceMaxUsd: null, mileageMin: null, mileageMax: null, accelMax: null, batteryMin: null, rangeMin: null, hasRanges: false };
+  const result = { rest: rest.join(" "), yearFrom: "", yearTo: "", priceMinUsd: null, priceMaxUsd: null, mileageMin: null, mileageMax: null, accelMax: null, batteryMin: null, rangeMin: null, engineMin: null, engineMax: null, powerMin: null, powerMax: null, hasRanges: false };
   const bareYears = [];
   for (const construct of constructs) {
     const domain = classify(construct);
@@ -378,6 +385,33 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
     }
     if (domain === "battery") {
       if (construct.bound !== "max" && value >= 10 && value <= 400) result.batteryMin = Math.round(value);
+      continue;
+    }
+    // Объём мотора и мощность: «до 2 литров», «от 150 л.с.», «гольф 1.4».
+    // Названный без «от» и «до» объём читается точным (1.4 — это ровно 1.4),
+    // а мощность — нижней границей: её просят «не меньше».
+    if (domain === "engine") {
+      if (value < 0.5 || value > 8) continue;
+      const volume = Math.round(value * 10) / 10;
+      if (construct.bound === "near") {
+        result.engineMin = Math.round(volume * 0.85 * 10) / 10;
+        result.engineMax = Math.round(volume * 1.15 * 10) / 10;
+      } else if (construct.bound === "min") result.engineMin = volume;
+      else if (construct.bound === "max") result.engineMax = volume;
+      else {
+        result.engineMin = volume;
+        result.engineMax = volume;
+      }
+      continue;
+    }
+    if (domain === "power") {
+      if (value < 30 || value > 2000) continue;
+      const power = Math.round(value);
+      if (construct.bound === "near") {
+        result.powerMin = Math.round(power * 0.85);
+        result.powerMax = Math.round(power * 1.15);
+      } else if (construct.bound === "max") result.powerMax = power;
+      else result.powerMin = power;
       continue;
     }
     if (domain === "range") {
@@ -413,7 +447,9 @@ export function parseQueryRanges(query, { currency = "USD" } = {}) {
   if (result.yearFrom && result.yearTo && Number(result.yearFrom) > Number(result.yearTo)) [result.yearFrom, result.yearTo] = [result.yearTo, result.yearFrom];
   if (result.priceMinUsd != null && result.priceMaxUsd != null && result.priceMinUsd > result.priceMaxUsd) [result.priceMinUsd, result.priceMaxUsd] = [result.priceMaxUsd, result.priceMinUsd];
   if (result.mileageMin != null && result.mileageMax != null && result.mileageMin > result.mileageMax) [result.mileageMin, result.mileageMax] = [result.mileageMax, result.mileageMin];
-  result.hasRanges = Boolean(result.yearFrom || result.yearTo || result.priceMinUsd != null || result.priceMaxUsd != null || result.mileageMin != null || result.mileageMax != null || result.accelMax != null || result.batteryMin != null || result.rangeMin != null);
+  if (result.engineMin != null && result.engineMax != null && result.engineMin > result.engineMax) [result.engineMin, result.engineMax] = [result.engineMax, result.engineMin];
+  if (result.powerMin != null && result.powerMax != null && result.powerMin > result.powerMax) [result.powerMin, result.powerMax] = [result.powerMax, result.powerMin];
+  result.hasRanges = Boolean(result.yearFrom || result.yearTo || result.priceMinUsd != null || result.priceMaxUsd != null || result.mileageMin != null || result.mileageMax != null || result.accelMax != null || result.batteryMin != null || result.rangeMin != null || result.engineMin != null || result.engineMax != null || result.powerMin != null || result.powerMax != null);
   return result;
 }
 

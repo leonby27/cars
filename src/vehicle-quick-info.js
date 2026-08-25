@@ -11,6 +11,8 @@ const powertrainLabel = (value) => {
   if (!normalized || normalized.startsWith("не указан")) return null;
   if (normalized === "электромобиль") return "электро";
   if (normalized === "гибрид") return "гибрид";
+  // «ДВС» — как тип записан в базе; покупателю показываем привычное слово.
+  if (normalized === "двс") return "бензин";
   return normalized;
 };
 

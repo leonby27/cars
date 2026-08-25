@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CarProfile, ChartLineUp, MagnifyingGlass, ShieldCheck, SignOut, Trash, Tray, UsersThree } from "@phosphor-icons/react";
+import { CarProfile, ChartLineUp, MagnifyingGlass, ShieldCheck, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
 
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 const formatDate = (value, withTime = false) => {

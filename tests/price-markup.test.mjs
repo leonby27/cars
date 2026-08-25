@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { findCatalogLanding } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
+import { modelPageWithText } from "../src/model-texts.js";
 import { estimateLandedCost } from "../src/pricing.js";
 import { createSeoRenderer } from "../server/seo-render.mjs";
 
@@ -81,7 +82,7 @@ test("нижняя граница вилки не выше цены, показ�
 });
 
 test("на странице модели стоит вилка цен по всем предложениям", () => {
-  const modelPage = MODEL_PAGES.find((item) => item.brand === "BYD" && item.model === "Han") || MODEL_PAGES[0];
+  const modelPage = modelPageWithText(MODEL_PAGES.find((item) => item.brand === "BYD" && item.model === "Han") || MODEL_PAGES[0]);
   const cheapest = car(1, 90000);
   const dearest = car(2, 300000);
   const shown = [cheapest, car(3, 130000)];
@@ -103,7 +104,7 @@ test("на странице модели стоит вилка цен по вс�
 });
 
 test("когда модели нет в наличии, вилки цен не появляется", () => {
-  const modelPage = MODEL_PAGES[0];
+  const modelPage = modelPageWithText(MODEL_PAGES[0]);
   const page = renderer.modelPage({ modelPage, cars: [], total: 0, edges: null });
   assert.doesNotMatch(page.html, /AggregateOffer/);
   assert.doesNotMatch(page.html, /"price":/);

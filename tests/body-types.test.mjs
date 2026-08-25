@@ -21,3 +21,20 @@ test("normalizes English body types from global listings", () => {
   assert.equal(normalizeBodyType({ bodyStructure:"Wagon" }), "Универсал");
   assert.equal(normalizeBodyType({ vehicleClass:"Mini Van" }), "Минивэн");
 });
+
+test("купе, кабриолет и пикап — из бензинового каталога", () => {
+  // У Mercedes-Benz и BMW это под тысячу машин, и до появления этих кузовов они
+  // висели в каталоге как «не определён»: мимо фильтра и мимо разделов сайта.
+  assert.equal(normalizeBodyType({ bodyStructure:"Hardtop Coupe" }), "Купе");
+  assert.equal(normalizeBodyType({ bodyStructure:"Soft-top Convertible" }), "Кабриолет");
+  assert.equal(normalizeBodyType({ bodyStructure:"Hardtop Convertible" }), "Кабриолет");
+  assert.equal(normalizeBodyType({ bodyStructure:"Pickup Truck" }), "Пикап");
+});
+
+test("купе-кроссовер остаётся кроссовером", () => {
+  // GLC Coupe и X6 покупатель ищет среди кроссоверов, а не среди купе, поэтому
+  // проверка на кроссовер идёт раньше проверки на купе.
+  assert.equal(normalizeBodyType({ bodyStructure:"SUV Coupe" }), "SUV / кроссовер");
+  assert.equal(normalizeBodyType({ bodyStructure:"Crossover Coupe" }), "SUV / кроссовер");
+  assert.equal(normalizeBodyType({ bodyStructure:"Hardtop Coupe" }), "Купе");
+});

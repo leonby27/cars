@@ -4,6 +4,7 @@ import { pool, withTransaction } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeBodyType } from "../src/body-types.js";
 import { DRIVE_TYPES, normalizeDrive, orderDrives, UNKNOWN_DRIVE } from "../src/drive-types.js";
+import { FUEL_TYPES, GEARBOX_TYPES, enginePower, engineVolume, fuelType, gearboxType } from "../src/engine-spec.js";
 
 const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).slice(0, 2)) : Number(value) || null;
 const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({ price:car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images })).digest("hex");
@@ -22,7 +23,7 @@ export async function upsertCar(car, client = pool) {
   await client.query(`INSERT INTO vehicles (id, brand, model, model_year, powertrain, drivetrain, battery_kwh, electric_range_km, combined_range_km, specifications, updated_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
     ON CONFLICT (id) DO UPDATE SET brand=EXCLUDED.brand, model=EXCLUDED.model, model_year=EXCLUDED.model_year, powertrain=EXCLUDED.powertrain, drivetrain=EXCLUDED.drivetrain, battery_kwh=EXCLUDED.battery_kwh, electric_range_km=EXCLUDED.electric_range_km, combined_range_km=EXCLUDED.combined_range_km, specifications=EXCLUDED.specifications, updated_at=now()`,
-    [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify({ bodyType:item.bodyType,bodyStructure:item.bodyStructure,batteryType:item.batteryType,batteryBrand:item.batteryBrand,batteryHealth:item.batteryHealth,engine:item.engine,transmission:item.transmission,bodyColor:item.bodyColor,acceleration:item.acceleration,torqueNm:item.torqueNm,tireSizeFront:item.tireSizeFront,tireRim:item.tireRim,vehicleClass:item.vehicleClass,driverAssistance:item.driverAssistance,infotainmentChip:item.infotainmentChip,assistanceLevel:item.assistanceLevel,radarCount:item.radarCount,cameraCount:item.cameraCount,ultrasonicCount:item.ultrasonicCount,warranty:item.warranty,inspectionGrade:item.inspectionGrade,powertrainInspection:item.powertrainInspection,bodyInspection:item.bodyInspection,interiorInspection:item.interiorInspection,structureInspection:item.structureInspection,engineBayInspection:item.engineBayInspection,batteryProtection:item.batteryProtection })]);
+    [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify({ bodyType:item.bodyType,bodyStructure:item.bodyStructure,batteryType:item.batteryType,batteryBrand:item.batteryBrand,batteryHealth:item.batteryHealth,engine:item.engine,transmission:item.transmission,engineVolume:engineVolume(item),enginePower:enginePower(item),gearbox:gearboxType(item) || null,fuelType:fuelType(item) || null,bodyColor:item.bodyColor,acceleration:item.acceleration,torqueNm:item.torqueNm,tireSizeFront:item.tireSizeFront,tireRim:item.tireRim,vehicleClass:item.vehicleClass,driverAssistance:item.driverAssistance,infotainmentChip:item.infotainmentChip,assistanceLevel:item.assistanceLevel,radarCount:item.radarCount,cameraCount:item.cameraCount,ultrasonicCount:item.ultrasonicCount,warranty:item.warranty,inspectionGrade:item.inspectionGrade,powertrainInspection:item.powertrainInspection,bodyInspection:item.bodyInspection,interiorInspection:item.interiorInspection,structureInspection:item.structureInspection,engineBayInspection:item.engineBayInspection,batteryProtection:item.batteryProtection })]);
   await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at)
     VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()))
     ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= 700 THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / 7.15)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= 700 THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash THEN now() ELSE listings.content_changed_at END`,
@@ -59,6 +60,15 @@ export function multiParamValues(input, anyLabel, { splitCommas = false } = {}) 
   return [...new Set(parts.map((item) => item.trim()).filter((item) => item && item !== anyLabel))];
 }
 
+// Объём мотора, мощность и коробка приходят из источника описанием («1.4T 150HP L4»,
+// «7-speed wet dual-clutch»). Разбирает их src/engine-spec.js — при записи машины
+// (см. upsertCar) и в статическом режиме на клиенте, — а в характеристиках лежат уже
+// готовые значения: разбор строк прямо в отборе занимал на полном каталоге полсекунды.
+const ENGINE_VOLUME_SQL = "NULLIF(v.specifications->>'engineVolume','')::numeric";
+const ENGINE_POWER_SQL = "NULLIF(v.specifications->>'enginePower','')::numeric";
+const GEARBOX_SQL = "v.specifications->>'gearbox'";
+const FUEL_SQL = "v.specifications->>'fuelType'";
+
 export function buildCarFilters(searchParams) {
   const clauses = ["l.status='active'"];
   const values = [];
@@ -94,6 +104,16 @@ export function buildCarFilters(searchParams) {
   if (Number(searchParams.get("accelMax"))) add("(v.specifications->>'acceleration')::numeric<=?", Number(searchParams.get("accelMax")));
   if (Number(searchParams.get("torqueMin"))) add("(v.specifications->>'torqueNm')::numeric>=?", Number(searchParams.get("torqueMin")));
   if (Number(searchParams.get("tireRimMin"))) add("(v.specifications->>'tireRim')::numeric>=?", Number(searchParams.get("tireRimMin")));
+  // Литры мотора и лошадиные силы: машину без известного значения фильтр отсеивает,
+  // как и разгон, — иначе электромобили попадали бы в выдачу «от 1.6 литра».
+  if (Number(searchParams.get("engineMin"))) add(`${ENGINE_VOLUME_SQL}>=?`, Number(searchParams.get("engineMin")));
+  if (Number(searchParams.get("engineMax"))) add(`${ENGINE_VOLUME_SQL}<=?`, Number(searchParams.get("engineMax")));
+  if (Number(searchParams.get("powerMin"))) add(`${ENGINE_POWER_SQL}>=?`, Number(searchParams.get("powerMin")));
+  if (Number(searchParams.get("powerMax"))) add(`${ENGINE_POWER_SQL}<=?`, Number(searchParams.get("powerMax")));
+  if (GEARBOX_TYPES.includes(searchParams.get("gearbox"))) add(`${GEARBOX_SQL}=?`, searchParams.get("gearbox"));
+  // Топливо есть только у машин с двигателем: у электромобиля его нет вовсе, и такой
+  // отбор его честно не показывает.
+  if (FUEL_TYPES.includes(searchParams.get("fuel"))) add(`${FUEL_SQL}=?`, searchParams.get("fuel"));
   // Исключения из строки поиска («зикр кроме 001», «электро кроме белых»).
   // COALESCE обязателен: без него машина с пустым кузовом или цветом выпадала бы
   // из выдачи — сравнение с NULL не истинно и не ложно.
@@ -287,6 +307,27 @@ export async function getCar(id) {
   return result.rows[0] ? { ...rowToCar(result.rows[0]), priceHistory:result.rows[0].price_history } : null;
 }
 
+// Сколько машин в наличии у каждой марки — одним лёгким запросом.
+//
+// Зачем: разделы марок заведены заранее, под загрузку каталога, и марки, до которой
+// импорт ещё не дошёл, в базе просто нет. Пустой раздел поисковику отдавать нельзя —
+// это тонкая страница без содержания, — поэтому такие разделы не показываются нигде
+// и отвечают 404, пока в них не появятся машины.
+//
+// Ответ держим в памяти пять минут: страницы разделов запрашивает робот тысячами,
+// а состав марок меняется раз в сутки, после ночного импорта.
+const BRAND_STOCK_TTL_MS = 5 * 60 * 1000;
+let brandStockCache = { at: 0, value: null };
+
+export async function brandStock() {
+  const now = Date.now();
+  if (brandStockCache.value && now - brandStockCache.at < BRAND_STOCK_TTL_MS) return brandStockCache.value;
+  const { rows } = await pool.query("SELECT v.brand, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' GROUP BY v.brand");
+  const value = new Map(rows.map((row) => [row.brand, row.count]));
+  brandStockCache = { at: now, value };
+  return value;
+}
+
 export async function getCatalogMeta(type, brand, bodyType) {
   const selectedBodyTypes = multiParamValues(bodyType, "Все кузова", { splitCommas:true });
   const values = [];
@@ -308,7 +349,10 @@ export async function getCatalogMeta(type, brand, bodyType) {
     pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
     pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
     pool.query("SELECT v.drivetrain drive, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
-    pool.query("SELECT count(v.drivetrain)::int drive, count(l.owners)::int owners, count(v.battery_kwh)::int battery, count(l.condition_grade)::int condition FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'"),
+    pool.query(`SELECT count(v.drivetrain)::int drive, count(l.owners)::int owners, count(v.battery_kwh)::int battery, count(l.condition_grade)::int condition,
+      count(${ENGINE_VOLUME_SQL})::int engine, count(${ENGINE_POWER_SQL})::int power, count(${GEARBOX_SQL})::int gearbox,
+      count(DISTINCT ${FUEL_SQL})::int fuel
+      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'`),
   ]);
   const driveCounts = drives.rows.reduce((totals, row) => {
     const drive = normalizeDrive(row.drive);

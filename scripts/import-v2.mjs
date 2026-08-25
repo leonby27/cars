@@ -23,7 +23,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { buildChe168Car, extractChe168DetailPayload, extractChe168ListPayload } from "./lib/che168-parser.mjs";
-import { ICE_IMPORT_BRANDS, IMPORT_BRANDS, canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
+import { ICE_IMPORT_BRANDS, ICE_IMPORT_MIN_YEAR, IMPORT_BRANDS, IMPORT_MIN_YEAR, canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
@@ -79,6 +79,8 @@ const skipHybridCandidates = fuelTypes.every((fuelType) => fuelType === ELECTRIC
 // запрошенному фиду источника, отдельного ключа для этого не нужно.
 const combustionRun = fuelTypes.includes(GASOLINE_FUEL_TYPE);
 const policyBrands = combustionRun ? [...new Set([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS])] : IMPORT_BRANDS;
+// Отсечка по году на слое списка: у бензина она на год выше, см. import-policy.mjs.
+const listMinYear = combustionRun ? ICE_IMPORT_MIN_YEAR : IMPORT_MIN_YEAR;
 const fuelKey = [...fuelTypes].sort((a, b) => a - b).join("-");
 const BRAND_MAP_PATH = path.join(ROOT, "config", fuelKey === String(ELECTRIC_FUEL_TYPE) ? "che168-brands.json" : `che168-brands-${fuelKey}.json`);
 const FEED_URL = `https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=${fuelTypes[0]}`;
@@ -220,7 +222,7 @@ function report(extra = {}) {
     rejected: [...rejected.values()].reduce((total, value) => total + value, 0),
     rejectedByReason: Object.fromEntries([...rejected].sort((a, b) => b[1] - a[1])),
     rejectionExamples,
-    policy: { minYear: 2020, brands: policyBrands, newImports: combustionRun ? "combustion allowed" : "electric-only", cleansExistingCatalog: false },
+    policy: { minYear: listMinYear, brands: policyBrands, newImports: combustionRun ? "combustion allowed" : "electric-only", cleansExistingCatalog: false },
     previousCount: catalog.cars?.length || 0,
     ...extra,
   };
@@ -341,7 +343,7 @@ try {
             // из списка, это ближайшее к нему.
             const named = Number(`${item.specname} ${item.carname}`.match(/\b(20\d{2})\b/)?.[1]);
             const year = named || Number(String(item.regdate || "").slice(0, 4));
-            if (!year || year < 2020) { skippedOld += 1; continue; }
+            if (!year || year < listMinYear) { skippedOld += 1; continue; }
             seen.add(externalId);
             candidates.push({ externalId, brand: target.policyBrand, year, carname: String(item.carname || "").trim() });
             brandCandidates += 1;

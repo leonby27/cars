@@ -172,3 +172,26 @@ test("ограничивает размер страницы и не прини�
   assert.equal(catalogPaging(new URLSearchParams({ limit:"0" })).limit, 24);
   assert.deepEqual(catalogPaging(new URLSearchParams({ limit:"nope", offset:"-40" })), { limit:24, offset:0, beyondCap:false });
 });
+
+test("отбирает по объёму мотора, мощности и коробке", () => {
+  const result = buildCarFilters(new URLSearchParams({ engineMin:"1.4", engineMax:"2", powerMin:"150", gearbox:"Автомат" }));
+  assert.deepEqual(result.values, [1.4, 2, 150, "Автомат"]);
+  // Значения посчитаны при записи машины (см. миграцию 025 и upsertCar),
+  // поэтому отбор сравнивает готовые числа, а не разбирает строки источника.
+  assert.ok(result.where.includes("v.specifications->>'engineVolume'"), "объём мотора не отбирается");
+  assert.ok(result.where.includes("v.specifications->>'enginePower'"), "мощность не отбирается");
+  assert.ok(result.where.includes("v.specifications->>'gearbox'"), "коробка не отбирается");
+  assert.ok(result.where.includes(">=$1") && result.where.includes("<=$2") && result.where.includes(">=$3") && result.where.includes("=$4"));
+});
+
+test("отбирает по топливу", () => {
+  const result = buildCarFilters(new URLSearchParams({ fuel:"Дизель" }));
+  assert.deepEqual(result.values, ["Дизель"]);
+  assert.ok(result.where.includes("v.specifications->>'fuelType'=$1"));
+});
+
+test("чужие значения коробки, топлива и пустые числа мотора не попадают в запрос", () => {
+  const result = buildCarFilters(new URLSearchParams({ gearbox:"DROP TABLE listings", fuel:"Керосин", engineMin:"нет", powerMin:"0" }));
+  assert.deepEqual(result.values, []);
+  assert.equal(result.where, "WHERE l.status='active'");
+});
