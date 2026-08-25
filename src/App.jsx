@@ -20,6 +20,7 @@ import { formatListingAge, getListingAddedAt, getSourceListedAt, isNewListing } 
 import { formatChangeDate, getPriceChange } from "./price-change.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar } from "./model-pages.js";
+import { splitInlineLinks } from "./inline-links.js";
 import { loadModelText, loadedModelText } from "./model-text-load.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
 import { brandNotice } from "./brand-notice.js";
@@ -700,6 +701,20 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
     navigate(href);
   };
   return <a href={appHref(href)} onClick={handleClick} {...props}>{children}</a>;
+}
+
+// Абзацы обзоров изредка ссылаются со середины текста на соседний раздел каталога —
+// разбор ссылок общий с сервером, см. src/inline-links.js.
+function renderInlineText(text, navigate) {
+  return splitInlineLinks(text).map((part, index) =>
+    typeof part === "string" ? (
+      part
+    ) : (
+      <AppLink key={`link-${index}`} href={part.href} navigate={navigate}>
+        {part.label}
+      </AppLink>
+    ),
+  );
 }
 
 // Ярлык новой машины. Показывается только у карточек, попавших в каталог за
@@ -2783,12 +2798,12 @@ function ModelPageGallery({ cars, onOpenCar }) {
 // Раздел статьи: абзацы плюс необязательные блоки — список с выделенным началом
 // строки, две карточки сравнения и врезка с заметкой. Они разбивают текст и
 // вытаскивают из абзацев главное.
-function ModelPageSection({ section }) {
+function ModelPageSection({ section, navigate }) {
   return (
     <section>
       <h2>{section.title}</h2>
       {section.paragraphs.map((text) => (
-        <p key={text}>{text}</p>
+        <p key={text}>{renderInlineText(text, navigate)}</p>
       ))}
       {section.list && (
         <dl className="model-page-points">
@@ -3001,7 +3016,7 @@ function ModelsIndexPage({ navigate }) {
       <div className="model-page-body page-width">
         <article className="model-page-article">
           {MODELS_INDEX.sections.map((section) => (
-            <ModelPageSection key={section.title} section={section} />
+            <ModelPageSection key={section.title} section={section} navigate={navigate} />
           ))}
         </article>
       </div>
@@ -3082,7 +3097,7 @@ function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
         <article className="model-page-article">
           <div className="model-page-intro">
             {text?.intro.map((paragraph) => (
-              <p key={paragraph}>{paragraph}</p>
+              <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
             ))}
           </div>
           {/* Полоса главных цифр разбивает текст сразу после вступления: то, за чем
@@ -3105,7 +3120,7 @@ function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
       <div className="model-page-body page-width">
         <article className="model-page-article">
           {firstSections.map((section) => (
-            <ModelPageSection key={section.title} section={section} />
+            <ModelPageSection key={section.title} section={section} navigate={navigate} />
           ))}
         </article>
       </div>
@@ -3115,7 +3130,7 @@ function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
       <div className="model-page-body page-width">
         <article className="model-page-article">
           {restSections.map((section) => (
-            <ModelPageSection key={section.title} section={section} />
+            <ModelPageSection key={section.title} section={section} navigate={navigate} />
           ))}
           {text?.versions && (
             <section className="model-page-versions">
@@ -7259,14 +7274,14 @@ function ToolPage({ tool, navigate }) {
         </div>
         <div className="model-page-body page-width">
           <article className="model-page-article">
-            {firstSections.map((section) => <ModelPageSection key={section.title} section={section} />)}
+            {firstSections.map((section) => <ModelPageSection key={section.title} section={section} navigate={navigate} />)}
           </article>
         </div>
         <ModelPagePromo navigate={navigate} />
         {restSections.length > 0 && (
           <div className="model-page-body page-width">
             <article className="model-page-article">
-              {restSections.map((section) => <ModelPageSection key={section.title} section={section} />)}
+              {restSections.map((section) => <ModelPageSection key={section.title} section={section} navigate={navigate} />)}
             </article>
           </div>
         )}

@@ -12,11 +12,20 @@ import { brandNotice } from "../src/brand-notice.js";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
 // Страницы-расчёты нужны подвалу: ссылки на них должны стоять на каждой странице сайта.
 import { TOOL_PAGES } from "../src/tool-pages.js";
+// Живые ссылки внутри абзацев обзора модели — тот же разбор, что в приложении.
+import { splitInlineLinks } from "../src/inline-links.js";
 // Первый экран, который браузер показывает до запуска приложения.
 import { bootScreen } from "./boot-screen.mjs";
 
 export const escapeHtml = (value) => String(value ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
 export const escapeXml = (value) => escapeHtml(value).replace(/'/g, "&apos;");
+
+// Обзоры моделей изредка ссылаются со середины абзаца на соседний раздел каталога —
+// разбор ссылок общий с приложением, см. src/inline-links.js.
+export const linkifyText = (text, hrefRoute) =>
+  splitInlineLinks(text)
+    .map((part) => (typeof part === "string" ? escapeHtml(part) : `<a href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`))
+    .join("");
 export const jsonLd = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
 export const number = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 /** Склонение существительного при числе: 1 автомобиль, 2 автомобиля, 5 автомобилей. */
@@ -617,7 +626,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
 
   /** Текст обзора: абзацы, разделы, врезки, таблица версий и частые вопросы. */
   function modelPageArticle(modelPage, { cars: inStock = [] } = {}) {
-    const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+    const paragraphs = (items) => items.map((text) => `<p>${linkifyText(text, hrefRoute)}</p>`).join("");
     // Списки, карточки сравнения и врезки — такой же текст, как абзацы: в статической
     // версии страницы они тоже должны быть, иначе поисковик увидит меньше, чем человек.
     const extras = (section) =>
