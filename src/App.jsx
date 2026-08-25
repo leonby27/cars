@@ -1,6 +1,6 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "./icons.jsx";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, RoadHorizon, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineBounds, engineLabel, enginePower, engineVolume, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -1302,7 +1302,7 @@ function CardSkeleton({ row }) {
   );
 }
 
-function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon }) {
+function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, icon: Icon }) {
   // В режиме мультивыбора value — массив, а первая опция играет роль «сбросить всё».
   const allOption = multiple ? options[0] : null;
   const selectedValues = multiple ? (Array.isArray(value) ? value : value && value !== allOption ? [value] : []) : [];
@@ -1425,7 +1425,8 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
 
   return (
     <div className={`select-field custom-select${className ? ` ${className}` : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
-      <button ref={triggerRef} type="button" className="select-trigger" aria-label={label} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
+      <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}`} aria-label={label} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
+        {Icon && <Icon className="select-trigger-icon" size={20} weight="duotone" aria-hidden="true" />}
         <b>{multiple ? (chosenInOrder.length ? `${formatOption(chosenInOrder[0])}${chosenInOrder.length > 1 ? ` +${chosenInOrder.length - 1}` : ""}` : formatOption(allOption)) : formatOption(value)}</b>
         <CaretDown size={16} weight="bold" />
       </button>
@@ -1500,6 +1501,47 @@ function HomeFaqItem({ item, initiallyOpen = false }) {
   );
 }
 
+// Какие фильтры показывать. Скрываем только то, что не имеет смысла при выбранном
+// топливе: у бензиновой машины не спрашивают ёмкость батареи и запас хода на
+// электротяге, у электромобиля — объём двигателя и коробку передач. Все остальные
+// поля (разгон, шины, мощность, привод, состояние…) годятся любой машине и остаются
+// на всех вкладках. На вкладке «Все» показываем всё сразу. Поле, у которого в отборе
+// нет ни одного значения, не показывается — такой фильтр возвращал бы пустоту.
+const FILTER_POWERTRAINS = {
+  battery: ["Электромобили", "Гибриды"],
+  range: ["Электромобили", "Гибриды"],
+  engine: ["Гибриды", "Бензин"],
+  gearbox: ["Гибриды", "Бензин"],
+};
+const filterAvailable = (availability, key, selectedType = "Все") => {
+  const tabs = FILTER_POWERTRAINS[key];
+  if (tabs && selectedType !== "Все" && !tabs.includes(selectedType)) return false;
+  // Пустая вкладка (машин такого топлива в каталоге нет вовсе) не должна раздевать
+  // панель: поля остаются на месте, просто выбирать в них нечего. А пока справочник
+  // не пришёл, полей нет — появиться позже спокойнее, чем исчезнуть на глазах.
+  if (!(Number(availability?.total) || 0)) return availability?.total !== undefined;
+  return (Number(availability[key]) || 0) > 0;
+};
+// Фильтры, привязанные к типу двигателя: при смене вкладки топлива они пропадают
+// с экрана, поэтому оставленное значение сбрасывается — иначе скрытый фильтр молча
+// резал бы выдачу.
+const POWERTRAIN_FILTER_RESET = { battery:ANY_BATTERY, range:ANY_RANGE, engine:ANY_ENGINE, gearbox:ANY_GEARBOX, fuel:ANY_FUEL };
+// Статический режим считает те же признаки по загруженному каталогу.
+const localAvailability = (cars) => ({
+  total: cars.length,
+  drive: cars.filter((car) => car.drive && car.drive !== "Не указан").length,
+  owners: cars.filter((car) => Number(car.owners)).length,
+  battery: cars.filter((car) => Number(car.battery) > 0).length,
+  condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
+  range: cars.filter((car) => Number(car.electricRange || car.combinedRange || car.range) > 0).length,
+  accel: cars.filter((car) => Number(car.acceleration) > 0).length,
+  tire: cars.filter((car) => Number(car.tireRim) > 0).length,
+  engine: cars.filter((car) => engineVolume(car) !== null).length,
+  power: cars.filter((car) => enginePower(car) !== null).length,
+  gearbox: cars.filter((car) => gearboxType(car)).length,
+  fuel: new Set(cars.map((car) => fuelType(car)).filter(Boolean)).size,
+});
+
 function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, onSaveSearch, searchSaved = false, searchUpdate = false, hasActiveFilters = false, initiallyExpanded = false }) {
   const currency = useCurrency();
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => initiallyExpanded && !window.matchMedia("(max-width: 700px)").matches);
@@ -1535,20 +1577,20 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
 
   const extraFilters = (className = "") => (
     <>
-      <SelectField className={className} label="Пробег" value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
-      <SelectField className={className} label="Кузов" value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple />
-      <SelectField className={className} label="Цвет" value={values.color} onChange={actions.color} options={[ANY_COLOR, ...COLOR_LABELS]} multiple />
-      {Number(availability.drive) > 0 && <SelectField className={className} label="Привод" value={values.drive} onChange={actions.drive} options={options.drives} />}
-      {Number(availability.owners) > 0 && <SelectField className={className} label="Владельцы" value={values.owners} onChange={actions.owners} options={ownerOptions} />}
-      {Number(availability.battery) > 0 && <SelectField className={className} label="Батарея" value={values.battery} onChange={actions.battery} options={batteryOptions} />}
-      {Number(availability.condition) > 0 && <SelectField className={className} label="Состояние" value={values.condition} onChange={actions.condition} options={conditionOptions} />}
-      {Number(availability.engine) > 0 && <SelectField className={className} label="Объём двигателя" value={values.engine || ANY_ENGINE} onChange={actions.engine} options={engineOptions} />}
-      {Number(availability.power) > 0 && <SelectField className={className} label="Мощность" value={values.power || ANY_POWER} onChange={actions.power} options={powerOptions} />}
-      {Number(availability.gearbox) > 0 && <SelectField className={className} label="Коробка" value={values.gearbox || ANY_GEARBOX} onChange={actions.gearbox} options={gearboxOptions} />}
-      {Number(availability.fuel) > 1 && <SelectField className={className} label="Топливо" value={values.fuel || ANY_FUEL} onChange={actions.fuel} options={fuelOptions} />}
-      <SelectField className={className} label="Разгон до 100 км/ч" value={values.accel} onChange={actions.accel} options={accelOptions} />
-      <SelectField className={className} label="Размер шин" value={values.tire} onChange={actions.tire} options={tireOptions} />
-      <SelectField className={className} label="Запас хода" value={values.range || ANY_RANGE} onChange={actions.range} options={rangeOptions} />
+      <SelectField className={className} label="Пробег" icon={Gauge} value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
+      <SelectField className={className} label="Кузов" icon={CarProfile} value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple />
+      <SelectField className={className} label="Цвет" icon={Palette} value={values.color} onChange={actions.color} options={[ANY_COLOR, ...COLOR_LABELS]} multiple />
+      {filterAvailable(availability, "drive", selectedType) && <SelectField className={className} label="Привод" icon={SteeringWheel} value={values.drive} onChange={actions.drive} options={options.drives} />}
+      {filterAvailable(availability, "owners", selectedType) && <SelectField className={className} label="Владельцы" icon={UsersThree} value={values.owners} onChange={actions.owners} options={ownerOptions} />}
+      {filterAvailable(availability, "battery", selectedType) && <SelectField className={className} label="Батарея" icon={BatteryHigh} value={values.battery} onChange={actions.battery} options={batteryOptions} />}
+      {filterAvailable(availability, "condition", selectedType) && <SelectField className={className} label="Состояние" icon={ShieldCheck} value={values.condition} onChange={actions.condition} options={conditionOptions} />}
+      {filterAvailable(availability, "engine", selectedType) && <SelectField className={className} label="Объём двигателя" icon={Engine} value={values.engine || ANY_ENGINE} onChange={actions.engine} options={engineOptions} />}
+      {filterAvailable(availability, "power", selectedType) && <SelectField className={className} label="Мощность" icon={Lightning} value={values.power || ANY_POWER} onChange={actions.power} options={powerOptions} />}
+      {filterAvailable(availability, "gearbox", selectedType) && <SelectField className={className} label="Коробка" icon={Gear} value={values.gearbox || ANY_GEARBOX} onChange={actions.gearbox} options={gearboxOptions} />}
+      {Number(availability.fuel) > 1 && <SelectField className={className} label="Топливо" icon={GasPump} value={values.fuel || ANY_FUEL} onChange={actions.fuel} options={fuelOptions} />}
+      {filterAvailable(availability, "accel", selectedType) && <SelectField className={className} label="Разгон до 100 км/ч" icon={Timer} value={values.accel} onChange={actions.accel} options={accelOptions} />}
+      {filterAvailable(availability, "tire", selectedType) && <SelectField className={className} label="Размер шин" icon={Tire} value={values.tire} onChange={actions.tire} options={tireOptions} />}
+      {filterAvailable(availability, "range", selectedType) && <SelectField className={className} label="Запас хода" icon={RoadHorizon} value={values.range || ANY_RANGE} onChange={actions.range} options={rangeOptions} />}
     </>
   );
 
@@ -1673,6 +1715,9 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [remoteCount, setRemoteCount] = useState(null);
   const countCacheRef = useRef(new Map());
   const normalizedType = typeValue(type);
+  // Набор для признаков «есть ли что выбирать»: топливо и марка, как в справочнике
+  // с сервера. Кузов сюда не входит — иначе поля прыгали бы при выборе кузова.
+  const typedCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand));
   const brandCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && matchesMulti(car.bodyType, bodyType, ANY_BODY_TYPE));
   const modelCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand) && matchesMulti(car.bodyType, bodyType, ANY_BODY_TYPE));
   const brands = ["Все марки", ...(apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand)))];
@@ -1685,18 +1730,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   if (modelEntries.length) modelOptionCounts.set("Все модели", modelEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
   const bodyTypes = ["Все кузова", ...(apiMode ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
   const drives = [ANY_DRIVE, ...orderDrives(apiMode ? remoteMeta.drives.map((item) => item.drive) : cars.map((car) => car.drive))];
-  const availability = apiMode
-    ? remoteMeta.availability
-    : {
-        drive: cars.filter((car) => car.drive && car.drive !== "Не указан").length,
-        owners: cars.filter((car) => Number(car.owners)).length,
-        battery: cars.filter((car) => Number(car.battery) > 0).length,
-        condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
-        engine: cars.filter((car) => engineVolume(car) !== null).length,
-        power: cars.filter((car) => enginePower(car) !== null).length,
-        gearbox: cars.filter((car) => gearboxType(car)).length,
-        fuel: new Set(cars.map((car) => fuelType(car)).filter(Boolean)).size,
-      };
+  const availability = apiMode ? remoteMeta.availability : localAvailability(typedCars);
   const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesColorLabels(car.bodyColor, multiValues(color, ANY_COLOR)) && matchesYears(car, yearMin, yearMax) && matchesMileageRange(car, mileage) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition, accel, tire, range, engine, power, gearbox, fuel })).length;
   const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || multiValues(color, ANY_COLOR).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION || accel !== ANY_ACCEL || tire !== ANY_TIRE || range !== ANY_RANGE || engine !== ANY_ENGINE || power !== ANY_POWER || gearbox !== ANY_GEARBOX || fuel !== ANY_FUEL;
   useEffect(() => {
@@ -1764,6 +1798,12 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const changeType = (value) => {
     setType(value);
     setModel([]);
+    // Фильтры своего топлива при смене вкладки уходят с экрана — см. POWERTRAIN_FILTER_RESET.
+    setBattery(ANY_BATTERY);
+    setRange(ANY_RANGE);
+    setEngine(ANY_ENGINE);
+    setGearbox(ANY_GEARBOX);
+    setFuel(ANY_FUEL);
   };
   const changeBrand = (value) => {
     setBrand(value);
@@ -3225,6 +3265,18 @@ const brandLogos = {
 // stay in the catalog, the brand filter, and search.
 const showcaseHiddenBrands = new Set(["AION", "Denza", "Dongfeng", "Hongqi", "ORA"]);
 
+// Марки, которых нет в свёрнутом блоке, но которые открываются кнопкой «Показать
+// все марки». Машин у них много, и по одной популярности они занимали половину
+// витрины: посетитель видел обычный автосайт с немцами и корейцами вместо
+// каталога китайских машин, за которым пришёл.
+const showcaseDemotedBrands = new Set(["Buick", "Changan", "Chery", "Ford", "Hyundai", "Land Rover", "Nissan"]);
+
+// Марки, которые в свёрнутом блоке стоят всегда, сколько бы машин у них ни было:
+// это лицо каталога, и терять их из-за того, что у Volkswagen объявлений втрое
+// больше, нельзя. Марку без машин правило всё равно не покажет — она отсеивается
+// раньше, вместе с остальными пустыми.
+const showcasePinnedBrands = new Set(["Avatr", "Deepal", "Voyah", "Xiaomi", "Zeekr"]);
+
 // Marks whose own colours are part of the brand. The dark theme inverts logos so
 // black artwork stays readable on a dark surface; applying that to these fixed-
 // colour marks would repaint the brand, so they opt out.
@@ -3342,12 +3394,19 @@ function PopularBrands({ navigate, cars, apiMode }) {
   // сюда не попадают даже когда свободные строки есть: «Acura 0» в популярных — это
   // тупик, а не предложение. В полном списке они остаются.
   const ranked = countsKnown ? brands.filter((item) => item.count > 0) : brands;
-  const shown = expanded || brands.length <= limit
-    ? brands
-    : [...ranked]
-      .sort((a, b) => b.count - a.count || a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }))
-      .slice(0, limit)
-      .sort((a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }));
+  const byName = (a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" });
+  const byCount = (a, b) => b.count - a.count || byName(a, b);
+  // Закреплённые марки занимают свои места первыми, дальше идут остальные по числу
+  // машин, а отставленные не участвуют вовсе. Ряды в блоке всегда полные: если
+  // отставленных и закреплённых не хватило, недостающие места добираются из тех же
+  // отставленных — пустых клеток в сетке быть не должно.
+  const pickShowcase = () => {
+    const pinned = ranked.filter((item) => showcasePinnedBrands.has(item.brand)).sort(byCount);
+    const usual = ranked.filter((item) => !showcasePinnedBrands.has(item.brand) && !showcaseDemotedBrands.has(item.brand)).sort(byCount);
+    const demoted = ranked.filter((item) => showcaseDemotedBrands.has(item.brand)).sort(byCount);
+    return [...pinned, ...usual, ...demoted].slice(0, limit);
+  };
+  const shown = expanded || brands.length <= limit ? brands : pickShowcase().sort(byName);
   const typeQuery = selectedType === "Все" ? "" : `type=${encodeURIComponent(type)}`;
 
   return (
@@ -3999,7 +4058,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
 
 function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, optionCounts, availability, onSaveSearch, searchSaved, searchUpdate }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
-  const changeType = (value) => setFilters((old) => ({ ...old, type: value, model: [] }));
+  const changeType = (value) => setFilters((old) => ({ ...old, type: value, model: [], ...POWERTRAIN_FILTER_RESET }));
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
   const selectedType = typeLabel(filters.type);
   const selectType = (value) => changeType(typeValue(value));
@@ -4783,6 +4842,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     setSort(value);
   };
   const brands = useApi ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand));
+  const typedCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand));
   const brandCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE));
   const models = ["Все модели", ...(useApi ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
@@ -4794,18 +4854,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   if (modelEntries.length) modelOptionCounts.set("Все модели", modelEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
   const bodyTypes = ["Все кузова", ...(useApi ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
   const drives = [ANY_DRIVE, ...orderDrives(useApi ? remoteMeta.drives.map((item) => item.drive) : cars.map((car) => car.drive))];
-  const availability = useApi
-    ? remoteMeta.availability
-    : {
-        drive: cars.filter((car) => car.drive && car.drive !== "Не указан").length,
-        owners: cars.filter((car) => Number(car.owners)).length,
-        battery: cars.filter((car) => Number(car.battery) > 0).length,
-        condition: cars.filter((car) => conditionLabels[car.conditionGrade]).length,
-        engine: cars.filter((car) => engineVolume(car) !== null).length,
-        power: cars.filter((car) => enginePower(car) !== null).length,
-        gearbox: cars.filter((car) => gearboxType(car)).length,
-        fuel: new Set(cars.map((car) => fuelType(car)).filter(Boolean)).size,
-      };
+  const availability = useApi ? remoteMeta.availability : localAvailability(typedCars);
   // Цена в статическом режиме считается здесь же, поэтому смена режима цен
   // (переключатель «Цены с квотами») должна пересчитать выдачу.
   const quotaPricingOn = useQuotaPricing()?.on;

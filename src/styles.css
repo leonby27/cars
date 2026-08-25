@@ -4973,8 +4973,25 @@ body.header-menu-open .detail-floating-availability {
   flex: 0 0 auto;
   transition: transform var(--motion-medium) var(--motion-ease);
 }
-.custom-select.open .select-trigger > svg {
+.custom-select.open .select-trigger > svg:last-child {
   transform: rotate(180deg);
+}
+/* Иконка слева от значения: в плотной сетке фильтров по ней быстрее находишь
+   нужное поле, чем по тексту. Стрелка списка остаётся справа. */
+.select-trigger.with-icon {
+  gap: 9px;
+  padding-left: 13px;
+}
+.select-trigger.with-icon b {
+  margin-right: auto;
+}
+.custom-select .select-trigger-icon {
+  color: color-mix(in srgb, var(--ink) 70%, var(--muted-contrast));
+  transition: color var(--motion-fast) ease;
+}
+.custom-select.open .select-trigger-icon,
+.select-trigger:hover .select-trigger-icon {
+  color: inherit;
 }
 .custom-select.disabled {
   background: var(--filter-field-disabled-bg);

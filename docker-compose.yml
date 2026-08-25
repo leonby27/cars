@@ -1,6 +1,11 @@
 services:
   postgres:
     image: postgres:17-alpine
+    # Docker по умолчанию даёт контейнеру 64 МБ общей памяти (/dev/shm). Postgres
+    # кладёт туда промежуточные наборы параллельных запросов, и на полном каталоге
+    # нескольких одновременных обращений хватало, чтобы получить «no space left on
+    # device» — каталог отвечал ошибкой, а страница показывала ноль машин.
+    shm_size: 1gb
     environment:
       POSTGRES_DB: chinacar
       POSTGRES_USER: chinacar

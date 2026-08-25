@@ -349,10 +349,15 @@ export async function getCatalogMeta(type, brand, bodyType) {
     pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
     pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
     pool.query("SELECT v.drivetrain drive, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
-    pool.query(`SELECT count(v.drivetrain)::int drive, count(l.owners)::int owners, count(v.battery_kwh)::int battery, count(l.condition_grade)::int condition,
+    // Какие фильтры вообще показывать. Считается по тому же отбору, что и остальной
+    // справочник (топливо и марка), — иначе на бензиновой вкладке висел бы фильтр по
+    // батарее, а на электрической по объёму двигателя.
+    pool.query(`SELECT count(*)::int total, count(v.drivetrain)::int drive, count(l.owners)::int owners, count(v.battery_kwh)::int battery, count(l.condition_grade)::int condition,
+      count(COALESCE(v.electric_range_km, v.combined_range_km))::int AS "range",
+      count(NULLIF(v.specifications->>'acceleration',''))::int accel, count(NULLIF(v.specifications->>'tireRim',''))::int tire,
       count(${ENGINE_VOLUME_SQL})::int engine, count(${ENGINE_POWER_SQL})::int power, count(${GEARBOX_SQL})::int gearbox,
       count(DISTINCT ${FUEL_SQL})::int fuel
-      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'`),
+      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
   const driveCounts = drives.rows.reduce((totals, row) => {
     const drive = normalizeDrive(row.drive);
