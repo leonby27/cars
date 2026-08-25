@@ -6,7 +6,7 @@ import { authenticateAccount, clearSessionCookie, createAccount, createSession, 
 import { createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
-import { analyticsCookie, clearAnalyticsCookie, createAnalyticsToken, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsUpdates, hasAnalyticsSession, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
@@ -124,8 +124,18 @@ export async function handleApiRequest(request, response) {
       const body = await readJson(request);
       // Отвечаем как обычно и молчим о причине: незачем подсказывать, как
       // подделать событие. Для страницы сайта разницы нет — она ответ не читает.
-      if (!fromOwnPage(request.headers, url.host)) return json(response, 202, { ok:true, recorded:false });
+      if (!fromOwnPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, recorded:false });
       const result = await recordAnalyticsEvent(body);
+      return result.error ? json(response, 400, result) : json(response, 202, result);
+    }
+    // Страница сообщает, что за заходом стоит живой человек: он подвигал мышью,
+    // коснулся экрана, прокрутил, нажал клавишу или просто пробыл на странице.
+    if (request.method === "POST" && url.pathname === "/api/analytics/human") {
+      const limit = await checkRateLimit("analyticsEvents", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
+      const body = await readJson(request);
+      if (!fromOwnPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0 });
+      const result = await confirmHumanVisit(body);
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
     if (request.method === "POST" && url.pathname === "/api/analytics/login") {

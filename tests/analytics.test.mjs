@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ANALYTICS_SECTIONS, createAnalyticsToken, fromOwnPage, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, verifyAnalyticsToken } from "../server/analytics.mjs";
-import { isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
+import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromOwnPage, isBotAgent, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
   const event = normalizeAnalyticsEvent({
@@ -88,6 +88,8 @@ test("свои заходы не попадают в собственную ст
   assert.equal(isSkippedVisit({ ...live, nocount:"1" }), true, "метка ?nocount=1 не сработала");
   assert.equal(isSkippedVisit({ ...live, automated:true }), true, "автоматический браузер считается");
   assert.equal(isSkippedVisit({ ...live, hostname:"localhost" }), true, "рабочий компьютер считается");
+  assert.equal(isSkippedVisit({ ...live, agent:"Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)" }), true, "робот с честной подписью считается");
+  assert.equal(isSkippedVisit({ ...live, agent:"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36" }), false, "обычный браузер считать нужно");
   // Снятая метка возвращает учёт: ?nocount=0 стирает её, и остаётся пустое значение.
   assert.equal(isSkippedVisit({ ...live, nocount:"0" }), false, "снятая метка всё ещё выключает учёт");
 });
@@ -151,5 +153,78 @@ test("событие принимается только со страницы �
   assert.equal(fromOwnPage({ origin:"https://abcars.by.evil.com" }, site), false);
   assert.equal(fromOwnPage({ referer:"https://evil.com/abcars.by/" }, site), false);
   assert.equal(fromOwnPage({ origin:"https://abcars.by" }, ""), false, "без известного адреса сайта ничего не принимаем");
+  // Адрес сайта берём из настроек, а не из запроса: сервер отвечает и по числовому
+  // адресу, и робот, который перебирает адреса подряд, открывал по нему главную —
+  // его собственная отметка совпадала сама с собой, и он попадал в статистику.
+  assert.equal(fromOwnPage({ origin:"https://5.23.48.128" }, site), false, "заход по числовому адресу сервера — не своя страница");
+  assert.equal(fromOwnPage({ referer:"https://5.23.48.128/" }, site), false);
+  assert.equal(fromOwnPage({ origin:"https://www.abcars.by" }, site), true, "адрес с www — тот же сайт");
+  assert.equal(siteHost("https://abcars.by"), "abcars.by");
+  assert.equal(siteHost("abcars.by"), "abcars.by", "адрес в настройках может быть без протокола");
+  assert.equal(fromOwnPage({ origin:"https://abcars.by" }), true, "без второго аргумента адрес берётся из настроек");
+});
+
+// Часть роботов работает на настоящем браузере и наш скрипт выполняет: сборщики
+// данных для ИИ, проверялки скорости, обходчики каталогов. В статистике «посетителей»
+// им не место. На выдачу поисковиков это не влияет — фильтр стоит только на приёме
+// событий, страницы отдаются всем.
+test("робот в число посетителей не попадает", () => {
+  const people = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15",
+    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 YaBrowser/25.8.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+  ];
+  for (const agent of people) assert.equal(isBotAgent(agent), false, agent);
+  const robots = [
+    "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ClaudeBot/1.0; +claudebot@anthropic.com)",
+    "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)",
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    "Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)",
+    "Mozilla/5.0 (compatible; Bytespider; spider-feedback@bytedance.com)",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/131.0.0.0 Safari/537.36",
+    "curl/8.7.1",
+    "python-requests/2.32.3",
+    "",
+  ];
+  for (const agent of robots) assert.equal(isBotAgent(agent), true, agent || "пустая подпись");
+});
+
+// Робота, который подделал подпись под обычный Chrome, выдаёт поведение: он снимает
+// страницу и уходит, ни к чему не притронувшись. Заход записываем сразу — иначе
+// потерялся бы и человек, закрывший страницу через пару секунд, — а «живым» он
+// становится отдельной отметкой, когда посетитель себя проявит.
+test("живого человека отмечает поведение, а не сама запись захода", async () => {
+  // Признаки: движение и нажатие мыши, касание экрана, клавиша, колесо, прокрутка.
+  for (const signal of ["pointermove", "pointerdown", "touchstart", "keydown", "wheel", "scroll"]) {
+    assert.ok(HUMAN_SIGNALS.includes(signal), signal);
+  }
+  // Человек, который просто читает страницу и ничего не трогает, тоже человек —
+  // но ждать его дольше нельзя, иначе в людях окажутся роботы.
+  assert.equal(HUMAN_DWELL_MS, 15_000);
+
+  // Первое событие приходит без отметки, и это нормально.
+  const first = normalizeAnalyticsEvent({ eventId:"e1", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/" });
+  assert.equal(first.human, false);
+  const later = normalizeAnalyticsEvent({ eventId:"e2", visitorId:"v1", sessionId:"s1", eventName:"vehicle_view", path:"/cars/1", human:true });
+  assert.equal(later.human, true);
+  // Признак доезжает до записи в базу отдельным значением, а не свойством события.
+  const calls = [];
+  const db = { query: async (sql, values) => { calls.push({ sql, values }); return { rowCount:1 }; } };
+  await recordAnalyticsEvent({ ...later }, { db });
+  assert.equal(calls[0].values.at(-1), true);
+  assert.match(calls[0].sql, /listing_title,properties,human/);
+
+  // Отметка ставится вдогонку на весь след этого посетителя в этом сеансе.
+  const updates = [];
+  const updateDb = { query: async (sql, values) => { updates.push({ sql, values }); return { rowCount:3 }; } };
+  const confirmed = await confirmHumanVisit({ visitorId:"v1", sessionId:"s1" }, { db:updateDb });
+  assert.deepEqual(confirmed, { ok:true, confirmed:3 });
+  assert.match(updates[0].sql, /UPDATE analytics_events SET human = true/);
+  assert.deepEqual(updates[0].values, ["v1", "s1"]);
+  // Без опознания посетителя отмечать нечего.
+  assert.equal((await confirmHumanVisit({ visitorId:"v1" }, { db:updateDb })).error, "invalid_event_identity");
 });
 

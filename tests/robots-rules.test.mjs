@@ -31,11 +31,37 @@ async function robots(env = {}) {
 }
 
 /**
+ * Правила для одного робота. В robots.txt правила разбиты на группы: строки
+ * `User-agent` перечисляют, к кому относится группа, и робот читает только свою.
+ * Поэтому запрет для сборщиков данных нельзя проверять вместе с правилами для
+ * поисковиков — иначе тест не заметит, что запрет случайно накрыл Google.
+ */
+function group(rules, agent = "*") {
+  const groups = [];
+  let current = null;
+  for (const line of rules.split("\n")) {
+    const header = line.match(/^User-agent:\s*(\S+)$/i);
+    if (header) {
+      if (!current || current.rules.length) current = { agents:[], rules:[] };
+      if (!groups.includes(current)) groups.push(current);
+      current.agents.push(header[1].toLowerCase());
+      continue;
+    }
+    if (current && /^(Allow|Disallow):/i.test(line)) current.rules.push(line);
+  }
+  const name = String(agent).toLowerCase();
+  const own = groups.find((item) => item.agents.includes(name));
+  const fallback = groups.find((item) => item.agents.includes("*"));
+  return ((own || fallback)?.rules || []).join("\n");
+}
+
+/**
  * Разрешён ли адрес по правилам robots.txt. Сравнение по началу строки, `$` означает
  * точное совпадение, `*` — любую последовательность. Побеждает самое длинное правило —
  * так же, как это делают Google и Яндекс.
  */
-function allowed(rules, url) {
+function allowed(rules, url, agent = "*") {
+  rules = group(rules, agent);
   const matches = (pattern) => {
     const anchored = pattern.endsWith("$");
     const body = anchored ? pattern.slice(0, -1) : pattern;
@@ -125,4 +151,22 @@ test("на тестовой сборке закрыто всё", async () => {
   const rules = await robots();
   assert.match(rules, /^Disallow: \/$/m);
   assert.equal(allowed(rules, "/cars/59372753"), false);
+});
+
+// Роботов, которые вычитывают сайт для обучения ИИ и для оптовых SEO-сервисов, мы
+// закрыли: пользы от них нет, а сервер они грузят как настоящая толпа. Поисковики
+// при этом обязаны остаться открытыми — иначе сайт выпадет из выдачи.
+test("поисковики открыты, а сборщики данных для ИИ закрыты", async () => {
+  const rules = await robots({ SEO_ALLOW_INDEXING: "1" });
+  for (const agent of ["Googlebot", "Googlebot-Image", "Google-InspectionTool", "YandexBot", "Bingbot", "Applebot", "DuckDuckBot", "OAI-SearchBot", "PerplexityBot"]) {
+    assert.equal(allowed(rules, "/", agent), true, `${agent} должен видеть главную`);
+    assert.equal(allowed(rules, "/cars/59372753", agent), true, `${agent} должен видеть карточку машины`);
+    assert.equal(allowed(rules, "/catalog/byd", agent), true, `${agent} должен видеть раздел каталога`);
+  }
+  for (const agent of ["ClaudeBot", "GPTBot", "CCBot", "Bytespider", "AhrefsBot", "SemrushBot", "MJ12bot", "DataForSeoBot"]) {
+    assert.equal(allowed(rules, "/", agent), false, `${agent} должен быть закрыт`);
+    assert.equal(allowed(rules, "/cars/59372753", agent), false, `${agent} должен быть закрыт`);
+  }
+  // Личные разделы закрыты по-прежнему для всех, включая поисковиков.
+  assert.equal(allowed(rules, "/account", "Googlebot"), false);
 });

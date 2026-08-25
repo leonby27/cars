@@ -554,6 +554,42 @@ const robots = allowIndexing
       // параметры своей страницы не имеют, поэтому их по-прежнему склеиваем.
       "Clean-param: sort&model&color&drive&yearFrom&yearTo&priceFrom&priceTo&mileage&owners&battery&range&accel&tire&torque&condition&q /catalog",
       "",
+      // Сборщики данных для обучения ИИ и оптовые обходчики каталогов. Пользы от них
+      // нет: в поиске они сайт не показывают, а сервер грузят как настоящая толпа —
+      // 25.08.2026 один такой сделал 25 тысяч запросов за сутки, две трети всей работы
+      // сервера. Поисковиков (Google, Яндекс, Bing, Apple, DuckDuckGo) в списке нет
+      // намеренно: их обход и выдача остаются как были. Google-Extended и
+      // Applebot-Extended — это только обучение ИИ у Google и Apple, к поиску они
+      // отношения не имеют, поэтому запрет на выдачу не влияет. Роботы, которые
+      // приводят людей по ссылкам (OAI-SearchBot у ChatGPT, PerplexityBot), тоже
+      // открыты: это источник посетителей, а не просто вычитка сайта.
+      // Список — просьба, а не запрет: честные роботы его соблюдают, остальных
+      // останавливает настройка сервера (сниппет nginx abcars-bots.conf).
+      "User-agent: ClaudeBot",
+      "User-agent: anthropic-ai",
+      "User-agent: Claude-Web",
+      "User-agent: GPTBot",
+      "User-agent: CCBot",
+      "User-agent: Google-Extended",
+      "User-agent: Applebot-Extended",
+      "User-agent: Bytespider",
+      "User-agent: Amazonbot",
+      "User-agent: meta-externalagent",
+      "User-agent: Diffbot",
+      "User-agent: Omgilibot",
+      "User-agent: ImagesiftBot",
+      "User-agent: cohere-ai",
+      "User-agent: AhrefsBot",
+      "User-agent: SemrushBot",
+      "User-agent: DataForSeoBot",
+      "User-agent: MJ12bot",
+      "User-agent: DotBot",
+      "User-agent: BLEXBot",
+      "User-agent: Barkrowler",
+      "User-agent: ZoominfoBot",
+      "User-agent: PetalBot",
+      "Disallow: /",
+      "",
     ].join("\n")
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;
 writeFileSync(path.join(clientDir, "robots.txt"), robots);

@@ -45,6 +45,9 @@ export function normalizeAnalyticsEvent(body = {}) {
     listingId:text(body.listingId, 200) || null,
     listingTitle:text(body.listingTitle, 240) || null,
     properties:safeProperties,
+    // Признак живого человека страница ставит сама, когда посетитель себя проявил.
+    // На первом событии его обычно нет — он приходит следом, отдельным запросом.
+    human:body.human === true,
   };
 }
 
@@ -54,8 +57,8 @@ export function normalizeAnalyticsEvent(body = {}) {
 // стоит на сервере, а не только в браузере: у части посетителей загружен старый
 // код сайта, и починить их можно только здесь.
 export const ANALYTICS_REPEAT_SECONDS = 5;
-const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties)
-     SELECT $1,$2,$3,$4,$5,$6,$7,$8
+const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties,human)
+     SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9
      WHERE NOT EXISTS (
        SELECT 1 FROM analytics_events
        WHERE visitor_id=$2 AND event_name=$4 AND coalesce(listing_id,'')=coalesce($6,'')
@@ -69,27 +72,67 @@ const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,sess
      )
      ON CONFLICT (event_id) DO NOTHING`;
 
+// Настоящий адрес сайта — из настроек, а не из запроса. Сервер отвечает и по
+// числовому адресу, и по имени: раньше сверялись с тем адресом, по которому пришёл
+// запрос, поэтому робот, перебиравший адреса подряд, открыл главную по числовому
+// адресу сервера — и его собственная отметка совпала сама с собой. В статистике он
+// оказался живым посетителем (25.08.2026).
+export const siteHost = (siteUrl = process.env.SITE_URL) => {
+  const raw = String(siteUrl || "https://abcars.by").trim();
+  try { return new URL(raw.includes("//") ? raw : `https://${raw}`).hostname.toLowerCase(); } catch { return ""; }
+};
+
 // Событие со страницы сайта браузер всегда сопровождает отметкой, откуда оно
 // отправлено (Origin, а в редких случаях только Referer). Запрос, посланный
 // напрямую — командой из терминала, роботом, кем-то посторонним, — такой отметки
 // не несёт: наши собственные проверки и чужие подделки в статистику не пойдут.
 // Фильтры «свой заход» живут в браузере, и обойти их можно только так.
-export const fromOwnPage = (headers = {}, host = "") => {
-  const site = String(host || headers.host || "").toLowerCase();
+export const fromOwnPage = (headers = {}, host = siteHost()) => {
+  const site = String(host || "").toLowerCase().replace(/^www\./, "");
   if (!site) return false;
+  const hosts = [site, `www.${site}`];
   const origin = String(headers.origin || "").toLowerCase();
-  if (origin) return origin === `https://${site}` || origin === `http://${site}`;
+  if (origin) return hosts.some((name) => origin === `https://${name}` || origin === `http://${name}`);
   const referer = String(headers.referer || "").toLowerCase();
-  return referer.startsWith(`https://${site}/`) || referer.startsWith(`http://${site}/`) || referer === `https://${site}` || referer === `http://${site}`;
+  return hosts.some((name) => referer === `https://${name}` || referer === `http://${name}`
+    || referer.startsWith(`https://${name}/`) || referer.startsWith(`http://${name}/`));
+};
+
+// Робот, который честно называет себя роботом. Поисковики наш скрипт не выполняют и
+// событий не присылают, но сборщики данных для ИИ и проверялки сайтов бывают на
+// настоящем браузере — с такой подписью в статистику они не попадут.
+const BOT_AGENT = /bot|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|curl|wget|python-requests|httpclient|http-client|libwww|okhttp|java\/|axios|node-fetch|go-http|lighthouse|pagespeed|gtmetrix|pingdom|uptime|monitor|preview|fetcher|archiver|ia_archiver|yandeximages|feed/i;
+export const isBotAgent = (agent = "") => {
+  const value = String(agent || "").trim();
+  // Браузер всегда представляется. Пустая подпись — это не человек.
+  if (!value) return true;
+  return BOT_AGENT.test(value);
 };
 
 export async function recordAnalyticsEvent(body, { db = pool } = {}) {
   const event = normalizeAnalyticsEvent(body);
   if (event.error) return event;
   const result = await db.query(INSERT_EVENT_SQL,
-    [event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties)],
+    [event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties),event.human],
   );
   return { ok:true, recorded:result.rowCount > 0 };
+}
+
+// Посетитель себя проявил: отмечаем живым весь его сегодняшний след. Отметка нужна
+// именно так, вдогонку, потому что заход записывается сразу — иначе человек, который
+// открыл страницу и ушёл, не притронувшись ни к чему, потерялся бы совсем. Теперь он
+// в базе есть, просто не попадает в число посетителей, а виден отдельной цифрой.
+export async function confirmHumanVisit(body = {}, { db = pool } = {}) {
+  const visitorId = text(body.visitorId, 80);
+  const sessionId = text(body.sessionId, 80);
+  if (!visitorId || !sessionId) return { error:"invalid_event_identity" };
+  const result = await db.query(
+    `UPDATE analytics_events SET human = true
+       WHERE visitor_id = $1 AND session_id = $2 AND NOT human
+         AND created_at > now() - interval '12 hours'`,
+    [visitorId, sessionId],
+  );
+  return { ok:true, confirmed:result.rowCount };
 }
 
 export async function resetAnalyticsData() {
@@ -153,6 +196,13 @@ export function normalizeAnalyticsDays(value) {
   return [7, 30, 90].includes(Number(value)) ? Number(value) : 30;
 }
 
+// Посетителем считаем того, у кого хотя бы одно событие отмечено живым человеком.
+// Именно «хотя бы одно», а не каждое: отметка приходит вдогонку, отдельным запросом,
+// и порядок записи не гарантирован — иначе первый заход человека остался бы
+// непризнанным из-за случайной очерёдности двух запросов.
+const humanVisitor = (compare = ">=") => `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at ${compare} $1 AND human)`;
+const HUMAN_VISITOR = humanVisitor();
+
 export async function getAnalyticsDashboard(daysValue) {
   const days = normalizeAnalyticsDays(daysValue);
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
@@ -163,10 +213,11 @@ export async function getAnalyticsDashboard(daysValue) {
   // посетителей, заходы и просмотры карточек.
   const [summaryResult,actionsResult,dailyResult,vehiclesResult,registrationsResult,recentResult,accountsResult,searchesResult,actionsDailyResult] = await Promise.all([
     pool.query(`SELECT
-      count(DISTINCT visitor_id)::int AS visitors,
-      count(DISTINCT session_id)::int AS sessions,
-      count(*) FILTER (WHERE event_name='page_view')::int AS page_views,
-      count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views
+      count(DISTINCT visitor_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS visitors,
+      count(DISTINCT session_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS sessions,
+      count(*) FILTER (WHERE event_name='page_view' AND ${HUMAN_VISITOR})::int AS page_views,
+      count(*) FILTER (WHERE event_name='vehicle_view' AND ${HUMAN_VISITOR})::int AS vehicle_views,
+      count(DISTINCT visitor_id) FILTER (WHERE NOT (${HUMAN_VISITOR}))::int AS robot_visits
       FROM analytics_events WHERE created_at >= $1`, [cutoff]),
     pool.query(`SELECT
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND ${notStaffAccount("customer_id")})::int
@@ -176,12 +227,13 @@ export async function getAnalyticsDashboard(daysValue) {
     pool.query(`SELECT created_at::date::text AS day,
       count(DISTINCT visitor_id)::int AS visitors,
       count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views
-      FROM analytics_events WHERE created_at >= $1 GROUP BY created_at::date ORDER BY created_at::date`, [cutoff]),
+      FROM analytics_events WHERE created_at >= $1 AND ${HUMAN_VISITOR}
+      GROUP BY created_at::date ORDER BY created_at::date`, [cutoff]),
     pool.query(`WITH views AS (
         SELECT listing_id, max(listing_title) AS listing_title,
           count(*) FILTER (WHERE event_name='vehicle_view')::int AS views,
           count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers
-        FROM analytics_events WHERE created_at >= $1 AND listing_id IS NOT NULL GROUP BY listing_id
+        FROM analytics_events WHERE created_at >= $1 AND listing_id IS NOT NULL AND ${HUMAN_VISITOR} GROUP BY listing_id
       ), asks AS (
         SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND listing_id IS NOT NULL AND ${notStaffAccount("customer_id")} GROUP BY listing_id
       ), drafts AS (
@@ -211,7 +263,7 @@ export async function getAnalyticsDashboard(daysValue) {
       FROM customer_accounts WHERE created_at >= $1 AND NOT staff
       ORDER BY created_at DESC LIMIT 100`, [cutoff]),
     pool.query(`SELECT event_name,listing_id,listing_title,path,created_at
-      FROM analytics_events WHERE created_at >= $1 ORDER BY created_at DESC LIMIT 30`, [cutoff]),
+      FROM analytics_events WHERE created_at >= $1 AND ${HUMAN_VISITOR} ORDER BY created_at DESC LIMIT 30`, [cutoff]),
     // Регистрации считаем по аккаунтам, а не по событиям — тем же источником, из которого
     // берётся список ниже. Иначе счётчик и список расходятся: событий может не быть вовсе
     // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
@@ -226,7 +278,8 @@ export async function getAnalyticsDashboard(daysValue) {
           btrim(properties->>'query') AS query,
           nullif(properties->>'found','')::int AS found
         FROM analytics_events
-        WHERE event_name='search_query' AND created_at >= $1 AND btrim(coalesce(properties->>'query','')) <> ''
+        WHERE event_name='search_query' AND created_at >= $1 AND ${HUMAN_VISITOR}
+          AND btrim(coalesce(properties->>'query','')) <> ''
       ), settled AS (
         SELECT * FROM asked a WHERE NOT EXISTS (
           SELECT 1 FROM asked longer
@@ -310,9 +363,11 @@ export const seenMoment = (value, now = Date.now()) => {
 export async function getAnalyticsUpdates(seenBySection = {}, { now = Date.now() } = {}) {
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
   const [overview, vehicles, searches, leads, customers] = await Promise.all([
-    pool.query("SELECT count(DISTINCT visitor_id)::int AS n FROM analytics_events WHERE created_at > $1", [since.overview]),
-    pool.query("SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1", [since.vehicles]),
-    pool.query("SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND btrim(coalesce(properties->>'query','')) <> ''", [since.searches]),
+    // Ярлык «новое с прошлого раза» тоже считает только живых людей, иначе он
+    // зажигался бы от заходов роботов.
+    pool.query(`SELECT count(DISTINCT visitor_id)::int AS n FROM analytics_events WHERE created_at > $1 AND ${humanVisitor(">")}`, [since.overview]),
+    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${humanVisitor(">")}`, [since.vehicles]),
+    pool.query(`SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND ${humanVisitor(">")} AND btrim(coalesce(properties->>'query','')) <> ''`, [since.searches]),
     pool.query(`SELECT (SELECT count(*) FROM order_drafts WHERE created_at > $1 AND ${notStaffContact("contact")})::int
       + (SELECT count(*) FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")})::int AS n`, [since.leads]),
     pool.query("SELECT count(*)::int AS n FROM customer_accounts WHERE created_at > $1 AND NOT staff", [since.customers]),

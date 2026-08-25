@@ -35,13 +35,75 @@ export const isRepeatEvent = (key, now = Date.now()) => {
 // браузер, в котором хоть раз открыли сайт с ?nocount=1, помнит это насовсем
 // (метку ставит счётчик в index.html). Плюс молчим в браузерах под управлением
 // программы — это автоматические проверки и роботы, а не живые люди.
-export const isSkippedVisit = ({ hostname, nocount, automated }) =>
-  isLocalVisit(hostname) || nocount === "1" || Boolean(automated);
+// Робот, который не скрывает, что он робот: сборщики данных для ИИ и проверялки
+// скорости сайта иногда работают на настоящем браузере и наш скрипт выполняют.
+const BOT_AGENT = /bot|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i;
+export const isBotAgent = (agent = "") => BOT_AGENT.test(String(agent));
+
+export const isSkippedVisit = ({ hostname, nocount, automated, agent = "" }) =>
+  isLocalVisit(hostname) || nocount === "1" || Boolean(automated) || isBotAgent(agent);
 
 const skipThisVisit = () => {
   let nocount = null;
   try { nocount = window.localStorage.getItem("nocount"); } catch { nocount = null; }
-  return isSkippedVisit({ hostname:window.location.hostname, nocount, automated:window.navigator?.webdriver });
+  return isSkippedVisit({
+    hostname:window.location.hostname,
+    nocount,
+    automated:window.navigator?.webdriver,
+    agent:window.navigator?.userAgent,
+  });
+};
+
+// Робот и человек по-разному ведут себя на открытой странице. Человек шевелит мышью,
+// листает, нажимает; робот, которому нужно только содержимое, снимает страницу и
+// уходит через несколько секунд, ни к чему не притронувшись, — а подпись браузера
+// при этом подделывает под обычный Chrome, поэтому по ней его не отличить.
+// Вот эти признаки и отличают живого посетителя от такого робота.
+export const HUMAN_SIGNALS = ["pointermove", "pointerdown", "touchstart", "keydown", "wheel", "scroll"];
+// Человек, который просто читает страницу и не касается ни мыши, ни колеса, — тоже
+// человек. Столько времени на видимой странице считаем признаком жизни: роботы
+// столько не ждут, им нужно обойти тысячи адресов.
+export const HUMAN_DWELL_MS = 15_000;
+
+// Заход записываем сразу, а живым человеком он становится, когда посетитель себя
+// проявит: подвигает мышью, коснётся экрана, прокрутит, нажмёт клавишу или пробудет
+// на открытой странице 15 секунд. Робот, который снимает страницу и уходит, отметку
+// не получает — в числе посетителей его нет, но сам заход в базе остаётся и виден
+// отдельной цифрой. Так не теряется и человек, закрывший страницу через две секунды:
+// он просто попадёт не в людей, а в неподтверждённые заходы.
+let humanConfirmed = false;
+let watching = false;
+
+const post = (path, payload) => {
+  fetch(path, {
+    method:"POST",
+    headers:{ "content-type":"application/json" },
+    body:JSON.stringify(payload),
+    keepalive:true,
+  }).catch(() => {});
+};
+
+const confirmHuman = () => {
+  if (humanConfirmed) return;
+  humanConfirmed = true;
+  post("/api/analytics/human", {
+    visitorId:storedId(window.localStorage, visitorKey),
+    sessionId:storedId(window.sessionStorage, sessionKey),
+  });
+};
+
+const watchForHuman = () => {
+  if (watching) return;
+  watching = true;
+  const signal = () => {
+    for (const name of HUMAN_SIGNALS) window.removeEventListener(name, signal, true);
+    confirmHuman();
+  };
+  for (const name of HUMAN_SIGNALS) window.addEventListener(name, signal, { capture:true, passive:true });
+  window.setTimeout(() => {
+    // Страница в фоновой закладке ничего не доказывает: её мог открыть и робот.
+    if (window.document?.visibilityState !== "hidden") signal();
+  }, HUMAN_DWELL_MS);
 };
 
 export function trackEvent(eventName, details = {}) {
@@ -58,12 +120,9 @@ export function trackEvent(eventName, details = {}) {
     listingId:details.listingId,
     listingTitle:details.listingTitle,
     properties:details.properties,
+    human:humanConfirmed,
   };
-  fetch("/api/analytics/events", {
-    method:"POST",
-    headers:{ "content-type":"application/json" },
-    body:JSON.stringify(payload),
-    keepalive:true,
-  }).catch(() => {});
+  watchForHuman();
+  post("/api/analytics/events", payload);
 }
 

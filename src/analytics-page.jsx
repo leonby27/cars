@@ -258,7 +258,10 @@ function OverviewSection({ data }) {
   // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
   // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
   const cards = [
-    ["Уникальные посетители", summary.visitors, `${formatNumber(summary.sessions)} сессий`],
+    // Роботов в число посетителей не берём, но и не скрываем: заход, за которым не
+    // видно живого человека (никаких движений, прокрутки и нажатий), считается
+    // отдельно — так видно, сколько на сайт приходит машинного трафика.
+    ["Уникальные посетители", summary.visitors, `${formatNumber(summary.sessions)} сессий${Number(summary.robot_visits) ? ` · ещё ${formatNumber(summary.robot_visits)} заходов без признаков человека` : ""}`],
     ["Просмотры автомобилей", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
     ["Заявки по автомобилю", summary.availability_clicks, `${percent(summary.availability_clicks, summary.vehicle_views)} от просмотров авто${summary.custom_searches ? ` · ещё ${formatNumber(summary.custom_searches)} на подбор` : ""}`],
     ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} машин держат в избранном`],
