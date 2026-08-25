@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Tire, Trash, UserCircle, X } from "@phosphor-icons/react";
 import { matchesYearRange, sortCars } from "./car-filters.js";
@@ -66,18 +66,7 @@ const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORD
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? Math.round(usd * PRICING.usdByn) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
-// Итог «под ключ» стоит в строку с кружком стрелки переоценки, а в карточке заказа —
-// ещё и с переключателем валюты. Семизначная сумма в рублях («≈ 1 521 424 BYN» —
-// пятнадцать знаков) в строку уже не влезала, и стрелка съезжала под цену. Меру
-// берём по длине готовой надписи: в долларах таких длинных цен не бывает, в рублях
-// они начинаются с миллиона. Насколько уменьшить кегль — решают стили того места,
-// где цена нарисована.
-const priceFitClass = (usd, currency) => {
-  const length = `≈ ${money(usd, currency)}`.length;
-  if (length >= 16) return "price-very-long";
-  if (length >= 14) return "price-long";
-  return "";
-};
+
 const ANY_YEAR_MIN = "Год от";
 const ANY_YEAR_MAX = "До";
 const ANY_PRICE_MIN = "Цена от";
@@ -92,6 +81,13 @@ const ANY_COLOR = "Все цвета";
 const ANY_ACCEL = "Разгон до";
 const ANY_TIRE = "Размер шин";
 const ANY_RANGE = "Запас хода";
+// Переключатель силовой установки. В карточке тип хранится в единственном числе
+// («Электромобиль»), а на кнопке и в адресе страницы стоит множественное
+// («Электромобили»), поэтому перевод между ними собран в двух местах, а не
+// повторяется по файлу: раньше добавление типа требовало правки в семи точках.
+const POWERTRAIN_TABS = ["Все", "Электромобили", "Гибриды", "ДВС"];
+const typeLabel = (value) => (value === "Электромобиль" ? "Электромобили" : value === "Гибрид" ? "Гибриды" : value === "ДВС" ? "ДВС" : "Все");
+const typeValue = (label) => (label === "Электромобили" ? "Электромобиль" : label === "Гибриды" ? "Гибрид" : label === "ДВС" ? "ДВС" : "Все");
 // Кузов и модель выбираются списком, поэтому их значение хранится массивом.
 // Пустой массив = «все»; строку принимаем ради старых ссылок и history.state.
 const multiValues = (value, anyLabel) => (Array.isArray(value) ? value : [value]).filter((item) => item && item !== anyLabel);
@@ -690,6 +686,66 @@ function PriceChangeMark({ car }) {
       {change.direction === "up" ? <ArrowUp weight="bold" /> : <ArrowDown weight="bold" />}
       <ActionTooltip className="price-change-tooltip" text={tooltip} tapToOpen />
     </span>
+  );
+}
+
+// Итог «под ключ» со стрелкой переоценки — одной строкой.
+//
+// Длинная цена в рублях («≈ 1 521 424 BYN») вместе с кружком стрелки в строку не
+// влезала, и стрелка съезжала под цену. По длине надписи этого не угадать: места
+// разной ширины (каталог, карточка заказа, телефон), а в карточке заказа рядом стоит
+// ещё и переключатель валюты. Поэтому смотрим на уже нарисованную строку: если она
+// разъехалась на две — или, там где переносы запрещены, вылезла за край, — уменьшаем
+// кегль ступенью и смотрим снова. Множитель кладём в переменную: на сколько это точек,
+// решают стили того места, где цена нарисована.
+const PRICE_FIT_STEPS = [0.92, 0.84, 0.76, 0.68];
+
+function TotalPrice({ car, price, currency, className = "" }) {
+  const boxRef = useRef(null);
+  const lineRef = useRef(null);
+  const text = `≈ ${money(price.totalUsd, currency)}`;
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const line = lineRef.current;
+    if (!box || !line) return undefined;
+    // Строка занимает больше одного прямоугольника — значит перенеслась.
+    // Единица запаса по ширине: дробные ширины дают лишние доли пикселя.
+    // Нулевая ширина — цена сейчас не показана (мобильная и обычная разметка
+    // живут в одном месте, лишняя спрятана): мерить нечего, кегль не трогаем.
+    const fits = () => {
+      if (!box.clientWidth) return true;
+      const rects = line.getClientRects();
+      return rects.length === 1 && rects[0].width <= box.clientWidth + 1;
+    };
+    // Цены, которые и так помещаются (а это почти все), обходятся одним замером:
+    // кегль им не трогаем вовсе. Замер идёт для каждой цены в выдаче, поэтому
+    // лишняя работа здесь заметна.
+    const fit = () => {
+      box.style.removeProperty("--price-fit");
+      if (fits()) return;
+      for (const step of PRICE_FIT_STEPS) {
+        box.style.setProperty("--price-fit", String(step));
+        if (fits()) return;
+      }
+    };
+    fit();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    // Место под цену меняется при повороте телефона и при перетаскивании окна.
+    // Ширину запоминаем: без этого пересчёт, меняющий кегль, мог бы вызвать сам себя.
+    let known = box.parentElement?.clientWidth ?? 0;
+    const observer = new ResizeObserver(() => {
+      const width = box.parentElement?.clientWidth ?? 0;
+      if (width === known) return;
+      known = width;
+      fit();
+    });
+    if (box.parentElement) observer.observe(box.parentElement);
+    return () => observer.disconnect();
+  }, [text]);
+  return (
+    <strong ref={boxRef} className={className || undefined}>
+      <span ref={lineRef}>{text}<PriceChangeMark car={car} /></span>
+    </strong>
   );
 }
 
@@ -1442,7 +1498,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
   return (
     <section className={`search-box${constrained ? " search-box--constrained" : ""}`}>
       <div className="type-tabs">
-        {["Все", "Электромобили", "Гибриды"].map((item) => (
+        {POWERTRAIN_TABS.map((item) => (
           <button type="button" key={item} className={selectedType === item ? "active" : ""} onClick={() => onTypeChange(item)}>
             {item}
           </button>
@@ -1555,7 +1611,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   // «Показать авто» без цифры вместо мгновенного «0 авто» при переключении.
   const [remoteCount, setRemoteCount] = useState(null);
   const countCacheRef = useRef(new Map());
-  const normalizedType = type === "Электромобили" ? "Электромобиль" : type === "Гибриды" ? "Гибрид" : "Все";
+  const normalizedType = typeValue(type);
   const brandCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && matchesMulti(car.bodyType, bodyType, ANY_BODY_TYPE));
   const modelCars = cars.filter((car) => (normalizedType === "Все" || car.type === normalizedType) && (brand === "Все марки" || car.brand === brand) && matchesMulti(car.bodyType, bodyType, ANY_BODY_TYPE));
   const brands = ["Все марки", ...(apiMode ? remoteMeta.brands.map((item) => item.brand) : uniqueSorted(cars.map((car) => car.brand)))];
@@ -2160,7 +2216,7 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
 // и единственное число. Из-за смешения этих имён год из поиска раньше терялся.
 const heroCatalogHref = (parsed) => {
   const params = new URLSearchParams();
-  if (parsed.powertrain) params.set("type", parsed.powertrain === "Гибрид" ? "Гибриды" : "Электромобили");
+  if (parsed.powertrain) params.set("type", typeLabel(parsed.powertrain));
   if (parsed.brand) params.set("brand", parsed.brand);
   parsed.models.forEach((model) => params.append("model", model));
   if (parsed.bodyType) params.append("body", parsed.bodyType);
@@ -2230,7 +2286,7 @@ const savedSearchKey = (filters) => JSON.stringify(normalizeSavedFilters(filters
 // поиска, и строка-подпись на его карточке. Цены — в долларах, как они и хранятся.
 const savedSearchChips = (filters) => {
   const chips = [];
-  if (filters.type !== "Все") chips.push(filters.type === "Электромобиль" ? "Электромобили" : "Гибриды");
+  if (filters.type !== "Все") chips.push(typeLabel(filters.type));
   const models = multiValues(filters.model, ANY_MODEL);
   if (filters.brand !== "Все марки") chips.push(models.length ? `${filters.brand} ${models.join(", ")}` : filters.brand);
   multiValues(filters.bodyType, ANY_BODY_TYPE).forEach((body) => chips.push(body));
@@ -2266,7 +2322,7 @@ const savedSearchTitle = (filters) => {
 // каталог разберёт её при монтировании и восстановит фильтры один в один.
 const savedSearchCatalogHref = (filters) => {
   const params = new URLSearchParams();
-  if (filters.type !== "Все") params.set("type", filters.type === "Электромобиль" ? "Электромобили" : "Гибриды");
+  if (filters.type !== "Все") params.set("type", typeLabel(filters.type));
   if (filters.brand !== "Все марки") params.set("brand", filters.brand);
   multiValues(filters.model, ANY_MODEL).forEach((model) => params.append("model", model));
   multiValues(filters.bodyType, ANY_BODY_TYPE).forEach((body) => params.append("body", body));
@@ -2580,7 +2636,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
           </div>
         )}
         <div className="featured-price">
-          <strong className={priceFitClass(price.totalUsd, currency)}>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
+          <TotalPrice car={car} price={price} currency={currency} />
         </div>
       </div>
     </article>
@@ -3955,8 +4011,8 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, model: [] }));
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
-  const selectedType = filters.type === "Электромобиль" ? "Электромобили" : filters.type === "Гибрид" ? "Гибриды" : "Все";
-  const selectType = (value) => changeType(value === "Электромобили" ? "Электромобиль" : value === "Гибриды" ? "Гибрид" : "Все");
+  const selectedType = typeLabel(filters.type);
+  const selectType = (value) => changeType(typeValue(value));
   const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || hasExclusions(filters);
   const resetFilters = () => setFilters(() => ({
     type: "Все",
@@ -4027,7 +4083,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <div className="car-row-mobile-header">
         <div>
           <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
-          <strong className={priceFitClass(price.totalUsd, currency)}>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
+          <TotalPrice car={car} price={price} currency={currency} />
         </div>
         <button
           type="button"
@@ -4098,7 +4154,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
         </div>
       </div>
       <div className="car-row-price">
-        <strong className={priceFitClass(price.totalUsd, currency)}>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
+        <TotalPrice car={car} price={price} currency={currency} />
         <span>Под ключ</span>
         <b>{number(car.chinaPrice)} ¥</b>
         <small>цена в Китае</small>
@@ -4523,7 +4579,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const rawTire = params.get("tire");
   const rawRange = params.get("range");
   const initialFilters = {
-    type: rawType === "Электромобили" ? "Электромобиль" : rawType === "Гибриды" ? "Гибрид" : "Все",
+    type: typeValue(rawType),
     brand: rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",
     model: multiValues(rawModels, ANY_MODEL),
     bodyType: BODY_TYPES.filter((item) => rawBodyTypes.includes(item)),
@@ -5963,9 +6019,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </AppLink>
             )}
           </div>
-          <strong className={`detail-mobile-price ${priceFitClass(price.totalUsd, currency)}`.trim()}>
-            ≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} />
-          </strong>
+          <TotalPrice car={car} price={price} currency={currency} className="detail-mobile-price" />
           {/* Тип, привод и пробег из подзаголовка убраны: они и так стоят
               строкой ниже, в «Характеристиках». Остались только даты. */}
           {datesLine && <p>{datesLine}</p>}
@@ -6010,7 +6064,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           )}
           <aside className="order-card">
             <div className={`price-total${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
-              <strong className={priceFitClass(price.totalUsd, currency)}>≈ {money(price.totalUsd, currency)}<PriceChangeMark car={car} /></strong>
+              <TotalPrice car={car} price={price} currency={currency} />
               {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
             </div>
             <div className="price-breakdown">

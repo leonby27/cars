@@ -6,6 +6,20 @@ export const IMPORT_MIN_YEAR = 2020;
 // classifies it as `ДВС`, which this list excludes.
 export const IMPORTABLE_POWERTRAINS = Object.freeze(["Электромобиль", "Гибрид"]);
 
+// Бензиновый ввоз — отдельный список марок и отдельное разрешение. Каталог
+// источника на 181 448 бензиновых машин наполовину состоит из марок, которых в
+// Беларуси нет вообще (GAC Trumpchi, Roewe, Baojun, подбренды Dongfeng): такую
+// машину здесь не узнают и не купят. В список попали марки, у которых на av.by
+// есть хотя бы 20 живых объявлений, — то есть те, что тут реально ездят.
+export const ICE_IMPORT_BRANDS = Object.freeze([
+  "Volkswagen", "Mercedes-Benz", "BMW", "Audi", "Toyota", "Honda", "Buick", "Porsche",
+  "Geely", "Nissan", "Land Rover", "Ford", "Haval", "Changan", "Hyundai", "Cadillac",
+  "Mazda", "Chevrolet", "Chery", "Volvo", "Lexus", "Kia", "MINI", "Škoda", "MG",
+  "Peugeot", "Jaguar", "Jeep", "Bentley", "Jetour", "Lincoln", "BYD", "Maserati",
+  "Infiniti", "Citroën", "Mitsubishi", "Subaru", "Suzuki", "smart", "Great Wall",
+  "Renault", "Acura", "Alfa Romeo", "DS", "Chrysler", "GMC", "Fiat",
+]);
+
 // Sources retired from the catalog. Their existing listings stay in the
 // database as `unavailable` so orders that already reference them keep
 // resolving, but nothing re-imports or re-activates them: `upsertCar` forces
@@ -120,7 +134,8 @@ const BRAND_ALIASES = new Map([
   ["mercedes-benz", "Mercedes-Benz"],
 ]);
 const allowedBrands = new Set(IMPORT_BRANDS);
-const allowedBrandByLower = new Map(IMPORT_BRANDS.map((brand) => [brand.toLocaleLowerCase("en-US"), brand]));
+const allowedIceBrands = new Set(ICE_IMPORT_BRANDS);
+const allowedBrandByLower = new Map([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS].map((brand) => [brand.toLocaleLowerCase("en-US"), brand]));
 
 export function canonicalImportBrand(value) {
   const brand = String(value || "").trim();
@@ -188,17 +203,22 @@ export function canonicalImportModel(brandValue, modelValue) {
   return MODEL_ALIASES.get(`${brand.toLocaleLowerCase("en-US")}|${model.toLocaleLowerCase("en-US")}`) || model;
 }
 
-export function isAllowedImportBrand(value) {
-  return allowedBrands.has(canonicalImportBrand(value));
+export function isAllowedImportBrand(value, { combustion = false } = {}) {
+  const brand = canonicalImportBrand(value);
+  return allowedBrands.has(brand) || (combustion && allowedIceBrands.has(brand));
 }
 
-export function importPolicyViolation(car) {
-  if (!isAllowedImportBrand(car?.brand)) return "brand is outside the Belarus import list";
+// `combustion` включает бензиновый ввоз: свой список марок и тип «ДВС». Без него
+// правила остаются прежними — электромобиль или гибрид из основного списка, и
+// ночной импорт электромобилей не начинает тянуть бензин сам собой.
+export function importPolicyViolation(car, { combustion = false } = {}) {
+  if (!isAllowedImportBrand(car?.brand, { combustion })) return "brand is outside the Belarus import list";
   if (!Number.isFinite(Number(car?.year)) || Number(car.year) < IMPORT_MIN_YEAR) return `model year is below ${IMPORT_MIN_YEAR}`;
-  if (!IMPORTABLE_POWERTRAINS.includes(car?.type)) return "new imports must be electric or hybrid";
+  const powertrains = combustion ? [...IMPORTABLE_POWERTRAINS, "ДВС"] : IMPORTABLE_POWERTRAINS;
+  if (!powertrains.includes(car?.type)) return combustion ? "unknown powertrain" : "new imports must be electric or hybrid";
   return null;
 }
 
-export function isEligibleNewImport(car) {
-  return importPolicyViolation(car) === null;
+export function isEligibleNewImport(car, options) {
+  return importPolicyViolation(car, options) === null;
 }

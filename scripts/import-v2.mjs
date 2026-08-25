@@ -23,7 +23,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { buildChe168Car, extractChe168DetailPayload, extractChe168ListPayload } from "./lib/che168-parser.mjs";
-import { IMPORT_BRANDS, canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
+import { ICE_IMPORT_BRANDS, IMPORT_BRANDS, canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
@@ -34,8 +34,9 @@ const PAGE_SIZE = 24;
 // extender, 7 pure electric. A run targets one or more of those feeds; brand ids
 // are probed per feed, because a brand present in one is not necessarily in
 // another, so each set of fuel types gets its own cached map.
-const FUEL_TYPE_NAMES = { 3: "hybrid", 5: "plug-in hybrid", 6: "range extender", 7: "electric" };
+const FUEL_TYPE_NAMES = { 1: "gasoline", 2: "diesel", 3: "hybrid", 5: "plug-in hybrid", 6: "range extender", 7: "electric" };
 const ELECTRIC_FUEL_TYPE = 7;
+const GASOLINE_FUEL_TYPE = 1;
 
 const args = new Map(process.argv.slice(2).map((arg) => {
   const [key, value = "true"] = arg.replace(/^--/, "").split("=");
@@ -44,6 +45,8 @@ const args = new Map(process.argv.slice(2).map((arg) => {
 const limit = Number(args.get("limit") || 100);
 const batchSize = Number(args.get("batch") || 100);
 const concurrency = Number(args.get("concurrency") || 5);
+// Сколько окон одновременно просматривают списки при поиске новых машин.
+const listerCount = Math.max(1, Number(args.get("lister") || 1));
 const brandFilter = args.get("brands")?.split(",").map((brand) => canonicalImportBrand(brand.trim())) || null;
 const mapOnly = args.get("map-only") === "true";
 // `--repair=range` re-reads cards the catalog already has whose range never
@@ -72,6 +75,10 @@ if (!fuelTypes.length) throw new Error("--fueltype needs at least one numeric so
 // The pure-electric feed still carries hybrids, so they are dropped before a
 // detail request is spent. A hybrid run must obviously not apply that filter.
 const skipHybridCandidates = fuelTypes.every((fuelType) => fuelType === ELECTRIC_FUEL_TYPE);
+// Бензиновый прогон: свой список марок и разрешённый тип «ДВС». Определяется по
+// запрошенному фиду источника, отдельного ключа для этого не нужно.
+const combustionRun = fuelTypes.includes(GASOLINE_FUEL_TYPE);
+const policyBrands = combustionRun ? [...new Set([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS])] : IMPORT_BRANDS;
 const fuelKey = [...fuelTypes].sort((a, b) => a - b).join("-");
 const BRAND_MAP_PATH = path.join(ROOT, "config", fuelKey === String(ELECTRIC_FUEL_TYPE) ? "che168-brands.json" : `che168-brands-${fuelKey}.json`);
 const FEED_URL = `https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=${fuelTypes[0]}`;
@@ -213,7 +220,7 @@ function report(extra = {}) {
     rejected: [...rejected.values()].reduce((total, value) => total + value, 0),
     rejectedByReason: Object.fromEntries([...rejected].sort((a, b) => b[1] - a[1])),
     rejectionExamples,
-    policy: { minYear: 2020, brands: IMPORT_BRANDS, newImports: "electric-only", cleansExistingCatalog: false },
+    policy: { minYear: 2020, brands: policyBrands, newImports: combustionRun ? "combustion allowed" : "electric-only", cleansExistingCatalog: false },
     previousCount: catalog.cars?.length || 0,
     ...extra,
   };
@@ -271,7 +278,7 @@ try {
   const brandMap = await loadBrandMap(page);
   const targets = Object.entries(brandMap)
     .map(([sourceName, info]) => ({ sourceName, ...info, policyBrand: canonicalImportBrand(sourceName) }))
-    .filter((target) => IMPORT_BRANDS.includes(target.policyBrand))
+    .filter((target) => policyBrands.includes(target.policyBrand))
     .filter((target) => !brandFilter || brandFilter.includes(target.policyBrand))
     .sort((a, b) => brandListings(b) - brandListings(a));
   const fuelLabel = fuelTypes.map((fuelType) => FUEL_TYPE_NAMES[fuelType] || fuelType).join(" + ");
@@ -308,17 +315,32 @@ try {
         const listed = brandListingsFor(target, fuelType);
         if (!listed) continue;
         let pageCount = Math.max(1, Math.ceil(listed / PAGE_SIZE));
-        for (let pageIndex = 1; pageIndex <= pageCount && accepted.length < limit; pageIndex += 1) {
+        // Страницы списка делятся между окнами по чередованию: первое окно берёт
+        // 1, 3, 5-ю, второе — 2, 4, 6-ю. Источник отдаёт страницу за две-три
+        // секунды, и один обходчик держал на этой скорости весь прогон, хотя
+        // карточки успевали качаться вдвое быстрее. Число окон — `--lister`.
+        await Promise.all(listerPages.map(async (listerPage, listerIndex) => {
+        for (let pageIndex = listerIndex + 1; pageIndex <= pageCount && accepted.length < limit; pageIndex += listerPages.length) {
           const { text, status } = await flight(listerPage, listUrl(target.brandId, pageIndex, fuelType));
           const payload = status === 200 && text ? listPayload(text) : null;
-          if (!payload?.items?.length) break;
+          // Источник, начавший ограничивать частоту, отвечает не 200 или пустым
+          // телом. Молчать об этом нельзя: страница просто «кончается», и прогон
+          // выглядит успешным, хотя половина машин не найдена.
+          if (status !== 200) console.warn(`[throttle] ${target.sourceName} стр. ${pageIndex}: ответ ${status}`);
+          if (!payload?.items?.length) return;
           if (payload.pageCount) pageCount = Math.min(pageCount, payload.pageCount);
           for (const item of payload.items) {
             const externalId = String(item.infoid || "");
             if (!externalId || seen.has(externalId)) continue;
             if (knownIds.has(`che168-${externalId}`)) { known += 1; continue; }
             if (skipHybridCandidates && HYBRID_FUEL.test(`${item.fuelname} ${item.specname} ${item.carname}`)) { skippedHybrid += 1; continue; }
-            const year = Number(`${item.specname} ${item.carname}`.match(/\b(20\d{2})\b/)?.[1]);
+            // Модельный год из названия комплектации — то же, что проверяет политика
+            // по детальной карточке, поэтому отбор здесь идёт по нему: иначе машина
+            // 2019 модельного года, поставленная на учёт в 2020-м, качается целиком
+            // и тут же отбраковывается. Года в названии нет — берём дату выпуска
+            // из списка, это ближайшее к нему.
+            const named = Number(`${item.specname} ${item.carname}`.match(/\b(20\d{2})\b/)?.[1]);
+            const year = named || Number(String(item.regdate || "").slice(0, 4));
             if (!year || year < 2020) { skippedOld += 1; continue; }
             seen.add(externalId);
             candidates.push({ externalId, brand: target.policyBrand, year, carname: String(item.carname || "").trim() });
@@ -326,6 +348,7 @@ try {
           }
           await sleep(60);
         }
+        }));
       }
       console.log(`[discover] ${target.sourceName}: ${brandCandidates} new candidates · ${known} already imported · skipped ${skippedOld} pre-2020${skipHybridCandidates ? `, ${skippedHybrid} hybrid` : ""} · ${brandListings(target)} listed`);
     } };
@@ -358,7 +381,7 @@ try {
             reject("detail page lacks required structured fields or gallery", candidate.externalId);
             continue;
           }
-          const violation = importPolicyViolation(car);
+          const violation = importPolicyViolation(car, { combustion: combustionRun });
           if (violation) {
             reject(`Import policy: ${violation}`, candidate.externalId);
             continue;
@@ -389,7 +412,12 @@ try {
         await sleep(60);
       }
     };
-    const listerPage = page;
+    // Первое окно обхода — уже открытое, остальные докрываются по `--lister`.
+    const listerPages = [page, ...await Promise.all(Array.from({ length: listerCount - 1 }, async () => {
+      const extra = await context.newPage();
+      await extra.goto("https://global.che168.com/en", { waitUntil: "domcontentloaded", timeout: 60_000 });
+      return extra;
+    }))];
     // Every worker fetches relative URLs, so its page has to sit on the site's
     // own origin; the challenge cookie is already shared through the context.
     const workerPages = await Promise.all(Array.from({ length: concurrency }, async () => {

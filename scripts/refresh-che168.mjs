@@ -29,8 +29,13 @@ import { estimateLandedCost } from "../src/pricing.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPORT_PATH = path.join(ROOT, "runtime", "refresh-report.json");
 const FEED_URL = "https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=7";
-// The catalog spans three powertrain feeds; each paginates on its own.
-const FUEL_TYPES = [7, 5, 6];
+// The catalog spans four powertrain feeds; each paginates on its own. Feed 1 is
+// the petrol one and it is by far the largest (~181k cars, ~7.5k pages, about
+// twenty extra minutes). It has to be walked all the same: a card missing from
+// every feed goes to the detail queue, so leaving petrol out would send tens of
+// thousands of perfectly live cards there every night — and none of them would
+// ever get a price update from the lists.
+const FUEL_TYPES = [7, 5, 6, 1];
 const USD_TO_CNY = 7.15;
 // Day-to-day the source re-quotes yuan prices in dollars at the current rate,
 // which moves almost every card by $10–20. Those wiggles are noise: they would
