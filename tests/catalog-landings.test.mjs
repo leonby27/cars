@@ -71,9 +71,9 @@ test("страница раздела отдаётся с текстом, маш
   // Блок «другие разделы» группирует их по виду, поэтому нужен настоящий раздел.
   const others = [findCatalogLanding("/catalog/tesla"), findCatalogLanding("/catalog/electric")];
   const { html } = render().landingPage({ landing, cars, total: 5673, modelPages, others });
-  assert.match(html, /<title>BYD из Китая — каталог с ценами до Минска \| abcars\.by<\/title>/);
+  assert.match(html, /<title>BYD с пробегом из Китая — цены до Минска \| abcars\.by<\/title>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog\/byd"/);
-  assert.match(html, /<h1>Автомобили BYD из Китая с доставкой в Беларусь<\/h1>/);
+  assert.match(html, /<h1>Автомобили BYD с пробегом из Китая — доставка в Беларусь<\/h1>/);
   assert.match(html, /В наличии 5[^<]*673 автомобиля/);
   // Текст раздела лежит в самой странице, а не подгружается скриптом.
   assert.match(html, /собственный тип батареи Blade/);
@@ -326,4 +326,30 @@ test("раздел марки без машин не показывается", 
   // Разделы без марки — тип двигателя, кузов, цена — проверки не требуют.
   assert.equal(visible(findCatalogLanding("/catalog/electric")), true);
   assert.equal(visible(findCatalogLanding("/catalog/petrol")), true);
+});
+
+test("вопросы раздела зависят от типа двигателя и стоят только на первой странице", () => {
+  const { html } = render().landingPage({ landing: findCatalogLanding("/catalog/petrol"), cars, total: 70629 });
+  // Бензиновый раздел спрашивают про пошлину по объёму двигателя, а не про квоту.
+  assert.match(html, /Сколько добавляет растаможка к цене бензиновой машины\?/);
+  assert.match(html, /по объёму двигателя и возрасту/);
+  assert.match(html, /"@type":"FAQPage"/);
+  // Число машин в ответе — настоящее, из этого же запроса.
+  assert.match(html, /в разделе 70[^<]*629 автомобилей/);
+
+  const electric = render().landingPage({ landing: findCatalogLanding("/catalog/electric"), cars, total: 21209 }).html;
+  assert.match(electric, /Какие платежи ждут электромобиль на таможне\?/);
+  // Обещания «пошлины нет навсегда» в ответе быть не должно: квота заканчивается.
+  assert.match(electric, /когда квота закончится, добавится пошлина 15%/);
+
+  // У марки тип двигателя разный, поэтому вопрос общий — про то, от чего зависит сумма.
+  const brand = render().landingPage({ landing: findCatalogLanding("/catalog/haval"), cars, total: 2142 }).html;
+  assert.match(brand, /От чего зависит сумма растаможки\?/);
+  assert.match(brand, /Какие модели Haval есть в наличии\?/);
+
+  // Страницы 2–50 — тот же раздел другим куском: повторять на них блок вопросов
+  // и разметку FAQ незачем.
+  const second = render().landingPage({ landing: findCatalogLanding("/catalog/petrol"), cars, total: 70629, page: 2, pages: 50 }).html;
+  assert.ok(!second.includes("Частые вопросы"));
+  assert.ok(!second.includes("FAQPage"));
 });

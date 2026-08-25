@@ -7,7 +7,8 @@ import { FUEL_TYPES, GEARBOX_TYPES, engineBounds, engineLabel, enginePower, engi
 import { collectHeroAliases, isHeroExcludeWord, rankSearchEntries, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
-import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, relatedLandings } from "./catalog-landings.js";
+import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingsForCar, relatedLandings } from "./catalog-landings.js";
+import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
 import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
@@ -1703,13 +1704,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [power, setPower] = useState(ANY_POWER);
   const [gearbox, setGearbox] = useState(ANY_GEARBOX);
   const [fuel, setFuel] = useState(ANY_FUEL);
-  const [remoteMeta, setRemoteMeta] = useState({
-    brands: [],
-    models: [],
-    bodyTypes: [],
-    drives: [],
-    availability: {},
-  });
+  const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(typeValue(type), brand, bodyType)) || EMPTY_CATALOG_META);
   // null — число для текущих фильтров ещё не посчитано: кнопка показывает
   // «Показать авто» без цифры вместо мгновенного «0 авто» при переключении.
   const [remoteCount, setRemoteCount] = useState(null);
@@ -1737,17 +1732,10 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     // Ждать загрузочный запрос незачем: справочник нужен сразу и уходит параллельно
     // с витриной. Останавливает его только выясненный статический режим.
     if (apiMode === false) return undefined;
-    const metaQuery = new URLSearchParams();
+    const metaKey = catalogMetaQuery(normalizedType, brand, bodyType);
     const carsQuery = new URLSearchParams({ limit: "1" });
-    if (normalizedType !== "Все") {
-      metaQuery.set("type", normalizedType);
-      carsQuery.set("type", normalizedType);
-    }
-    if (brand !== "Все марки") {
-      metaQuery.set("brand", brand);
-      carsQuery.set("brand", brand);
-    }
-    appendMulti(metaQuery, "bodyType", bodyType, ANY_BODY_TYPE);
+    if (normalizedType !== "Все") carsQuery.set("type", normalizedType);
+    if (brand !== "Все марки") carsQuery.set("brand", brand);
     appendMulti(carsQuery, "bodyType", bodyType, ANY_BODY_TYPE);
     appendMulti(carsQuery, "model", model, ANY_MODEL);
     colorValuesForLabels(multiValues(color, ANY_COLOR)).forEach((value) => carsQuery.append("color", value));
@@ -1773,20 +1761,24 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     setRemoteCount(cached ?? null);
     const controller = new AbortController();
     let cancelled = false;
+    // Справочник уходит сразу и без задержки: от него зависит, какие поля вообще
+    // показывать, и ждать из-за них подсчёт машин на кнопке незачем — иначе панель
+    // фильтров достраивается у посетителя на глазах. Повторов не будет: запрос по
+    // одной и той же строке отдаётся из общего обещания.
+    requestCatalogMeta(metaKey)
+      .then((meta) => {
+        if (!cancelled) setRemoteMeta(meta);
+      })
+      .catch(() => {});
     const timer = window.setTimeout(async () => {
       try {
         // Пока ни один фильтр не выбран, кнопка показывает общее число из загрузочного
         // запроса, поэтому считать то же самое второй раз незачем.
-        const [meta, catalog] = await Promise.all([
-          requestCatalogMeta(metaQuery.toString()),
-          hasActiveFilters ? fetchCarsJson(`/api/cars?${carsQuery}`, controller.signal) : null,
-        ]);
+        if (!hasActiveFilters) return;
+        const catalog = await fetchCarsJson(`/api/cars?${carsQuery}`, controller.signal);
         if (cancelled) return;
-        setRemoteMeta(meta);
-        if (catalog) {
-          countCacheRef.current.set(countKey, catalog.total);
-          setRemoteCount(catalog.total);
-        }
+        countCacheRef.current.set(countKey, catalog.total);
+        setRemoteCount(catalog.total);
       } catch {}
     }, 120);
     return () => {
@@ -3159,9 +3151,49 @@ function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
       <ArticleFaq faq={text?.faq} title={`Частые вопросы про ${modelPage.name}`} />
       </div>
       <ModelPageCatalog modelPage={modelPage} carsState={carsState} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpenCar={openCar} quickViewToggle={quickViewToggle} />
+      <ModelPageWays modelPage={modelPage} cars={carsState.cars} navigate={navigate} />
       <p className="model-page-disclaimer page-width">{text?.disclaimer}</p>
       {quickViewModal}
     </main>
+  );
+}
+
+/* Куда идти со страницы обзора: разделы каталога, в которые попадает эта модель, и
+   другие обзоры той же марки. Раньше обзор был почти тупиком — из него вела одна
+   ссылка в каталог, — а это самые содержательные страницы сайта.
+
+   Кузов и тип двигателя берём у первой загруженной машины модели: держать их руками
+   в конфиге не нужно, а у модели они одни и те же. Пока список машин не пришёл,
+   разделы не показываем — угадывать нечего. */
+function ModelPageWays({ modelPage, cars, navigate }) {
+  const car = (cars || [])[0] || null;
+  const sections = car ? landingsForCar({ brand: modelPage.brand, type: car.type, bodyType: car.bodyType }).slice(0, 6) : [];
+  const siblings = MODEL_PAGES.filter((item) => item.brand === modelPage.brand && item.path !== modelPage.path).slice(0, 12);
+  if (!sections.length && !siblings.length) return null;
+  return (
+    <section className="model-page-ways page-width" aria-labelledby="model-page-ways-title">
+      <h2 id="model-page-ways-title">Где смотреть {modelPage.name} и похожие машины</h2>
+      {sections.length > 0 && (
+        <div className="catalog-landing-links">
+          <b>Разделы каталога</b>
+          <div>
+            {sections.map((landing) => (
+              <AppLink key={landing.path} href={landing.path} navigate={navigate}>{landing.name}</AppLink>
+            ))}
+          </div>
+        </div>
+      )}
+      {siblings.length > 0 && (
+        <div className="catalog-landing-links">
+          <b>Другие модели {modelPage.brand}</b>
+          <div>
+            {siblings.map((page) => (
+              <AppLink key={page.path} href={page.path} navigate={navigate}>{page.name}</AppLink>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -4702,13 +4734,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // есть потолок глубины листания, и без его признака бесконечная прокрутка молотила
   // бы пустые страницы и показывала ошибку загрузки на ровном месте.
   const [remoteHasMore, setRemoteHasMore] = useState(false);
-  const [remoteMeta, setRemoteMeta] = useState({
-    brands: [],
-    models: [],
-    bodyTypes: [],
-    drives: [],
-    availability: {},
-  });
+  const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType)) || EMPTY_CATALOG_META);
   const [remoteLoading, setRemoteLoading] = useState(useApi);
   const [remoteError, setRemoteError] = useState(false);
   const [customSearchOpen, setCustomSearchOpen] = useState(false);
@@ -4923,21 +4949,22 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     setRemoteLoading(true);
     setRemoteError(false);
     const query = requestParams();
-    const metaQuery = new URLSearchParams();
-    if (filters.type !== "Все") metaQuery.set("type", filters.type);
-    if (filters.brand !== "Все марки") metaQuery.set("brand", filters.brand);
-    appendMulti(metaQuery, "bodyType", filters.bodyType, ANY_BODY_TYPE);
-    Promise.all([
-      fetch(`/api/cars?${query}`, { signal: controller.signal }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("catalog unavailable")))),
-      fetch(`/api/catalog/meta?${metaQuery}`, {
-        signal: controller.signal,
-      }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("catalog meta unavailable")))),
-    ])
-      .then(([catalog, meta]) => {
+    // Справочник и список машин идут врозь: какие поля показывать, известно из
+    // справочника, а он отвечает быстрее выдачи. Раньше их ждали вместе, и панель
+    // фильтров достраивалась только после того, как загрузится каталог.
+    requestCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType))
+      .then((meta) => {
+        if (!controller.signal.aborted) setRemoteMeta(meta);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRemoteError(true);
+      });
+    fetch(`/api/cars?${query}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("catalog unavailable"))))
+      .then((catalog) => {
         setRemoteCars(restoreRemoteOrder(catalog.items.map(normalizeImportedCar)));
         setRemoteTotal(catalog.total);
         setRemoteHasMore(Boolean(catalog.hasMore));
-        setRemoteMeta(meta);
       })
       .catch((error) => {
         if (error.name !== "AbortError") setRemoteError(true);
@@ -5164,7 +5191,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         </aside>
         {/* Текстовый блок стоит в той же колонке, что выдача: справа от него —
             карточка сервиса, и правый край блока совпадает с правым краем выдачи. */}
-        {landing ? <CatalogLandingNotes landing={landing} models={models} navigate={navigate} /> : <CatalogSectionLinks navigate={navigate} />}
+        {landing ? <CatalogLandingNotes landing={landing} models={models} navigate={navigate} total={knownResultCount} /> : <CatalogSectionLinks navigate={navigate} />}
       </div>
       <ScrollToTopButton />
       {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
@@ -5205,7 +5232,7 @@ function CatalogSectionLinks({ navigate }) {
 /* Текст страницы марки или типа стоит под выдачей, а не над ней: сверху человеку нужны
    машины, а не чтение. Здесь же ссылки на обзоры моделей этой марки и на соседние
    страницы каталога — по ним поисковик обходит раздел, а человек переходит к похожему. */
-function CatalogLandingNotes({ landing, models, navigate }) {
+function CatalogLandingNotes({ landing, models, navigate, total = null }) {
   const modelPages = landing.brand ? MODEL_PAGES.filter((page) => page.brand === landing.brand) : [];
   const available = new Set((models || []).filter((model) => model !== ANY_MODEL));
   const reviews = modelPages.filter((page) => !available.size || available.has(page.model));
@@ -5239,7 +5266,39 @@ function CatalogLandingNotes({ landing, models, navigate }) {
           </div>
         </div>
       )}
+      <CatalogLandingFaq landing={landing} total={total} />
     </section>
+  );
+}
+
+/* Частые вопросы раздела: те же плашки, что в обзорах моделей, только внутри текстового
+   блока каталога — и с разметкой FAQPage, по которой вопросы попадают прямо в выдачу.
+   Сами вопросы собираются из типа раздела и количества машин (src/landing-faq.js),
+   поэтому у бензинового раздела спрашивают про пошлину по объёму, а у электрического —
+   про квоту. Пока количество машин не пришло, первый вопрос про цену не показываем:
+   выдумывать число нельзя. */
+function CatalogLandingFaq({ landing, total }) {
+  const faq = landingFaq(landing, { total });
+  if (!faq.length) return null;
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faq.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
+  return (
+    <div className="catalog-landing-faq">
+      <h3>{landingFaqTitle(landing)}</h3>
+      <div className="catalog-landing-faq-list">
+        {faq.map((item, index) => (
+          <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} />
+        ))}
+      </div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+    </div>
   );
 }
 
@@ -8424,15 +8483,31 @@ const fetchCarsJson = (url, signal) => fetch(url, { signal }).then((response) =>
 // об одном и том же. Держим обещание по строке запроса: второй потребитель дожидается
 // первого ответа вместо того, чтобы отправлять свой.
 const metaRequests = new Map();
+const rememberMetaRequest = (key, request) => {
+  // Неудачу не запоминаем, иначе следующий выбор фильтра больше не попробует.
+  request.catch(() => metaRequests.delete(key));
+  metaRequests.set(key, request);
+  return request;
+};
+// Запрос справочника, начатый в index.html до загрузки этого файла: подхватываем его,
+// чтобы не спрашивать то же самое второй раз.
+if (window.__boot?.meta) rememberMetaRequest(String(window.__boot.metaQuery || ""), window.__boot.meta);
 const requestCatalogMeta = (query = "") => {
   const key = String(query);
-  if (!metaRequests.has(key)) {
-    const request = fetchCarsJson(`/api/catalog/meta${key ? `?${key}` : ""}`);
-    // Неудачу не запоминаем, иначе следующий выбор фильтра больше не попробует.
-    request.catch(() => metaRequests.delete(key));
-    metaRequests.set(key, request);
-  }
+  if (!metaRequests.has(key)) rememberMetaRequest(key, fetchCarsJson(`/api/catalog/meta${key ? `?${key}` : ""}`));
   return metaRequests.get(key);
+};
+// Тот же справочник, но уже готовым ответом: если загрузочный запрос успел ответить до
+// первой отрисовки, панель фильтров показывает все поля сразу, а не достраивается.
+const bootCatalogMeta = (query = "") => (window.__boot?.metaValue && String(window.__boot.metaQuery || "") === String(query) ? window.__boot.metaValue : null);
+const EMPTY_CATALOG_META = { brands: [], models: [], bodyTypes: [], drives: [], availability: {} };
+// Строка запроса справочника: те же три признака и в каталоге, и в поиске на главной.
+const catalogMetaQuery = (type, brand, bodyType) => {
+  const query = new URLSearchParams();
+  if (type && type !== "Все") query.set("type", type);
+  if (brand && brand !== "Все марки") query.set("brand", brand);
+  appendMulti(query, "bodyType", bodyType, ANY_BODY_TYPE);
+  return query.toString();
 };
 let catalogRequest = null;
 // Same split as the inline script in index.html: the 60-card list is only read by the

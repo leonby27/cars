@@ -75,11 +75,28 @@
         // список не открывает, поэтому там просим одну карточку: загрузочного
         // запроса всё равно достаточно, чтобы узнать размер каталога и что база отвечает.
         const showcase = location.pathname !== "/catalog";
+        // Справочник фильтров решает, какие поля показывать (батарею спрашивают у
+        // электромобиля, объём двигателя — у бензинового). Если спросить его после
+        // того, как соберётся приложение, поля появляются второй волной и панель
+        // фильтров достраивается на глазах. Поэтому спрашиваем сразу, вместе с
+        // каталогом, а на разделах по типу топлива — с тем же отбором, что у раздела.
+        // Спрашиваем только там, где панель фильтров есть с первого экрана: главная,
+        // общий каталог и разделы по типу топлива. У разделов марки и кузова отбор
+        // знает только приложение — там справочник спрашивается как раньше.
+        const metaType = { "/catalog/electric": "Электромобиль", "/catalog/hybrid": "Гибрид", "/catalog/petrol": "ДВС" }[location.pathname];
+        const metaWanted = metaType || location.pathname === "/" || location.pathname === "/catalog";
+        const metaQuery = metaType ? new URLSearchParams({ type: metaType }).toString() : "";
+        const meta = metaWanted ? start(`/api/catalog/meta${metaQuery ? `?${metaQuery}` : ""}`) : null;
         window.__boot = {
           catalog: start(showcase ? "/api/cars?limit=60&sort=variety" : "/api/cars?limit=1&sort=newest"),
           carId: id,
           car: id ? start(`/api/cars/${encodeURIComponent(id)}`) : null,
+          metaQuery,
+          meta,
         };
+        // Готовый ответ кладём рядом: приложение читает его при первой отрисовке,
+        // не дожидаясь даже одного лишнего кадра.
+        meta?.then((value) => { window.__boot.metaValue = value; }).catch(() => {});
       })();
     </script>
     <!-- Яндекс.Метрика. Счётчик считает живых посетителей, поэтому заходы с рабочего

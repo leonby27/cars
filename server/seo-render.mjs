@@ -9,6 +9,7 @@
 import { estimateLandedCost, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
 import { brandNotice } from "../src/brand-notice.js";
+import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
 // Страницы-расчёты нужны подвалу: ссылки на них должны стоять на каждой странице сайта.
 import { TOOL_PAGES } from "../src/tool-pages.js";
 // Первый экран, который браузер показывает до запуска приложения.
@@ -527,10 +528,16 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // их всего два, и раздел электромобилей — самый ценный на сайте — получал ровно
     // одну входящую ссылку.
     const near = others.length ? sectionLinks(others, { skip: landing.path, heading: "Другие разделы каталога" }) : "";
+    // Вопросы — только на первой странице раздела: на страницах 2–50 это был бы один
+    // и тот же блок пятьдесят раз, а вместе с ним и пятьдесят одинаковых разметок FAQ.
+    const questions = page > 1 ? [] : landingFaq(landing, { total });
+    const faq = questions.length
+      ? `<section><h2>${escapeHtml(landingFaqTitle(landing))}</h2><dl>${questions.map((item) => `<dt>${escapeHtml(item.q)}</dt><dd>${escapeHtml(item.a)}</dd>`).join("")}</dl></section>`
+      : "";
     // Заголовок страницы повторяет заголовок раздела: это один и тот же раздел, просто
     // другой его кусок. Номер страницы стоит рядом, в строке с количеством.
     const heading = page > 1 ? `${landing.h1} — страница ${page}` : landing.h1;
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(heading)}</h1>${countLine}${list}${notes}${reviews}${near}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(heading)}</h1>${countLine}${list}${notes}${faq}${reviews}${near}</main>${footer()}`;
     // Разметка списка: по ней поисковик понимает, что это подборка предложений, а не
     // одна страница товара.
     const itemList = {
@@ -562,7 +569,11 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         // сказать поисковику, что машин со второй страницы не существует.
         prev: page > 1 ? routeUrl(pageRoute(landing.path, page - 1)) : null,
         next: page < pages ? routeUrl(pageRoute(landing.path, page + 1)) : null,
-        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]), itemList],
+        schemas: [
+          breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]),
+          itemList,
+          ...(questions.length ? [faqSchema(questions)] : []),
+        ],
       }),
     };
   }
@@ -630,7 +641,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * `cars` — самые доступные машины этой модели, `total` — сколько их всего,
    * `siblings` — другие модели той же марки, `brandLanding` — раздел каталога марки.
    */
-  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing, edges = null }) {
+  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing, edges = null, sections = [], similar = [] }) {
     const canonical = routeUrl(page.path);
     // Вилку берём по всем машинам модели, а не по загруженной дюжине: дюжина — самые
     // доступные, и верхняя граница по ней вышла бы заниженной.
@@ -642,7 +653,20 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const offers = items.length
       ? `<section><h2>${escapeHtml(page.name)} в наличии — цены до Минска</h2>${carLinks(items, 12)}${brandLanding ? `<p><a href="${hrefRoute(brandLanding.path)}">Все ${escapeHtml(page.brand)} в каталоге</a></p>` : ""}</section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/models/")}">О моделях авто</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${availability}${modelPageArticle(page)}${offers}${modelLinks(siblings, { heading: `Другие модели ${page.brand}`, skip: page.path })}</main>${footer()}`;
+    // Разделы каталога, в которые эта модель попадает. Со страницы обзора вела одна
+    // ссылка в каталог — на раздел марки; теперь их столько, во сколько срезов машина
+    // действительно входит: марка, марка с кузовом, кузов, тип двигателя.
+    const catalogWays = sections.length
+      ? pathwayLinks({
+          heading: `Где смотреть ${page.name} и похожие машины`,
+          intro: `${page.name} попадает в эти разделы каталога — в каждом стоит живой список с ценами до Минска.`,
+          links: sections.map((landing) => [landing.path, landing.name, null]),
+        })
+      : "";
+    // Обзоры моделей того же класса у других марок: тот же кузов и тот же тип
+    // двигателя. Своей марки здесь нет — она идёт отдельным блоком ниже.
+    const alike = modelLinks(similar, { heading: `Похожие модели других марок`, skip: page.path });
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/models/")}">О моделях авто</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${availability}${modelPageArticle(page)}${offers}${catalogWays}${alike}${modelLinks(siblings, { heading: `Другие модели ${page.brand}`, skip: page.path })}</main>${footer()}`;
     const schemas = [
       breadcrumbsSchema([["Главная", "/"], ["О моделях авто", "/models/"], [page.name, page.path]]),
     ];

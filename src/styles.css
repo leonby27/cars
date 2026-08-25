@@ -1386,6 +1386,29 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   grid-column: 1;
   margin-top: 22px;
 }
+/* Вопросы раздела стоят последним блоком в том же тексте: заголовок мельче, чем у
+   самого блока, плашки — на светлой подложке, как ссылки рядом. Рамки нет: блок
+   отделён от текста фоном плашек и отступом. */
+.catalog-landing-faq {
+  margin-top: 22px;
+}
+.catalog-landing-faq h3 {
+  margin: 0 0 12px;
+  font-size: 21px;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+.catalog-landing-faq-list {
+  display: grid;
+  gap: 10px;
+}
+.catalog-landing-faq .home-faq-item {
+  background: var(--panel);
+  box-shadow: none;
+}
+html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
+  background: var(--surface);
+}
 .filter-panel {
   padding: 18px;
   border: 1px solid var(--line);
@@ -11675,6 +11698,7 @@ html[data-theme="dark"] .models-index-photo {
 /* Частые вопросы и переходы к другим расчётам лежат в такой же подложке, как
    текстовые блоки страницы. */
 .model-page-faq,
+.model-page-ways,
 .tool-page-links {
   width: min(860px, calc(100% - 48px));
   padding: 40px;
@@ -11684,10 +11708,22 @@ html[data-theme="dark"] .models-index-photo {
   box-shadow: 0 18px 50px rgba(24, 27, 32, 0.1);
 }
 html[data-theme="dark"] .model-page-faq,
+html[data-theme="dark"] .model-page-ways,
 html[data-theme="dark"] .tool-page-links {
   border-color: transparent;
   background: var(--surface);
   box-shadow: none;
+}
+.model-page-ways h2 {
+  margin: 0 0 6px;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+/* Ссылки внутри блока — такие же плашки, как в тексте раздела каталога, только
+   подложка здесь светлая, поэтому плашке нужен более заметный фон. */
+.model-page-ways .catalog-landing-links a {
+  background: var(--header-control-bg);
 }
 .model-page-faq h2 {
   margin: 0 0 18px;
@@ -11926,6 +11962,7 @@ html[data-theme="dark"] .model-page-cars-nav {
   /* На узком экране рамка подложки только сужала бы текст: оставляем поля меньше. */
   .model-page-body,
   .model-page-faq,
+  .model-page-ways,
   .tool-page-links {
     padding: 20px 18px;
   }

@@ -93,3 +93,28 @@ test("блок ссылок на разделы собирается по вид
   const withoutSelf = render().sectionLinks(CATALOG_LANDINGS, { skip: "/catalog/byd" });
   assert.doesNotMatch(withoutSelf, /<a href="\/catalog\/byd">/);
 });
+
+test("обзор ведёт в разделы каталога своего класса и к похожим моделям других марок", () => {
+  // Со страницы обзора вела одна ссылка в каталог — на раздел марки. Теперь их
+  // столько, во сколько срезов машина действительно входит, плюс обзоры моделей того
+  // же класса у других марок: это самые содержательные страницы сайта, и раньше вес
+  // с них дальше никуда не шёл.
+  const sections = landingsForCar({ brand: "BYD", type: "Электромобиль", bodyType: "Седан" }).slice(0, 6);
+  const similar = [findModelPage("/models/tesla-model-3"), findModelPage("/models/xiaomi-su7")].filter(Boolean);
+  const { html } = render().modelPage({ modelPage: page, cars, total: 616, siblings, brandLanding, sections, similar });
+  assert.match(html, /<h2>Где смотреть BYD Han и похожие машины<\/h2>/);
+  assert.match(html, /<a href="\/catalog\/byd-sedan">/);
+  assert.match(html, /<a href="\/catalog\/electric-sedan">/);
+  assert.match(html, /<h2>Похожие модели других марок<\/h2>/);
+  assert.match(html, /<a href="\/models\/tesla-model-3">/);
+  // Своя марка в «похожих» не участвует — она идёт отдельным блоком.
+  assert.ok(!similar.some((item) => item.brand === "BYD"));
+});
+
+test("без разделов и похожих моделей страница остаётся целой", () => {
+  // Пока каталог не прогрузился, класс модели неизвестен — блоков просто нет.
+  const { html } = render().modelPage({ modelPage: page, cars, total: 616, siblings, brandLanding });
+  assert.ok(!html.includes("Где смотреть BYD Han"));
+  assert.ok(!html.includes("Похожие модели других марок"));
+  assert.match(html, /<h2>Другие модели BYD<\/h2>/);
+});

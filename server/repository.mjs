@@ -328,6 +328,34 @@ export async function brandStock() {
   return value;
 }
 
+// Кузов и тип двигателя каждой модели с числом машин — одним запросом на весь каталог
+// (около семисот строк).
+//
+// Зачем: обзор модели был почти тупиком — со страницы Haval H6 вела одна ссылка в
+// каталог и две на другие обзоры Haval, потому что обзоров этой марки всего три. По
+// этой таблице обзор находит похожие модели других марок: тот же кузов, тот же тип
+// двигателя, больше всего машин в наличии. Класс модели берётся из живого каталога,
+// поэтому руками его нигде держать не нужно.
+//
+// Держим в памяти десять минут: состав каталога меняется раз в сутки, после ночного
+// импорта, а страницы обзоров робот запрашивает подряд.
+const MODEL_CLASS_TTL_MS = 10 * 60 * 1000;
+let modelClassCache = { at: 0, value: null };
+
+export async function modelClassStock() {
+  const now = Date.now();
+  if (modelClassCache.value && now - modelClassCache.at < MODEL_CLASS_TTL_MS) return modelClassCache.value;
+  const { rows } = await pool.query(`SELECT v.brand, v.model, v.powertrain,
+      NULLIF(v.specifications->>'bodyType','') AS body_type, count(*)::int AS count
+    FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+    WHERE l.status='active'
+    GROUP BY v.brand, v.model, v.powertrain, v.specifications->>'bodyType'
+    ORDER BY count DESC`);
+  const value = rows.map((row) => ({ brand:row.brand, model:row.model, powertrain:row.powertrain, bodyType:row.body_type, count:row.count }));
+  modelClassCache = { at: now, value };
+  return value;
+}
+
 export async function getCatalogMeta(type, brand, bodyType) {
   const selectedBodyTypes = multiParamValues(bodyType, "Все кузова", { splitCommas:true });
   const values = [];
