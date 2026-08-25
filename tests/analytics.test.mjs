@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, createAnalyticsToken, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
@@ -121,5 +121,20 @@ test("слишком длинный запрос обрезается", () => {
     properties:{ query:"а".repeat(500) },
   });
   assert.equal(event.properties.query.length, 120);
+});
+
+// Красные счётчики считают новое с прошлого захода. Дата приходит из браузера,
+// поэтому ей нельзя верить на слово.
+test("момент последнего захода приводится к разумному", () => {
+  const now = Date.parse("2026-08-25T09:00:00Z");
+  const hourAgo = "2026-08-25T08:00:00Z";
+  assert.equal(seenMoment(hourAgo, now), new Date(hourAgo).toISOString(), "нормальная дата остаётся как есть");
+  // Пусто, мусор и дата из будущего — считаем, что видели всё только что.
+  for (const bad of ["", null, "вчера", "2027-01-01T00:00:00Z"]) {
+    assert.equal(seenMoment(bad, now), new Date(now).toISOString(), String(bad));
+  }
+  // Дальше месяца назад не заглядываем: цифра на ярлыке должна оставаться понятной.
+  assert.equal(seenMoment("2020-01-01T00:00:00Z", now), new Date(now - 30 * 86_400_000).toISOString());
+  assert.deepEqual(ANALYTICS_SECTIONS, ["overview", "leads", "vehicles", "searches", "customers"]);
 });
 

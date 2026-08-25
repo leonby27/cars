@@ -91,6 +91,9 @@ html[data-theme="dark"] .analytics-kpis article, html[data-theme="dark"] .analyt
 .analytics-navigation button.active { background:var(--surface); color:var(--ink); }
 .analytics-navigation button.active > svg { color:var(--accent); }
 .analytics-navigation button > b { margin-left:auto; min-width:22px; height:22px; display:grid; place-items:center; padding:0 6px; border-radius:999px; background:var(--accent); color:#fff; font-size:16px; }
+/* Красный кружок — новое с прошлого захода в этот пункт. Общее число заявок
+   рядом с «Заявками» новостью не является, поэтому оно спокойного цвета. */
+.analytics-navigation button > b.analytics-badge-total { background:var(--line-strong); color:var(--muted); }
 .analytics-sidebar-footer { margin-top:9px; padding-top:10px; border-top:1px solid var(--line); }
 .analytics-sidebar-danger { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:0 13px; border:0; border-radius:calc(10px * var(--corner-scale)); background:transparent; color:var(--muted); font-size:16px; font-weight:700; }
 .analytics-sidebar-danger:hover { background:var(--accent-soft); color:var(--accent-dark); }

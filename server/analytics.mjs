@@ -278,6 +278,40 @@ export async function getAnalyticsDashboard(daysValue) {
   };
 }
 
+// Красные счётчики у пунктов раздела: сколько нового появилось с тех пор, как
+// сотрудник в последний раз открывал этот пункт. Момент последнего просмотра
+// приходит из браузера — он там и хранится, у каждого свой. Дата, которой браузер
+// не прислал (или прислал мусор), считается «только что»: показывать всю историю
+// как новинку хуже, чем не показать ничего.
+export const ANALYTICS_SECTIONS = ["overview", "leads", "vehicles", "searches", "customers"];
+
+export const seenMoment = (value, now = Date.now()) => {
+  const moment = new Date(String(value || ""));
+  if (Number.isNaN(moment.getTime()) || moment.getTime() > now) return new Date(now).toISOString();
+  // Дальше месяца назад не заглядываем: раздел и так показывает период,
+  // а огромное число на ярлыке ни о чём не говорит.
+  return new Date(Math.max(moment.getTime(), now - 30 * 86_400_000)).toISOString();
+};
+
+export async function getAnalyticsUpdates(seenBySection = {}, { now = Date.now() } = {}) {
+  const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
+  const [overview, vehicles, searches, leads, customers] = await Promise.all([
+    pool.query("SELECT count(DISTINCT visitor_id)::int AS n FROM analytics_events WHERE created_at > $1", [since.overview]),
+    pool.query("SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1", [since.vehicles]),
+    pool.query("SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND btrim(coalesce(properties->>'query','')) <> ''", [since.searches]),
+    pool.query(`SELECT (SELECT count(*) FROM order_drafts WHERE created_at > $1 AND ${notStaffContact("contact")})::int
+      + (SELECT count(*) FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")})::int AS n`, [since.leads]),
+    pool.query("SELECT count(*)::int AS n FROM customer_accounts WHERE created_at > $1 AND NOT staff", [since.customers]),
+  ]);
+  return {
+    overview:overview.rows[0].n,
+    vehicles:vehicles.rows[0].n,
+    searches:searches.rows[0].n,
+    leads:leads.rows[0].n,
+    customers:customers.rows[0].n,
+  };
+}
+
 // Заявки собираются из двух мест сразу: формы на сайте пишут в `order_drafts`, а
 // кабинет — в `customer_orders`. Менеджеру важен один список по дате, поэтому обе
 // таблицы приводятся к общей форме здесь, а не в браузере.

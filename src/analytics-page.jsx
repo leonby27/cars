@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarProfile, ChartLineUp, MagnifyingGlass, ShieldCheck, SignOut, Trash, Tray, UsersThree } from "@phosphor-icons/react";
 
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
@@ -314,6 +314,16 @@ function CustomersSection({ data }) {
   );
 }
 
+// Когда сотрудник в последний раз открывал каждый пункт. Живёт в браузере:
+// раздел смотрят с разных устройств, и у каждого свой «прочитано».
+const seenKey = "abcars-analytics-seen";
+const readSeen = () => {
+  try { return JSON.parse(window.localStorage.getItem(seenKey)) || {}; } catch { return {}; }
+};
+const writeSeen = (value) => {
+  try { window.localStorage.setItem(seenKey, JSON.stringify(value)); } catch { /* приватный режим */ }
+};
+
 const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:false },
@@ -324,6 +334,41 @@ const sections = [
 
 function Dashboard({ data, days, setDays, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads }) {
   const [section, setSection] = useState("leads");
+  // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
+  const [updates, setUpdates] = useState({});
+  const seenRef = useRef(null);
+  if (seenRef.current === null) {
+    const stored = readSeen();
+    const now = new Date().toISOString();
+    // Пункт, в который ещё ни разу не заходили, отсчитывает новое от этой минуты:
+    // показать всю прошлую историю как непрочитанное — только напугать цифрой.
+    for (const item of sections) if (!stored[item.id]) stored[item.id] = now;
+    seenRef.current = stored;
+    writeSeen(stored);
+  }
+  // Открытый пункт считается просмотренным всё время, пока он открыт, — как
+  // непрочитанные сообщения в чате: смотришь на них, и они перестают гореть.
+  const markSeen = useCallback((id) => {
+    seenRef.current = { ...seenRef.current, [id]:new Date().toISOString() };
+    writeSeen(seenRef.current);
+    setUpdates((current) => ({ ...current, [id]:0 }));
+  }, []);
+  const openSection = (id) => {
+    markSeen(id);
+    setSection(id);
+  };
+  const sectionRef = useRef(section);
+  sectionRef.current = section;
+  const loadUpdates = useCallback(async () => {
+    seenRef.current = { ...seenRef.current, [sectionRef.current]:new Date().toISOString() };
+    writeSeen(seenRef.current);
+    try {
+      const response = await fetch(`/api/analytics/updates?${new URLSearchParams(seenRef.current)}`, { credentials:"same-origin" });
+      if (response.ok) setUpdates(await response.json());
+    } catch { /* счётчики — не повод ломать раздел */ }
+  }, []);
+  // Считаем заново при каждом обновлении среза: и при заходе, и после кнопки «обновить».
+  useEffect(() => { loadUpdates(); }, [data, leads, loadUpdates]);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState("");
@@ -360,11 +405,13 @@ function Dashboard({ data, days, setDays, reload, logout, leads, leadsLoading, l
           <nav className="analytics-navigation" aria-label="Разделы аналитики">
             {sections.map((item) => {
               const Icon = item.icon;
+              const fresh = Number(updates[item.id]) || 0;
               return (
-                <button key={item.id} type="button" className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => setSection(item.id)}>
+                <button key={item.id} type="button" className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => openSection(item.id)}>
                   <Icon size={21} weight="duotone" />
                   <span>{item.label}</span>
-                  {item.id === "leads" && leads.length ? <b>{leads.length}</b> : null}
+                  {fresh ? <b title={`Нового с прошлого захода: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b>
+                    : item.id === "leads" && leads.length ? <b className="analytics-badge-total" title="Всего заявок">{leads.length}</b> : null}
                 </button>
               );
             })}
