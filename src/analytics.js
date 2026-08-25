@@ -48,7 +48,7 @@ export function trackEvent(eventName, details = {}) {
   if (skipThisVisit()) return;
   // У события про машину примета — сама машина: «быстрый просмотр» из каталога и
   // открытая следом карточка — это один и тот же взгляд, а не два.
-  if (isRepeatEvent(`${eventName}|${details.listingId || window.location.pathname}`)) return;
+  if (isRepeatEvent(`${eventName}|${details.listingId || details.properties?.query || window.location.pathname}`)) return;
   const payload = {
     eventId:randomId(),
     visitorId:storedId(window.localStorage, visitorKey),

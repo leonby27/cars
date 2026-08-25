@@ -101,3 +101,25 @@ test("служебные аккаунты вырезаются из подсчё
   assert.match(notStaffContact("contact"), /regexp_replace\(contact, '\\D', '', 'g'\) NOT IN/);
   assert.match(notStaffContact("d.contact"), /SELECT phone FROM customer_accounts WHERE staff AND phone <> ''/);
 });
+
+// Строку поиска в событии принимаем, всё остальное из свойств выкидываем:
+// приём событий открыт без пароля, туда нельзя пускать произвольные данные.
+test("событие поиска несёт запрос и число найденных машин", () => {
+  const event = normalizeAnalyticsEvent({
+    eventId:"e1", visitorId:"v1", sessionId:"s1", eventName:"search_query", path:"/",
+    properties:{ query:"  джили галакси  ", found:"37", phone:"+375291234567" },
+  });
+  assert.equal(event.error, undefined);
+  assert.equal(event.properties.query, "джили галакси");
+  assert.equal(event.properties.found, 37);
+  assert.equal(event.properties.phone, undefined, "лишние свойства должны отсекаться");
+});
+
+test("слишком длинный запрос обрезается", () => {
+  const event = normalizeAnalyticsEvent({
+    eventId:"e2", visitorId:"v1", sessionId:"s1", eventName:"search_query", path:"/",
+    properties:{ query:"а".repeat(500) },
+  });
+  assert.equal(event.properties.query.length, 120);
+});
+

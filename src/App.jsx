@@ -3549,7 +3549,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     restoredHeroRef.current = window.history.state?.heroReturn ? readHomeSearchReturn() : null;
   }
   const restoredHero = restoredHeroRef.current;
-  const [heroQuery, setHeroQuery] = useState(restoredHero?.query || "");
+  // Готовый запрос можно передать адресом: /?q=джили галакси. Так открываются
+  // строки из раздела «Что ищут» — сразу видно, что человек увидел в ответ.
+  const [heroQuery, setHeroQuery] = useState(() => restoredHero?.query || new URLSearchParams(window.location.search).get("q") || "");
   const [heroSearch, setHeroSearch] = useState(() => (restoredHero ? {
     items: restoredHero.items,
     total: Number(restoredHero.total) || restoredHero.items.length,
@@ -3679,6 +3681,22 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     };
   }, [heroQuery, heroSort, apiMode, cars, currency, heroShuffleSeed]);
   const searching = heroSearch !== null;
+  // Поиск работает прямо во время набора, поэтому в статистику идёт не каждая буква,
+  // а «отстоявшийся» запрос: строка не менялась полторы секунды и выдача уже
+  // посчитана. Записываем и число найденных машин — по нему видно запросы, на
+  // которые каталогу нечего ответить. Паузу посреди набора это не ловит: если
+  // человек задумался после «джили», а потом дописал «галакси», в разделе
+  // останется только самая полная строка.
+  const searchReported = useRef("");
+  useEffect(() => {
+    const query = heroQuery.trim();
+    if (query.length < 2 || !heroSearch || heroSearch.loading || searchReported.current === query) return undefined;
+    const timer = window.setTimeout(() => {
+      searchReported.current = query;
+      trackEvent("search_query", { properties:{ query, found:Number(heroSearch.total) || 0 } });
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [heroQuery, heroSearch]);
   // Уйти с главной можно куда угодно (карточка, «В каталог», меню), поэтому
   // признак «сюда вернутся к поиску» и снимок выдачи поддерживаем всё время,
   // пока поиск активен. history пишем только при смене признака — часто нельзя,

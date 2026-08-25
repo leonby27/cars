@@ -10,6 +10,7 @@ export const ANALYTICS_EVENTS = new Set([
   "favorite_added",
   "search_saved",
   "custom_search_submitted",
+  "search_query",
 ]);
 
 const COOKIE_NAME = "abcars_analytics";
@@ -30,6 +31,11 @@ export function normalizeAnalyticsEvent(body = {}) {
   // телефонами. Имя и телефон берутся из таблицы аккаунтов, где они уже есть.
   const safeProperties = {};
   if (properties.source) safeProperties.source = text(properties.source, 40);
+  // Строка поиска — единственный свободный текст, который мы принимаем от браузера.
+  // Приём событий открыт без пароля, поэтому длину режем и ничего, кроме строки
+  // и числа найденных машин, из свойств не берём.
+  if (properties.query) safeProperties.query = text(properties.query, 120);
+  if (Number.isFinite(Number(properties.found))) safeProperties.found = Math.max(0, Math.min(1_000_000, Math.round(Number(properties.found))));
   return {
     eventId,
     visitorId,
@@ -56,6 +62,9 @@ const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,sess
          -- У события про машину примета — сама машина: «быстрый просмотр» в каталоге
          -- и открытая следом карточка лежат на разных адресах, но взгляд один.
          AND ($6 IS NOT NULL OR path=$5)
+         -- Два разных запроса в строке поиска — два разных события, даже если их
+         -- набрали подряд на одной странице.
+         AND coalesce(properties->>'query','') = coalesce(($8::jsonb)->>'query','')
          AND created_at > now() - interval '${ANALYTICS_REPEAT_SECONDS} seconds'
      )
      ON CONFLICT (event_id) DO NOTHING`;
@@ -138,7 +147,7 @@ export async function getAnalyticsDashboard(daysValue) {
   // вкладка, закрытая страница) и его может подделать кто угодно, а строка в таблице
   // появляется только от настоящего действия. Из событий берём лишь то, чего в базе нет:
   // посетителей, заходы и просмотры карточек.
-  const [summaryResult,actionsResult,dailyResult,vehiclesResult,registrationsResult,recentResult,accountsResult,actionsDailyResult] = await Promise.all([
+  const [summaryResult,actionsResult,dailyResult,vehiclesResult,registrationsResult,recentResult,accountsResult,searchesResult,actionsDailyResult] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id)::int AS visitors,
       count(DISTINCT session_id)::int AS sessions,
@@ -194,6 +203,31 @@ export async function getAnalyticsDashboard(daysValue) {
     // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
     pool.query(`SELECT created_at::date::text AS day, count(*)::int AS registrations
       FROM customer_accounts WHERE created_at >= $1 AND NOT staff GROUP BY 1`, [cutoff]),
+    // Что вводят в строку поиска. Записывается только «отстоявшийся» запрос, но
+    // человек мог сделать паузу посреди набора — тогда в одном сеансе окажутся
+    // и «джили», и «джили галакси». Показываем самое полное: строку выкидываем,
+    // если в том же сеансе рядом есть запрос, который начинается с неё.
+    pool.query(`WITH asked AS (
+        SELECT session_id, visitor_id, created_at,
+          btrim(properties->>'query') AS query,
+          nullif(properties->>'found','')::int AS found
+        FROM analytics_events
+        WHERE event_name='search_query' AND created_at >= $1 AND btrim(coalesce(properties->>'query','')) <> ''
+      ), settled AS (
+        SELECT * FROM asked a WHERE NOT EXISTS (
+          SELECT 1 FROM asked longer
+          WHERE longer.session_id = a.session_id
+            AND longer.query <> a.query
+            AND left(longer.query, length(a.query)) = a.query
+            AND longer.created_at BETWEEN a.created_at AND a.created_at + interval '10 minutes'
+        )
+      )
+      SELECT query,
+        count(*)::int AS asked,
+        count(DISTINCT visitor_id)::int AS people,
+        max(found)::int AS found,
+        max(created_at) AS last_asked
+      FROM settled GROUP BY query ORDER BY asked DESC, last_asked DESC LIMIT 60`, [cutoff]),
     pool.query(`SELECT day, sum(availability_clicks)::int AS availability_clicks, sum(custom_searches)::int AS custom_searches FROM (
         SELECT created_at::date::text AS day, count(*)::int AS availability_clicks, 0 AS custom_searches
           FROM customer_orders WHERE created_at >= $1 AND ${notStaffAccount("customer_id")} GROUP BY 1
@@ -240,6 +274,7 @@ export async function getAnalyticsDashboard(daysValue) {
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
     recent:recentResult.rows.map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),
+    searches:searchesResult.rows.map((row) => ({ query:row.query, asked:row.asked, people:row.people, found:row.found, lastAskedAt:row.last_asked })),
   };
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CarProfile, ChartLineUp, ShieldCheck, SignOut, Trash, Tray, UsersThree } from "@phosphor-icons/react";
+import { CarProfile, ChartLineUp, MagnifyingGlass, ShieldCheck, SignOut, Trash, Tray, UsersThree } from "@phosphor-icons/react";
 
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 const formatDate = (value, withTime = false) => {
@@ -43,6 +43,7 @@ const eventLabels = {
   favorite_added:"Добавление в избранное",
   search_saved:"Сохранение поиска",
   custom_search_submitted:"Заявка на индивидуальный подбор",
+  search_query:"Запрос в поиске",
 };
 const leadKindLabels = {
   availability:"Запрос актуальности",
@@ -287,6 +288,17 @@ function VehiclesSection({ data }) {
   );
 }
 
+function SearchesSection({ data }) {
+  const rows = data.searches || [];
+  const empty = rows.filter((item) => Number(item.found) === 0).length;
+  return (
+    <section className="analytics-panel">
+      <div className="analytics-panel-heading"><div><h2>Что ищут</h2><p>Записывается готовый запрос, а не набор по буквам: строка попадает сюда, когда её перестали править{empty ? ` · без результата: ${empty}` : ""}</p></div></div>
+      <div className="analytics-table-wrap"><table><thead><tr><th>Запрос</th><th>Искали</th><th>Людей</th><th>Нашлось</th><th>Последний раз</th></tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.query} className={Number(item.found) === 0 ? "analytics-row-warning" : undefined}><td><a href={`/?q=${encodeURIComponent(item.query)}`}>{item.query}</a></td><td>{formatNumber(item.asked)}</td><td>{formatNumber(item.people)}</td><td>{item.found === null || item.found === undefined ? "—" : formatNumber(item.found)}</td><td>{formatDate(item.lastAskedAt, true)}</td></tr>) : <tr><td colSpan="5">В строке поиска пока ничего не набирали.</td></tr>}</tbody></table></div>
+    </section>
+  );
+}
+
 function CustomersSection({ data }) {
   return (
     <div className="analytics-two-column">
@@ -306,6 +318,7 @@ const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:false },
   { id:"vehicles", label:"Автомобили", icon:CarProfile, ranged:true },
+  { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
 ];
 
@@ -365,6 +378,7 @@ function Dashboard({ data, days, setDays, reload, logout, leads, leadsLoading, l
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
         </div>
       </div>
