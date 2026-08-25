@@ -60,12 +60,12 @@ test("keeps combustion cars out, including 48V mild hybrids", () => {
   assert.equal(normalizeChe168Energy({ fuelname: "Pure Electric" }, []), "Электромобиль");
 });
 
-test("starts the petrol import a year later than the electric one", () => {
-  assert.equal(ICE_IMPORT_MIN_YEAR, 2021);
-  // Машина 2020 года к оформлению уже старше пяти лет: ставка за кубический
-  // сантиметр вдвое выше, и такую машину в Беларуси не купят.
-  assert.match(importPolicyViolation({ brand: "BMW", year: 2020, type: "ДВС" }, { combustion: true }), /2021/);
-  assert.equal(isEligibleNewImport({ brand: "BMW", year: 2021, type: "ДВС" }, { combustion: true }), true);
+test("starts the petrol import at the same year as the electric one", () => {
+  assert.equal(ICE_IMPORT_MIN_YEAR, 2020);
+  // Машина 2020 года к оформлению старше пяти лет и приезжает дороже машины
+  // 2021 года, но расчёт на карточке показывает это честно — возим и такие.
+  assert.equal(isEligibleNewImport({ brand: "BMW", year: 2020, type: "ДВС" }, { combustion: true }), true);
+  assert.match(importPolicyViolation({ brand: "BMW", year: 2019, type: "ДВС" }, { combustion: true }), /2020/);
   // Электромобилям и гибридам граница не меняется.
   assert.equal(isEligibleNewImport({ brand: "BYD", year: 2020, type: "Электромобиль" }), true);
   assert.equal(isEligibleNewImport({ brand: "Li Auto", year: 2020, type: "Гибрид" }), true);

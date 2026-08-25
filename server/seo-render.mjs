@@ -8,6 +8,7 @@
 // на выходе строка. Поэтому модуль проверяется тестами без сборки и без Postgres.
 import { estimateLandedCost, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
+import { brandNotice } from "../src/brand-notice.js";
 // Страницы-расчёты нужны подвалу: ссылки на них должны стоять на каждой странице сайта.
 import { TOOL_PAGES } from "../src/tool-pages.js";
 // Первый экран, который браузер показывает до запуска приложения.
@@ -348,6 +349,13 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const modelLink = modelPage
       ? `<p><a href="${hrefRoute(`${modelPage.path}/`)}">Обзор модели ${escapeHtml(modelPage.name)}</a> — чем отличаются версии, что менялось по годам и на что смотреть при выборе.</p>`
       : "";
+    // Особенность марки, из-за которой итог может вырасти (пока это подписка на батарею
+    // у NIO): на готовой странице она тоже нужна — её видят и робот, и человек до того,
+    // как загрузится приложение.
+    const notice = brandNotice(car.brand);
+    const noticeBlock = notice
+      ? `<p><strong>${escapeHtml(notice.title)}.</strong> ${notice.lines.map((line) => escapeHtml(line)).join(" ")}</p>`
+      : "";
     const relatedBlock = related.length
       ? `<section><h2>Другие ${escapeHtml(modelName || "автомобили")} в наличии</h2>${carLinks(related, 12)}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>`
       : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
@@ -356,7 +364,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const sectionBlock = sections.length
       ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${modelLink}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${noticeBlock}${modelLink}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({

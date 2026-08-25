@@ -48,6 +48,7 @@
   --yellow-ink: #17191c;
   /* Оранжевый для предупреждений, которые не про квоту на электромобили. */
   --warn-ink: #b45309;
+  --warn-soft: #fff4e6;
   --green: #1b8b55;
   --motion-fast: 140ms;
   --motion-medium: 190ms;
@@ -712,13 +713,8 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   gap: 24px;
   margin-bottom: 20px;
 }
-.popular-brands-heading h2 {
-  margin: 0;
-  font-size: 32px;
-  letter-spacing: -1.1px;
-}
-.popular-brands-heading button,
-.popular-brands-heading .popular-brands-all {
+.popular-brands-heading > button,
+.popular-brands-heading > .popular-brands-all {
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -733,13 +729,113 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   text-decoration: none;
   cursor: pointer;
 }
-.popular-brands-heading a.popular-brands-all:any-link {
+.popular-brands-heading > a.popular-brands-all:any-link {
   color: inherit;
   text-decoration: none;
 }
-.popular-brands-heading button:hover,
-.popular-brands-heading .popular-brands-all:hover {
+.popular-brands-heading > button:hover,
+.popular-brands-heading > .popular-brands-all:hover {
   background: #e3e5e8;
+}
+/* Тот же вид, что у переключателя валюты в шапке: подложка-пилюля, выбранное
+   значение приподнято. Высота — как у кнопки «Все предложения» в той же строке. */
+.brand-type-switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  padding: 4px;
+  border-radius: calc(13px * var(--corner-scale));
+  background: var(--surface);
+}
+/* Плашка едет за выбранной кнопкой. Пока её место не замерено (первая отрисовка,
+   разметка с сервера), выбранное значение подсвечено фоном самой кнопки. */
+.brand-type-switch-pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: calc(9px * var(--corner-scale));
+  background: var(--ink);
+  transition:
+    transform var(--motion-medium) var(--motion-ease),
+    width var(--motion-medium) var(--motion-ease);
+}
+.brand-type-switch button {
+  position: relative;
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: calc(9px * var(--corner-scale));
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+.brand-type-switch button:hover {
+  color: var(--ink);
+}
+/* Выбранное значение — на инверсии: в светлой теме почти чёрная плашка со светлой
+   надписью, в тёмной наоборот. Так видно, что выбрано, без второго акцентного цвета. */
+.brand-type-switch button.active {
+  background: var(--ink);
+  color: var(--panel);
+  box-shadow: none;
+}
+.brand-type-switch--measured button.active {
+  background: transparent;
+}
+/* Обычный список вместо кнопок — только на узких экранах. Селектор с родителем,
+   иначе общее правило списков ниже в файле снова его показывает. */
+.popular-brands-heading > .brand-type-select {
+  display: none;
+}
+.brand-type-switch button:active {
+  transform: scale(0.96);
+}
+.brand-type-switch::-webkit-scrollbar {
+  display: none;
+}
+.popular-brands-empty {
+  margin: 0;
+  padding: 18px 0 6px;
+  color: var(--muted-contrast);
+  font-size: 17px;
+}
+.popular-brands-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 24px;
+}
+.popular-brands-more button {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: calc(11px * var(--corner-scale));
+  background: var(--surface);
+  color: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.popular-brands-more button:hover {
+  background: #e3e5e8;
+}
+/* Стрелка смотрит вниз, пока список свёрнут, и вверх — когда он раскрыт. */
+.popular-brands-more button[aria-expanded="true"] svg {
+  transform: rotate(180deg);
 }
 /* Multi-column, not grid: the alphabet has to run down each column and
    continue in the next one. A grid fills rows first, which reads the list
@@ -3973,20 +4069,43 @@ body.header-menu-open .detail-floating-availability {
   }
   .popular-brands-heading {
     align-items: center;
+    gap: 10px;
     margin-bottom: 15px;
   }
-  .popular-brands-heading h2 {
-    font-size: 27px;
-  }
-  .popular-brands-heading button,
-  .popular-brands-heading .popular-brands-all {
-    width: 38px;
-    min-height: 38px;
-    flex: 0 0 38px;
+  .popular-brands-heading > button,
+  .popular-brands-heading > .popular-brands-all {
+    width: 44px;
+    min-height: 44px;
+    flex: 0 0 44px;
     justify-content: center;
     gap: 0;
     padding: 0;
     font-size: 0;
+  }
+  /* Четыре кнопки в ширину телефона не встают — вместо них список. */
+  .brand-type-switch {
+    display: none;
+  }
+  /* Ширина под самую длинную подпись, а не во всю строку: список выбирает тип, а не
+     принимает текст. Она же постоянная — от выбора поле не прыгает. Высота — как у
+     круглой кнопки рядом. Своей ширины у поля нет: надпись внутри лежит отдельным
+     слоем и на размер не влияет. */
+  .popular-brands-heading > .brand-type-select {
+    width: 202px;
+    max-width: calc(100% - 54px);
+    flex: 0 0 auto;
+    display: flex;
+    height: 44px;
+    border-radius: calc(12px * var(--corner-scale));
+  }
+  .popular-brands-more {
+    padding-top: 16px;
+  }
+  .popular-brands-more button {
+    width: 100%;
+    justify-content: center;
+    padding: 0 16px;
+    font-size: 15px;
   }
   .popular-brands-grid {
     columns: 2;
@@ -4660,6 +4779,38 @@ body.header-menu-open .detail-floating-availability {
    здесь взять красный, разные случаи сольются в один. */
 .price-customs-alert-warn {
   color: var(--warn-ink);
+}
+/* Особенность марки под карточкой цены (пока это батарея NIO). Отделяется
+   оранжевым фоном, а не рамкой: рамок в правой колонке нет, лишняя выбивалась
+   бы из ряда. Тот же оранжевый, что у предупреждений о растаможке. */
+.brand-notice {
+  margin: 14px 0 0;
+  padding: 15px 17px 16px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--warn-soft);
+}
+.brand-notice-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--warn-ink);
+}
+.brand-notice-heading svg {
+  flex: 0 0 auto;
+}
+.brand-notice-heading b {
+  font-size: 15px;
+  line-height: 1.3;
+}
+.brand-notice p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.brand-notice p + p {
+  margin-top: 8px;
 }
 .price-assumption {
   display: block;
@@ -9939,6 +10090,7 @@ html[data-theme="dark"] .modal-close {
 /* Dark theme component states: keep interaction hierarchy deliberate. */
 html[data-theme="dark"] {
   --warn-ink: #f0a34a;
+  --warn-soft: rgba(240, 163, 74, 0.13);
   --line-strong: #454b55;
   --focus-ring: #59616c;
   --page: #111315;
@@ -9961,7 +10113,7 @@ html[data-theme="dark"] .auth-page {
 html[data-theme="dark"] :where(.primary, .primary:hover, .primary:focus-visible) {
   color: var(--yellow-ink);
 }
-html[data-theme="dark"] :where(.popular-brands-heading button, .popular-brands-heading .popular-brands-all, .auth-switch button.active) {
+html[data-theme="dark"] :where(.popular-brands-heading > button, .popular-brands-heading > .popular-brands-all, .popular-brands-more button, .auth-switch button.active) {
   background: #30353d;
   color: var(--ink);
   box-shadow: none;
@@ -9995,8 +10147,9 @@ html[data-theme="dark"] .mobile-filter-sheet-header button {
 html[data-theme="dark"] .mobile-filter-sheet-header button:hover {
   background: #383d45;
 }
-html[data-theme="dark"] .popular-brands-heading button:hover,
-html[data-theme="dark"] .popular-brands-heading .popular-brands-all:hover {
+html[data-theme="dark"] .popular-brands-heading > button:hover,
+html[data-theme="dark"] .popular-brands-heading > .popular-brands-all:hover,
+html[data-theme="dark"] .popular-brands-more button:hover {
   background: #383e47;
 }
 html[data-theme="dark"] :where(

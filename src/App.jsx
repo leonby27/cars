@@ -21,6 +21,7 @@ import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar } from "./model-pages.js";
 import { loadModelText, loadedModelText } from "./model-text-load.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
+import { brandNotice } from "./brand-notice.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
@@ -3250,59 +3251,156 @@ function BrandMark({ brand }) {
   );
 }
 
+// Главная показывает шесть строк марок, остальное открывает кнопка. Строк всегда
+// шесть, а колонок на узких экранах меньше, поэтому и марок туда влезает меньше:
+// иначе те же шесть строк на телефоне превращаются в двенадцать.
+const BRAND_SHOWCASE_ROWS = 6;
+// На кнопке «Все» блок называет себя целиком, поэтому подпись у неё длиннее.
+const brandSwitchLabel = (item) => (item === "Все" ? "Все марки авто" : item);
+const BRAND_SWITCH_OPTIONS = POWERTRAIN_TABS.map(brandSwitchLabel);
+const brandSwitchType = (label) => POWERTRAIN_TABS.find((item) => brandSwitchLabel(item) === label) || "Все";
+const brandShowcaseColumns = () => (window.innerWidth <= 700 ? 2 : window.innerWidth <= 980 ? 3 : 4);
+// Раздел под выбранный тип двигателя: у каждого из трёх есть своя страница.
+const powertrainLandingPath = (label) => CATALOG_LANDINGS.find((landing) => landing.kind === "powertrain" && landing.powertrain === typeValue(label))?.path || "/catalog";
+
 function PopularBrands({ navigate, cars, apiMode }) {
-  const [remoteBrands, setRemoteBrands] = useState([]);
+  // Сервер отдаёт разметку в четыре колонки, поэтому и здесь начинаем с четырёх:
+  // мерить ширину окна можно только после того, как страница появилась в браузере.
+  const [columns, setColumns] = useState(4);
+  const [type, setType] = useState("Все");
+  const [expanded, setExpanded] = useState(false);
+  const [remoteBrands, setRemoteBrands] = useState({});
+  const selectedType = typeValue(type);
+
+  const switchRef = useRef(null);
+  // Белая плашка выбранного типа — отдельный слой: она переезжает к нажатой кнопке,
+  // а не появляется на ней заново. Размер и место берём с самой кнопки, поэтому
+  // подписи можно менять свободно.
+  const [pill, setPill] = useState(null);
+
+  // useLayoutEffect, а не useEffect: замер до первой отрисовки, иначе на телефоне
+  // сначала мелькает список на четыре колонки и только потом сжимается до двух.
+  useLayoutEffect(() => {
+    const measure = () => {
+      setColumns(brandShowcaseColumns());
+      const active = switchRef.current?.querySelector("button.active");
+      if (active) setPill({ left: active.offsetLeft, width: active.offsetWidth });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [type]);
+
   const localBrands = useMemo(() => {
     const counts = new Map();
-    cars.forEach((car) => counts.set(car.brand, (counts.get(car.brand) || 0) + 1));
+    cars.forEach((car) => {
+      if (selectedType !== "Все" && car.type !== selectedType) return;
+      counts.set(car.brand, (counts.get(car.brand) || 0) + 1);
+    });
     return [...counts].map(([brand, count]) => ({ brand, count }));
-  }, [cars]);
+  }, [cars, selectedType]);
 
   useEffect(() => {
     if (apiMode === false) {
-      setRemoteBrands([]);
+      setRemoteBrands({});
       return undefined;
     }
     let cancelled = false;
     // Тот же справочник, что запрашивает поиск на главной, поэтому запрос уходит один.
-    requestCatalogMeta()
-      .then((payload) => { if (!cancelled) setRemoteBrands(payload.brands || []); })
+    // У каждого типа двигателя свой набор марок, и спрашиваем его только тогда, когда
+    // переключатель действительно нажали.
+    const query = selectedType === "Все" ? "" : new URLSearchParams({ type: selectedType }).toString();
+    requestCatalogMeta(query)
+      .then((payload) => { if (!cancelled) setRemoteBrands((known) => ({ ...known, [selectedType]: payload.brands || [] })); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [apiMode]);
+  }, [apiMode, selectedType]);
 
-  const availableBrands = apiMode && remoteBrands.length ? remoteBrands : localBrands;
+  // Ответ по новому типу приходит не мгновенно, а стартовая выборка знает лишь горстку
+  // марок: если показать её, список на миг сжимается и мигает. Поэтому до ответа
+  // оставляем на экране прежний набор — он сменится один раз, уже на верный.
+  const remoteForType = apiMode === false ? localBrands : remoteBrands[selectedType];
+  const lastAnswer = useRef(null);
+  useEffect(() => { if (remoteForType) lastAnswer.current = remoteForType; }, [remoteForType]);
+  const availableBrands = remoteForType || lastAnswer.current || localBrands;
   const brandCounts = new Map(availableBrands.map((item) => [item.brand, Number(item.count) || 0]));
   // Before the catalog answers there are no counts at all, and rendering every brand as "0"
   // reads as an empty catalog rather than a pending one.
   const countsKnown = brandCounts.size > 0;
   // Every brand the catalog can show, plus the configured marks that currently
   // have no listings, so the block is the full inventory rather than a preview.
+  // Под выбранный тип двигателя пустые марки убираем: раздела «электрический
+  // Bentley» не существует, и вести по такой ссылке некуда.
   const brands = [...new Set([...Object.keys(brandLogos), ...availableBrands.map((item) => item.brand)])]
     .filter((brand) => !showcaseHiddenBrands.has(brand))
     .map((brand) => ({ brand, count: brandCounts.get(brand) || 0 }))
+    .filter((item) => selectedType === "Все" || item.count > 0)
     .sort((a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }));
+  const limit = columns * BRAND_SHOWCASE_ROWS;
+  // В сокращённом виде оставляем самые многочисленные марки, но показываем их всё равно
+  // по алфавиту: список ищут глазами по имени, а не читают как рейтинг. Марки без машин
+  // сюда не попадают даже когда свободные строки есть: «Acura 0» в популярных — это
+  // тупик, а не предложение. В полном списке они остаются.
+  const ranked = countsKnown ? brands.filter((item) => item.count > 0) : brands;
+  const shown = expanded || brands.length <= limit
+    ? brands
+    : [...ranked]
+      .sort((a, b) => b.count - a.count || a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }))
+      .slice(0, limit)
+      .sort((a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }));
+  const typeQuery = selectedType === "Все" ? "" : `type=${encodeURIComponent(type)}`;
 
   return (
     <section className="popular-brands page-width" aria-labelledby="popular-brands-title">
       <div className="popular-brands-heading">
-        <h2 id="popular-brands-title">Популярные марки</h2>
-        <AppLink className="popular-brands-all" href="/catalog" navigate={navigate}>
+        {/* Заголовок остаётся в разметке для поисковика и для чтения с экрана: на экране
+            блок называет себя первой кнопкой переключателя. */}
+        <h2 className="visually-hidden" id="popular-brands-title">Популярные марки</h2>
+        {/* На телефоне четыре кнопки в строку не встают — там тот же выбор сделан
+            обычным списком, как в фильтрах. Что показать, решает ширина экрана. */}
+        <div className={`brand-type-switch${pill ? " brand-type-switch--measured" : ""}`} role="group" aria-label="Тип двигателя" ref={switchRef}>
+          {pill && <span className="brand-type-switch-pill" aria-hidden="true" style={{ transform: `translateX(${pill.left}px)`, width: `${pill.width}px` }} />}
+          {POWERTRAIN_TABS.map((item) => (
+            <button type="button" key={item} className={type === item ? "active" : ""} aria-pressed={type === item} onClick={() => setType(item)}>
+              {brandSwitchLabel(item)}
+            </button>
+          ))}
+        </div>
+        <SelectField className="brand-type-select" label="Тип двигателя" value={brandSwitchLabel(type)} options={BRAND_SWITCH_OPTIONS} onChange={(label) => setType(brandSwitchType(label))} />
+        <AppLink className="popular-brands-all" href={selectedType === "Все" ? "/catalog" : powertrainLandingPath(type)} navigate={navigate}>
           Все предложения <CaretRight size={20} weight="bold" />
         </AppLink>
       </div>
       <div className="popular-brands-grid">
-        {brands.map(({ brand, count }) => (
+        {shown.map(({ brand, count }) => {
           // Ссылка ведёт на страницу марки, если она у нас есть: адрес с параметром
           // (`/catalog?brand=BYD`) для поисковика указывает на общий каталог, то есть
-          // отдельной страницы под марку по такой ссылке не существует.
-          <AppLink className="brand-link" key={brand} href={brandLandingPath(brand) || `/catalog?brand=${encodeURIComponent(brand)}`} navigate={navigate} aria-label={countsKnown ? `Перейти к предложениям ${brand}, объявлений: ${number(count)}` : `Перейти к предложениям ${brand}`}>
-            <BrandMark brand={brand} />
-            <span className="brand-name" title={brand}>{brand}</span>
-            <span className="brand-count" aria-hidden="true">{countsKnown ? number(count) : ""}</span>
-          </AppLink>
-        ))}
+          // отдельной страницы под марку по такой ссылке не существует. Выбранный тип
+          // двигателя добавляем параметром — он сужает и саму страницу марки.
+          const landing = brandLandingPath(brand);
+          const href = landing
+            ? `${landing}${typeQuery ? `?${typeQuery}` : ""}`
+            : `/catalog?brand=${encodeURIComponent(brand)}${typeQuery ? `&${typeQuery}` : ""}`;
+          return (
+            <AppLink className="brand-link" key={brand} href={href} navigate={navigate} aria-label={countsKnown ? `Перейти к предложениям ${brand}, объявлений: ${number(count)}` : `Перейти к предложениям ${brand}`}>
+              <BrandMark brand={brand} />
+              <span className="brand-name" title={brand}>{brand}</span>
+              <span className="brand-count" aria-hidden="true">{countsKnown ? number(count) : ""}</span>
+            </AppLink>
+          );
+        })}
       </div>
+      {/* У типа двигателя, до которого импорт ещё не дошёл, марок нет вовсе — пустая
+          сетка выглядела бы поломкой. */}
+      {!shown.length && <p className="popular-brands-empty">Машин с таким двигателем в каталоге пока нет.</p>}
+      {brands.length > limit && (
+        <div className="popular-brands-more">
+          <button type="button" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded}>
+            {expanded ? "Свернуть список" : "Показать все марки"}
+            <CaretDown size={16} weight="bold" aria-hidden="true" />
+          </button>
+        </div>
+      )}
     </section>
   );
 }
@@ -5806,6 +5904,25 @@ async function copyToClipboard(text) {
   }
 }
 
+// Оранжевая плашка под карточкой цены: особенность марки, из-за которой итог
+// может вырасти уже после проверки машины. Стоит после кнопки, чтобы её
+// прочитали перед обращением, но не заслоняла цену.
+function BrandNotice({ car }) {
+  const notice = brandNotice(car?.brand);
+  if (!notice) return null;
+  return (
+    <section className="brand-notice" aria-label={notice.title}>
+      <div className="brand-notice-heading">
+        <BatteryHigh size={20} weight="duotone" />
+        <b>{notice.title}</b>
+      </div>
+      {notice.lines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </section>
+  );
+}
+
 // Серый ряд с номером объявления под карточкой цены: по нему клиент называет
 // машину менеджеру, поэтому рядом кнопка «скопировать».
 function ListingIdRow({ car }) {
@@ -6061,6 +6178,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
             </button>
           </aside>
+          <BrandNotice car={car} />
           <ListingIdRow car={car} />
         </div>
       </div>

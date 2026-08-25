@@ -12,7 +12,13 @@
 // less than half the weight of its HTML page. Parsing, the import policy, and
 // every write stay in Node with the canonical modules.
 //
+// Ночью списки обходит актуализация, и она же складывает всё незнакомое в
+// `runtime/che168-discoveries.json`. С `--discoveries` пополнение берёт готовый
+// список и только качает карточки: обход второй раз за ночь не нужен, а фиды
+// (в том числе бензиновый) подхватываются те, что обошла актуализация.
+//
 // Usage:
+//   npm run importv2 -- --discoveries --limit=600
 //   npm run importv2 -- --map-only
 //   npm run importv2 -- --limit=100
 //   npm run importv2 -- --limit=1000 --batch=100 --brands=Deepal,Zeekr
@@ -23,7 +29,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { buildChe168Car, extractChe168DetailPayload, extractChe168ListPayload } from "./lib/che168-parser.mjs";
-import { ICE_IMPORT_BRANDS, ICE_IMPORT_MIN_YEAR, IMPORT_BRANDS, IMPORT_MIN_YEAR, canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
+import { ICE_IMPORT_BRANDS, ICE_IMPORT_MIN_YEAR, IMPORT_BRANDS, IMPORT_MIN_YEAR, MAX_LANDED_USD, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
+import { estimateLandedCost } from "../src/pricing.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_PATH = path.join(ROOT, "public", "data", "cars.json");
@@ -67,7 +74,26 @@ const writeStatic = args.get("static") !== "0" && hasStaticCatalog;
 if (args.get("static") !== "0" && !hasStaticCatalog) console.warn(`[static] ${path.relative(ROOT, DATA_PATH)} нет — статическая копия каталога не пишется; известные id берём из базы.`);
 const PENDING_PATH = path.join(ROOT, "runtime", "che168-pending.json");
 const maxBrandId = Number(args.get("max-brand-id") || 999);
-const fuelTypes = String(args.get("fueltype") || ELECTRIC_FUEL_TYPE)
+
+// `--discoveries` берёт список новых машин у ночной актуализации вместо того,
+// чтобы обходить списки источника второй раз за ночь. Актуализация всё равно
+// читает каждую страницу каждого фида ради цен и попутно складывает туда всё,
+// что нам подходит и чего у нас нет, — см. lib/che168-discovery.mjs.
+const discoveriesArg = args.get("discoveries");
+const DISCOVERIES_PATH = discoveriesArg && discoveriesArg !== "true"
+  ? path.resolve(ROOT, discoveriesArg)
+  : path.join(ROOT, "runtime", "che168-discoveries.json");
+const discoveriesFile = discoveriesArg ? JSON.parse(await fs.readFile(DISCOVERIES_PATH, "utf8")) : null;
+if (discoveriesFile) {
+  const ageMinutes = Math.round((Date.now() - new Date(discoveriesFile.generatedAt).getTime()) / 60000);
+  // Устаревший файл — не ошибка: машины из него либо уже заведены и отсеются по
+  // известным id, либо ещё живы. Но молчать нельзя: если актуализация ночью
+  // упала, пополнение работает по позавчерашним находкам и новых не увидит.
+  console.log(`[new] ${discoveriesFile.items?.length ?? 0} находок от актуализации, файлу ${ageMinutes} мин`);
+  if (ageMinutes > 24 * 60) console.warn(`[new] файлу находок больше суток — актуализация могла не отработать`);
+}
+
+const fuelTypes = String(args.get("fueltype") || (discoveriesFile?.feeds?.join(",")) || ELECTRIC_FUEL_TYPE)
   .split(",")
   .map((value) => Number(value.trim()))
   .filter((value) => Number.isFinite(value) && value > 0);
@@ -87,6 +113,14 @@ const FEED_URL = `https://global.che168.com/en/used-cars?vehicle_list=1&fueltype
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const startedAt = new Date().toISOString();
+
+// Потолок по времени. Прогон и так ограничен числом машин, но если источник
+// начнёт отвечать медленно, ночная служба дотянется до утра и встретится с
+// дневными посетителями. Набранное к этому моменту записывается как обычно.
+const maxMinutes = Number(args.get("max-minutes") || 40);
+const deadline = Number.isFinite(maxMinutes) && maxMinutes > 0 ? Date.now() + maxMinutes * 60_000 : Infinity;
+const outOfTime = () => Date.now() >= deadline;
+let timeoutReported = false;
 
 // One in-page fetch of the site's Flight endpoint. Runs inside the challenged
 // page so the request carries its cookies.
@@ -277,15 +311,21 @@ try {
   await page.waitForFunction(() => document.querySelectorAll("[data-uc-car-card]").length > 0, null, { timeout: 60_000 });
   console.log("[browser] challenge passed, feed rendered");
 
-  const brandMap = await loadBrandMap(page);
+  const fuelLabel = fuelTypes.map((fuelType) => FUEL_TYPE_NAMES[fuelType] || fuelType).join(" + ");
+  // Работая по находкам, прогон не обходит списки и не адресует марки по номерам,
+  // поэтому карта марок ему не нужна — а её построение само по себе стоит обхода.
+  const brandMap = discoveriesFile ? {} : await loadBrandMap(page);
   const targets = Object.entries(brandMap)
     .map(([sourceName, info]) => ({ sourceName, ...info, policyBrand: canonicalImportBrand(sourceName) }))
     .filter((target) => policyBrands.includes(target.policyBrand))
     .filter((target) => !brandFilter || brandFilter.includes(target.policyBrand))
     .sort((a, b) => brandListings(b) - brandListings(a));
-  const fuelLabel = fuelTypes.map((fuelType) => FUEL_TYPE_NAMES[fuelType] || fuelType).join(" + ");
-  console.log(`[map] ${Object.keys(brandMap).length} Che168 brands with ${fuelLabel} listings; ${targets.length} match the import policy`);
-  console.log(`[targets] ${targets.map((target) => `${target.sourceName}(${brandListings(target)})`).join(", ") || "none"}`);
+  if (!discoveriesFile) {
+    console.log(`[map] ${Object.keys(brandMap).length} Che168 brands with ${fuelLabel} listings; ${targets.length} match the import policy`);
+    console.log(`[targets] ${targets.map((target) => `${target.sourceName}(${brandListings(target)})`).join(", ") || "none"}`);
+  } else {
+    console.log(`[new] работаем по находкам актуализации (${fuelLabel}), обход списков не нужен`);
+  }
   if (mapOnly) {
     console.log(JSON.stringify({ brandMap, targets }, null, 2));
   } else {
@@ -305,15 +345,32 @@ try {
         console.log(`[repair] ${candidates.length} existing Che168 cards without ${repairField}`);
         return;
       }
+      if (discoveriesFile) {
+        // Находки собраны час назад по списковому слою. За этот час часть машин
+        // уже могла попасть к нам другим прогоном, поэтому известные отсеиваем
+        // ещё раз — и здесь же режем по `--limit`, чтобы за ночь не выгребать
+        // разом всё, что источник выложил за сутки.
+        let known = 0;
+        for (const item of discoveriesFile.items || []) {
+          if (candidates.length >= limit) break;
+          const externalId = String(item.externalId || "");
+          if (!externalId || seen.has(externalId)) continue;
+          if (knownIds.has(`che168-${externalId}`)) { known += 1; continue; }
+          seen.add(externalId);
+          candidates.push({ externalId, brand: item.brand, year: item.year, carname: item.carname || "" });
+        }
+        console.log(`[new] ${candidates.length} к скачиванию · ${known} уже заведены · всего в файле ${(discoveriesFile.items || []).length}`);
+        return;
+      }
       for (const target of targets) {
-      if (accepted.length >= limit) break;
+      if (accepted.length >= limit || outOfTime()) break;
       let brandCandidates = 0;
       let known = 0;
       let skippedOld = 0;
       let skippedHybrid = 0;
       // Each feed paginates on its own, so a brand is walked once per fuel type.
       for (const fuelType of fuelTypes) {
-        if (accepted.length >= limit) break;
+        if (accepted.length >= limit || outOfTime()) break;
         const listed = brandListingsFor(target, fuelType);
         if (!listed) continue;
         let pageCount = Math.max(1, Math.ceil(listed / PAGE_SIZE));
@@ -322,7 +379,7 @@ try {
         // секунды, и один обходчик держал на этой скорости весь прогон, хотя
         // карточки успевали качаться вдвое быстрее. Число окон — `--lister`.
         await Promise.all(listerPages.map(async (listerPage, listerIndex) => {
-        for (let pageIndex = listerIndex + 1; pageIndex <= pageCount && accepted.length < limit; pageIndex += listerPages.length) {
+        for (let pageIndex = listerIndex + 1; pageIndex <= pageCount && accepted.length < limit && !outOfTime(); pageIndex += listerPages.length) {
           const { text, status } = await flight(listerPage, listUrl(target.brandId, pageIndex, fuelType));
           const payload = status === 200 && text ? listPayload(text) : null;
           // Источник, начавший ограничивать частоту, отвечает не 200 или пустым
@@ -360,6 +417,10 @@ try {
     let cursor = 0;
     const worker = async (workerPage) => {
       while (accepted.length < limit) {
+        if (outOfTime()) {
+          if (!timeoutReported) { timeoutReported = true; console.warn(`[time] отведённые ${maxMinutes} мин вышли — дописываем набранное и заканчиваем`); }
+          return;
+        }
         if (cursor >= candidates.length) {
           if (!discovering) return;
           await sleep(250);
@@ -386,6 +447,12 @@ try {
           const violation = importPolicyViolation(car, { combustion: combustionRun });
           if (violation) {
             reject(`Import policy: ${violation}`, candidate.externalId);
+            continue;
+          }
+          // Потолок цены считаем здесь, а не в политике: она не считает деньги.
+          const landedUsd = estimateLandedCost(car).totalUsd;
+          if (isAbovePriceCeiling(landedUsd)) {
+            reject(`landed price ${Math.round(landedUsd)} $ is above the ${MAX_LANDED_USD} $ ceiling`, candidate.externalId);
             continue;
           }
           const existing = catalogById.get(car.id);

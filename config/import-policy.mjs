@@ -1,11 +1,11 @@
 export const IMPORT_MIN_YEAR = 2020;
 
-// У бензиновых машин граница на год выше. Пороги пошлины стоят на трёх и пяти
-// годах с даты выпуска, и машина 2020 года к моменту оформления этот порог уже
-// прошла: ставка за кубический сантиметр у неё вдвое выше, чем у машины
-// 2021 года. Трёхлитровая машина за 20 тысяч приезжает почти за 43 — такую
-// в Беларуси не купят, а карточка занимает место в каталоге и в выдаче.
-export const ICE_IMPORT_MIN_YEAR = 2021;
+// Бензиновым машинам граница та же, что и остальным. У машины 2020 года к моменту
+// оформления пройден пятилетний порог и ставка за кубический сантиметр вдвое выше,
+// поэтому приезжает она дороже машины 2021 года — но расчёт на карточке эту разницу
+// показывает честно, и выбор остаётся за покупателем (решение Сергея 25.08.2026).
+// Константа отдельная: если бензиновую границу опять поведут вверх, менять здесь.
+export const ICE_IMPORT_MIN_YEAR = 2020;
 
 // Нижняя граница года по типу машины: бензиновой — своя, остальным — общая.
 export const importMinYear = (type) => (type === "ДВС" ? ICE_IMPORT_MIN_YEAR : IMPORT_MIN_YEAR);
@@ -23,12 +23,26 @@ export const IMPORTABLE_POWERTRAINS = Object.freeze(["Электромобиль
 // есть хотя бы 20 живых объявлений, — то есть те, что тут реально ездят.
 export const ICE_IMPORT_BRANDS = Object.freeze([
   "Volkswagen", "Mercedes-Benz", "BMW", "Audi", "Toyota", "Honda", "Buick", "Porsche",
-  "Geely", "Nissan", "Land Rover", "Ford", "Haval", "Changan", "Hyundai", "Cadillac",
+  "Geely", "Nissan", "Land Rover", "Ford", "Haval", "Changan", "Hyundai",
   "Mazda", "Chevrolet", "Chery", "Volvo", "Lexus", "Kia", "MINI", "Škoda", "MG",
-  "Peugeot", "Jaguar", "Jeep", "Bentley", "Jetour", "Lincoln", "BYD", "Maserati",
-  "Infiniti", "Citroën", "Mitsubishi", "Subaru", "Suzuki", "smart", "Great Wall",
-  "Renault", "Acura", "Alfa Romeo", "DS", "Chrysler", "GMC", "Fiat",
+  "Peugeot", "Jaguar", "Jeep", "Jetour", "BYD", "Maserati",
+  "Infiniti", "Mitsubishi", "Subaru", "Suzuki", "smart", "Great Wall",
+  "Renault", "Chrysler", "GMC", "Fiat",
 ]);
+
+// Марки, вычеркнутые Сергеем 25.08.2026 после просмотра каталога: американский
+// премиум и штучные европейцы, которых в Беларуси не спрашивают. Держим списком,
+// а не просто убираем из перечня выше: имена сюда попадают из живых данных
+// источника, и без явного запрета марка вернулась бы при следующей правке
+// списка. Заведённые машины этих марок из базы удалены.
+export const EXCLUDED_BRANDS = Object.freeze([
+  "Acura", "Alfa Romeo", "Bentley", "Cadillac", "Citroën", "DS", "Lincoln",
+]);
+
+// Потолок итоговой цены. Считается по стоимости «под ключ» в Беларуси, а не по
+// цене в Китае: покупателя интересует она. Машину дороже этого у нас не заказывают,
+// а карточка занимает место в каталоге, в выдаче и в ночном обходе.
+export const MAX_LANDED_USD = 100_000;
 
 // Sources retired from the catalog. Their existing listings stay in the
 // database as `unavailable` so orders that already reference them keep
@@ -145,6 +159,7 @@ const BRAND_ALIASES = new Map([
 ]);
 const allowedBrands = new Set(IMPORT_BRANDS);
 const allowedIceBrands = new Set(ICE_IMPORT_BRANDS);
+const excludedBrands = new Set(EXCLUDED_BRANDS);
 const allowedBrandByLower = new Map([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS].map((brand) => [brand.toLocaleLowerCase("en-US"), brand]));
 
 export function canonicalImportBrand(value) {
@@ -228,7 +243,16 @@ export function canonicalImportModel(brandValue, modelValue) {
 
 export function isAllowedImportBrand(value, { combustion = false } = {}) {
   const brand = canonicalImportBrand(value);
+  if (excludedBrands.has(brand)) return false;
   return allowedBrands.has(brand) || (combustion && allowedIceBrands.has(brand));
+}
+
+// Цена «под ключ» выше потолка — отказ. Значение приходит из расчёта (`totalUsd`),
+// поэтому проверка живёт отдельной функцией: там, где расчёта ещё нет (слой списка
+// у источника), потолок применяют к цене в Китае с запасом.
+export function isAbovePriceCeiling(landedUsd) {
+  const value = Number(landedUsd);
+  return Number.isFinite(value) && value > MAX_LANDED_USD;
 }
 
 // `combustion` включает бензиновый ввоз: свой список марок и тип «ДВС». Без него

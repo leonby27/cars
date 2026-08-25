@@ -24,10 +24,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { extractChe168ListPayload, extractChe168DetailPayload } from "./lib/che168-parser.mjs";
+import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPORT_PATH = path.join(ROOT, "runtime", "refresh-report.json");
+// Машины источника, которых у нас нет: обход списков всё равно проходит мимо
+// каждой, так что находки достаются даром. Отсюда их забирает пополнение вместо
+// собственного обхода — см. `scripts/lib/che168-discovery.mjs`.
+const DISCOVERIES_PATH = path.join(ROOT, "runtime", "che168-discoveries.json");
 const FEED_URL = "https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=7";
 // The catalog spans four powertrain feeds; each paginates on its own. Feed 1 is
 // the petrol one and it is by far the largest (~181k cars, ~7.5k pages, about
@@ -105,6 +110,12 @@ const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_
   FROM listings WHERE source='Che168' AND status='active'`);
 console.log(`[db] ${rows.length} active Che168 listings`);
 
+// Все наши идентификаторы, вместе с проданными: машина, снятая с витрины, иногда
+// ещё мелькает в списках, и без этого списка находки предлагали бы качать её
+// каждую ночь заново.
+const { rows: knownRows } = await pool.query(`SELECT id FROM listings WHERE source='Che168'`);
+const knownIds = new Set(knownRows.map((row) => row.id));
+
 // Cards visitors actually opened in the last month jump the queue: each gets a
 // detail-page check and a database write before the list sweep even starts, so
 // the cars people look at are fresh within the first minutes of a run.
@@ -126,6 +137,8 @@ const context = await browser.newContext({
 const page = await context.newPage();
 
 const seenPrices = new Map(); // externalId -> current USD price on the source
+const discoveries = new Map(); // externalId -> кандидат на скачивание, см. lib/che168-discovery.mjs
+let discoveriesSkipped = 0; // машины источника, которых у нас нет и которые не проходят правила
 let listPages = 0;
 let listPagesEmpty = 0;
 
@@ -149,14 +162,39 @@ async function sweepLists() {
         const id = String(item.infoid || "");
         const price = Number(String(item.price).replace(/[^\d.]/g, "")) || null;
         if (id && price && !seenPrices.has(id)) seenPrices.set(id, price);
+        // Незнакомая машина попадается здесь бесплатно — страница всё равно
+        // прочитана ради цен. Отбор идёт по списку, окончательное решение
+        // остаётся за карточкой при скачивании.
+        if (id && !knownIds.has(`che168-${id}`) && !discoveries.has(id)) {
+          const candidate = discoveryCandidate(item, { fuelType, knownIds });
+          if (candidate) discoveries.set(id, candidate);
+          else discoveriesSkipped += 1;
+        }
       }
       listPages += 1;
-      if (listPages % 200 === 0) console.log(`[lists] ${listPages}/${total} pages, ${seenPrices.size} cars`);
+      if (listPages % 200 === 0) console.log(`[lists] ${listPages}/${total} pages, ${seenPrices.size} cars, ${discoveries.size} new`);
       await sleep(60);
     }
   };
   await Promise.all(Array.from({ length: concurrency }, worker));
   console.log(`[lists] done: ${listPages} pages (${listPagesEmpty} empty), ${seenPrices.size} cars priced`);
+  console.log(`[new] ${discoveries.size} машин источника нам подходят и ещё не заведены (${discoveriesSkipped} мимо правил)`);
+}
+
+// Находки переживают прогон в файле: пополнение запускается отдельной службой
+// через час. Пустой список тоже записываем — иначе пополнение возьмёт вчерашний
+// файл и полезет за машинами, которые уже завело.
+async function writeDiscoveries() {
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    feeds: FUEL_TYPES,
+    catalogKnown: knownIds.size,
+    skippedByPolicy: discoveriesSkipped,
+    items: [...discoveries.values()],
+  };
+  await fs.mkdir(path.dirname(DISCOVERIES_PATH), { recursive: true });
+  await fs.writeFile(DISCOVERIES_PATH, `${JSON.stringify(payload, null, 2)}\n`);
+  console.log(`[new] записано в ${path.relative(ROOT, DISCOVERIES_PATH)}: ${payload.items.length}`);
 }
 
 // A card the lists no longer show gets one detail request. The sold page still
@@ -301,6 +339,9 @@ try {
   }
 
   await sweepLists();
+  // Записываем сразу после обхода, до долгой проверки пропавших карточек: если
+  // прогон оборвётся на ней, находки уже лежат на диске и пополнение их получит.
+  if (!dryRun) await writeDiscoveries();
 
   for (const row of rows) {
     if (prioritized.has(row.id)) continue;
@@ -357,6 +398,8 @@ try {
     listPages,
     listPagesEmpty,
     pricedByLists: seenPrices.size,
+    discovered: discoveries.size,
+    discoveriesSkipped,
     prioritized: prioritized.size,
     rePriced: stats.rePriced,
     priceDrops: drops.length,

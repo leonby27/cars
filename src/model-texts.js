@@ -137,7 +137,6 @@ import leapmotor_lafa_5 from "./model-texts/leapmotor-lafa-5.js";
 import voyah_zhuiguang from "./model-texts/voyah-zhuiguang.js";
 import mercedes_benz_eqb from "./model-texts/mercedes-benz-eqb.js";
 import audi_e5_sportback from "./model-texts/audi-e5-sportback.js";
-import bmw_xm from "./model-texts/bmw-xm.js";
 import voyah_zhuiguang_l from "./model-texts/voyah-zhuiguang-l.js";
 import lynk_co_10 from "./model-texts/lynk-co-10.js";
 import mercedes_benz_gle_hybrid from "./model-texts/mercedes-benz-gle-hybrid.js";
@@ -161,7 +160,6 @@ import bmw_x3 from "./model-texts/bmw-x3.js";
 import volkswagen_tayron from "./model-texts/volkswagen-tayron.js";
 import volkswagen_passat from "./model-texts/volkswagen-passat.js";
 import volkswagen_magotan from "./model-texts/volkswagen-magotan.js";
-import cadillac_ct5 from "./model-texts/cadillac-ct5.js";
 import hyundai_elantra from "./model-texts/hyundai-elantra.js";
 import nissan_sylphy from "./model-texts/nissan-sylphy.js";
 import volkswagen_tiguan_l from "./model-texts/volkswagen-tiguan-l.js";
@@ -188,7 +186,6 @@ import honda_civic from "./model-texts/honda-civic.js";
 import volkswagen_teramont from "./model-texts/volkswagen-teramont.js";
 import honda_accord from "./model-texts/honda-accord.js";
 import volkswagen_bora from "./model-texts/volkswagen-bora.js";
-import porsche_911 from "./model-texts/porsche-911.js";
 import mercedes_benz_vito from "./model-texts/mercedes-benz-vito.js";
 import mazda_mazda3_axela from "./model-texts/mazda-mazda3-axela.js";
 import chevrolet_monza from "./model-texts/chevrolet-monza.js";
@@ -196,7 +193,6 @@ import mercedes_benz_gle from "./model-texts/mercedes-benz-gle.js";
 import mini_cooper from "./model-texts/mini-cooper.js";
 import toyota_camry from "./model-texts/toyota-camry.js";
 import bmw_x5 from "./model-texts/bmw-x5.js";
-import mercedes_benz_g_class from "./model-texts/mercedes-benz-g-class.js";
 import geely_xingyue_l from "./model-texts/geely-xingyue-l.js";
 import mercedes_benz_maybach_s_class from "./model-texts/mercedes-benz-maybach-s-class.js";
 import volvo_xc60 from "./model-texts/volvo-xc60.js";
@@ -224,7 +220,6 @@ import honda_haoying from "./model-texts/honda-haoying.js";
 import geely_emgrand from "./model-texts/geely-emgrand.js";
 import geely_binyue from "./model-texts/geely-binyue.js";
 import jetour_x70_plus from "./model-texts/jetour-x70-plus.js";
-import cadillac_xt5 from "./model-texts/cadillac-xt5.js";
 import toyota_rav4_rongfang from "./model-texts/toyota-rav4-rongfang.js";
 import audi_q7 from "./model-texts/audi-q7.js";
 import volkswagen_cc from "./model-texts/volkswagen-cc.js";
@@ -233,11 +228,31 @@ import porsche_cayenne from "./model-texts/porsche-cayenne.js";
 import land_rover_range_rover_evoque from "./model-texts/land-rover-range-rover-evoque.js";
 import honda_fit from "./model-texts/honda-fit.js";
 import bmw_1_series from "./model-texts/bmw-1-series.js";
-import cadillac_xt4 from "./model-texts/cadillac-xt4.js";
 import bmw_x2 from "./model-texts/bmw-x2.js";
 import changan_uni_t from "./model-texts/changan-uni-t.js";
 import audi_a8 from "./model-texts/audi-a8.js";
 import changan_cs55_plus from "./model-texts/changan-cs55-plus.js";
+import haval_m6 from "./model-texts/haval-m6.js";
+import buick_envision_plus from "./model-texts/buick-envision-plus.js";
+import volkswagen_talagon from "./model-texts/volkswagen-talagon.js";
+import jaguar_xel from "./model-texts/jaguar-xel.js";
+import mazda_cx_5 from "./model-texts/mazda-cx-5.js";
+import audi_a7l from "./model-texts/audi-a7l.js";
+import lexus_rx from "./model-texts/lexus-rx.js";
+import geely_binrui from "./model-texts/geely-binrui.js";
+import hongqi_h9 from "./model-texts/hongqi-h9.js";
+import buick_lacrosse from "./model-texts/buick-lacrosse.js";
+import toyota_levin from "./model-texts/toyota-levin.js";
+import skoda_kamiq from "./model-texts/skoda-kamiq.js";
+import toyota_avalon from "./model-texts/toyota-avalon.js";
+import buick_verano from "./model-texts/buick-verano.js";
+import jetour_traveler from "./model-texts/jetour-traveler.js";
+import bmw_7_series from "./model-texts/bmw-7-series.js";
+import lynk_co_06_petrol from "./model-texts/lynk-co-06-petrol.js";
+import toyota_corolla from "./model-texts/toyota-corolla.js";
+import mercedes_benz_gla from "./model-texts/mercedes-benz-gla.js";
+import volkswagen_viloran from "./model-texts/volkswagen-viloran.js";
+import honda_integra from "./model-texts/honda-integra.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -366,7 +381,6 @@ export const MODEL_TEXTS_RAW = {
   "voyah-zhuiguang": voyah_zhuiguang,
   "mercedes-benz-eqb": mercedes_benz_eqb,
   "audi-e5-sportback": audi_e5_sportback,
-  "bmw-xm": bmw_xm,
   "voyah-zhuiguang-l": voyah_zhuiguang_l,
   "lynk-co-10": lynk_co_10,
   "mercedes-benz-gle-hybrid": mercedes_benz_gle_hybrid,
@@ -390,7 +404,6 @@ export const MODEL_TEXTS_RAW = {
   "volkswagen-tayron": volkswagen_tayron,
   "volkswagen-passat": volkswagen_passat,
   "volkswagen-magotan": volkswagen_magotan,
-  "cadillac-ct5": cadillac_ct5,
   "hyundai-elantra": hyundai_elantra,
   "nissan-sylphy": nissan_sylphy,
   "volkswagen-tiguan-l": volkswagen_tiguan_l,
@@ -417,7 +430,6 @@ export const MODEL_TEXTS_RAW = {
   "volkswagen-teramont": volkswagen_teramont,
   "honda-accord": honda_accord,
   "volkswagen-bora": volkswagen_bora,
-  "porsche-911": porsche_911,
   "mercedes-benz-vito": mercedes_benz_vito,
   "mazda-mazda3-axela": mazda_mazda3_axela,
   "chevrolet-monza": chevrolet_monza,
@@ -425,7 +437,6 @@ export const MODEL_TEXTS_RAW = {
   "mini-cooper": mini_cooper,
   "toyota-camry": toyota_camry,
   "bmw-x5": bmw_x5,
-  "mercedes-benz-g-class": mercedes_benz_g_class,
   "geely-xingyue-l": geely_xingyue_l,
   "mercedes-benz-maybach-s-class": mercedes_benz_maybach_s_class,
   "volvo-xc60": volvo_xc60,
@@ -453,7 +464,6 @@ export const MODEL_TEXTS_RAW = {
   "geely-emgrand": geely_emgrand,
   "geely-binyue": geely_binyue,
   "jetour-x70-plus": jetour_x70_plus,
-  "cadillac-xt5": cadillac_xt5,
   "toyota-rav4-rongfang": toyota_rav4_rongfang,
   "audi-q7": audi_q7,
   "volkswagen-cc": volkswagen_cc,
@@ -462,11 +472,31 @@ export const MODEL_TEXTS_RAW = {
   "land-rover-range-rover-evoque": land_rover_range_rover_evoque,
   "honda-fit": honda_fit,
   "bmw-1-series": bmw_1_series,
-  "cadillac-xt4": cadillac_xt4,
   "bmw-x2": bmw_x2,
   "changan-uni-t": changan_uni_t,
   "audi-a8": audi_a8,
   "changan-cs55-plus": changan_cs55_plus,
+  "haval-m6": haval_m6,
+  "buick-envision-plus": buick_envision_plus,
+  "volkswagen-talagon": volkswagen_talagon,
+  "jaguar-xel": jaguar_xel,
+  "mazda-cx-5": mazda_cx_5,
+  "audi-a7l": audi_a7l,
+  "lexus-rx": lexus_rx,
+  "geely-binrui": geely_binrui,
+  "hongqi-h9": hongqi_h9,
+  "buick-lacrosse": buick_lacrosse,
+  "toyota-levin": toyota_levin,
+  "skoda-kamiq": skoda_kamiq,
+  "toyota-avalon": toyota_avalon,
+  "buick-verano": buick_verano,
+  "jetour-traveler": jetour_traveler,
+  "bmw-7-series": bmw_7_series,
+  "lynk-co-06-petrol": lynk_co_06_petrol,
+  "toyota-corolla": toyota_corolla,
+  "mercedes-benz-gla": mercedes_benz_gla,
+  "volkswagen-viloran": volkswagen_viloran,
+  "honda-integra": honda_integra,
 };
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
