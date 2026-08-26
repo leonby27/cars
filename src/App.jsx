@@ -3411,13 +3411,42 @@ const brandShowcaseColumns = () => (window.innerWidth <= 700 ? 2 : window.innerW
 // Раздел под выбранный тип двигателя: у каждого из трёх есть своя страница.
 const powertrainLandingPath = (label) => CATALOG_LANDINGS.find((landing) => landing.kind === "powertrain" && landing.powertrain === typeValue(label))?.path || "/catalog";
 
+// Числа у марок блок раньше рисовал дважды. Сначала он считал их по стартовой выборке
+// в шестьдесят карточек — оттуда и брались «BYD 2», «Tesla 1», — а когда приходил
+// настоящий ответ каталога, весь блок пересобирался: числа менялись на верные, марки
+// без машин исчезали, порядок съезжал. Чтобы верные числа стояли с первой отрисовки,
+// берём их с двух сторон: готовый ответ загрузочного запроса, если он успел прийти до
+// запуска приложения, и числа прошлого захода, сохранённые в браузере. За ночь каталог
+// меняется на сотни машин из десятков тысяч, поэтому вчерашние числа выглядят как
+// сегодняшние, и подмена настоящими проходит незаметно.
+const brandCountsKey = "abcars-brand-counts";
+const readStoredBrandCounts = () => {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(brandCountsKey) || "null");
+    return stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+  } catch {
+    return {};
+  }
+};
+const storeBrandCounts = (type, brands) => {
+  try {
+    window.localStorage.setItem(brandCountsKey, JSON.stringify({ ...readStoredBrandCounts(), [type]: brands }));
+  } catch {
+    // Приватный режим может запрещать хранилище — тогда просто ждём ответ каталога.
+  }
+};
+const initialBrandCounts = () => {
+  const boot = bootCatalogMeta("")?.brands;
+  return boot ? { ...readStoredBrandCounts(), "Все": boot } : readStoredBrandCounts();
+};
+
 function PopularBrands({ navigate, cars, apiMode }) {
   // Сервер отдаёт разметку в четыре колонки, поэтому и здесь начинаем с четырёх:
   // мерить ширину окна можно только после того, как страница появилась в браузере.
   const [columns, setColumns] = useState(4);
   const [type, setType] = useState("Все");
   const [expanded, setExpanded] = useState(false);
-  const [remoteBrands, setRemoteBrands] = useState({});
+  const [remoteBrands, setRemoteBrands] = useState(initialBrandCounts);
   const selectedType = typeValue(type);
 
   const switchRef = useRef(null);
@@ -3467,7 +3496,12 @@ function PopularBrands({ navigate, cars, apiMode }) {
       const value = typeValue(item);
       const query = value === "Все" ? "" : new URLSearchParams({ type: value }).toString();
       requestCatalogMeta(query)
-        .then((payload) => { if (!cancelled) setRemoteBrands((known) => ({ ...known, [value]: payload.brands || [] })); })
+        .then((payload) => {
+          if (cancelled) return;
+          const brands = payload.brands || [];
+          setRemoteBrands((known) => ({ ...known, [value]: brands }));
+          storeBrandCounts(value, brands);
+        })
         .catch(() => {});
     });
     return () => { cancelled = true; };
@@ -3479,7 +3513,10 @@ function PopularBrands({ navigate, cars, apiMode }) {
   const remoteForType = apiMode === false ? localBrands : remoteBrands[selectedType];
   const lastAnswer = useRef(null);
   useEffect(() => { if (remoteForType) lastAnswer.current = remoteForType; }, [remoteForType]);
-  const availableBrands = remoteForType || lastAnswer.current || localBrands;
+  // Пока каталог не ответил, числа по стартовой выборке не показываем: в ней шестьдесят
+  // карточек на весь каталог, и марка выглядела бы как «одна машина в наличии». Лучше
+  // назвать марки без чисел, чем назвать неверные.
+  const availableBrands = remoteForType || lastAnswer.current || (apiMode === false ? localBrands : []);
   const brandCounts = new Map(availableBrands.map((item) => [item.brand, Number(item.count) || 0]));
   // Before the catalog answers there are no counts at all, and rendering every brand as "0"
   // reads as an empty catalog rather than a pending one.
