@@ -3335,22 +3335,15 @@ const brandLogos = {
   Ford: "ford.svg",
   Geely: "geely.svg",
   Haval: "haval.svg",
-  Cadillac: "cadillac.svg",
   Changan: "changan.svg",
   Chevrolet: "chevrolet.svg",
   Honda: "honda.svg",
   Hyundai: "hyundai.svg",
   Nissan: "nissan.svg",
-  Acura: "acura.svg",
-  "Alfa Romeo": "alfa-romeo.svg",
-  DS: "ds.svg",
   Peugeot: "peugeot.svg",
   Lexus: "lexus.svg",
-  "Škoda": "skoda.svg",
   Subaru: "subaru.svg",
-  Bentley: "bentley.svg",
   "Great Wall": "great-wall.svg",
-  Lincoln: "lincoln.svg",
   Maserati: "maserati.svg",
   Volvo: "volvo.svg",
   Infiniti: "infiniti.svg",
@@ -3360,7 +3353,6 @@ const brandLogos = {
   MINI: "mini.svg",
   Mitsubishi: "mitsubishi.svg",
   Jeep: "jeep.svg",
-  "Citroën": "citroen.svg",
   Jetour: "jetour.svg",
   Kia: "kia.svg",
 };
@@ -3388,8 +3380,7 @@ const showcasePinnedBrands = new Set(["Avatr", "Deepal", "Voyah", "Xiaomi", "Zee
 const coloredBrandLogos = new Set([
   "BMW", "BYD", "Changan", "Chevrolet", "Denza", "Dongfeng", "Ford", "Geely Galaxy",
   "Honda", "Hongqi", "Hyundai", "Nissan", "Porsche", "Tesla", "Toyota", "Voyah", "Xiaomi",
-  "Alfa Romeo", "Great Wall", "Škoda", "Subaru", "Maserati", "Volvo", "Infiniti", "MG", "Mitsubishi",
-  "Citroën", "Kia",
+  "Great Wall", "Subaru", "Maserati", "Volvo", "Infiniti", "MG", "Mitsubishi", "Kia",
 ]);
 
 // Two letters, so brands sharing an initial stay apart (Tesla/Toyota).
