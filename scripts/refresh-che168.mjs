@@ -1,24 +1,46 @@
 // Refresh — price and availability for the Che168 catalog.
 //
-// A full detail sweep of ~33k cards costs about two hours, but the source's
-// own list layer already carries the current dollar price for every visible
-// card, so the bulk of the refresh is a ~2k-page list walk (~6 minutes).
-// Detail requests are spent only where the lists are silent: a card that
-// vanished from every feed is either sold or merely rotated out of the list
-// layer — the measured split is roughly 40/60 — so absence alone must never
-// unpublish a card. Its own page is the authority: a sold card still answers
-// with a detail payload, just without a price.
+// The source's list layer carries the current dollar price for every visible
+// card, so the bulk of the refresh is a list walk; detail requests are spent
+// only where the lists are silent. Two hard-won facts shape the walk:
+//
+// 1. List pagination is dishonest at depth. Every request reshuffles the
+//    order (even with sort=), and beyond ~300 pages the source keeps serving
+//    the same shallow window — a flat walk of the ~7.5k-page petrol feed sees
+//    barely half the cars. So the petrol feed is walked in slices that are
+//    each shallow enough to be honest: per brand (config/che168-brands-1.json),
+//    and for brands too big even for that — per model (series), with the live
+//    series list asked from Autohome and config/che168-giant-series.json as
+//    the fallback. A measured 220-page brand slice yields ~94% of its cars in
+//    one pass, so every slice is walked twice: each request reshuffles the
+//    order, and the second pass recovers most of what the first one missed.
+//    The EV/hybrid feeds (7/5/6) are shallow and honest; they stay unsliced
+//    (but still double-passed — a single pass of feed 6 measured only 81%).
+//
+// 2. The source's quota is per session, not per IP: the night it first
+//    blocked us, a freshly-challenged import session on the same machine kept
+//    downloading happily. So the browser session is rotated after a fixed
+//    number of requests, and when the source goes silent mid-run the script
+//    first rotates the session; only if that doesn't help does it stop —
+//    gracefully, keeping everything already checked.
+//
+// A card that vanished from every list slice is either sold or merely
+// unlisted; absence alone must never unpublish a card. Its own page is the
+// authority: a sold card still answers with a detail payload, just without a
+// price. Detail checks are capped per night and drawn oldest-checked-first,
+// so the whole catalog rotates through them fairly.
 //
 // The run starts with a priority pass: cards visitors opened in the last 30
 // days (view/availability/favorite events, top 300) get a detail check and a
-// database write first, so the cars people care about are fresh within minutes
-// even if the rest of the run is interrupted. --skip-detail skips this pass too.
+// database write first. --skip-detail skips this pass too.
 //
 // Usage:
 //   npm run refresh                     # full run: priority pass + lists + detail checks + writes
 //   npm run refresh -- --dry-run       # measure only, no database writes
 //   npm run refresh -- --skip-detail   # lists only (prices), leave missing cards alone
 //   npm run refresh -- --detail-limit=500
+//   npm run refresh -- --pace=250      # пауза каждого потока между запросами, мс
+//   npm run refresh -- --feeds=1 --brand-limit=2   # укороченный прогон для проверки
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,20 +55,28 @@ const REPORT_PATH = path.join(ROOT, "runtime", "refresh-report.json");
 // каждой, так что находки достаются даром. Отсюда их забирает пополнение вместо
 // собственного обхода — см. `scripts/lib/che168-discovery.mjs`.
 const DISCOVERIES_PATH = path.join(ROOT, "runtime", "che168-discoveries.json");
+const BRAND_MAP_PATH = path.join(ROOT, "config", "che168-brands-1.json");
+const GIANT_SERIES_PATH = path.join(ROOT, "config", "che168-giant-series.json");
 const FEED_URL = "https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=7";
-// The catalog spans four powertrain feeds; each paginates on its own. Feed 1 is
-// the petrol one and it is by far the largest (~181k cars, ~7.5k pages, about
-// twenty extra minutes). It has to be walked all the same: a card missing from
-// every feed goes to the detail queue, so leaving petrol out would send tens of
-// thousands of perfectly live cards there every night — and none of them would
-// ever get a price update from the lists.
+const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+// Feeds 7/5/6 (EV, plug-in, hybrid) are walked whole; feed 1 (petrol) is the
+// one that needs brand/series slicing — see the header note.
 const FUEL_TYPES = [7, 5, 6, 1];
+// Глубже этого срез не листаем: дальше пагинация начинает подсовывать одно и
+// то же (замерено на марках в несколько сотен страниц). Марка глубже порога
+// идёт в разрез по моделям.
+const SLICE_MAX_PAGES = 250;
 const USD_TO_CNY = 7.15;
 // Day-to-day the source re-quotes yuan prices in dollars at the current rate,
 // which moves almost every card by $10–20. Those wiggles are noise: they would
 // rewrite the whole catalog and flood price_history daily. Only a move of at
 // least this many dollars counts as a real re-pricing.
 const PRICE_STEP_USD = 100;
+// Столько безответных запросов подряд значит «источник закрылся»: в здоровом
+// прогоне безответных нет вообще, а при блокировке они идут сплошной стеной.
+// Каждый безответный запрос дорог (~13 секунд повторов), поэтому порог низкий —
+// так смена сессии приходит через ~3 минуты стены, а не через семь.
+const SILENCE_LIMIT = 60;
 
 const args = new Map(process.argv.slice(2).map((arg) => {
   const [key, value = "true"] = arg.replace(/^--/, "").split("=");
@@ -54,8 +84,20 @@ const args = new Map(process.argv.slice(2).map((arg) => {
 }));
 const dryRun = args.get("dry-run") === "true";
 const skipDetail = args.get("skip-detail") === "true";
-const detailLimit = Number(args.get("detail-limit") || Infinity);
+// Потолок поштучных проверок за ночь: очередь берётся «сначала самые
+// залежавшиеся», так что весь каталог проходит через них по кругу за несколько
+// ночей, а прогон никогда не выжигает сессионную квоту источника подчистую.
+const detailLimit = Number(args.get("detail-limit") || 12000);
 const concurrency = Number(args.get("concurrency") || 4);
+// Пауза каждого потока между запросами. Спешить некуда: бережный темп важнее
+// скорости, лишь бы прогон укладывался в ночное окно.
+const pace = Number(args.get("pace") || 250);
+// Квота источника — на сессию: после стольких запросов окно меняется заранее,
+// не дожидаясь блокировки.
+const sessionMax = Number(args.get("session-max") || 8000);
+// Для укороченных проверочных прогонов: какие фиды обходить и сколько марок.
+const activeFeeds = args.get("feeds") ? args.get("feeds").split(",").map(Number) : FUEL_TYPES;
+const brandLimit = Number(args.get("brand-limit") || 0);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const startedAt = Date.now();
@@ -73,7 +115,9 @@ async function flight(page, url, expectMarker) {
       // результатами; теперь это просто ещё одна попытка.
       let response;
       try {
-        response = await fetch(target, { credentials: "include", headers: { RSC: "1" } });
+        // Свой лимит времени обязателен: придержанный источником запрос иначе
+        // висит минутами, и предохранитель не успевает заметить стену молчания.
+        response = await fetch(target, { credentials: "include", headers: { RSC: "1" }, signal: AbortSignal.timeout(20_000) });
       } catch {
         await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
         continue;
@@ -91,10 +135,120 @@ async function flight(page, url, expectMarker) {
   }, [url, expectMarker]);
 }
 
-const listUrl = (fuelType, pageIndex) =>
-  `/en/used-cars?fueltype=${fuelType}&vehicle_list=1${pageIndex > 1 ? `&page=${pageIndex}` : ""}&_rsc=rf${fuelType}p${pageIndex}`;
+// ---- Сессия к источнику -----------------------------------------------------
+// Одно окно с пройденной проверкой «не робот» на всех: у источника квота на
+// сессию, поэтому окно живёт ограниченное число запросов и меняется целиком.
+let browser = null;
+let context = null;
+let page = null;
+let sessionRequests = 0;
+let sessionRotations = 0;
+let rotating = null;
+
+async function openSession() {
+  // Браузер мог умереть целиком (сигнал остановки, сбой) — тогда поднимаем новый,
+  // а не пытаемся открыть окно в мёртвом.
+  if (browser && !browser.isConnected()) browser = null;
+  browser = browser || await chromium.launch();
+  const freshContext = await browser.newContext({
+    locale: "en-US",
+    viewport: { width: 1440, height: 900 },
+    userAgent: USER_AGENT,
+  });
+  const freshPage = await freshContext.newPage();
+  await freshPage.goto(FEED_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await freshPage.waitForFunction(() => document.querySelectorAll("[data-uc-car-card]").length > 0, null, { timeout: 60_000 });
+  const stale = context;
+  context = freshContext;
+  page = freshPage;
+  sessionRequests = 0;
+  if (stale) await stale.close().catch(() => {});
+}
+
+function rotateSession(reason) {
+  if (!rotating) {
+    sessionRotations += 1;
+    console.log(`[session] ${reason} — открываю новую сессию (№${sessionRotations + 1})`);
+    rotating = openSession()
+      .catch((error) => console.log(`[session] не открылась: ${String(error.message).slice(0, 120)}`))
+      .finally(() => { rotating = null; });
+  }
+  return rotating;
+}
+
+// Единственная дверь к источнику: ждёт смену сессии, меняет её по счётчику и
+// никогда не бросает исключение — потокам достаётся пустой ответ, не обвал.
+async function safeFlight(url, expectMarker) {
+  if (rotating) await rotating;
+  if (sessionRequests >= sessionMax) await rotateSession("плановая смена после " + sessionRequests + " запросов");
+  sessionRequests += 1;
+  try {
+    return await flight(page, url, expectMarker);
+  } catch {
+    return { status: 0, text: "" };
+  }
+}
+
+// ---- Предохранитель ---------------------------------------------------------
+// Стена молчания — признак блокировки. Первая реакция — новая сессия (квота
+// сессионная, это лечит). Если источник молчит и после смены — останавливаемся
+// вежливо: всё проверенное уже в базе, остальное дождётся следующей ночи.
+let consecutiveSilence = 0;
+let answersSinceRotation = 0;
+let silenceRotations = 0;
+let lastAnswerAt = Date.now();
+let stopped = false;
+
+// Сигнал остановки (systemd, Ctrl+C) не должен выбрасывать наработанное:
+// потоки сворачиваются, всё проверенное дозаписывается, отчёт сохраняется.
+// Playwright по этому же сигналу сам закрывает браузер — оставшиеся запросы
+// мгновенно вернутся пустыми, так что ожидание короткое.
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, () => {
+    if (!stopped) console.log(`[stop] получен ${signal} — сворачиваюсь, всё проверенное сохраняю`);
+    stopped = true;
+  });
+}
+
+async function noteAnswer(ok) {
+  if (stopped) return;
+  if (ok) {
+    consecutiveSilence = 0;
+    answersSinceRotation += 1;
+    lastAnswerAt = Date.now();
+    return;
+  }
+  consecutiveSilence += 1;
+  // Две картины блокировки: стена быстрых пустых ответов (ловится счётчиком)
+  // и стена медленных зависаний (счётчик растёт еле-еле — ловим по времени).
+  const wall = consecutiveSilence >= SILENCE_LIMIT
+    || (consecutiveSilence >= 12 && Date.now() - lastAnswerAt > 180_000);
+  if (!wall) return;
+  consecutiveSilence = 0;
+  lastAnswerAt = Date.now();
+  // Смена сессии, которая после прошлого раза успела поработать, считается
+  // сработавшей — лимит на подряд идущие безуспешные смены, а не на все за ночь.
+  if (silenceRotations < 2 || answersSinceRotation >= 300) {
+    silenceRotations = answersSinceRotation >= 300 ? 1 : silenceRotations + 1;
+    answersSinceRotation = 0;
+    await rotateSession(`источник замолчал (${SILENCE_LIMIT} запросов без ответа)`);
+  } else {
+    stopped = true;
+    console.log("[stop] источник молчит и после смены сессии — заканчиваю досрочно, всё проверенное сохранено");
+  }
+}
+
+let rscSeq = 0;
+async function listFlight(params) {
+  rscSeq += 1;
+  const { status, text } = await safeFlight(`/en/used-cars?vehicle_list=1&${params}&_rsc=r${rscSeq}`, "infoid");
+  return status === 200 && text ? extractChe168ListPayload([asFlightScript(text)]) : null;
+}
 
 const { pool } = await import("../server/db.mjs");
+// Порядок важен: очередь поштучных проверок берётся из этого же списка, и
+// «сначала самые давно не проверенные» превращает ограниченный ночной запас
+// проверок в честную карусель по всему каталогу.
 const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_total_usd,
     (source_payload->>'usdPrice')::numeric AS usd_price,
     (source_payload->>'year')::int AS year,
@@ -107,7 +261,8 @@ const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_
     source_payload->>'dimensions' AS dimensions,
     (source_payload->>'curbWeight')::numeric AS curb_weight,
     title
-  FROM listings WHERE source='Che168' AND status='active'`);
+  FROM listings WHERE source='Che168' AND status='active'
+  ORDER BY last_checked_at ASC NULLS FIRST`);
 console.log(`[db] ${rows.length} active Che168 listings`);
 
 // Все наши идентификаторы, вместе с проданными: машина, снятая с витрины, иногда
@@ -128,52 +283,166 @@ const { rows: popular } = await pool.query(`SELECT listing_id, count(*)::int AS 
 const activeById = new Map(rows.map((row) => [row.id, row]));
 const popularRows = popular.map((p) => activeById.get(p.listing_id)).filter(Boolean);
 
-const browser = await chromium.launch();
-const context = await browser.newContext({
-  locale: "en-US",
-  viewport: { width: 1440, height: 900 },
-  userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-});
-const page = await context.newPage();
-
 const seenPrices = new Map(); // externalId -> current USD price on the source
 const discoveries = new Map(); // externalId -> кандидат на скачивание, см. lib/che168-discovery.mjs
 let discoveriesSkipped = 0; // машины источника, которых у нас нет и которые не проходят правила
 let listPages = 0;
 let listPagesEmpty = 0;
+let seriesWalked = 0;
+let brandsWalked = 0;
+
+// Страница списка учтена: цены — в общую копилку, незнакомые машины — в находки.
+function absorbList(payload, fuelType) {
+  if (!payload?.items?.length) return false;
+  for (const item of payload.items) {
+    const id = String(item.infoid || "");
+    const price = Number(String(item.price).replace(/[^\d.]/g, "")) || null;
+    if (id && price && !seenPrices.has(id)) seenPrices.set(id, price);
+    // Незнакомая машина попадается здесь бесплатно — страница всё равно
+    // прочитана ради цен. Отбор идёт по списку, окончательное решение
+    // остаётся за карточкой при скачивании.
+    if (id && !knownIds.has(`che168-${id}`) && !discoveries.has(id)) {
+      const candidate = discoveryCandidate(item, { fuelType, knownIds });
+      if (candidate) discoveries.set(id, candidate);
+      else discoveriesSkipped += 1;
+    }
+  }
+  return true;
+}
+
+// Живой список моделей гигантской марки: нумерация моделей у Autohome общая с
+// Che168, а запасной список из репозитория страхует от недоступности Autohome
+// и сам по себе стареет медленно.
+async function autohomeSeriesIds(brandId) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(`https://car.autohome.com.cn/price/brand-${brandId}.html`, {
+        headers: { "user-agent": USER_AGENT },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (response.ok) {
+        const text = await response.text();
+        const ids = [...new Set([...text.matchAll(/series-(\d+)/g)].map((m) => Number(m[1])))];
+        if (ids.length) return ids;
+      }
+    } catch {}
+    await sleep(1000 * (attempt + 1));
+  }
+  return [];
+}
 
 async function sweepLists() {
   const queue = [];
-  for (const fuelType of FUEL_TYPES) {
-    const { text } = await flight(page, listUrl(fuelType, 1), "infoid");
-    const payload = extractChe168ListPayload([asFlightScript(text)]);
+
+  // Каждый срез проходим дважды: порядок машин на страницах перемешивается при
+  // каждом запросе, и второй проход добирает то, что первый не увидел (замерено:
+  // один проход отдаёт лишь 81–94% машин среза, два — почти всё). Это дешевле,
+  // чем ловить пропущенных поштучными проверками: страница списка приносит до
+  // 24 машин ценой одного запроса.
+  const enqueueSlice = (baseParams, pageCount, fuelType, { cap = true } = {}) => {
+    const depth = cap ? Math.min(pageCount, SLICE_MAX_PAGES) : pageCount;
+    for (let pass = 0; pass < 2; pass += 1) {
+      // Первая страница уже прочитана разведкой среза, поэтому в первом проходе
+      // начинаем со второй, а во втором берём и первую — итого по два взгляда на всё.
+      for (let pageIndex = pass === 0 ? 2 : 1; pageIndex <= depth; pageIndex += 1) {
+        queue.push({ params: `${baseParams}${pageIndex > 1 ? `&page=${pageIndex}` : ""}`, fuelType });
+      }
+    }
+  };
+
+  // Фиды 7/5/6 неглубокие, их пагинация честная — обходим целиком, как раньше.
+  for (const fuelType of activeFeeds.filter((f) => f !== 1)) {
+    const payload = await listFlight(`fueltype=${fuelType}`);
     if (!payload?.pageCount) throw new Error(`feed ${fuelType}: first list page did not parse`);
-    for (let pageIndex = 1; pageIndex <= payload.pageCount; pageIndex += 1) queue.push({ fuelType, pageIndex });
+    absorbList(payload, fuelType);
+    enqueueSlice(`fueltype=${fuelType}`, payload.pageCount, fuelType, { cap: false });
     console.log(`[feed] fueltype=${fuelType}: ${payload.totalCount} cars, ${payload.pageCount} pages`);
   }
-  const total = queue.length;
-  const worker = async () => {
-    while (queue.length) {
-      const { fuelType, pageIndex } = queue.shift();
-      const { status, text } = await flight(page, listUrl(fuelType, pageIndex), "infoid");
-      const payload = status === 200 && text ? extractChe168ListPayload([asFlightScript(text)]) : null;
-      if (!payload?.items?.length) listPagesEmpty += 1;
-      else for (const item of payload.items) {
-        const id = String(item.infoid || "");
-        const price = Number(String(item.price).replace(/[^\d.]/g, "")) || null;
-        if (id && price && !seenPrices.has(id)) seenPrices.set(id, price);
-        // Незнакомая машина попадается здесь бесплатно — страница всё равно
-        // прочитана ради цен. Отбор идёт по списку, окончательное решение
-        // остаётся за карточкой при скачивании.
-        if (id && !knownIds.has(`che168-${id}`) && !discoveries.has(id)) {
-          const candidate = discoveryCandidate(item, { fuelType, knownIds });
-          if (candidate) discoveries.set(id, candidate);
-          else discoveriesSkipped += 1;
+
+  // Бензиновый фид глубокой пагинации не переживает — режем по маркам, а самые
+  // крупные марки по моделям. sort=2 (по цене) даёт устойчивую мелкую пагинацию.
+  if (activeFeeds.includes(1)) {
+    const brandMap = JSON.parse(await fs.readFile(BRAND_MAP_PATH, "utf8"));
+    const giantSeries = JSON.parse(await fs.readFile(GIANT_SERIES_PATH, "utf8"));
+    let brands = Object.entries(brandMap.brands)
+      .map(([name, value]) => ({ name, id: value.brandId, censusListings: value.listings || 0 }))
+      .sort((a, b) => b.censusListings - a.censusListings);
+    if (brandLimit) brands = brands.slice(0, brandLimit);
+
+    const giants = [];
+    const brandQueue = [...brands];
+    const probeBrand = async () => {
+      while (brandQueue.length && !stopped) {
+        const brand = brandQueue.shift();
+        const payload = await listFlight(`fueltype=1&brandid=${brand.id}&sort=2`);
+        // Марка, у которой сегодня ноль машин, — это ответ, а не молчание.
+        await noteAnswer(Boolean(payload));
+        if (!payload?.pageCount || !payload.totalCount) continue;
+        absorbList(payload, 1);
+        brandsWalked += 1;
+        if (payload.pageCount <= SLICE_MAX_PAGES) {
+          enqueueSlice(`fueltype=1&brandid=${brand.id}&sort=2`, payload.pageCount, 1);
+        } else {
+          giants.push({ ...brand, totalCount: payload.totalCount });
         }
+        await sleep(pace);
       }
+    };
+    await Promise.all(Array.from({ length: concurrency }, probeBrand));
+    console.log(`[feed] fueltype=1: ${brands.length} марок, из них ${giants.length} крупных — по моделям`);
+
+    for (const giant of giants) {
+      if (stopped) break;
+      const fallback = (giantSeries.seriesByBrand[String(giant.id)]?.series || []).map((s) => s.id);
+      const live = await autohomeSeriesIds(giant.id);
+      const seriesIds = [...new Set([...live, ...fallback])];
+      if (!seriesIds.length) {
+        // Некуда резать — берём хотя бы честную часть марки с двух концов цены.
+        console.log(`[feed] ${giant.name}: списка моделей нет, обходим края марки`);
+        for (let pageIndex = 2; pageIndex <= SLICE_MAX_PAGES; pageIndex += 1) {
+          queue.push({ params: `fueltype=1&brandid=${giant.id}&sort=2&page=${pageIndex}`, fuelType: 1 });
+          queue.push({ params: `fueltype=1&brandid=${giant.id}&sort=1&page=${pageIndex}`, fuelType: 1 });
+        }
+        continue;
+      }
+      let covered = 0;
+      const seriesQueue = [...seriesIds];
+      const probeSeries = async () => {
+        while (seriesQueue.length && !stopped) {
+          const seriesId = seriesQueue.shift();
+          const payload = await listFlight(`fueltype=1&seriesid=${seriesId}&sort=2`);
+          await noteAnswer(Boolean(payload));
+          if (!payload?.pageCount || !payload.totalCount) continue;
+          absorbList(payload, 1);
+          // Страница марки на Autohome ссылается и на «рекомендованные» чужие
+          // модели — такой номер источнику знаком, но это не наша марка.
+          // Первую страницу мы уже забрали (цены лишними не бывают), а вглубь
+          // не идём: чужая модель обойдётся в срезе своей марки.
+          if (payload.items?.[0]?.brandname && payload.items[0].brandname !== giant.name) continue;
+          seriesWalked += 1;
+          covered += payload.totalCount;
+          enqueueSlice(`fueltype=1&seriesid=${seriesId}&sort=2`, payload.pageCount, 1);
+          await sleep(pace);
+        }
+      };
+      await Promise.all(Array.from({ length: concurrency }, probeSeries));
+      const share = Math.round((covered / giant.totalCount) * 100);
+      console.log(`[feed] ${giant.name}: ${seriesIds.length} моделей (${live.length ? "живой список" : "запасной список"}), покрывают ${covered} из ${giant.totalCount} (${share}%)`);
+      if (share < 80) console.log(`[feed] ${giant.name}: покрытие моделей просело — пора обновить перепись (runtime/census-series.mjs)`);
+    }
+  }
+
+  const total = queue.length + listPages;
+  const worker = async () => {
+    while (queue.length && !stopped) {
+      const { params, fuelType } = queue.shift();
+      const payload = await listFlight(params);
+      const ok = absorbList(payload, fuelType);
+      await noteAnswer(ok);
+      if (!ok) listPagesEmpty += 1;
       listPages += 1;
       if (listPages % 200 === 0) console.log(`[lists] ${listPages}/${total} pages, ${seenPrices.size} cars, ${discoveries.size} new`);
-      await sleep(60);
+      await sleep(pace);
     }
   };
   await Promise.all(Array.from({ length: concurrency }, worker));
@@ -182,12 +451,12 @@ async function sweepLists() {
 }
 
 // Находки переживают прогон в файле: пополнение запускается отдельной службой
-// через час. Пустой список тоже записываем — иначе пополнение возьмёт вчерашний
-// файл и полезет за машинами, которые уже завело.
+// позже ночью. Пустой список тоже записываем — иначе пополнение возьмёт
+// вчерашний файл и полезет за машинами, которые уже завело.
 async function writeDiscoveries() {
   const payload = {
     generatedAt: new Date().toISOString(),
-    feeds: FUEL_TYPES,
+    feeds: activeFeeds,
     catalogKnown: knownIds.size,
     skippedByPolicy: discoveriesSkipped,
     items: [...discoveries.values()],
@@ -203,15 +472,7 @@ async function writeDiscoveries() {
 // after retries) stays untouched and is only counted: guessing here would
 // either hide a live car or keep advertising a sold one.
 async function checkDetail(externalId) {
-  let status = 0;
-  let text = "";
-  try {
-    ({ status, text } = await flight(page, `/en/detail/${externalId}?_rsc=rfd${externalId}`, "ssrCarDetail"));
-  } catch {
-    // Ни одна сетевая ошибка не должна прерывать прогон: машина уходит в
-    // «без ответа» и остаётся на витрине нетронутой до следующего раза.
-    return { verdict: "unknown", status: 0 };
-  }
+  const { status, text } = await safeFlight(`/en/detail/${externalId}?_rsc=rfd${externalId}`, "ssrCarDetail");
   const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
   if (!payload?.detail) return { verdict: "unknown", status };
   const price = Number(String(payload.detail.price ?? "").replace(/[^\d.]/g, "")) || null;
@@ -235,9 +496,11 @@ const landedTotal = (row, usd) => estimateLandedCost({
   curbWeight: row.curb_weight,
 }).totalUsd;
 
+let detailChecked = 0;
+let detailSkipped = 0;
+
 try {
-  await page.goto(FEED_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.waitForFunction(() => document.querySelectorAll("[data-uc-car-card]").length > 0, null, { timeout: 60_000 });
+  await openSession();
   console.log("[browser] challenge passed");
 
   const priceUpdates = []; // real re-pricings: new price + landed estimate + history point
@@ -317,20 +580,21 @@ try {
   };
 
   // Priority pass: the cars visitors opened get their authoritative detail
-  // check and a write immediately, before the ~6-minute list walk begins.
+  // check and a write immediately, before the long list walk begins.
   const prioritized = new Set();
   if (!skipDetail && popularRows.length) {
     console.log(`[priority] ${popularRows.length} visitor-viewed cars go first`);
     const queue = [...popularRows];
     const worker = async () => {
-      while (queue.length) {
+      while (queue.length && !stopped) {
         const row = queue.shift();
         const result = await checkDetail(row.external_id);
+        await noteAnswer(result.verdict !== "unknown");
         if (result.verdict === "sold") soldIds.push(row.id);
         else if (result.verdict === "alive") classify(row, result.price);
         else unknown += 1;
         prioritized.add(row.id);
-        await sleep(60);
+        await sleep(pace);
       }
     };
     await Promise.all(Array.from({ length: concurrency }, worker));
@@ -353,28 +617,28 @@ try {
   // Всё, что списки подтвердили, записываем сразу — до долгой детальной фазы.
   await flushWrites();
 
-  if (!skipDetail) {
+  if (!skipDetail && !stopped) {
     const queue = missing.slice(0, detailLimit);
-    const skipped = missing.length - queue.length;
-    if (skipped > 0) console.log(`[detail] --detail-limit: ${skipped} of ${missing.length} missing cards left for the next run`);
-    let checked = 0;
+    detailSkipped = missing.length - queue.length;
+    if (detailSkipped > 0) console.log(`[detail] потолок за ночь: ${detailSkipped} из ${missing.length} карточек дождутся следующего прогона`);
     const worker = async () => {
-      while (queue.length) {
+      while (queue.length && !stopped) {
         const row = queue.shift();
         const result = await checkDetail(row.external_id);
+        await noteAnswer(result.verdict !== "unknown");
         if (result.verdict === "sold") soldIds.push(row.id);
         else if (result.verdict === "alive") classify(row, result.price);
         else unknown += 1;
-        checked += 1;
-        if (checked % 200 === 0) console.log(`[detail] ${checked} checked · ${stats.sold + soldIds.length} sold · ${unknown} no answer · ${Math.round((Date.now() - startedAt) / 60000)}min`);
+        detailChecked += 1;
+        if (detailChecked % 200 === 0) console.log(`[detail] ${detailChecked} checked · ${stats.sold + soldIds.length} sold · ${unknown} no answer · ${Math.round((Date.now() - startedAt) / 60000)}min`);
         // Пишем по ходу дела: прогон длинный, и прерванный на середине он должен
         // оставить в базе всё, что успел проверить, а не выбросить результат.
-        if (checked % 1000 === 0) await flushWrites();
-        await sleep(60);
+        if (detailChecked % 1000 === 0) await flushWrites();
+        await sleep(pace);
       }
     };
     await Promise.all(Array.from({ length: concurrency }, worker));
-    console.log(`[detail] done: ${checked} checked, ${soldIds.length} sold, ${unknown} without a clear answer`);
+    console.log(`[detail] done: ${detailChecked} checked, ${soldIds.length} sold, ${unknown} without a clear answer`);
   }
 
   await flushWrites();
@@ -394,9 +658,14 @@ try {
     finishedAt: new Date().toISOString(),
     minutes: Math.round((Date.now() - startedAt) / 6000) / 10,
     dryRun,
+    stoppedEarly: stopped,
+    sessionRotations,
+    pace,
     activeBefore: rows.length,
     listPages,
     listPagesEmpty,
+    brandsWalked,
+    seriesWalked,
     pricedByLists: seenPrices.size,
     discovered: discoveries.size,
     discoveriesSkipped,
@@ -406,7 +675,8 @@ try {
     priceRises: stats.rePriced - drops.length,
     estimateOnly: stats.estimateOnly,
     unchanged: stats.unchanged,
-    detailChecked: skipDetail ? 0 : prioritized.size + Math.min(missing.length, detailLimit),
+    detailChecked: prioritized.size + detailChecked,
+    detailSkipped,
     sold: stats.sold,
     noAnswer: unknown,
     favoritesCleared,
@@ -417,6 +687,6 @@ try {
   await fs.writeFile(REPORT_PATH, `${JSON.stringify({ ...report, priceUpdates: stats.priceUpdates.map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })) }, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
 } finally {
-  await browser.close();
+  if (browser) await browser.close().catch(() => {});
   await pool.end();
 }

@@ -1,0 +1,5747 @@
+{
+  "generatedAt": "2026-08-26T08:00:00.000Z",
+  "source": "Che168 Global, перепись census-series (fueltype=1) от 25.08.2026",
+  "note": "Запасной список моделей для марок, которые слишком велики для сквозной пагинации. Актуализация сначала спрашивает свежий список у Autohome и объединяет с этим.",
+  "seriesByBrand": {
+    "1": {
+      "name": "Volkswagen",
+      "series": [
+        {
+          "id": 871,
+          "model": "Golf",
+          "censusTotal": 1959
+        },
+        {
+          "id": 496,
+          "model": "Magotan",
+          "censusTotal": 1514
+        },
+        {
+          "id": 614,
+          "model": "Lavida",
+          "censusTotal": 1418
+        },
+        {
+          "id": 528,
+          "model": "Passat",
+          "censusTotal": 1402
+        },
+        {
+          "id": 442,
+          "model": "Sagitar",
+          "censusTotal": 1298
+        },
+        {
+          "id": 3457,
+          "model": "Lamando",
+          "censusTotal": 1260
+        },
+        {
+          "id": 4274,
+          "model": "Tiguan L",
+          "censusTotal": 1122
+        },
+        {
+          "id": 4744,
+          "model": "Tayron",
+          "censusTotal": 1091
+        },
+        {
+          "id": 145,
+          "model": "Polo",
+          "censusTotal": 1002
+        },
+        {
+          "id": 633,
+          "model": "Bora",
+          "censusTotal": 839
+        },
+        {
+          "id": 4745,
+          "model": "Tharu",
+          "censusTotal": 764
+        },
+        {
+          "id": 4232,
+          "model": "Teramont",
+          "censusTotal": 734
+        },
+        {
+          "id": 4674,
+          "model": "Volkswagen T-ROC",
+          "censusTotal": 667
+        },
+        {
+          "id": 905,
+          "model": "FAW-Volkswagen CC",
+          "censusTotal": 564
+        },
+        {
+          "id": 874,
+          "model": "Tiguan",
+          "censusTotal": 502
+        },
+        {
+          "id": 2922,
+          "model": "Santana",
+          "censusTotal": 438
+        },
+        {
+          "id": 82,
+          "model": "Touareg",
+          "censusTotal": 408
+        },
+        {
+          "id": 16,
+          "model": "Jetta",
+          "censusTotal": 283
+        },
+        {
+          "id": 210,
+          "model": "Beetle",
+          "censusTotal": 245
+        },
+        {
+          "id": 333,
+          "model": "Touran",
+          "censusTotal": 187
+        },
+        {
+          "id": 5445,
+          "model": "Viloran",
+          "censusTotal": 182
+        },
+        {
+          "id": 5245,
+          "model": "Volkswagen Talagon",
+          "censusTotal": 165
+        },
+        {
+          "id": 4993,
+          "model": "T-Cross",
+          "censusTotal": 141
+        },
+        {
+          "id": 5394,
+          "model": "Tanying",
+          "censusTotal": 120
+        },
+        {
+          "id": 669,
+          "model": "Scirocco",
+          "censusTotal": 120
+        },
+        {
+          "id": 3103,
+          "model": "Lavida Tour",
+          "censusTotal": 117
+        },
+        {
+          "id": 86,
+          "model": "Sharan",
+          "censusTotal": 109
+        },
+        {
+          "id": 7829,
+          "model": "Golf GTI",
+          "censusTotal": 102
+        },
+        {
+          "id": 3964,
+          "model": "Golf Sportsvan",
+          "censusTotal": 90
+        },
+        {
+          "id": 4045,
+          "model": "Volkswagen Phideon",
+          "censusTotal": 84
+        },
+        {
+          "id": 6738,
+          "model": "Volkswagen Talagon",
+          "censusTotal": 82
+        },
+        {
+          "id": 631,
+          "model": "Multivan",
+          "censusTotal": 80
+        },
+        {
+          "id": 372,
+          "model": "Golf (Import)",
+          "censusTotal": 72
+        },
+        {
+          "id": 4204,
+          "model": "C-TREK",
+          "censusTotal": 58
+        },
+        {
+          "id": 5246,
+          "model": "Volkswagen Tayron X",
+          "censusTotal": 54
+        },
+        {
+          "id": 3999,
+          "model": "Weilan",
+          "censusTotal": 54
+        },
+        {
+          "id": 224,
+          "model": "Phaeton",
+          "censusTotal": 51
+        },
+        {
+          "id": 557,
+          "model": "Tiguan",
+          "censusTotal": 50
+        },
+        {
+          "id": 3416,
+          "model": "Caravelle",
+          "censusTotal": 37
+        },
+        {
+          "id": 539,
+          "model": "Magotan (Import)",
+          "censusTotal": 24
+        },
+        {
+          "id": 5826,
+          "model": "Volkswagen Tiguan X",
+          "censusTotal": 17
+        },
+        {
+          "id": 826,
+          "model": "Passat Lingyu",
+          "censusTotal": 13
+        },
+        {
+          "id": 3197,
+          "model": "Gran Lavida",
+          "censusTotal": 11
+        },
+        {
+          "id": 368,
+          "model": "Passat",
+          "censusTotal": 9
+        },
+        {
+          "id": 149,
+          "model": "Santana Classic",
+          "censusTotal": 7
+        },
+        {
+          "id": 780,
+          "model": "Volkswagen up!",
+          "censusTotal": 6
+        },
+        {
+          "id": 430,
+          "model": "Volkswagen Eos",
+          "censusTotal": 6
+        },
+        {
+          "id": 207,
+          "model": "Santana Vista",
+          "censusTotal": 4
+        },
+        {
+          "id": 360,
+          "model": "Caddy",
+          "censusTotal": 2
+        },
+        {
+          "id": 700,
+          "model": "Volkswagen CC",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "3": {
+      "name": "Toyota",
+      "series": [
+        {
+          "id": 526,
+          "model": "Corolla",
+          "censusTotal": 1114
+        },
+        {
+          "id": 110,
+          "model": "Camry",
+          "censusTotal": 1046
+        },
+        {
+          "id": 3462,
+          "model": "Levin",
+          "censusTotal": 764
+        },
+        {
+          "id": 770,
+          "model": "RAV4 Rongfang",
+          "censusTotal": 733
+        },
+        {
+          "id": 771,
+          "model": "Highlander",
+          "censusTotal": 691
+        },
+        {
+          "id": 3126,
+          "model": "YARiS L Zhi Xuan",
+          "censusTotal": 657
+        },
+        {
+          "id": 46,
+          "model": "Prado",
+          "censusTotal": 451
+        },
+        {
+          "id": 4962,
+          "model": "Avalon",
+          "censusTotal": 350
+        },
+        {
+          "id": 882,
+          "model": "Crown",
+          "censusTotal": 349
+        },
+        {
+          "id": 2107,
+          "model": "Alphard",
+          "censusTotal": 286
+        },
+        {
+          "id": 111,
+          "model": "Vios",
+          "censusTotal": 242
+        },
+        {
+          "id": 5472,
+          "model": "Wildlander",
+          "censusTotal": 236
+        },
+        {
+          "id": 375,
+          "model": "Reiz",
+          "censusTotal": 218
+        },
+        {
+          "id": 6414,
+          "model": "Frontlander",
+          "censusTotal": 153
+        },
+        {
+          "id": 4260,
+          "model": "Vios FS",
+          "censusTotal": 151
+        },
+        {
+          "id": 6428,
+          "model": "Corolla Cross",
+          "censusTotal": 131
+        },
+        {
+          "id": 334,
+          "model": "Prado (Import)",
+          "censusTotal": 122
+        },
+        {
+          "id": 4645,
+          "model": "Toyota C-HR",
+          "censusTotal": 116
+        },
+        {
+          "id": 109,
+          "model": "Corolla",
+          "censusTotal": 105
+        },
+        {
+          "id": 4646,
+          "model": "Toyota IZOA",
+          "censusTotal": 96
+        },
+        {
+          "id": 4259,
+          "model": "YARiS L Zhi Xiang",
+          "censusTotal": 90
+        },
+        {
+          "id": 45,
+          "model": "Land Cruiser",
+          "censusTotal": 55
+        },
+        {
+          "id": 550,
+          "model": "Land Cruiser (Import)",
+          "censusTotal": 48
+        },
+        {
+          "id": 107,
+          "model": "Previa",
+          "censusTotal": 42
+        },
+        {
+          "id": 5960,
+          "model": "Allion",
+          "censusTotal": 39
+        },
+        {
+          "id": 6385,
+          "model": "Venza",
+          "censusTotal": 37
+        },
+        {
+          "id": 983,
+          "model": "Toyota Sienna",
+          "censusTotal": 37
+        },
+        {
+          "id": 2237,
+          "model": "E'Z",
+          "censusTotal": 23
+        },
+        {
+          "id": 2574,
+          "model": "Toyota 86",
+          "censusTotal": 22
+        },
+        {
+          "id": 6077,
+          "model": "Lingfang HARRIER",
+          "censusTotal": 20
+        },
+        {
+          "id": 505,
+          "model": "Yaris",
+          "censusTotal": 13
+        },
+        {
+          "id": 2354,
+          "model": "Tundra",
+          "censusTotal": 13
+        },
+        {
+          "id": 2617,
+          "model": "Supra",
+          "censusTotal": 12
+        },
+        {
+          "id": 513,
+          "model": "FJ Cruiser",
+          "censusTotal": 11
+        },
+        {
+          "id": 2527,
+          "model": "Coaster",
+          "censusTotal": 10
+        },
+        {
+          "id": 5963,
+          "model": "Levin GT",
+          "censusTotal": 7
+        },
+        {
+          "id": 6030,
+          "model": "Crown Kluger",
+          "censusTotal": 7
+        },
+        {
+          "id": 206,
+          "model": "Toyota RAV4 (Import)",
+          "censusTotal": 7
+        },
+        {
+          "id": 964,
+          "model": "Sequoia",
+          "censusTotal": 6
+        },
+        {
+          "id": 2607,
+          "model": "HIACE",
+          "censusTotal": 6
+        },
+        {
+          "id": 711,
+          "model": "GR YARIS",
+          "censusTotal": 3
+        },
+        {
+          "id": 3851,
+          "model": "Fortuner",
+          "censusTotal": 3
+        },
+        {
+          "id": 762,
+          "model": "Venza (Import)",
+          "censusTotal": 3
+        },
+        {
+          "id": 963,
+          "model": "Camry (Overseas)",
+          "censusTotal": 2
+        },
+        {
+          "id": 2244,
+          "model": "Zelos",
+          "censusTotal": 2
+        },
+        {
+          "id": 549,
+          "model": "Highlander (Import)",
+          "censusTotal": 2
+        },
+        {
+          "id": 170,
+          "model": "Terios",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "8": {
+      "name": "Ford",
+      "series": [
+        {
+          "id": 364,
+          "model": "Focus",
+          "censusTotal": 1059
+        },
+        {
+          "id": 117,
+          "model": "Mondeo",
+          "censusTotal": 792
+        },
+        {
+          "id": 3347,
+          "model": "Ford Escort",
+          "censusTotal": 549
+        },
+        {
+          "id": 3615,
+          "model": "Edge",
+          "censusTotal": 445
+        },
+        {
+          "id": 2863,
+          "model": "Ford Kuga",
+          "censusTotal": 271
+        },
+        {
+          "id": 102,
+          "model": "Mustang",
+          "censusTotal": 217
+        },
+        {
+          "id": 2353,
+          "model": "Ford F-150 Raptor",
+          "censusTotal": 181
+        },
+        {
+          "id": 5556,
+          "model": "Explorer",
+          "censusTotal": 172
+        },
+        {
+          "id": 2871,
+          "model": "Ford EcoSport",
+          "censusTotal": 161
+        },
+        {
+          "id": 3693,
+          "model": "Taurus",
+          "censusTotal": 89
+        },
+        {
+          "id": 659,
+          "model": "Fiesta",
+          "censusTotal": 88
+        },
+        {
+          "id": 2024,
+          "model": "Explorer (Import)",
+          "censusTotal": 81
+        },
+        {
+          "id": 5211,
+          "model": "Ford Escape",
+          "censusTotal": 75
+        },
+        {
+          "id": 7224,
+          "model": "Ford Bronco",
+          "censusTotal": 56
+        },
+        {
+          "id": 4899,
+          "model": "Territory",
+          "censusTotal": 53
+        },
+        {
+          "id": 6931,
+          "model": "Ford Ranger",
+          "censusTotal": 49
+        },
+        {
+          "id": 3814,
+          "model": "Tourneo",
+          "censusTotal": 42
+        },
+        {
+          "id": 5910,
+          "model": "Territory",
+          "censusTotal": 34
+        },
+        {
+          "id": 3518,
+          "model": "Everest",
+          "censusTotal": 28
+        },
+        {
+          "id": 6430,
+          "model": "Lingrui",
+          "censusTotal": 25
+        },
+        {
+          "id": 684,
+          "model": "Edge (Import)",
+          "censusTotal": 20
+        },
+        {
+          "id": 577,
+          "model": "Mondeo Zhisheng",
+          "censusTotal": 19
+        },
+        {
+          "id": 3175,
+          "model": "Mondeo",
+          "censusTotal": 16
+        },
+        {
+          "id": 6143,
+          "model": "EVOS",
+          "censusTotal": 15
+        },
+        {
+          "id": 5383,
+          "model": "Focus Active",
+          "censusTotal": 14
+        },
+        {
+          "id": 4192,
+          "model": "Transit",
+          "censusTotal": 14
+        },
+        {
+          "id": 704,
+          "model": "Focus (Import)",
+          "censusTotal": 11
+        },
+        {
+          "id": 2302,
+          "model": "Ford E350",
+          "censusTotal": 7
+        },
+        {
+          "id": 713,
+          "model": "Fiesta (Import)",
+          "censusTotal": 6
+        },
+        {
+          "id": 498,
+          "model": "S-MAX",
+          "censusTotal": 4
+        }
+      ]
+    },
+    "12": {
+      "name": "Hyundai",
+      "series": [
+        {
+          "id": 51,
+          "model": "Elantra",
+          "censusTotal": 704
+        },
+        {
+          "id": 1007,
+          "model": "Beijing Hyundai ix35",
+          "censusTotal": 383
+        },
+        {
+          "id": 3959,
+          "model": "Elantra",
+          "censusTotal": 341
+        },
+        {
+          "id": 358,
+          "model": "Hyundai Tucson",
+          "censusTotal": 288
+        },
+        {
+          "id": 3073,
+          "model": "Mistra",
+          "censusTotal": 263
+        },
+        {
+          "id": 2115,
+          "model": "Verna",
+          "censusTotal": 211
+        },
+        {
+          "id": 2764,
+          "model": "Langdong",
+          "censusTotal": 211
+        },
+        {
+          "id": 2649,
+          "model": "Sonata",
+          "censusTotal": 163
+        },
+        {
+          "id": 586,
+          "model": "Elantra",
+          "censusTotal": 157
+        },
+        {
+          "id": 4817,
+          "model": "Fista",
+          "censusTotal": 155
+        },
+        {
+          "id": 2927,
+          "model": "Santa Fe",
+          "censusTotal": 152
+        },
+        {
+          "id": 3292,
+          "model": "Beijing Hyundai ix25",
+          "censusTotal": 152
+        },
+        {
+          "id": 6118,
+          "model": "Kustu",
+          "censusTotal": 54
+        },
+        {
+          "id": 4107,
+          "model": "Hyundai Verna",
+          "censusTotal": 50
+        },
+        {
+          "id": 3415,
+          "model": "Reina",
+          "censusTotal": 24
+        },
+        {
+          "id": 2256,
+          "model": "Veloster",
+          "censusTotal": 16
+        },
+        {
+          "id": 756,
+          "model": "Genesis Coupe",
+          "censusTotal": 12
+        },
+        {
+          "id": 4615,
+          "model": "Hyundai ENCINO",
+          "censusTotal": 8
+        },
+        {
+          "id": 255,
+          "model": "Equus",
+          "censusTotal": 7
+        },
+        {
+          "id": 2984,
+          "model": "Santa Fe (Import)",
+          "censusTotal": 5
+        },
+        {
+          "id": 2117,
+          "model": "H-1 Grand Starex",
+          "censusTotal": 5
+        },
+        {
+          "id": 5003,
+          "model": "Palisade",
+          "censusTotal": 3
+        },
+        {
+          "id": 3164,
+          "model": "Grand Santa Fe",
+          "censusTotal": 3
+        },
+        {
+          "id": 4222,
+          "model": "Verna RV",
+          "censusTotal": 2
+        },
+        {
+          "id": 127,
+          "model": "Santa Fe Classic",
+          "censusTotal": 2
+        },
+        {
+          "id": 814,
+          "model": "Beijing Hyundai i30",
+          "censusTotal": 1
+        },
+        {
+          "id": 3453,
+          "model": "Genesis",
+          "censusTotal": 1
+        },
+        {
+          "id": 252,
+          "model": "Coupe",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "13": {
+      "name": "Peugeot",
+      "series": [
+        {
+          "id": 987,
+          "model": "Peugeot 408",
+          "censusTotal": 293
+        },
+        {
+          "id": 3234,
+          "model": "Peugeot 2008",
+          "censusTotal": 175
+        },
+        {
+          "id": 877,
+          "model": "Peugeot 308",
+          "censusTotal": 169
+        },
+        {
+          "id": 2619,
+          "model": "Peugeot 3008",
+          "censusTotal": 149
+        },
+        {
+          "id": 4167,
+          "model": "Peugeot 4008",
+          "censusTotal": 91
+        },
+        {
+          "id": 2299,
+          "model": "Peugeot 508",
+          "censusTotal": 82
+        },
+        {
+          "id": 3068,
+          "model": "Peugeot 301",
+          "censusTotal": 75
+        },
+        {
+          "id": 4271,
+          "model": "Peugeot 5008",
+          "censusTotal": 65
+        },
+        {
+          "id": 3632,
+          "model": "Peugeot 308S",
+          "censusTotal": 19
+        },
+        {
+          "id": 99,
+          "model": "Peugeot 307",
+          "censusTotal": 15
+        },
+        {
+          "id": 689,
+          "model": "Peugeot 308 (Import)",
+          "censusTotal": 6
+        },
+        {
+          "id": 2472,
+          "model": "Peugeot 4008 (Import)",
+          "censusTotal": 5
+        },
+        {
+          "id": 688,
+          "model": "Peugeot 207",
+          "censusTotal": 4
+        },
+        {
+          "id": 6785,
+          "model": "Peugeot 408X",
+          "censusTotal": 1
+        },
+        {
+          "id": 2047,
+          "model": "Peugeot RCZ",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "14": {
+      "name": "Honda",
+      "series": [
+        {
+          "id": 135,
+          "model": "Civic",
+          "censusTotal": 1268
+        },
+        {
+          "id": 78,
+          "model": "Accord",
+          "censusTotal": 1113
+        },
+        {
+          "id": 314,
+          "model": "Honda CR-V",
+          "censusTotal": 820
+        },
+        {
+          "id": 3582,
+          "model": "Honda XR-V",
+          "censusTotal": 771
+        },
+        {
+          "id": 81,
+          "model": "Fit",
+          "censusTotal": 675
+        },
+        {
+          "id": 3460,
+          "model": "Vezel",
+          "censusTotal": 617
+        },
+        {
+          "id": 3085,
+          "model": "Lingpai",
+          "censusTotal": 354
+        },
+        {
+          "id": 5393,
+          "model": "Haoying",
+          "censusTotal": 333
+        },
+        {
+          "id": 4102,
+          "model": "Honda Avancier",
+          "censusTotal": 333
+        },
+        {
+          "id": 880,
+          "model": "Odyssey",
+          "censusTotal": 324
+        },
+        {
+          "id": 4809,
+          "model": "Inspire",
+          "censusTotal": 274
+        },
+        {
+          "id": 3104,
+          "model": "Jade",
+          "censusTotal": 204
+        },
+        {
+          "id": 6386,
+          "model": "Integra",
+          "censusTotal": 182
+        },
+        {
+          "id": 4304,
+          "model": "Honda UR-V",
+          "censusTotal": 176
+        },
+        {
+          "id": 2565,
+          "model": "Elysion",
+          "censusTotal": 153
+        },
+        {
+          "id": 3876,
+          "model": "City",
+          "censusTotal": 99
+        },
+        {
+          "id": 859,
+          "model": "Spirior",
+          "censusTotal": 73
+        },
+        {
+          "id": 694,
+          "model": "City Classic",
+          "censusTotal": 66
+        },
+        {
+          "id": 5031,
+          "model": "Honda ENVIX",
+          "censusTotal": 64
+        },
+        {
+          "id": 2168,
+          "model": "Crosstour",
+          "censusTotal": 61
+        },
+        {
+          "id": 5842,
+          "model": "LIFE",
+          "censusTotal": 50
+        },
+        {
+          "id": 3859,
+          "model": "Greiz",
+          "censusTotal": 29
+        },
+        {
+          "id": 4179,
+          "model": "Gienia",
+          "censusTotal": 17
+        },
+        {
+          "id": 896,
+          "model": "Civic (Import)",
+          "censusTotal": 17
+        },
+        {
+          "id": 6825,
+          "model": "Honda HR-V",
+          "censusTotal": 10
+        },
+        {
+          "id": 6731,
+          "model": "Honda ZR-V",
+          "censusTotal": 7
+        },
+        {
+          "id": 449,
+          "model": "City",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "15": {
+      "name": "BMW",
+      "series": [
+        {
+          "id": 66,
+          "model": "BMW 3 Series",
+          "censusTotal": 3547
+        },
+        {
+          "id": 65,
+          "model": "BMW 5 Series",
+          "censusTotal": 2969
+        },
+        {
+          "id": 2561,
+          "model": "BMW X1",
+          "censusTotal": 2193
+        },
+        {
+          "id": 4658,
+          "model": "BMW X3",
+          "censusTotal": 1368
+        },
+        {
+          "id": 153,
+          "model": "BMW 7 Series",
+          "censusTotal": 938
+        },
+        {
+          "id": 4171,
+          "model": "BMW 1 Series",
+          "censusTotal": 777
+        },
+        {
+          "id": 159,
+          "model": "BMW X5 (Import)",
+          "censusTotal": 777
+        },
+        {
+          "id": 2968,
+          "model": "BMW 4 Series",
+          "censusTotal": 507
+        },
+        {
+          "id": 6548,
+          "model": "BMW X5",
+          "censusTotal": 501
+        },
+        {
+          "id": 587,
+          "model": "BMW X6",
+          "censusTotal": 281
+        },
+        {
+          "id": 2963,
+          "model": "BMW 3 Series GT",
+          "censusTotal": 267
+        },
+        {
+          "id": 5309,
+          "model": "BMW X2",
+          "censusTotal": 264
+        },
+        {
+          "id": 4472,
+          "model": "BMW 6 Series GT",
+          "censusTotal": 237
+        },
+        {
+          "id": 3230,
+          "model": "BMW 2 Series (Import)",
+          "censusTotal": 221
+        },
+        {
+          "id": 373,
+          "model": "BMW 1 Series (Import)",
+          "censusTotal": 221
+        },
+        {
+          "id": 3053,
+          "model": "BMW X4",
+          "censusTotal": 189
+        },
+        {
+          "id": 3362,
+          "model": "BMW X7",
+          "censusTotal": 180
+        },
+        {
+          "id": 202,
+          "model": "BMW 5 Series (Import)",
+          "censusTotal": 179
+        },
+        {
+          "id": 271,
+          "model": "BMW X3 (Import)",
+          "censusTotal": 167
+        },
+        {
+          "id": 3189,
+          "model": "BMW M4",
+          "censusTotal": 166
+        },
+        {
+          "id": 161,
+          "model": "BMW Z4",
+          "censusTotal": 131
+        },
+        {
+          "id": 3357,
+          "model": "BMW M2",
+          "censusTotal": 122
+        },
+        {
+          "id": 3941,
+          "model": "BMW 2 Series Touring",
+          "censusTotal": 112
+        },
+        {
+          "id": 2196,
+          "model": "BMW M3",
+          "censusTotal": 108
+        },
+        {
+          "id": 317,
+          "model": "BMW 3 Series (Import)",
+          "censusTotal": 97
+        },
+        {
+          "id": 2728,
+          "model": "BMW X5 M",
+          "censusTotal": 74
+        },
+        {
+          "id": 2847,
+          "model": "BMW 5 Series GT",
+          "censusTotal": 67
+        },
+        {
+          "id": 3386,
+          "model": "BMW X2 (Import)",
+          "censusTotal": 66
+        },
+        {
+          "id": 7827,
+          "model": "BMW 2 Series",
+          "censusTotal": 54
+        },
+        {
+          "id": 3464,
+          "model": "BMW 8 Series",
+          "censusTotal": 50
+        },
+        {
+          "id": 4928,
+          "model": "BMW X3 M",
+          "censusTotal": 50
+        },
+        {
+          "id": 2726,
+          "model": "BMW M5",
+          "censusTotal": 42
+        },
+        {
+          "id": 2729,
+          "model": "BMW X6 M",
+          "censusTotal": 42
+        },
+        {
+          "id": 3726,
+          "model": "BMW 2 Series Gran Tourer",
+          "censusTotal": 41
+        },
+        {
+          "id": 675,
+          "model": "BMW X1 (Import)",
+          "censusTotal": 39
+        },
+        {
+          "id": 4929,
+          "model": "BMW X4 M",
+          "censusTotal": 30
+        },
+        {
+          "id": 7946,
+          "model": "BMW M240i",
+          "censusTotal": 28
+        },
+        {
+          "id": 270,
+          "model": "BMW 6 Series",
+          "censusTotal": 25
+        },
+        {
+          "id": 3302,
+          "model": "BMW 2 Series Tourer (Import)",
+          "censusTotal": 13
+        },
+        {
+          "id": 2725,
+          "model": "BMW 1 Series M",
+          "censusTotal": 11
+        },
+        {
+          "id": 2727,
+          "model": "BMW M6",
+          "censusTotal": 9
+        },
+        {
+          "id": 7944,
+          "model": "BMW X1 M35Li",
+          "censusTotal": 8
+        },
+        {
+          "id": 3291,
+          "model": "BMW M8",
+          "censusTotal": 7
+        },
+        {
+          "id": 7954,
+          "model": "BMW X4 M40i",
+          "censusTotal": 6
+        },
+        {
+          "id": 7953,
+          "model": "BMW X3 M40i",
+          "censusTotal": 5
+        },
+        {
+          "id": 7945,
+          "model": "BMW M235L",
+          "censusTotal": 4
+        },
+        {
+          "id": 7955,
+          "model": "BMW X7 M60i",
+          "censusTotal": 4
+        },
+        {
+          "id": 8028,
+          "model": "BMW X3 M50",
+          "censusTotal": 2
+        },
+        {
+          "id": 7952,
+          "model": "BMW X2 M35i",
+          "censusTotal": 1
+        },
+        {
+          "id": 7951,
+          "model": "BMW Z4 M40i",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "19": {
+      "name": "Roewe",
+      "series": [
+        {
+          "id": 4869,
+          "model": "Roewe i5",
+          "censusTotal": 388
+        },
+        {
+          "id": 4080,
+          "model": "Roewe RX5",
+          "censusTotal": 312
+        },
+        {
+          "id": 3857,
+          "model": "Roewe 360",
+          "censusTotal": 80
+        },
+        {
+          "id": 5753,
+          "model": "Roewe iMAX8",
+          "censusTotal": 68
+        },
+        {
+          "id": 4246,
+          "model": "Roewe i6",
+          "censusTotal": 62
+        },
+        {
+          "id": 2062,
+          "model": "Roewe 350",
+          "censusTotal": 60
+        },
+        {
+          "id": 5226,
+          "model": "Roewe RX5 MAX",
+          "censusTotal": 46
+        },
+        {
+          "id": 4473,
+          "model": "Roewe RX3",
+          "censusTotal": 43
+        },
+        {
+          "id": 4665,
+          "model": "Roewe RX8",
+          "censusTotal": 38
+        },
+        {
+          "id": 5799,
+          "model": "Roewe i6 MAX",
+          "censusTotal": 13
+        },
+        {
+          "id": 2297,
+          "model": "Roewe W5",
+          "censusTotal": 9
+        },
+        {
+          "id": 2743,
+          "model": "Roewe 950",
+          "censusTotal": 9
+        },
+        {
+          "id": 537,
+          "model": "Roewe 550",
+          "censusTotal": 6
+        },
+        {
+          "id": 5071,
+          "model": "Roewe RX9",
+          "censusTotal": 3
+        },
+        {
+          "id": 8512,
+          "model": "Roewe i6",
+          "censusTotal": 1
+        },
+        {
+          "id": 482,
+          "model": "Roewe 750",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "20": {
+      "name": "MG",
+      "series": [
+        {
+          "id": 532,
+          "model": "MG5",
+          "censusTotal": 368
+        },
+        {
+          "id": 835,
+          "model": "MG6",
+          "censusTotal": 287
+        },
+        {
+          "id": 531,
+          "model": "MG7",
+          "censusTotal": 175
+        },
+        {
+          "id": 4247,
+          "model": "MG ZS",
+          "censusTotal": 122
+        },
+        {
+          "id": 6660,
+          "model": "MG5 Scorpio",
+          "censusTotal": 51
+        },
+        {
+          "id": 3065,
+          "model": "Roewe RX5",
+          "censusTotal": 51
+        },
+        {
+          "id": 2147,
+          "model": "MG 3",
+          "censusTotal": 38
+        },
+        {
+          "id": 3547,
+          "model": "MG GT",
+          "censusTotal": 23
+        },
+        {
+          "id": 4868,
+          "model": "MG HS",
+          "censusTotal": 19
+        },
+        {
+          "id": 6300,
+          "model": "MG ONE",
+          "censusTotal": 9
+        },
+        {
+          "id": 5903,
+          "model": "MG Pilot",
+          "censusTotal": 8
+        },
+        {
+          "id": 555,
+          "model": "MG 3SW",
+          "censusTotal": 4
+        }
+      ]
+    },
+    "25": {
+      "name": "Geely",
+      "series": [
+        {
+          "id": 5273,
+          "model": "Xing Rui",
+          "censusTotal": 722
+        },
+        {
+          "id": 3788,
+          "model": "Boyue",
+          "censusTotal": 648
+        },
+        {
+          "id": 3556,
+          "model": "Emgrand",
+          "censusTotal": 539
+        },
+        {
+          "id": 4701,
+          "model": "Binyue",
+          "censusTotal": 421
+        },
+        {
+          "id": 6004,
+          "model": "Xingyue L",
+          "censusTotal": 411
+        },
+        {
+          "id": 4481,
+          "model": "Vision X3",
+          "censusTotal": 318
+        },
+        {
+          "id": 4702,
+          "model": "Binrui",
+          "censusTotal": 303
+        },
+        {
+          "id": 3465,
+          "model": "Emgrand GS",
+          "censusTotal": 264
+        },
+        {
+          "id": 4133,
+          "model": "Emgrand X6",
+          "censusTotal": 264
+        },
+        {
+          "id": 474,
+          "model": "Vision",
+          "censusTotal": 210
+        },
+        {
+          "id": 6814,
+          "model": "Boyue L",
+          "censusTotal": 160
+        },
+        {
+          "id": 4139,
+          "model": "Emgrand GL",
+          "censusTotal": 129
+        },
+        {
+          "id": 3589,
+          "model": "Borui",
+          "censusTotal": 122
+        },
+        {
+          "id": 4813,
+          "model": "Geely ICON",
+          "censusTotal": 119
+        },
+        {
+          "id": 4396,
+          "model": "Jia Ji",
+          "censusTotal": 75
+        },
+        {
+          "id": 6085,
+          "model": "Emgrand S",
+          "censusTotal": 60
+        },
+        {
+          "id": 5073,
+          "model": "Haoyue",
+          "censusTotal": 47
+        },
+        {
+          "id": 4293,
+          "model": "Yuanjing X1",
+          "censusTotal": 45
+        },
+        {
+          "id": 6978,
+          "model": "Haoyue L",
+          "censusTotal": 38
+        },
+        {
+          "id": 4491,
+          "model": "Vision S1",
+          "censusTotal": 35
+        },
+        {
+          "id": 4982,
+          "model": "Xingyue",
+          "censusTotal": 31
+        },
+        {
+          "id": 7903,
+          "model": "Geely Cowboy",
+          "censusTotal": 28
+        },
+        {
+          "id": 447,
+          "model": "King Kong",
+          "censusTotal": 21
+        },
+        {
+          "id": 6333,
+          "model": "Emgrand L",
+          "censusTotal": 18
+        },
+        {
+          "id": 989,
+          "model": "Geely GX7",
+          "censusTotal": 16
+        },
+        {
+          "id": 7440,
+          "model": "Haoyue PRO",
+          "censusTotal": 10
+        },
+        {
+          "id": 799,
+          "model": "Classic Emgrand",
+          "censusTotal": 8
+        },
+        {
+          "id": 608,
+          "model": "Panda Classic",
+          "censusTotal": 7
+        },
+        {
+          "id": 6275,
+          "model": "Xingyue S",
+          "censusTotal": 5
+        },
+        {
+          "id": 2155,
+          "model": "Geely GC7",
+          "censusTotal": 3
+        },
+        {
+          "id": 2051,
+          "model": "Hai Jing",
+          "censusTotal": 2
+        },
+        {
+          "id": 609,
+          "model": "Golden Eagle",
+          "censusTotal": 1
+        },
+        {
+          "id": 3467,
+          "model": "Haoqing SUV",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "26": {
+      "name": "Chery",
+      "series": [
+        {
+          "id": 6664,
+          "model": "Arrizo 8",
+          "censusTotal": 372
+        },
+        {
+          "id": 3405,
+          "model": "Arrizo 5",
+          "censusTotal": 226
+        },
+        {
+          "id": 4693,
+          "model": "Tiggo 8",
+          "censusTotal": 205
+        },
+        {
+          "id": 4099,
+          "model": "Tiggo 3x",
+          "censusTotal": 181
+        },
+        {
+          "id": 3766,
+          "model": "Tiggo 7",
+          "censusTotal": 164
+        },
+        {
+          "id": 4531,
+          "model": "Tiggo 5x",
+          "censusTotal": 141
+        },
+        {
+          "id": 6547,
+          "model": "Tiggo 8 PRO",
+          "censusTotal": 137
+        },
+        {
+          "id": 5884,
+          "model": "Tiggo 8 PLUS",
+          "censusTotal": 132
+        },
+        {
+          "id": 7072,
+          "model": "Tiggo 9",
+          "censusTotal": 108
+        },
+        {
+          "id": 6288,
+          "model": "Tiggo 7 PLUS",
+          "censusTotal": 85
+        },
+        {
+          "id": 8041,
+          "model": "Arrizo 8 PRO",
+          "censusTotal": 76
+        },
+        {
+          "id": 3397,
+          "model": "Tiggo 3",
+          "censusTotal": 64
+        },
+        {
+          "id": 3195,
+          "model": "Tiggo 5",
+          "censusTotal": 59
+        },
+        {
+          "id": 5959,
+          "model": "Arrizo 5 PLUS",
+          "censusTotal": 53
+        },
+        {
+          "id": 7745,
+          "model": "Tiggo 8L",
+          "censusTotal": 37
+        },
+        {
+          "id": 4787,
+          "model": "Arrizo GX",
+          "censusTotal": 27
+        },
+        {
+          "id": 6999,
+          "model": "Tansuo 06",
+          "censusTotal": 22
+        },
+        {
+          "id": 837,
+          "model": "Fengyun 2",
+          "censusTotal": 18
+        },
+        {
+          "id": 6227,
+          "model": "Omoda",
+          "censusTotal": 17
+        },
+        {
+          "id": 2980,
+          "model": "Arrizo 7",
+          "censusTotal": 11
+        },
+        {
+          "id": 6821,
+          "model": "Arrizo 5 GT",
+          "censusTotal": 7
+        },
+        {
+          "id": 2989,
+          "model": "Chery QQ",
+          "censusTotal": 5
+        },
+        {
+          "id": 2953,
+          "model": "Chery E3",
+          "censusTotal": 5
+        },
+        {
+          "id": 3157,
+          "model": "Arrizo 3",
+          "censusTotal": 3
+        },
+        {
+          "id": 2324,
+          "model": "Chery E5",
+          "censusTotal": 2
+        },
+        {
+          "id": 3300,
+          "model": "Arrizo M7",
+          "censusTotal": 2
+        },
+        {
+          "id": 2178,
+          "model": "Chery Cloud 2",
+          "censusTotal": 1
+        },
+        {
+          "id": 530,
+          "model": "Chery A3",
+          "censusTotal": 1
+        },
+        {
+          "id": 434,
+          "model": "Chery A5",
+          "censusTotal": 1
+        },
+        {
+          "id": 8546,
+          "model": "Tiggo 7L",
+          "censusTotal": 1
+        },
+        {
+          "id": 396,
+          "model": "Tiggo",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "27": {
+      "name": "BAIC ORV",
+      "series": [
+        {
+          "id": 623,
+          "model": "Beijing Offroad BJ40",
+          "censusTotal": 262
+        },
+        {
+          "id": 6590,
+          "model": "Beijing Off-Road BJ60",
+          "censusTotal": 27
+        },
+        {
+          "id": 3800,
+          "model": "Beijing Offroad BJ20",
+          "censusTotal": 22
+        },
+        {
+          "id": 3972,
+          "model": "Beijing Offroad BJ90",
+          "censusTotal": 22
+        },
+        {
+          "id": 2852,
+          "model": "Beijing Off-Road BJ80",
+          "censusTotal": 17
+        },
+        {
+          "id": 5771,
+          "model": "Beijing Off-Road BJ30",
+          "censusTotal": 14
+        },
+        {
+          "id": 5338,
+          "model": "Beijing Off-Road F40",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "33": {
+      "name": "Audi",
+      "series": [
+        {
+          "id": 3170,
+          "model": "Audi A3",
+          "censusTotal": 3000
+        },
+        {
+          "id": 18,
+          "model": "Audi A6L",
+          "censusTotal": 2367
+        },
+        {
+          "id": 2951,
+          "model": "Audi Q3",
+          "censusTotal": 2064
+        },
+        {
+          "id": 692,
+          "model": "Audi A4L",
+          "censusTotal": 1863
+        },
+        {
+          "id": 4851,
+          "model": "Audi Q5L",
+          "censusTotal": 892
+        },
+        {
+          "id": 4871,
+          "model": "Audi Q2L",
+          "censusTotal": 657
+        },
+        {
+          "id": 412,
+          "model": "Audi Q7",
+          "censusTotal": 601
+        },
+        {
+          "id": 146,
+          "model": "Audi A8",
+          "censusTotal": 565
+        },
+        {
+          "id": 812,
+          "model": "Audi Q5",
+          "censusTotal": 418
+        },
+        {
+          "id": 538,
+          "model": "Audi A5 (Import)",
+          "censusTotal": 328
+        },
+        {
+          "id": 740,
+          "model": "Audi A7",
+          "censusTotal": 248
+        },
+        {
+          "id": 5998,
+          "model": "Audi A7L",
+          "censusTotal": 239
+        },
+        {
+          "id": 472,
+          "model": "Audi A6 (Import)",
+          "censusTotal": 150
+        },
+        {
+          "id": 2732,
+          "model": "Audi S4",
+          "censusTotal": 130
+        },
+        {
+          "id": 5933,
+          "model": "Audi Q3 Sportback",
+          "censusTotal": 116
+        },
+        {
+          "id": 4288,
+          "model": "Audi Q8",
+          "censusTotal": 101
+        },
+        {
+          "id": 7855,
+          "model": "Audi A5L",
+          "censusTotal": 90
+        },
+        {
+          "id": 148,
+          "model": "Audi TT",
+          "censusTotal": 81
+        },
+        {
+          "id": 471,
+          "model": "Audi A4 (Import)",
+          "censusTotal": 65
+        },
+        {
+          "id": 2734,
+          "model": "Audi S5",
+          "censusTotal": 57
+        },
+        {
+          "id": 650,
+          "model": "Audi A1",
+          "censusTotal": 54
+        },
+        {
+          "id": 2735,
+          "model": "Audi RS 5",
+          "censusTotal": 49
+        },
+        {
+          "id": 370,
+          "model": "Audi A3 (Import)",
+          "censusTotal": 45
+        },
+        {
+          "id": 5912,
+          "model": "Audi Q5L Sportback",
+          "censusTotal": 44
+        },
+        {
+          "id": 2730,
+          "model": "Audi S3",
+          "censusTotal": 41
+        },
+        {
+          "id": 511,
+          "model": "Audi R8",
+          "censusTotal": 38
+        },
+        {
+          "id": 2737,
+          "model": "Audi RS 6",
+          "censusTotal": 34
+        },
+        {
+          "id": 6526,
+          "model": "Audi Q6",
+          "censusTotal": 32
+        },
+        {
+          "id": 593,
+          "model": "Audi Q5 (Import)",
+          "censusTotal": 28
+        },
+        {
+          "id": 2733,
+          "model": "Audi RS 4",
+          "censusTotal": 20
+        },
+        {
+          "id": 3822,
+          "model": "Audi SQ7",
+          "censusTotal": 17
+        },
+        {
+          "id": 2740,
+          "model": "Audi TTS",
+          "censusTotal": 15
+        },
+        {
+          "id": 2739,
+          "model": "Audi S8",
+          "censusTotal": 14
+        },
+        {
+          "id": 2738,
+          "model": "Audi S7",
+          "censusTotal": 13
+        },
+        {
+          "id": 2994,
+          "model": "Audi RS 7",
+          "censusTotal": 12
+        },
+        {
+          "id": 5508,
+          "model": "Audi RS Q8",
+          "censusTotal": 12
+        },
+        {
+          "id": 7817,
+          "model": "Audi A5L Sportback",
+          "censusTotal": 11
+        },
+        {
+          "id": 2736,
+          "model": "Audi S6",
+          "censusTotal": 10
+        },
+        {
+          "id": 2841,
+          "model": "Audi SQ5",
+          "censusTotal": 10
+        },
+        {
+          "id": 2731,
+          "model": "Audi RS 3",
+          "censusTotal": 8
+        },
+        {
+          "id": 2264,
+          "model": "Audi Q3 (Import)",
+          "censusTotal": 7
+        },
+        {
+          "id": 19,
+          "model": "Audi A4",
+          "censusTotal": 5
+        },
+        {
+          "id": 509,
+          "model": "Audi A6",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "35": {
+      "name": "Aston Martin",
+      "series": [
+        {
+          "id": 3891,
+          "model": "Aston Martin DB11",
+          "censusTotal": 89
+        },
+        {
+          "id": 385,
+          "model": "V8 Vantage",
+          "censusTotal": 55
+        },
+        {
+          "id": 3742,
+          "model": "Aston Martin DBX",
+          "censusTotal": 46
+        },
+        {
+          "id": 923,
+          "model": "Rapide",
+          "censusTotal": 28
+        },
+        {
+          "id": 582,
+          "model": "Aston Martin DBS",
+          "censusTotal": 7
+        },
+        {
+          "id": 7293,
+          "model": "Aston Martin DB12",
+          "censusTotal": 5
+        },
+        {
+          "id": 266,
+          "model": "Aston Martin DB9",
+          "censusTotal": 4
+        },
+        {
+          "id": 386,
+          "model": "Vanquish",
+          "censusTotal": 3
+        },
+        {
+          "id": 2275,
+          "model": "Virage",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "36": {
+      "name": "Mercedes-Benz",
+      "series": [
+        {
+          "id": 588,
+          "model": "Mercedes-Benz C-Class",
+          "censusTotal": 3241
+        },
+        {
+          "id": 197,
+          "model": "Mercedes-Benz E-Class",
+          "censusTotal": 2746
+        },
+        {
+          "id": 3862,
+          "model": "Mercedes-Benz GLC",
+          "censusTotal": 1883
+        },
+        {
+          "id": 59,
+          "model": "Mercedes-Benz S-Class",
+          "censusTotal": 1492
+        },
+        {
+          "id": 4764,
+          "model": "Mercedes-Benz A-Class",
+          "censusTotal": 882
+        },
+        {
+          "id": 3248,
+          "model": "Mercedes-Benz GLA",
+          "censusTotal": 781
+        },
+        {
+          "id": 60,
+          "model": "Mercedes-Benz G-Class",
+          "censusTotal": 671
+        },
+        {
+          "id": 5348,
+          "model": "Mercedes-Benz GLB",
+          "censusTotal": 658
+        },
+        {
+          "id": 3665,
+          "model": "Maybach S-Class",
+          "censusTotal": 621
+        },
+        {
+          "id": 3683,
+          "model": "Mercedes-Benz GLE",
+          "censusTotal": 609
+        },
+        {
+          "id": 2084,
+          "model": "Vito",
+          "censusTotal": 590
+        },
+        {
+          "id": 3823,
+          "model": "Mercedes-Benz V-Class",
+          "censusTotal": 540
+        },
+        {
+          "id": 2723,
+          "model": "Mercedes-Benz G-Class AMG",
+          "censusTotal": 439
+        },
+        {
+          "id": 450,
+          "model": "Mercedes-Benz E-Class (Import)",
+          "censusTotal": 374
+        },
+        {
+          "id": 365,
+          "model": "Mercedes-Benz CLS",
+          "censusTotal": 324
+        },
+        {
+          "id": 3688,
+          "model": "Mercedes-Benz GLS",
+          "censusTotal": 300
+        },
+        {
+          "id": 2966,
+          "model": "Mercedes-Benz CLA (Import)",
+          "censusTotal": 297
+        },
+        {
+          "id": 56,
+          "model": "Mercedes-Benz C-Class (Import)",
+          "censusTotal": 291
+        },
+        {
+          "id": 2717,
+          "model": "Mercedes-Benz C-Class AMG",
+          "censusTotal": 233
+        },
+        {
+          "id": 3451,
+          "model": "AMG GT",
+          "censusTotal": 194
+        },
+        {
+          "id": 398,
+          "model": "Mercedes-Benz B-Class",
+          "censusTotal": 185
+        },
+        {
+          "id": 3339,
+          "model": "Mercedes-Benz GLC Coupe",
+          "censusTotal": 183
+        },
+        {
+          "id": 2562,
+          "model": "Mercedes-Benz GLK-Class",
+          "censusTotal": 174
+        },
+        {
+          "id": 52,
+          "model": "Mercedes-Benz A-Class (Import)",
+          "censusTotal": 148
+        },
+        {
+          "id": 469,
+          "model": "Mercedes-Benz R-Class",
+          "censusTotal": 138
+        },
+        {
+          "id": 2842,
+          "model": "Mercedes-Benz A-Class AMG (Import)",
+          "censusTotal": 126
+        },
+        {
+          "id": 57,
+          "model": "Mercedes-Benz M-Class",
+          "censusTotal": 121
+        },
+        {
+          "id": 3704,
+          "model": "Mercedes-Benz GLE AMG",
+          "censusTotal": 113
+        },
+        {
+          "id": 6207,
+          "model": "Mercedes-Benz GLE Coupe",
+          "censusTotal": 105
+        },
+        {
+          "id": 4074,
+          "model": "Mercedes-Benz GLC AMG",
+          "censusTotal": 96
+        },
+        {
+          "id": 2197,
+          "model": "Mercedes-Benz S-Class AMG",
+          "censusTotal": 86
+        },
+        {
+          "id": 5217,
+          "model": "Mercedes-Benz A-Class AMG",
+          "censusTotal": 83
+        },
+        {
+          "id": 2967,
+          "model": "Mercedes-Benz CLA AMG",
+          "censusTotal": 76
+        },
+        {
+          "id": 5462,
+          "model": "Maybach GLS",
+          "censusTotal": 60
+        },
+        {
+          "id": 467,
+          "model": "Mercedes-Benz GL-Class",
+          "censusTotal": 48
+        },
+        {
+          "id": 6209,
+          "model": "Mercedes-Benz GLE Coupe AMG",
+          "censusTotal": 43
+        },
+        {
+          "id": 6210,
+          "model": "Mercedes-Benz GLC Coupe AMG",
+          "censusTotal": 38
+        },
+        {
+          "id": 5038,
+          "model": "Mercedes-Benz GLB AMG",
+          "censusTotal": 33
+        },
+        {
+          "id": 3264,
+          "model": "Mercedes-Benz GLA AMG",
+          "censusTotal": 32
+        },
+        {
+          "id": 6916,
+          "model": "Mercedes-Benz CLE",
+          "censusTotal": 31
+        },
+        {
+          "id": 267,
+          "model": "Mercedes-Benz SLK-Class",
+          "censusTotal": 31
+        },
+        {
+          "id": 595,
+          "model": "Mercedes-Benz GLK-Class (Import)",
+          "censusTotal": 25
+        },
+        {
+          "id": 2718,
+          "model": "Mercedes-Benz E-Class AMG",
+          "censusTotal": 25
+        },
+        {
+          "id": 914,
+          "model": "Mercedes-Benz SLS AMG",
+          "censusTotal": 25
+        },
+        {
+          "id": 3901,
+          "model": "Mercedes-Benz GLS AMG",
+          "censusTotal": 24
+        },
+        {
+          "id": 2719,
+          "model": "Mercedes-Benz CLS AMG",
+          "censusTotal": 21
+        },
+        {
+          "id": 6917,
+          "model": "Mercedes-AMG CLE",
+          "censusTotal": 21
+        },
+        {
+          "id": 2034,
+          "model": "Viano",
+          "censusTotal": 20
+        },
+        {
+          "id": 237,
+          "model": "Mercedes-Benz SL-Class",
+          "censusTotal": 12
+        },
+        {
+          "id": 235,
+          "model": "Mercedes-Benz CLK-Class",
+          "censusTotal": 11
+        },
+        {
+          "id": 3278,
+          "model": "Mercedes-Benz SLC",
+          "censusTotal": 11
+        },
+        {
+          "id": 2722,
+          "model": "Mercedes-Benz M-Class AMG",
+          "censusTotal": 7
+        },
+        {
+          "id": 2833,
+          "model": "Mercedes-Benz GL-Class AMG",
+          "censusTotal": 7
+        },
+        {
+          "id": 2005,
+          "model": "Sprinter",
+          "censusTotal": 6
+        },
+        {
+          "id": 2720,
+          "model": "Mercedes-Benz SL-Class AMG",
+          "censusTotal": 5
+        },
+        {
+          "id": 3079,
+          "model": "Mercedes-Benz GLA (Import)",
+          "censusTotal": 3
+        },
+        {
+          "id": 683,
+          "model": "Mercedes-Benz CL-Class",
+          "censusTotal": 3
+        },
+        {
+          "id": 300,
+          "model": "Viano (Import)",
+          "censusTotal": 3
+        },
+        {
+          "id": 8479,
+          "model": "Mercedes-Benz GLE L",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "38": {
+      "name": "Buick",
+      "series": [
+        {
+          "id": 166,
+          "model": "Buick GL8",
+          "censusTotal": 1894
+        },
+        {
+          "id": 982,
+          "model": "Excelle",
+          "censusTotal": 1083
+        },
+        {
+          "id": 3554,
+          "model": "Envision Plus",
+          "censusTotal": 754
+        },
+        {
+          "id": 164,
+          "model": "Regal",
+          "censusTotal": 722
+        },
+        {
+          "id": 834,
+          "model": "LaCrosse",
+          "censusTotal": 552
+        },
+        {
+          "id": 3751,
+          "model": "Verano",
+          "censusTotal": 539
+        },
+        {
+          "id": 2896,
+          "model": "Buick Encore",
+          "censusTotal": 234
+        },
+        {
+          "id": 875,
+          "model": "Excelle",
+          "censusTotal": 204
+        },
+        {
+          "id": 4487,
+          "model": "Buick GL6",
+          "censusTotal": 136
+        },
+        {
+          "id": 5395,
+          "model": "Enclave",
+          "censusTotal": 106
+        },
+        {
+          "id": 7010,
+          "model": "Century",
+          "censusTotal": 89
+        },
+        {
+          "id": 8038,
+          "model": "Envision S",
+          "censusTotal": 78
+        },
+        {
+          "id": 4552,
+          "model": "Buick Excelle GT",
+          "censusTotal": 25
+        },
+        {
+          "id": 5200,
+          "model": "Buick Encore GX",
+          "censusTotal": 17
+        },
+        {
+          "id": 592,
+          "model": "Enclave",
+          "censusTotal": 13
+        },
+        {
+          "id": 525,
+          "model": "Park Avenue",
+          "censusTotal": 5
+        },
+        {
+          "id": 7042,
+          "model": "Buick Encore PLUS",
+          "censusTotal": 2
+        },
+        {
+          "id": 6776,
+          "model": "Angyang",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "39": {
+      "name": "Bentley",
+      "series": [
+        {
+          "id": 3014,
+          "model": "Flying Spur",
+          "censusTotal": 341
+        },
+        {
+          "id": 2685,
+          "model": "Bentayga",
+          "censusTotal": 318
+        },
+        {
+          "id": 305,
+          "model": "Continental",
+          "censusTotal": 260
+        },
+        {
+          "id": 901,
+          "model": "Mulsanne",
+          "censusTotal": 46
+        },
+        {
+          "id": 306,
+          "model": "Arnage",
+          "censusTotal": 4
+        }
+      ]
+    },
+    "40": {
+      "name": "Porsche",
+      "series": [
+        {
+          "id": 172,
+          "model": "Cayenne",
+          "censusTotal": 1299
+        },
+        {
+          "id": 703,
+          "model": "Panamera",
+          "censusTotal": 1258
+        },
+        {
+          "id": 2838,
+          "model": "Macan",
+          "censusTotal": 1201
+        },
+        {
+          "id": 162,
+          "model": "Porsche 911",
+          "censusTotal": 749
+        },
+        {
+          "id": 4175,
+          "model": "Porsche 718",
+          "censusTotal": 686
+        },
+        {
+          "id": 168,
+          "model": "Boxster",
+          "censusTotal": 36
+        },
+        {
+          "id": 415,
+          "model": "Cayman",
+          "censusTotal": 34
+        }
+      ]
+    },
+    "42": {
+      "name": "Ferrari",
+      "series": [
+        {
+          "id": 3720,
+          "model": "Ferrari 488",
+          "censusTotal": 148
+        },
+        {
+          "id": 5141,
+          "model": "Ferrari F8",
+          "censusTotal": 130
+        },
+        {
+          "id": 5517,
+          "model": "Ferrari Roma",
+          "censusTotal": 88
+        },
+        {
+          "id": 4524,
+          "model": "Portofino",
+          "censusTotal": 53
+        },
+        {
+          "id": 889,
+          "model": "Ferrari 458",
+          "censusTotal": 48
+        },
+        {
+          "id": 676,
+          "model": "California T",
+          "censusTotal": 44
+        },
+        {
+          "id": 4314,
+          "model": "Ferrari 812",
+          "censusTotal": 31
+        },
+        {
+          "id": 4027,
+          "model": "GTC4Lusso",
+          "censusTotal": 30
+        },
+        {
+          "id": 6642,
+          "model": "Purosangue",
+          "censusTotal": 29
+        },
+        {
+          "id": 2682,
+          "model": "F12berlinetta",
+          "censusTotal": 22
+        },
+        {
+          "id": 359,
+          "model": "Ferrari F430",
+          "censusTotal": 9
+        },
+        {
+          "id": 459,
+          "model": "Ferrari 599",
+          "censusTotal": 7
+        },
+        {
+          "id": 2261,
+          "model": "Ferrari FF",
+          "censusTotal": 7
+        },
+        {
+          "id": 361,
+          "model": "Ferrari 360",
+          "censusTotal": 2
+        },
+        {
+          "id": 308,
+          "model": "Ferrari 575M",
+          "censusTotal": 1
+        },
+        {
+          "id": 367,
+          "model": "Ferrari 612",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "44": {
+      "name": "Jaguar",
+      "series": [
+        {
+          "id": 4462,
+          "model": "Jaguar XEL",
+          "censusTotal": 327
+        },
+        {
+          "id": 4083,
+          "model": "Jaguar XFL",
+          "censusTotal": 284
+        },
+        {
+          "id": 3209,
+          "model": "Jaguar F-PACE",
+          "censusTotal": 138
+        },
+        {
+          "id": 178,
+          "model": "Jaguar XJ",
+          "censusTotal": 122
+        },
+        {
+          "id": 589,
+          "model": "Jaguar XF",
+          "censusTotal": 55
+        },
+        {
+          "id": 2903,
+          "model": "Jaguar F-TYPE",
+          "censusTotal": 55
+        },
+        {
+          "id": 4663,
+          "model": "Jaguar E-PACE",
+          "censusTotal": 49
+        },
+        {
+          "id": 3312,
+          "model": "Jaguar XE",
+          "censusTotal": 16
+        },
+        {
+          "id": 258,
+          "model": "Jaguar S-TYPE",
+          "censusTotal": 6
+        },
+        {
+          "id": 456,
+          "model": "Jaguar XK",
+          "censusTotal": 6
+        }
+      ]
+    },
+    "45": {
+      "name": "smart",
+      "series": [
+        {
+          "id": 620,
+          "model": "smart fortwo",
+          "censusTotal": 205
+        },
+        {
+          "id": 1004,
+          "model": "smart forfour",
+          "censusTotal": 114
+        }
+      ]
+    },
+    "46": {
+      "name": "Jeep",
+      "series": [
+        {
+          "id": 121,
+          "model": "Wrangler",
+          "censusTotal": 226
+        },
+        {
+          "id": 3845,
+          "model": "Compass",
+          "censusTotal": 212
+        },
+        {
+          "id": 3872,
+          "model": "Cherokee",
+          "censusTotal": 203
+        },
+        {
+          "id": 4072,
+          "model": "Jeep Renegade",
+          "censusTotal": 132
+        },
+        {
+          "id": 521,
+          "model": "Grand Cherokee (Import)",
+          "censusTotal": 124
+        },
+        {
+          "id": 504,
+          "model": "Compass (Import)",
+          "censusTotal": 47
+        },
+        {
+          "id": 4673,
+          "model": "Grand Commander",
+          "censusTotal": 36
+        },
+        {
+          "id": 2811,
+          "model": "Gladiator",
+          "censusTotal": 20
+        },
+        {
+          "id": 777,
+          "model": "Patriot",
+          "censusTotal": 12
+        },
+        {
+          "id": 3062,
+          "model": "Cherokee (Import)",
+          "censusTotal": 9
+        },
+        {
+          "id": 4891,
+          "model": "Commander",
+          "censusTotal": 7
+        },
+        {
+          "id": 503,
+          "model": "Commander Classic",
+          "censusTotal": 1
+        },
+        {
+          "id": 3048,
+          "model": "Grand Cherokee SRT",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "47": {
+      "name": "Cadillac",
+      "series": [
+        {
+          "id": 5349,
+          "model": "Cadillac CT5",
+          "censusTotal": 823
+        },
+        {
+          "id": 3989,
+          "model": "Cadillac XT5",
+          "censusTotal": 506
+        },
+        {
+          "id": 3207,
+          "model": "Cadillac ATS-L",
+          "censusTotal": 478
+        },
+        {
+          "id": 2949,
+          "model": "Cadillac XTS",
+          "censusTotal": 365
+        },
+        {
+          "id": 4856,
+          "model": "Cadillac XT4",
+          "censusTotal": 356
+        },
+        {
+          "id": 3802,
+          "model": "Cadillac CT6",
+          "censusTotal": 295
+        },
+        {
+          "id": 5102,
+          "model": "Cadillac XT6",
+          "censusTotal": 184
+        },
+        {
+          "id": 5593,
+          "model": "Cadillac CT4",
+          "censusTotal": 168
+        },
+        {
+          "id": 49,
+          "model": "Cadillac SRX",
+          "censusTotal": 78
+        },
+        {
+          "id": 2629,
+          "model": "Cadillac ATS (Import)",
+          "censusTotal": 13
+        },
+        {
+          "id": 6774,
+          "model": "Cadillac GT4",
+          "censusTotal": 8
+        },
+        {
+          "id": 462,
+          "model": "Escalade",
+          "censusTotal": 8
+        },
+        {
+          "id": 311,
+          "model": "Cadillac CTS (Import)",
+          "censusTotal": 7
+        },
+        {
+          "id": 488,
+          "model": "SLS",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "48": {
+      "name": "Lamborghini",
+      "series": [
+        {
+          "id": 2775,
+          "model": "Urus",
+          "censusTotal": 231
+        },
+        {
+          "id": 3277,
+          "model": "Huracán",
+          "censusTotal": 181
+        },
+        {
+          "id": 2277,
+          "model": "Aventador",
+          "censusTotal": 44
+        },
+        {
+          "id": 354,
+          "model": "Gallardo",
+          "censusTotal": 24
+        }
+      ]
+    },
+    "49": {
+      "name": "Land Rover",
+      "series": [
+        {
+          "id": 69,
+          "model": "Range Rover",
+          "censusTotal": 1127
+        },
+        {
+          "id": 850,
+          "model": "Range Rover Sport",
+          "censusTotal": 919
+        },
+        {
+          "id": 802,
+          "model": "Discovery",
+          "censusTotal": 502
+        },
+        {
+          "id": 256,
+          "model": "Land Rover Defender",
+          "censusTotal": 494
+        },
+        {
+          "id": 3521,
+          "model": "Range Rover Evoque",
+          "censusTotal": 477
+        },
+        {
+          "id": 5536,
+          "model": "Discovery Sport",
+          "censusTotal": 431
+        },
+        {
+          "id": 3871,
+          "model": "Discovery Sport",
+          "censusTotal": 333
+        },
+        {
+          "id": 4316,
+          "model": "Range Rover Velar",
+          "censusTotal": 199
+        },
+        {
+          "id": 754,
+          "model": "Range Rover Evoque (Import)",
+          "censusTotal": 74
+        },
+        {
+          "id": 77,
+          "model": "Freelander 2",
+          "censusTotal": 44
+        },
+        {
+          "id": 3565,
+          "model": "Discovery Sport (Import)",
+          "censusTotal": 10
+        },
+        {
+          "id": 3177,
+          "model": "Freelander",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "51": {
+      "name": "Lincoln",
+      "series": [
+        {
+          "id": 5385,
+          "model": "Adventurer",
+          "censusTotal": 221
+        },
+        {
+          "id": 95,
+          "model": "Navigator",
+          "censusTotal": 165
+        },
+        {
+          "id": 5554,
+          "model": "Aviator",
+          "censusTotal": 126
+        },
+        {
+          "id": 5757,
+          "model": "Nautilus",
+          "censusTotal": 120
+        },
+        {
+          "id": 2991,
+          "model": "Lincoln MKC",
+          "censusTotal": 63
+        },
+        {
+          "id": 6477,
+          "model": "Lincoln Z",
+          "censusTotal": 58
+        },
+        {
+          "id": 3731,
+          "model": "Lincoln Continental",
+          "censusTotal": 58
+        },
+        {
+          "id": 793,
+          "model": "Lincoln MKZ",
+          "censusTotal": 57
+        },
+        {
+          "id": 4635,
+          "model": "Nautilus (Import)",
+          "censusTotal": 29
+        },
+        {
+          "id": 758,
+          "model": "Lincoln MKX",
+          "censusTotal": 25
+        },
+        {
+          "id": 4749,
+          "model": "Aviator (Import)",
+          "censusTotal": 6
+        },
+        {
+          "id": 794,
+          "model": "Lincoln MKT",
+          "censusTotal": 2
+        },
+        {
+          "id": 6902,
+          "model": "Navigator One",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "52": {
+      "name": "Lexus",
+      "series": [
+        {
+          "id": 403,
+          "model": "Lexus ES",
+          "censusTotal": 616
+        },
+        {
+          "id": 3934,
+          "model": "Lexus RX",
+          "censusTotal": 390
+        },
+        {
+          "id": 3442,
+          "model": "Lexus NX",
+          "censusTotal": 329
+        },
+        {
+          "id": 352,
+          "model": "Lexus LX",
+          "censusTotal": 160
+        },
+        {
+          "id": 351,
+          "model": "Lexus RX Classic",
+          "censusTotal": 100
+        },
+        {
+          "id": 201,
+          "model": "Lexus IS",
+          "censusTotal": 87
+        },
+        {
+          "id": 341,
+          "model": "Lexus LS",
+          "censusTotal": 73
+        },
+        {
+          "id": 261,
+          "model": "Lexus GS",
+          "censusTotal": 58
+        },
+        {
+          "id": 112,
+          "model": "Lexus GX",
+          "censusTotal": 52
+        },
+        {
+          "id": 4197,
+          "model": "Lexus UX",
+          "censusTotal": 18
+        },
+        {
+          "id": 3758,
+          "model": "Lexus RC",
+          "censusTotal": 9
+        },
+        {
+          "id": 3238,
+          "model": "Lexus RC F",
+          "censusTotal": 4
+        },
+        {
+          "id": 332,
+          "model": "Lexus SC",
+          "censusTotal": 3
+        }
+      ]
+    },
+    "53": {
+      "name": "Suzuki",
+      "series": [
+        {
+          "id": 362,
+          "model": "Swift",
+          "censusTotal": 136
+        },
+        {
+          "id": 529,
+          "model": "SX4",
+          "censusTotal": 37
+        },
+        {
+          "id": 508,
+          "model": "Jimny (Import)",
+          "censusTotal": 35
+        },
+        {
+          "id": 3185,
+          "model": "SX4 S-Cross",
+          "censusTotal": 34
+        },
+        {
+          "id": 872,
+          "model": "Alto",
+          "censusTotal": 28
+        },
+        {
+          "id": 3858,
+          "model": "Vitara",
+          "censusTotal": 20
+        },
+        {
+          "id": 3528,
+          "model": "Alivio",
+          "censusTotal": 14
+        },
+        {
+          "id": 3216,
+          "model": "Beidouxing X5",
+          "censusTotal": 14
+        },
+        {
+          "id": 75,
+          "model": "Beidou",
+          "censusTotal": 13
+        },
+        {
+          "id": 500,
+          "model": "Grand Vitara",
+          "censusTotal": 4
+        },
+        {
+          "id": 2242,
+          "model": "Tianyu Shangyue",
+          "censusTotal": 3
+        },
+        {
+          "id": 3112,
+          "model": "Liana A6",
+          "censusTotal": 3
+        },
+        {
+          "id": 2176,
+          "model": "Swift Sport",
+          "censusTotal": 3
+        },
+        {
+          "id": 4435,
+          "model": "Xiaotu",
+          "censusTotal": 2
+        },
+        {
+          "id": 2534,
+          "model": "Landi",
+          "censusTotal": 2
+        },
+        {
+          "id": 892,
+          "model": "Kizashi",
+          "censusTotal": 2
+        },
+        {
+          "id": 3926,
+          "model": "Suzuki Ignis",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "54": {
+      "name": "Rolls-Royce",
+      "series": [
+        {
+          "id": 3778,
+          "model": "Cullinan",
+          "censusTotal": 269
+        },
+        {
+          "id": 836,
+          "model": "Ghost",
+          "censusTotal": 251
+        },
+        {
+          "id": 3015,
+          "model": "Wraith",
+          "censusTotal": 127
+        },
+        {
+          "id": 265,
+          "model": "Phantom",
+          "censusTotal": 97
+        },
+        {
+          "id": 3838,
+          "model": "Dawn",
+          "censusTotal": 41
+        }
+      ]
+    },
+    "56": {
+      "name": "MINI",
+      "series": [
+        {
+          "id": 209,
+          "model": "MINI",
+          "censusTotal": 1134
+        },
+        {
+          "id": 750,
+          "model": "MINI COUNTRYMAN",
+          "censusTotal": 270
+        },
+        {
+          "id": 749,
+          "model": "MINI CLUBMAN",
+          "censusTotal": 210
+        },
+        {
+          "id": 3178,
+          "model": "MINI JCW",
+          "censusTotal": 76
+        },
+        {
+          "id": 3181,
+          "model": "MINI JCW COUNTRYMAN",
+          "censusTotal": 22
+        },
+        {
+          "id": 3179,
+          "model": "MINI JCW CLUBMAN",
+          "censusTotal": 13
+        },
+        {
+          "id": 2241,
+          "model": "MINI Paceman",
+          "censusTotal": 12
+        },
+        {
+          "id": 930,
+          "model": "MINI ROADSTER",
+          "censusTotal": 3
+        },
+        {
+          "id": 904,
+          "model": "MINI COUPE",
+          "censusTotal": 2
+        },
+        {
+          "id": 3182,
+          "model": "MINI JCW PACEMAN",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "57": {
+      "name": "Maserati",
+      "series": [
+        {
+          "id": 2428,
+          "model": "Levante",
+          "censusTotal": 278
+        },
+        {
+          "id": 3060,
+          "model": "Ghibli",
+          "censusTotal": 222
+        },
+        {
+          "id": 289,
+          "model": "Quattroporte",
+          "censusTotal": 120
+        },
+        {
+          "id": 551,
+          "model": "GranTurismo",
+          "censusTotal": 36
+        },
+        {
+          "id": 5646,
+          "model": "Maserati MC20",
+          "censusTotal": 14
+        },
+        {
+          "id": 5890,
+          "model": "Maserati Grecale",
+          "censusTotal": 9
+        },
+        {
+          "id": 903,
+          "model": "GranCabrio",
+          "censusTotal": 5
+        }
+      ]
+    },
+    "58": {
+      "name": "Mazda",
+      "series": [
+        {
+          "id": 3294,
+          "model": "Mazda3 Axela",
+          "censusTotal": 955
+        },
+        {
+          "id": 2987,
+          "model": "Mazda CX-5",
+          "censusTotal": 402
+        },
+        {
+          "id": 3968,
+          "model": "Mazda CX-4",
+          "censusTotal": 360
+        },
+        {
+          "id": 3154,
+          "model": "Atenza",
+          "censusTotal": 335
+        },
+        {
+          "id": 22,
+          "model": "Mazda 6",
+          "censusTotal": 151
+        },
+        {
+          "id": 5586,
+          "model": "Mazda CX-30",
+          "censusTotal": 122
+        },
+        {
+          "id": 7082,
+          "model": "Mazda CX-50 Xingye",
+          "censusTotal": 79
+        },
+        {
+          "id": 2418,
+          "model": "Mazda3 Axela",
+          "censusTotal": 51
+        },
+        {
+          "id": 363,
+          "model": "Mazda 3",
+          "censusTotal": 33
+        },
+        {
+          "id": 655,
+          "model": "Ruiyi",
+          "censusTotal": 27
+        },
+        {
+          "id": 3066,
+          "model": "Mazda CX-7",
+          "censusTotal": 20
+        },
+        {
+          "id": 578,
+          "model": "Mazda5",
+          "censusTotal": 19
+        },
+        {
+          "id": 2118,
+          "model": "Mazda 8",
+          "censusTotal": 15
+        },
+        {
+          "id": 433,
+          "model": "Mazda 2",
+          "censusTotal": 11
+        },
+        {
+          "id": 672,
+          "model": "Mazda MX-5",
+          "censusTotal": 10
+        },
+        {
+          "id": 3538,
+          "model": "Mazda CX-3",
+          "censusTotal": 8
+        },
+        {
+          "id": 4870,
+          "model": "Mazda CX-8",
+          "censusTotal": 5
+        },
+        {
+          "id": 584,
+          "model": "Mazda3 (Import)",
+          "censusTotal": 5
+        },
+        {
+          "id": 295,
+          "model": "Mazda RX-8",
+          "censusTotal": 4
+        },
+        {
+          "id": 3096,
+          "model": "ATENZA",
+          "censusTotal": 2
+        },
+        {
+          "id": 2391,
+          "model": "Mazda CX-5 (Import)",
+          "censusTotal": 2
+        },
+        {
+          "id": 1005,
+          "model": "Mazda CX-9",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "62": {
+      "name": "Kia",
+      "series": [
+        {
+          "id": 2886,
+          "model": "Kia K3",
+          "censusTotal": 387
+        },
+        {
+          "id": 2137,
+          "model": "Sportage",
+          "censusTotal": 252
+        },
+        {
+          "id": 2246,
+          "model": "Kia K5",
+          "censusTotal": 211
+        },
+        {
+          "id": 2319,
+          "model": "Kia K2",
+          "censusTotal": 210
+        },
+        {
+          "id": 4824,
+          "model": "KX1",
+          "censusTotal": 198
+        },
+        {
+          "id": 3664,
+          "model": "KX3 Smart Run",
+          "censusTotal": 97
+        },
+        {
+          "id": 7201,
+          "model": "Seltos",
+          "censusTotal": 96
+        },
+        {
+          "id": 3954,
+          "model": "Kia KX5",
+          "censusTotal": 67
+        },
+        {
+          "id": 4387,
+          "model": "Huan Chi",
+          "censusTotal": 54
+        },
+        {
+          "id": 3286,
+          "model": "Kia K4",
+          "censusTotal": 49
+        },
+        {
+          "id": 4505,
+          "model": "KX CROSS",
+          "censusTotal": 38
+        },
+        {
+          "id": 565,
+          "model": "Sportage",
+          "censusTotal": 38
+        },
+        {
+          "id": 813,
+          "model": "Forte",
+          "censusTotal": 28
+        },
+        {
+          "id": 281,
+          "model": "Sorento",
+          "censusTotal": 26
+        },
+        {
+          "id": 4523,
+          "model": "Kaishen",
+          "censusTotal": 17
+        },
+        {
+          "id": 453,
+          "model": "Carens",
+          "censusTotal": 17
+        },
+        {
+          "id": 6853,
+          "model": "Sportage",
+          "censusTotal": 16
+        },
+        {
+          "id": 876,
+          "model": "Soul",
+          "censusTotal": 15
+        },
+        {
+          "id": 3385,
+          "model": "Kia K3S",
+          "censusTotal": 15
+        },
+        {
+          "id": 284,
+          "model": "Carnival",
+          "censusTotal": 11
+        },
+        {
+          "id": 591,
+          "model": "Borego",
+          "censusTotal": 9
+        },
+        {
+          "id": 4200,
+          "model": "Kia KX7",
+          "censusTotal": 8
+        },
+        {
+          "id": 413,
+          "model": "Cerato",
+          "censusTotal": 3
+        },
+        {
+          "id": 1016,
+          "model": "Shuma",
+          "censusTotal": 2
+        },
+        {
+          "id": 454,
+          "model": "Rio",
+          "censusTotal": 1
+        },
+        {
+          "id": 1010,
+          "model": "K7",
+          "censusTotal": 1
+        },
+        {
+          "id": 3448,
+          "model": "Carnival (Import)",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "63": {
+      "name": "Nissan",
+      "series": [
+        {
+          "id": 448,
+          "model": "Sylphy",
+          "censusTotal": 1300
+        },
+        {
+          "id": 656,
+          "model": "X-Trail",
+          "censusTotal": 750
+        },
+        {
+          "id": 634,
+          "model": "Teana",
+          "censusTotal": 736
+        },
+        {
+          "id": 564,
+          "model": "Qashqai",
+          "censusTotal": 698
+        },
+        {
+          "id": 425,
+          "model": "Tiida",
+          "censusTotal": 487
+        },
+        {
+          "id": 264,
+          "model": "Patrol",
+          "censusTotal": 171
+        },
+        {
+          "id": 64,
+          "model": "Sunny",
+          "censusTotal": 91
+        },
+        {
+          "id": 3817,
+          "model": "Bluebird",
+          "censusTotal": 81
+        },
+        {
+          "id": 522,
+          "model": "Livina",
+          "censusTotal": 77
+        },
+        {
+          "id": 4305,
+          "model": "Kicks",
+          "censusTotal": 69
+        },
+        {
+          "id": 2381,
+          "model": "Murano",
+          "censusTotal": 68
+        },
+        {
+          "id": 4691,
+          "model": "Terra",
+          "censusTotal": 50
+        },
+        {
+          "id": 438,
+          "model": "Quest",
+          "censusTotal": 39
+        },
+        {
+          "id": 7396,
+          "model": "Terra",
+          "censusTotal": 23
+        },
+        {
+          "id": 436,
+          "model": "Nissan GT-R",
+          "censusTotal": 22
+        },
+        {
+          "id": 2113,
+          "model": "Nissan NV200",
+          "censusTotal": 21
+        },
+        {
+          "id": 4307,
+          "model": "Navara",
+          "censusTotal": 13
+        },
+        {
+          "id": 2086,
+          "model": "March",
+          "censusTotal": 11
+        },
+        {
+          "id": 355,
+          "model": "Tiida",
+          "censusTotal": 8
+        },
+        {
+          "id": 2853,
+          "model": "Nissan ZN Van",
+          "censusTotal": 6
+        },
+        {
+          "id": 2466,
+          "model": "Nissan D22",
+          "censusTotal": 4
+        },
+        {
+          "id": 53,
+          "model": "Nissan Paladin",
+          "censusTotal": 4
+        },
+        {
+          "id": 316,
+          "model": "Nissan 350Z",
+          "censusTotal": 4
+        },
+        {
+          "id": 3957,
+          "model": "Cima",
+          "censusTotal": 3
+        },
+        {
+          "id": 475,
+          "model": "Livina",
+          "censusTotal": 2
+        },
+        {
+          "id": 702,
+          "model": "Nissan 370Z",
+          "censusTotal": 2
+        },
+        {
+          "id": 2578,
+          "model": "Civilian",
+          "censusTotal": 2
+        },
+        {
+          "id": 376,
+          "model": "Fuga",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "65": {
+      "name": "Subaru",
+      "series": [
+        {
+          "id": 285,
+          "model": "Forester",
+          "censusTotal": 227
+        },
+        {
+          "id": 286,
+          "model": "Outback",
+          "censusTotal": 80
+        },
+        {
+          "id": 2557,
+          "model": "Subaru BRZ",
+          "censusTotal": 51
+        },
+        {
+          "id": 2417,
+          "model": "Subaru XV",
+          "censusTotal": 37
+        },
+        {
+          "id": 287,
+          "model": "Legacy",
+          "censusTotal": 28
+        },
+        {
+          "id": 283,
+          "model": "Impreza",
+          "censusTotal": 16
+        },
+        {
+          "id": 3263,
+          "model": "Subaru WRX",
+          "censusTotal": 7
+        },
+        {
+          "id": 6933,
+          "model": "Subaru Crosstrek",
+          "censusTotal": 3
+        }
+      ]
+    },
+    "67": {
+      "name": "Škoda",
+      "series": [
+        {
+          "id": 519,
+          "model": "Octavia",
+          "censusTotal": 411
+        },
+        {
+          "id": 4690,
+          "model": "Kamiq",
+          "censusTotal": 239
+        },
+        {
+          "id": 3171,
+          "model": "Superb",
+          "censusTotal": 225
+        },
+        {
+          "id": 4453,
+          "model": "Karoq",
+          "censusTotal": 186
+        },
+        {
+          "id": 2962,
+          "model": "Rapid",
+          "censusTotal": 135
+        },
+        {
+          "id": 4217,
+          "model": "Kodiaq",
+          "censusTotal": 134
+        },
+        {
+          "id": 382,
+          "model": "Fabia",
+          "censusTotal": 119
+        },
+        {
+          "id": 3013,
+          "model": "Yeti",
+          "censusTotal": 86
+        },
+        {
+          "id": 3290,
+          "model": "Skoda Rapid Spaceback",
+          "censusTotal": 66
+        },
+        {
+          "id": 4986,
+          "model": "Kodiaq GT",
+          "censusTotal": 28
+        },
+        {
+          "id": 772,
+          "model": "Superb",
+          "censusTotal": 20
+        },
+        {
+          "id": 858,
+          "model": "Yeti (Import)",
+          "censusTotal": 6
+        }
+      ]
+    },
+    "68": {
+      "name": "Mitsubishi",
+      "series": [
+        {
+          "id": 4147,
+          "model": "Outlander",
+          "censusTotal": 312
+        },
+        {
+          "id": 2768,
+          "model": "ASX",
+          "censusTotal": 64
+        },
+        {
+          "id": 580,
+          "model": "Pajero (Import)",
+          "censusTotal": 58
+        },
+        {
+          "id": 873,
+          "model": "Lancer EX",
+          "censusTotal": 45
+        },
+        {
+          "id": 4807,
+          "model": "Eclipse Cross",
+          "censusTotal": 29
+        },
+        {
+          "id": 3008,
+          "model": "Pajero Sport",
+          "censusTotal": 21
+        },
+        {
+          "id": 377,
+          "model": "Pajero",
+          "censusTotal": 16
+        },
+        {
+          "id": 486,
+          "model": "Outlander (Import)",
+          "censusTotal": 15
+        },
+        {
+          "id": 369,
+          "model": "Lancer",
+          "censusTotal": 7
+        },
+        {
+          "id": 458,
+          "model": "Lancer",
+          "censusTotal": 5
+        },
+        {
+          "id": 2332,
+          "model": "Pajero Sport (Import)",
+          "censusTotal": 4
+        },
+        {
+          "id": 668,
+          "model": "Zinger",
+          "censusTotal": 2
+        },
+        {
+          "id": 1018,
+          "model": "ASX (Import)",
+          "censusTotal": 2
+        },
+        {
+          "id": 24,
+          "model": "Pajero Sport",
+          "censusTotal": 1
+        },
+        {
+          "id": 3131,
+          "model": "Fengdisi",
+          "censusTotal": 1
+        },
+        {
+          "id": 483,
+          "model": "Mitsubishi Galant",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "70": {
+      "name": "Volvo",
+      "series": [
+        {
+          "id": 3411,
+          "model": "Volvo XC60",
+          "censusTotal": 635
+        },
+        {
+          "id": 4206,
+          "model": "Volvo S90",
+          "censusTotal": 475
+        },
+        {
+          "id": 3158,
+          "model": "Volvo S60",
+          "censusTotal": 330
+        },
+        {
+          "id": 177,
+          "model": "Volvo XC90",
+          "censusTotal": 305
+        },
+        {
+          "id": 5198,
+          "model": "Volvo XC40",
+          "censusTotal": 92
+        },
+        {
+          "id": 2678,
+          "model": "Volvo V40",
+          "censusTotal": 91
+        },
+        {
+          "id": 585,
+          "model": "Volvo XC60 (Import)",
+          "censusTotal": 65
+        },
+        {
+          "id": 2190,
+          "model": "Volvo V60",
+          "censusTotal": 62
+        },
+        {
+          "id": 4029,
+          "model": "Volvo V90",
+          "censusTotal": 51
+        },
+        {
+          "id": 693,
+          "model": "Volvo S80L",
+          "censusTotal": 20
+        },
+        {
+          "id": 404,
+          "model": "Volvo S60 (Import)",
+          "censusTotal": 13
+        },
+        {
+          "id": 494,
+          "model": "Volvo C30",
+          "censusTotal": 5
+        },
+        {
+          "id": 463,
+          "model": "Volvo S40",
+          "censusTotal": 3
+        },
+        {
+          "id": 3420,
+          "model": "XC Classic",
+          "censusTotal": 3
+        },
+        {
+          "id": 406,
+          "model": "Volvo C70",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "71": {
+      "name": "Chevrolet",
+      "series": [
+        {
+          "id": 5008,
+          "model": "Monza",
+          "censusTotal": 522
+        },
+        {
+          "id": 4031,
+          "model": "Malibu XL",
+          "censusTotal": 366
+        },
+        {
+          "id": 4105,
+          "model": "Chevrolet Cavalier",
+          "censusTotal": 345
+        },
+        {
+          "id": 2313,
+          "model": "Malibu",
+          "censusTotal": 302
+        },
+        {
+          "id": 657,
+          "model": "Cruze",
+          "censusTotal": 270
+        },
+        {
+          "id": 4235,
+          "model": "Equinox",
+          "censusTotal": 195
+        },
+        {
+          "id": 3335,
+          "model": "Trax",
+          "censusTotal": 141
+        },
+        {
+          "id": 163,
+          "model": "Sail",
+          "censusTotal": 113
+        },
+        {
+          "id": 2583,
+          "model": "Captiva",
+          "censusTotal": 90
+        },
+        {
+          "id": 4882,
+          "model": "Volando",
+          "censusTotal": 75
+        },
+        {
+          "id": 678,
+          "model": "Camaro",
+          "censusTotal": 25
+        },
+        {
+          "id": 2348,
+          "model": "Aveo",
+          "censusTotal": 20
+        },
+        {
+          "id": 5476,
+          "model": "Trailblazer",
+          "censusTotal": 15
+        },
+        {
+          "id": 3923,
+          "model": "Chevrolet Lova RV",
+          "censusTotal": 11
+        },
+        {
+          "id": 397,
+          "model": "Epica",
+          "censusTotal": 7
+        },
+        {
+          "id": 5199,
+          "model": "Chevrolet Trailblazer",
+          "censusTotal": 7
+        },
+        {
+          "id": 6718,
+          "model": "Chevrolet Seeker",
+          "censusTotal": 2
+        },
+        {
+          "id": 439,
+          "model": "Lova",
+          "censusTotal": 1
+        },
+        {
+          "id": 2405,
+          "model": "Silverado",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "72": {
+      "name": "Citroën",
+      "series": [
+        {
+          "id": 3429,
+          "model": "Citroën C3-XR",
+          "censusTotal": 100
+        },
+        {
+          "id": 2945,
+          "model": "Citroën C4L",
+          "censusTotal": 86
+        },
+        {
+          "id": 639,
+          "model": "C-Quatre",
+          "censusTotal": 76
+        },
+        {
+          "id": 98,
+          "model": "Elysee",
+          "censusTotal": 72
+        },
+        {
+          "id": 792,
+          "model": "Citroën C5",
+          "censusTotal": 68
+        },
+        {
+          "id": 6120,
+          "model": "Versailles C5 X",
+          "censusTotal": 60
+        },
+        {
+          "id": 4370,
+          "model": "Tianyi C5 AIRCROSS",
+          "censusTotal": 53
+        },
+        {
+          "id": 3873,
+          "model": "C4 C-Quatre",
+          "censusTotal": 41
+        },
+        {
+          "id": 4043,
+          "model": "Citroën C6",
+          "censusTotal": 22
+        },
+        {
+          "id": 473,
+          "model": "C4 Picasso",
+          "censusTotal": 14
+        },
+        {
+          "id": 4685,
+          "model": "C4 AIRCROSS",
+          "censusTotal": 9
+        },
+        {
+          "id": 476,
+          "model": "Citroën C2",
+          "censusTotal": 3
+        },
+        {
+          "id": 5553,
+          "model": "Citroën C3L",
+          "censusTotal": 3
+        },
+        {
+          "id": 293,
+          "model": "Fukang",
+          "censusTotal": 1
+        },
+        {
+          "id": 388,
+          "model": "Triumph",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "73": {
+      "name": "Infiniti",
+      "series": [
+        {
+          "id": 3553,
+          "model": "Infiniti Q50L",
+          "censusTotal": 262
+        },
+        {
+          "id": 3591,
+          "model": "Infiniti QX50",
+          "censusTotal": 77
+        },
+        {
+          "id": 3097,
+          "model": "Infiniti Q70",
+          "censusTotal": 45
+        },
+        {
+          "id": 383,
+          "model": "Infiniti G Series",
+          "censusTotal": 34
+        },
+        {
+          "id": 3535,
+          "model": "Infiniti ESQ",
+          "censusTotal": 31
+        },
+        {
+          "id": 122,
+          "model": "Infiniti FX",
+          "censusTotal": 31
+        },
+        {
+          "id": 2992,
+          "model": "Infiniti Q50",
+          "censusTotal": 30
+        },
+        {
+          "id": 3099,
+          "model": "Infiniti QX70",
+          "censusTotal": 25
+        },
+        {
+          "id": 3100,
+          "model": "Infiniti QX80",
+          "censusTotal": 14
+        },
+        {
+          "id": 3652,
+          "model": "Infiniti QX30",
+          "censusTotal": 14
+        },
+        {
+          "id": 3098,
+          "model": "Infiniti QX50 (Import)",
+          "censusTotal": 10
+        },
+        {
+          "id": 2400,
+          "model": "Infiniti JX",
+          "censusTotal": 9
+        },
+        {
+          "id": 6342,
+          "model": "Infiniti QX60",
+          "censusTotal": 7
+        },
+        {
+          "id": 416,
+          "model": "Infiniti QX",
+          "censusTotal": 4
+        },
+        {
+          "id": 581,
+          "model": "Infiniti M Series",
+          "censusTotal": 4
+        },
+        {
+          "id": 3201,
+          "model": "Infiniti Q60",
+          "censusTotal": 4
+        },
+        {
+          "id": 3043,
+          "model": "Infiniti QX60 (Import)",
+          "censusTotal": 3
+        },
+        {
+          "id": 605,
+          "model": "Infiniti EX",
+          "censusTotal": 3
+        },
+        {
+          "id": 5502,
+          "model": "Infiniti QX55",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "75": {
+      "name": "BYD",
+      "series": [
+        {
+          "id": 4279,
+          "model": "Song MAX",
+          "censusTotal": 195
+        },
+        {
+          "id": 5178,
+          "model": "BYD Song Pro",
+          "censusTotal": 111
+        },
+        {
+          "id": 407,
+          "model": "BYD F3",
+          "censusTotal": 105
+        },
+        {
+          "id": 4802,
+          "model": "Tang",
+          "censusTotal": 78
+        },
+        {
+          "id": 3780,
+          "model": "Song",
+          "censusTotal": 77
+        },
+        {
+          "id": 3059,
+          "model": "BYD S7",
+          "censusTotal": 55
+        },
+        {
+          "id": 3781,
+          "model": "Yuan",
+          "censusTotal": 39
+        },
+        {
+          "id": 5760,
+          "model": "Song PLUS",
+          "censusTotal": 32
+        },
+        {
+          "id": 579,
+          "model": "BYD F0",
+          "censusTotal": 22
+        },
+        {
+          "id": 2806,
+          "model": "Surui",
+          "censusTotal": 18
+        },
+        {
+          "id": 4900,
+          "model": "Qin Pro",
+          "censusTotal": 16
+        },
+        {
+          "id": 2088,
+          "model": "BYD S6",
+          "censusTotal": 15
+        },
+        {
+          "id": 5365,
+          "model": "Qin",
+          "censusTotal": 13
+        },
+        {
+          "id": 2085,
+          "model": "BYD L3",
+          "censusTotal": 8
+        },
+        {
+          "id": 798,
+          "model": "BYD M6",
+          "censusTotal": 6
+        },
+        {
+          "id": 3283,
+          "model": "BYD G5",
+          "censusTotal": 5
+        },
+        {
+          "id": 2944,
+          "model": "Surui",
+          "censusTotal": 2
+        },
+        {
+          "id": 997,
+          "model": "BYD G3R",
+          "censusTotal": 1
+        },
+        {
+          "id": 540,
+          "model": "BYD F6",
+          "censusTotal": 1
+        },
+        {
+          "id": 2091,
+          "model": "BYD G6",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "76": {
+      "name": "Changan",
+      "series": [
+        {
+          "id": 6335,
+          "model": "Changan UNI-V",
+          "censusTotal": 632
+        },
+        {
+          "id": 2429,
+          "model": "Eado",
+          "censusTotal": 594
+        },
+        {
+          "id": 5179,
+          "model": "Changan CS75 PLUS",
+          "censusTotal": 505
+        },
+        {
+          "id": 3204,
+          "model": "Changan CS75",
+          "censusTotal": 319
+        },
+        {
+          "id": 5565,
+          "model": "Changan UNI-T",
+          "censusTotal": 257
+        },
+        {
+          "id": 5498,
+          "model": "Changan CS55 PLUS",
+          "censusTotal": 254
+        },
+        {
+          "id": 4976,
+          "model": "Changan CS35 PLUS",
+          "censusTotal": 184
+        },
+        {
+          "id": 2778,
+          "model": "Changan CS35",
+          "censusTotal": 146
+        },
+        {
+          "id": 5927,
+          "model": "Changan UNI-K",
+          "censusTotal": 80
+        },
+        {
+          "id": 4269,
+          "model": "Changan CS55",
+          "censusTotal": 76
+        },
+        {
+          "id": 4913,
+          "model": "Eado XT",
+          "censusTotal": 65
+        },
+        {
+          "id": 3924,
+          "model": "Changan CS15",
+          "censusTotal": 55
+        },
+        {
+          "id": 6976,
+          "model": "Yida",
+          "censusTotal": 54
+        },
+        {
+          "id": 5461,
+          "model": "Ruicheng CC",
+          "censusTotal": 42
+        },
+        {
+          "id": 6923,
+          "model": "Ruicheng PLUS",
+          "censusTotal": 36
+        },
+        {
+          "id": 4885,
+          "model": "Changan CS85 COUPE",
+          "censusTotal": 36
+        },
+        {
+          "id": 4588,
+          "model": "Eado DT",
+          "censusTotal": 33
+        },
+        {
+          "id": 7552,
+          "model": "Changan X5 PLUS",
+          "censusTotal": 30
+        },
+        {
+          "id": 7821,
+          "model": "Changan UNI-Z",
+          "censusTotal": 27
+        },
+        {
+          "id": 3422,
+          "model": "Yuexiang V7",
+          "censusTotal": 26
+        },
+        {
+          "id": 3121,
+          "model": "Changan CS95",
+          "censusTotal": 25
+        },
+        {
+          "id": 3217,
+          "model": "Benben",
+          "censusTotal": 21
+        },
+        {
+          "id": 2567,
+          "model": "Yuexiang V3",
+          "censusTotal": 18
+        },
+        {
+          "id": 2119,
+          "model": "Changan CX20",
+          "censusTotal": 13
+        },
+        {
+          "id": 3811,
+          "model": "Raeton CC",
+          "censusTotal": 13
+        },
+        {
+          "id": 705,
+          "model": "Yuexiang",
+          "censusTotal": 12
+        },
+        {
+          "id": 7543,
+          "model": "Changan X7 PLUS",
+          "censusTotal": 12
+        },
+        {
+          "id": 2045,
+          "model": "BenBen MINI",
+          "censusTotal": 8
+        },
+        {
+          "id": 2785,
+          "model": "Ruicheng",
+          "censusTotal": 7
+        },
+        {
+          "id": 2788,
+          "model": "Yuexiang V5",
+          "censusTotal": 5
+        },
+        {
+          "id": 4242,
+          "model": "Lingxuan",
+          "censusTotal": 4
+        },
+        {
+          "id": 7428,
+          "model": "Changan F70 Blue Whale",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "82": {
+      "name": "GAC Trumpchi",
+      "series": [
+        {
+          "id": 4174,
+          "model": "Trumpchi M8",
+          "censusTotal": 946
+        },
+        {
+          "id": 4662,
+          "model": "Trumpchi M6",
+          "censusTotal": 510
+        },
+        {
+          "id": 5944,
+          "model": "Trumpchi Emkoo",
+          "censusTotal": 438
+        },
+        {
+          "id": 4094,
+          "model": "Trumpchi GS8",
+          "censusTotal": 358
+        },
+        {
+          "id": 3495,
+          "model": "Trumpchi GS3",
+          "censusTotal": 142
+        },
+        {
+          "id": 6270,
+          "model": "Trumpchi GS4 PLUS",
+          "censusTotal": 50
+        },
+        {
+          "id": 3349,
+          "model": "Trumpchi GA6",
+          "censusTotal": 39
+        },
+        {
+          "id": 2560,
+          "model": "Trumpchi GS5",
+          "censusTotal": 35
+        },
+        {
+          "id": 6495,
+          "model": "Yingku",
+          "censusTotal": 27
+        },
+        {
+          "id": 4630,
+          "model": "Trumpchi GA4",
+          "censusTotal": 22
+        },
+        {
+          "id": 4230,
+          "model": "Trumpchi GS7",
+          "censusTotal": 16
+        },
+        {
+          "id": 3574,
+          "model": "Trumpchi GS5 Super",
+          "censusTotal": 13
+        },
+        {
+          "id": 3524,
+          "model": "Trumpchi GA3S Vision",
+          "censusTotal": 7
+        },
+        {
+          "id": 3782,
+          "model": "Trumpchi GA8",
+          "censusTotal": 7
+        },
+        {
+          "id": 2141,
+          "model": "Trumpchi GA5",
+          "censusTotal": 5
+        },
+        {
+          "id": 3069,
+          "model": "Trumpchi GA3",
+          "censusTotal": 3
+        }
+      ]
+    },
+    "91": {
+      "name": "Hongqi",
+      "series": [
+        {
+          "id": 4410,
+          "model": "Hongqi H5",
+          "censusTotal": 689
+        },
+        {
+          "id": 5048,
+          "model": "Hongqi HS5",
+          "censusTotal": 525
+        },
+        {
+          "id": 5566,
+          "model": "Hongqi H9",
+          "censusTotal": 226
+        },
+        {
+          "id": 6460,
+          "model": "Hongqi H6",
+          "censusTotal": 53
+        },
+        {
+          "id": 4150,
+          "model": "Hongqi HS7",
+          "censusTotal": 52
+        },
+        {
+          "id": 7130,
+          "model": "Hongqi HS3",
+          "censusTotal": 44
+        },
+        {
+          "id": 2771,
+          "model": "Hongqi H7",
+          "censusTotal": 37
+        },
+        {
+          "id": 6726,
+          "model": "Hongqi HQ9",
+          "censusTotal": 37
+        },
+        {
+          "id": 6461,
+          "model": "Hongqi Guoyao",
+          "censusTotal": 6
+        },
+        {
+          "id": 428,
+          "model": "Hongqi盛世",
+          "censusTotal": 3
+        },
+        {
+          "id": 556,
+          "model": "New Mingshi",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "94": {
+      "name": "Zotye",
+      "series": [
+        {
+          "id": 2334,
+          "model": "Zotye T600",
+          "censusTotal": 47
+        },
+        {
+          "id": 3852,
+          "model": "Zotye T700",
+          "censusTotal": 34
+        },
+        {
+          "id": 4092,
+          "model": "Zotye X7",
+          "censusTotal": 23
+        },
+        {
+          "id": 4070,
+          "model": "Zotye SR9",
+          "censusTotal": 23
+        },
+        {
+          "id": 3793,
+          "model": "Zotye Damai X5",
+          "censusTotal": 21
+        },
+        {
+          "id": 4385,
+          "model": "Zotye T600 Coupe",
+          "censusTotal": 17
+        },
+        {
+          "id": 3899,
+          "model": "Zotye SR7",
+          "censusTotal": 15
+        },
+        {
+          "id": 2333,
+          "model": "Zotye T300",
+          "censusTotal": 12
+        },
+        {
+          "id": 3627,
+          "model": "Zotye Z700",
+          "censusTotal": 8
+        },
+        {
+          "id": 3425,
+          "model": "Zotye Z500",
+          "censusTotal": 6
+        },
+        {
+          "id": 4417,
+          "model": "Zotye T500",
+          "censusTotal": 5
+        },
+        {
+          "id": 4737,
+          "model": "Zotye T800",
+          "censusTotal": 3
+        },
+        {
+          "id": 2337,
+          "model": "Zotye Z300",
+          "censusTotal": 2
+        },
+        {
+          "id": 4317,
+          "model": "Zotye Z560",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "95": {
+      "name": "Besturn",
+      "series": [
+        {
+          "id": 466,
+          "model": "Besturn B70",
+          "censusTotal": 275
+        },
+        {
+          "id": 4800,
+          "model": "Bestune T77",
+          "censusTotal": 51
+        },
+        {
+          "id": 4069,
+          "model": "Besturn X40",
+          "censusTotal": 36
+        },
+        {
+          "id": 3000,
+          "model": "Besturn X80",
+          "censusTotal": 28
+        },
+        {
+          "id": 5060,
+          "model": "Bestune T99",
+          "censusTotal": 28
+        },
+        {
+          "id": 632,
+          "model": "Besturn B50",
+          "censusTotal": 23
+        },
+        {
+          "id": 5954,
+          "model": "Bestune T55",
+          "censusTotal": 16
+        },
+        {
+          "id": 3695,
+          "model": "Besturn B30",
+          "censusTotal": 14
+        },
+        {
+          "id": 7149,
+          "model": "Bestune T90",
+          "censusTotal": 13
+        },
+        {
+          "id": 6872,
+          "model": "Besturn M9",
+          "censusTotal": 8
+        },
+        {
+          "id": 5317,
+          "model": "Besturn T33",
+          "censusTotal": 3
+        },
+        {
+          "id": 2310,
+          "model": "Besturn B90",
+          "censusTotal": 1
+        },
+        {
+          "id": 6213,
+          "model": "Bestune B70S",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "113": {
+      "name": "Dongfeng Aeolus",
+      "series": [
+        {
+          "id": 5103,
+          "model": "Yixuan",
+          "censusTotal": 155
+        },
+        {
+          "id": 3341,
+          "model": "Dongfeng Fengshen AX7",
+          "censusTotal": 102
+        },
+        {
+          "id": 6114,
+          "model": "Yixuan MAX",
+          "censusTotal": 65
+        },
+        {
+          "id": 5696,
+          "model": "Yixuan GS",
+          "censusTotal": 32
+        },
+        {
+          "id": 2556,
+          "model": "Dongfeng Fengshen A60",
+          "censusTotal": 11
+        },
+        {
+          "id": 6583,
+          "model": "Haoji",
+          "censusTotal": 10
+        },
+        {
+          "id": 3786,
+          "model": "Dongfeng Fengshen AX3",
+          "censusTotal": 9
+        },
+        {
+          "id": 4383,
+          "model": "Dongfeng Fengshen AX4",
+          "censusTotal": 9
+        },
+        {
+          "id": 7136,
+          "model": "Haohan",
+          "censusTotal": 8
+        },
+        {
+          "id": 3461,
+          "model": "Dongfeng Aeolus L60",
+          "censusTotal": 4
+        },
+        {
+          "id": 4097,
+          "model": "Dongfeng Fengshen AX5",
+          "censusTotal": 3
+        },
+        {
+          "id": 790,
+          "model": "Dongfeng Fengshen S30",
+          "censusTotal": 2
+        },
+        {
+          "id": 3493,
+          "model": "Dongfeng Aeolus A30",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "114": {
+      "name": "Wuling Motors",
+      "series": [
+        {
+          "id": 2139,
+          "model": "Wuling Hongguang",
+          "censusTotal": 280
+        },
+        {
+          "id": 5174,
+          "model": "Wuling Hongguang V",
+          "censusTotal": 101
+        },
+        {
+          "id": 6117,
+          "model": "Wuling Xingchen",
+          "censusTotal": 76
+        },
+        {
+          "id": 5772,
+          "model": "Wuling Victory",
+          "censusTotal": 60
+        },
+        {
+          "id": 2451,
+          "model": "Wuling Rongguang",
+          "censusTotal": 56
+        },
+        {
+          "id": 6650,
+          "model": "Wuling Jiachen",
+          "censusTotal": 55
+        },
+        {
+          "id": 2456,
+          "model": "Wuling Zhiguang",
+          "censusTotal": 51
+        },
+        {
+          "id": 3657,
+          "model": "Wuling Rongguang V",
+          "censusTotal": 39
+        },
+        {
+          "id": 4408,
+          "model": "Wuling Hongguang S3",
+          "censusTotal": 36
+        },
+        {
+          "id": 6777,
+          "model": "Wuling Xingchi",
+          "censusTotal": 29
+        },
+        {
+          "id": 5450,
+          "model": "Wuling Hongguang PLUS",
+          "censusTotal": 28
+        },
+        {
+          "id": 6039,
+          "model": "Wuling Journey",
+          "censusTotal": 27
+        },
+        {
+          "id": 2855,
+          "model": "Wuling Rongguang Mini Truck",
+          "censusTotal": 26
+        },
+        {
+          "id": 6218,
+          "model": "Wuling Rongguang S",
+          "censusTotal": 20
+        },
+        {
+          "id": 4884,
+          "model": "Wuling Rongguang New Truck",
+          "censusTotal": 20
+        },
+        {
+          "id": 3570,
+          "model": "Wuling Journey Classic",
+          "censusTotal": 6
+        },
+        {
+          "id": 8217,
+          "model": "Starlight 560",
+          "censusTotal": 4
+        },
+        {
+          "id": 8188,
+          "model": "Xingguang 730",
+          "censusTotal": 4
+        },
+        {
+          "id": 3946,
+          "model": "Wuling Zhiguang Mini Truck",
+          "censusTotal": 4
+        },
+        {
+          "id": 5881,
+          "model": "Wuling Journey",
+          "censusTotal": 3
+        },
+        {
+          "id": 5353,
+          "model": "Wuling 730",
+          "censusTotal": 1
+        },
+        {
+          "id": 7199,
+          "model": "Wuling Longka",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "120": {
+      "name": "Baojun",
+      "series": [
+        {
+          "id": 4166,
+          "model": "Baojun 510",
+          "censusTotal": 207
+        },
+        {
+          "id": 3412,
+          "model": "Baojun 730",
+          "censusTotal": 201
+        },
+        {
+          "id": 3677,
+          "model": "Baojun 560",
+          "censusTotal": 112
+        },
+        {
+          "id": 4077,
+          "model": "Baojun 310",
+          "censusTotal": 81
+        },
+        {
+          "id": 4587,
+          "model": "Baojun 530",
+          "censusTotal": 50
+        },
+        {
+          "id": 4392,
+          "model": "Baojun 310W",
+          "censusTotal": 46
+        },
+        {
+          "id": 4606,
+          "model": "Baojun 360",
+          "censusTotal": 34
+        },
+        {
+          "id": 5373,
+          "model": "Baojun RS-3",
+          "censusTotal": 24
+        },
+        {
+          "id": 5342,
+          "model": "Baojun RM-5",
+          "censusTotal": 13
+        },
+        {
+          "id": 4908,
+          "model": "Baojun RS-5",
+          "censusTotal": 11
+        },
+        {
+          "id": 6053,
+          "model": "Baojun Valli",
+          "censusTotal": 8
+        },
+        {
+          "id": 2236,
+          "model": "Baojun 630",
+          "censusTotal": 7
+        },
+        {
+          "id": 5084,
+          "model": "Baojun RC-5",
+          "censusTotal": 7
+        },
+        {
+          "id": 155,
+          "model": "Lechi",
+          "censusTotal": 5
+        },
+        {
+          "id": 5336,
+          "model": "Baojun RC-6",
+          "censusTotal": 5
+        },
+        {
+          "id": 3343,
+          "model": "Baojun 610",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "122": {
+      "name": "Venucia",
+      "series": [
+        {
+          "id": 4490,
+          "model": "Venucia D60",
+          "censusTotal": 56
+        },
+        {
+          "id": 3618,
+          "model": "Venucia T70",
+          "censusTotal": 45
+        },
+        {
+          "id": 6216,
+          "model": "Venucia Big V",
+          "censusTotal": 39
+        },
+        {
+          "id": 2867,
+          "model": "Venucia R50",
+          "censusTotal": 31
+        },
+        {
+          "id": 4115,
+          "model": "Venucia T90",
+          "censusTotal": 19
+        },
+        {
+          "id": 2341,
+          "model": "Venucia D50",
+          "censusTotal": 16
+        },
+        {
+          "id": 5519,
+          "model": "Venucia Star",
+          "censusTotal": 16
+        },
+        {
+          "id": 4887,
+          "model": "Venucia T60",
+          "censusTotal": 12
+        },
+        {
+          "id": 3904,
+          "model": "Venucia T70X",
+          "censusTotal": 2
+        },
+        {
+          "id": 3226,
+          "model": "Venucia R50X",
+          "censusTotal": 1
+        },
+        {
+          "id": 4315,
+          "model": "Venucia M50V",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "129": {
+      "name": "McLaren",
+      "series": [
+        {
+          "id": 5305,
+          "model": "McLaren GT",
+          "censusTotal": 97
+        },
+        {
+          "id": 4366,
+          "model": "McLaren 720S",
+          "censusTotal": 64
+        },
+        {
+          "id": 3767,
+          "model": "McLaren 570",
+          "censusTotal": 52
+        },
+        {
+          "id": 4880,
+          "model": "McLaren 600LT",
+          "censusTotal": 16
+        },
+        {
+          "id": 3809,
+          "model": "McLaren 540C",
+          "censusTotal": 15
+        },
+        {
+          "id": 2293,
+          "model": "McLaren 12C",
+          "censusTotal": 7
+        },
+        {
+          "id": 3382,
+          "model": "McLaren 650S",
+          "censusTotal": 5
+        },
+        {
+          "id": 3620,
+          "model": "McLaren 625C",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "155": {
+      "name": "SAIC Maxus",
+      "series": [
+        {
+          "id": 4686,
+          "model": "Maxus G50",
+          "censusTotal": 95
+        },
+        {
+          "id": 3064,
+          "model": "Maxus G10",
+          "censusTotal": 72
+        },
+        {
+          "id": 5244,
+          "model": "Maxus G20",
+          "censusTotal": 37
+        },
+        {
+          "id": 4120,
+          "model": "SAIC Maxus D90",
+          "censusTotal": 14
+        },
+        {
+          "id": 6479,
+          "model": "Maxus G90",
+          "censusTotal": 9
+        },
+        {
+          "id": 7333,
+          "model": "Maxus G70",
+          "censusTotal": 5
+        },
+        {
+          "id": 5083,
+          "model": "Maxus D60",
+          "censusTotal": 1
+        },
+        {
+          "id": 5913,
+          "model": "SAIC Maxus MAXUS G20 RV",
+          "censusTotal": 1
+        },
+        {
+          "id": 5258,
+          "model": "Maxus T70",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "163": {
+      "name": "Changan Oshan",
+      "series": [
+        {
+          "id": 5748,
+          "model": "Changan Oushang X5",
+          "censusTotal": 181
+        },
+        {
+          "id": 6476,
+          "model": "Changan Oshan Z6",
+          "censusTotal": 64
+        },
+        {
+          "id": 5219,
+          "model": "Changan Oshan X7",
+          "censusTotal": 64
+        },
+        {
+          "id": 6126,
+          "model": "Changan Oshan X7 PLUS",
+          "censusTotal": 31
+        },
+        {
+          "id": 3893,
+          "model": "Changan Oushang CX70",
+          "censusTotal": 26
+        },
+        {
+          "id": 4517,
+          "model": "Changan Oushang X70A",
+          "censusTotal": 22
+        },
+        {
+          "id": 6826,
+          "model": "Changan Oshan X5 PLUS",
+          "censusTotal": 20
+        },
+        {
+          "id": 4376,
+          "model": "Changan Oushang A800",
+          "censusTotal": 5
+        },
+        {
+          "id": 4886,
+          "model": "Changan Oushang Kosai",
+          "censusTotal": 5
+        },
+        {
+          "id": 2954,
+          "model": "Ouliv",
+          "censusTotal": 3
+        },
+        {
+          "id": 4660,
+          "model": "Changan Oshan Cosmos",
+          "censusTotal": 3
+        },
+        {
+          "id": 5367,
+          "model": "Changan Oshan Kosai 5",
+          "censusTotal": 2
+        },
+        {
+          "id": 5886,
+          "model": "Changan Oshan Cosmos Pro",
+          "censusTotal": 2
+        }
+      ]
+    },
+    "165": {
+      "name": "Dongfeng Fengxing",
+      "series": [
+        {
+          "id": 2540,
+          "model": "Lingzhi",
+          "censusTotal": 162
+        },
+        {
+          "id": 5835,
+          "model": "Fengxing T5 EVO",
+          "censusTotal": 41
+        },
+        {
+          "id": 3128,
+          "model": "Jingyi X5",
+          "censusTotal": 38
+        },
+        {
+          "id": 4767,
+          "model": "Fengxing T5",
+          "censusTotal": 30
+        },
+        {
+          "id": 6429,
+          "model": "Fengxing Yacht",
+          "censusTotal": 22
+        },
+        {
+          "id": 3414,
+          "model": "Joyear X3",
+          "censusTotal": 12
+        },
+        {
+          "id": 5950,
+          "model": "Lingzhi PLUS",
+          "censusTotal": 12
+        },
+        {
+          "id": 3789,
+          "model": "Fengxing S500",
+          "censusTotal": 12
+        },
+        {
+          "id": 2990,
+          "model": "Fengxing CM7",
+          "censusTotal": 12
+        },
+        {
+          "id": 3970,
+          "model": "Fengxing SX6",
+          "censusTotal": 10
+        },
+        {
+          "id": 4423,
+          "model": "Jingyi X6",
+          "censusTotal": 6
+        },
+        {
+          "id": 3301,
+          "model": "Jingyi S50",
+          "censusTotal": 5
+        },
+        {
+          "id": 3785,
+          "model": "Joyear XV",
+          "censusTotal": 5
+        },
+        {
+          "id": 4805,
+          "model": "Fengxing M7",
+          "censusTotal": 5
+        },
+        {
+          "id": 4921,
+          "model": "Fengxing T5L",
+          "censusTotal": 2
+        },
+        {
+          "id": 3792,
+          "model": "Fengxing F600",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "181": {
+      "name": "Haval",
+      "series": [
+        {
+          "id": 2123,
+          "model": "Haval H6",
+          "censusTotal": 1801
+        },
+        {
+          "id": 4485,
+          "model": "Haval M6",
+          "censusTotal": 461
+        },
+        {
+          "id": 5770,
+          "model": "Haval Big Dog",
+          "censusTotal": 346
+        },
+        {
+          "id": 2615,
+          "model": "Haval H2",
+          "censusTotal": 179
+        },
+        {
+          "id": 3298,
+          "model": "Haval H9",
+          "censusTotal": 124
+        },
+        {
+          "id": 3481,
+          "model": "Haval H6 Coupe",
+          "censusTotal": 110
+        },
+        {
+          "id": 4898,
+          "model": "Haval F7",
+          "censusTotal": 90
+        },
+        {
+          "id": 3454,
+          "model": "Haval H1",
+          "censusTotal": 82
+        },
+        {
+          "id": 6048,
+          "model": "Haval Chitu",
+          "censusTotal": 77
+        },
+        {
+          "id": 3074,
+          "model": "Haval H7",
+          "censusTotal": 67
+        },
+        {
+          "id": 4168,
+          "model": "Haval H2s",
+          "censusTotal": 60
+        },
+        {
+          "id": 4984,
+          "model": "Haval F7x",
+          "censusTotal": 46
+        },
+        {
+          "id": 6926,
+          "model": "Haval Da Gou 2nd Gen",
+          "censusTotal": 42
+        },
+        {
+          "id": 6299,
+          "model": "Haval Shenshou",
+          "censusTotal": 32
+        },
+        {
+          "id": 4792,
+          "model": "Haval F5",
+          "censusTotal": 27
+        },
+        {
+          "id": 6158,
+          "model": "Haval Cool Dog",
+          "censusTotal": 26
+        },
+        {
+          "id": 4608,
+          "model": "Haval H4",
+          "censusTotal": 24
+        },
+        {
+          "id": 5926,
+          "model": "Haval First Love",
+          "censusTotal": 18
+        },
+        {
+          "id": 2124,
+          "model": "Haval H8",
+          "censusTotal": 18
+        },
+        {
+          "id": 7092,
+          "model": "Haval H5",
+          "censusTotal": 15
+        },
+        {
+          "id": 2027,
+          "model": "Haval H5 Classic",
+          "censusTotal": 15
+        },
+        {
+          "id": 7746,
+          "model": "Haval Menglong",
+          "censusTotal": 13
+        },
+        {
+          "id": 6343,
+          "model": "Haval H6S",
+          "censusTotal": 7
+        },
+        {
+          "id": 8322,
+          "model": "Haval H6L",
+          "censusTotal": 4
+        }
+      ]
+    },
+    "259": {
+      "name": "Dongfeng Fengguang",
+      "series": [
+        {
+          "id": 4023,
+          "model": "Fengguang 580",
+          "censusTotal": 128
+        },
+        {
+          "id": 4468,
+          "model": "Fengguang S560",
+          "censusTotal": 45
+        },
+        {
+          "id": 5871,
+          "model": "Fengon 500",
+          "censusTotal": 17
+        },
+        {
+          "id": 4759,
+          "model": "Fengguang ix5",
+          "censusTotal": 15
+        },
+        {
+          "id": 3829,
+          "model": "Fengguang 330",
+          "censusTotal": 15
+        },
+        {
+          "id": 3925,
+          "model": "Fengguang 370",
+          "censusTotal": 14
+        },
+        {
+          "id": 5384,
+          "model": "Fengguang 580Pro",
+          "censusTotal": 9
+        },
+        {
+          "id": 6581,
+          "model": "Fengguang 380",
+          "censusTotal": 7
+        },
+        {
+          "id": 3828,
+          "model": "Fengguang 360",
+          "censusTotal": 7
+        },
+        {
+          "id": 5070,
+          "model": "Fengguang ix7",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "279": {
+      "name": "Lynk & Co",
+      "series": [
+        {
+          "id": 4402,
+          "model": "Lynk & Co 03",
+          "censusTotal": 787
+        },
+        {
+          "id": 4221,
+          "model": "Lynk & Co 01",
+          "censusTotal": 262
+        },
+        {
+          "id": 5555,
+          "model": "Lynk & Co 06",
+          "censusTotal": 225
+        },
+        {
+          "id": 4616,
+          "model": "Lynk & Co 02",
+          "censusTotal": 127
+        },
+        {
+          "id": 5194,
+          "model": "Lynk & Co 05",
+          "censusTotal": 109
+        },
+        {
+          "id": 6144,
+          "model": "Lynk & Co 09",
+          "censusTotal": 31
+        },
+        {
+          "id": 6070,
+          "model": "Lynk & Co 02 Hatchback",
+          "censusTotal": 22
+        }
+      ]
+    },
+    "283": {
+      "name": "WEY",
+      "series": [
+        {
+          "id": 4252,
+          "model": "Wey VV7",
+          "censusTotal": 137
+        },
+        {
+          "id": 4253,
+          "model": "Wey VV5",
+          "censusTotal": 131
+        },
+        {
+          "id": 4631,
+          "model": "Wey VV6",
+          "censusTotal": 85
+        },
+        {
+          "id": 6010,
+          "model": "Wey Mocha",
+          "censusTotal": 16
+        },
+        {
+          "id": 5415,
+          "model": "Wei VV7 GT",
+          "censusTotal": 4
+        }
+      ]
+    },
+    "319": {
+      "name": "Jetour",
+      "series": [
+        {
+          "id": 5941,
+          "model": "Jetour X70 PLUS",
+          "censusTotal": 367
+        },
+        {
+          "id": 6606,
+          "model": "Jetour Traveler",
+          "censusTotal": 198
+        },
+        {
+          "id": 6291,
+          "model": "Jetour Dasheng",
+          "censusTotal": 129
+        },
+        {
+          "id": 4683,
+          "model": "Jetour X70",
+          "censusTotal": 90
+        },
+        {
+          "id": 6146,
+          "model": "Jetour X90 PLUS",
+          "censusTotal": 48
+        },
+        {
+          "id": 4797,
+          "model": "Jetour X90",
+          "censusTotal": 44
+        },
+        {
+          "id": 7828,
+          "model": "Jetour Freedom",
+          "censusTotal": 21
+        },
+        {
+          "id": 7319,
+          "model": "Jetour X70 PRO",
+          "censusTotal": 21
+        },
+        {
+          "id": 5550,
+          "model": "Jetour X70M",
+          "censusTotal": 12
+        },
+        {
+          "id": 7597,
+          "model": "Jetour X90 PRO",
+          "censusTotal": 9
+        },
+        {
+          "id": 5052,
+          "model": "Jetour X70S",
+          "censusTotal": 8
+        },
+        {
+          "id": 5081,
+          "model": "Jetour X95",
+          "censusTotal": 2
+        },
+        {
+          "id": 5575,
+          "model": "Jetour X70 Coupe",
+          "censusTotal": 2
+        },
+        {
+          "id": 8186,
+          "model": "Jetour X70L",
+          "censusTotal": 1
+        }
+      ]
+    },
+    "358": {
+      "name": "Jetta",
+      "series": [
+        {
+          "id": 5193,
+          "model": "Jetta VS7",
+          "censusTotal": 465
+        },
+        {
+          "id": 5138,
+          "model": "Jetta VS5",
+          "censusTotal": 373
+        },
+        {
+          "id": 5137,
+          "model": "Jetta VA3",
+          "censusTotal": 24
+        },
+        {
+          "id": 8160,
+          "model": "Jetta VS8",
+          "censusTotal": 20
+        },
+        {
+          "id": 7890,
+          "model": "Jetta VA7",
+          "censusTotal": 8
+        }
+      ]
+    },
+    "458": {
+      "name": "Tank",
+      "series": [
+        {
+          "id": 5810,
+          "model": "Tank 300",
+          "censusTotal": 1034
+        },
+        {
+          "id": 6284,
+          "model": "Tank 500",
+          "censusTotal": 95
+        },
+        {
+          "id": 6359,
+          "model": "Tank 400",
+          "censusTotal": 5
+        }
+      ]
+    }
+  }
+}
