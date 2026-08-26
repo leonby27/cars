@@ -14,10 +14,11 @@
          `crossorigin` обязателен: без него браузер скачает файл второй раз. -->
     <link rel="preload" href="/fonts/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <!-- Фотографии машин лежат на чужом домене, а его адрес появляется в разметке только
-         после запуска приложения. Рукопожатие с этим сервером начинаем заранее: иначе
-         первый снимок ждёт ещё три обращения туда-обратно (DNS, соединение, шифрование). -->
-    <link rel="preconnect" href="https://erscglobal2.autoimg.cn" crossorigin />
+    <!-- Фотографии машин раньше грузились прямо с китайского хранилища, и здесь стояло
+         заблаговременное рукопожатие с ним. Теперь снимки идут со своего адреса
+         /photo/… (наш сервер держит их копию, см. imageSource в src/App.jsx), то есть
+         по уже открытому соединению с сайтом, — знакомиться с чужим сервером не нужно.
+         К нему обращаемся только страховкой, если наша копия почему-то не отдалась. -->
     <meta property="og:title" content="Автомобили из Китая в Беларусь — abcars.by" />
     <meta property="og:description" content="Актуальные объявления, проверка и ориентировочная цена до Минска." />
     <meta property="og:image" content="https://abcars.by/og.jpg" />

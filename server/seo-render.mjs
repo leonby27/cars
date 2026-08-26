@@ -27,6 +27,19 @@ export const linkifyText = (text, hrefRoute) =>
   splitInlineLinks(text)
     .map((part) => (typeof part === "string" ? escapeHtml(part) : `<a href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`))
     .join("");
+// Фотографии машин отдаём со своего адреса /photo/… — наш сервер держит копию
+// снимка у себя и отдаёт её вчетверо быстрее, чем китайское хранилище отвечает на
+// первый запрос. Подробности — в snippets/abcars-photo-location.conf на сервере
+// и в imageSource() в src/App.jsx. Если адрес не из хранилища Che168 — оставляем как есть.
+export const photoHref = (source) => {
+  if (!source) return source;
+  try {
+    const url = new URL(source);
+    return /(^|\.)autoimg\.cn$/.test(url.hostname) ? `/photo${url.pathname}` : source;
+  } catch {
+    return source;
+  }
+};
 export const jsonLd = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
 export const number = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 /** Склонение существительного при числе: 1 автомобиль, 2 автомобиля, 5 автомобилей. */
@@ -349,6 +362,12 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const landed = estimateLandedCost(car);
     const description = carDescription(car, landed);
     const image = /^https:\/\//.test(String(car.image || "")) ? car.image : null;
+    // Тот же снимок, что откроет галерея после запуска приложения, — и просим его
+    // по тому же адресу (свой кэш фотографий, /photo/…), иначе браузер скачает
+    // одну и ту же фотографию дважды. Разметке для поисковиков оставляем прямой
+    // адрес хранилища: там важен исходник, а не наша копия.
+    const proxiedPhoto = photoHref(image);
+    const imageOnPage = proxiedPhoto?.startsWith("/") ? `${siteBasePath}${proxiedPhoto}` : proxiedPhoto;
     const modelName = [car.brand, car.model].filter(Boolean).join(" ");
     const schema = {
       "@context": "https://schema.org",
@@ -403,7 +422,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const sectionBlock = sections.length
       ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({

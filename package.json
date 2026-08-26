@@ -14,6 +14,7 @@
     "rates": "node scripts/update-rates.mjs",
     "quota": "node scripts/update-ev-quota.mjs",
     "ranges": "node scripts/update-datacenter-ranges.mjs",
+    "warm": "node scripts/warm-photos.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:import": "node scripts/db-import-json.mjs",
     "db:discover": "node scripts/import-guazi.mjs --database-only",

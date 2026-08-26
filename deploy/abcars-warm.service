@@ -1,0 +1,21 @@
+# Прогрев кэша фотографий: заранее просим у своего же сайта снимки первых экранов,
+# чтобы наш сервер забрал их у китайского хранилища до прихода посетителей.
+# Что и зачем — в шапке scripts/warm-photos.mjs. Ставится на сервер так:
+#   install -m644 /srv/abcars/deploy/abcars-warm.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now abcars-warm.timer
+[Unit]
+Description=Прогрев кэша фотографий машин
+After=network-online.target nginx.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+ExecStart=/usr/bin/npm run warm -- --limit=2000 --concurrency=6
+TimeoutStartSec=3600
+Nice=15
+CPUWeight=20
+IOWeight=20
+MemoryHigh=500M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-warm

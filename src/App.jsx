@@ -341,14 +341,31 @@ const resizedImageHref = (url, width) => {
   resized.pathname = path;
   return resized.href;
 };
+// Фотохранилище Che168 стоит в Китае и раздаётся через чужую сеть доставки. Кадр,
+// который у неё «горячий», приходит за 0,2 с, но любой снимок, которого там сейчас
+// нет, заставляет ждать 0,8–1,1 с — из-за этого фотографии и «не грузились при
+// первом заходе». Поэтому просим их не напрямую, а со своего адреса /photo/…:
+// наш сервер один раз забирает кадр у китайцев и дальше отдаёт его с диска всем
+// посетителям (0,08 с). Заодно снимки идут по уже открытому соединению с сайтом.
+// Настройка кэша — в snippets/abcars-photo-location.conf на сервере.
+const photoProxyHost = /(^|\.)autoimg\.cn$/;
+const canProxyPhotos = () => import.meta.env.BASE_URL === "/";
 const imageSource = (source, width) => {
   if (!source) return source;
   try {
     const url = new URL(source);
     // Static preview hosts do not have the image-proxy API; use the original
     // allowlisted source there so catalog images remain visible.
-    if (proxiedImageHosts.has(url.hostname) && import.meta.env.BASE_URL === "/") return `/api/image?src=${encodeURIComponent(url.href)}`;
-    return resizedImageHref(url, width) || source;
+    if (proxiedImageHosts.has(url.hostname) && canProxyPhotos()) return `/api/image?src=${encodeURIComponent(url.href)}`;
+    const resized = resizedImageHref(url, width) || source;
+    if (photoProxyHost.test(url.hostname) && canProxyPhotos()) {
+      try {
+        return `/photo${new URL(resized).pathname}`;
+      } catch {
+        return resized;
+      }
+    }
+    return resized;
   } catch {
     return source;
   }
@@ -362,13 +379,14 @@ const IMAGE_WIDTH_CARD = 600;
 const IMAGE_WIDTH_STRIP = 500;
 const IMAGE_WIDTH_TILE = 600;
 const IMAGE_WIDTH_THUMB = 240;
-// Страховка: если хранилище не отдало уменьшенный кадр, подставляем оригинал —
-// тяжёлое фото лучше пустой рамки. Повторяем только один раз.
+// Страховка: если кадр не пришёл — уменьшенного нет в хранилище или наш кэш
+// почему-то не ответил, — берём оригинал прямо из хранилища, мимо своего адреса.
+// Тяжёлое фото лучше пустой рамки. Повторяем только один раз.
 const retryWithFullImage = (event, source) => {
   const image = event.currentTarget;
   if (!source || image.dataset.fullSize) return;
   image.dataset.fullSize = "1";
-  image.src = imageSource(source);
+  image.src = source;
 };
 
 function normalizeImportedCar(car) {
@@ -5529,7 +5547,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
                 imageRefs.current[index] = node;
               }}
             >
-              <img src={imageSource(image)} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"} />
+              <img src={imageSource(image)} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"} onError={(event) => retryWithFullImage(event, image)} />
               <figcaption>
                 {index + 1} из {images.length}
               </figcaption>
@@ -5620,7 +5638,7 @@ function VehicleGallery({ car }) {
     <>
       <section className="gallery-panel">
         <button className={`gallery-open${dragging ? " dragging" : ""}`} style={{ "--gallery-drag-x": `${dragOffset}px` }} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}>
-          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active])} alt={`${car.title}, фото ${active + 1}`} draggable="false" />
+          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active])} alt={`${car.title}, фото ${active + 1}`} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
         </button>
         {/* Ярлык «Новое» поверх фотографии — только для узкого экрана: там строка
             ярлыка над заголовком отодвигала цену вниз. На широком экране виден
@@ -6732,7 +6750,7 @@ function OrderDraft({ car, navigate }) {
         <DataTag type="pending" />
       </div>
       <section className="order-car-summary">
-        <img src={imageSource(car.image, IMAGE_WIDTH_TILE)} alt={car.title} />
+        <img src={imageSource(car.image, IMAGE_WIDTH_TILE)} alt={car.title} onError={(event) => retryWithFullImage(event, car.image)} />
         <div>
           <h2>{car.title}</h2>
           <p>

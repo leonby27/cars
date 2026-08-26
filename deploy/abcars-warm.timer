@@ -1,0 +1,12 @@
+# Каждое утро после пополнения каталога (05:00 UTC): к этому часу в базе уже лежат
+# ночные новинки, а их фотографий в нашем кэше ещё нет.
+[Unit]
+Description=Прогрев кэша фотографий раз в сутки
+
+[Timer]
+OnCalendar=*-*-* 06:10:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
