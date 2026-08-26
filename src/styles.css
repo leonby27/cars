@@ -2093,37 +2093,11 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   background: color-mix(in srgb, var(--ink) 8%, var(--surface));
 }
 /* Китайское имя модели рядом с названием: круг с буквой «i» слева от стрелки на
-   полную страницу. Отдельный класс, а не .detail-back: там кнопка на 36 пикселей,
-   а здесь знак при заголовке — он должен быть заметно мельче названия и не
-   выглядеть третьей кнопкой в ряд. */
+   полную страницу. Круг, размер и фон берутся у самой стрелки (.detail-back) —
+   они стоят рядом в строке заголовка и должны читаться как пара. Своего здесь
+   только курсор: это не кнопка, а знак с подсказкой, нажимать его некуда. */
 .chinese-name-mark {
-  position: relative;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--ink) 7%, var(--surface));
-  color: var(--muted);
   cursor: default;
-  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
-}
-.chinese-name-mark svg {
-  width: 17px;
-  height: 17px;
-}
-/* Зона нажатия до 44px, не меняя раскладку строки: подсказку на телефоне открывает касание. */
-.chinese-name-mark::after {
-  content: "";
-  position: absolute;
-  inset: -9px;
-}
-.chinese-name-mark:hover,
-.chinese-name-mark:focus-visible {
-  background: color-mix(in srgb, var(--ink) 12%, var(--surface));
-  color: var(--ink);
 }
 /* Подсказка в две-три строки: китайское имя, чтение латиницей и, если нужно,
    короткое пояснение. Поэтому колонкой, а не в строку, как у стрелки цены. */

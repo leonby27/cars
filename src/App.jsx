@@ -6167,9 +6167,11 @@ function ChineseNameMark({ car }) {
       {info.note && <i>{info.note}</i>}
     </>
   );
+  // Класс стрелки на полную страницу берём как есть: знак стоит рядом с ней в строке
+  // заголовка, и они должны читаться как пара — один круг, один размер значка.
   return (
-    <span className="chinese-name-mark" role="img" aria-label={hint} tabIndex="0">
-      <Info size={18} />
+    <span className="detail-back chinese-name-mark" role="img" aria-label={hint} tabIndex="0">
+      <Info />
       <ActionTooltip className="chinese-name-tooltip" text={tooltip} tapToOpen />
     </span>
   );
