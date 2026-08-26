@@ -437,6 +437,32 @@ import bmw_i4 from "./model-texts/bmw-i4.js";
 import changan_uni_z from "./model-texts/changan-uni-z.js";
 import mercedes_benz_cle from "./model-texts/mercedes-benz-cle.js";
 import byd_song_pro_petrol from "./model-texts/byd-song-pro-petrol.js";
+import byd_sealion_07_ev from "./model-texts/byd-sealion-07-ev.js";
+import mercedes_benz_c_class_new_energy from "./model-texts/mercedes-benz-c-class-new-energy.js";
+import bmw_8_series from "./model-texts/bmw-8-series.js";
+import mercedes_benz_eqa from "./model-texts/mercedes-benz-eqa.js";
+import audi_rs_5 from "./model-texts/audi-rs-5.js";
+import geely_emgrand_l from "./model-texts/geely-emgrand-l.js";
+import bmw_m3 from "./model-texts/bmw-m3.js";
+import audi_s5 from "./model-texts/audi-s5.js";
+import volkswagen_id6_crozz from "./model-texts/volkswagen-id6-crozz.js";
+import bmw_x4_m from "./model-texts/bmw-x4-m.js";
+import toyota_bz5 from "./model-texts/toyota-bz5.js";
+import byd_song_max_new_energy from "./model-texts/byd-song-max-new-energy.js";
+import deepal_l06 from "./model-texts/deepal-l06.js";
+import toyota_bz4x from "./model-texts/toyota-bz4x.js";
+import mercedes_benz_glc_coupe_amg from "./model-texts/mercedes-benz-glc-coupe-amg.js";
+import volkswagen_id6_x from "./model-texts/volkswagen-id6-x.js";
+import audi_a5l_sportback from "./model-texts/audi-a5l-sportback.js";
+import toyota_bz7 from "./model-texts/toyota-bz7.js";
+import byd_tang_petrol from "./model-texts/byd-tang-petrol.js";
+import nio_et9 from "./model-texts/nio-et9.js";
+import mazda_ez_6 from "./model-texts/mazda-ez-6.js";
+import bmw_x4_m40i from "./model-texts/bmw-x4-m40i.js";
+import bmw_x5_new_energy from "./model-texts/bmw-x5-new-energy.js";
+import zeekr_8x from "./model-texts/zeekr-8x.js";
+import zeekr_001_fr from "./model-texts/zeekr-001-fr.js";
+import mazda_ez_60 from "./model-texts/mazda-ez-60.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -865,6 +891,32 @@ export const MODEL_TEXTS_RAW = {
   "changan-uni-z": changan_uni_z,
   "mercedes-benz-cle": mercedes_benz_cle,
   "byd-song-pro-petrol": byd_song_pro_petrol,
+  "byd-sealion-07-ev": byd_sealion_07_ev,
+  "mercedes-benz-c-class-new-energy": mercedes_benz_c_class_new_energy,
+  "bmw-8-series": bmw_8_series,
+  "mercedes-benz-eqa": mercedes_benz_eqa,
+  "audi-rs-5": audi_rs_5,
+  "geely-emgrand-l": geely_emgrand_l,
+  "bmw-m3": bmw_m3,
+  "audi-s5": audi_s5,
+  "volkswagen-id6-crozz": volkswagen_id6_crozz,
+  "bmw-x4-m": bmw_x4_m,
+  "toyota-bz5": toyota_bz5,
+  "byd-song-max-new-energy": byd_song_max_new_energy,
+  "deepal-l06": deepal_l06,
+  "toyota-bz4x": toyota_bz4x,
+  "mercedes-benz-glc-coupe-amg": mercedes_benz_glc_coupe_amg,
+  "volkswagen-id6-x": volkswagen_id6_x,
+  "audi-a5l-sportback": audi_a5l_sportback,
+  "toyota-bz7": toyota_bz7,
+  "byd-tang-petrol": byd_tang_petrol,
+  "nio-et9": nio_et9,
+  "mazda-ez-6": mazda_ez_6,
+  "bmw-x4-m40i": bmw_x4_m40i,
+  "bmw-x5-new-energy": bmw_x5_new_energy,
+  "zeekr-8x": zeekr_8x,
+  "zeekr-001-fr": zeekr_001_fr,
+  "mazda-ez-60": mazda_ez_60,
 };
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
