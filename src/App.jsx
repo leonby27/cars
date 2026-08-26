@@ -3409,21 +3409,30 @@ function PopularBrands({ navigate, cars, apiMode }) {
     return [...counts].map(([brand, count]) => ({ brand, count }));
   }, [cars, selectedType]);
 
+  // Раньше марки под новый тип двигателя запрашивались только по нажатию на вкладку,
+  // и первое переключение в сессии ждало ответ сервера — вкладка на вид зависала.
+  // Теперь, как только известно, что каталог отвечает, одним заходом спрашиваем марки
+  // сразу под все четыре вкладки (справочник помнит такой же запрос, ушедший из
+  // index.html, и не дублирует его). К моменту, когда посетитель нажмёт на вкладку,
+  // ответ обычно уже лежит наготове, и список меняется сразу.
+  const brandsPrefetched = useRef(false);
   useEffect(() => {
     if (apiMode === false) {
       setRemoteBrands({});
       return undefined;
     }
+    if (apiMode !== true || brandsPrefetched.current) return undefined;
+    brandsPrefetched.current = true;
     let cancelled = false;
-    // Тот же справочник, что запрашивает поиск на главной, поэтому запрос уходит один.
-    // У каждого типа двигателя свой набор марок, и спрашиваем его только тогда, когда
-    // переключатель действительно нажали.
-    const query = selectedType === "Все" ? "" : new URLSearchParams({ type: selectedType }).toString();
-    requestCatalogMeta(query)
-      .then((payload) => { if (!cancelled) setRemoteBrands((known) => ({ ...known, [selectedType]: payload.brands || [] })); })
-      .catch(() => {});
+    POWERTRAIN_TABS.forEach((item) => {
+      const value = typeValue(item);
+      const query = value === "Все" ? "" : new URLSearchParams({ type: value }).toString();
+      requestCatalogMeta(query)
+        .then((payload) => { if (!cancelled) setRemoteBrands((known) => ({ ...known, [value]: payload.brands || [] })); })
+        .catch(() => {});
+    });
     return () => { cancelled = true; };
-  }, [apiMode, selectedType]);
+  }, [apiMode]);
 
   // Ответ по новому типу приходит не мгновенно, а стартовая выборка знает лишь горстку
   // марок: если показать её, список на миг сжимается и мигает. Поэтому до ответа
