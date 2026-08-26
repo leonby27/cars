@@ -1124,7 +1124,7 @@ function EvQuotaButton({ quotas }) {
         className={`icon-label quota-link${open ? " selected" : ""}`}
         aria-expanded={open}
         aria-controls="ev-quota-panel"
-        aria-label={`Осталось квот на беспошлинный ввоз электромобилей: ${number(remaining)} из ${number(total)}`}
+        aria-label={`Осталось квот ${number(remaining)} из ${number(total)} на беспошлинный ввоз электромобилей`}
         onClick={() => setOpen((value) => !value)}
       >
         <Lightning size={20} weight="bold" />
@@ -3488,7 +3488,7 @@ function PopularBrands({ navigate, cars, apiMode }) {
             ? `${landing}${typeQuery ? `?${typeQuery}` : ""}`
             : `/catalog?brand=${encodeURIComponent(brand)}${typeQuery ? `&${typeQuery}` : ""}`;
           return (
-            <AppLink className="brand-link" key={brand} href={href} navigate={navigate} aria-label={countsKnown ? `Перейти к предложениям ${brand}, объявлений: ${number(count)}` : `Перейти к предложениям ${brand}`}>
+            <AppLink className="brand-link" key={brand} href={href} navigate={navigate} aria-label={countsKnown ? `Перейти к предложениям: ${brand} ${number(count)} объявлений` : `Перейти к предложениям: ${brand}`}>
               <BrandMark brand={brand} />
               <span className="brand-name" title={brand}>{brand}</span>
               <span className="brand-count" aria-hidden="true">{countsKnown ? number(count) : ""}</span>

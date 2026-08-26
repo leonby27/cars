@@ -30,7 +30,7 @@
      фразы (пункты под заголовком главной, счётчики у марок): обычный --muted
      на белом не дотягивает до нормы читаемости 4,5:1, из-за чего проверка
      доступности Lighthouse снимала баллы. Разница на глаз почти незаметна. */
-  --muted-contrast: #6a7079;
+  --muted-contrast: #666c75;
   --line: #e7e9ec;
   --line-strong: #d8dadd;
   --focus-ring: #aeb3ba;
@@ -49,7 +49,7 @@
   /* Оранжевый для предупреждений, которые не про квоту на электромобили. */
   --warn-ink: #b45309;
   --warn-soft: #fff4e6;
-  --green: #1b8b55;
+  --green: #1b8551;
   --motion-fast: 140ms;
   --motion-medium: 190ms;
   --motion-ease: cubic-bezier(0.2, 0.72, 0.2, 1);
@@ -770,7 +770,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   border: 0;
   border-radius: calc(9px * var(--corner-scale));
   background: transparent;
-  color: var(--muted);
+  color: var(--muted-contrast);
   font-size: 16px;
   font-weight: 800;
   white-space: nowrap;
@@ -974,7 +974,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 }
 .trust-strip small {
   margin-top: 3px;
-  color: var(--muted);
+  color: var(--muted-contrast);
   font-size: 16px;
 }
 .featured {
@@ -1073,6 +1073,9 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 .featured-body h3 {
   margin: 0;
   font-size: 17px;
+  /* Строка не ниже 24px: ссылка-заголовок сама по себе — цель нажатия, а меньшая
+     высота не проходит норму доступности для пальца. */
+  line-height: 1.45;
 }
 .featured-body h3 a,
 .row-title h2 a {
@@ -4539,7 +4542,7 @@ body.header-menu-open .detail-floating-availability {
     margin: 0;
     padding: 5px 9px;
     border-radius: calc(7px * var(--corner-scale));
-    background: #1b8b55;
+    background: #1b8551;
     color: #ffffff;
     font-size: 16px;
     font-weight: 600;
@@ -12817,7 +12820,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   margin-bottom: 4px;
   padding: 3px 8px;
   border-radius: calc(6px * var(--corner-scale));
-  background: #1b8b55;
+  background: #1b8551;
   color: #ffffff;
   font-size: 15px;
   font-weight: 600;
@@ -12842,7 +12845,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   margin: 0;
   padding: 5px 8px;
   border-radius: calc(7px * var(--corner-scale));
-  background: #1b8b55;
+  background: #1b8551;
   color: #ffffff;
   font-size: 16px;
   font-weight: 600;

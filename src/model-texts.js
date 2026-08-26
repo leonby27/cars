@@ -410,6 +410,13 @@ import kia_seltos from "./model-texts/kia-seltos.js";
 import audi_s4 from "./model-texts/audi-s4.js";
 import chery_tiggo_5x from "./model-texts/chery-tiggo-5x.js";
 import haval_da_gou from "./model-texts/haval-da-gou.js";
+import mercedes_benz_cla_amg from "./model-texts/mercedes-benz-cla-amg.js";
+import geely_emgrand_gs from "./model-texts/geely-emgrand-gs.js";
+import geely_emgrand_gl from "./model-texts/geely-emgrand-gl.js";
+import toyota_venza from "./model-texts/toyota-venza.js";
+import mercedes_benz_b_class from "./model-texts/mercedes-benz-b-class.js";
+import toyota_bz3 from "./model-texts/toyota-bz3.js";
+import geely_galaxy_stellar_6 from "./model-texts/geely-galaxy-stellar-6.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -811,6 +818,13 @@ export const MODEL_TEXTS_RAW = {
   "audi-s4": audi_s4,
   "chery-tiggo-5x": chery_tiggo_5x,
   "haval-da-gou": haval_da_gou,
+  "mercedes-benz-cla-amg": mercedes_benz_cla_amg,
+  "geely-emgrand-gs": geely_emgrand_gs,
+  "geely-emgrand-gl": geely_emgrand_gl,
+  "toyota-venza": toyota_venza,
+  "mercedes-benz-b-class": mercedes_benz_b_class,
+  "toyota-bz3": toyota_bz3,
+  "geely-galaxy-stellar-6": geely_galaxy_stellar_6,
 };
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
