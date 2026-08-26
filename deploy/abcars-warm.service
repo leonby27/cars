@@ -1,17 +1,21 @@
-# Прогрев кэша фотографий: заранее просим у своего же сайта снимки первых экранов,
-# чтобы наш сервер забрал их у китайского хранилища до прихода посетителей.
+# Прогрев кэша фотографий: заранее просим у своего же сайта первый снимок каждой
+# машины каталога, чтобы наш сервер забрал их у китайского хранилища до прихода
+# посетителей. Витрине главной может достаться любая карточка, поэтому греем все.
 # Что и зачем — в шапке scripts/warm-photos.mjs. Ставится на сервер так:
 #   install -m644 /srv/abcars/deploy/abcars-warm.* /etc/systemd/system/
 #   systemctl daemon-reload && systemctl enable --now abcars-warm.timer
 [Unit]
 Description=Прогрев кэша фотографий машин
-After=network-online.target nginx.service
+After=network-online.target nginx.service postgresql.service
 
 [Service]
 Type=oneshot
 WorkingDirectory=/srv/abcars
-ExecStart=/usr/bin/npm run warm -- --limit=2000 --concurrency=6
-TimeoutStartSec=3600
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/npm run warm -- --all --concurrency=6
+# Первый полный проход качает у хранилища около 3 ГБ и идёт часа два-три;
+# дальше почти всё берётся из своей же копии и проход занимает минуты.
+TimeoutStartSec=18000
 Nice=15
 CPUWeight=20
 IOWeight=20
