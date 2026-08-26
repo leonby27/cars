@@ -1439,11 +1439,18 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     } else if (event.key === "Tab") close();
   };
 
+  // Подпись для чтения с экрана обязана содержать написанное на кнопке слово в слово,
+  // иначе проверка доступности считает её несовпадающей: поэтому не «Марка», а
+  // «Марка: Все марки авто».
+  const triggerText = multiple
+    ? (chosenInOrder.length ? `${formatOption(chosenInOrder[0])}${chosenInOrder.length > 1 ? ` +${chosenInOrder.length - 1}` : ""}` : formatOption(allOption))
+    : formatOption(value);
+
   return (
     <div className={`select-field custom-select${className ? ` ${className}` : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
-      <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}`} aria-label={label} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
+      <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}`} aria-label={`${label}: ${triggerText}`} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
         {Icon && <Icon className="select-trigger-icon" size={20} weight="duotone" aria-hidden="true" />}
-        <b>{multiple ? (chosenInOrder.length ? `${formatOption(chosenInOrder[0])}${chosenInOrder.length > 1 ? ` +${chosenInOrder.length - 1}` : ""}` : formatOption(allOption)) : formatOption(value)}</b>
+        <b>{triggerText}</b>
         <CaretDown size={16} weight="bold" />
       </button>
       {!disabled && (
@@ -2480,8 +2487,11 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
   const currency = useCurrency();
   const price = estimateLandedCost(car);
   const listingAge = formatListingAge(getSourceListedAt(car));
+  // Карточка целиком нажимается мышью, но кнопкой не притворяется: роль кнопки на блоке
+  // со ссылками и своими кнопками внутри сбивает чтение с экрана, а её имя («Открыть …»)
+  // не совпадало с написанным на карточке. С клавиатуры машину открывает ссылка-заголовок.
   return (
-    <article className="featured-card" data-car-id={car.id} data-feed-key={anchorKey} onClick={onClick} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}>
+    <article className="featured-card" data-car-id={car.id} data-feed-key={anchorKey} onClick={onClick}>
       <CardLinkOverlay car={car} open={onClick} />
       <HoverImagePreview car={car} className="featured-image" badge={<NewListingBadge car={car} />} />
       {toggleFavorite && (
@@ -4181,8 +4191,10 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
   const open = () => (onOpen ? onOpen(car) : navigate(carHref(car)));
   const price = estimateLandedCost(car);
   const listingAge = formatListingAge(getSourceListedAt(car));
+  // Роли кнопки у строки каталога нет по той же причине, что и у карточки витрины:
+  // внутри свои ссылки и кнопки, а с клавиатуры открывает ссылка-заголовок.
   return (
-    <article className="car-row" data-car-id={car.id} data-feed-key={anchorKey} onClick={open} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && open()} tabIndex="0" role="button" aria-label={`Открыть ${car.title}`}>
+    <article className="car-row" data-car-id={car.id} data-feed-key={anchorKey} onClick={open}>
       <CardLinkOverlay car={car} open={open} />
       <div className="car-row-mobile-header">
         <div>

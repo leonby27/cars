@@ -417,6 +417,26 @@ import toyota_venza from "./model-texts/toyota-venza.js";
 import mercedes_benz_b_class from "./model-texts/mercedes-benz-b-class.js";
 import toyota_bz3 from "./model-texts/toyota-bz3.js";
 import geely_galaxy_stellar_6 from "./model-texts/geely-galaxy-stellar-6.js";
+import hyundai_ix25 from "./model-texts/hyundai-ix25.js";
+import byd_sealion_05_ev from "./model-texts/byd-sealion-05-ev.js";
+import mercedes_benz_glb_amg from "./model-texts/mercedes-benz-glb-amg.js";
+import audi_a4 from "./model-texts/audi-a4.js";
+import byd_song_plus from "./model-texts/byd-song-plus.js";
+import lynk_co_09_petrol from "./model-texts/lynk-co-09-petrol.js";
+import audi_q6 from "./model-texts/audi-q6.js";
+import byd_song_max from "./model-texts/byd-song-max.js";
+import volkswagen_touran from "./model-texts/volkswagen-touran.js";
+import volvo_v90 from "./model-texts/volvo-v90.js";
+import geely_galaxy_m9 from "./model-texts/geely-galaxy-m9.js";
+import audi_a6l_new_energy from "./model-texts/audi-a6l-new-energy.js";
+import hyundai_santa_fe from "./model-texts/hyundai-santa-fe.js";
+import byd_song from "./model-texts/byd-song.js";
+import byd_seal_06gt from "./model-texts/byd-seal-06gt.js";
+import bmw_x3_m from "./model-texts/bmw-x3-m.js";
+import bmw_i4 from "./model-texts/bmw-i4.js";
+import changan_uni_z from "./model-texts/changan-uni-z.js";
+import mercedes_benz_cle from "./model-texts/mercedes-benz-cle.js";
+import byd_song_pro_petrol from "./model-texts/byd-song-pro-petrol.js";
 import { MODEL_PAGES } from "./model-pages.js";
 
 // Файл текста на каждый обзор: ключ — тот же slug, что в model-pages.js.
@@ -825,6 +845,26 @@ export const MODEL_TEXTS_RAW = {
   "mercedes-benz-b-class": mercedes_benz_b_class,
   "toyota-bz3": toyota_bz3,
   "geely-galaxy-stellar-6": geely_galaxy_stellar_6,
+  "hyundai-ix25": hyundai_ix25,
+  "byd-sealion-05-ev": byd_sealion_05_ev,
+  "mercedes-benz-glb-amg": mercedes_benz_glb_amg,
+  "audi-a4": audi_a4,
+  "byd-song-plus": byd_song_plus,
+  "lynk-co-09-petrol": lynk_co_09_petrol,
+  "audi-q6": audi_q6,
+  "byd-song-max": byd_song_max,
+  "volkswagen-touran": volkswagen_touran,
+  "volvo-v90": volvo_v90,
+  "geely-galaxy-m9": geely_galaxy_m9,
+  "audi-a6l-new-energy": audi_a6l_new_energy,
+  "hyundai-santa-fe": hyundai_santa_fe,
+  "byd-song": byd_song,
+  "byd-seal-06gt": byd_seal_06gt,
+  "bmw-x3-m": bmw_x3_m,
+  "bmw-i4": bmw_i4,
+  "changan-uni-z": changan_uni_z,
+  "mercedes-benz-cle": mercedes_benz_cle,
+  "byd-song-pro-petrol": byd_song_pro_petrol,
 };
 
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,

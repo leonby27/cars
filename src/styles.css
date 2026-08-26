@@ -25,12 +25,11 @@
   --accent-on-dark: #ff5a62;
   --accent-secondary: #f4d90e;
   --ink: #17191c;
-  --muted: #747a83;
-  /* Тот же приглушённый серый, но чуть темнее — для мест, где он красит целые
-     фразы (пункты под заголовком главной, счётчики у марок): обычный --muted
-     на белом не дотягивает до нормы читаемости 4,5:1, из-за чего проверка
-     доступности Lighthouse снимала баллы. Разница на глаз почти незаметна. */
-  --muted-contrast: #666c75;
+  /* Приглушённый серый: 5,29:1 на белом и 4,68:1 на подложке панели --panel-soft.
+     Прежний #747a83 давал 4,33 и 3,82 — ниже нормы читаемости 4,5:1, и проверка
+     доступности снимала за это баллы во всех текстах второго плана (шаги заказа,
+     ответы вопросов, ссылки подвала). Разница на глаз почти незаметна. */
+  --muted: #666c75;
   --line: #e7e9ec;
   --line-strong: #d8dadd;
   --focus-ring: #aeb3ba;
@@ -770,7 +769,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   border: 0;
   border-radius: calc(9px * var(--corner-scale));
   background: transparent;
-  color: var(--muted-contrast);
+  color: var(--muted);
   font-size: 16px;
   font-weight: 800;
   white-space: nowrap;
@@ -808,7 +807,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 .popular-brands-empty {
   margin: 0;
   padding: 18px 0 6px;
-  color: var(--muted-contrast);
+  color: var(--muted);
   font-size: 17px;
 }
 .popular-brands-more {
@@ -882,7 +881,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 .brand-count {
   flex: 0 0 auto;
   margin-left: -5px;
-  color: var(--muted-contrast);
+  color: var(--muted);
   font-size: 16px;
   font-weight: 500;
   line-height: 1;
@@ -974,7 +973,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 }
 .trust-strip small {
   margin-top: 3px;
-  color: var(--muted-contrast);
+  color: var(--muted);
   font-size: 16px;
 }
 .featured {
@@ -1177,9 +1176,12 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
+/* Номер шага остаётся светлее текста, но не бледнее нормы: для жирного шрифта от
+   19px норма контраста мягче (3:1 вместо 4,5:1), поэтому цифра чуть крупнее и чуть
+   темнее прежнего #b3b7bd, дававшего всего 2:1. */
 .home-step-topline small {
-  color: #b3b7bd;
-  font-size: 16px;
+  color: #8b919a;
+  font-size: 19px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -3179,8 +3181,6 @@ body.header-menu-open .detail-floating-availability {
   --accent-soft: rgba(238, 28, 37, 0.16);
   --ink: #f3f4f6;
   --muted: #aeb4bd;
-  /* В тёмной теме обычный --muted и так контрастный (8,9:1) — темнее не нужно. */
-  --muted-contrast: #aeb4bd;
   --line: #30353c;
   --focus-ring: #59616c;
   --surface: #202329;
@@ -3655,7 +3655,7 @@ body.header-menu-open .detail-floating-availability {
   justify-content: space-between;
   gap: 28px;
   border-top: 1px solid var(--line);
-  color: #747a83;
+  color: var(--muted);
   font-size: 16px;
 }
 .footer-bottom > div {
@@ -4016,7 +4016,7 @@ body.header-menu-open .detail-floating-availability {
     width: 100%;
     max-width: 100%;
     margin-top: 20px;
-    color: var(--muted-contrast);
+    color: var(--muted);
     text-align: center;
   }
   .hero-benefits li {
@@ -5017,7 +5017,7 @@ body.header-menu-open .detail-floating-availability {
   margin-right: auto;
 }
 .custom-select .select-trigger-icon {
-  color: color-mix(in srgb, var(--ink) 70%, var(--muted-contrast));
+  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
   transition: color var(--motion-fast) ease;
 }
 .custom-select.open .select-trigger-icon,
