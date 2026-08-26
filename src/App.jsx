@@ -3308,9 +3308,11 @@ const brandLogos = {
   "Geely Galaxy": "geely-galaxy.svg",
   Dongfeng: "dongfeng.svg",
   Avatr: "avatr.svg",
-  // Логотип альянса Huawei достался самой большой из его пяти марок. У Luxeed,
-  // Stelato, Shangjie и Maextro своих файлов пока нет — там показываются буквы.
   AITO: "aito.svg",
+  Luxeed: "luxeed.svg",
+  Shangjie: "shangjie.svg",
+  Stelato: "stelato.svg",
+  Maextro: "maextro.svg",
   Xiaomi: "xiaomi.svg",
   XPeng: "xpeng.svg",
   NIO: "nio.svg",
