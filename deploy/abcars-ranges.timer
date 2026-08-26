@@ -1,0 +1,12 @@
+# Ночь с субботы на воскресенье: до ночной актуализации каталога (01:00 UTC) и после
+# обновления курсов, чтобы задания не спорили за сеть и процессор.
+[Unit]
+Description=Список адресов дата-центров раз в неделю
+
+[Timer]
+OnCalendar=Sun *-*-* 00:45:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -37,7 +37,10 @@ export const isRepeatEvent = (key, now = Date.now()) => {
 // программы — это автоматические проверки и роботы, а не живые люди.
 // Робот, который не скрывает, что он робот: сборщики данных для ИИ и проверялки
 // скорости сайта иногда работают на настоящем браузере и наш скрипт выполняют.
-const BOT_AGENT = /bot|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i;
+// Сюда же встроенный браузер Claude (`claude/`): им проверяют правки на боевом
+// сайте, а метку «не считать» он не помнит — она живёт в хранилище браузера,
+// а он каждый раз чистый.
+const BOT_AGENT = /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i;
 export const isBotAgent = (agent = "") => BOT_AGENT.test(String(agent));
 
 export const isSkippedVisit = ({ hostname, nocount, automated, agent = "" }) =>

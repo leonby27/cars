@@ -1,0 +1,22 @@
+# Еженедельное обновление списка адресов облачных хостингов (таблица datacenter_ranges).
+# Без него защита аналитики от роботов постепенно устаревает: провайдеры получают
+# новые сети. Ставится на сервер так:
+#   install -m644 /srv/abcars/deploy/abcars-ranges.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now abcars-ranges.timer
+[Unit]
+Description=Обновление списка адресов облачных хостингов (защита аналитики от роботов)
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/npm run ranges
+TimeoutStartSec=900
+Nice=10
+CPUWeight=20
+IOWeight=20
+MemoryHigh=1000M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-ranges

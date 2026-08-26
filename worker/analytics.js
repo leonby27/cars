@@ -14,7 +14,7 @@ const cookieValue = (header, name) => String(header || "").split(";").map((item)
 // принимаем только со страницы настоящего адреса сайта и только от браузера, который
 // не называет себя роботом. Запрос мимо браузера и заход по числовому адресу сервера
 // в статистику не идут.
-const BOT_AGENT = /bot|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|curl|wget|python-requests|httpclient|http-client|libwww|okhttp|java\/|axios|node-fetch|go-http|lighthouse|pagespeed|pingdom|uptime|monitor|preview|fetcher|archiver|feed/i;
+const BOT_AGENT = /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|curl|wget|python-requests|httpclient|http-client|libwww|okhttp|java\/|axios|node-fetch|go-http|lighthouse|pagespeed|pingdom|uptime|monitor|preview|fetcher|archiver|feed/i;
 export const workerBotAgent = (agent) => { const value = String(agent || "").trim(); return !value || BOT_AGENT.test(value); };
 export const workerOwnPage = (request, env) => {
   let site = "";

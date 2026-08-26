@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromOwnPage, isBotAgent, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromOwnPage, isBotAgent, isDatacenterAddress, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
@@ -190,6 +190,39 @@ test("робот в число посетителей не попадает", ()
     "",
   ];
   for (const agent of robots) assert.equal(isBotAgent(agent), true, agent || "пустая подпись");
+});
+
+// Встроенный браузер Claude, которым проверяют правки на боевом сайте. Метку
+// «не считать» он не помнит — она живёт в хранилище браузера, а он каждый раз
+// чистый, — поэтому свои проверки попадали в раздел как живые посетители.
+test("проверки из браузера Claude в статистику не попадают", () => {
+  const claude = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Claude/1.37937.1 Chrome/148.0.7778.280 Safari/537.36";
+  assert.equal(isBotAgent(claude), true);
+  assert.equal(isSkippedVisit({ hostname:"abcars.by", nocount:null, automated:false, agent:claude }), true);
+});
+
+// Робота с арендованного сервера не выдаёт ни подпись, ни поведение: он и то и другое
+// подделывает. Выдаёт адрес — диапазоны дата-центров провайдеры публикуют сами.
+test("события с адресов дата-центров не записываются", async () => {
+  const asked = [];
+  const db = { query: async (sql, values) => { asked.push({ sql, values }); return { rowCount: values[0] === "3.5.140.7" ? 1 : 0 }; } };
+  const now = Date.now();
+  assert.equal(await isDatacenterAddress("3.5.140.7", { db, now }), true);
+  assert.equal(await isDatacenterAddress("37.215.1.174", { db, now }), false, "домашний адрес живого посетителя");
+  assert.match(asked[0].sql, /datacenter_ranges WHERE network >>= \$1/);
+
+  // Повторный вопрос про тот же адрес идёт из памяти, а не в базу.
+  const before = asked.length;
+  assert.equal(await isDatacenterAddress("3.5.140.7", { db, now: now + 1000 }), true);
+  assert.equal(asked.length, before, "ответ взят из кэша");
+  assert.equal(await isDatacenterAddress("3.5.140.7", { db, now: now + 11 * 60 * 1000 }), true);
+  assert.equal(asked.length, before + 1, "через десять минут спрашиваем заново");
+
+  // Без адреса и при недоступной базе посетителя не теряем: пропускаем.
+  assert.equal(await isDatacenterAddress("unknown", { db }), false);
+  assert.equal(await isDatacenterAddress("", { db }), false);
+  const broken = { query: async () => { throw new Error("relation does not exist"); } };
+  assert.equal(await isDatacenterAddress("1.2.3.4", { db: broken }), false);
 });
 
 // Робота, который подделал подпись под обычный Chrome, выдаёт поведение: он снимает

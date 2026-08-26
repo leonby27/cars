@@ -101,13 +101,47 @@ export const fromOwnPage = (headers = {}, host = siteHost()) => {
 // Робот, который честно называет себя роботом. Поисковики наш скрипт не выполняют и
 // событий не присылают, но сборщики данных для ИИ и проверялки сайтов бывают на
 // настоящем браузере — с такой подписью в статистику они не попадут.
-const BOT_AGENT = /bot|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|curl|wget|python-requests|httpclient|http-client|libwww|okhttp|java\/|axios|node-fetch|go-http|lighthouse|pagespeed|gtmetrix|pingdom|uptime|monitor|preview|fetcher|archiver|ia_archiver|yandeximages|feed/i;
+//
+// `claude/` — это встроенный браузер Claude, которым я сам проверяю правки на сайте.
+// Метка «не считать» живёт в localStorage конкретного браузера, а этот запускается
+// каждый раз заново и метки не помнит, поэтому 26.08.2026 мои проверки оказались
+// в разделе как живые посетители. Здесь он отсекается по подписи и навсегда.
+const BOT_AGENT = /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|curl|wget|python-requests|httpclient|http-client|libwww|okhttp|java\/|axios|node-fetch|go-http|lighthouse|pagespeed|gtmetrix|pingdom|uptime|monitor|preview|fetcher|archiver|ia_archiver|yandeximages|feed/i;
 export const isBotAgent = (agent = "") => {
   const value = String(agent || "").trim();
   // Браузер всегда представляется. Пустая подпись — это не человек.
   if (!value) return true;
   return BOT_AGENT.test(value);
 };
+
+// Адрес арендованного сервера в дата-центре. Робота, который подделал подпись
+// браузера и научился изображать поведение человека (подвигать мышью, прокрутить),
+// иначе не отличить: 26.08.2026 такие «посетители» с Amazon, Alibaba, DigitalOcean
+// и Scaleway составили в разделе большинство. Диапазоны провайдеров лежат в базе,
+// их раз в неделю переписывает `npm run ranges`.
+const DATACENTER_CACHE_TTL_MS = 10 * 60 * 1000;
+const DATACENTER_CACHE_LIMIT = 5000;
+const datacenterCache = new Map();
+
+export async function isDatacenterAddress(address, { db = pool, now = Date.now() } = {}) {
+  const value = String(address || "").trim();
+  if (!value || value === "unknown") return false;
+  const cached = datacenterCache.get(value);
+  if (cached && now - cached.at < DATACENTER_CACHE_TTL_MS) return cached.hit;
+  try {
+    const result = await db.query("SELECT 1 FROM datacenter_ranges WHERE network >>= $1 LIMIT 1", [value]);
+    const hit = result.rowCount > 0;
+    // Адресов за день набегает немного, но кэш всё равно ограничиваем: иначе его
+    // раздует тот самый обходчик, от которого мы защищаемся.
+    if (datacenterCache.size >= DATACENTER_CACHE_LIMIT) datacenterCache.clear();
+    datacenterCache.set(value, { at:now, hit });
+    return hit;
+  } catch {
+    // Таблицы ещё нет, база молчит или адрес пришёл в непонятном виде — пропускаем.
+    // Потерять чужого робота не так обидно, как потерять живого посетителя.
+    return false;
+  }
+}
 
 export async function recordAnalyticsEvent(body, { db = pool } = {}) {
   const event = normalizeAnalyticsEvent(body);
