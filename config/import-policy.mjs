@@ -1,3 +1,5 @@
+import { belarusianName } from "./model-names-by.mjs";
+
 export const IMPORT_MIN_YEAR = 2020;
 
 // Бензиновым машинам граница та же, что и остальным. У машины 2020 года к моменту
@@ -80,7 +82,7 @@ export const HOMEPAGE_POPULAR_BRANDS = Object.freeze([
   "Geely Galaxy",
   "Dongfeng",
   "Avatr",
-  "HIMA",
+  "AITO",
   "Xiaomi",
   "XPeng",
   "NIO",
@@ -91,6 +93,13 @@ export const HOMEPAGE_POPULAR_BRANDS = Object.freeze([
 ]);
 
 export const EXTRA_IMPORT_BRANDS = Object.freeze([
+  // Пять марок альянса Huawei вместо одной «HIMA»: под общим именем их в Беларуси
+  // не ищут, а на av.by есть готовая марка Aito. Самая большая, AITO, стоит в списке
+  // популярных на главной, остальные четыре — здесь.
+  "Luxeed",
+  "Stelato",
+  "Shangjie",
+  "Maextro",
   "Leapmotor",
   "Tesla",
   "Mercedes-Benz",
@@ -116,7 +125,11 @@ export const IMPORT_BRAND_BY_SLUG = Object.freeze({
   "geely-galaxy": "Geely Galaxy",
   dongfeng: "Dongfeng",
   avatr: "Avatr",
-  hima: "HIMA",
+  aito: "AITO",
+  luxeed: "Luxeed",
+  stelato: "Stelato",
+  shangjie: "Shangjie",
+  maextro: "Maextro",
   "xiaomi-auto": "Xiaomi",
   xpeng: "XPeng",
   nio: "NIO",
@@ -138,16 +151,20 @@ export const IMPORT_BRAND_BY_SLUG = Object.freeze({
 export const IMPORT_BRAND_SLUGS = Object.freeze(Object.keys(IMPORT_BRAND_BY_SLUG));
 
 const BRAND_ALIASES = new Map([
-  ["hima", "HIMA"],
-  ["aito", "HIMA"],
-  // HIMA reaches a source catalogue as its individual marques rather than as
-  // the alliance name: Wenjie/AITO, Zhijie, Xiangjie, Zunjie, and Shangjie.
-  ["aito wenjie", "HIMA"],
-  ["wenjie", "HIMA"],
-  ["zhijie", "HIMA"],
-  ["xiangjie", "HIMA"],
-  ["zunjie", "HIMA"],
-  ["shangjie", "HIMA"],
+  // Альянс Huawei приходит к источнику отдельными марками, и в Беларуси их тоже знают
+  // по отдельности: на av.by есть марка Aito. Раньше все пять сваливались в «HIMA» —
+  // имя альянса, которого не знает ни один покупатель. Теперь каждая едет под своим.
+  ["hima", "AITO"],
+  ["aito", "AITO"],
+  ["aito wenjie", "AITO"],
+  ["wenjie", "AITO"],
+  ["zhijie", "Luxeed"],
+  ["luxeed", "Luxeed"],
+  ["xiangjie", "Stelato"],
+  ["stelato", "Stelato"],
+  ["zunjie", "Maextro"],
+  ["maextro", "Maextro"],
+  ["shangjie", "Shangjie"],
   ["voyah", "Voyah"],
   ["voyah auto", "Voyah"],
   ["xiaomi auto", "Xiaomi"],
@@ -178,6 +195,13 @@ export function canonicalImportBrand(value) {
 // import and on read alike. New source spellings land here as they show up.
 const MODEL_PREFIX_STRIPS = new Map([
   ["Deepal", ["Deep Blue", "DeepBlue", "Shenlan", "深蓝"]],
+  // У марок альянса Huawei источник приклеивает к модели имя подмарки: «Luxeed R7»,
+  // «Zhijie S7», «Enjoy World S9». Марка теперь своя, поэтому приставка лишняя.
+  ["AITO", ["AITO Wenjie", "Wenjie", "AITO", "问界"]],
+  ["Luxeed", ["Luxeed", "Zhijie", "智界"]],
+  ["Stelato", ["Enjoy World", "Stelato", "Xiangjie", "享界"]],
+  ["Shangjie", ["Shangjie", "尚界"]],
+  ["Maextro", ["Maextro", "Zunjie", "尊界"]],
   // Один и тот же CC собирают два совместных предприятия, и источник приклеивает
   // к названию завод: «FAW-Volkswagen CC». Для покупателя это просто CC.
   ["Volkswagen", ["FAW-Volkswagen", "FAW Volkswagen", "SAIC-Volkswagen", "SAIC Volkswagen", "Shanghai Volkswagen"]],
@@ -225,6 +249,9 @@ const MODEL_ALIASES = new Map([
   ["li auto|li i8", "i8"],
   ["aion|trumpchi ge3", "GE3"],
   ["dongfeng|zhengzhou nissan z9 ge phev", "Nissan Z9 GE PHEV"],
+  // У Shangjie источник вместо модели присылает тип кузова. Машина у марки пока одна — H5.
+  ["shangjie|suv", "H5"],
+  ["shangjie|shangjie suv", "H5"],
 ]);
 
 export function canonicalImportModel(brandValue, modelValue) {
@@ -241,7 +268,23 @@ export function canonicalImportModel(brandValue, modelValue) {
   }
   const withoutImport = model.replace(IMPORT_SUFFIX, "").trim();
   if (withoutImport) model = withoutImport;
-  return MODEL_ALIASES.get(`${brand.toLocaleLowerCase("en-US")}|${model.toLocaleLowerCase("en-US")}`) || model;
+  const canonical = MODEL_ALIASES.get(`${brand.toLocaleLowerCase("en-US")}|${model.toLocaleLowerCase("en-US")}`) || model;
+  return belarusianName(brand, canonical).model;
+}
+
+// Марка и модель вместе. Нужны вместе, потому что часть машин при переименовании
+// заодно меняет марку: 银河E5 в Беларуси продают как Geely EX5 — без приставки Galaxy,
+// а модели альянса Huawei разъезжаются по пяти своим маркам. Импорт и обновление
+// каталога зовут именно эту функцию, иначе марка и модель разойдутся.
+export function canonicalImportName(brandValue, modelValue, powertrain) {
+  // Сначала пробуем то, что пришло, как есть: у части моделей вместе с именем меняется
+  // и марка, а словарь марок к этому моменту успел бы её подменить. «HIMA / Luxeed R7»
+  // должно стать «Luxeed R7», а не «AITO Luxeed R7».
+  const asIs = belarusianName(brandValue, modelValue, powertrain);
+  if (asIs.brand !== String(brandValue || "").trim() || asIs.model !== String(modelValue || "").trim()) return asIs;
+  const brand = canonicalImportBrand(brandValue);
+  const model = canonicalImportModel(brandValue, modelValue);
+  return belarusianName(brand, model, powertrain);
 }
 
 export function isAllowedImportBrand(value, { combustion = false } = {}) {

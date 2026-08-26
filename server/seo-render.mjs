@@ -9,6 +9,7 @@
 import { estimateLandedCost, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
 import { brandNotice } from "../src/brand-notice.js";
+import { chineseModelName } from "../config/model-names-by.mjs";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
 // Страницы-расчёты нужны подвалу: ссылки на них должны стоять на каждой странице сайта.
 import { TOOL_PAGES } from "../src/tool-pages.js";
@@ -359,6 +360,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       model: car.model || undefined,
       vehicleModelDate: String(car.year || ""),
       mileageFromOdometer: { "@type": "QuantitativeValue", value: Number(car.mileage) || 0, unitCode: "KMT" },
+      // Китайское имя той же модели: помогает поисковику связать карточку с запросом,
+      // в котором машину назвали по-китайски.
+      alternateName: chineseModelName(car.brand, car.model)?.zh || undefined,
       fuelType: car.type || undefined,
       driveWheelConfiguration: car.drive || undefined,
       numberOfPreviousOwners: Number(car.owners) || undefined,
@@ -383,6 +387,14 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const noticeBlock = notice
       ? `<p><strong>${escapeHtml(notice.title)}.</strong> ${notice.lines.map((line) => escapeHtml(line)).join(" ")}</p>`
       : "";
+    // Китайское имя модели: в каталоге машина стоит под беларуским (星瑞 — это Geely
+    // Preface), но в китайских объявлениях и обзорах имя другое. На готовой странице
+    // оно нужно и человеку, который сверяет карточку с источником, и поисковику:
+    // по китайскому имени эту машину тоже ищут.
+    const chinese = chineseModelName(car.brand, car.model);
+    const chineseBlock = chinese
+      ? `<p>В Китае эта модель называется ${escapeHtml(chinese.zh)}${chinese.pinyin ? ` (${escapeHtml(chinese.pinyin)})` : ""}${chinese.note ? `: ${escapeHtml(chinese.note)}` : ""}.</p>`
+      : "";
     const relatedBlock = related.length
       ? `<section><h2>Другие ${escapeHtml(modelName || "автомобили")} в наличии</h2>${carLinks(related, 12)}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>`
       : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
@@ -391,7 +403,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const sectionBlock = sections.length
       ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${noticeBlock}${modelLink}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({

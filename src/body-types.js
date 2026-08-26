@@ -21,7 +21,7 @@ const modelRules = [
   [/^Dongfeng$/i, /^(SKY EV01|L8)$/i, "SUV / кроссовер"],
   [/^Avatr$/i, /^06$/i, "Седан"],
   [/^Avatr$/i, /^11$/i, "SUV / кроссовер"],
-  [/^HIMA$/i, /^M[79]$/i, "SUV / кроссовер"],
+  [/^AITO$/i, /^M[5-9]$/i, "SUV / кроссовер"],
   [/^Xiaomi$/i, /^SU7$/i, "Седан"],
   [/^Xiaomi$/i, /^YU7$/i, "SUV / кроссовер"],
   [/^XPeng$/i, /^P7$/i, "Седан"],

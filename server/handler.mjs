@@ -6,7 +6,7 @@ import { authenticateAccount, clearSessionCookie, createAccount, createSession, 
 import { createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
-import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, isDatacenterAddress, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
@@ -125,6 +125,7 @@ export async function handleApiRequest(request, response) {
       // Отвечаем как обычно и молчим о причине: незачем подсказывать, как
       // подделать событие. Для страницы сайта разницы нет — она ответ не читает.
       if (!fromOwnPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, recorded:false });
+      if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, recorded:false });
       const result = await recordAnalyticsEvent(body);
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
@@ -135,6 +136,7 @@ export async function handleApiRequest(request, response) {
       if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const body = await readJson(request);
       if (!fromOwnPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0 });
+      if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0 });
       const result = await confirmHumanVisit(body);
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
@@ -344,6 +346,10 @@ export async function handleApiRequest(request, response) {
       try {
         const { renderModelPage } = await import("./model-page.mjs");
         const page = await renderModelPage(url.searchParams.get("slug"));
+        if (page.location) {
+          response.writeHead(301, { location: page.location, ...seoPageCache });
+          return response.end();
+        }
         return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
       } catch (error) {
         console.error(error);

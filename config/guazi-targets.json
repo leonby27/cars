@@ -14,7 +14,7 @@
     { "brand": "Geely Galaxy", "url": "https://www.guazi.com/bj/jlyh/", "includeSeries": "银河E5|银河L7|银河E8", "priority": 3 },
     { "brand": "Dongfeng", "url": "https://www.guazi.com/bj/dongfengfengshen/", "includeSeries": "东风风神E70|风神L7新能源|东风风神L8|SKY EV01", "priority": 2 },
     { "brand": "Avatr", "url": "https://www.guazi.com/bj/aweita/", "includeSeries": "阿维塔06|阿维塔07|阿维塔11|阿维塔12", "priority": 2 },
-    { "brand": "HIMA", "url": "https://www.guazi.com/bj/aito/", "includeSeries": "问界M5|问界M7|问界M8|问界M9", "priority": 2 },
+    { "brand": "AITO", "url": "https://www.guazi.com/bj/aito/", "includeSeries": "问界M5|问界M7|问界M8|问界M9", "priority": 2 },
     { "brand": "Xiaomi", "url": "https://www.guazi.com/bj/xiaomiqiche/", "includeSeries": "小米SU7|小米YU7", "priority": 2 },
     { "brand": "Volkswagen", "url": "https://www.guazi.com/bj/dazhong/", "includeSeries": "大众ID.3|大众ID.4|大众ID.6|途观L新能源|帕萨特新能源", "priority": 2 },
     { "brand": "BMW", "url": "https://www.guazi.com/bj/bmw/", "includeSeries": "宝马i3|宝马iX3|宝马iX1|宝马i5|宝马i4|宝马iX|宝马5系新能源|宝马X1新能源", "priority": 2 },

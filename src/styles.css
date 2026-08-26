@@ -2092,6 +2092,58 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
 .detail-back:hover {
   background: color-mix(in srgb, var(--ink) 8%, var(--surface));
 }
+/* Китайское имя модели рядом с названием: круг с буквой «i» слева от стрелки на
+   полную страницу. Отдельный класс, а не .detail-back: там кнопка на 36 пикселей,
+   а здесь знак при заголовке — он должен быть заметно мельче названия и не
+   выглядеть третьей кнопкой в ряд. */
+.chinese-name-mark {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 7%, var(--surface));
+  color: var(--muted);
+  cursor: default;
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+.chinese-name-mark svg {
+  width: 17px;
+  height: 17px;
+}
+/* Зона нажатия до 44px, не меняя раскладку строки: подсказку на телефоне открывает касание. */
+.chinese-name-mark::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+}
+.chinese-name-mark:hover,
+.chinese-name-mark:focus-visible {
+  background: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  color: var(--ink);
+}
+/* Подсказка в две-три строки: китайское имя, чтение латиницей и, если нужно,
+   короткое пояснение. Поэтому колонкой, а не в строку, как у стрелки цены. */
+.chinese-name-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: min(300px, calc(100vw - 20px));
+  padding: 7px 11px;
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: left;
+}
+.chinese-name-tooltip b {
+  font-weight: 600;
+}
+.chinese-name-tooltip i {
+  color: var(--tooltip-ink-muted);
+  font-style: normal;
+}
 .detail-mobile-price {
   display: none;
 }
@@ -11603,8 +11655,9 @@ html[data-theme="dark"] .models-index-select {
   right: -1px;
   left: auto;
 }
-@media (max-width: 560px) {
-  /* На узком экране два списка рядом не читаются — ставим друг под друга. */
+@media (max-width: 900px) {
+  /* Три списка в ряд (тип, марка, сортировка) на узком и среднем экране не
+     помещаются — ставим друг под друга. */
   .models-index-controls {
     flex-direction: column;
   }

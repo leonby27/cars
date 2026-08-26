@@ -7,7 +7,7 @@
 import { brandStock, carsByIds, listCarPage, priceEdges } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
-import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
 
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
@@ -99,8 +99,15 @@ export async function renderCatalogIndex(searchParams) {
 export async function renderCatalogPage(slug, searchParams) {
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
-  const landing = findCatalogLanding(`/catalog/${String(slug || "").trim()}`);
-  if (!landing) return { status: 404, html: renderer.landingMissingPage() };
+  const path = `/catalog/${String(slug || "").trim()}`;
+  const landing = findCatalogLanding(path);
+  // Раздел переехал вместе с переименованием марки: уводим постоянным перебросом,
+  // чтобы старая ссылка из индекса поисковика не отдавала 404.
+  if (!landing) {
+    const moved = catalogLandingMoved(path);
+    if (moved) return { status: 301, location: moved };
+    return { status: 404, html: renderer.landingMissingPage() };
+  }
 
   const query = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams(searchParams || "");
   const cleaned = catalogPlaceholderRedirect(landing.path, query);

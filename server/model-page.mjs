@@ -8,7 +8,7 @@
 import { brandStock, listCars, modelClassStock, priceEdges } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
-import { MODEL_PAGES, findModelPage } from "../src/model-pages.js";
+import { MODEL_PAGES, findModelPage, modelPageRedirect } from "../src/model-pages.js";
 // Текст обзора лежит отдельным файлом на модель: браузеру мы отдаём только нужный,
 // а здесь нужен весь текст сразу — страницу для поисковика собираем целиком.
 import { modelPageWithText } from "../src/model-texts.js";
@@ -66,7 +66,13 @@ export async function renderModelPage(slug) {
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
   const found = findModelPage(`/models/${String(slug || "").trim()}`);
-  if (!found) return { status: 404, html: renderer.landingMissingPage() };
+  // Обзор переехал на новый адрес вместе с переименованием модели: уводим постоянным
+  // перебросом, чтобы старая ссылка из индекса поисковика не отдавала 404.
+  if (!found) {
+    const location = modelPageRedirect(slug);
+    if (location) return { status: 301, location };
+    return { status: 404, html: renderer.landingMissingPage() };
+  }
   const page = modelPageWithText(found);
 
   // Самые доступные машины модели: по ним считается «от такой-то цены».

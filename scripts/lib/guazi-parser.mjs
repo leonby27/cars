@@ -11,7 +11,7 @@ const BRAND_MAP = new Map([
   ["深蓝汽车", "Deepal"], ["深蓝", "Deepal"], ["腾势汽车", "Denza"],
   ["腾势", "Denza"], ["小米汽车", "Xiaomi"], ["小米", "Xiaomi"],
   ["岚图汽车", "Voyah"], ["岚图", "Voyah"], ["智界", "Luxeed"],
-  ["享界", "Stelato"], ["尚界", "Shangjie"], ["鸿蒙智行", "HIMA"],
+  ["享界", "Stelato"], ["尚界", "Shangjie"], ["鸿蒙智行", "AITO"], ["尊界", "Maextro"],
   ["吉利银河", "Geely Galaxy"], ["东风风神", "Dongfeng"],
   ["宝马", "BMW"], ["华晨宝马", "BMW"], ["宝马汽车", "BMW"],
   ["大众", "Volkswagen"], ["上汽大众", "Volkswagen"], ["一汽-大众", "Volkswagen"],

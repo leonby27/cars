@@ -6,6 +6,7 @@ import {
   IMPORT_BRAND_SLUGS,
   canonicalImportBrand,
   canonicalImportModel,
+  canonicalImportName,
   importPolicyViolation,
   isAllowedImportBrand,
   isEligibleNewImport,
@@ -13,7 +14,7 @@ import {
 import { normalizeChe168Energy } from "../scripts/lib/che168-parser.mjs";
 
 test("normalizes source brand variants used by the import policy", () => {
-  assert.equal(canonicalImportBrand("Hima"), "HIMA");
+  assert.equal(canonicalImportBrand("Hima"), "AITO");
   assert.equal(canonicalImportBrand("Xiaomi Auto"), "Xiaomi");
   assert.equal(canonicalImportBrand("Nio"), "NIO");
   assert.equal(canonicalImportBrand("Lync Co"), "Lynk & Co");
@@ -21,16 +22,98 @@ test("normalizes source brand variants used by the import policy", () => {
   assert.equal(canonicalImportBrand("XPENG"), "XPeng");
 });
 
-test("treats the HIMA marques and Voyah Auto as their policy brands", () => {
-  for (const marque of ["AITO Wenjie", "Wenjie", "Zhijie", "Xiangjie", "Zunjie", "Shangjie"]) {
-    assert.equal(canonicalImportBrand(marque), "HIMA", marque);
+test("марки альянса Huawei разъезжаются по своим маркам, а не в общую HIMA", () => {
+  // Раньше все пять сваливались в «HIMA» — имя альянса, которого не знает ни один
+  // покупатель. В Беларуси их ищут по отдельности, на av.by есть марка Aito.
+  const expected = new Map([
+    ["AITO Wenjie", "AITO"],
+    ["Wenjie", "AITO"],
+    ["Hima", "AITO"],
+    ["Zhijie", "Luxeed"],
+    ["Xiangjie", "Stelato"],
+    ["Zunjie", "Maextro"],
+    ["Shangjie", "Shangjie"],
+  ]);
+  for (const [marque, brand] of expected) {
+    assert.equal(canonicalImportBrand(marque), brand, marque);
     assert.equal(isAllowedImportBrand(marque), true, marque);
   }
   assert.equal(canonicalImportBrand("Voyah Auto"), "Voyah");
   assert.equal(isAllowedImportBrand("Voyah Auto"), true);
-  // Only confirmed alliance marques are folded into HIMA; a similar-looking
-  // source name is not evidence of membership.
+  // Only confirmed alliance marques are folded in; a similar-looking source name
+  // is not evidence of membership.
   assert.equal(isAllowedImportBrand("Shijie"), false);
+});
+
+test("модель альянса Huawei уезжает в свою марку вместе с именем", () => {
+  const cases = [
+    [["HIMA", "M9"], ["AITO", "M9"]],
+    [["Wenjie", "问界M7"], ["AITO", "M7"]],
+    [["HIMA", "Luxeed R7"], ["Luxeed", "R7"]],
+    [["Zhijie", "Zhijie S7"], ["Luxeed", "S7"]],
+    [["Xiangjie", "Enjoy World S9"], ["Stelato", "S9"]],
+    [["Shangjie", "Shangjie SUV"], ["Shangjie", "H5"]],
+    [["Zunjie", "Zunjie MPV"], ["Maextro", "MPV"]],
+    // Уже переименованная машина второй раз не переезжает.
+    [["Luxeed", "R7"], ["Luxeed", "R7"]],
+    [["AITO", "M9"], ["AITO", "M9"]],
+  ];
+  for (const [[brand, model], [wantBrand, wantModel]] of cases) {
+    assert.deepEqual(canonicalImportName(brand, model), { brand: wantBrand, model: wantModel }, `${brand} ${model}`);
+  }
+});
+
+test("китайское название модели меняется на беларуское", () => {
+  const cases = [
+    [["Geely", "Xing Rui"], ["Geely", "Preface"]],
+    [["Geely", "Binyue"], ["Geely", "Coolray"]],
+    [["Geely", "Xingyue L"], ["Geely", "Monjaro"]],
+    [["Haval", "Big Dog"], ["Haval", "Dargo"]],
+    [["Jetour", "Traveler"], ["Jetour", "T2"]],
+    [["Great Wall", "Pao"], ["Great Wall", "Poer"]],
+    [["Voyah", "Dreamer"], ["Voyah", "Dream"]],
+    [["Chery", "Tiggo 5x"], ["Chery", "Tiggo 4 Pro"]],
+    [["Honda", "Haoying"], ["Honda", "Breeze"]],
+    [["Mazda", "Atenza"], ["Mazda", "Mazda6"]],
+    // 银河E5 продают как Geely EX5 — без приставки Galaxy, поэтому меняется и марка.
+    [["Geely Galaxy", "Galaxy E5"], ["Geely", "EX5"]],
+    [["Geely Galaxy", "Starry Wish"], ["Geely", "EX2"]],
+    // Сергей оставил эти под китайскими именами: 26.08.2026.
+    [["Volkswagen", "Sagitar"], ["Volkswagen", "Sagitar"]],
+    [["Volkswagen", "Magotan"], ["Volkswagen", "Magotan"]],
+    [["Volkswagen", "Tiguan L"], ["Volkswagen", "Tiguan L"]],
+    [["Hyundai", "Beijing Hyundai ix25"], ["Hyundai", "ix25"]],
+    // Удлинённые китайские версии сохраняют букву L.
+    [["Audi", "A6L New Energy"], ["Audi", "A6L PHEV"]],
+    [["Jaguar", "XEL"], ["Jaguar", "XEL"]],
+    // Экспортное имя беларуским не считается: на av.by все BYD под китайскими именами.
+    [["BYD", "Yuan PLUS"], ["BYD", "Yuan PLUS"]],
+    [["BYD", "Seagull"], ["BYD", "Seagull"]],
+    [["Ford", "Escape"], ["Ford", "Escape"]],
+    [["Kia", "K3"], ["Kia", "K3"]],
+  ];
+  for (const [[brand, model], [wantBrand, wantModel]] of cases) {
+    assert.deepEqual(canonicalImportName(brand, model), { brand: wantBrand, model: wantModel }, `${brand} ${model}`);
+  }
+});
+
+test("«New Energy» превращается в PHEV, а электромобиль — в EV", () => {
+  // Китайское «新能源» покрывает и гибрид, и электромобиль. Где под именем едут только
+  // гибриды — PHEV; где только электромобили — EV: назвать электромобиль гибридом
+  // на карточке было бы неправдой.
+  assert.deepEqual(canonicalImportName("BMW", "5 Series New Energy"), { brand: "BMW", model: "5 Series PHEV" });
+  assert.deepEqual(canonicalImportName("Mercedes-Benz", "E-Class New Energy"), { brand: "Mercedes-Benz", model: "E-Class PHEV" });
+  assert.deepEqual(canonicalImportName("Mercedes-Benz", "G-Class New Energy"), { brand: "Mercedes-Benz", model: "G-Class EV" });
+  assert.deepEqual(canonicalImportName("Volkswagen", "Tharu New Energy"), { brand: "Volkswagen", model: "Tharu EV" });
+  // У BYD своё слово для гибрида с розеткой, и оно уже стоит у половины моделей.
+  assert.deepEqual(canonicalImportName("BYD", "Song Pro New Energy"), { brand: "BYD", model: "Song Pro DM-i" });
+  // А здесь под одним китайским именем едут и гибриды, и электромобили: имя зависит
+  // от типа двигателя, потому что рядом в каталоге стоит бензиновый Tang.
+  assert.deepEqual(canonicalImportName("BYD", "Tang New Energy", "Гибрид"), { brand: "BYD", model: "Tang DM-i" });
+  assert.deepEqual(canonicalImportName("BYD", "Tang New Energy", "Электромобиль"), { brand: "BYD", model: "Tang EV" });
+  assert.deepEqual(canonicalImportName("BYD", "Tang", "Гибрид"), { brand: "BYD", model: "Tang DM-i" });
+  assert.deepEqual(canonicalImportName("BYD", "Tang", "ДВС"), { brand: "BYD", model: "Tang" });
+  assert.deepEqual(canonicalImportName("BYD", "Seal 06 New Energy", "Электромобиль"), { brand: "BYD", model: "Seal 06 EV" });
 });
 
 test("allows the Belarus import brands including Leapmotor", () => {
@@ -81,14 +164,16 @@ test("«(Import)» — не отдельная модель", () => {
   assert.equal(canonicalImportModel("BMW", "X5 (Import)"), "X5");
   assert.equal(canonicalImportModel("Audi", "A6 (Import)"), "A6");
   // Версию с розеткой пометка не съедает: у неё свой обзор и свой расчёт таможни.
-  assert.equal(canonicalImportModel("BMW", "X5 New Energy(Imported)"), "X5 New Energy");
-  assert.equal(canonicalImportModel("BMW", "5 Series New Energy"), "5 Series New Energy");
+  // Имя при этом сразу становится беларуским — «New Energy» меняется на PHEV.
+  assert.equal(canonicalImportModel("BMW", "X5 New Energy(Imported)"), "X5 PHEV");
+  assert.equal(canonicalImportModel("BMW", "5 Series New Energy"), "5 Series PHEV");
 });
 
 test("завод в названии модели отбрасывается", () => {
   // Один и тот же CC собирают два совместных предприятия, и источник приклеивает
   // к названию имя завода.
-  assert.equal(canonicalImportModel("Volkswagen", "FAW-Volkswagen CC"), "CC");
+  // Заодно имя становится беларуским: на av.by эта машина стоит как Passat CC.
+  assert.equal(canonicalImportModel("Volkswagen", "FAW-Volkswagen CC"), "Passat CC");
   assert.equal(canonicalImportModel("Volkswagen", "SAIC-Volkswagen Lavida"), "Lavida");
   assert.equal(canonicalImportModel("Volkswagen", "Golf"), "Golf");
 });

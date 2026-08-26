@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
-import { canonicalImportModel } from "../config/import-policy.mjs";
+import { canonicalImportName } from "../config/import-policy.mjs";
 import { pool, withTransaction } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeBodyType } from "../src/body-types.js";
+import { carTitle } from "../src/car-title.js";
 import { DRIVE_TYPES, normalizeDrive, orderDrives, UNKNOWN_DRIVE } from "../src/drive-types.js";
 import { FUEL_TYPES, GEARBOX_TYPES, enginePower, engineVolume, fuelType, gearboxType } from "../src/engine-spec.js";
 
@@ -12,8 +13,10 @@ const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({
 export function normalizeCar(car) {
   const electricRange = car.electricRange ?? (Number(car.description?.match(/纯电续航\s*(\d+)/)?.[1]) || null);
   const combinedRange = car.combinedRange ?? (Number(car.description?.match(/综合续航\s*(\d+)/)?.[1]) || null);
-  const model = canonicalImportModel(car.brand, car.model);
-  return { ...car, model, title:`${car.brand} ${model} ${car.year}`, bodyType:normalizeBodyType({ ...car, model }), drive:normalizeDrive(car.drive), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
+  // Марка и модель приводятся вместе: часть машин при переименовании на беларуское имя
+  // заодно меняет марку (银河E5 → Geely EX5, модели альянса Huawei → AITO, Luxeed и далее).
+  const { brand, model } = canonicalImportName(car.brand, car.model, car.type);
+  return { ...car, brand, model, title:carTitle(brand, model, car.year), bodyType:normalizeBodyType({ ...car, brand, model }), drive:normalizeDrive(car.drive), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
 }
 
 export async function upsertCar(car, client = pool) {
@@ -403,19 +406,20 @@ export async function getCatalogMeta(type, brand, bodyType) {
 // сводкой по модели, фото — с самой доступной машины, то есть с той же, что и раньше.
 export async function getModelFacts() {
   const result = await pool.query(`WITH active AS (
-      SELECT l.id, v.brand, v.model, l.estimated_total_usd AS price,
+      SELECT l.id, v.brand, v.model, v.powertrain, l.estimated_total_usd AS price,
         NULLIF(v.specifications->>'acceleration','')::numeric AS accel,
         COALESCE(v.electric_range_km, v.combined_range_km) AS range
       FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'
     ), summary AS (
       SELECT brand, model, count(*)::int AS count, min(price) AS price_min, max(price) AS price_max,
-        min(accel) AS accel, max(range) AS range
+        min(accel) AS accel, max(range) AS range,
+        array_agg(DISTINCT powertrain) FILTER (WHERE powertrain IS NOT NULL) AS powertrains
       FROM active GROUP BY brand, model
     ), cheapest AS (
       SELECT DISTINCT ON (brand, model) brand, model, id
       FROM active ORDER BY brand, model, price ASC NULLS LAST, id
     )
-    SELECT s.brand, s.model, s.count, s.price_min, s.price_max, s.accel, s.range,
+    SELECT s.brand, s.model, s.count, s.price_min, s.price_max, s.accel, s.range, s.powertrains,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=c.id ORDER BY m.position LIMIT 1) AS image
     FROM summary s LEFT JOIN cheapest c ON c.brand=s.brand AND c.model=s.model
     ORDER BY s.brand, s.model`);
@@ -427,6 +431,7 @@ export async function getModelFacts() {
     priceMax:Number(row.price_max) || null,
     accel:Number(row.accel) || null,
     range:Number(row.range) || null,
+    powertrains:row.powertrains || [],
     image:row.image || null,
   })) };
 }

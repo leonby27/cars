@@ -19,7 +19,9 @@ import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogR
 import { formatListingAge, getListingAddedAt, getSourceListedAt, isNewListing } from "./listing-age.js";
 import { formatChangeDate, getPriceChange } from "./price-change.js";
 import { selectSimilarCars } from "./similar-cars.js";
-import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar } from "./model-pages.js";
+import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar, modelPageRedirect } from "./model-pages.js";
+import { carTitle } from "./car-title.js";
+import { chineseModelName } from "../config/model-names-by.mjs";
 import { splitInlineLinks } from "./inline-links.js";
 import { loadModelText, loadedModelText } from "./model-text-load.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
@@ -380,7 +382,7 @@ function normalizeImportedCar(car) {
   return {
     ...car,
     model,
-    title: `${car.brand} ${model} ${car.year}`,
+    title: carTitle(car.brand, model, car.year),
     bodyType: normalizeBodyType({ ...car, model }),
     drive: normalizeDrive(car.drive),
     appearanceScore,
@@ -614,6 +616,16 @@ function useRoute() {
       return;
     }
     const target = new URL(next, window.location.origin);
+    // Обзор мог переехать на новый адрес вместе с переименованием модели. Внутри сайта
+    // все ссылки уже новые, но старая могла остаться в закладках или чужом письме —
+    // тогда сервер отдаёт переброс сам, а здесь подстраховка для перехода внутри сайта.
+    const movedModel = target.pathname.startsWith("/models/")
+      ? modelPageRedirect(target.pathname.slice("/models/".length))
+      : null;
+    if (movedModel && movedModel !== target.pathname) {
+      navigate(movedModel, { replace: true, preserveScroll, catalogState });
+      return;
+    }
     const currentPath = appPath(window.location.pathname);
     const targetPath = appPath(target.pathname);
     const keepScrollPosition = preserveScroll || targetPath === "/login" || targetPath === "/register";
@@ -902,7 +914,7 @@ const privateRouteSeo = {
 function ClientSeo({ path, car, landing }) {
   useEffect(() => {
     const privatePage = ["/favorites", "/searches", "/login", "/register", "/account", "/analytics"].includes(path) || path.startsWith("/orders/");
-    const detailTitle = car?.title || (car ? `${car.brand} ${car.model} ${car.year}` : null);
+    const detailTitle = car?.title || (car ? carTitle(car.brand, car.model, car.year) : null);
     // Заголовок и описание страницы марки, типа двигателя или кузова лежат в её
     // описании (src/catalog-landings.js) — там же, откуда их берёт сервер, когда
     // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
@@ -2898,6 +2910,9 @@ function useModelsIndexFacts() {
             priceMax:Number(row.priceMax) || null,
             accel:Number(row.accel) || null,
             range:Number(row.range) || null,
+            // Типы двигателя машин этой модели в наличии — сама модель может
+            // продаваться и электромобилем, и гибридом (BYD Han и другие).
+            types:new Set(row.powertrains || []),
           };
         }
         setFacts(next);
@@ -2911,6 +2926,17 @@ function useModelsIndexFacts() {
 // Марки для фильтра — только те, у которых есть обзор; порядок алфавитный.
 const MODELS_INDEX_ALL_BRANDS = "Все марки";
 const MODELS_INDEX_BRANDS = [MODELS_INDEX_ALL_BRANDS, ...Array.from(new Set(MODEL_PAGES.map((modelPage) => modelPage.brand))).sort((a, b) => a.localeCompare(b, "ru"))];
+
+// Тип двигателя: те же варианты, что в каталоге. Модель считается электромобилем,
+// гибридом или бензиновой по машинам этой модели в наличии — некоторые модели
+// продаются и так, и так (BYD Han, Li Auto L7 и другие), тогда они попадают в оба
+// раздела фильтра.
+const MODELS_INDEX_ALL_TYPE = "Все типы";
+const MODELS_INDEX_TYPES = [MODELS_INDEX_ALL_TYPE, ...POWERTRAIN_TABS.slice(1)];
+
+// Сколько обзоров показывать сразу и на сколько увеличивать список по кнопке
+// «Подгрузить ещё» — список приходит на клиент целиком, догружать с сервера нечего.
+const MODELS_INDEX_BATCH = 24;
 
 // Сортировки списка обзоров. Цена, разгон и запас хода — по самой подходящей машине
 // модели в каталоге: дешёвые считаем по самой доступной, дорогие — по самой дорогой,
@@ -2930,7 +2956,9 @@ const MODELS_INDEX_SORTS = [
 function ModelsIndexPage({ navigate }) {
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState(MODELS_INDEX_ALL_BRANDS);
+  const [type, setType] = useState(MODELS_INDEX_ALL_TYPE);
   const [sort, setSort] = useState("default");
+  const [visibleCount, setVisibleCount] = useState(MODELS_INDEX_BATCH);
   const facts = useModelsIndexFacts();
   const search = query.trim().toLowerCase();
   const selectedSort = MODELS_INDEX_SORTS.find((option) => option.value === sort) || MODELS_INDEX_SORTS[0];
@@ -2941,9 +2969,13 @@ function ModelsIndexPage({ navigate }) {
     return counts;
   }, []);
   const found = useMemo(() => {
+    const wantedType = type === MODELS_INDEX_ALL_TYPE ? null : typeValue(type);
     const matches = MODEL_PAGES.filter(
       (modelPage) =>
         (brand === MODELS_INDEX_ALL_BRANDS || modelPage.brand === brand) &&
+        // Модель без машин в наличии не знает своего типа — под конкретный фильтр
+        // (не «Все типы») она не попадает.
+        (!wantedType || facts[modelPage.slug]?.types?.has(wantedType)) &&
         (!search || `${modelPage.name} ${modelPage.brand} ${modelPage.tagline} ${modelPage.teaser}`.toLowerCase().includes(search)),
     );
     if (sort === "default") return matches;
@@ -2959,7 +2991,11 @@ function ModelsIndexPage({ navigate }) {
       if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
       return option.direction === "asc" ? left - right : right - left;
     });
-  }, [brand, search, sort, facts]);
+  }, [brand, type, search, sort, facts]);
+  // Список короче фильтра — а не наоборот — не остаётся с кнопкой «подгрузить»
+  // в никуда: любая смена фильтра или поиска возвращает список к первой порции.
+  useEffect(() => setVisibleCount(MODELS_INDEX_BATCH), [brand, type, search, sort]);
+  const visible = found.slice(0, visibleCount);
   return (
     <main className="model-page">
       <div className="model-page-reading">
@@ -2990,8 +3026,9 @@ function ModelsIndexPage({ navigate }) {
                 </button>
               )}
             </div>
-            {/* Под поиском: слева выбор марки, справа сортировка. */}
+            {/* Под поиском: тип двигателя, затем марка, справа сортировка. */}
             <div className="models-index-controls">
+              <SelectField className="models-index-select" label="Тип" value={type} options={MODELS_INDEX_TYPES} onChange={setType} />
               <SelectField className="models-index-select" label="Марка" value={brand} options={MODELS_INDEX_BRANDS} onChange={setBrand} optionCounts={brandCounts} searchable />
               <SelectField
                 className="models-index-select models-index-select-sort"
@@ -3002,19 +3039,26 @@ function ModelsIndexPage({ navigate }) {
               />
             </div>
             {found.length ? (
-              <div className="models-index-list">
-                {found.map((modelPage) => (
-                  <AppLink key={modelPage.slug} href={modelPage.path} navigate={navigate}>
-                    <div className="models-index-photo">
-                      {facts[modelPage.slug]?.image && <img src={facts[modelPage.slug].image} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, facts[modelPage.slug].imageFull)} />}
-                    </div>
-                    <div className="models-index-copy">
-                      <strong>{modelPage.name}</strong>
-                      <p>{modelPage.teaser}</p>
-                    </div>
-                  </AppLink>
-                ))}
-              </div>
+              <>
+                <div className="models-index-list">
+                  {visible.map((modelPage) => (
+                    <AppLink key={modelPage.slug} href={modelPage.path} navigate={navigate}>
+                      <div className="models-index-photo">
+                        {facts[modelPage.slug]?.image && <img src={facts[modelPage.slug].image} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, facts[modelPage.slug].imageFull)} />}
+                      </div>
+                      <div className="models-index-copy">
+                        <strong>{modelPage.name}</strong>
+                        <p>{modelPage.teaser}</p>
+                      </div>
+                    </AppLink>
+                  ))}
+                </div>
+                {visibleCount < found.length && (
+                  <button type="button" className="load-more featured-load-more" onClick={() => setVisibleCount((current) => current + MODELS_INDEX_BATCH)}>
+                    Показать ещё
+                  </button>
+                )}
+              </>
             ) : (
               <p className="catalog-message">Ничего не нашлось. Попробуйте другую марку, тип кузова или «бензин».</p>
             )}
@@ -3264,7 +3308,9 @@ const brandLogos = {
   "Geely Galaxy": "geely-galaxy.svg",
   Dongfeng: "dongfeng.svg",
   Avatr: "avatr.svg",
-  HIMA: "hima.svg",
+  // Логотип альянса Huawei достался самой большой из его пяти марок. У Luxeed,
+  // Stelato, Shangjie и Maextro своих файлов пока нет — там показываются буквы.
+  AITO: "aito.svg",
   Xiaomi: "xiaomi.svg",
   XPeng: "xpeng.svg",
   NIO: "nio.svg",
@@ -6109,6 +6155,33 @@ function CopyLinkButton({ car }) {
   );
 }
 
+// Китайское имя модели рядом с названием.
+//
+// В каталоге машины стоят под беларускими именами — так их здесь ищут: 星瑞 у нас
+// Geely Preface, 缤越 — Coolray. Но покупатель сверяет карточку с китайскими
+// объявлениями и обзорами, где имя другое, поэтому оно должно быть под рукой.
+// Знак появляется только у переименованных моделей: где имя совпадает, показывать
+// нечего (`config/model-names-by.mjs`).
+function ChineseNameMark({ car }) {
+  const info = chineseModelName(car?.brand, car?.model);
+  if (!info) return null;
+  const spoken = info.pinyin ? `${info.zh} (${info.pinyin})` : info.zh;
+  const hint = `В Китае эта модель называется ${spoken}`;
+  const tooltip = (
+    <>
+      <b>В Китае — {info.zh}</b>
+      {info.pinyin && <i>{info.pinyin}</i>}
+      {info.note && <i>{info.note}</i>}
+    </>
+  );
+  return (
+    <span className="chinese-name-mark" role="img" aria-label={hint} tabIndex="0">
+      <Info size={18} />
+      <ActionTooltip className="chinese-name-tooltip" text={tooltip} tapToOpen />
+    </span>
+  );
+}
+
 function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false, onOpenOrder = null }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
@@ -6191,6 +6264,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </button>
             )}
             <h1>{car.title}</h1>
+            <ChineseNameMark car={car} />
             {openFull && (
               <AppLink className="detail-back detail-open-full" href={carHref(car)} navigate={openFull} aria-label="Открыть полную страницу автомобиля">
                 <ArrowUpRight size={20} />

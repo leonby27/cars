@@ -144,7 +144,13 @@ function specValue(specs, patterns) {
 const SOURCE_BRAND_PREFIXES = new Map([
   ["Zeekr", ["ZEEKR", "Zeekr"]],
   ["Xiaomi", ["Xiaomi Auto", "Xiaomi"]],
-  ["HIMA", ["AITO", "HIMA"]],
+  // Приставка подмарки в названии модели: у альянса Huawei источник приклеивает
+  // к модели имя марки, а иногда прежнее общее имя альянса.
+  ["AITO", ["AITO Wenjie", "Wenjie", "AITO", "HIMA", "问界"]],
+  ["Luxeed", ["Luxeed", "Zhijie", "智界"]],
+  ["Stelato", ["Enjoy World", "Stelato", "Xiangjie", "享界"]],
+  ["Shangjie", ["Shangjie", "尚界"]],
+  ["Maextro", ["Maextro", "Zunjie", "尊界"]],
   ["NIO", ["NIO", "Nio"]],
   ["XPeng", ["XPENG", "XPeng"]],
   ["Lynk & Co", ["LYNK&CO", "Lynk & Co", "Lynk Co"]],

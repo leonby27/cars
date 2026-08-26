@@ -11,7 +11,9 @@ const REPORT_PATH = path.join(ROOT, "runtime", "import-che168-report.json");
 const LIST_URL = "https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=7";
 const SOURCE_PREFIXES = new Map([
   ["Xiaomi Auto", "Xiaomi"], ["Xiaomi", "Xiaomi"], ["ZEEKR", "Zeekr"], ["Zeekr", "Zeekr"],
-  ["AITO", "HIMA"], ["HIMA", "HIMA"], ["XPENG", "XPeng"], ["NIO", "NIO"],
+  // «HIMA» — имя альянса Huawei: машины разъехались по пяти своим маркам,
+  // и старое имя ведёт на самую большую из них.
+  ["AITO", "AITO"], ["HIMA", "AITO"], ["XPENG", "XPeng"], ["NIO", "NIO"],
   ["LYNK&CO", "Lynk & Co"], ["Lynk & Co", "Lynk & Co"],
   ...IMPORT_BRANDS.map((brand) => [brand, brand]),
 ]);
