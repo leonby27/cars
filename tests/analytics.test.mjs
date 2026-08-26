@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromOwnPage, isBotAgent, isDatacenterAddress, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
@@ -247,17 +248,42 @@ test("живого человека отмечает поведение, а не
   const calls = [];
   const db = { query: async (sql, values) => { calls.push({ sql, values }); return { rowCount:1 }; } };
   await recordAnalyticsEvent({ ...later }, { db });
-  assert.equal(calls[0].values.at(-1), true);
-  assert.match(calls[0].sql, /listing_title,properties,human/);
+  assert.equal(calls[0].values.at(-2), true);
+  assert.match(calls[0].sql, /listing_title,properties,human,human_action/);
 
   // Отметка ставится вдогонку на весь след этого посетителя в этом сеансе.
   const updates = [];
   const updateDb = { query: async (sql, values) => { updates.push({ sql, values }); return { rowCount:3 }; } };
-  const confirmed = await confirmHumanVisit({ visitorId:"v1", sessionId:"s1" }, { db:updateDb });
+  const confirmed = await confirmHumanVisit({ visitorId:"v1", sessionId:"s1", action:true }, { db:updateDb });
   assert.deepEqual(confirmed, { ok:true, confirmed:3 });
   assert.match(updates[0].sql, /UPDATE analytics_events SET human = true/);
-  assert.deepEqual(updates[0].values, ["v1", "s1"]);
+  assert.deepEqual(updates[0].values, ["v1", "s1", true]);
   // Без опознания посетителя отмечать нечего.
   assert.equal((await confirmHumanVisit({ visitorId:"v1" }, { db:updateDb })).error, "invalid_event_identity");
+});
+
+// 26.08.2026: обходчик, который ходит через домашние адреса живых людей, брал страницу,
+// выжидал те самые пятнадцать секунд и уходил — и попадал в посетителей. Поэтому время
+// на странице и настоящее действие теперь разные отметки, а посетителем считается
+// только второе.
+test("время на странице человеком не делает — только действие", async () => {
+  const updates = [];
+  const db = { query: async (sql, values) => { updates.push({ sql, values }); return { rowCount:1 }; } };
+  // Отметка по времени приходит без признака действия.
+  await confirmHumanVisit({ visitorId:"v1", sessionId:"s1" }, { db });
+  assert.deepEqual(updates[0].values, ["v1", "s1", false]);
+  assert.match(updates[0].sql, /human_action = human_action OR \$3/);
+  // Действие после отстоянного времени всё равно доезжает: строка обновляется, пока
+  // само действие не проставлено.
+  await confirmHumanVisit({ visitorId:"v1", sessionId:"s1", action:true }, { db });
+  assert.deepEqual(updates[1].values, ["v1", "s1", true]);
+  // Посетителей раздел считает по действию, а не по одной лишь отметке «живой».
+  const dashboardSql = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  assert.match(dashboardSql, /created_at \$\{compare\} \$1 AND human_action/);
+  assert.equal(/created_at \$\{compare\} \$1 AND human\)/.test(dashboardSql), false);
+  // Событие несёт признак действия с собой: вторая страница того же захода приходит
+  // помеченной сразу, отдельного подтверждения на каждую не нужно.
+  assert.equal(normalizeAnalyticsEvent({ eventId:"e3", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/", human:true, humanAction:true }).humanAction, true);
+  assert.equal(normalizeAnalyticsEvent({ eventId:"e4", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/", human:true }).humanAction, false);
 });
 

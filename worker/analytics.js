@@ -50,7 +50,10 @@ export function normalizeWorkerEvent(body = {}) {
     listingTitle:clean(body.listingTitle, 240) || null,
     properties,
     // Признак живого человека страница ставит сама, когда посетитель себя проявил.
+    // Отдельно — было ли настоящее действие: одно лишь время на странице выжидает
+    // обходчик, поэтому в посетители раздел берёт только по действию.
     human:body.human === true,
+    humanAction:body.humanAction === true,
   };
 }
 
@@ -67,6 +70,7 @@ async function ensureSchema(db) {
       listing_title TEXT,
       properties TEXT NOT NULL DEFAULT '{}',
       human INTEGER NOT NULL DEFAULT 0,
+      human_action INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_analytics_events_created ON analytics_events(created_at DESC)"),
@@ -120,22 +124,22 @@ async function dashboard(db, days) {
       sum(CASE WHEN event_name='registration_completed' THEN 1 ELSE 0 END) AS registrations,
       sum(CASE WHEN event_name='custom_search_submitted' THEN 1 ELSE 0 END) AS custom_searches,
       sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human = 1)`).bind(cutoff, cutoff).first(),
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1)`).bind(cutoff, cutoff).first(),
     db.prepare(`SELECT date(created_at) AS day, count(DISTINCT visitor_id) AS visitors,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS vehicle_views,
       sum(CASE WHEN event_name='availability_click' THEN 1 ELSE 0 END) AS availability_clicks,
       sum(CASE WHEN event_name='registration_completed' THEN 1 ELSE 0 END) AS registrations,
       sum(CASE WHEN event_name='custom_search_submitted' THEN 1 ELSE 0 END) AS custom_searches
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human = 1)
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1)
       GROUP BY date(created_at) ORDER BY date(created_at)`).bind(cutoff, cutoff).all(),
     db.prepare(`SELECT listing_id, max(listing_title) AS listing_title,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS views,
       sum(CASE WHEN event_name='availability_click' THEN 1 ELSE 0 END) AS availability_clicks,
       sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND listing_id IS NOT NULL AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human = 1)
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND listing_id IS NOT NULL AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1)
       GROUP BY listing_id ORDER BY availability_clicks DESC, views DESC LIMIT 30`).bind(cutoff, cutoff).all(),
     db.prepare(`SELECT event_name,listing_id,listing_title,path,created_at
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human = 1) ORDER BY created_at DESC LIMIT 30`).bind(cutoff, cutoff).all(),
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1) ORDER BY created_at DESC LIMIT 30`).bind(cutoff, cutoff).all(),
   ]);
   const safeSummary = Object.fromEntries(Object.entries(summary || {}).map(([key,value]) => [key,Number(value) || 0]));
   return {
@@ -170,9 +174,9 @@ export async function handleAnalyticsRequest(request, env, url) {
     if (!workerOwnPage(request, env) || workerBotAgent(request.headers.get("user-agent"))) return json({ ok:true, recorded:false }, 202);
     const event = normalizeWorkerEvent(await request.json().catch(() => ({})));
     if (event.error) return json(event, 400);
-    await env.DB.prepare(`INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties,human)
-      VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING`)
-      .bind(event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties),event.human ? 1 : 0).run();
+    await env.DB.prepare(`INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties,human,human_action)
+      VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING`)
+      .bind(event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties),event.human ? 1 : 0,event.humanAction ? 1 : 0).run();
     return json({ ok:true }, 202);
   }
   // Страница сообщает, что за заходом стоит живой человек: он подвигал мышью,
@@ -183,8 +187,10 @@ export async function handleAnalyticsRequest(request, env, url) {
     const visitorId = clean(body.visitorId, 80);
     const sessionId = clean(body.sessionId, 80);
     if (!visitorId || !sessionId) return json({ error:"invalid_event_identity" }, 400);
-    const result = await env.DB.prepare("UPDATE analytics_events SET human = 1 WHERE visitor_id = ? AND session_id = ? AND human = 0")
-      .bind(visitorId, sessionId).run();
+    const action = body.action === true ? 1 : 0;
+    const result = await env.DB.prepare(`UPDATE analytics_events SET human = 1, human_action = max(human_action, ?)
+        WHERE visitor_id = ? AND session_id = ? AND NOT (human = 1 AND (human_action = 1 OR ? = 0))`)
+      .bind(action, visitorId, sessionId, action).run();
     return json({ ok:true, confirmed:result?.meta?.changes || 0 }, 202);
   }
   if (request.method === "GET" && url.pathname === "/api/analytics/dashboard") {

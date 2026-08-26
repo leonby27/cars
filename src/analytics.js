@@ -63,9 +63,10 @@ const skipThisVisit = () => {
 // при этом подделывает под обычный Chrome, поэтому по ней его не отличить.
 // Вот эти признаки и отличают живого посетителя от такого робота.
 export const HUMAN_SIGNALS = ["pointermove", "pointerdown", "touchstart", "keydown", "wheel", "scroll"];
-// Человек, который просто читает страницу и не касается ни мыши, ни колеса, — тоже
-// человек. Столько времени на видимой странице считаем признаком жизни: роботы
-// столько не ждут, им нужно обойти тысячи адресов.
+// Время на странице тоже отмечаем, но отдельно и слабее: 26.08.2026 нашёлся обходчик,
+// который открывает страницу, ровно столько ждёт и уходит, ни к чему не притронувшись.
+// Поэтому одно лишь время человеком уже не делает — в посетители попадает только тот,
+// за кем есть действие, а отстоявшие своё без движения видны отдельной цифрой.
 export const HUMAN_DWELL_MS = 15_000;
 
 // Заход записываем сразу, а живым человеком он становится, когда посетитель себя
@@ -75,6 +76,7 @@ export const HUMAN_DWELL_MS = 15_000;
 // отдельной цифрой. Так не теряется и человек, закрывший страницу через две секунды:
 // он просто попадёт не в людей, а в неподтверждённые заходы.
 let humanConfirmed = false;
+let humanActed = false;
 let watching = false;
 
 const post = (path, payload) => {
@@ -86,12 +88,16 @@ const post = (path, payload) => {
   }).catch(() => {});
 };
 
-const confirmHuman = () => {
-  if (humanConfirmed) return;
+// `action` — было настоящее действие, а не просто время на странице. Отметку по времени
+// шлём один раз, отметку по действию — даже если время уже отправлено: она сильнее.
+const confirmHuman = (action) => {
+  if (humanActed || (humanConfirmed && !action)) return;
   humanConfirmed = true;
+  if (action) humanActed = true;
   post("/api/analytics/human", {
     visitorId:storedId(window.localStorage, visitorKey),
     sessionId:storedId(window.sessionStorage, sessionKey),
+    action:Boolean(action),
   });
 };
 
@@ -100,12 +106,12 @@ const watchForHuman = () => {
   watching = true;
   const signal = () => {
     for (const name of HUMAN_SIGNALS) window.removeEventListener(name, signal, true);
-    confirmHuman();
+    confirmHuman(true);
   };
   for (const name of HUMAN_SIGNALS) window.addEventListener(name, signal, { capture:true, passive:true });
   window.setTimeout(() => {
     // Страница в фоновой закладке ничего не доказывает: её мог открыть и робот.
-    if (window.document?.visibilityState !== "hidden") signal();
+    if (window.document?.visibilityState !== "hidden") confirmHuman(false);
   }, HUMAN_DWELL_MS);
 };
 
@@ -124,6 +130,7 @@ export function trackEvent(eventName, details = {}) {
     listingTitle:details.listingTitle,
     properties:details.properties,
     human:humanConfirmed,
+    humanAction:humanActed,
   };
   watchForHuman();
   post("/api/analytics/events", payload);

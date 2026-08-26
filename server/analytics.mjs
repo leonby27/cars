@@ -48,6 +48,9 @@ export function normalizeAnalyticsEvent(body = {}) {
     // Признак живого человека страница ставит сама, когда посетитель себя проявил.
     // На первом событии его обычно нет — он приходит следом, отдельным запросом.
     human:body.human === true,
+    // Действие посетителя уже было: следующие страницы того же захода приходят
+    // помеченными сразу, отдельного подтверждения на каждую не нужно.
+    humanAction:body.humanAction === true,
   };
 }
 
@@ -57,8 +60,8 @@ export function normalizeAnalyticsEvent(body = {}) {
 // стоит на сервере, а не только в браузере: у части посетителей загружен старый
 // код сайта, и починить их можно только здесь.
 export const ANALYTICS_REPEAT_SECONDS = 5;
-const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties,human)
-     SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9
+const INSERT_EVENT_SQL = `INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties,human,human_action)
+     SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
      WHERE NOT EXISTS (
        SELECT 1 FROM analytics_events
        WHERE visitor_id=$2 AND event_name=$4 AND coalesce(listing_id,'')=coalesce($6,'')
@@ -147,7 +150,7 @@ export async function recordAnalyticsEvent(body, { db = pool } = {}) {
   const event = normalizeAnalyticsEvent(body);
   if (event.error) return event;
   const result = await db.query(INSERT_EVENT_SQL,
-    [event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties),event.human],
+    [event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties),event.human,event.humanAction],
   );
   return { ok:true, recorded:result.rowCount > 0 };
 }
@@ -160,11 +163,16 @@ export async function confirmHumanVisit(body = {}, { db = pool } = {}) {
   const visitorId = text(body.visitorId, 80);
   const sessionId = text(body.sessionId, 80);
   if (!visitorId || !sessionId) return { error:"invalid_event_identity" };
+  // Отметок две. Слабая — просто время на открытой странице; её научился получать
+  // обходчик, который ждёт свои пятнадцать секунд и уходит. Сильная — настоящее
+  // действие; в число посетителей раздел берёт только по ней. Сильная приходит и
+  // после слабой, поэтому строку обновляем, пока не проставлено само действие.
+  const action = body.action === true;
   const result = await db.query(
-    `UPDATE analytics_events SET human = true
-       WHERE visitor_id = $1 AND session_id = $2 AND NOT human
+    `UPDATE analytics_events SET human = true, human_action = human_action OR $3
+       WHERE visitor_id = $1 AND session_id = $2 AND NOT (human AND (human_action OR NOT $3))
          AND created_at > now() - interval '12 hours'`,
-    [visitorId, sessionId],
+    [visitorId, sessionId, action],
   );
   return { ok:true, confirmed:result.rowCount };
 }
@@ -230,11 +238,13 @@ export function normalizeAnalyticsDays(value) {
   return [7, 30, 90].includes(Number(value)) ? Number(value) : 30;
 }
 
-// Посетителем считаем того, у кого хотя бы одно событие отмечено живым человеком.
-// Именно «хотя бы одно», а не каждое: отметка приходит вдогонку, отдельным запросом,
-// и порядок записи не гарантирован — иначе первый заход человека остался бы
-// непризнанным из-за случайной очерёдности двух запросов.
-const humanVisitor = (compare = ">=") => `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at ${compare} $1 AND human)`;
+// Посетителем считаем того, у кого хотя бы одно событие отмечено действием живого
+// человека. Именно «хотя бы одно», а не каждое: отметка приходит вдогонку, отдельным
+// запросом, и порядок записи не гарантирован — иначе первый заход человека остался бы
+// непризнанным из-за случайной очерёдности двух запросов. Именно действием, а не
+// просто отметкой «живой»: одно лишь время на странице подделывает обходчик, который
+// ходит через домашние адреса и по адресу не отличается от людей (26.08.2026).
+const humanVisitor = (compare = ">=") => `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at ${compare} $1 AND human_action)`;
 const HUMAN_VISITOR = humanVisitor();
 
 export async function getAnalyticsDashboard(daysValue) {
