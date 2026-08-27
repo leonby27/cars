@@ -136,3 +136,29 @@ export function trackEvent(eventName, details = {}) {
   post("/api/analytics/events", payload);
 }
 
+
+// Метрика сама записывает просмотр только по загрузке страницы. Всё остальное —
+// переход по сайту без перезагрузки, быстрый просмотр машины в модалке — приходится
+// называть ей отдельно штатной командой счётчика: «посетитель смотрит такой-то адрес».
+// Для Метрики такой просмотр неотличим от обычного открытия страницы.
+// Адрес последнего названного просмотра помним, чтобы не считать один взгляд дважды:
+// посмотрел машину в модалке и следом открыл её страницу целиком — просмотр один.
+// Стартовое значение — адрес захода: его счётчик записал сам при запуске.
+let lastMetrikaView = typeof window === "undefined" ? null : window.location.href;
+
+export function trackMetrikaView(url, options = {}) {
+  const counter = window.__ym;
+  if (!counter || typeof window.ym !== "function") return;
+  const absolute = new URL(url, window.location.href).href;
+  if (absolute === lastMetrikaView) return;
+  lastMetrikaView = absolute;
+  window.ym(counter, "hit", absolute, options);
+}
+
+// Отдельная отметка «машину посмотрели в модалке»: в отчётах такой просмотр ничем не
+// отличается от обычного, а по этой цели видно, каким способом смотрят машины.
+export function trackMetrikaGoal(goal, params = undefined) {
+  const counter = window.__ym;
+  if (!counter || typeof window.ym !== "function") return;
+  window.ym(counter, "reachGoal", goal, params);
+}

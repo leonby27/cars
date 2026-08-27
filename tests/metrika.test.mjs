@@ -36,3 +36,43 @@ test("правила безопасности пускают Метрику", ()
   assert.ok(rule("img-src").includes("https:"), "картинка счётчика заблокирована");
   assert.ok(rule("frame-src").includes("https://*.yandex.ru"), "кадр синхронизации заблокирован");
 });
+
+test("быстрый просмотр Метрика засчитывает как просмотр страницы машины", async () => {
+  const calls = [];
+  globalThis.window = {
+    location:{ href:"https://abcars.by/catalog" },
+    __ym:111868764,
+    ym:(...args) => calls.push(args),
+  };
+  const { trackMetrikaGoal, trackMetrikaView } = await import("../src/analytics.js");
+
+  // Модалка не меняет адрес в браузере, поэтому просмотр называем Метрике сами —
+  // адресом и заголовком страницы этой машины.
+  trackMetrikaView("/cars/12345", { title:"Zeekr 001, 30 000 км — цена до Минска | abcars.by" });
+  assert.deepEqual(calls[0], [111868764, "hit", "https://abcars.by/cars/12345", { title:"Zeekr 001, 30 000 км — цена до Минска | abcars.by" }]);
+
+  // Посмотрел в модалке и следом открыл страницу целиком — это один взгляд, а не два.
+  globalThis.window.location.href = "https://abcars.by/cars/12345";
+  trackMetrikaView("https://abcars.by/cars/12345");
+  assert.equal(calls.length, 1, "тот же адрес ушёл в Метрику дважды");
+
+  // Следующая машина считается как новый просмотр.
+  trackMetrikaView("/cars/67890");
+  assert.equal(calls.length, 2);
+
+  trackMetrikaGoal("quick_view");
+  assert.deepEqual(calls[2], [111868764, "reachGoal", "quick_view", undefined]);
+
+  // Без счётчика (свой заход, робот) не отправляется ничего.
+  globalThis.window.__ym = undefined;
+  trackMetrikaView("/cars/13579");
+  assert.equal(calls.length, 3);
+  delete globalThis.window;
+});
+
+test("модалка быстрого просмотра сообщает Метрике о просмотре", () => {
+  const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const open = app.slice(app.indexOf("const openQuickView = (nextCar)"));
+  assert.ok(open.slice(0, 700).includes("trackMetrikaView("), "открытие модалки перестало считаться просмотром");
+  assert.ok(open.slice(0, 700).includes('trackMetrikaGoal("quick_view")'), "цель быстрого просмотра пропала");
+});

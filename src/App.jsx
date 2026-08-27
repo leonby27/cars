@@ -35,7 +35,7 @@ import { TOOL_PAGES, customsExample, deliveryStages, findToolPage, toolPageStats
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
-import { trackEvent } from "./analytics.js";
+import { trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
 // таблиц) не кладём в общий файл приложения, а подгружаем отдельным файлом при
 // первом открытии /analytics: каждому посетителю сайта он не нужен.
@@ -48,6 +48,10 @@ const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
 // поэтому старые ссылки и закладки продолжают открываться.
 const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
 const carHref = (car) => `/cars/${encodeURIComponent(listingNumber(car?.id))}`;
+// Заголовок страницы машины. Он же уходит в Метрику, когда карточку открывают
+// быстрым просмотром: в отчётах такой просмотр должен выглядеть ровно так же,
+// как открытая страница этой машины, а не как что-то отдельное.
+const carPageTitle = (car) => `${car?.title || carTitle(car?.brand, car?.model, car?.year)}, ${number(car?.mileage)} км — цена до Минска | abcars.by`;
 // Адрес несёт короткий номер, а карточки и избранное — полный идентификатор,
 // поэтому сравниваем их по номеру.
 const sameListing = (left, right) => Boolean(left) && Boolean(right) && listingNumber(left) === listingNumber(right);
@@ -938,7 +942,7 @@ function ClientSeo({ path, car, landing }) {
     // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
     const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
     const [title, description] = detailTitle
-      ? [`${detailTitle}, ${number(car.mileage)} км — цена до Минска | abcars.by`, `${detailTitle}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены до Минска.`]
+      ? [carPageTitle(car), `${detailTitle}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены до Минска.`]
       : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | abcars.by", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена | abcars.by", "Запрошенная страница не найдена."];
     const canonicalRoot = document.querySelector('link[rel="canonical"]')?.href || `${window.location.origin}${import.meta.env.BASE_URL}`;
     const canonicalBase = new URL(canonicalRoot);
@@ -6610,6 +6614,11 @@ function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate, ord
   const openQuickView = (nextCar) => {
     if (!desktop || !enabled || !nextCar) return false;
     setListed(nextCar);
+    // Модалка показывает ту же карточку машины, что и её страница, но адрес в браузере
+    // не меняется — сам по себе такой просмотр Метрике не виден. Поэтому называем его
+    // ей сами, адресом и заголовком страницы этой машины, и отмечаем целью.
+    trackMetrikaView(appHref(carHref(nextCar)), { title:carPageTitle(nextCar) });
+    trackMetrikaGoal("quick_view");
     return true;
   };
   return {
@@ -8773,7 +8782,7 @@ export function App() {
   const metrikaStarted = useRef(false);
   useEffect(() => {
     if (path !== "/analytics") trackEvent("page_view");
-    if (metrikaStarted.current && window.__ym) window.ym?.(window.__ym, "hit", window.location.href);
+    if (metrikaStarted.current) trackMetrikaView(window.location.href);
     metrikaStarted.current = true;
   }, [path]);
   useEffect(() => {
