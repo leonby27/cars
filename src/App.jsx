@@ -8188,6 +8188,31 @@ function AccountRemovalModal({ pending, error, onCancel, onConfirm }) {
   );
 }
 
+// Пока не запускаем проверку объявлений: кнопка есть, но заявка никуда не уходит.
+function AvailabilityPausedModal({ onClose }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal" role="dialog" aria-modal="true" aria-labelledby="availability-paused-title" aria-describedby="availability-paused-description">
+        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={19} /></button>
+        <div className="order-removal-icon availability-paused-icon"><Clock size={32} weight="duotone" /></div>
+        <h2 id="availability-paused-title">Временно не принимаем заказы</h2>
+        <p id="availability-paused-description">Приём заказов на авто временно приостановлен. Через несколько дней он снова станет доступен.</p>
+        <div className="order-removal-actions availability-paused-actions">
+          <button className="primary" type="button" onClick={onClose}>Хорошо, вернусь позже</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, authBackend, navigate }) {
   // Цена заказа тоже слушается переключателя валюты в шапке: рубли в каталоге и
   // доллары в заказе выглядели бы разными ценами.
@@ -8201,6 +8226,8 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
   const [removalOpen, setRemovalOpen] = useState(false);
   const [removalError, setRemovalError] = useState("");
   const [availabilityComment, setAvailabilityComment] = useState("");
+  // Запросы актуальности временно отключены: кнопка вместо отправки объясняет это окном.
+  const [availabilityPausedOpen, setAvailabilityPausedOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState("");
   // Машин в заказе может быть несколько: показываем выбранную, по умолчанию свежую.
   const order = orders.find((item) => item.id === selectedOrderId) || orders[0] || null;
@@ -8382,6 +8409,17 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
   const contractUnlocked = order.contractStatus !== "locked";
   const contractDone = order.contractStatus === "confirmed";
   const paymentUnlocked = order.paymentStatus !== "locked";
+  // Заявка временно никуда не уходит, но клик по этой кнопке — ключевое действие
+  // воронки: она стоит ближе всего к сделке, поэтому в аналитике его считаем всегда.
+  const requestAvailabilityCheck = () => {
+    trackEvent("availability_request_click", {
+      listingId:order.listingId,
+      listingTitle:order.car.title,
+      properties:{ withComment:availabilityComment.trim() ? "yes" : "no" },
+    });
+    trackMetrikaGoal("availability_request");
+    setAvailabilityPausedOpen(true);
+  };
   const requestOrderRemoval = (event) => {
     event.currentTarget.closest("details")?.removeAttribute("open");
     setRemovalError("");
@@ -8403,6 +8441,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
   const widestOrderLabel = orderLabels.reduce((longest, label) => (label.length > longest.length ? label : longest), "");
   return (
     <section className="customer-order" aria-label={`Заказ ${order.orderNumber}`}>
+      {orders.length > 1 && (
       <div className="customer-order-picker">
         <SelectField
           className="customer-order-select"
@@ -8415,6 +8454,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
             поле дёргалось бы при каждом переключении машины. */}
         <span className="customer-order-picker-sizer" aria-hidden="true">{widestOrderLabel}</span>
       </div>
+      )}
       <div className="customer-order-car">
         <img src={imageSource(order.car.image, IMAGE_WIDTH_TILE)} alt={order.car.title} onError={(event) => retryWithFullImage(event, order.car.image)} />
         <div className="customer-order-car-copy">
@@ -8432,7 +8472,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         <OrderStageRow number={1} title="Проверка объявления" description="Уточним у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
           {/* После отправки запроса вёрстка этапа не меняется: поле с комментарием и
               кнопка просто перестают быть активными, а рядом с кнопкой встаёт статус. */}
-          <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); applyAction("request_availability_check", { comment: availabilityComment.trim() }); }}>
+          <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); requestAvailabilityCheck(); }}>
             <div className="availability-check-block">
               <p>Перед осмотром свяжемся с продавцом и подтвердим:</p>
               <ul className="availability-check-list">
@@ -8448,7 +8488,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
               </label>
             )}
             <div className="availability-check-actions">
-              <button className="primary" type="submit" disabled={saving || availabilityRequested}>Уточнить актуальность</button>
+              <button className="primary" type="submit">Уточнить актуальность</button>
               {availabilityRequested && (
                 <p className="availability-check-status"><CheckCircle size={20} weight="fill" />{availabilityConfirmed ? "Актуальность подтверждена." : "Запрос отправлен, скоро свяжемся."}</p>
               )}
@@ -8480,6 +8520,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         </OrderStageRow>
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
+      {availabilityPausedOpen && <AvailabilityPausedModal onClose={() => setAvailabilityPausedOpen(false)} />}
       {removalOpen && <OrderRemovalModal carTitle={order.car.title} orderNumber={order.orderNumber} saving={saving} error={removalError} onCancel={() => { setRemovalOpen(false); setRemovalError(""); }} onConfirm={removeOrder} />}
       {quickViewModal}
     </section>

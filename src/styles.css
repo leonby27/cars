@@ -9024,6 +9024,18 @@ html[data-theme="dark"] #root .spec-search,
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+/* Окно чуть шире обычного: иначе заголовок ломается на две строки. */
+.lead-modal.availability-paused-modal {
+  width: min(540px, 100%);
+}
+.availability-paused-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: calc(18px * var(--corner-scale));
+}
+.lead-modal.confirm-modal .availability-paused-actions {
+  grid-template-columns: minmax(0, 1fr);
+}
 .confirm-modal .order-removal-actions > button {
   width: 100%;
   min-height: 46px;

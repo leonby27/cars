@@ -6,6 +6,7 @@ export const ANALYTICS_EVENTS = new Set([
   "page_view",
   "vehicle_view",
   "availability_click",
+  "availability_request_click",
   "registration_completed",
   "favorite_added",
   "search_saved",
@@ -31,6 +32,8 @@ export function normalizeAnalyticsEvent(body = {}) {
   // телефонами. Имя и телефон берутся из таблицы аккаунтов, где они уже есть.
   const safeProperties = {};
   if (properties.source) safeProperties.source = text(properties.source, 40);
+  // Был ли комментарий менеджеру — только «да» или «нет»: сам текст в события не берём.
+  if (properties.withComment === "yes" || properties.withComment === "no") safeProperties.withComment = properties.withComment;
   // Строка поиска — единственный свободный текст, который мы принимаем от браузера.
   // Приём событий открыт без пароля, поэтому длину режем и ничего, кроме строки
   // и числа найденных машин, из свойств не берём.
@@ -281,6 +284,8 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(DISTINCT visitor_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS visitors,
       count(*) FILTER (WHERE event_name='page_view' AND ${HUMAN_VISITOR})::int AS page_views,
       count(*) FILTER (WHERE event_name='vehicle_view' AND ${HUMAN_VISITOR})::int AS vehicle_views,
+      count(*) FILTER (WHERE event_name='availability_request_click' AND ${HUMAN_VISITOR})::int AS availability_requests,
+      count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_request_click' AND ${HUMAN_VISITOR})::int AS availability_request_people,
       count(DISTINCT visitor_id) FILTER (WHERE NOT (${HUMAN_VISITOR}))::int AS robot_visits
       FROM analytics_events WHERE created_at >= $1 AND created_at < $2`, [from, to]),
     // «Заход» считаем по паузе, а не по вкладке: страница помнит номер захода, пока
@@ -299,14 +304,16 @@ export async function getAnalyticsDashboard(rangeValue) {
       (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND calculation->>'requestType' = 'catalog_search' AND ${notStaffContact("contact")})::int AS custom_searches`, [from, to]),
     pool.query(`SELECT created_at::date::text AS day,
       count(DISTINCT visitor_id)::int AS visitors,
-      count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views
+      count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views,
+      count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
       FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR}
       GROUP BY created_at::date ORDER BY created_at::date`, [from, to]),
     pool.query(`WITH views AS (
         SELECT listing_id, max(listing_title) AS listing_title,
           count(*) FILTER (WHERE event_name='vehicle_view')::int AS views,
           count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers,
-          max(created_at) FILTER (WHERE event_name='vehicle_view') AS last_viewed
+          max(created_at) FILTER (WHERE event_name='vehicle_view') AS last_viewed,
+          count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
         FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${HUMAN_VISITOR} GROUP BY listing_id
       ), asks AS (
         SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${notStaffAccount("customer_id")} GROUP BY listing_id
@@ -322,6 +329,7 @@ export async function getAnalyticsDashboard(rangeValue) {
         COALESCE(views.views, 0) AS views,
         COALESCE(views.viewers, 0) AS viewers,
         COALESCE(asks.n, 0) + COALESCE(drafts.n, 0) AS availability_clicks,
+        COALESCE(views.availability_requests, 0) AS availability_requests,
         COALESCE(favs.n, 0) AS favorites,
         views.last_viewed
       FROM ids
@@ -415,6 +423,7 @@ export async function getAnalyticsDashboard(rangeValue) {
       day,
       visitors:0,
       vehicle_views:0,
+      availability_requests:0,
       availability_clicks:dayAction(day, "availability_clicks"),
       registrations:registrationsByDay.get(day) || 0,
       custom_searches:dayAction(day, "custom_searches"),
@@ -429,7 +438,7 @@ export async function getAnalyticsDashboard(rangeValue) {
     generatedAt:new Date().toISOString(),
     summary:{ ...summaryResult.rows[0], ...visitsResult.rows[0], ...actionsResult.rows[0], registrations },
     daily,
-    vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, favorites:row.favorites, lastViewedAt:row.last_viewed })),
+    vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, availabilityRequests:row.availability_requests, favorites:row.favorites, lastViewedAt:row.last_viewed })),
     favorites:favoritesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.title, people:row.people, addedAt:row.added_at, gone:row.gone, status:row.status, priceUsd:row.estimated_total_usd })),
     // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
     // разделе он читался и работала ссылка «позвонить».

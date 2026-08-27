@@ -17,9 +17,21 @@ test("analytics events are allowlisted and drop personal data", () => {
   // прислали: контакты берутся только из таблицы аккаунтов.
   assert.deepEqual(event.properties, { source:"server" });
   assert.equal(normalizeAnalyticsEvent({ eventName:"arbitrary" }).error, "invalid_event");
-  for (const eventName of ["page_view","vehicle_view","availability_click","registration_completed","favorite_added","custom_search_submitted"]) {
+  for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted"]) {
     assert.equal(normalizeAnalyticsEvent({ eventId:`event-${eventName}`, visitorId:"visitor", sessionId:"session", eventName, path:"/" }).eventName, eventName);
   }
+});
+
+test("нажатие кнопки проверки объявления считается без текста комментария", () => {
+  const event = normalizeAnalyticsEvent({
+    eventId:"e-check", visitorId:"v1", sessionId:"s1", eventName:"availability_request_click", path:"/account",
+    listingId:"che168-1", listingTitle:"Zeekr 001 2024",
+    properties:{ withComment:"yes", comment:"позвоните вечером", orderNumber:"000048" },
+  });
+  assert.equal(event.eventName, "availability_request_click");
+  assert.equal(event.listingId, "che168-1");
+  // Сам комментарий менеджеру в статистику не уходит — только признак, что он был.
+  assert.deepEqual(event.properties, { withComment:"yes" });
 });
 
 test("analytics date range is restricted to dashboard presets", () => {

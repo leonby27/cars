@@ -39,6 +39,7 @@ const eventLabels = {
   page_view:"Просмотр страницы",
   vehicle_view:"Просмотр автомобиля",
   availability_click:"Клик «Уточнить актуальность»",
+  availability_request_click:"Кнопка «Уточнить актуальность» в заказе",
   registration_completed:"Регистрация",
   favorite_added:"Добавление в избранное",
   search_saved:"Сохранение поиска",
@@ -267,6 +268,9 @@ function OverviewSection({ data }) {
     ["Уникальные посетители", summary.visitors, `${formatNumber(summary.visits)} заходов${Number(summary.robot_visits) ? ` · ещё ${formatNumber(summary.robot_visits)} без действий` : ""}`],
     ["Просмотры автомобилей", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
     ["Заявки по автомобилю", summary.availability_clicks, `${percent(summary.availability_clicks, summary.vehicle_views)} от просмотров авто${summary.custom_searches ? ` · ещё ${formatNumber(summary.custom_searches)} на подбор` : ""}`],
+    // Кнопка на первом этапе заказа — самый близкий к сделке шаг: пока проверка
+    // объявлений выключена, заявка никуда не уходит, но нажатия считаются.
+    ["Проверка объявления", summary.availability_requests, `${formatNumber(summary.availability_request_people)} человек · ${percent(summary.availability_requests, summary.availability_clicks)} от заявок`],
     ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} добавлений в избранное`],
   ];
   return (
@@ -276,7 +280,7 @@ function OverviewSection({ data }) {
       <section className="analytics-panel analytics-trend">
         <div className="analytics-panel-heading"><div><h2>Динамика интереса</h2><p>Уникальные посетители и ключевые действия по дням</p></div></div>
         {daily.length ? <div className="analytics-bars">{daily.map((item) => {
-          const actions = Number(item.availability_clicks || 0) + Number(item.registrations || 0) + Number(item.custom_searches || 0);
+          const actions = Number(item.availability_clicks || 0) + Number(item.availability_requests || 0) + Number(item.registrations || 0) + Number(item.custom_searches || 0);
           return <div className="analytics-bar-column" key={item.day} title={`${formatDate(item.day)}: ${item.visitors || 0} посетителей, ${actions} целевых действий`}><div className="analytics-bar-track"><i style={{ height:`${Math.max(5, Number(item.visitors || 0) / maxDaily * 100)}%` }} /><b style={{ height:`${Math.min(100, actions / maxDaily * 100)}%` }} /></div><span>{formatDate(item.day)}</span></div>;
         })}</div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
         <div className="analytics-legend"><span><i />Посетители</span><span><i />Целевые действия</span></div>
@@ -291,6 +295,7 @@ const vehicleColumns = [
   { id:"viewers", label:"Люди", value:(item) => Number(item.viewers) || 0 },
   { id:"views", label:"Просмотры", value:(item) => Number(item.views) || 0 },
   { id:"asks", label:"Уточнения", value:(item) => Number(item.availabilityClicks) || 0 },
+  { id:"checks", label:"Проверка", value:(item) => Number(item.availabilityRequests) || 0 },
   { id:"favorites", label:"Избранное", value:(item) => Number(item.favorites) || 0 },
   { id:"conversion", label:"Конверсия", value:(item) => (Number(item.views) ? (Number(item.availabilityClicks) || 0) / Number(item.views) : 0) },
   { id:"lastViewed", label:"Последний просмотр", value:(item) => (item.lastViewedAt ? new Date(item.lastViewedAt).getTime() || 0 : 0) },
@@ -316,7 +321,7 @@ function VehiclesSection({ data }) {
   return (
     <section className="analytics-panel">
       <div className="analytics-panel-heading"><div><h2>Интерес по автомобилям</h2><p>Сверху то, что открывали последним. Нажатие на заголовок столбца меняет порядок. «Люди» — сколько разных посетителей открывали карточку; «просмотры» считают каждое открытие</p></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr>{vehicleColumns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggle(column.id)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : ""}</span></button></th>)}</tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle || item.listingId}</a></td><td>{formatNumber(item.viewers ?? 0)}</td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></tr>) : <tr><td colSpan={vehicleColumns.length}>Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
+      <div className="analytics-table-wrap"><table><thead><tr>{vehicleColumns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggle(column.id)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : ""}</span></button></th>)}</tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle || item.listingId}</a></td><td>{formatNumber(item.viewers ?? 0)}</td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.availabilityRequests ?? 0)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></tr>) : <tr><td colSpan={vehicleColumns.length}>Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
       <FavoritesPanel favorites={data.favorites} />
     </section>
   );

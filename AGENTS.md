@@ -155,6 +155,10 @@ Order availability-gate preference: submitting the listing-availability request 
 
 Order-contact preference: do not show a persistent contact card between the vehicle and order stages. While availability requests are disabled, do not collect or submit contact data from the “Уточнить актуальность” action.
 
+Availability request pause: the stage-1 “Уточнить актуальность” button must not call the availability action. It opens a “Пока недоступно” modal explaining the check is temporarily off; keep the button always enabled and send no request until the workflow is switched back on. The click is still the key MVP conversion step: always send the availability_request_click analytics event (listing id/title, withComment flag only) and the Metrika goal availability_request, and keep it visible in the dashboard KPIs, per-vehicle table and daily chart.
+
+Order car picker preference: show the order car dropdown only when the customer has more than one car in the order; with a single car the picker is hidden.
+
 Personal-data preference: do not show placeholder copy about future phone-number changes or SMS confirmation under the login phone. Keep optional passport and registration details in a collapsed disclosure within personal data, persist them with the customer profile, and position them as advance preparation for future contract documents.
 
 Catalog custom-search preference: when catalog filters return no cars and when a user reaches the end of the results, show a light, white-background CTA offering individual vehicle sourcing, including cars not currently in the catalog. The CTA opens a modal with a vehicle-preferences textarea and phone input; do not use a dark or inverted treatment.
