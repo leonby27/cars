@@ -10805,8 +10805,12 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
    страницы: панели и карточки внутри читаются точно так же, как на /cars/:id.
    Открывается только на десктопе, отдельной мобильной раскладки у неё нет. */
 .quick-view-backdrop {
-  position: fixed;
-  inset: 0;
+  /* Не `fixed`, а `absolute` со сдвигом на прокрутку: см. VehicleQuickViewModal.
+     Прижатые к экрану блоки Chrome при зуме на трекпаде рисует рывками. */
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 100vh;
   z-index: 90;
   display: grid;
   place-items: center;

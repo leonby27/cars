@@ -6510,8 +6510,29 @@ function useQuickViewCar(listed, apiMode) {
   return detailed || listed;
 }
 
+// Затемнение с окном не прижато к краям экрана, а положено на страницу и сдвинуто
+// на текущую прокрутку. Выглядит это одинаково — прокрутку страницы окно всё равно
+// запирает, — но Chrome с прижатыми к экрану блоками при зуме на трекпаде ведёт себя
+// плохо: он приближает картинку не пересобирая страницу, а такие блоки живут у него
+// отдельно от неё и рисуются заново на каждом шаге жеста. Отсюда и мелькание: окна
+// на мгновение нет вовсе или оно нарисовано наполовину. У обычной страницы машины
+// такого блока нет, и там зум ровный; в Safari жест устроен иначе, и там всё ровно
+// было и раньше.
 function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpenFull, onClose, onOpenOrder = null }) {
   const closeRef = useRef(null);
+  // Насколько страница пролистана в момент открытия. Пока окно открыто, листать
+  // нельзя, поэтому значение почти всегда остаётся прежним — но браузер может
+  // подвинуть страницу сам, если окно изменило размер, и тогда мы это подхватываем.
+  const [pageTop, setPageTop] = useState(() => window.scrollY);
+  useEffect(() => {
+    const sync = () => setPageTop((current) => (Math.abs(current - window.scrollY) < 1 ? current : window.scrollY));
+    window.addEventListener("resize", sync);
+    window.addEventListener("scroll", sync, { passive: true });
+    return () => {
+      window.removeEventListener("resize", sync);
+      window.removeEventListener("scroll", sync);
+    };
+  }, []);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -6528,8 +6549,11 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [onClose]);
-  return (
-    <div className="quick-view-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+  // Кладём окно первым уровнем внутри приложения: у соседей по странице бывают свои
+  // системы координат, и от них положение окна съезжало бы. Именно внутри приложения,
+  // а не рядом с ним: часть оформления в тёмной теме привязана к нему по имени.
+  return createPortal(
+    <div className="quick-view-backdrop" role="presentation" style={{ top: `${pageTop}px` }} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="quick-view-modal" role="dialog" aria-modal="true" aria-label={`Быстрый просмотр: ${car.title}`}>
         <header className="quick-view-bar">
           <span>Быстрый просмотр</span>
@@ -6541,7 +6565,8 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
           <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch onOpenOrder={onOpenOrder} />
         </div>
       </section>
-    </div>
+    </div>,
+    document.getElementById("root"),
   );
 }
 
