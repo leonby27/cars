@@ -1029,8 +1029,8 @@ function ViberLogo({ size = 27 }) {
 function SiteLogo() {
   return (
     <>
-      <img className="wordmark-image wordmark-image-light" src="/logo-light.svg" width="480" height="100" alt="" aria-hidden="true" />
-      <img className="wordmark-image wordmark-image-dark" src="/logo-dark.svg" width="480" height="100" alt="" aria-hidden="true" />
+      <img className="wordmark-image wordmark-image-light" src="/logo-light.svg?v=2" width="480" height="100" alt="" aria-hidden="true" />
+      <img className="wordmark-image wordmark-image-dark" src="/logo-dark.svg?v=2" width="480" height="100" alt="" aria-hidden="true" />
     </>
   );
 }
