@@ -3483,7 +3483,13 @@ function PopularBrands({ navigate, cars, apiMode }) {
     const measure = () => {
       setColumns(brandShowcaseColumns());
       const active = switchRef.current?.querySelector("button.active");
-      if (active) setPill({ left: active.offsetLeft, width: active.offsetWidth });
+      if (!active) return;
+      // Плашку переставляем, только если она действительно съехала. Иначе каждое
+      // изменение размера окна пересобирало весь блок марок заново, а при зуме на
+      // трекпаде такие изменения идут подряд десятками — браузер не успевал
+      // дорисовать страницу между ними.
+      const next = { left: active.offsetLeft, width: active.offsetWidth };
+      setPill((current) => (current && current.left === next.left && current.width === next.width ? current : next));
     };
     measure();
     window.addEventListener("resize", measure);
@@ -6606,10 +6612,14 @@ function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate, ord
     patchHistoryState({ quickViewCar: null });
     navigate(href);
   };
-  // Окно сузилось до мобильной раскладки — быстрый просмотр закрываем.
-  useEffect(() => {
-    if (!desktop) setListed(null);
-  }, [desktop]);
+  // Открытое окно предпросмотра сужение окна больше не закрывает. Раньше закрывало —
+  // и это ломало зум на макбуке: жест на трекпаде браузер понимает как смену масштаба
+  // страницы, а при увеличении в окно помещается меньше точек, чем раньше. На каком-то
+  // шаге ширина падала ниже границы «десктопа», окно предпросмотра исчезало прямо под
+  // руками, а страница в тот же момент пересобиралась целиком — отсюда и белая вспышка
+  // с обрывками карточек. Обратный зум окно не возвращал: машина уже забыта.
+  // Закрывать его незачем: внутри та же вёрстка, что и на странице машины, а она
+  // тянется по ширине. Открыть предпросмотр по-прежнему можно только на десктопе.
   // true — карточка раскрыта модалкой, переходить на страницу не нужно.
   const openQuickView = (nextCar) => {
     if (!desktop || !enabled || !nextCar) return false;
