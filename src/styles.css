@@ -1381,8 +1381,8 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   max-width: none;
   color: var(--ink);
   font-family: var(--font-article);
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 21px;
+  line-height: 30px;
   letter-spacing: 0;
 }
 /* Блок живёт в первой колонке каталога — под выдачей, а карточка сервиса остаётся
@@ -1723,6 +1723,13 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
 }
 .side-card li svg {
   color: var(--green);
+}
+/* Иконка карточки сервиса — сплошная зелёная плашка с белым знаком. Цвет числом,
+   а не переменной: в тёмной теме --green светлый, и белый знак на нём потерялся бы. */
+.side-card .side-icon {
+  background: #1b8551;
+  color: #ffffff;
+  box-shadow: none;
 }
 .side-card .secondary {
   width: 100%;
@@ -3309,7 +3316,7 @@ body.header-menu-open .detail-floating-availability {
   background: var(--panel);
   border-color: var(--focus-ring);
 }
-:root[data-theme="dark"] :where(.select-menu .select-options button:hover, .select-menu .select-options button.active, .load-more:hover, .car-row:hover, button.customer-order-stage-heading:hover:not(:disabled)) {
+:root[data-theme="dark"] :where(.select-menu .select-options :is(button, a):hover, .select-menu .select-options :is(button, a).active, .load-more:hover, .car-row:hover, button.customer-order-stage-heading:hover:not(:disabled)) {
   background: var(--surface);
 }
 :root[data-theme="dark"] :where(.secondary, .side-card .secondary, .danger-button) {
@@ -4248,6 +4255,22 @@ body.header-menu-open .detail-floating-availability {
   .breadcrumbs {
     display: none;
   }
+  /* В журнале крошки нужны и на телефоне: из статьи возвращаются в журнал и на главную,
+     а другого пути назад на странице нет. Набраны мельче обычного и с небольшими
+     полями: это служебная строка, а не часть материала. Длинное название переносится
+     на вторую строку, а не растягивает страницу. */
+  .blog-page > .breadcrumbs {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 0;
+    padding: 8px 0 6px;
+    font-size: 14px;
+  }
+  /* Между строкой «Журнал abcars.by» и самим материалом на телефоне хватает
+     половины десктопного зазора. */
+  .blog-page > .blog-layout {
+    margin-top: 14px;
+  }
   .catalog {
     padding-top: 10px;
   }
@@ -5098,7 +5121,7 @@ body.header-menu-open .detail-floating-availability {
   overflow-y: auto;
   scrollbar-width: thin;
 }
-.select-menu .select-options button {
+.select-menu .select-options :is(button, a) {
   width: 100%;
   min-width: 0;
   display: flex;
@@ -5116,15 +5139,15 @@ body.header-menu-open .detail-floating-availability {
   white-space: nowrap;
   transition: background-color 110ms ease, color 110ms ease;
 }
-.select-menu .select-options button:hover,
-.select-menu .select-options button.active {
+.select-menu .select-options :is(button, a):hover,
+.select-menu .select-options :is(button, a).active {
   background: var(--surface);
 }
-.select-menu .select-options button.selected {
+.select-menu .select-options :is(button, a).selected {
   background: var(--accent-soft);
   color: var(--accent-dark) !important;
 }
-.select-menu .select-options button > span {
+.select-menu .select-options :is(button, a) > span {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -7300,44 +7323,44 @@ html[data-theme="dark"] #root .spec-search,
     grid-template-columns: minmax(0, 1fr) 286px;
   }
   .side-card {
-    min-height: 468px;
     display: flex;
     flex-direction: column;
-    padding: 24px;
+    padding: 18px;
     border-color: #e3e5e8;
     border-radius: calc(15px * var(--corner-scale));
     background: var(--panel);
     box-shadow: none;
   }
   .side-card .side-icon {
-    width: 47px;
-    height: 47px;
-    flex-basis: 47px;
-    border-radius: calc(13px * var(--corner-scale));
-    background: var(--accent-soft);
-    color: var(--accent-dark);
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: calc(11px * var(--corner-scale));
+    background: #1b8551;
+    color: #ffffff;
+    box-shadow: none;
   }
   .side-card h3 {
-    margin: 20px 0 17px;
-    font-size: 19px;
+    margin: 13px 0 7px;
+    font-size: 18px;
     font-weight: 750;
-    line-height: 1.34;
+    line-height: 1.3;
     letter-spacing: -0.35px;
   }
   .side-card p {
     margin: 0;
     color: #7a8089;
     font-size: 16px;
-    line-height: 1.65;
+    line-height: 1.5;
     letter-spacing: -0.2px;
   }
   .side-card ul {
     display: grid;
-    gap: 10px;
-    margin: 21px 0 0;
+    gap: 7px;
+    margin: 13px 0 0;
     padding: 0;
     font-size: 16px;
-    line-height: 1.4;
+    line-height: 1.35;
   }
   .side-card li {
     gap: 8px;
@@ -7349,8 +7372,8 @@ html[data-theme="dark"] #root .spec-search,
     color: #338b5c;
   }
   .side-card .secondary {
-    min-height: 55px;
-    margin-top: auto;
+    min-height: 44px;
+    margin-top: 16px;
     border-color: var(--line-strong);
     border-radius: calc(10px * var(--corner-scale));
     background: var(--panel);
@@ -10276,13 +10299,13 @@ html[data-theme="dark"] body #root .sort-custom-select.open,
 html[data-theme="dark"] body #root .sort-custom-select .select-menu {
   border-color: transparent;
 }
-html[data-theme="dark"] body #root .select-menu .select-options button {
+html[data-theme="dark"] body #root .select-menu .select-options :is(button, a) {
   background: transparent;
   color: var(--ink);
   transition: background 0.12s ease, color 0.12s ease;
 }
-html[data-theme="dark"] body #root .select-menu .select-options button:hover,
-html[data-theme="dark"] body #root .select-menu .select-options button.active {
+html[data-theme="dark"] body #root .select-menu .select-options :is(button, a):hover,
+html[data-theme="dark"] body #root .select-menu .select-options :is(button, a).active {
   background: #30363f;
   color: #fff;
 }
@@ -11050,9 +11073,12 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
 
 /* Тон вложенных блоков в тёмной теме: цифры, карточки версий, вопросы, плитки
    обзоров. Расчётный оттенок выходил светлее и теплее подложки страницы, поэтому
-   держим его отдельным цветом — на обеих страницах он должен быть один. */
+   держим его отдельным цветом — на обеих страницах он должен быть один.
+   Значение подобрано под подложку статьи: когда её сделали мягче (27.08.2026,
+   с --surface на --header-control-bg), прежний #2c2f36 стал выделяться сильнее,
+   чем нужно. Шаг от подложки к вложенному блоку остался тем же, что был. */
 html[data-theme="dark"] {
-  --model-nested-bg: #2c2f36;
+  --model-nested-bg: #272a2f;
 }
 
 /* Блок «О модели» в карточке машины: начало текста и переход на страницу модели. */
@@ -11165,9 +11191,13 @@ html[data-theme="dark"] .model-intro {
   background: var(--panel);
   box-shadow: 0 18px 50px rgba(24, 27, 32, 0.1);
 }
+/* В тёмной теме подложка текста берёт тот же цвет, что панели бокового меню
+   (--header-control-bg). Прежний --surface был светлее и на почти чёрном фоне
+   страницы читался как отдельная яркая плита; решение владельца 27.08.2026 —
+   мягче. В светлой теме подложка остаётся белой. */
 html[data-theme="dark"] .model-page-body {
   border-color: transparent;
-  background: var(--surface);
+  background: var(--header-control-bg);
   box-shadow: none;
 }
 /* Дорожка под кнопку «назад» тянется во всю высоту читаемой части страницы: кнопка
@@ -11278,18 +11308,46 @@ html[data-theme="dark"] .model-page-back:hover {
   margin-bottom: 0;
 }
 .model-page-intro p {
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 21px;
+  line-height: 30px;
 }
+/* Ссылки внутри текста статьи — акцентным цветом и без подчёркивания: подчёркивание
+   на засечном тексте рвёт строку, а браузерный сиреневый «посещённый» цвет выбивается
+   из оформления. Подчёркивание появляется при наведении, чтобы ссылка оставалась
+   узнаваемой. Правило про абзацы: служебные ссылки блоков ниже оформлены по-своему. */
+.model-page-intro p a,
+.model-page-article p a,
+.catalog-landing-article p a {
+  color: var(--accent-dark);
+  text-decoration: none;
+}
+.model-page-intro p a:hover,
+.model-page-article p a:hover,
+.catalog-landing-article p a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* Сам текст статьи набран засечным шрифтом и крупнее интерфейсного: длинные
    абзацы так читаются легче. Врезки, карточки сравнения и список остаются
-   интерфейсными — они разбивают текст, а не продолжают его. */
+   интерфейсными — они разбивают текст, а не продолжают его.
+   Размер 21/30 (решение владельца 27.08.2026): на 18 пунктах длинные статьи читались
+   мелко. Он один и тот же во всех текстах с засечками — обзорах моделей, страницах
+   расчётов, разделах каталога и журнале. */
 .model-page-intro p,
 .model-page-article > section > p:not(.model-page-versions-note) {
   font-family: var(--font-article);
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 21px;
+  line-height: 30px;
   letter-spacing: 0;
+}
+/* В тёмной теме обычный текст статьи чуть приглушён: заголовки набраны в полную силу,
+   и без этой разницы страница читается как сплошное белое полотно. Правило одно на все
+   тексты с засечками — обзоры моделей, страницы расчётов, разделы каталога и журнал:
+   это один шаблон, и расходиться им незачем. В светлой теме приглушать нечего — там
+   контраст и так мягче. */
+html[data-theme="dark"] :is(.model-page-intro, .model-page-article, .model-page-faq, .catalog-landing-article) p {
+  opacity: 0.8;
 }
 /* Мозаика фотографий над текстом: первый кадр вдвое крупнее остальных, поэтому сетка
    не выглядит однообразной. Фон плитки светлее подложки блока — пока фото грузится,
@@ -11579,8 +11637,8 @@ html[data-theme="dark"] .model-page-versions-cards > div {
      читается как часть последней карточки. */
   margin: 32px 0 0;
   font-family: var(--font-article);
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 21px;
+  line-height: 30px;
   letter-spacing: 0;
 }
 /* Поиск по обзорам: то же поле, что в полных данных карточки машины, но выше и без
@@ -11758,7 +11816,7 @@ html[data-theme="dark"] .model-page-faq,
 html[data-theme="dark"] .model-page-ways,
 html[data-theme="dark"] .tool-page-links {
   border-color: transparent;
-  background: var(--surface);
+  background: var(--header-control-bg);
   box-shadow: none;
 }
 .model-page-ways h2 {
@@ -11796,8 +11854,8 @@ html[data-theme="dark"] .model-page-faq .home-faq-item {
   max-width: none;
   color: var(--ink);
   font-family: var(--font-article);
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 21px;
+  line-height: 30px;
   letter-spacing: 0;
 }
 /* Сетка каталога в конце страницы идёт во всю ширину, как на главной. Перед ней
@@ -11855,7 +11913,7 @@ html[data-theme="dark"] .model-page-faq .home-faq-item {
 }
 html[data-theme="dark"] .model-page-promo {
   border-color: transparent;
-  background: var(--surface);
+  background: var(--header-control-bg);
   box-shadow: none;
 }
 /* Иллюстрация без подложки: у картинки прозрачный фон, и она сама стоит на белом
@@ -11882,8 +11940,8 @@ html[data-theme="dark"] .model-page-promo {
 .model-page-promo-copy p {
   margin: 0 0 20px;
   font-family: var(--font-article);
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 21px;
+  line-height: 30px;
   letter-spacing: 0;
 }
 .model-page-promo-copy .primary {
@@ -12077,9 +12135,14 @@ html[data-theme="dark"] .model-page-cars-nav {
    живые цифры квоты, форма и итог калькулятора, переходы к остальным расчётам.
    Отделяем их фоном, без обводок: в светлой теме плашка темнее подложки блока,
    в тёмной — светлее, иначе её край не виден. */
+/* Подзаголовок внутри раздела. Крупнее и заметно жирнее текста: рядом с засечным
+   текстом на 21 пункт прежние 19 сливались с абзацами и не разбивали чтение.
+   Сверху отступ больше, чем снизу, — заголовок должен принадлежать тому, что за ним. */
 .model-page-article h3 {
-  margin: 0 0 12px;
-  font-size: 19px;
+  margin: 26px 0 10px;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
   line-height: 1.2;
   letter-spacing: -0.4px;
 }
@@ -12841,7 +12904,11 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
     .quota-panel-bar,
     .quota-panel-bar > b,
     .tool-live-bar,
-    .tool-live-bar > b
+    .tool-live-bar > b,
+    .blog-share-trigger,
+    .blog-card-tags > span,
+    .blog-duel-versus,
+    .blog-card-duel > i
   ) {
     corner-shape: round;
   }
@@ -13067,6 +13134,8 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
    плашку как раньше — сплошной полупрозрачной подложкой. */
 .model-page-gallery-price,
 .model-page-gallery-mileage,
+.blog-card-tags > span,
+.blog-top-rank,
 .hover-image-count,
 .car-row-image > .hover-image-count,
 .car-row-image > span,
@@ -13077,4 +13146,1170 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 .featured-favorite {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
+}
+
+/* ── Журнал: подборки на главной, общая страница и страница материала ──────────
+
+   Подборка выглядит как обзор модели: тот же засечный шрифт статьи, та же полоса
+   цифр и те же врезки — классы `model-page-*` здесь переиспользуются, а не
+   переписываются. Своё у журнала только раскладка: слева читаемая колонка, справа
+   меню разделов. Блоки отделяются подложкой, а не рамками. */
+.home-collections {
+  padding-bottom: 104px;
+}
+/* Сетка рассчитана на четыре карточки. Пока материалов меньше, ряд не растягивается:
+   две карточки во всю ширину экрана выглядели бы как ошибка вёрстки. */
+.blog-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.blog-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: calc(18px * var(--corner-scale));
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  overflow: visible;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+html[data-theme="dark"] .blog-card {
+  background: var(--model-nested-bg);
+}
+.blog-card:hover {
+  background: var(--model-chip-bg);
+}
+html[data-theme="dark"] .blog-card:hover {
+  background: color-mix(in srgb, var(--ink) 8%, var(--model-nested-bg));
+}
+.blog-card-cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  border-radius: calc(18px * var(--corner-scale)) calc(18px * var(--corner-scale)) 0 0;
+  background: var(--panel-soft);
+  overflow: hidden;
+}
+.blog-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Нажимается вся карточка, но внутри неё есть кнопка «поделиться», а кнопку нельзя
+   положить внутрь ссылки. Поэтому ссылка — прозрачный слой поверх карточки, а кнопка
+   лежит выше него (`.blog-share` со своим z-index). */
+.blog-card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+/* Обложка сравнения: два кадра в тех же границах, что обычная обложка, и значок
+   между ними. Тонкая щель между половинами — фон подложки, а не рамка. */
+.blog-card-duel {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  /* Просвет между кадрами и есть разделительная линия: её цвет виден в щели и им же
+     залит значок «vs». На наведение значок не отзывается — цвет линии постоянный. */
+  background: var(--line);
+}
+.blog-card-duel > span {
+  display: block;
+  overflow: hidden;
+  background: var(--panel-soft);
+}
+.blog-card-duel > i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--line);
+  color: var(--ink);
+  font-size: 22px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  transform: translate(-50%, -50%);
+}
+/* Тело карточки тянется на всю оставшуюся высоту, поэтому «Подробнее» у всех четырёх
+   карточек стоит на одной линии внизу, сколько бы строк ни занял заголовок. */
+.blog-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+  padding: 16px 18px 18px;
+}
+/* Заголовок — не больше двух строк, дальше многоточие. Иначе карточки в ряду
+   разъезжаются по высоте, и дата внизу перестаёт стоять на одной линии. Названия
+   пишем так, чтобы в две строки они помещались целиком: обрезка — страховка от
+   длинного названия, а не обычное состояние карточки. */
+.blog-card-body strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 19px;
+  line-height: 1.25;
+  letter-spacing: -0.4px;
+}
+/* Метки материала лежат на снимке, в нижнем углу, — так же, как цена и пробег на
+   фотографиях машин. Подложка полупрозрачная и размывает кадр под собой, поэтому
+   подпись читается и на светлой, и на пёстрой фотографии. */
+.blog-card-tags {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+/* Метки и дата — служебные подписи, а не текст, который читают: по решению владельца
+   (27.08.2026) они набраны мельче общего минимума в 16px и без выделения. Это
+   осознанное исключение из типографики проекта, а не недосмотр. */
+.blog-card-tags > span {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(14, 16, 19, 0.62);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+/* Низ карточки прижат к нижнему краю: у всех карточек в ряду дата и кнопка стоят на
+   одной линии, сколько бы строк ни занял заголовок. */
+.blog-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+.blog-card-date {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* «Поделиться». Кнопка и её меню лежат выше прозрачной ссылки карточки, иначе
+   нажатие уходило бы на переход к материалу. */
+.blog-share {
+  position: relative;
+  z-index: 2;
+  flex: none;
+}
+.blog-share-trigger {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+.blog-share-trigger:hover,
+.blog-share-trigger[aria-expanded="true"] {
+  background: var(--model-chip-bg);
+  color: var(--ink);
+}
+/* В тёмной теме серые подложки почти совпадают между собой, и наведение было не
+   видно: подмешиваем к фону цвет текста, чтобы шаг читался. */
+html[data-theme="dark"] .blog-share-trigger:hover,
+html[data-theme="dark"] .blog-share-trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--ink) 17%, var(--surface));
+}
+/* Само меню — обычный селект сайта: подложка, скругление, тень и появление берутся
+   из `.select-menu`, поэтому в тёмной теме наведение выглядит там же, где везде.
+   Своего здесь только положение: меню раскрывается вверх и вправо от кнопки, потому
+   что кнопка стоит у нижнего края карточки. */
+.blog-share-menu {
+  left: auto;
+  right: 0;
+  min-width: 216px;
+}
+/* На карточке кнопка стоит у нижнего края, поэтому список раскрывается вверх; в статье
+   она в правом верхнем углу — там вверх раскрываться некуда. */
+.blog-share-up .blog-share-menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform-origin: bottom right;
+  transform: translateY(5px) scale(0.985);
+}
+.blog-share-down .blog-share-menu {
+  top: calc(100% + 8px);
+  bottom: auto;
+  transform-origin: top right;
+  transform: translateY(-5px) scale(0.985);
+}
+.blog-share.open .select-menu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  transition-delay: 0s;
+}
+/* Значок и подпись пункта стоят по центру строки: у обычного селекта подписи
+   выравниваются по базовой линии, и там иконок нет. Подчёркивание убираем — в списке
+   пункты выглядят одинаково, независимо от того, ссылка это или кнопка. */
+.blog-share-menu .select-options a {
+  text-decoration: none;
+}
+.blog-share-menu .select-option-label {
+  align-items: center;
+  gap: 10px;
+}
+.blog-share-menu .select-option-label svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.blog-page {
+  padding-bottom: 80px;
+}
+/* Раскладка та же, что у каталога: колонка содержимого и узкий столбец справа.
+   Ширины и отступы намеренно повторяют `.catalog-layout` — журнал не должен
+   выглядеть страницей с другого сайта. */
+/* Одна сетка на весь журнал: четыре колонки шириной с карточку и отступ 16 точек.
+   От неё считается всё остальное, поэтому между страницами ничего не «прыгает»:
+     • на главной — четыре карточки в ряд;
+     • в журнале — три карточки и меню шириной ровно с карточку;
+     • в материале — текст шириной в три карточки и то же меню.
+   Ширины в точках нигде не проставлены: их считает сама сетка, и при любой ширине
+   экрана колонки на всех трёх страницах совпадают. */
+.blog-layout {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 30px;
+  align-items: start;
+}
+/* Когда сетка идёт сразу за хлебными крошками (страница материала и страницы
+   расчётов), верхний отступ почти не нужен: крошки уже дают своё поле снизу,
+   и вместе получалось 46 точек пустоты перед статьёй. */
+.breadcrumbs + .blog-layout {
+  margin-top: 6px;
+}
+/* ── Шапка журнала ─────────────────────────────────────────────────────────────
+   Строка «Журнал abcars.by» над содержимым. Стоит на всех страницах раздела, и
+   встать должна везде на одну и ту же высоту — иначе при переходе внутри журнала
+   заголовок и верх содержимого прыгают.
+
+   Поэтому здесь заданы сразу все размеры, и одинаково для двух видов строки:
+   заголовка общей страницы (h1) и ссылки обратно в журнал на остальных (a). Опираться
+   на размеры заголовка каталога нельзя: у h1 своя межстрочная высота от браузера, у
+   ссылки — своя, и строка съезжала на несколько точек.
+
+   Поля снизу у шапки нет намеренно: всё расстояние до содержимого задаёт один отступ
+   сверху у `.blog-layout`. У страницы расчёта содержимое разложено флексом, у
+   остальных — обычным потоком, а в потоке соседние поля слипаются, во флексе
+   складываются; при поле у шапки те же 22 точки давали на одной странице 30, а на
+   другой 52. Одно поле вместо двух работает одинаково везде — и на страницах,
+   которые появятся в журнале потом. */
+.blog-masthead {
+  margin: 0;
+}
+.blog-masthead > :is(h1, a) {
+  display: block;
+  margin: 0;
+  font-size: 33px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -1.3px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.blog-masthead > a:hover {
+  color: var(--accent-dark);
+}
+/* На телефоне строка меньше — как заголовок каталога. Медиазапрос стоит сразу за
+   основным правилом: тот же вес селектора, и побеждает то, что ниже. */
+@media (max-width: 700px) {
+  .blog-masthead > :is(h1, a) {
+    font-size: 27px;
+  }
+}
+.blog-main {
+  grid-column: span 3;
+}
+.blog-sidebar {
+  grid-column: span 1;
+}
+.blog-main {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  min-width: 0;
+}
+/* Карточки журнала стоят в тех же колонках, что и внешняя сетка: тот же отступ,
+   три колонки внутри трёх колонок. */
+.blog-card-grid-index {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+/* Статья лежит на своей подложке — как обзор модели. Длинный текст так отделён от
+   фона страницы, и глазу есть за что зацепиться на краю колонки.
+
+   Сама подложка занимает три колонки сетки, а вот строка внутри неё не тянется на всю
+   ширину: читаемая колонка ограничена той же меркой, что в обзорах моделей (у них
+   блок 860 точек при отступах по 40, то есть 780 точек текста). Дальше строка
+   становится слишком длинной, и глаз теряет начало следующей. Содержимое стоит по
+   центру подложки, чтобы поля справа и слева были одинаковыми. */
+.blog-article > * {
+  width: 100%;
+  max-width: 780px;
+  margin-inline: auto;
+}
+/* Открывающий кадр — прямой ребёнок подложки, ему нужно то же центрирование, что
+   и остальным частям статьи. Правило точнее общего `.blog-article > *`, поэтому
+   обнуление отступов у `.blog-figure` его не перебивает. */
+.blog-article > .blog-figure {
+  margin-inline: auto;
+}
+/* Кнопка «поделиться» в углу подложки: из общей читаемой колонки её исключаем, иначе
+   она уехала бы к краю текста, а не к краю блока. */
+.blog-article > .blog-article-share {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+  z-index: 2;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+.blog-article {
+  position: relative;
+  /* Расстояния между частями статьи задаёт эта колонка. Раньше подложка была тем же
+     элементом, что и колонка сетки, и отступы доставались от неё; после разделения
+     (под статьёй появились похожие материалы) их нужно задать здесь — иначе снимок
+     прилипает к описанию, а разделы к цифрам. */
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  padding: 40px;
+  border: 1px solid var(--line);
+  border-radius: calc(20px * var(--corner-scale));
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgba(24, 27, 32, 0.1);
+}
+html[data-theme="dark"] .blog-article {
+  border-color: transparent;
+  background: var(--header-control-bg);
+  box-shadow: none;
+}
+/* Внутри подложки серые плитки должны быть светлее её, иначе их край не виден. */
+html[data-theme="dark"] .blog-article .model-page-numbers > div,
+html[data-theme="dark"] .blog-article .model-page-points > div,
+html[data-theme="dark"] .blog-article .model-page-compare > div,
+html[data-theme="dark"] .blog-article .model-page-callout,
+html[data-theme="dark"] .blog-article .home-faq-item {
+  background: var(--model-nested-bg);
+}
+.blog-head {
+  display: flex;
+  flex-direction: column;
+}
+.blog-head h1 {
+  margin: 0;
+  /* На широком экране 45 точек: заголовок статьи — единственное, что должно
+     останавливать взгляд на первом экране. На узком уменьшается сам. */
+  font-size: clamp(28px, 3.4vw, 45px);
+  line-height: 1.1;
+  letter-spacing: -1.6px;
+}
+.blog-head > p {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.6;
+}
+/* Строка над заголовком статьи: раздел и дата одного размера, раздел выделен цветом
+   и насыщенностью, а не капслоком — капслок в две буквы читается как ярлык, а это
+   обычная подпись. Точка-разделитель ставится стилями, чтобы её не было, когда даты
+   почему-то нет. */
+.blog-article-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+.blog-article-meta > a {
+  color: var(--accent-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+.blog-article-meta > a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.blog-article-meta > span {
+  color: var(--muted);
+}
+.blog-article-meta > a + span::before {
+  content: "·";
+  margin-right: 8px;
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+/* Полоса цифр у подборки короче, чем у обзора модели: показываем только то, что
+   каталог действительно отдал, поэтому колонок может быть и две, и три. */
+.blog-article .model-page-numbers {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+/* ── Список машин в подборке ───────────────────────────────────────────────────
+   Единственные блоки внутри статьи — сами машины. Карточка простая и одинаковая:
+   слева снимок с номером в списке, справа название, цена под ключ и четыре
+   характеристики. Всё остальное в статье — обычный текст, потому что чередование
+   врезок, карточек сравнения и списков читать труднее, чем связный текст. */
+.blog-top {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* Мелкая строка над заголовком: список собирается из каталога при каждом заходе. */
+.blog-top-note {
+  margin: 0 0 -8px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+.blog-top h2 {
+  margin: 0;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+.blog-top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.blog-top-card {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 18px;
+  padding: 12px;
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+html[data-theme="dark"] .blog-top-card {
+  background: var(--model-nested-bg);
+}
+.blog-top-card:hover {
+  background: var(--model-chip-bg);
+}
+html[data-theme="dark"] .blog-top-card:hover {
+  background: color-mix(in srgb, var(--ink) 8%, var(--model-nested-bg));
+}
+.blog-top-photo {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--panel-soft);
+  overflow: hidden;
+}
+.blog-top-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+/* Номер в списке — плашка на снимке, как цена и пробег на фотографиях машин. */
+.blog-top-rank {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 26px;
+  padding: 2px 7px;
+  border-radius: calc(8px * var(--corner-scale));
+  background: rgba(14, 16, 19, 0.62);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+.blog-top-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px 4px 0;
+}
+/* Шапка карточки: название слева, цена в правом верхнем углу. По базовой линии,
+   чтобы буквы и цифры стояли на одном уровне при любой длине названия. */
+.blog-top-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.blog-top-head > strong {
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+/* Главная цифра подборки — то, ради чего человек открыл статью. Стоит внизу карточки,
+   крупнее всего и акцентным цветом: при листании десяти карточек взгляд идёт по этим
+   цифрам, а не по названиям. Подпись рядом остаётся спокойной. */
+.blog-top-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+/* Подпись над цифрой: сначала понятно, что за число, потом само число. */
+.blog-top-figure i {
+  color: var(--muted);
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.blog-top-figure b {
+  color: var(--accent-dark);
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.6px;
+}
+/* Цена тем же шрифтом, что и название: пара «что» и «сколько» читается как одна строка. */
+.blog-top-price {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+/* Значок с подсказкой — тот же, что у цены в карточке машины. */
+.blog-top-price .price-info {
+  width: 20px;
+  height: 20px;
+}
+/* Почему машина в списке. Считается по самому списку, поэтому это факт, а не реклама. */
+.blog-top-reason {
+  color: var(--muted);
+  font-size: 16px;
+}
+/* ── Сравнение двух моделей ────────────────────────────────────────────────────
+   Другой вид материала — и намеренно другая вёрстка: две машины друг против друга
+   вместо ленты одинаковых карточек. Так по одному взгляду на страницу видно, что
+   здесь выбирают из двух, а не листают подборку. */
+
+/* Шапка: два кадра рядом и значок между ними. */
+/* Сетка в два ряда: сверху кадры, снизу подписи. Ряды заданы явно, потому что значок
+   «vs» должен стоять по центру фотографий, а не по центру фотографий вместе с
+   подписями — иначе он съезжает вниз и цепляет буквы. */
+.blog-duel-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto;
+  gap: 10px 14px;
+}
+/* Сама `figure` в сетке не участвует — в ней участвуют её кадр и подпись, каждый
+   в своей клетке. */
+.blog-duel-hero figure {
+  display: contents;
+  margin: 0;
+}
+.blog-duel-hero figure:nth-of-type(1) > a {
+  grid-area: 1 / 1;
+}
+.blog-duel-hero figure:nth-of-type(2) > a {
+  grid-area: 1 / 2;
+}
+.blog-duel-hero figure:nth-of-type(1) figcaption {
+  grid-area: 2 / 1;
+}
+.blog-duel-hero figure:nth-of-type(2) figcaption {
+  grid-area: 2 / 2;
+}
+.blog-duel-hero a {
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--panel-soft);
+  overflow: hidden;
+}
+.blog-duel-hero img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.blog-duel-hero figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.blog-duel-hero figcaption strong {
+  font-size: 19px;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+.blog-duel-hero figcaption span {
+  color: var(--muted);
+  font-size: 16px;
+}
+/* Значок «vs» стоит ровно между кадрами: он и делает из двух фотографий сравнение.
+   Фон — цвет подложки статьи, тот же, что в промежутке между кадрами: значок читается
+   как часть разделительной полосы, а не как наклейка поверх фотографий. */
+.blog-duel-versus {
+  /* Клетка на весь ряд с кадрами, значок по её середине: так он висит ровно на стыке
+     двух фотографий, на их середине по высоте. */
+  grid-area: 1 / 1 / 2 / 3;
+  place-self: center;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--line);
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+}
+
+/* Таблица различий. Всё в ней из каталога, поэтому над заголовком стоит та же
+   мелкая строка, что и над списком подборки. */
+.blog-duel-table {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* Заголовок живёт в первой клетке шапки таблицы и набран ровно как названия моделей
+   рядом — только без ссылки: это подпись к таблице, а не переход. */
+.blog-duel-table h2 {
+  margin: 0;
+  font: inherit;
+}
+/* Строки таблицы — отдельные плашки с зазором в 4 точки, а не разлинованный список:
+   так пара «параметр — два значения» читается одним блоком, и глаз не съезжает
+   в соседнюю строку. Блоки отделяются фоном, а не рамками — как везде на сайте. */
+.blog-duel-scroll {
+  overflow-x: auto;
+}
+.blog-duel-table table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+}
+.blog-duel-table th,
+.blog-duel-table td {
+  padding: 13px 16px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+/* Шапка — такая же плашка, как строки, но с более заметной подложкой: она держит
+   названия моделей и заголовок таблицы. Названия ссылками на обзоры: из сравнения
+   логично уйти в разбор конкретной машины. Подчёркивание толще обычного и отодвинуто
+   от букв: в тонком начертании ссылка на такой подложке почти не видна. */
+.blog-duel-table thead th {
+  background: color-mix(in srgb, var(--ink) 7%, var(--surface));
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+html[data-theme="dark"] .blog-duel-table thead th {
+  background: color-mix(in srgb, var(--ink) 10%, var(--model-nested-bg));
+}
+.blog-duel-table thead a {
+  color: inherit;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+/* Каждая строка — своя плашка: заливка на ячейках, скругление у крайних. */
+.blog-duel-table tbody th,
+.blog-duel-table tbody td {
+  background: var(--surface);
+}
+html[data-theme="dark"] .blog-duel-table tbody th,
+html[data-theme="dark"] .blog-duel-table tbody td {
+  background: var(--model-nested-bg);
+}
+.blog-duel-table tr > *:first-child {
+  border-radius: calc(10px * var(--corner-scale)) 0 0 calc(10px * var(--corner-scale));
+}
+.blog-duel-table tr > *:last-child {
+  border-radius: 0 calc(10px * var(--corner-scale)) calc(10px * var(--corner-scale)) 0;
+}
+/* Название строки того же размера, что и значение, но приглушённого цвета: читают
+   таблицу по цифрам, а названия только направляют взгляд. Мелких пояснений под ними
+   нет — что стоит за цифрами, сказано одной строкой под таблицей. */
+.blog-duel-table tbody th {
+  width: 34%;
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+.blog-duel-table tbody td {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+/* Подсвечено только настоящее преимущество: при равных значениях не подсвечивается
+   ничего, иначе цвет врёт. Зелёный, а не фирменный красный: красным на сайте помечают
+   то, на что нужно обратить внимание, а здесь цвет означает «эта цифра лучше». */
+.blog-duel-table tbody td.best {
+  color: var(--green);
+}
+/* Число машин ведёт в каталог по этой модели — подчёркивание такое же, как у названий
+   моделей в шапке. */
+.blog-duel-table tbody a {
+  color: inherit;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+/* Подзаголовок внутри таблицы: дальше идут строки не про объявления, а про саму
+   модель. Он не плашка, а подпись между ними, поэтому без заливки. */
+.blog-duel-source {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.35;
+}
+/* Машины каждой модели — обычные карточки каталога, по две в ряд: в сравнении они
+   не соревнуются между собой, как в подборке, а просто показывают, что есть сейчас. */
+.blog-duel-cars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.blog-duel-cars h3 {
+  margin: 0;
+  font-size: 23px;
+  line-height: 1.2;
+  letter-spacing: -0.6px;
+}
+
+
+/* Похожие статьи под материалом: те же карточки, что в журнале, три в ряд. */
+.blog-related {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.blog-related h2 {
+  margin: 0;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
+}
+
+.blog-top-more {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  color: var(--accent-dark);
+  font-size: 16px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.blog-top-more svg {
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.blog-top-more:hover svg {
+  transform: translateX(3px);
+}
+
+/* Фотография внутри статьи: во всю ширину колонки, подпись — название машины,
+   пробег и итоговая цена. Кадры разбивают текст и ведут в объявление. */
+.blog-figure {
+  /* Обнуляем все отступы, которые браузер даёт <figure> по умолчанию: боковые
+     сорок точек делали снимки между разделами уже колонки текста. Центрирование
+     открывающего кадра возвращает правило ниже — оно точнее по весу. */
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.blog-figure a {
+  color: inherit;
+  text-decoration: none;
+}
+.blog-figure img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--surface);
+}
+.blog-figure figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.blog-figure figcaption a {
+  font-weight: 700;
+}
+.blog-figure figcaption a:hover {
+  color: var(--accent-dark);
+}
+.blog-figure figcaption span {
+  color: var(--muted);
+}
+.blog-disclaimer {
+  margin-block: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+/* Частые вопросы у подборки — не отдельная карточка, а продолжение статьи:
+   в колонке шириной 760 точек ещё одна подложка внутри подложки читалась бы
+   как вложенный блок без причины. Серыми плашками остаются сами вопросы. */
+.blog-article .model-page-faq,
+html[data-theme="dark"] .blog-article .model-page-faq {
+  width: 100%;
+  /* Не `margin: 0`: иначе блок вопросов встал бы у левого края подложки, а остальные
+     части статьи стоят по центру читаемой колонки. */
+  margin-inline: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.blog-article .model-page-faq h2 {
+  margin-bottom: 14px;
+}
+
+/* Боковое меню. Едет вместе с экраном: статьи длинные, и переход в соседний раздел
+   не должен требовать прокрутки в самый низ. Два блока с разной задачей: сверху выбор
+   раздела, снизу переходы к расчётам, — поэтому у меню нет общей подложки, подложка
+   у каждого блока своя. */
+.blog-sidebar {
+  position: sticky;
+  top: 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+/* Список выбора. Прокрутки у него нет намеренно: разделов немного, и все должны быть
+   видны сразу — список внутри бокового меню, который сам скроллится, читается как
+   ошибка вёрстки. Подписи набраны как в кнопках расчётов ниже, чтобы боковое меню
+   выглядело одним целым. */
+.blog-sidebar-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--header-control-bg);
+}
+.blog-filter-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 0;
+  border-radius: calc(10px * var(--corner-scale));
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 110ms ease, color 110ms ease;
+}
+.blog-filter-item svg {
+  flex: none;
+  color: var(--muted);
+}
+.blog-filter-item > span {
+  flex: 1;
+  min-width: 0;
+}
+.blog-filter-item small {
+  flex: none;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 400;
+}
+.blog-filter-item:hover {
+  background: var(--panel);
+}
+html[data-theme="dark"] .blog-filter-item:hover {
+  background: color-mix(in srgb, var(--ink) 14%, var(--header-control-bg));
+}
+/* Выбранный раздел. Наведение его не меняет: он уже выбран, и подсветка «как будто
+   можно нажать» только путает.
+
+   В светлой теме отметка — та же подложка, что под курсором: красная заливка на
+   белом меню перетягивала на себя внимание сильнее, чем сами материалы. В тёмной
+   теме такая подложка почти не видна, поэтому там выбранный пункт остаётся акцентным. */
+/* Выбранный пункт: в светлой теме подложка как под курсором, но подпись, значок и число
+   акцентного цвета — иначе отметка теряется, когда курсор уходит. В тёмной теме такая
+   подложка почти не видна, поэтому там пункт залит акцентом.
+
+   Класс `current`, а не `selected`: в проекте есть общее правило `.selected`, которое
+   красит текст акцентом через `!important` и не даёт управлять цветом здесь. */
+.blog-filter-item.current,
+.blog-filter-item.current:hover {
+  background: var(--panel);
+  color: var(--accent-dark);
+  cursor: default;
+}
+html[data-theme="dark"] .blog-filter-item.current,
+html[data-theme="dark"] .blog-filter-item.current:hover {
+  background: var(--accent-soft);
+}
+.blog-filter-item.current svg,
+.blog-filter-item.current small {
+  color: inherit;
+}
+
+/* Расчёты — не фильтры журнала, поэтому отдельным блоком и обычными кнопками. */
+.blog-sidebar-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.blog-tool-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--header-control-bg);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 110ms ease;
+}
+.blog-tool-button svg {
+  flex: none;
+  color: var(--muted);
+}
+.blog-tool-button:hover {
+  background: var(--model-chip-bg);
+}
+/* Переход в каталог — главное действие, поэтому кнопка жёлтая, как основные кнопки
+   сайта. Значок в ней не приглушаем: на жёлтом серый значок теряется. */
+.blog-tool-button.accent {
+  background: var(--accent-secondary);
+  color: var(--yellow-ink);
+  font-weight: 800;
+}
+.blog-tool-button.accent svg {
+  color: inherit;
+}
+/* Стрелка у правого края: подпись занимает всё место между значком и ней. Выбираем
+   стрелку как значок после подписи, а не последний: на главной журнала стрелки нет,
+   и «последним» оказался бы значок слева — он бы ездил при наведении. */
+.blog-tool-button > span {
+  flex: 1;
+  min-width: 0;
+}
+.blog-tool-button > span ~ svg {
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.blog-tool-button:hover > span ~ svg {
+  transform: translateX(3px);
+}
+.blog-tool-button.accent:hover,
+html[data-theme="dark"] .blog-tool-button.accent:hover {
+  background: #dcc20d;
+}
+
+/* Расчёт, на странице которого посетитель уже стоит: отмечен и не приглашает нажать. */
+.blog-tool-button.current,
+.blog-tool-button.current:hover,
+html[data-theme="dark"] .blog-tool-button.current:hover {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  cursor: default;
+}
+.blog-tool-button.current svg {
+  color: inherit;
+}
+
+/* Страница расчёта с боковым меню. Блоки текста перестают быть узкими карточками по
+   центру страницы и заполняют колонку сетки — иначе рядом с меню они выглядели бы
+   вдвое уже, чем нужно. */
+.tool-page-aside {
+  /* У страницы расчёта два ребёнка — крошки и сетка, — а `.model-page` разводит своих
+     детей зазором 18 точек. Здесь он лишний: расстояние под крошками задаёт правило
+     `.breadcrumbs + .blog-layout`, и вместе выходило 24 точки вместо 6. */
+  gap: 0;
+  padding: 0 0 80px;
+}
+.tool-page-aside .model-page-body,
+.tool-page-aside .model-page-faq,
+.tool-page-aside .model-page-promo,
+.tool-page-aside .tool-page-links {
+  width: 100%;
+}
+/* Подложки заняли колонку сетки, а вот строка внутри них ограничена той же меркой,
+   что в материалах журнала: 780 точек — примерно семьдесят знаков, дальше глаз теряет
+   начало следующей строки. Содержимое стоит по центру подложки, поэтому поля справа
+   и слева одинаковые. */
+.tool-page-aside .model-page-body > *,
+.tool-page-aside .model-page-faq > *,
+.tool-page-aside .tool-page-links > * {
+  width: 100%;
+  max-width: 780px;
+  margin-inline: auto;
+}
+.tool-page-aside .model-page-disclaimer {
+  width: 100%;
+  max-width: 780px;
+  margin: 24px auto 0;
+}
+html[data-theme="dark"] .blog-tool-button:hover {
+  background: color-mix(in srgb, var(--ink) 14%, var(--header-control-bg));
+}
+.blog-cars {
+  margin-top: 64px;
+}
+
+@media (max-width: 1100px) {
+  .blog-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .blog-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .blog-main,
+  .blog-sidebar {
+    grid-column: auto;
+  }
+  .blog-card-grid-index {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .blog-sidebar {
+    position: static;
+  }
+}
+@media (max-width: 700px) {
+  .home-collections,
+  .blog-page {
+    padding-bottom: 64px;
+  }
+  .blog-card-grid,
+  .blog-card-grid-index {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Кадры остаются рядом и на узком экране: два снимка друг под другом читаются как
+     подборка из двух машин, а не как выбор из двух. */
+  .blog-duel-hero {
+    gap: 10px;
+  }
+  .blog-duel-versus {
+    width: 56px;
+    height: 56px;
+    font-size: 22px;
+  }
+  .blog-duel-hero figcaption strong {
+    font-size: 17px;
+  }
+  .blog-duel-table th,
+  .blog-duel-table td {
+    padding: 12px 12px;
+  }
+  .blog-duel-table tbody td {
+    font-size: 17px;
+  }
+  .blog-duel-cars h3 {
+    font-size: 21px;
+  }
+  /* На телефоне снимок уже во всю ширину карточки, характеристики под ним. */
+  .blog-top-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .blog-top-body {
+    padding: 0 4px 4px;
+  }
+  .blog-top h2 {
+    font-size: 23px;
+  }
+  /* Текст статьи на телефоне мельче: 21 точка в узкой колонке даёт по три-четыре слова
+     в строке, и абзац растягивается на пол-экрана. Размер один на все тексты
+     с засечками — обзоры моделей, расчёты, разделы каталога и журнал. */
+  :is(.model-page-intro, .model-page-article, .model-page-faq, .catalog-landing-article) p,
+  .model-page-faq .home-faq-item p,
+  .model-page-article > section > p:not(.model-page-versions-note),
+  /* Приписка под таблицей версий читается как обычный текст статьи, значит и мельче
+     становится вместе с ним. */
+  .model-page-article p.model-page-versions-note {
+    font-size: 18px;
+    line-height: 25px;
+  }
+  /* На телефоне у подложки статьи нет тени, но поля ей нужны настоящие: с отступом
+     в пару точек текст прилипал к её краю. Тонкая рамка остаётся в обеих темах —
+     в тёмной подложка почти сливается с фоном страницы, и без неё край материала
+     не виден. */
+  .blog-article,
+  html[data-theme="dark"] .blog-article {
+    padding: 18px 16px 20px;
+    border: 1px solid var(--line);
+    box-shadow: none;
+  }
+  /* Кнопка «поделиться» остаётся в углу подложки, только ближе к краю: в поток над
+     заголовком она уводила первую строку статьи слишком далеко вниз. Строка «раздел ·
+     дата» под ней короткая, но поле справа ей всё равно оставляем — на узком экране
+     иначе набегает на кнопку. */
+  .blog-article > .blog-article-share {
+    top: 10px;
+    right: 12px;
+  }
+  .blog-article-meta {
+    padding-right: 44px;
+  }
+  /* Таблица сравнения не сжимается до нечитаемого: на узком экране она шире экрана
+     и прокручивается внутри себя. Иначе «Tesla Model 3» и «634 машины» ломались бы
+     на две строки, а колонки съезжали. */
+  .blog-duel-table table {
+    min-width: 480px;
+  }
+  .blog-cars {
+    margin-top: 40px;
+  }
 }

@@ -264,6 +264,55 @@ export async function listCarPage(searchParams, { limit = 100, offset = 0 } = {}
   };
 }
 
+/**
+ * Сводка по набору машин одним запросом: сколько их, какие годы, какой лучший запас
+ * хода, самая большая батарея, самый мощный мотор и так далее. Нужна сравнениям
+ * в журнале: таблица различий там на десяток строк, и вытаскивать каждую крайнюю
+ * машину отдельным запросом значило бы два десятка запросов на страницу.
+ *
+ * Пустые значения источника (ноль пробега, пустая строка в характеристиках) в расчёт
+ * не идут: ноль пробега в объявлении — это пробел в данных продавца, а не машина без
+ * единого километра, и «пробег от 0 км» было бы враньём.
+ *
+ * Цены здесь нет намеренно: столбец `estimated_total_usd` пересчитывается при
+ * обновлении объявления и после смены правил расчёта какое-то время отстаёт, поэтому
+ * цену по-прежнему берут из самой дешёвой строки целиком (см. `priceEdges`).
+ */
+export async function modelSummary(searchParams) {
+  const { where, values } = buildCarFilters(searchParams);
+  // Характеристики лежат текстом, и у части объявлений там не число, а прочерк или
+  // «нет данных». Приводим к числу только то, что числом и записано: иначе один
+  // кривой ряд ронял бы весь запрос.
+  const numeric = (source) => `(CASE WHEN ${source} ~ '^[0-9]+([.,][0-9]+)?$' THEN replace(${source}, ',', '.')::numeric END)`;
+  const spec = (name) => numeric(`v.specifications->>'${name}'`);
+  // Мощность в характеристики не переносится: она лежит в исходном ответе источника.
+  const payload = (name) => numeric(`l.source_payload->>'${name}'`);
+  const result = await pool.query(`SELECT count(*)::int AS total,
+      max(l.last_seen_at) AS refreshed_at,
+      min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
+      min(NULLIF(l.mileage_km, 0))::int AS mileage_min,
+      max(COALESCE(v.electric_range_km, v.combined_range_km))::int AS range_max,
+      max(v.battery_kwh)::numeric AS battery_max,
+      max(${payload("horsepower")}) AS power_max,
+      max(${spec("torqueNm")}) AS torque_max,
+      min(${spec("acceleration")}) AS accel_min
+    FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
+  const row = result.rows[0] || {};
+  const value = (name) => (row[name] == null ? null : Number(row[name]));
+  return {
+    total: row.total || 0,
+    refreshedAt: row.refreshed_at || null,
+    yearMin: value("year_min"),
+    yearMax: value("year_max"),
+    mileageMin: value("mileage_min"),
+    rangeMax: value("range_max"),
+    batteryMax: value("battery_max"),
+    powerMax: value("power_max"),
+    torqueMax: value("torque_max"),
+    accelMin: value("accel_min"),
+  };
+}
+
 /** Сколько машин в разделе. Нужно сборке: по этому числу в карту сайта попадают страницы раздела. */
 export async function countCars(searchParams) {
   const { where, values } = buildCarFilters(searchParams);

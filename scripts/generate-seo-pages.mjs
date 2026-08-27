@@ -5,12 +5,15 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
-import { CATALOG_LANDINGS, catalogPageCount, landingApiParams } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, catalogPageCount, landingApiParams, landingsForCar } from "../src/catalog-landings.js";
 import { TOOL_PAGES, customsExample, deliveryStages, toolPageStats } from "../src/tool-pages.js";
 // Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
 // отдельным файлом, а сборке нужны целиком — склеиваем запись с её текстами.
 import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
 import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
+// Цена подборки «от такой-то суммы» считается тем же расчётом, что показывает
+// карточка машины: иначе в журнале стояла бы одна сумма, а в каталоге другая.
+import { estimateLandedCost } from "../src/pricing.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
@@ -19,10 +22,15 @@ import { DELIVERY_CASES, DELIVERY_STATS } from "../src/delivery-cases.js";
 import { LEGAL_COPY } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
 import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
+// Журнал: подборки. Раздел собирается только при включённом выключателе — пока он
+// выключен, у сайта нет ни страниц журнала, ни его адресов в карте сайта.
+import { BLOG_ENABLED } from "../src/feature-flags.js";
+import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogDateLine, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogRelatedPosts, blogTopCars, blogUpdatedAt, blogUpdatedLabel } from "../src/blog-posts.js";
+import { blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
-import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, listingNumber, number, plural, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
+import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, linkifyText, listingNumber, number, photoHref, plural, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
@@ -52,11 +60,13 @@ const carsSitemapName = (index) => (index === 0 ? `sitemap-${sitemapToken}-cars.
 const carsPerSitemap = 45_000;
 const shell = readFileSync(shellPath, "utf8");
 const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
-const { carLinks, footer, hrefRoute, navigation, renderHtml, routeUrl } = renderer;
+const { carLinks, footer, hrefRoute, modelLinks, navigation, pathwayLinks, renderHtml, routeUrl } = renderer;
 // Сколько машин показываем на главной. Витрина берёт по одной машине на модель,
 // поэтому двадцать ссылок ведут в двадцать разных моделей, а не в двадцать почти
 // одинаковых объявлений из последнего импорта.
 const showcaseSize = 20;
+// Сколько машин перечисляем в подборке журнала: столько же, сколько видит человек.
+const blogCarsOnPage = BLOG_TOP_POOL;
 // Страницы автомобилей и статический каталог собираются только по явному
 // `SEO_VEHICLE_PAGES=1`. По умолчанию их нет: на хостинге карточки собирает сервер
 // в момент запроса поверх базы, дампа каталога там вообще не бывает, — то есть
@@ -104,6 +114,18 @@ const publicPages = [
     const tool = { ...cover, ...TOOL_PAGE_TEXTS[cover.path] };
     return { route: `${tool.path}/`, title: tool.seoTitle, description: tool.seoDescription, h1: tool.h1, lead: tool.lead, tool };
   }),
+  // Журнал и его материалы. Файлами, а не сервером: текст подборки не зависит от
+  // запроса, а живой список машин под ним подставляется здесь же, из базы, и
+  // обновляется вместе с ночной пересборкой сайта.
+  ...(BLOG_ENABLED
+    ? [
+        { route: `${BLOG_INDEX.path}/`, title: BLOG_INDEX.seoTitle, description: BLOG_INDEX.seoDescription, h1: BLOG_INDEX.h1, lead: BLOG_INDEX.lead, blogIndex: true },
+        ...blogPosts().map((cover) => {
+          const post = blogPostWithText(cover);
+          return { route: `${post.path}/`, title: post.seoTitle, description: post.seoDescription, h1: post.h1, lead: post.lead, post };
+        }),
+      ]
+    : []),
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
@@ -301,6 +323,252 @@ function infoArticle(route) {
   return "";
 }
 
+// ── Журнал ────────────────────────────────────────────────────────────────────
+// Разметка подборки повторяет то, что видит человек: вступление, полоса цифр из
+// каталога, разделы статьи с их вложенными блоками, вопросы и живой список машин.
+// Ничего «только для поисковика» здесь не пишется.
+/**
+ * Фотография внутри статьи — та же, что видит человек: настоящая машина подборки
+ * с подписью и ссылкой в объявление. Поисковик получает снимок с осмысленным
+ * описанием, а не «картинку из статьи».
+ */
+function blogFigure(car, index) {
+  const gallery = car.images?.length ? car.images : [car.image].filter(Boolean);
+  const source = gallery[Math.min(index, gallery.length - 1)] || null;
+  if (!source) return "";
+  const title = carTitle(car);
+  const landed = estimateLandedCost(car).totalUsd;
+  const facts = `${car.mileage ? `${number(car.mileage)} км · ` : ""}≈ ${number(landed)} $ под ключ в Минске`;
+  // Ширины те же, что в приложении: 800 точек показа и вдвое крупнее для экранов
+  // с двойной плотностью (см. IMAGE_WIDTH_ARTICLE в src/App.jsx).
+  const srcset = `${photoHref(source, 800)} 1x, ${photoHref(source, 1400)} 2x`;
+  return `<figure><a href="${escapeHtml(hrefRoute(carRoute(car)))}"><img src="${escapeHtml(photoHref(source, 800))}" srcset="${escapeHtml(srcset)}" alt="${escapeHtml(`${title} — автомобиль из Китая в наличии`)}" loading="lazy" /></a><figcaption><a href="${escapeHtml(hrefRoute(carRoute(car)))}">${escapeHtml(title)}</a> — ${escapeHtml(facts)}</figcaption></figure>`;
+}
+
+function blogArticleBody(text, cars = [], shown = new Set()) {
+  const paragraphs = (items) => (items || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  const extras = (section) =>
+    [
+      // Подразделы: маленький заголовок и абзацы под ним — разбивка длинного раздела.
+      section.parts ? section.parts.map((part) => `<h3>${escapeHtml(part.title)}</h3>${paragraphs(part.paragraphs)}`).join("") : "",
+      section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${escapeHtml(item.text)}</dd>`).join("")}</dl>` : "",
+      section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${escapeHtml(option.text)}</p>`).join("") : "",
+      section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${escapeHtml(section.callout.text)}</p>` : "",
+    ].join("");
+  const sections = text.sections || [];
+  const withoutCover = cars.filter((item) => !shown.has(item.id));
+  return sections
+    .map((section, index) => {
+      // Между разделами — фотография машины из этой же подборки; после последнего
+      // раздела снимка нет, дальше идут вопросы и список машин.
+      // Машину с обложки в тексте не повторяем.
+      const car = index < sections.length - 1 ? withoutCover[index] : null;
+      return `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}${extras(section)}</section>${car ? blogFigure(car, index) : ""}`;
+    })
+    .join("");
+}
+
+/**
+ * Сравнение двух моделей для поисковика. Всё то же, что видит человек, только версткой
+ * попроще: два снимка, таблица различий из каталога, разборы текстом и списки машин
+ * каждой модели. Таблица — обычная <table>, поэтому её содержимое читается и без стилей.
+ */
+function blogDuelArticle(post) {
+  const found = live.collections.get(post.slug) || null;
+  const sides = found?.duel || [];
+  const updated = blogDateLine(post, found?.refreshedAt);
+  const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
+  const date = `<p>${rubric}${updated ? ` · ${escapeHtml(updated.date)}` : ""}</p>`;
+  const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  // Шапка: по кадру на модель. Без снимков блока нет — заголовок над пустотой
+  // поисковик читает как сломанную страницу.
+  const hero = sides.some((entry) => entry.hero)
+    ? sides.map((entry) => (entry.hero ? blogFigure(entry.hero, 0) : "")).join("")
+    : "";
+  const rows = blogDuelRows(sides);
+  // Вторая половина таблицы — паспорт модели: она написана в самом материале и от
+  // каталога не зависит, поэтому под таблицей стоит оговорка, откуда какие цифры.
+  const specs = blogDuelSpecRows(sides);
+  const cell = (value) => (value ? (value.money != null ? `≈ ${number(value.money)} $` : value.text) : "—");
+  // Наличие ведёт в каталог по этой модели — то же, что видит человек.
+  const line = (row) =>
+    `<tr><th>${escapeHtml(row.label)}</th>${row.values
+      .map((value, index) => {
+        const text = escapeHtml(cell(value));
+        const side = sides[index]?.side;
+        const target = row.key === "total" && value && side ? hrefRoute(blogCatalogHref({ filters: side.filters })) : null;
+        return `<td>${target ? `<a href="${escapeHtml(target)}" target="_blank" rel="noreferrer">${text}</a>` : text}</td>`;
+      })
+      .join("")}</tr>`;
+  const lines = [...rows, ...specs];
+  const table = lines.length
+    ? `<section><table><thead><tr><th><h2>В цифрах</h2></th>${sides
+        .map((entry) => `<th><a href="${escapeHtml(hrefRoute(entry.side.review))}" target="_blank" rel="noreferrer">${escapeHtml(entry.side.name)}</a></th>`)
+        .join("")}</tr></thead><tbody>${lines.map(line).join("")}</tbody></table>` +
+      `<p>Наличие, цена и характеристики версий считаются из каталога: цена — самая доступная машина под ключ в Минске, остальное — лучшее, что есть сейчас. Габариты, багажник и гарантия — паспортные данные производителей.</p></section>`
+    : "";
+  // Списки машин каждой модели: то же, что в приложении, — снимок, название, цена
+  // под ключ, год и пробег.
+  const heroes = new Set(sides.map((entry) => entry.hero?.id).filter(Boolean));
+  const offers = sides
+    .map((entry) => {
+      const cars = entry.cars.slice(0, 5);
+      if (!cars.length) return "";
+      const items = cars
+        .map((car) => {
+          const href = escapeHtml(hrefRoute(carRoute(car)));
+          const title = escapeHtml(carTitle(car));
+          const source = car.images?.length ? car.images[0] : car.image;
+          const photo = source ? `<img src="${escapeHtml(photoHref(source, 400))}" alt="${title}" loading="lazy" />` : "";
+          const facts = [`≈ ${number(estimateLandedCost(car).totalUsd)} $ под ключ в Минске`, car.year ? `${car.year} год` : null, car.mileage ? `пробег ${number(car.mileage)} км` : null].filter(Boolean);
+          return `<li><a href="${href}">${photo}${title}</a> — ${escapeHtml(facts.join(", "))}</li>`;
+        })
+        .join("");
+      const catalog = escapeHtml(hrefRoute(blogCatalogHref({ filters: entry.side.filters })));
+      return `<section><h2>${escapeHtml(entry.side.name)} в наличии</h2><ul>${items}</ul><p><a href="${catalog}">Смотреть все ${escapeHtml(entry.side.name)} в каталоге</a></p></section>`;
+    })
+    .join("");
+  const faq = post.faq?.length
+    ? `<section><h2>Частые вопросы</h2>${post.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
+    : "";
+  const related = blogRelatedPosts(post);
+  const rest = related.length
+    ? `<section><h2>Похожие статьи</h2><ul>${related.map((item) => `<li><a href="${hrefRoute(`${item.path}/`)}">${escapeHtml(item.name)}</a> — ${escapeHtml(item.teaser || item.lead)}</li>`).join("")}</ul></section>`
+    : "";
+  // Снимки между разделами — машины обеих моделей по очереди, кроме тех, что уже
+  // стоят в шапке.
+  const photoCars = [];
+  for (let index = 0; index < 4; index += 1) {
+    for (const entry of sides) {
+      const car = entry.cars.filter((item) => !heroes.has(item.id))[index];
+      if (car) photoCars.push(car);
+    }
+  }
+  return `${date}${hero}${intro}${table}${blogArticleBody(post, photoCars)}${offers}${faq}${blogCatalogWays(post)}${blogModelWays(post)}${rest}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+}
+
+// ── Куда журнал ведёт дальше ──────────────────────────────────────────────────
+// Материал журнала был почти тупиком: из него вели ссылки на страницы расчётов, на
+// сами машины и на каталог с набором параметров. Последний адрес поисковик склеивает
+// с общим каталогом, то есть вес статьи не доходил ни до одного раздела. Разделы и
+// обзоры моделей считаем по самому списку машин — руками их писать нельзя: состав
+// подборки меняется каждую ночь, а записанный раздел через неделю будет не про то.
+
+/** Машины материала: у подборки её список, у сравнения — обе стороны. */
+const blogCarsFound = (post) => live.collections.get(post.slug)?.cars || [];
+
+/**
+ * Разделы каталога, в которые попадают машины материала, — по убыванию того, сколько
+ * машин списка в них входит. Ценовые полосы сюда не попадают: их отбирает сам
+ * справочник разделов.
+ */
+function blogCatalogWays(post) {
+  const cars = blogCarsFound(post);
+  if (!cars.length) return "";
+  const counted = new Map();
+  for (const car of cars) {
+    for (const landing of landingsForCar({ brand: car.brand, type: car.type, bodyType: car.bodyType })) {
+      const seen = counted.get(landing.path) || { landing, count: 0 };
+      seen.count += 1;
+      counted.set(landing.path, seen);
+    }
+  }
+  // Раздел, в который попала одна машина из десяти, к теме материала отношения не
+  // имеет: берём те, что покрывают хотя бы пятую часть списка.
+  const threshold = Math.max(2, Math.ceil(cars.length / 5));
+  const links = [...counted.values()]
+    .filter((entry) => entry.count >= threshold && live.stock.get(entry.landing.path) !== 0)
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 6)
+    .map((entry) => [entry.landing.path, entry.landing.name, null]);
+  if (!links.length) return "";
+  return pathwayLinks({
+    heading: "Разделы каталога по теме",
+    intro: "Живые списки с ценами до Минска — в каждом разделе свой отбор и свои фильтры.",
+    links,
+  });
+}
+
+/**
+ * Обзоры моделей, о которых материал. У сравнения это две названные модели, у
+ * подборки — те модели из списка машин, на которые обзор уже написан.
+ */
+function blogModelWays(post) {
+  const wanted = new Map();
+  for (const side of blogPostSides(post)) {
+    const review = MODEL_PAGES.find((page) => page.brand === side.brand && page.model === side.model);
+    if (review) wanted.set(review.path, review);
+  }
+  for (const car of blogCarsFound(post)) {
+    if (wanted.size >= 8) break;
+    const review = MODEL_PAGES.find((page) => page.brand === car.brand && page.model === car.model);
+    if (review) wanted.set(review.path, review);
+  }
+  return modelLinks([...wanted.values()].slice(0, 8), { heading: "Обзоры моделей из этого материала" });
+}
+
+function blogPostArticle(post) {
+  if (post.kind === "duel") return blogDuelArticle(post);
+  const found = live.collections.get(post.slug) || null;
+  const stats = blogPostStats({ total: found?.total || null, priceFromUsd: found?.priceFromUsd || null, highlight: found?.highlight || null });
+  const numbers = stats.length ? `<ul>${stats.map((stat) => `<li><strong>${escapeHtml(stat.value)}</strong> — ${escapeHtml(stat.label)}</li>`).join("")}</ul>` : "";
+  // Дата обновления — когда каталог последний раз проверялся: список машин и цифры
+  // в тексте живут вместе с ним. Её же получает поисковик в разметке статьи.
+  // Строка над текстом — та же, что видит человек: раздел и дата через точку.
+  const updated = blogDateLine(post, found?.refreshedAt);
+  // Раздел ссылкой в журнал: из статьи ведёт путь к списку материалов.
+  const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
+  const date = `<p>${rubric}${updated ? ` · ${escapeHtml(updated.date)}` : ""}</p>`;
+  const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  // Открывающая фотография — сразу после описания, до текста.
+  const cover = found?.cover ? blogFigure(found.cover, 0) : "";
+  // Живой список машин — то же, что видит человек: номер, снимок, цена под ключ и
+  // четыре характеристики. Когда база при сборке недоступна, блока просто нет:
+  // заголовок над пустым списком поисковик читает как сломанную страницу.
+  const top = blogTopCars(found?.cars || [], post);
+  const offers = top.length
+    ? `<section><h2>${escapeHtml(post.name)}</h2><ol>${top
+        .map((car) => {
+          const href = escapeHtml(hrefRoute(carRoute(car)));
+          const title = escapeHtml(carTitle(car));
+          const source = car.images?.length ? car.images[0] : car.image;
+          const photo = source ? `<img src="${escapeHtml(photoHref(source, 400))}" alt="${title}" loading="lazy" />` : "";
+          // То же, что видит человек: главная цифра подборки, цена и причина.
+          const figure = blogCarFigure(car, post);
+          const reason = blogCarReason(car, top, post, (item) => (item ? estimateLandedCost(item).totalUsd : null));
+          const parts = [
+            figure ? `${figure.value} ${figure.label}` : null,
+            `≈ ${number(estimateLandedCost(car).totalUsd)} $ под ключ в Минске`,
+            reason,
+          ].filter(Boolean);
+          return `<li><a href="${href}">${photo}${title}</a> — ${escapeHtml(parts.join(". "))}</li>`;
+        })
+        .join("")}</ol><p><a href="${escapeHtml(hrefRoute(blogCatalogHref(post)))}">Смотреть все в каталоге</a></p></section>`
+    : "";
+  const faq = post.faq?.length
+    ? `<section><h2>Частые вопросы</h2>${post.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
+    : "";
+  const related = blogRelatedPosts(post);
+  const rest = related.length
+    ? `<section><h2>Похожие статьи</h2><ul>${related.map((item) => `<li><a href="${hrefRoute(`${item.path}/`)}">${escapeHtml(item.name)}</a> — ${escapeHtml(item.teaser || item.lead)}</li>`).join("")}</ul></section>`
+    : "";
+  return `${date}${cover}${intro}${numbers}${offers}${blogArticleBody(post, found?.cars || [], new Set([found?.cover?.id, ...top.map((car) => car.id)]))}${faq}${blogCatalogWays(post)}${blogModelWays(post)}${rest}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+}
+
+function blogIndexArticle() {
+  // Список материалов: то же, что человек видит на карточках — метки, название,
+  // о чём материал и дата последнего обновления.
+  const items = blogPosts()
+    .map((post) => {
+      const tags = blogPostTags(post).map((tag) => tag.name).join(", ");
+      const date = blogUpdatedLabel(post, live.collections.get(post.slug)?.refreshedAt);
+      const meta = [tags, date].filter(Boolean).join(". ");
+      return `<li><a href="${hrefRoute(`${post.path}/`)}">${escapeHtml(post.name)}</a> — ${escapeHtml(post.lead)}${meta ? ` (${escapeHtml(meta)})` : ""}</li>`;
+    })
+    .join("");
+  return `<section><h2>${escapeHtml(BLOG_INDEX.listTitle)}</h2><ul>${items}</ul></section>`;
+}
+
 function modelsIndexArticle() {
   const intro = MODELS_INDEX.sections
     .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${section.paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}</section>`)
@@ -333,13 +601,31 @@ function popularModelLinks(limit = 24) {
   });
 }
 
+/**
+ * Журнал на главной. В приложении этот блок есть, но его рисует скрипт: в готовой
+ * разметке главной на журнал не вело ни одной ссылки, и материалы держались только
+ * на карте сайта. Здесь — те же материалы теми же названиями.
+ */
+function blogHomeLinks() {
+  const posts = blogPosts();
+  if (!BLOG_ENABLED || !posts.length) return "";
+  return pathwayLinks({
+    heading: BLOG_INDEX.name,
+    intro: BLOG_INDEX.lead,
+    links: [
+      ...posts.map((post) => [`${post.path}/`, post.name, post.teaser || null]),
+      [`${BLOG_INDEX.path}/`, "Все материалы журнала", null],
+    ],
+  });
+}
+
 function publicPageBody(page) {
   // Блок с предложениями появляется только когда есть что в него положить: заголовок
   // над пустым списком читается поисковиком как сломанная страница. На хостинге дампа
   // каталога нет, поэтому витрину главной берём из базы — иначе самая массовая
   // страница сайта не ссылалась бы ни на одну машину, что и было до 23.08.2026.
   const links = page.route === "/" && live.showcase.length ? carLinks(live.showcase, showcaseSize) : "";
-  const article = page.tool ? toolArticle(page.tool) : page.modelsIndex ? modelsIndexArticle() : infoArticle(page.route);
+  const article = page.tool ? toolArticle(page.tool) : page.post ? blogPostArticle(page.post) : page.blogIndex ? blogIndexArticle() : page.modelsIndex ? modelsIndexArticle() : infoArticle(page.route);
   // Ссылки на разделы каталога. Раньше с главной вели ровно двенадцать ссылок (меню и
   // подвал), и в разделы нельзя было попасть ниоткуда, кроме карты сайта: плитку марок
   // рисует скрипт, в разметке её нет. Сначала на главной были только марки, типы
@@ -351,7 +637,8 @@ function publicPageBody(page) {
     ? renderer.sectionLinks(liveSections, { heading: page.modelsIndex ? "Разделы каталога" : "Автомобили из Китая по маркам, типам и цене" })
     : "";
   const models = page.route === "/" ? popularModelLinks() : "";
-  return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}${models}${pathwayFor(page.route)}${sections}</main>${footer()}`;
+  const journal = page.route === "/" ? blogHomeLinks() : "";
+  return `${navigation(MODELS_INDEX.path)}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${article}${links ? `<section><h2>Актуальные предложения</h2>${links}</section>` : ""}${models}${journal}${pathwayFor(page.route)}${sections}</main>${footer()}`;
 }
 
 // Живые данные читаем до отрисовки страниц: витрина и счётчики моделей нужны главной.
@@ -366,8 +653,47 @@ const liveSections = live.stock.size
   : CATALOG_LANDINGS;
 
 
+/**
+ * Картинка материала журнала для соцсетей и поиска: та же машина, что открывает
+ * статью. Раньше всем страницам уходила одна общая заставка сайта — ссылка,
+ * отправленная в Telegram, выглядела одинаково для любой подборки.
+ */
+function blogPostImage(post) {
+  const found = live.collections.get(post.slug) || null;
+  const car = found?.cover || found?.duel?.find((entry) => entry.hero)?.hero || null;
+  const source = car?.images?.length ? car.images[0] : car?.image;
+  return /^https:\/\//.test(String(source || "")) ? source : undefined;
+}
+
 for (const page of publicPages) {
-  const schemas = [renderer.breadcrumbsSchema(page.route === "/" ? [["Главная", "/"]] : [["Главная", "/"], [page.h1, page.route]])];
+  // Хлебные крошки: у материала журнала и у страницы расчёта их три ступени —
+  // главная, журнал, страница. Расчёты живут в журнале, и путь к ним должен быть
+  // одинаковым и для человека (см. ToolPage в src/App.jsx), и для поисковика.
+  const viaBlog = page.post || (page.tool && BLOG_ENABLED);
+  const crumbs = page.route === "/"
+    ? [["Главная", "/"]]
+    : viaBlog
+      ? [["Главная", "/"], [BLOG_INDEX.name, `${BLOG_INDEX.path}/`], [page.post?.name || page.tool.name, page.route]]
+      : [["Главная", "/"], [page.h1, page.route]];
+  const schemas = [renderer.breadcrumbsSchema(crumbs)];
+  // Разметка статьи: по ней поисковик понимает, что это материал с датой, а не
+  // очередная страница каталога. Дата обновления — день сборки: список машин и
+  // цифры в тексте действительно пересобираются каждую ночь.
+  if (page.post) {
+    schemas.push({
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: page.post.h1,
+      description: page.post.seoDescription,
+      inLanguage: "ru-BY",
+      mainEntityOfPage: routeUrl(page.route),
+      datePublished: page.post.published,
+      dateModified: isoDate(blogUpdatedAt(page.post, live.collections.get(page.post.slug)?.refreshedAt)) || page.post.published,
+      author: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
+      publisher: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
+    });
+    if (page.post.faq?.length) schemas.push(renderer.faqSchema(page.post.faq));
+  }
   if (page.route === "/") schemas.unshift(renderer.organizationSchema(), renderer.webSiteSchema());
   // Вопросы со страницы «Вопросы и ответы» — по этой разметке они попадают
   // в выдачу раскрывающимся списком. На страницах моделей это уже работает.
@@ -376,7 +702,7 @@ for (const page of publicPages) {
   if (page.tool?.faq?.length) schemas.push(renderer.faqSchema(page.tool.faq));
   // Первый экран главной браузер рисует целиком — заголовок с поиском, а не только
   // шапку: главная и есть та страница, куда приходят по ссылке из поиска.
-  writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), body: publicPageBody(page), schemas, boot: page.route === "/" ? "home" : "header" }));
+  writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), image: page.post ? blogPostImage(page.post) : undefined, body: publicPageBody(page), schemas, boot: page.route === "/" ? "home" : "header" }));
 }
 
 function writeRoute(route, html) {
@@ -449,7 +775,7 @@ async function readLiveCatalog() {
     }
     return counts;
   };
-  const nothing = { showcase: [], models: new Map(), carEntries: [], listPages: new Map(), stock: new Map() };
+  const nothing = { showcase: [], models: new Map(), carEntries: [], listPages: new Map(), stock: new Map(), collections: new Map() };
   if (cars.length) {
     return {
       showcase: cars.slice(0, showcaseSize),
@@ -457,6 +783,7 @@ async function readLiveCatalog() {
       carEntries: carsSitemap ? cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) })) : [],
       listPages: new Map(),
       stock: new Map(),
+      collections: new Map(),
     };
   }
   if (!carsFromDatabase) {
@@ -466,7 +793,7 @@ async function readLiveCatalog() {
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
-    const { countCars, getModelFacts, listCars } = await import("../server/repository.mjs");
+    const { countCars, getModelFacts, listCars, modelSummary } = await import("../server/repository.mjs");
     // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
     // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
     // модель займёт весь блок.
@@ -490,8 +817,63 @@ async function readLiveCatalog() {
       stock.set(landing.path, total);
       listPages.set(landing.path, catalogPageCount(total));
     }
+    // Живые списки подборок журнала: сам список машин, сколько их всего и цифры
+    // для полосы под вступлением. Считаем здесь же, на том же соединении с базой.
+    const collections = new Map();
+    for (const post of BLOG_ENABLED ? blogPosts() : []) {
+      // У сравнения не один срез каталога, а по срезу на модель: наличие, самая
+      // доступная машина и лучшие цифры версий считаются для каждой стороны отдельно.
+      if (post.kind === "duel") {
+        const sides = [];
+        for (const side of blogPostSides(post)) {
+          // Все цифры таблицы приходят одной сводкой из базы: годы, пробег, запас хода,
+          // батарея, мощность, момент и разгон. Отдельно берём только цену — её считает
+          // тот же расчёт, что и карточка машины, — и кадр для шапки.
+          const summary = await modelSummary(blogApiParams(side));
+          // Пять самых доступных машин модели: и список под разбором, и цена «от»
+          // берутся из одного запроса.
+          const list = await listCars(blogApiParams(side, { sort: "price_asc", limit: "5" }));
+          // База сортирует по записанной сумме, а показываем пересчитанную: пять машин
+          // переставляем по ней, и «цена от» берётся из них же.
+          const cars = [...list.items].sort((left, right) => estimateLandedCost(left).totalUsd - estimateLandedCost(right).totalUsd);
+          const cheapest = cars[0] || null;
+          const byRange = (await listCars(blogApiParams(side, { sort: "range_desc", limit: "5" }))).items;
+          sides.push({
+            ...summary,
+            side,
+            cars,
+            refreshedAt: summary.refreshedAt || list.refreshedAt || null,
+            priceFromUsd: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
+            hero: byRange.find((car) => car.images?.length || car.image) || cars[0] || null,
+          });
+        }
+        collections.set(post.slug, { duel: sides, cars: sides.flatMap((entry) => entry.cars), total: null, refreshedAt: sides.find((entry) => entry.refreshedAt)?.refreshedAt || null });
+        continue;
+      }
+      const list = await listCars(blogListParams(post, String(blogCarsOnPage)));
+      // Края подборки — отдельными запросами: список идёт «в разнобой», и по нему
+      // «от такой-то суммы» посчиталось бы по двенадцати случайным объявлениям.
+      const cheapest = (await listCars(blogApiParams(post, { sort: "price_asc", limit: "1" }))).items[0] || null;
+      const highlightSort = blogHighlightSort(post);
+      // Пять строк, а не одна: у части объявлений главная цифра не заполнена.
+      const notable = highlightSort
+        ? (await listCars(blogApiParams(post, { sort: highlightSort, limit: "5" }))).items.find((car) => blogHighlight(post, car)) || null
+        : null;
+      // Открывающий кадр статьи — тот же, что на карточке материала (самая дорогая
+      // машина подборки: у дорогих объявлений съёмка лучше).
+      const cover = (await listCars(blogApiParams(post, { sort: "price_desc", limit: "1" }))).items[0] || null;
+      collections.set(post.slug, {
+        cover,
+        cars: list.items,
+        total: list.total,
+        refreshedAt: list.refreshedAt || null,
+        priceFromUsd: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
+        highlight: blogHighlight(post, notable),
+      });
+    }
     return {
       showcase,
+      collections,
       models: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.count])),
       carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) })),
       listPages,
@@ -516,8 +898,22 @@ const listPageEntries = (route) => {
   return Array.from({ length: Math.max(0, pages - 1) }, (_, index) => ({ loc: `${routeUrl(route)}?page=${index + 2}`, lastmod: null }));
 };
 
+// Дата последнего обновления материала журнала: тот же день, что стоит в разметке
+// статьи и виден человеку. Для поисковика это единственный способ узнать, что списки
+// машин и цифры в подборках пересобираются каждую ночь, — без даты он приходит
+// перепроверять страницу тем реже, чем дольше она в индексе. У остальных страниц
+// даты нет: их содержимое от каталога не зависит.
+const blogLastmod = (post) => isoDate(blogUpdatedAt(post, live.collections.get(post.slug)?.refreshedAt)) || post.published || null;
+// У самого журнала дата — самая свежая из его материалов: список на нём и есть они.
+const blogIndexLastmod = BLOG_ENABLED
+  ? blogPosts().map(blogLastmod).filter(Boolean).sort().pop() || null
+  : null;
+
 const pageEntries = [
-  ...publicPages.map((page) => ({ loc: routeUrl(page.route), lastmod: null })),
+  ...publicPages.map((page) => ({
+    loc: routeUrl(page.route),
+    lastmod: page.post ? blogLastmod(page.post) : page.blogIndex ? blogIndexLastmod : null,
+  })),
   // Каталог и его разделы файлами не собираются, но в карте сайта им место.
   { loc: routeUrl("/catalog/"), lastmod: null },
   ...listPageEntries("/catalog/"),

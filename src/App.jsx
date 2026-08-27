@@ -1,6 +1,6 @@
-import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BatteryHigh, BookmarkSimple, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Palette, RoadHorizon, Rows, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineBounds, engineLabel, enginePower, engineVolume, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -33,6 +33,9 @@ import { LEGAL_COPY } from "./legal-copy.js";
 import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
 import { TOOL_PAGES, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
+import { BLOG_ENABLED } from "./feature-flags.js";
+import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogDateLine, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogRelativeDateSentence, blogSidebarItems, blogUpdatedAt, findBlogPost, homeBlogPosts } from "./blog-posts.js";
+import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
 import { trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
@@ -383,6 +386,32 @@ const IMAGE_WIDTH_CARD = 600;
 const IMAGE_WIDTH_STRIP = 500;
 const IMAGE_WIDTH_TILE = 600;
 const IMAGE_WIDTH_THUMB = 240;
+// Крупные места: фотография внутри статьи (780 точек) и большой снимок в карточке
+// машины. Здесь кадр показан втрое шире, чем в списке, поэтому и просить нужно шире —
+// иначе снимок выглядит мыльным.
+const IMAGE_WIDTH_ARTICLE = 800;
+// Потолок для второго кадра. Хранилище отдаёт снимок любой ширины вплоть до оригинала
+// (у разных объявлений это от 1537 до 2016 точек), но 1400 — та ширина, которая стоит
+// в адресах объявлений, то есть наш кэш фотографий её уже знает. Просить больше значит
+// заводить новые файлы в кэше и качать вдвое больше байт ради разницы, которой не
+// видно: на снимке шириной 780 точек экран с двойной плотностью просит 1560, и 1400
+// от них отличается неразличимо.
+const IMAGE_WIDTH_DOUBLE_CAP = 1400;
+
+/**
+ * Второй, вдвое более широкий кадр для экранов с двойной плотностью. На обычном экране
+ * браузер скачает первый и ничего не потеряет, на retina возьмёт второй и покажет
+ * резкую картинку. Так вес страницы растёт только там, где эта резкость видна.
+ *
+ * Хранилище отдаёт снимок любой ширины (проверено: 240, 600, 1200, 1400 — всё живое),
+ * а выше 1537 возвращает оригинал, поэтому вторая ширина ограничена.
+ */
+const imageSourceSet = (source, width) => {
+  if (!source || !width) return undefined;
+  const single = imageSource(source, width);
+  const double = imageSource(source, Math.min(width * 2, IMAGE_WIDTH_DOUBLE_CAP));
+  return single && double && double !== single ? `${single} 1x, ${double} 2x` : undefined;
+};
 // Страховка: если кадр не пришёл — уменьшенного нет в хранилище или наш кэш
 // почему-то не ответил, — берём оригинал прямо из хранилища, мимо своего адреса.
 // Тяжёлое фото лучше пустой рамки. Повторяем только один раз.
@@ -924,6 +953,13 @@ const routeSeo = {
 routeSeo[MODELS_INDEX.path] = [MODELS_INDEX.seoTitle, MODELS_INDEX.seoDescription];
 for (const modelPage of MODEL_PAGES) routeSeo[modelPage.path] = [modelPage.seoTitle, modelPage.seoDescription];
 for (const tool of TOOL_PAGES) routeSeo[tool.path] = [tool.seoTitle, tool.seoDescription];
+// Журнал попадает в эту карту только вместе с выключателем: пока раздел выключен,
+// у его адресов нет ни заголовка, ни разрешения на индексацию — как у несуществующей
+// страницы, которой он для посетителя и является.
+if (BLOG_ENABLED) {
+  routeSeo[BLOG_INDEX.path] = [BLOG_INDEX.seoTitle, BLOG_INDEX.seoDescription];
+  for (const post of blogPosts()) routeSeo[post.path] = [post.seoTitle, post.seoDescription];
+}
 
 const privateRouteSeo = {
   "/favorites": ["Избранные автомобили | abcars.by", "Сохранённые автомобили в вашем личном кабинете abcars.by."],
@@ -2826,7 +2862,7 @@ function ModelPageGallery({ cars, onOpenCar }) {
     <div className="model-page-gallery">
       {shots.map(({ car, source, image }) => (
         <button type="button" key={car.id} onClick={() => onOpenCar(car)} aria-label={`Открыть объявление: ${car.title}`}>
-          <img src={image} alt={car.title} loading="lazy" onError={(event) => retryWithFullImage(event, source)} />
+          <img src={image} srcSet={imageSourceSet(source, IMAGE_WIDTH_TILE)} alt={car.title} loading="lazy" onError={(event) => retryWithFullImage(event, source)} />
           {/* Две плашки по углам снимка: сверху цена до Минска, снизу пробег. Раньше
               мозаика была просто набором фотографий и не говорила, за сколько эта
               машина и сколько она прошла. Цена считается так же, как в карточках,
@@ -2848,6 +2884,17 @@ function ModelPageSection({ section, navigate }) {
       <h2>{section.title}</h2>
       {section.paragraphs.map((text) => (
         <p key={text}>{renderInlineText(text, navigate)}</p>
+      ))}
+      {/* Подразделы: маленький заголовок и пара абзацев. Не блок с подложкой, а просто
+          разбивка длинного раздела — пять абзацев подряд читать тяжело, а плашки
+          и карточки внутри статьи мешают ещё больше. */}
+      {section.parts?.map((part) => (
+        <Fragment key={part.title}>
+          <h3>{part.title}</h3>
+          {part.paragraphs.map((text) => (
+            <p key={text}>{renderInlineText(text, navigate)}</p>
+          ))}
+        </Fragment>
       ))}
       {section.list && (
         <dl className="model-page-points">
@@ -3260,7 +3307,10 @@ function ModelPageWays({ modelPage, cars, navigate }) {
   const car = (cars || [])[0] || null;
   const sections = car ? landingsForCar({ brand: modelPage.brand, type: car.type, bodyType: car.bodyType }).slice(0, 6) : [];
   const siblings = MODEL_PAGES.filter((item) => item.brand === modelPage.brand && item.path !== modelPage.path).slice(0, 12);
-  if (!sections.length && !siblings.length) return null;
+  // Материалы журнала про эту модель — сравнения с соседями. Тот, кто дочитал обзор,
+  // как раз выбирает между двумя машинами, а из обзора об этом узнать было неоткуда.
+  const journal = BLOG_ENABLED ? blogPostsForModel(modelPage.path) : [];
+  if (!sections.length && !siblings.length && !journal.length) return null;
   return (
     <section className="model-page-ways page-width" aria-labelledby="model-page-ways-title">
       <h2 id="model-page-ways-title">Где смотреть {modelPage.name} и похожие машины</h2>
@@ -3270,6 +3320,16 @@ function ModelPageWays({ modelPage, cars, navigate }) {
           <div>
             {sections.map((landing) => (
               <AppLink key={landing.path} href={landing.path} navigate={navigate}>{landing.name}</AppLink>
+            ))}
+          </div>
+        </div>
+      )}
+      {journal.length > 0 && (
+        <div className="catalog-landing-links">
+          <b>В журнале</b>
+          <div>
+            {journal.map((post) => (
+              <AppLink key={post.path} href={post.path} navigate={navigate}>{post.name}</AppLink>
             ))}
           </div>
         </div>
@@ -4220,6 +4280,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         )}
       </section>
       <HomeConversionSections navigate={navigate} />
+      {/* Журнал: четыре свежих материала. Пока раздел не готов, выключатель
+          BLOG_ENABLED убирает блок целиком — на его месте ничего не остаётся. */}
+      <HomeCollections navigate={navigate} />
       <ScrollToTopButton />
       {quickViewModal}
     </main>
@@ -7393,17 +7456,31 @@ function ToolPage({ tool, navigate }) {
   // Шаг назад работает, только если на страницу пришли с другой страницы сайта. По
   // прямой ссылке из поиска возвращаться некуда — ведём на главную.
   const goBack = () => (window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : navigate("/"));
-  return (
-    <main className="model-page tool-page">
+  // Пока журнал выключен, страница расчёта выглядит как прежде: текст по центру и
+  // кружок «назад» слева. С журналом у неё появляется то же боковое меню, что у
+  // материалов, — чтобы переход «журнал → расчёт → журнал» не терял навигацию. Кружок
+  // «назад» в этом виде убран: слева от текста больше нет свободного поля, а его роль
+  // берут хлебные крошки.
+  const withAside = BLOG_ENABLED;
+  const reading = (
       <div className="model-page-reading">
+        {!withAside && (
         <div className="model-page-back-rail">
           <button type="button" className="model-page-back" aria-label="Назад" onClick={goBack}>
             <ArrowLeft size={24} />
           </button>
         </div>
+        )}
         <div className="model-page-body page-width">
           <section className="model-page-hero">
             <div className="model-page-hero-copy">
+              {/* Та же строка над заголовком, что у материалов журнала: название
+                  раздела ссылкой назад в журнал. */}
+              {withAside && (
+                <span className="blog-article-meta">
+                  <AppLink href={BLOG_INDEX.path} navigate={navigate}>Расчёты</AppLink>
+                </span>
+              )}
               <h1>{tool.h1}</h1>
               <p>{tool.lead}</p>
             </div>
@@ -7451,8 +7528,39 @@ function ToolPage({ tool, navigate }) {
         )}
         <ArticleFaq faq={texts.faq} title="Частые вопросы" />
       </div>
-      <ToolPageLinks tool={tool} navigate={navigate} />
-      <p className="model-page-disclaimer page-width">{texts.disclaimer}</p>
+  );
+  if (!withAside) {
+    return (
+      <main className="model-page tool-page">
+        {reading}
+        <ToolPageLinks tool={tool} navigate={navigate} />
+        <p className="model-page-disclaimer page-width">{texts.disclaimer}</p>
+      </main>
+    );
+  }
+  return (
+    <main className="model-page tool-page tool-page-aside blog-page page-width">
+      {/* Крошки ведут через журнал, а не сразу на главную: расчёты — его раздел,
+          и обратный путь должен это показывать. */}
+      <div className="breadcrumbs">
+        <button onClick={() => goBackTo(navigate, "/")}>Главная</button>
+        <CaretRight size={13} />
+        <button onClick={() => goBackTo(navigate, BLOG_INDEX.path)}>{BLOG_INDEX.name}</button>
+        <CaretRight size={13} />
+        {tool.name}
+      </div>
+      <BlogMasthead navigate={navigate} />
+      <div className="blog-layout">
+        {/* Всё содержимое страницы лежит в колонке сетки, включая переходы к другим
+            расчётам и оговорку: иначе они тянулись бы во всю ширину страницы и не
+            совпадали бы по краям с текстом выше. */}
+        <div className="blog-main">
+          {reading}
+          <ToolPageLinks tool={tool} navigate={navigate} />
+          <p className="model-page-disclaimer">{texts.disclaimer}</p>
+        </div>
+        <BlogSidebar navigate={navigate} currentPath={tool.path} />
+      </div>
     </main>
   );
 }
@@ -7706,6 +7814,1088 @@ function LegalPage({ navigate, kind }) {
   );
 }
 
+// ── Журнал: подборки на главной, общая страница и страница материала ──────────
+//
+// Подборка — это статья и живой список машин по правилу отбора (см. src/blog-posts.js).
+// Список и цифры в тексте берутся из каталога в момент открытия страницы, поэтому
+// страница не устаревает между выкладками сайта.
+//
+// Весь раздел закрыт выключателем BLOG_ENABLED: пока он выключен, блока на главной
+// нет, ссылки в подвале нет, а адреса /blog и /blog/… отвечают «страницы нет».
+
+// Сколько машин показываем на странице подборки.
+const BLOG_POST_CARS_LIMIT = 12;
+
+/** Текст материала: подгружается отдельным файлом, как тексты обзоров моделей. */
+function useBlogText(slug) {
+  const [text, setText] = useState(() => loadedBlogText(slug));
+  useEffect(() => {
+    const ready = loadedBlogText(slug);
+    setText(ready);
+    if (ready) return undefined;
+    let alive = true;
+    loadBlogText(slug).then((loaded) => {
+      if (alive) setText(loaded);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [slug]);
+  return text;
+}
+
+/** Живой срез каталога по правилу отбора подборки. */
+function useCollectionCars(post, { limit = BLOG_POST_CARS_LIMIT } = {}) {
+  const [cars, setCars] = useState([]);
+  const [total, setTotal] = useState(null);
+  const [refreshedAt, setRefreshedAt] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const query = post ? String(blogListParams(post, limit)) : null;
+  useEffect(() => {
+    if (!query) return undefined;
+    const controller = new AbortController();
+    setCars([]);
+    setTotal(null);
+    setRefreshedAt(null);
+    setLoading(true);
+    setFailed(false);
+    fetch(`/api/cars?${query}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("collection unavailable"))))
+      .then((catalog) => {
+        setCars(catalog.items.map(normalizeImportedCar));
+        setTotal(catalog.total);
+        setRefreshedAt(catalog.refreshedAt || null);
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setFailed(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [query]);
+  return { cars, total, refreshedAt, loading, failed };
+}
+
+/**
+ * Края подборки: самая доступная машина и та, которой подборка хвалится, — самая
+ * дальнобойная, самая быстрая или самая свежая. Из них берутся вторая и третья
+ * цифры в полосе.
+ *
+ * Отдельными запросами, а не по показанному списку: список идёт «в разнобой», по одной
+ * машине на модель, и края по нему посчитались бы по двенадцати случайным объявлениям.
+ * Запросы крошечные — по одной строке, — и сервер отдаёт их из общего кэша.
+ */
+function useCollectionEdges(post) {
+  const [edges, setEdges] = useState({ priceFromUsd: null, highlight: null });
+  const cheapestQuery = post ? String(blogApiParams(post, { sort: "price_asc", limit: 1 })) : null;
+  const highlightSort = blogHighlightSort(post);
+  // Берём пять машин, а не одну: у части объявлений главная цифра не заполнена
+  // (пробег стоит нулём, разгон не указан), и первая строка выборки может её не иметь.
+  const highlightQuery = highlightSort ? String(blogApiParams(post, { sort: highlightSort, limit: 5 })) : null;
+  useEffect(() => {
+    if (!cheapestQuery) return undefined;
+    const controller = new AbortController();
+    setEdges({ priceFromUsd: null, highlight: null });
+    const load = (query) =>
+      query
+        ? fetch(`/api/cars?${query}`, { signal: controller.signal })
+            .then((response) => (response.ok ? response.json() : Promise.reject(new Error("collection edge unavailable"))))
+            .then((catalog) => catalog.items.map(normalizeImportedCar))
+        : Promise.resolve([]);
+    Promise.all([load(cheapestQuery), load(highlightQuery)])
+      .then(([cheapestCars, notableCars]) => {
+        const cheapest = cheapestCars[0] || null;
+        // Первая машина, у которой главная цифра вообще есть.
+        const notable = notableCars.find((car) => blogHighlight(post, car)) || null;
+        setEdges({
+          priceFromUsd: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
+          highlight: blogHighlight(post, notable),
+        });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [cheapestQuery, highlightQuery]);
+  return edges;
+}
+
+/**
+ * Обложка подборки. Берём самую дорогую машину подборки: у дорогих объявлений съёмка
+ * лучше — так же выбираются кадры для мозаики на странице модели.
+ *
+ * Запрос именно за одной машиной и с постоянной сортировкой: пока это объявление живо,
+ * на главной стоит один и тот же кадр. Случайный порядок менял бы обложку при каждой
+ * перезагрузке, и главная выглядела бы так, будто её подменили.
+ */
+function useCollectionCover(post) {
+  const [cover, setCover] = useState({ car: null, refreshedAt: null });
+  const query = post ? String(blogApiParams(post, { sort: "price_desc", limit: 1 })) : null;
+  useEffect(() => {
+    if (!query) return undefined;
+    const controller = new AbortController();
+    fetch(`/api/cars?${query}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("collection cover unavailable"))))
+      // Тем же ответом приходит дата последней проверки каталога — она и стоит на
+      // карточке. Отдельный запрос ради даты не нужен.
+      .then((catalog) => setCover({ car: catalog.items.length ? normalizeImportedCar(catalog.items[0]) : null, refreshedAt: catalog.refreshedAt || null }))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [query]);
+  return cover;
+}
+
+// ── Переход в журнал с выбранным разделом ─────────────────────────────────────
+// Отдельных адресов у фильтров журнала нет намеренно (десяток почти пустых страниц
+// поисковику вредит), поэтому выбранный раздел передаём не адресом, а одноразовым
+// намерением: нажали «Подборки» в статье — журнал открылся уже с этим фильтром.
+let blogFilterIntent = null;
+const openBlogWithFilter = (navigate, filter) => {
+  blogFilterIntent = filter;
+  navigate(BLOG_INDEX.path);
+};
+/** Забирает намерение и сразу его гасит: оно действует на один переход. */
+const takeBlogFilterIntent = () => {
+  const filter = blogFilterIntent;
+  blogFilterIntent = null;
+  return filter;
+};
+
+/**
+ * Переход по хлебным крошкам назад. Если на страницу пришли именно оттуда, куда ведёт
+ * крошка, делаем шаг назад по истории: тогда прежняя страница открывается на том же
+ * месте, где её оставили, — главная у блока подборок, журнал у той же карточки. Пришли
+ * иначе (по ссылке из поиска, из мессенджера) — возвращаться некуда, обычный переход.
+ */
+const goBackTo = (navigate, path) => {
+  if (window.history.length > 1 && window.history.state?.fromPath === path) navigate(-1);
+  else navigate(path);
+};
+
+// ── «Поделиться» на карточке материала ────────────────────────────────────────
+// Три способа отдать ссылку: скопировать, отправить в Telegram, отправить в Threads.
+// Своих счётчиков и кнопок соцсетей мы не подключаем: чужой скрипт на странице — это
+// и лишний вес, и слежка за посетителем. Здесь только обычные ссылки на страницы
+// обмена, скрипты никуда не грузятся.
+const BLOG_SHARE_TARGETS = [
+  { id: "telegram", name: "Telegram", Icon: TelegramLogo, href: (url, title) => `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}` },
+  { id: "threads", name: "Threads", Icon: ThreadsLogo, href: (url, title) => `https://www.threads.net/intent/post?text=${encodeURIComponent(`${title} ${url}`)}` },
+];
+
+function BlogShareMenu({ post, direction = "up" }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const boxRef = useRef(null);
+  // Закрываем нажатием мимо и клавишей Esc — как остальные всплывающие меню сайта.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onOutside = (event) => {
+      if (!boxRef.current?.contains(event.target)) setOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onOutside);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const shareUrl = `${window.location.origin}${appHref(post.path)}`;
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // Буфер обмена может быть закрыт настройками браузера: тогда просто оставляем
+      // меню открытым — ссылку видно в адресной строке после перехода.
+      setCopied(false);
+    }
+  };
+  // Оформление выпадающего списка берём у обычного селекта сайта: те же подложка,
+  // скругления, появление и — что важнее всего — уже отлаженные состояния наведения
+  // в тёмной теме. Своих красок здесь нет, только положение меню.
+  return (
+    <div className={`blog-share blog-share-${direction}${open ? " open" : ""}`} ref={boxRef}>
+      <button
+        type="button"
+        className="blog-share-trigger"
+        aria-label="Поделиться"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {/* Значок из кружков, а не рамка со стрелкой: в маленькой круглой кнопке
+            прямые углы читаются грубо. */}
+        <ShareNetwork size={18} />
+        {/* Пока список открыт, подсказка не нужна: она перекрывала бы сам список. */}
+        {!open && <ActionTooltip text="Поделиться" />}
+      </button>
+      <div className="select-menu blog-share-menu" role="menu">
+        <div className="select-options">
+          <button type="button" role="menuitem" onClick={copyLink}>
+            <span className="select-option-label">
+              <LinkSimple size={17} />
+              <span>{copied ? "Ссылка скопирована" : "Копировать ссылку"}</span>
+            </span>
+          </button>
+          {BLOG_SHARE_TARGETS.map(({ id, name, Icon, href }) => (
+            <a key={id} role="menuitem" href={href(shareUrl, post.name)} target="_blank" rel="noreferrer noopener" onClick={() => setOpen(false)}>
+              <span className="select-option-label">
+                <Icon size={17} />
+                <span>{name}</span>
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Карточка материала: обложка, метки, название, дата и «поделиться». */
+function BlogCollectionCard({ post, navigate }) {
+  // У сравнения нет одного правила отбора, поэтому и обложка у него своя: два кадра
+  // вместо одного. Разные виды материалов различаются уже в сетке журнала.
+  return post.kind === "duel" ? <BlogDuelCard post={post} navigate={navigate} /> : <BlogCollectionCoverCard post={post} navigate={navigate} />;
+}
+
+/**
+ * Общая часть карточки: снимок с метками, название, дата и «поделиться». Карточка
+ * сравнения такая же, как у подборки, — отличается только обложкой: два кадра вместо
+ * одного. Широкую карточку на две колонки пробовали и отказались: в сетке журнала все
+ * карточки одного размера.
+ */
+function BlogCardShell({ post, navigate, cover, refreshedAt }) {
+  const tags = blogPostTags(post);
+  // На карточке дата стоит сама по себе, поэтому пишем её по-человечески: «Сегодня»,
+  // «Вчера», «5 дней назад», а после недели — обычную дату.
+  const date = blogRelativeDateSentence(blogUpdatedAt(post, refreshedAt)?.toISOString());
+  // Нажимается вся карточка, но внутри неё есть своя кнопка «поделиться», а кнопку
+  // нельзя положить внутрь ссылки. Поэтому ссылка — отдельный прозрачный слой поверх
+  // карточки, а кнопка лежит выше него.
+  return (
+    <article className="blog-card">
+      <span className="blog-card-cover">
+        {cover}
+        {/* Метки лежат на снимке — так же, как цена и пробег на фотографиях машин:
+            подложка размывает кадр под собой, поэтому подпись читается на любом фоне. */}
+        {tags.length > 0 && (
+          <span className="blog-card-tags">
+            {tags.map((tag) => (
+              <span key={tag.slug}>{tag.name}</span>
+            ))}
+          </span>
+        )}
+      </span>
+      <span className="blog-card-body">
+        <strong>{post.name}</strong>
+        <span className="blog-card-foot">
+          {date ? <span className="blog-card-date">{date}</span> : <span />}
+          <BlogShareMenu post={post} />
+        </span>
+      </span>
+      <AppLink className="blog-card-link" href={post.path} navigate={navigate} aria-label={post.name} />
+    </article>
+  );
+}
+
+/** Карточка подборки: обложка — самая дорогая машина по правилу отбора. */
+function BlogCollectionCoverCard({ post, navigate }) {
+  const { car, refreshedAt } = useCollectionCover(post);
+  const source = car?.images?.[0] || car?.image || null;
+  const cover = imageSource(source, IMAGE_WIDTH_CARD);
+  return (
+    <BlogCardShell
+      post={post}
+      navigate={navigate}
+      refreshedAt={refreshedAt}
+      cover={cover ? <img src={cover} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, source)} /> : null}
+    />
+  );
+}
+
+/** Карточка сравнения: обложка из двух кадров со значком между ними. */
+function BlogDuelCard({ post, navigate }) {
+  const data = useDuelSides(post, { deep: false });
+  const photos = data.map((entry) => entry.hero?.images?.[0] || entry.hero?.image || null);
+  return (
+    <BlogCardShell
+      post={post}
+      navigate={navigate}
+      refreshedAt={data.find((entry) => entry.refreshedAt)?.refreshedAt || null}
+      cover={
+        photos.some(Boolean) ? (
+          <span className="blog-card-duel">
+            {photos.map((source, index) => (
+              <span key={data[index]?.side.name || index}>
+                {source ? <img src={imageSource(source, IMAGE_WIDTH_CARD)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, source)} /> : null}
+              </span>
+            ))}
+            <i aria-hidden="true">vs</i>
+          </span>
+        ) : null
+      }
+    />
+  );
+}
+
+/**
+ * Блок журнала на главной, между вопросами и подвалом: четыре свежих материала подряд,
+ * подборки и сравнения одинаковыми карточками. Отдельный блок под сравнения пробовали
+ * и отказались — главная не оглавление журнала. Пока материалов меньше четырёх, сетка
+ * сжимается сама.
+ */
+function HomeCollections({ navigate }) {
+  const posts = homeBlogPosts();
+  if (!BLOG_ENABLED || !posts.length) return null;
+  return (
+    <section className="home-collections page-width" aria-labelledby="home-collections-title">
+      <div className="section-heading">
+        <div className="section-heading-title">
+          <h2 id="home-collections-title">{BLOG_INDEX.name}</h2>
+        </div>
+        <AppLink className="section-heading-link" href={BLOG_INDEX.path} navigate={navigate}>
+          Смотреть всё <ArrowRight size={18} />
+        </AppLink>
+      </div>
+      <div className="blog-card-grid">
+        {posts.map((post) => (
+          <BlogCollectionCard key={post.slug} post={post} navigate={navigate} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Боковое меню журнала: два способа сузить выдачу — по типу машины и по разделу.
+ * Разделы перечислены все, включая пустые: так видно, что в журнале будет дальше.
+ * Пустой пункт не кликается — ссылка в никуда хуже честно серого пункта.
+ *
+ * На общей странице журнала пункты работают как фильтр (`onFilter`), на странице
+ * материала — как ссылки в журнал. Отдельных адресов у фильтров нет намеренно:
+ * десяток почти пустых страниц поисковику только вредит.
+ */
+// Значки страниц-расчётов. Держим их здесь, а не в описании страниц: `tool-pages.js`
+// читает и сервер, а там разметки нет.
+const TOOL_PAGE_ICONS = { "/ev-quota": Lightning, "/customs": ClipboardText, "/delivery-cost": RoadHorizon, "/calculator": Calculator };
+// Значки пунктов бокового меню — по слугу из `src/blog-posts.js`. Значки заведены и для
+// разделов, которых пока нет: их пункты появятся вместе с первым материалом.
+const BLOG_FILTER_ICONS = {
+  all: List,
+  electric: Lightning,
+  hybrid: Engine,
+  petrol: GasPump,
+  collections: SquaresFour,
+  comparisons: ArrowsLeftRight,
+  articles: Article,
+  news: Newspaper,
+  law: Scales,
+  tips: Lightbulb,
+};
+
+/**
+ * Боковое меню журнала. Сверху один список выбора — как выпадающий список сайта:
+ * «Все материалы», типы машин, разделы. Выбранный пункт подсвечен, пустые видны, но
+ * не нажимаются: так заранее видно, что в журнале будет дальше, и при этом нет ссылок
+ * в никуда. Отдельных адресов у фильтров нет намеренно — десяток почти пустых страниц
+ * поисковику только вредит.
+ *
+ * Ниже — переходы к расчётам. Это не фильтры журнала, поэтому они вынесены отдельным
+ * блоком и выглядят обычными кнопками со значками.
+ */
+function BlogSidebar({ navigate, filter = null, onFilter = null, currentPath = null }) {
+  const items = blogSidebarItems();
+  const chosen = (item) => (filter ? filter.kind === item.kind && filter.slug === item.slug : item.kind === "all");
+  // Где меню ведёт себя как обычная навигация: на главной журнала (её признак —
+  // onFilter, разделы там переключаются на месте, в любом состоянии фильтра) и на
+  // самих страницах расчётов (их признак — currentPath). Там расчёты и каталог
+  // открываются в этой же вкладке и без стрелок: читать ещё нечего, терять нечего.
+  // Со страницы материала — по-прежнему в новой вкладке, чтобы не потерять текст.
+  const sameTab = Boolean(onFilter) || Boolean(currentPath);
+  return (
+    <aside className="blog-sidebar" aria-label="Разделы журнала">
+      <nav className="blog-sidebar-filters">
+        {items
+          // Пустые разделы не показываем: пункт, за которым ничего нет, только сбивает.
+          // Они появятся сами, как только в разделе выйдет первый материал.
+          .filter((item) => item.count > 0)
+          .map((item) => {
+            const Icon = BLOG_FILTER_ICONS[item.slug] || List;
+            const inside = (
+              <>
+                <Icon size={18} />
+                <span>{item.name}</span>
+                <small>{item.count}</small>
+              </>
+            );
+            return onFilter ? (
+              <button
+                type="button"
+                key={item.slug}
+                className={`blog-filter-item${chosen(item) ? " current" : ""}`}
+                onClick={() => onFilter(item.kind === "all" ? null : item)}
+              >
+                {inside}
+              </button>
+            ) : (
+              <AppLink
+                className="blog-filter-item"
+                key={item.slug}
+                href={BLOG_INDEX.path}
+                navigate={navigate}
+                onClick={() => openBlogWithFilter(navigate, item.kind === "all" ? null : item)}
+              >
+                {inside}
+              </AppLink>
+            );
+          })}
+      </nav>
+      <nav className="blog-sidebar-tools">
+        {TOOL_PAGES.map((tool) => {
+          const Icon = TOOL_PAGE_ICONS[tool.path] || Calculator;
+          return sameTab ? (
+            <AppLink
+              className={`blog-tool-button${currentPath === tool.path ? " current" : ""}`}
+              key={tool.path}
+              href={tool.path}
+              navigate={navigate}
+              aria-current={currentPath === tool.path ? "page" : undefined}
+            >
+              <Icon size={19} />
+              <span>{tool.name}</span>
+            </AppLink>
+          ) : (
+            // Расчёты, как и каталог, открываются в новой вкладке: посетитель уходит
+            // считать и возвращается к материалу, не теряя прочитанное. Поэтому это
+            // обычные ссылки, а не переход внутри приложения.
+            <a
+              className={`blog-tool-button${currentPath === tool.path ? " current" : ""}`}
+              key={tool.path}
+              href={appHref(tool.path)}
+              target="_blank"
+              rel="noreferrer"
+              aria-current={currentPath === tool.path ? "page" : undefined}
+            >
+              <Icon size={19} />
+              <span>{tool.name}</span>
+              <ArrowRight size={16} weight="bold" />
+            </a>
+          );
+        })}
+        {/* Переход в каталог — главное действие сайта, поэтому кнопка жёлтая, как все
+            основные кнопки. Со страницы материала открывается в новой вкладке: человек
+            читает и уходит смотреть машины, не теряя прочитанное. На самой главной
+            журнала терять нечего, поэтому там переход в этой же вкладке и без стрелок. */}
+        {sameTab ? (
+          <AppLink className="blog-tool-button accent" href="/catalog" navigate={navigate}>
+            <CarProfile size={19} />
+            <span>Каталог авто из Китая</span>
+          </AppLink>
+        ) : (
+          <a className="blog-tool-button accent" href={appHref("/catalog")} target="_blank" rel="noreferrer">
+            <CarProfile size={19} />
+            <span>Каталог авто из Китая</span>
+            <ArrowRight size={16} weight="bold" />
+          </a>
+        )}
+      </nav>
+    </aside>
+  );
+}
+
+/**
+ * Шапка журнала — строка «Журнал abcars.by» над содержимым. Стоит на всех страницах
+ * раздела: на общей, в материале и на страницах расчётов, — чтобы переход внутри
+ * журнала не выглядел уходом на другую часть сайта. На общей странице это заголовок
+ * страницы, на остальных — ссылка обратно в журнал: свой заголовок там уже есть,
+ * а двух главных заголовков на странице быть не должно.
+ */
+function BlogMasthead({ navigate, main = false }) {
+  return (
+    <div className="blog-masthead">
+      {main ? (
+        <h1>{BLOG_INDEX.h1}</h1>
+      ) : (
+        <AppLink href={BLOG_INDEX.path} navigate={navigate}>
+          {BLOG_INDEX.h1}
+        </AppLink>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Общая страница журнала: материалы теми же карточками, что на главной, и меню
+ * разделов сбоку. Ширина и раскладка — как у каталога: колонка выдачи и узкий столбец
+ * справа, чтобы страницы сайта не расходились между собой.
+ */
+function BlogIndexPage({ navigate }) {
+  const [filter, setFilter] = useState(takeBlogFilterIntent);
+  const posts = blogPostsFor(filter);
+  return (
+    <main className="blog-page page-width">
+      <div className="breadcrumbs">
+        <button onClick={() => goBackTo(navigate, "/")}>Главная</button>
+        <CaretRight size={13} />
+        {BLOG_INDEX.name}
+      </div>
+      <BlogMasthead navigate={navigate} main />
+      <div className="blog-layout">
+        <div className="blog-main">
+          <div className="blog-card-grid blog-card-grid-index">
+            {posts.map((post) => (
+              <BlogCollectionCard key={post.slug} post={post} navigate={navigate} />
+            ))}
+          </div>
+        </div>
+        <BlogSidebar navigate={navigate} filter={filter} onFilter={setFilter} />
+      </div>
+    </main>
+  );
+}
+
+/**
+ * Одна карточка списка: номер на снимке, слева фото, справа только самое нужное —
+ * название, главная цифра подборки, цена под ключ и короткая причина, почему машина
+ * в списке. Полный набор характеристик здесь лишний: карточка должна читаться
+ * одним взглядом, а подробности есть в самом объявлении.
+ */
+function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpen, reason: ownReason }) {
+  const currency = useCurrency();
+  const source = car.images?.[0] || car.image || null;
+  const image = imageSource(source, IMAGE_WIDTH_CARD);
+  const title = car.title || carTitle(car.brand, car.model, car.year);
+  const figure = blogCarFigure(car, post);
+  // В подборке причина считается по самому списку, а в сравнении карточки одной модели
+  // стоят рядом, и «самая доступная в подборке» звучало бы странно — там строку
+  // передают готовой.
+  const reason = ownReason !== undefined ? ownReason : blogCarReason(car, list, post, (item) => (item ? estimateLandedCost(item).totalUsd : null));
+  return (
+    <AppLink
+      className="blog-top-card"
+      href={carHref(car)}
+      navigate={navigate}
+      onClick={(event) => {
+        if (onOpen?.(car)) event.preventDefault();
+      }}
+    >
+      <span className="blog-top-photo">
+        {image ? <img src={image} srcSet={imageSourceSet(source, IMAGE_WIDTH_CARD)} alt={title} loading="lazy" onError={(event) => retryWithFullImage(event, source)} /> : null}
+        {/* Номер только там, где список — это место в топе. В сравнении машины одной
+            модели не ранжируются, и цифра на снимке вводила бы в заблуждение. */}
+        {rank ? <span className="blog-top-rank">{rank}</span> : null}
+      </span>
+      {/* Порядок один для всех подборок: название, цена, почему машина в списке и внизу
+          главная цифра — то, по чему подборка вообще собрана. Цифра акцентного цвета:
+          на ней взгляд и должен остановиться, когда карточки листают одну за другой. */}
+      <span className="blog-top-body">
+        {/* Название и цена — одной строкой: слева машина, справа сколько она стоит
+            под ключ. Оба одинакового размера, чтобы взгляд не выбирал между ними. */}
+        <span className="blog-top-head">
+          <strong>{title}</strong>
+          {/* «Под ключ в Минске» ушло в подсказку у значка: в карточке эта строчка
+              повторялась десять раз и занимала место, а объяснение нужно один раз. */}
+          <span className="blog-top-price">
+            ≈ {money(estimateLandedCost(car).totalUsd, currency)}
+            <span className="price-info" tabIndex={0} aria-label="Из чего складывается цена">
+              <Info size={16} />
+              <ActionTooltip text="Итог в Минске: выкуп машины, доставка, таможня и оформление. Предварительный расчёт по открытым тарифам." />
+            </span>
+          </span>
+        </span>
+        {reason ? <span className="blog-top-reason">{reason}</span> : null}
+        {figure ? (
+          <span className="blog-top-figure">
+            <i>{figure.label}</i>
+            <b>{figure.value}</b>
+          </span>
+        ) : null}
+      </span>
+    </AppLink>
+  );
+}
+
+// ── Сравнение двух моделей ────────────────────────────────────────────────────
+// Второй вид материала журнала. У него не один список, а две стороны, и каждая живёт
+// своим срезом каталога: «все Xiaomi SU7» и «все Tesla Model 3». Из этих двух срезов
+// собирается вся страница — шапка с фотографиями, таблица различий и списки машин, —
+// поэтому руками в сравнении не написано ни одной цифры.
+
+const DUEL_SIDE_EMPTY = { cars: [], total: null, refreshedAt: null, priceFromUsd: null, hero: null };
+
+/**
+ * Живые данные сторон. По стороне три крошечных запроса: сводка по модели (сколько
+ * машин, годы, лучший запас хода, батарея, мощность, момент, разгон), самая доступная
+ * машина для цены и кадр для шапки. Все цифры таблицы приходят одной сводкой: тянуть
+ * каждую крайнюю машину отдельным запросом значило бы два десятка запросов на страницу.
+ * Для главной и карточки в журнале список машин не нужен (`deep: false`).
+ */
+function useDuelSides(post, { deep = true, listLimit = 5 } = {}) {
+  const slug = post?.slug || null;
+  const sides = useMemo(() => blogPostSides(post), [slug]);
+  const queries = useMemo(
+    () =>
+      sides.map((side) => ({
+        summary: String(blogApiParams(side)),
+        // Список — самые доступные машины модели: в сравнении важно, с какой суммы
+        // модель вообще начинается, а не случайная выборка из наличия.
+        list: deep ? String(blogApiParams(side, { sort: "price_asc", limit: listLimit })) : null,
+        cheapest: String(blogApiParams(side, { sort: "price_asc", limit: 1 })),
+        // Кадр для шапки — самая дальнобойная машина модели: порядок постоянный,
+        // поэтому фотография не меняется от перезагрузки к перезагрузке, а у топовых
+        // версий съёмка обычно лучше.
+        hero: String(blogApiParams(side, { sort: "range_desc", limit: 5 })),
+      })),
+    [slug, deep, listLimit],
+  );
+  const [state, setState] = useState(() => sides.map((side) => ({ side, ...DUEL_SIDE_EMPTY })));
+  useEffect(() => {
+    const controller = new AbortController();
+    setState(sides.map((side) => ({ side, ...DUEL_SIDE_EMPTY })));
+    const load = (query) =>
+      query
+        ? fetch(`/api/cars?${query}`, { signal: controller.signal })
+            .then((response) => (response.ok ? response.json() : Promise.reject(new Error("duel side unavailable"))))
+            .then((catalog) => ({ total: catalog.total ?? null, refreshedAt: catalog.refreshedAt || null, cars: catalog.items.map(normalizeImportedCar) }))
+        : Promise.resolve(null);
+    const loadSummary = (query) =>
+      fetch(`/api/cars/summary?${query}`, { signal: controller.signal })
+        .then((response) => (response.ok ? response.json() : Promise.reject(new Error("duel summary unavailable"))))
+        .catch(() => null);
+    Promise.all(queries.map((query) => Promise.all([loadSummary(query.summary), load(query.list), load(query.cheapest), load(query.hero)])))
+      .then((answers) => {
+        setState(
+          answers.map(([summary, list, cheapest, hero], index) => {
+            // Каталог сортирует по записанной в базу сумме, а карточка показывает
+            // пересчитанную — после смены правил расчёта они какое-то время расходятся.
+            // Поэтому пять машин переставляем по той цене, которую человек и увидит,
+            // и «цена от» берётся из них же: иначе в таблице стояла бы одна сумма,
+            // а первой строкой списка — другая, поменьше.
+            const landed = (car) => estimateLandedCost(car).totalUsd;
+            const cars = [...(list?.cars || [])].sort((left, right) => landed(left) - landed(right));
+            const prices = [...(cheapest?.cars || []), ...cars].map(landed).filter((value) => Number.isFinite(value) && value > 0);
+            return {
+            side: sides[index],
+            cars,
+            refreshedAt: summary?.refreshedAt || list?.refreshedAt || cheapest?.refreshedAt || null,
+            priceFromUsd: prices.length ? Math.min(...prices) : null,
+            // Кадр для шапки — первая машина со снимком: у части объявлений
+            // фотографий нет вовсе.
+            hero: (hero?.cars || []).find((car) => car.images?.length || car.image) || cars[0] || null,
+            ...(summary || { total: list?.total ?? cheapest?.total ?? null }),
+            };
+          }),
+        );
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [queries]);
+  return state;
+}
+
+/**
+ * Шапка сравнения: две настоящие машины из каталога друг против друга. Не рисунок и не
+ * фотобанк — снимки живые, поэтому кадр меняется, когда объявление продают.
+ */
+function BlogDuelHero({ data, navigate, onOpen }) {
+  const currency = useCurrency();
+  if (!data.some((entry) => entry.hero)) return null;
+  return (
+    <div className="blog-duel-hero">
+      {data.map((entry) => {
+        const car = entry.hero;
+        const source = car?.images?.[0] || car?.image || null;
+        const image = imageSource(source, IMAGE_WIDTH_CARD);
+        const open = (event) => {
+          if (car && onOpen?.(car)) event.preventDefault();
+        };
+        return (
+          <figure key={entry.side.name}>
+            <AppLink href={car ? carHref(car) : entry.side.review} navigate={navigate} onClick={open} aria-label={entry.side.name}>
+              {image ? <img src={image} srcSet={imageSourceSet(source, IMAGE_WIDTH_CARD)} alt={entry.side.name} loading="eager" onError={(event) => retryWithFullImage(event, source)} /> : null}
+            </AppLink>
+            <figcaption>
+              <strong>{entry.side.name}</strong>
+              <span>{entry.priceFromUsd ? `от ${money(entry.priceFromUsd, currency)} под ключ` : "цена считается"}</span>
+            </figcaption>
+          </figure>
+        );
+      })}
+      {/* Значок между кадрами — единственное украшение на странице: он сразу говорит,
+          что это сравнение, а не подборка из двух машин. */}
+      <span className="blog-duel-versus" aria-hidden="true">vs</span>
+    </div>
+  );
+}
+
+/**
+ * Таблица различий. Всё в ней считается из каталога: наличие, цена самой доступной
+ * машины и лучшие цифры версий, которые сейчас есть. Подсвечено только настоящее
+ * преимущество — при равных значениях не подсвечивается ничего.
+ */
+function BlogDuelTable({ post, data, navigate }) {
+  const currency = useCurrency();
+  const rows = blogDuelRows(data);
+  // Вторая половина таблицы — паспорт модели: то, чего в каталоге нет и что от
+  // объявлений не зависит. Она написана в самом материале, поэтому и оговорка под
+  // таблицей своя: цифры каталога считаются сейчас, паспортные взяты у производителя.
+  // Таблица одна и без перегородок: посетитель сравнивает две машины, а не изучает,
+  // какая цифра откуда взялась. Что считается из каталога, а что паспортное, сказано
+  // одной строкой под таблицей.
+  const lines = [...rows, ...blogDuelSpecRows(blogPostSides(post))];
+  if (!lines.length) return null;
+  const cell = (value) => (value ? (value.money != null ? `≈ ${money(value.money, currency)}` : value.text) : "—");
+  const line = (row) => (
+    <tr key={row.key}>
+      <th scope="row">{row.label}</th>
+      {row.values.map((value, index) => {
+        const side = data[index]?.side;
+        // Наличие — единственная строка, из которой есть куда пойти: число машин ведёт
+        // в каталог, отобранный по этой модели.
+        const target = row.key === "total" && value && side ? blogCatalogHref({ filters: side.filters }) : null;
+        return (
+          <td key={side?.name || index} className={row.best === index ? "best" : undefined}>
+            {/* Обычная ссылка в новую вкладку, а не переход внутри приложения: человек
+                уходит смотреть каталог, но статья остаётся открытой — так же сделаны
+                кнопки расчётов в боковом меню журнала. */}
+            {target ? (
+              <a href={appHref(target)} target="_blank" rel="noreferrer">{cell(value)}</a>
+            ) : (
+              cell(value)
+            )}
+          </td>
+        );
+      })}
+    </tr>
+  );
+  return (
+    <section className="blog-duel-table" aria-labelledby="blog-duel-title">
+      {/* Заголовок стоит внутри таблицы, в пустой клетке над названиями строк: так он
+          оказывается на одной строке с названиями моделей, а над таблицей не висит
+          лишний ярус. */}
+      <div className="blog-duel-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">
+                <h2 id="blog-duel-title">В цифрах</h2>
+              </th>
+              {data.map((entry) => (
+                <th key={entry.side.name} scope="col">
+                  <a href={appHref(entry.side.review)} target="_blank" rel="noreferrer">{entry.side.name}</a>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>{lines.map(line)}</tbody>
+        </table>
+      </div>
+      {/* Подписей под названиями строк нет — вместо десятка мелких пояснений одна
+          строка под таблицей: откуда цифры и что стоит за ценой. */}
+      <p className="blog-duel-source">Наличие, цена и характеристики версий считаются из каталога в момент открытия страницы: цена — самая доступная машина под ключ в Минске, остальное — лучшее, что есть сейчас. Габариты, багажник и гарантия — паспортные данные производителей.</p>
+    </section>
+  );
+}
+
+/**
+ * Живые машины одной модели: пять самых доступных строками каталога — теми же, что
+ * в списке на главной и в каталоге. Своя вёрстка списка тут не нужна: в сравнении
+ * машины не соревнуются между собой, как в подборке, а показывают, что есть в наличии
+ * и с какой суммы модель начинается.
+ */
+function BlogDuelSideCars({ entry, navigate, favorites, toggleFavorite, onOpen }) {
+  const cars = entry.cars.slice(0, 5);
+  if (!cars.length) return null;
+  const catalogTarget = blogCatalogHref({ filters: entry.side.filters });
+  return (
+    <section className="blog-duel-cars">
+      <h3>{entry.side.name} в наличии</h3>
+      <div className="car-list">
+        {cars.map((car) => (
+          <CarRow
+            key={car.id}
+            car={car}
+            navigate={navigate}
+            favorite={favorites?.has(car.id)}
+            toggleFavorite={toggleFavorite}
+            // Быстрый просмотр там, где он включён и помещается; иначе обычный переход
+            // на страницу машины — как в каталоге и на главной.
+            onOpen={(item) => {
+              if (onOpen?.(item)) return;
+              navigate(carHref(item));
+            }}
+          />
+        ))}
+      </div>
+      <AppLink className="blog-top-more" href={catalogTarget} navigate={navigate}>
+        {entry.total ? `Все ${number(entry.total)} в каталоге` : "Смотреть в каталоге"} <ArrowRight size={17} />
+      </AppLink>
+    </section>
+  );
+}
+
+/** Сам список с заголовком и переходом в каталог. */
+function BlogTopList({ post, cars, total, navigate, onOpen }) {
+  if (!cars.length) return null;
+  const catalogTarget = blogCatalogHref(post);
+  return (
+    <section className="blog-top" aria-labelledby="blog-top-title">
+      {/* Список живой: он собирается из каталога при каждом открытии страницы.
+          Мелкой строкой над заголовком говорим об этом прямо — иначе подборку
+          читают как написанную однажды и с тех пор устаревшую. */}
+      <p className="blog-top-note">Обновляем топ автоматически из нашего каталога</p>
+      <h2 id="blog-top-title">{post.name}</h2>
+      <div className="blog-top-list">
+        {cars.map((car, index) => (
+          <BlogTopCard key={car.id} car={car} rank={index + 1} post={post} list={cars} navigate={navigate} onOpen={onOpen} />
+        ))}
+      </div>
+      <AppLink className="blog-top-more" href={catalogTarget} navigate={navigate}>
+        {total ? `Все ${number(total)} в каталоге` : "Смотреть в каталоге"} <ArrowRight size={17} />
+      </AppLink>
+    </section>
+  );
+}
+
+/**
+ * Фотография внутри статьи. Кадр не иллюстративный, а из каталога: это настоящая
+ * машина подборки, подпись показывает её пробег и итоговую цену до Минска, а сам
+ * снимок кликается в объявление. Сплошной текст так разбивается тем, за чем на
+ * страницу и приходят, а поисковик получает фотографию с осмысленной подписью.
+ */
+function BlogFigure({ car, index, navigate, onOpen = null, eager = false }) {
+  const currency = useCurrency();
+  const gallery = car.images?.length ? car.images : [car.image].filter(Boolean);
+  // У соседних снимков берём разные кадры: иначе три фотографии подряд оказываются
+  // одинаковыми «три четверти спереди».
+  const source = gallery[Math.min(index, gallery.length - 1)] || null;
+  const image = imageSource(source, IMAGE_WIDTH_ARTICLE);
+  if (!image) return null;
+  const title = car.title || carTitle(car.brand, car.model, car.year);
+  // Нажатие раскрывает быстрый просмотр — как в каталоге и на главной. Если посетитель
+  // сам выключил его переключателем или экран узкий, `onOpen` вернёт неправду и ссылка
+  // сработает обычным образом, открыв полную страницу машины.
+  const open = (event) => {
+    if (onOpen?.(car)) event.preventDefault();
+  };
+  return (
+    <figure className="blog-figure">
+      <AppLink href={carHref(car)} navigate={navigate} onClick={open} aria-label={`Открыть объявление: ${title}`}>
+        <img src={image} srcSet={imageSourceSet(source, IMAGE_WIDTH_ARTICLE)} alt={`${title} — автомобиль из Китая в наличии`} loading={eager ? "eager" : "lazy"} onError={(event) => retryWithFullImage(event, source)} />
+      </AppLink>
+      <figcaption>
+        <AppLink href={carHref(car)} navigate={navigate} onClick={open}>{title}</AppLink>
+        <span>
+          {car.mileage ? `${number(car.mileage)} км · ` : ""}≈ {money(estimateLandedCost(car).totalUsd, currency)} под ключ в Минске
+        </span>
+      </figcaption>
+    </figure>
+  );
+}
+
+/**
+ * Похожие материалы под статьёй — теми же карточками, что в журнале и на главной.
+ * Три в ряд: колонка статьи ровно три колонки сетки, поэтому карточки здесь той же
+ * ширины, что везде.
+ */
+function BlogRelated({ post, navigate }) {
+  const related = blogRelatedPosts(post);
+  if (!related.length) return null;
+  return (
+    <section className="blog-related" aria-labelledby="blog-related-title">
+      <h2 id="blog-related-title">Похожие статьи</h2>
+      <div className="blog-card-grid blog-card-grid-index">
+        {related.map((item) => (
+          <BlogCollectionCard key={item.slug} post={item} navigate={navigate} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Общая обвязка страницы материала: крошки, шапка со строкой «раздел · дата», подложка
+ * статьи, кнопка «поделиться», похожие материалы и меню сбоку. Внутрь ставится тело
+ * материала — у подборки и у сравнения оно разное, а рамка одна.
+ */
+function BlogArticleShell({ post, navigate, dateLine, quickViewModal, children }) {
+  const shown = dateLine ? { ...dateLine, date: dateLine.date.charAt(0).toUpperCase() + dateLine.date.slice(1) } : null;
+  return (
+    <main className="blog-page page-width">
+      <div className="breadcrumbs">
+        <button onClick={() => goBackTo(navigate, "/")}>Главная</button>
+        <CaretRight size={13} />
+        <button onClick={() => goBackTo(navigate, BLOG_INDEX.path)}>{BLOG_INDEX.name}</button>
+        <CaretRight size={13} />
+        {post.name}
+      </div>
+      <BlogMasthead navigate={navigate} />
+      <div className="blog-layout">
+        {/* В колонке сетки два блока: сама статья на своей подложке — так же, как обзор
+            модели, — и под ней похожие материалы. */}
+        <div className="blog-main">
+          <article className="blog-article">
+            {/* Та же кнопка «поделиться», что на карточках, — в правом верхнем углу
+                подложки. Список раскрывается вниз: наверху страницы вверх ему некуда. */}
+            <div className="blog-article-share">
+              <BlogShareMenu post={post} direction="down" />
+            </div>
+            <header className="blog-head">
+              {/* Строка над заголовком: раздел и дата через точку. Слова «опубликовано»
+                  нет — дата и так читается как дата, а лишнее слово только удлиняет
+                  строку перед заголовком. */}
+              <span className="blog-article-meta">
+                {/* Раздел — ссылка в журнал: из статьи логично вернуться к списку
+                    материалов, а не только к главной. Вид тот же, что был у подписи. */}
+                <AppLink
+                  href={BLOG_INDEX.path}
+                  navigate={navigate}
+                  onClick={() => openBlogWithFilter(navigate, post.rubric ? { kind: "rubric", slug: post.rubric, name: post.rubricName } : null)}
+                >
+                  {post.rubricName || BLOG_INDEX.name}
+                </AppLink>
+                {shown ? <span>{shown.date}</span> : null}
+              </span>
+              <h1>{post.h1}</h1>
+              <p>{post.lead}</p>
+            </header>
+            {children}
+          </article>
+          <BlogRelated post={post} navigate={navigate} />
+        </div>
+        <BlogSidebar navigate={navigate} />
+      </div>
+      {quickViewModal}
+    </main>
+  );
+}
+
+/** Страница материала: у подборки и у сравнения общая рамка и разное тело. */
+function BlogPostPage({ post, navigate, favorites, toggleFavorite }) {
+  return post.kind === "duel"
+    ? <BlogDuelPage post={post} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
+    : <BlogCollectionPage post={post} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />;
+}
+
+/** Подборка: статья, полоса цифр и живой список машин по правилу отбора. */
+function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
+  const text = useBlogText(post.slug);
+  // Один запрос на всю статью: из него и список машин, и снимки между разделами.
+  // Берём с запасом — из шестидесяти машин набирается десяток разных марок; подборка,
+  // где половина машин одной марки, подборкой не выглядит.
+  const carsState = useCollectionCars(post, { limit: BLOG_TOP_POOL });
+  const edges = useCollectionEdges(post);
+  // Открывающий кадр — тот же, что на карточке материала: человек нажал на карточку
+  // и видит наверху статьи ту же машину, а не другую.
+  const { car: coverCar } = useCollectionCover(post);
+  const topCars = blogTopCars(carsState.cars, post);
+  // Дата обновления — когда каталог последний раз проверялся: список машин и цифры
+  // в тексте живут вместе с ним, а не с датой, когда статью написали. Пока проверок
+  // после выпуска не было, пишем «Опубликовано».
+  const dateLine = blogDateLine(post, carsState.refreshedAt, new Date());
+  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
+  // Цифры в тексте — из каталога: сколько машин подходит, от какой суммы и какой
+  // запас хода у самой дальнобойной. Чего каталог не отдал, того в полосе нет.
+  const stats = blogPostStats({ total: carsState.total, ...edges });
+  return (
+    <BlogArticleShell post={post} navigate={navigate} dateLine={dateLine} quickViewModal={quickViewModal}>
+      {/* Открывающая фотография — сразу после описания, до текста: статья без
+          картинки на первом экране читается как стена. */}
+      {coverCar ? <BlogFigure car={coverCar} index={0} navigate={navigate} onOpen={openQuickView} eager /> : null}
+      <div className="model-page-intro">
+        {text?.intro.map((paragraph) => (
+          <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
+        ))}
+      </div>
+      {stats.length > 0 && (
+        <div className="model-page-numbers">
+          {stats.map((stat) => (
+            <div key={stat.label}>
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Сам список — сразу после полосы цифр: за ним и приходят, а разборы
+          читают уже после. */}
+      <BlogTopList post={post} cars={topCars} total={carsState.total} navigate={navigate} onOpen={openQuickView} />
+      {/* Между разделами статьи встают фотографии машин из этой же подборки:
+          сплошной текст, пусть и с врезками, читать тяжело. Последний раздел
+          оставляем без снимка — дальше идут вопросы и список машин. */}
+      <div className="model-page-article">
+        {(text?.sections || []).map((section, index) => {
+          // Ни обложку, ни машины из списка в тексте не повторяем.
+          const shown = new Set([coverCar?.id, ...topCars.map((item) => item.id)]);
+          const cars = carsState.cars.filter((item) => !shown.has(item.id));
+          const car = index < (text?.sections?.length || 0) - 1 ? cars[index] : null;
+          return (
+            <Fragment key={section.title}>
+              <ModelPageSection section={section} navigate={navigate} />
+              {car ? <BlogFigure car={car} index={index} navigate={navigate} onOpen={openQuickView} /> : null}
+            </Fragment>
+          );
+        })}
+      </div>
+      <ArticleFaq faq={text?.faq} title="Частые вопросы" />
+      {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
+    </BlogArticleShell>
+  );
+}
+
+/**
+ * Сравнение: две машины в шапке, таблица различий, разборы текстом и живые списки
+ * обеих моделей. Порядок другой, чем у подборки: сначала ответ в цифрах — за ним и
+ * приходят по запросу «что выбрать», — а машины в наличии стоят под разбором, когда
+ * человек уже решил, какая из двух ему ближе.
+ */
+function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
+  const text = useBlogText(post.slug);
+  const data = useDuelSides(post);
+  const dateLine = blogDateLine(post, data.find((entry) => entry.refreshedAt)?.refreshedAt || null, new Date());
+  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
+  // Снимки между разделами берём у обеих сторон по очереди: иначе половина статьи
+  // была бы проиллюстрирована одной моделью.
+  const heroes = new Set(data.map((entry) => entry.hero?.id).filter(Boolean));
+  const photoCars = [];
+  for (let index = 0; index < 4; index += 1) {
+    for (const entry of data) {
+      const car = entry.cars.filter((item) => !heroes.has(item.id))[index];
+      if (car) photoCars.push(car);
+    }
+  }
+  return (
+    <BlogArticleShell post={post} navigate={navigate} dateLine={dateLine} quickViewModal={quickViewModal}>
+      <BlogDuelHero data={data} navigate={navigate} onOpen={openQuickView} />
+      <div className="model-page-intro">
+        {text?.intro.map((paragraph) => (
+          <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
+        ))}
+      </div>
+      <BlogDuelTable post={post} data={data} navigate={navigate} />
+      <div className="model-page-article">
+        {(text?.sections || []).map((section, index) => {
+          const car = index < (text?.sections?.length || 0) - 1 ? photoCars[index] : null;
+          return (
+            <Fragment key={section.title}>
+              <ModelPageSection section={section} navigate={navigate} />
+              {car ? <BlogFigure car={car} index={index} navigate={navigate} onOpen={openQuickView} /> : null}
+            </Fragment>
+          );
+        })}
+      </div>
+      {data.map((entry) => (
+        <BlogDuelSideCars key={entry.side.name} entry={entry} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpen={openQuickView} />
+      ))}
+      <ArticleFaq faq={text?.faq} title="Частые вопросы" />
+      {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
+    </BlogArticleShell>
+  );
+}
+
 function SiteFooter({ navigate }) {
   return (
     <footer className="site-footer">
@@ -7718,7 +8908,7 @@ function SiteFooter({ navigate }) {
             <a className="viber-social-link" href={COMPANY.viberUrl} aria-label="Viber"><ViberLogo size={25} /></a>
           </div>
         </div>
-        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink><AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
+        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
         <div className="footer-column footer-tools"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
         <div className="footer-column footer-contacts">
           <b>Связаться</b>
@@ -9395,6 +10585,11 @@ export function App() {
       <LegalPage navigate={navigate} kind="terms" />
     ) : contentPath === MODELS_INDEX.path ? (
       <ModelsIndexPage navigate={navigate} />
+    ) : BLOG_ENABLED && contentPath === BLOG_INDEX.path ? (
+      <BlogIndexPage navigate={navigate} />
+    ) : BLOG_ENABLED && findBlogPost(contentPath) ? (
+      // Подборка сама запрашивает свой срез каталога и не ждёт общего boot-запроса.
+      <BlogPostPage post={findBlogPost(contentPath)} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : findToolPage(contentPath) ? (
       <ToolPage tool={findToolPage(contentPath)} navigate={navigate} />
     ) : findModelPage(contentPath) ? (

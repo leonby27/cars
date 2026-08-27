@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { EV_DUTY_STALE_PHRASES, rewriteEvDutyCopy, rewriteEvDutyCopyDeep } from "../src/ev-duty-copy.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { MODEL_TEXTS_RAW } from "../src/model-texts.js";
+// Тексты журнала переписываются теми же правилами: обещание нулевой пошлины не должно
+// пережить конец льготы ни в обзоре модели, ни в подборке.
+import { BLOG_TEXTS_RAW } from "../src/blog-texts.js";
 
 const sentences = (value, found = []) => {
   if (typeof value === "string") found.push(...value.split(/(?<=[.!?])\s+/));
@@ -12,7 +15,7 @@ const sentences = (value, found = []) => {
 };
 
 test("keeps every page word for word while the quota lasts", () => {
-  const pages = { MODEL_PAGES, MODELS_INDEX, MODEL_TEXTS_RAW };
+  const pages = { MODEL_PAGES, MODELS_INDEX, MODEL_TEXTS_RAW, BLOG_TEXTS_RAW };
   assert.deepEqual(rewriteEvDutyCopyDeep(pages, { quotaOver:false }), pages);
 });
 
@@ -21,7 +24,7 @@ test("keeps every page word for word while the quota lasts", () => {
 // текстах обзоров появится новая такая фраза, этот тест упадёт — значит, для неё
 // нужно дописать правило в ev-duty-copy.js.
 test("leaves no zero-duty promise once the quota is gone", () => {
-  const after = rewriteEvDutyCopyDeep({ MODEL_PAGES, MODELS_INDEX, MODEL_TEXTS_RAW }, { quotaOver:true });
+  const after = rewriteEvDutyCopyDeep({ MODEL_PAGES, MODELS_INDEX, MODEL_TEXTS_RAW, BLOG_TEXTS_RAW }, { quotaOver:true });
   const stale = sentences(after).filter((sentence) => EV_DUTY_STALE_PHRASES.some((phrase) => phrase.test(sentence)));
   assert.deepEqual(stale, [], `Фразы про льготу пережили переписывание:\n${stale.slice(0, 5).join("\n")}`);
 });

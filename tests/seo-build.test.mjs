@@ -372,3 +372,54 @@ test("адреса не оканчиваются косой чертой ни в
     }
   }
 });
+
+// Журнал за выключателем: пока BLOG_ENABLED выключен, у сайта нет ни его страниц,
+// ни адресов в карте сайта — сайт можно выкладывать, не показывая недоделанный раздел.
+test("выключенный журнал в сборку не попадает", async () => {
+  const { missing, read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  await missing("blog/index.html");
+  await missing("blog/electric-range-700/index.html");
+  const [pages, home, about] = await Promise.all([read(`sitemap-${sitemapToken}-pages.xml`), read("index.html"), read("how-it-works/index.html")]);
+  assert.doesNotMatch(pages, /\/blog/);
+  // Ни ссылки в подвале, ни блока на главной: пока раздел выключен, его на сайте нет.
+  assert.doesNotMatch(home, /href="\/blog/);
+  assert.doesNotMatch(about, /href="\/blog/);
+});
+
+test("включённый журнал собирается страницами и попадает в карту сайта", async () => {
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1", BLOG_ENABLED: "1" });
+  const [index, post, pages, home, about] = await Promise.all([
+    read("blog/index.html"),
+    read("blog/electric-range-700/index.html"),
+    read(`sitemap-${sitemapToken}-pages.xml`),
+    read("index.html"),
+    read("how-it-works/index.html"),
+  ]);
+  assert.match(index, /<h1>Журнал abcars\.by/);
+  assert.match(index, /href="\/blog\/electric-range-700"/);
+  // Содержимое подборки лежит в разметке, а не подгружается скриптом: текст, вопросы
+  // и разметка статьи с датой.
+  assert.match(post, /<h1>Топ 10 электромобилей из Китая с запасом хода от 700 километров<\/h1>/);
+  assert.match(post, /Что стоит за цифрой в паспорте/);
+  assert.match(post, /"@type":"BlogPosting"/);
+  assert.match(post, /"@type":"FAQPage"/);
+  assert.match(post, /<link rel="canonical" href="https:\/\/abcars\.by\/blog\/electric-range-700"/);
+  assert.match(post, /<meta name="robots" content="index, follow/);
+  assert.match(pages, /<loc>https:\/\/abcars\.by\/blog<\/loc>/);
+  assert.match(pages, /<loc>https:\/\/abcars\.by\/blog\/electric-range-700<\/loc>/);
+  // Дата обновления у материалов есть: только по ней поисковик узнаёт, что списки
+  // машин в подборках пересобираются каждую ночь, и приходит перепроверять чаще.
+  assert.match(pages, /<loc>https:\/\/abcars\.by\/blog\/electric-range-700<\/loc><lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
+  // Ссылки на журнал должны быть в самой разметке: в приложении они есть, но их
+  // рисует скрипт, а Яндекс ходит по готовой странице. Без них материалы держались
+  // бы на одной карте сайта.
+  assert.match(about, /<footer[\s\S]*href="\/blog"/);
+  assert.match(home, /href="\/blog\/electric-range-700"/);
+  // Те же правила, что у остальных страниц: один заголовок первого уровня и ни одного
+  // адреса с косой чертой на конце.
+  for (const [name, html] of [["журнал", index], ["подборка", post]]) {
+    assert.equal((html.match(/<h1[\s>]/g) || []).length, 1, `${name}: заголовков первого уровня не один`);
+    assert.doesNotMatch(html, /<a href="\/[^"]+\/"/, `${name}: внутренняя ссылка с чертой`);
+    assert.doesNotMatch(html, /"item":"https:\/\/abcars\.by\/[^"]+\/"/, `${name}: крошки с чертой`);
+  }
+});

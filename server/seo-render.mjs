@@ -13,6 +13,10 @@ import { chineseModelName } from "../config/model-names-by.mjs";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
 // Страницы-расчёты нужны подвалу: ссылки на них должны стоять на каждой странице сайта.
 import { TOOL_PAGES } from "../src/tool-pages.js";
+// Журнал: ссылка на него нужна в подвале каждой страницы. Пока раздел выключен,
+// ссылки нет — как и самих страниц журнала.
+import { BLOG_ENABLED } from "../src/feature-flags.js";
+import { BLOG_INDEX, blogPostsForModel } from "../src/blog-posts.js";
 // Живые ссылки внутри абзацев обзора модели — тот же разбор, что в приложении.
 import { splitInlineLinks } from "../src/inline-links.js";
 // Первый экран, который браузер показывает до запуска приложения.
@@ -31,11 +35,16 @@ export const linkifyText = (text, hrefRoute) =>
 // снимка у себя и отдаёт её вчетверо быстрее, чем китайское хранилище отвечает на
 // первый запрос. Подробности — в snippets/abcars-photo-location.conf на сервере
 // и в imageSource() в src/App.jsx. Если адрес не из хранилища Che168 — оставляем как есть.
-export const photoHref = (source) => {
+export const photoHref = (source, width = 0) => {
   if (!source) return source;
   try {
     const url = new URL(source);
-    return /(^|\.)autoimg\.cn$/.test(url.hostname) ? `/photo${url.pathname}` : source;
+    if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return source;
+    // Хранилище Che168 отдаёт снимок любой ширины: она стоит в адресе перед именем
+    // файла. Оригинал на 1400 точек весит втрое больше нужного, поэтому там, где
+    // известна ширина показа, просим её (высоту хранилище считает само).
+    const path = width ? url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`) : url.pathname;
+    return `/photo${path}`;
   } catch {
     return source;
   }
@@ -142,6 +151,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const links = [
       ["/catalog/", "Автомобили"],
       ["/how-it-works/", "О сервисе"],
+      // Журнал стоит там же, где в подвале приложения, — третьей ссылкой. Без него
+      // страницы журнала не имели в готовой разметке ни одной входящей ссылки: в
+      // приложении ссылка есть, но её рисует скрипт, а Яндекс ходит по разметке.
+      ...(BLOG_ENABLED ? [[`${BLOG_INDEX.path}/`, BLOG_INDEX.name]] : []),
       ["/delivered/", "Доставленные автомобили"],
       ["/payment-and-contract/", "Оплата и договор"],
       ["/guarantees/", "Гарантии"],
@@ -723,7 +736,16 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // Обзоры моделей того же класса у других марок: тот же кузов и тот же тип
     // двигателя. Своей марки здесь нет — она идёт отдельным блоком ниже.
     const alike = modelLinks(similar, { heading: `Похожие модели других марок`, skip: page.path });
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/models/")}">О моделях авто</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${availability}${modelPageArticle(page)}${offers}${catalogWays}${alike}${modelLinks(siblings, { heading: `Другие модели ${page.brand}`, skip: page.path })}</main>${footer()}`;
+    // Материалы журнала про эту модель. Сравнение «SU7 или Model 3» не было упомянуто
+    // ни на одной из двух страниц обзоров, хотя читатель обзора — ровно тот, кому оно
+    // нужно, а поисковику это единственная ссылка из содержательной страницы в журнал.
+    const journal = BLOG_ENABLED
+      ? pathwayLinks({
+          heading: "Об этой модели в журнале",
+          links: blogPostsForModel(page.path).map((post) => [`${post.path}/`, post.name, post.teaser || null]),
+        })
+      : "";
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/models/")}">О моделях авто</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${availability}${modelPageArticle(page)}${offers}${journal}${catalogWays}${alike}${modelLinks(siblings, { heading: `Другие модели ${page.brand}`, skip: page.path })}</main>${footer()}`;
     const schemas = [
       breadcrumbsSchema([["Главная", "/"], ["О моделях авто", "/models/"], [page.name, page.path]]),
     ];
