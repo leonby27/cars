@@ -45,10 +45,20 @@
 .analytics-panel table { width:100%; border-collapse:collapse; text-align:left; }
 .analytics-panel th, .analytics-panel td { padding:15px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
 .analytics-panel th { color:var(--muted); font-weight:700; }
+/* Заголовок столбца, по которому можно сортировать: выглядит как обычная подпись,
+   у активного — стрелка направления. */
+.analytics-sort { display:inline-flex; align-items:center; gap:6px; padding:0; border:0; background:none; color:inherit; font:inherit; font-weight:700; cursor:pointer; }
+.analytics-sort:hover { color:var(--ink); }
+.analytics-sort.active { color:var(--ink); }
+.analytics-sort span { font-size:12px; }
+.analytics-sort:focus-visible { outline:3px solid var(--focus-ring); outline-offset:3px; border-radius:4px; }
 .analytics-panel td a { color:var(--ink); font-weight:700; text-decoration-color:color-mix(in srgb,var(--accent) 45%,transparent); text-underline-offset:3px; }
 /* Запрос, на который каталогу нечего ответить: подсвечиваем строку фоном. */
 .analytics-panel tr.analytics-row-warning { background:var(--accent-soft); }
 .analytics-panel tbody tr:last-child td { border-bottom:0; }
+/* Вторая таблица внутри той же карточки: отделяем чертой, чтобы не плодить панели. */
+.analytics-subpanel { margin-top:28px; padding-top:24px; border-top:1px solid var(--line); }
+.analytics-note { color:var(--muted); font-weight:400; }
 .analytics-two-column { display:grid; grid-template-columns:1.08fr .92fr; gap:18px; }
 .analytics-activity { list-style:none; margin:0; padding:0; }
 .analytics-activity li { display:flex; justify-content:space-between; gap:18px; padding:13px 0; border-bottom:1px solid var(--line); }

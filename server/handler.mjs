@@ -2,7 +2,7 @@ import { Readable } from "node:stream";
 import { gzip } from "node:zlib";
 import { promisify } from "node:util";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
-import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
+import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionAccount, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
@@ -114,6 +114,12 @@ const readJson = async (request) => {
 const tooManyRequests = (response, retryAfter) =>
   json(response, 429, { error:"too_many_requests" }, { "retry-after":String(retryAfter) });
 
+// Свои заходы в статистику не идут. Служебный аккаунт узнаём по входу в кабинет:
+// сбой запроса к базе считаем «не свой» — потерять чужое событие хуже, чем записать своё.
+const isStaffVisit = async (request) => {
+  try { return Boolean((await getSessionAccount(request))?.staff); } catch { return false; }
+};
+
 export async function handleApiRequest(request, response) {
   if (request.method === "OPTIONS") return json(response, 204, null);
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
@@ -126,6 +132,9 @@ export async function handleApiRequest(request, response) {
       // подделать событие. Для страницы сайта разницы нет — она ответ не читает.
       if (!fromOwnPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, recorded:false });
       if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, recorded:false });
+      // Свой человек, вошедший в кабинет служебным аккаунтом, статистику не наполняет:
+      // метку «не считать» браузер помнит не везде, а вход — надёжный признак своего.
+      if (await isStaffVisit(request)) return json(response, 202, { ok:true, recorded:false });
       const result = await recordAnalyticsEvent(body);
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
@@ -137,6 +146,7 @@ export async function handleApiRequest(request, response) {
       const body = await readJson(request);
       if (!fromOwnPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0 });
       if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0 });
+      if (await isStaffVisit(request)) return json(response, 202, { ok:true, confirmed:0 });
       const result = await confirmHumanVisit(body);
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
@@ -154,7 +164,7 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/dashboard") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
-      return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("days")));
+      return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("period") || url.searchParams.get("days")));
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });

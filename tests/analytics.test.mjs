@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromOwnPage, isBotAgent, isDatacenterAddress, normalizeAnalyticsDays, normalizeAnalyticsEvent, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromOwnPage, isBotAgent, isDatacenterAddress, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
@@ -25,6 +25,22 @@ test("analytics events are allowlisted and drop personal data", () => {
 test("analytics date range is restricted to dashboard presets", () => {
   assert.equal(normalizeAnalyticsDays("7"), 7);
   assert.equal(normalizeAnalyticsDays("365"), 30);
+});
+
+test("«сегодня» и «вчера» считаются по минским суткам", () => {
+  // 27.08.2026, 00:30 по Минску — это 26.08 21:30 UTC: «сегодня» должно начинаться
+  // с минской полуночи, иначе полчаса после полуночи показывали бы вчерашний день.
+  const now = Date.parse("2026-08-26T21:30:00Z");
+  const today = normalizeAnalyticsRange("today", now);
+  assert.equal(today.from.toISOString(), "2026-08-26T21:00:00.000Z");
+  assert.equal(today.to.toISOString(), new Date(now).toISOString());
+  const yesterday = normalizeAnalyticsRange("yesterday", now);
+  assert.equal(yesterday.from.toISOString(), "2026-08-25T21:00:00.000Z");
+  assert.equal(yesterday.to.toISOString(), "2026-08-26T21:00:00.000Z");
+  // Всё остальное — скользящее окно в днях, чужое значение не пропускаем.
+  assert.equal(normalizeAnalyticsRange("7", now).days, 7);
+  assert.equal(normalizeAnalyticsRange("365", now).days, 30);
+  assert.equal(normalizeAnalyticsRange("365", now).from.toISOString(), new Date(now - 30 * 86_400_000).toISOString());
 });
 
 test("analytics tokens expire and reject tampering", () => {

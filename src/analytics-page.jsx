@@ -262,10 +262,12 @@ function OverviewSection({ data }) {
     // не двинул мышью, не прокрутил и не нажал ни одной клавиши, считается отдельно —
     // так видно, сколько на сайт приходит машинного трафика. Просто время на странице
     // человеком не считается: его выжидает обходчик, чтобы сойти за посетителя.
-    ["Уникальные посетители", summary.visitors, `${formatNumber(summary.sessions)} сессий${Number(summary.robot_visits) ? ` · ещё ${formatNumber(summary.robot_visits)} заходов без действий` : ""}`],
+    // Заход — не вкладка: человек, вернувшийся вечером, считается вторым заходом, а
+    // три карточки, открытые в трёх вкладках подряд, остаются одним.
+    ["Уникальные посетители", summary.visitors, `${formatNumber(summary.visits)} заходов${Number(summary.robot_visits) ? ` · ещё ${formatNumber(summary.robot_visits)} без действий` : ""}`],
     ["Просмотры автомобилей", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
     ["Заявки по автомобилю", summary.availability_clicks, `${percent(summary.availability_clicks, summary.vehicle_views)} от просмотров авто${summary.custom_searches ? ` · ещё ${formatNumber(summary.custom_searches)} на подбор` : ""}`],
-    ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} машин держат в избранном`],
+    ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} добавлений в избранное`],
   ];
   return (
     <>
@@ -283,12 +285,52 @@ function OverviewSection({ data }) {
   );
 }
 
+// Колонки таблицы «Интерес по автомобилям»: каждую можно поставить во главу сортировки.
+const vehicleColumns = [
+  { id:"title", label:"Автомобиль", text:true, value:(item) => item.listingTitle || item.listingId || "" },
+  { id:"viewers", label:"Люди", value:(item) => Number(item.viewers) || 0 },
+  { id:"views", label:"Просмотры", value:(item) => Number(item.views) || 0 },
+  { id:"asks", label:"Уточнения", value:(item) => Number(item.availabilityClicks) || 0 },
+  { id:"favorites", label:"Избранное", value:(item) => Number(item.favorites) || 0 },
+  { id:"conversion", label:"Конверсия", value:(item) => (Number(item.views) ? (Number(item.availabilityClicks) || 0) / Number(item.views) : 0) },
+  { id:"lastViewed", label:"Последний просмотр", value:(item) => (item.lastViewedAt ? new Date(item.lastViewedAt).getTime() || 0 : 0) },
+];
+
 function VehiclesSection({ data }) {
+  // По умолчанию сверху то, что смотрели последним: раздел открывают, чтобы увидеть
+  // свежий интерес, а рейтинг за весь период собирается кликом по нужному столбцу.
+  const [sort, setSort] = useState({ column:"lastViewed", desc:true });
+  const rows = useMemo(() => {
+    const column = vehicleColumns.find((item) => item.id === sort.column) || vehicleColumns[0];
+    const direction = sort.desc ? -1 : 1;
+    return [...(data.vehicles || [])].sort((left, right) => {
+      const a = column.value(left);
+      const b = column.value(right);
+      if (column.text) return String(a).localeCompare(String(b), "ru") * direction;
+      return (a === b ? 0 : a < b ? -1 : 1) * direction;
+    });
+  }, [data.vehicles, sort]);
+  // Первый клик по столбцу ставит осмысленный порядок: у чисел и дат — от большего,
+  // у названия — по алфавиту. Повторный клик переворачивает.
+  const toggle = (id) => setSort((current) => (current.column === id ? { column:id, desc:!current.desc } : { column:id, desc:id !== "title" }));
   return (
     <section className="analytics-panel">
-      <div className="analytics-panel-heading"><div><h2>Интерес по автомобилям</h2><p>«Люди» — сколько разных посетителей открывали карточку; «просмотры» считают каждое открытие</p></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr><th>Автомобиль</th><th>Люди</th><th>Просмотры</th><th>Уточнения</th><th>Избранное</th><th>Конверсия</th></tr></thead><tbody>{data.vehicles?.length ? data.vehicles.map((item) => <tr key={item.listingId}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle || item.listingId}</a></td><td>{formatNumber(item.viewers ?? 0)}</td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td></tr>) : <tr><td colSpan="6">Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
+      <div className="analytics-panel-heading"><div><h2>Интерес по автомобилям</h2><p>Сверху то, что открывали последним. Нажатие на заголовок столбца меняет порядок. «Люди» — сколько разных посетителей открывали карточку; «просмотры» считают каждое открытие</p></div></div>
+      <div className="analytics-table-wrap"><table><thead><tr>{vehicleColumns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggle(column.id)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : ""}</span></button></th>)}</tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle || item.listingId}</a></td><td>{formatNumber(item.viewers ?? 0)}</td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></tr>) : <tr><td colSpan={vehicleColumns.length}>Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
+      <FavoritesPanel favorites={data.favorites} />
     </section>
+  );
+}
+
+// Что лежит в избранном прямо сейчас, а не сколько раз нажимали сердечко: строка
+// исчезает, когда машину убрали из избранного, и не зависит от выбранного периода.
+function FavoritesPanel({ favorites }) {
+  const rows = favorites || [];
+  return (
+    <div className="analytics-subpanel">
+      <div className="analytics-panel-heading"><div><h2>Сейчас в избранном</h2><p>Машины, отложенные зарегистрированными посетителями. У гостя без входа в кабинет избранное остаётся в его браузере и сюда не попадает</p></div></div>
+      <div className="analytics-table-wrap"><table><thead><tr><th>Автомобиль</th><th>Людей</th><th>Состояние</th><th>Отложили</th></tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId} className={item.gone || item.status === "unavailable" ? "analytics-row-warning" : undefined}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle}</a>{item.priceUsd ? <span className="analytics-note"> · {formatUsd(item.priceUsd)}</span> : null}</td><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{formatLeadDate(item.addedAt)}</td></tr>) : <tr><td colSpan="4">Избранного пока нет.</td></tr>}</tbody></table></div>
+    </div>
   );
 }
 
@@ -328,6 +370,15 @@ const writeSeen = (value) => {
   try { window.localStorage.setItem(seenKey, JSON.stringify(value)); } catch { /* приватный режим */ }
 };
 
+// «Сегодня» и «вчера» — это календарные сутки по Минску, остальное — скользящее окно.
+const analyticsPeriods = [
+  { id:"today", label:"Сегодня" },
+  { id:"yesterday", label:"Вчера" },
+  { id:"7", label:"7 дней" },
+  { id:"30", label:"30 дней" },
+  { id:"90", label:"90 дней" },
+];
+
 const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:false },
@@ -336,7 +387,7 @@ const sections = [
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
 ];
 
-function Dashboard({ data, days, setDays, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads }) {
+function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads }) {
   const [section, setSection] = useState("leads");
   // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
   const [updates, setUpdates] = useState({});
@@ -395,7 +446,7 @@ function Dashboard({ data, days, setDays, reload, logout, leads, leadsLoading, l
       <header className="analytics-heading">
         <div><span>Закрытый раздел</span><h1>Аналитика и заявки</h1><p>Срез обновлён {formatDate(data.generatedAt, true)}</p></div>
         <div className="analytics-actions">
-          {active.ranged && <div className="analytics-range" aria-label="Период аналитики">{[7,30,90].map((value) => <button key={value} type="button" className={days === value ? "active" : ""} onClick={() => setDays(value)}>{value} дней</button>)}</div>}
+          {active.ranged && <div className="analytics-range" aria-label="Период аналитики">{analyticsPeriods.map(({ id, label }) => <button key={id} type="button" className={period === id ? "active" : ""} onClick={() => setPeriod(id)}>{label}</button>)}</div>}
           <button className="secondary analytics-logout" type="button" onClick={logout}><SignOut size={18} /> Выйти</button>
         </div>
       </header>
@@ -439,7 +490,7 @@ function Dashboard({ data, days, setDays, reload, logout, leads, leadsLoading, l
 }
 
 export function AnalyticsPage() {
-  const [days, setDays] = useState(30);
+  const [period, setPeriod] = useState("30");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -466,7 +517,7 @@ export function AnalyticsPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/analytics/dashboard?days=${days}`, { cache:"no-store", credentials:"same-origin" });
+      const response = await fetch(`/api/analytics/dashboard?period=${encodeURIComponent(period)}`, { cache:"no-store", credentials:"same-origin" });
       if (response.status === 401) { setAuthenticated(false); setData(null); return; }
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "load_failed");
@@ -476,9 +527,9 @@ export function AnalyticsPage() {
       setError(loadError.message === "analytics_storage_unavailable" ? "Хранилище аналитики ещё не подключено." : "Не удалось загрузить аналитику. Попробуйте ещё раз.");
     } finally { setLoading(false); }
   };
-  useEffect(() => { load(); }, [days]);
+  useEffect(() => { load(); }, [period]);
   // Заявки живут отдельно от счётчиков: они не зависят от выбранного периода, поэтому
-  // переключение «7 / 30 / 90 дней» их не перезапрашивает.
+  // переключение периода их не перезапрашивает.
   useEffect(() => { if (authenticated) loadLeads(); }, [authenticated]);
   const logout = async () => {
     await fetch("/api/analytics/logout", { method:"POST", credentials:"same-origin" }).catch(() => {});
@@ -489,5 +540,5 @@ export function AnalyticsPage() {
   if (authenticated === false) return <Login onSuccess={load} />;
   if (error && !data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика недоступна</h1><p>{error}</p><button className="primary" type="button" onClick={load}>Повторить</button></section></main>;
   if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
-  return <Dashboard data={data} days={days} setDays={setDays} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} />;
+  return <Dashboard data={data} period={period} setPeriod={setPeriod} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} />;
 }

@@ -234,8 +234,25 @@ const STAFF_PHONES = "SELECT phone FROM customer_accounts WHERE staff AND phone 
 export const notStaffAccount = (column) => `${column} NOT IN (${STAFF_IDS})`;
 export const notStaffContact = (column) => `regexp_replace(${column}, '\\D', '', 'g') NOT IN (${STAFF_PHONES})`;
 
+// Беларусь круглый год живёт по UTC+3 и часы не переводит, поэтому «сегодня»
+// и «вчера» отсчитываем от минской полуночи, а не от полуночи по Гринвичу:
+// иначе с трёх ночи до трёх утра «сегодня» показывало бы вчерашний день.
+const MINSK_OFFSET_MS = 3 * 3_600_000;
+export const startOfMinskDay = (daysBack = 0, now = Date.now()) =>
+  new Date((Math.floor((now + MINSK_OFFSET_MS) / 86_400_000) - daysBack) * 86_400_000 - MINSK_OFFSET_MS);
+
 export function normalizeAnalyticsDays(value) {
   return [7, 30, 90].includes(Number(value)) ? Number(value) : 30;
+}
+
+// Период, за который считается раздел: скользящее окно в днях или конкретные сутки.
+// У суток есть и правая граница, поэтому период везде задаётся парой «с» и «по».
+export function normalizeAnalyticsRange(value, now = Date.now()) {
+  const key = String(value ?? "");
+  if (key === "today") return { period:"today", days:1, from:startOfMinskDay(0, now), to:new Date(now) };
+  if (key === "yesterday") return { period:"yesterday", days:1, from:startOfMinskDay(1, now), to:startOfMinskDay(0, now) };
+  const days = normalizeAnalyticsDays(key);
+  return { period:String(days), days, from:new Date(now - days * 86_400_000), to:new Date(now) };
 }
 
 // Посетителем считаем того, у кого хотя бы одно событие отмечено действием живого
@@ -245,45 +262,58 @@ export function normalizeAnalyticsDays(value) {
 // просто отметкой «живой»: одно лишь время на странице подделывает обходчик, который
 // ходит через домашние адреса и по адресу не отличается от людей (26.08.2026).
 const humanVisitor = (compare = ">=") => `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at ${compare} $1 AND human_action)`;
-const HUMAN_VISITOR = humanVisitor();
+// В разделе период ограничен с двух сторон, поэтому «живой посетитель» ищется
+// внутри тех же границ: иначе вчерашний день подхватывал бы сегодняшние отметки.
+const HUMAN_VISITOR = "visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND human_action)";
 
-export async function getAnalyticsDashboard(daysValue) {
-  const days = normalizeAnalyticsDays(daysValue);
-  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+export async function getAnalyticsDashboard(rangeValue) {
+  const range = normalizeAnalyticsRange(rangeValue);
+  const { days, period } = range;
+  const from = range.from.toISOString();
+  const to = range.to.toISOString();
   // Всё, что оставило след в базе — заявки, избранное, регистрации, — считаем по самим
   // таблицам, а не по событиям из браузера: событие может не дойти (блокировщик, старая
   // вкладка, закрытая страница) и его может подделать кто угодно, а строка в таблице
   // появляется только от настоящего действия. Из событий берём лишь то, чего в базе нет:
   // посетителей, заходы и просмотры карточек.
-  const [summaryResult,actionsResult,dailyResult,vehiclesResult,registrationsResult,recentResult,accountsResult,searchesResult,actionsDailyResult] = await Promise.all([
+  const [summaryResult,visitsResult,actionsResult,dailyResult,vehiclesResult,favoritesResult,registrationsResult,recentResult,accountsResult,searchesResult,actionsDailyResult] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS visitors,
-      count(DISTINCT session_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS sessions,
       count(*) FILTER (WHERE event_name='page_view' AND ${HUMAN_VISITOR})::int AS page_views,
       count(*) FILTER (WHERE event_name='vehicle_view' AND ${HUMAN_VISITOR})::int AS vehicle_views,
       count(DISTINCT visitor_id) FILTER (WHERE NOT (${HUMAN_VISITOR}))::int AS robot_visits
-      FROM analytics_events WHERE created_at >= $1`, [cutoff]),
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2`, [from, to]),
+    // «Заход» считаем по паузе, а не по вкладке: страница помнит номер захода, пока
+    // вкладка открыта, поэтому три карточки, открытые в трёх вкладках, выглядели бы
+    // тремя разными заходами, а вкладка, забытая на сутки, — одним. Новый заход
+    // начинается там, где между двумя шагами посетителя прошло больше получаса.
+    pool.query(`WITH steps AS (
+        SELECT created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap
+        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR}
+      )
+      SELECT count(*) FILTER (WHERE gap IS NULL OR gap > interval '30 minutes')::int AS visits FROM steps`, [from, to]),
     pool.query(`SELECT
-      (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND ${notStaffAccount("customer_id")})::int
-        + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
-      (SELECT count(*) FROM customer_favorites WHERE created_at >= $1 AND ${notStaffAccount("customer_id")})::int AS favorites,
-      (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND calculation->>'requestType' = 'catalog_search' AND ${notStaffContact("contact")})::int AS custom_searches`, [cutoff]),
+      (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int
+        + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
+      (SELECT count(*) FROM customer_favorites WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int AS favorites,
+      (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND calculation->>'requestType' = 'catalog_search' AND ${notStaffContact("contact")})::int AS custom_searches`, [from, to]),
     pool.query(`SELECT created_at::date::text AS day,
       count(DISTINCT visitor_id)::int AS visitors,
       count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views
-      FROM analytics_events WHERE created_at >= $1 AND ${HUMAN_VISITOR}
-      GROUP BY created_at::date ORDER BY created_at::date`, [cutoff]),
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR}
+      GROUP BY created_at::date ORDER BY created_at::date`, [from, to]),
     pool.query(`WITH views AS (
         SELECT listing_id, max(listing_title) AS listing_title,
           count(*) FILTER (WHERE event_name='vehicle_view')::int AS views,
-          count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers
-        FROM analytics_events WHERE created_at >= $1 AND listing_id IS NOT NULL AND ${HUMAN_VISITOR} GROUP BY listing_id
+          count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers,
+          max(created_at) FILTER (WHERE event_name='vehicle_view') AS last_viewed
+        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${HUMAN_VISITOR} GROUP BY listing_id
       ), asks AS (
-        SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND listing_id IS NOT NULL AND ${notStaffAccount("customer_id")} GROUP BY listing_id
+        SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${notStaffAccount("customer_id")} GROUP BY listing_id
       ), drafts AS (
-        SELECT listing_id, count(*)::int AS n FROM order_drafts WHERE created_at >= $1 AND listing_id IS NOT NULL AND ${notStaffContact("contact")} GROUP BY listing_id
+        SELECT listing_id, count(*)::int AS n FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${notStaffContact("contact")} GROUP BY listing_id
       ), favs AS (
-        SELECT listing_id, count(*)::int AS n FROM customer_favorites WHERE created_at >= $1 AND ${notStaffAccount("customer_id")} GROUP BY listing_id
+        SELECT listing_id, count(*)::int AS n FROM customer_favorites WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")} GROUP BY listing_id
       ), ids AS (
         SELECT listing_id FROM views UNION SELECT listing_id FROM asks UNION SELECT listing_id FROM drafts UNION SELECT listing_id FROM favs
       )
@@ -292,27 +322,43 @@ export async function getAnalyticsDashboard(daysValue) {
         COALESCE(views.views, 0) AS views,
         COALESCE(views.viewers, 0) AS viewers,
         COALESCE(asks.n, 0) + COALESCE(drafts.n, 0) AS availability_clicks,
-        COALESCE(favs.n, 0) AS favorites
+        COALESCE(favs.n, 0) AS favorites,
+        views.last_viewed
       FROM ids
       LEFT JOIN views ON views.listing_id = ids.listing_id
       LEFT JOIN asks ON asks.listing_id = ids.listing_id
       LEFT JOIN drafts ON drafts.listing_id = ids.listing_id
       LEFT JOIN favs ON favs.listing_id = ids.listing_id
       LEFT JOIN listings l ON l.id = ids.listing_id
-      ORDER BY availability_clicks DESC, favorites DESC, views DESC LIMIT 30`, [cutoff]),
+      ORDER BY views.last_viewed DESC NULLS LAST, availability_clicks DESC, views DESC LIMIT 100`, [from, to]),
+    // Что держат в избранном прямо сейчас — это не событие, а состояние: строка живёт,
+    // пока сердечко нажато, и период раздела на неё не влияет. Гостей здесь нет —
+    // без входа в кабинет избранное остаётся в браузере и до нас не доходит.
+    pool.query(`SELECT f.listing_id,
+        coalesce(l.title, f.listing_id) AS title,
+        l.id IS NULL AS gone,
+        coalesce(l.status, '') AS status,
+        l.estimated_total_usd,
+        count(*)::int AS people,
+        max(f.created_at) AS added_at
+      FROM customer_favorites f
+      LEFT JOIN listings l ON l.id = f.listing_id
+      WHERE ${notStaffAccount("f.customer_id")}
+      GROUP BY f.listing_id, l.id, l.title, l.status, l.estimated_total_usd
+      ORDER BY max(f.created_at) DESC LIMIT 50`),
     // Список регистраций читаем из таблицы аккаунтов, а не из событий: события
     // принимаются без пароля и подделываются, а аккаунт создаётся только настоящей
     // регистрацией. Заодно личные данные остаются в одном месте.
     pool.query(`SELECT name, phone, created_at
-      FROM customer_accounts WHERE created_at >= $1 AND NOT staff
-      ORDER BY created_at DESC LIMIT 100`, [cutoff]),
+      FROM customer_accounts WHERE created_at >= $1 AND created_at < $2 AND NOT staff
+      ORDER BY created_at DESC LIMIT 100`, [from, to]),
     pool.query(`SELECT event_name,listing_id,listing_title,path,created_at
-      FROM analytics_events WHERE created_at >= $1 AND ${HUMAN_VISITOR} ORDER BY created_at DESC LIMIT 30`, [cutoff]),
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR} ORDER BY created_at DESC LIMIT 30`, [from, to]),
     // Регистрации считаем по аккаунтам, а не по событиям — тем же источником, из которого
     // берётся список ниже. Иначе счётчик и список расходятся: событий может не быть вовсе
     // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
     pool.query(`SELECT created_at::date::text AS day, count(*)::int AS registrations
-      FROM customer_accounts WHERE created_at >= $1 AND NOT staff GROUP BY 1`, [cutoff]),
+      FROM customer_accounts WHERE created_at >= $1 AND created_at < $2 AND NOT staff GROUP BY 1`, [from, to]),
     // Что вводят в строку поиска. Записывается только «отстоявшийся» запрос, но
     // человек мог сделать паузу посреди набора — тогда в одном сеансе окажутся
     // и «джили», и «джили галакси». Показываем самое полное: строку выкидываем,
@@ -322,7 +368,7 @@ export async function getAnalyticsDashboard(daysValue) {
           btrim(properties->>'query') AS query,
           nullif(properties->>'found','')::int AS found
         FROM analytics_events
-        WHERE event_name='search_query' AND created_at >= $1 AND ${HUMAN_VISITOR}
+        WHERE event_name='search_query' AND created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR}
           AND btrim(coalesce(properties->>'query','')) <> ''
       ), settled AS (
         SELECT * FROM asked a WHERE NOT EXISTS (
@@ -338,16 +384,16 @@ export async function getAnalyticsDashboard(daysValue) {
         count(DISTINCT visitor_id)::int AS people,
         max(found)::int AS found,
         max(created_at) AS last_asked
-      FROM settled GROUP BY query ORDER BY asked DESC, last_asked DESC LIMIT 60`, [cutoff]),
+      FROM settled GROUP BY query ORDER BY asked DESC, last_asked DESC LIMIT 60`, [from, to]),
     pool.query(`SELECT day, sum(availability_clicks)::int AS availability_clicks, sum(custom_searches)::int AS custom_searches FROM (
         SELECT created_at::date::text AS day, count(*)::int AS availability_clicks, 0 AS custom_searches
-          FROM customer_orders WHERE created_at >= $1 AND ${notStaffAccount("customer_id")} GROUP BY 1
+          FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")} GROUP BY 1
         UNION ALL
         SELECT created_at::date::text AS day,
           count(*) FILTER (WHERE coalesce(calculation->>'requestType','') <> 'catalog_search')::int,
           count(*) FILTER (WHERE calculation->>'requestType' = 'catalog_search')::int
-          FROM order_drafts WHERE created_at >= $1 AND ${notStaffContact("contact")} GROUP BY 1
-      ) t GROUP BY day`, [cutoff]),
+          FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND ${notStaffContact("contact")} GROUP BY 1
+      ) t GROUP BY day`, [from, to]),
   ]);
   const actionsByDay = new Map(actionsDailyResult.rows.map((row) => [row.day, row]));
   const registrationsByDay = new Map(accountsResult.rows.map((row) => [row.day, row.registrations]));
@@ -377,10 +423,14 @@ export async function getAnalyticsDashboard(daysValue) {
   daily.sort((left, right) => left.day.localeCompare(right.day));
   return {
     days,
+    period,
+    from,
+    to,
     generatedAt:new Date().toISOString(),
-    summary:{ ...summaryResult.rows[0], ...actionsResult.rows[0], registrations },
+    summary:{ ...summaryResult.rows[0], ...visitsResult.rows[0], ...actionsResult.rows[0], registrations },
     daily,
-    vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, favorites:row.favorites })),
+    vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, favorites:row.favorites, lastViewedAt:row.last_viewed })),
+    favorites:favoritesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.title, people:row.people, addedAt:row.added_at, gone:row.gone, status:row.status, priceUsd:row.estimated_total_usd })),
     // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
