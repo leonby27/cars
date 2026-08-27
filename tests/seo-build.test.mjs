@@ -373,10 +373,11 @@ test("адреса не оканчиваются косой чертой ни в
   }
 });
 
-// Журнал за выключателем: пока BLOG_ENABLED выключен, у сайта нет ни его страниц,
-// ни адресов в карте сайта — сайт можно выкладывать, не показывая недоделанный раздел.
-test("выключенный журнал в сборку не попадает", async () => {
-  const { missing, read } = await build({ SEO_ALLOW_INDEXING: "1" });
+// Журнал открыт с 27.08.2026, но сам выключатель остался: им закроют следующий
+// недоделанный раздел, и он должен по-прежнему убирать из сборки всё разом —
+// страницы, адреса в карте сайта, ссылку в подвале и блок на главной.
+test("выключатель убирает журнал из сборки целиком", async () => {
+  const { missing, read } = await build({ SEO_ALLOW_INDEXING: "1", BLOG_ENABLED: "0" });
   await missing("blog/index.html");
   await missing("blog/electric-range-700/index.html");
   const [pages, home, about] = await Promise.all([read(`sitemap-${sitemapToken}-pages.xml`), read("index.html"), read("how-it-works/index.html")]);

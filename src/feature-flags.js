@@ -22,7 +22,8 @@
 // увидят разное.
 const FLAGS = Object.freeze({
   // production — виден ли раздел на боевом сайте; local — виден ли на локальной версии.
-  BLOG_ENABLED: { production: false, local: true },
+  // Журнал включён на боевом сайте 27.08.2026 по решению владельца.
+  BLOG_ENABLED: { production: true, local: true },
 });
 
 // Локальная версия — это `npm run dev`: сборщик помечает её признаком DEV. Сборка
