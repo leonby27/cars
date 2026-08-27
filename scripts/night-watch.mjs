@@ -154,16 +154,26 @@ if (!chatId) {
   process.exit(ok ? 0 : 1);
 }
 
-try {
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) console.warn(`[watch] телеграм ответил ${response.status}: ${(await response.text()).slice(0, 200)}`);
-  else console.log("[watch] сообщение отправлено");
-} catch (error) {
-  console.warn(`[watch] не отправилось: ${String(error.message).slice(0, 120)}`);
+// С этого сервера телеграм доступен только по IPv6, и маршрут иногда моргает:
+// первая же проверка получила «fetch failed» там, где через минуту всё прошло.
+// Одна потерянная попытка — потерянное сообщение о сломанной ночи, поэтому
+// пробуем трижды.
+for (let attempt = 1; attempt <= 3; attempt += 1) {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (response.ok) { console.log("[watch] сообщение отправлено"); break; }
+    console.warn(`[watch] телеграм ответил ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    // Отказ с ответом — это не сбой связи: повтор ничего не изменит.
+    break;
+  } catch (error) {
+    const cause = String(error.cause?.message || error.message).slice(0, 120);
+    console.warn(`[watch] попытка ${attempt} не прошла: ${cause}`);
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 5000));
+  }
 }
 process.exit(ok ? 0 : 1);
