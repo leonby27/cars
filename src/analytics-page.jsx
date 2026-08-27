@@ -495,7 +495,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
 }
 
 export function AnalyticsPage() {
-  const [period, setPeriod] = useState("30");
+  const [period, setPeriod] = useState("today");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
   const [loading, setLoading] = useState(false);
