@@ -14,6 +14,17 @@ export default defineConfig({
     allowedHosts: ["terminal.local"],
     proxy: {
       "/api": "http://127.0.0.1:8787",
+      // Фотографии машин сайт просит со своего адреса /photo/… — на боевом сервере
+      // их отдаёт nginx, забирая кадр у китайского хранилища и складывая на диск
+      // (snippets/abcars-photo-location.conf). Локально nginx нет, и без этой
+      // переадресации каталог остаётся без снимков. Кэша здесь тоже нет: каждый
+      // кадр идёт из Китая, поэтому локально фотографии появляются медленнее,
+      // чем на сайте.
+      "/photo": {
+        target: "https://erscglobal2.autoimg.cn",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/photo/, ""),
+      },
     },
     warmup: {
       clientFiles: ["./src/main.jsx"],
