@@ -51,7 +51,12 @@ const args = new Map(process.argv.slice(2).map((arg) => {
 }));
 const limit = Number(args.get("limit") || 100);
 const batchSize = Number(args.get("batch") || 100);
-const concurrency = Number(args.get("concurrency") || 5);
+// Темп бережный по той же причине, что и в актуализации: источник закрывается
+// не от объёма за неделю, а от плотности обращений за один заход (август 2026 —
+// см. scripts/lib/refresh-shifts.mjs). Два потока с секундной паузой дают около
+// двух карточек в секунду, ночной лимит при этом выкачивается минут за двадцать.
+const concurrency = Number(args.get("concurrency") || 2);
+const pace = Number(args.get("pace") || 800);
 // Сколько окон одновременно просматривают списки при поиске новых машин.
 const listerCount = Math.max(1, Number(args.get("lister") || 1));
 const brandFilter = args.get("brands")?.split(",").map((brand) => canonicalImportBrand(brand.trim())) || null;
@@ -250,6 +255,7 @@ function report(extra = {}) {
     requested: limit,
     batchSize,
     concurrency,
+    pace,
     detailReads,
     imported: accepted.length,
     importedByBrand: Object.fromEntries([...Map.groupBy(accepted, (car) => car.brand)].map(([brand, cars]) => [brand, cars.length])),
@@ -298,7 +304,14 @@ async function writeBatch(final = false) {
   console.log(`[batch] +${fresh.length} accepted (total ${accepted.length}/${limit}) · catalog ${cars.length}${databaseRows === null ? "" : ` · db +${databaseRows}`}`);
 }
 
-const browser = await chromium.launch();
+// Окно поднимается видимым: с 26.08.2026 источник узнаёт браузер без экрана и
+// встречает его проверкой «не робот». На сервере экран виртуальный —
+// `xvfb-run -a node scripts/import-v2.mjs ...`, см. scripts/refresh-che168.mjs.
+const headless = args.get("headless") === "true";
+if (!headless && process.platform === "linux" && !process.env.DISPLAY) {
+  throw new Error("нужен экран: запускайте через `xvfb-run -a` (или --headless=true, но источник такое окно не пустит)");
+}
+const browser = await chromium.launch({ headless, args: ["--disable-blink-features=AutomationControlled"] });
 const context = await browser.newContext({
   locale: "en-US",
   viewport: { width: 1440, height: 900 },
@@ -405,7 +418,7 @@ try {
             candidates.push({ externalId, brand: target.policyBrand, year, carname: String(item.carname || "").trim() });
             brandCandidates += 1;
           }
-          await sleep(60);
+          await sleep(pace);
         }
         }));
       }
@@ -478,7 +491,7 @@ try {
         } catch (error) {
           reject(`detail error: ${error.message.slice(0, 80)}`, candidate.externalId);
         }
-        await sleep(60);
+        await sleep(pace);
       }
     };
     // Первое окно обхода — уже открытое, остальные докрываются по `--lister`.

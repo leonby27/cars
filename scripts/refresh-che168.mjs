@@ -17,6 +17,13 @@
 //    The EV/hybrid feeds (7/5/6) are shallow and honest; they stay unsliced
 //    (but still double-passed — a single pass of feed 6 measured only 81%).
 //
+// 1a. С 26.08.2026 источник узнаёт браузер без экрана: невидимое окно ловится
+//    проверкой «не робот» с первого же запроса, окно с экраном проходит её
+//    свободно — замерено на трёх режимах и с двух разных адресов. Поэтому
+//    браузер поднимается видимым, а на сервере ему рисуют виртуальный экран
+//    (`xvfb-run -a npm run refresh`). Никакой блокировки по адресу за этим не
+//    стояло: тот же сервер, тот же час — окно с экраном пускают.
+//
 // 2. The source's quota is per session, not per IP: the night it first
 //    blocked us, a freshly-challenged import session on the same machine kept
 //    downloading happily. So the browser session is rotated after a fixed
@@ -34,12 +41,21 @@
 // days (view/availability/favorite events, top 300) get a detail check and a
 // database write first. --skip-detail skips this pass too.
 //
+// 3. Плотность обращений за одну ночь — то, по чему источник и вычисляет
+//    робота. Ночь 25→26.08.2026 (24 тысячи обращений в темпе 3–7 в секунду)
+//    кончилась блокировкой всего сервера на несколько дней. Поэтому работа
+//    разложена на четыре ночные смены (scripts/lib/refresh-shifts.mjs), а темп
+//    сбавлен примерно до одного обращения в секунду. Смена определяет не только
+//    что листать, но и за какие карточки мы сегодня отвечаем: чужие не уходят в
+//    поштучную очередь, а спокойно ждут своей ночи.
+//
 // Usage:
-//   npm run refresh                     # full run: priority pass + lists + detail checks + writes
+//   npm run refresh                     # смена по календарю: списки + поштучные проверки + запись
+//   npm run refresh -- --shift=ev      # явная смена: ev | petrol-a | petrol-b | petrol-c
 //   npm run refresh -- --dry-run       # measure only, no database writes
 //   npm run refresh -- --skip-detail   # lists only (prices), leave missing cards alone
 //   npm run refresh -- --detail-limit=500
-//   npm run refresh -- --pace=250      # пауза каждого потока между запросами, мс
+//   npm run refresh -- --pace=1200     # пауза каждого потока между запросами, мс
 //   npm run refresh -- --feeds=1 --brand-limit=2   # укороченный прогон для проверки
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -47,6 +63,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { extractChe168ListPayload, extractChe168DetailPayload } from "./lib/che168-parser.mjs";
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
+import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -87,17 +104,38 @@ const skipDetail = args.get("skip-detail") === "true";
 // Потолок поштучных проверок за ночь: очередь берётся «сначала самые
 // залежавшиеся», так что весь каталог проходит через них по кругу за несколько
 // ночей, а прогон никогда не выжигает сессионную квоту источника подчистую.
-const detailLimit = Number(args.get("detail-limit") || 12000);
-const concurrency = Number(args.get("concurrency") || 4);
+const detailLimit = Number(args.get("detail-limit") || 6000);
+// Два потока с паузой в секунду с небольшим — это около одного обращения в
+// секунду. Прежние четыре потока по 250 мс давали три-семь в секунду: именно
+// такой темп источник и читает как робота (см. lib/refresh-shifts.mjs).
+const concurrency = Number(args.get("concurrency") || 2);
 // Пауза каждого потока между запросами. Спешить некуда: бережный темп важнее
 // скорости, лишь бы прогон укладывался в ночное окно.
-const pace = Number(args.get("pace") || 250);
+const pace = Number(args.get("pace") || 1200);
 // Квота источника — на сессию: после стольких запросов окно меняется заранее,
 // не дожидаясь блокировки.
 const sessionMax = Number(args.get("session-max") || 8000);
+// Смена ночи: за какую часть каталога отвечаем сегодня. По умолчанию очередь
+// идёт по календарю; явное имя нужно для проверочных прогонов и для того,
+// чтобы догнать пропущенную ночь.
+const shift = args.get("shift") && args.get("shift") !== "auto" ? args.get("shift") : shiftForDate();
+if (!SHIFT_ORDER.includes(shift)) throw new Error(`неизвестная смена ${shift}; бывают: ${SHIFT_ORDER.join(", ")}`);
 // Для укороченных проверочных прогонов: какие фиды обходить и сколько марок.
-const activeFeeds = args.get("feeds") ? args.get("feeds").split(",").map(Number) : FUEL_TYPES;
+const activeFeeds = args.get("feeds") ? args.get("feeds").split(",").map(Number) : feedsForShift(shift);
 const brandLimit = Number(args.get("brand-limit") || 0);
+// Потолок глубины среза для проверочных прогонов: боевой прогон листает срез
+// целиком, а короткая проверка — три страницы, чтобы не тревожить источник.
+const maxPages = Number(args.get("max-pages") || 0);
+// Перепись марок бензинового фида: она же задаёт, какая марка в какую ночь
+// проверяется — и для обхода списков, и для наших карточек.
+const brandMap = JSON.parse(await fs.readFile(BRAND_MAP_PATH, "utf8"));
+const petrolShifts = petrolShiftByBrand(brandMap);
+// Машина сегодняшней смены. Неизвестный тип (shiftOfCar вернул null) проверяем
+// в любую ночь: таких единицы, и потерять их хуже, чем лишний раз проверить.
+const inShift = (row) => {
+  const own = shiftOfCar({ type: row.type, brand: row.brand }, petrolShifts.byCanonical);
+  return own === null || own === shift;
+};
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const startedAt = Date.now();
@@ -145,11 +183,22 @@ let sessionRequests = 0;
 let sessionRotations = 0;
 let rotating = null;
 
+// Видимое окно — не прихоть, а единственный режим, который источник пускает
+// (см. заметку 1a в шапке). На сервере экран виртуальный: служба запускает
+// прогон через `xvfb-run`. `--headless=true` оставлен для отладки.
+const headless = args.get("headless") === "true";
+async function launchBrowser() {
+  if (!headless && process.platform === "linux" && !process.env.DISPLAY) {
+    throw new Error("нужен экран: запускайте через `xvfb-run -a npm run refresh` (или --headless=true, но источник такое окно не пустит)");
+  }
+  return chromium.launch({ headless, args: ["--disable-blink-features=AutomationControlled"] });
+}
+
 async function openSession() {
   // Браузер мог умереть целиком (сигнал остановки, сбой) — тогда поднимаем новый,
   // а не пытаемся открыть окно в мёртвом.
   if (browser && !browser.isConnected()) browser = null;
-  browser = browser || await chromium.launch();
+  browser = browser || await launchBrowser();
   const freshContext = await browser.newContext({
     locale: "en-US",
     viewport: { width: 1440, height: 900 },
@@ -163,6 +212,33 @@ async function openSession() {
   page = freshPage;
   sessionRequests = 0;
   if (stale) await stale.close().catch(() => {});
+}
+
+// Первый вход — единственное место, где источник встречает нас проверкой «не
+// робот» на голом месте. Одна неудача здесь раньше роняла весь ночной прогон
+// (ночь 26→27.08.2026: скрипт умер через 78 секунд и до утра никто не знал).
+// Проверка бывает и капризной, поэтому ждём и пробуем снова — но редко и не
+// подряд: стучаться чаще в закрытую дверь только вредит.
+const ENTRY_WAITS_MS = args.get("entry-waits")
+  ? args.get("entry-waits").split(",").filter(Boolean).map(Number)
+  : [60_000, 180_000, 600_000, 1200_000];
+
+async function openSessionWithRetries() {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await openSession();
+      if (attempt) console.log(`[browser] challenge passed с ${attempt + 1}-й попытки`);
+      else console.log("[browser] challenge passed");
+      return true;
+    } catch (error) {
+      const wait = ENTRY_WAITS_MS[attempt];
+      console.log(`[browser] источник не пустил (${String(error.message).slice(0, 80)})`);
+      if (wait === undefined) return false;
+      console.log(`[browser] жду ${Math.round(wait / 60_000)} мин и пробую снова (попытка ${attempt + 2} из ${ENTRY_WAITS_MS.length + 1})`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      if (stopped) return false;
+    }
+  }
 }
 
 function rotateSession(reason) {
@@ -253,6 +329,7 @@ const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_
     (source_payload->>'usdPrice')::numeric AS usd_price,
     (source_payload->>'year')::int AS year,
     source_payload->>'type' AS type,
+    source_payload->>'brand' AS brand,
     source_payload->>'engine' AS engine,
     source_payload->>'sourceFuelType' AS fuel_type,
     source_payload->>'transmission' AS transmission,
@@ -340,7 +417,8 @@ async function sweepLists() {
   // чем ловить пропущенных поштучными проверками: страница списка приносит до
   // 24 машин ценой одного запроса.
   const enqueueSlice = (baseParams, pageCount, fuelType, { cap = true } = {}) => {
-    const depth = cap ? Math.min(pageCount, SLICE_MAX_PAGES) : pageCount;
+    let depth = cap ? Math.min(pageCount, SLICE_MAX_PAGES) : pageCount;
+    if (maxPages) depth = Math.min(depth, maxPages);
     for (let pass = 0; pass < 2; pass += 1) {
       // Первая страница уже прочитана разведкой среза, поэтому в первом проходе
       // начинаем со второй, а во втором берём и первую — итого по два взгляда на всё.
@@ -362,11 +440,16 @@ async function sweepLists() {
   // Бензиновый фид глубокой пагинации не переживает — режем по маркам, а самые
   // крупные марки по моделям. sort=2 (по цене) даёт устойчивую мелкую пагинацию.
   if (activeFeeds.includes(1)) {
-    const brandMap = JSON.parse(await fs.readFile(BRAND_MAP_PATH, "utf8"));
     const giantSeries = JSON.parse(await fs.readFile(GIANT_SERIES_PATH, "utf8"));
     let brands = Object.entries(brandMap.brands)
       .map(([name, value]) => ({ name, id: value.brandId, censusListings: value.listings || 0 }))
       .sort((a, b) => b.censusListings - a.censusListings);
+    // Бензин поделён между тремя ночами: сегодня листаем только свои марки.
+    if (shift.startsWith("petrol-")) {
+      const all = brands.length;
+      brands = brands.filter((brand) => petrolShifts.byBrandName.get(brand.name) === shift);
+      console.log(`[shift] ${shift}: ${brands.length} марок из ${all}`);
+    }
     if (brandLimit) brands = brands.slice(0, brandLimit);
 
     const giants = [];
@@ -498,10 +581,20 @@ const landedTotal = (row, usd) => estimateLandedCost({
 
 let detailChecked = 0;
 let detailSkipped = 0;
+// Закрытая дверь — не поломка: прогон сворачивается тихо, без стека в журнале.
+let entryDenied = false;
 
 try {
-  await openSession();
-  console.log("[browser] challenge passed");
+  console.log(`[shift] смена ${shift}: фиды ${activeFeeds.join(", ")}`);
+  if (!await openSessionWithRetries()) {
+    // Не пустили совсем — это не поломка кода, а закрытая дверь. Уходим с
+    // понятным следом в журнале: утренняя проверка (scripts/night-watch.mjs)
+    // увидит его и сообщит в телеграм.
+    console.log("[stop] источник не пустил ни разу — прогон отменён, каталог остался как был");
+    process.exitCode = 1;
+    entryDenied = true;
+    throw new Error("entry-denied");
+  }
 
   const priceUpdates = []; // real re-pricings: new price + landed estimate + history point
   const estimateUpdates = []; // price unchanged, but the stored landed estimate drifted
@@ -607,13 +700,19 @@ try {
   // прогон оборвётся на ней, находки уже лежат на диске и пополнение их получит.
   if (!dryRun) await writeDiscoveries();
 
+  let outOfShift = 0;
   for (const row of rows) {
     if (prioritized.has(row.id)) continue;
     const liveUsd = seenPrices.get(String(row.external_id));
     if (liveUsd) classify(row, liveUsd);
-    else missing.push(row);
+    // Вот ради чего заведены смены: машину, чьи списки сегодня не листались,
+    // нельзя считать пропавшей. Иначе каждая ночь отправляла бы в поштучную
+    // очередь весь остальной каталог — вдесятеро больше обращений, чем экономит
+    // сам пропуск фида.
+    else if (inShift(row)) missing.push(row);
+    else outOfShift += 1;
   }
-  console.log(`[match] ${rows.length - prioritized.size - missing.length} in lists · ${priceUpdates.length} re-priced · ${missing.length} need a detail check`);
+  console.log(`[match] ${rows.length - prioritized.size - missing.length - outOfShift} in lists · ${priceUpdates.length} re-priced · ${missing.length} need a detail check · ${outOfShift} ждут своей смены`);
   // Всё, что списки подтвердили, записываем сразу — до долгой детальной фазы.
   await flushWrites();
 
@@ -658,6 +757,8 @@ try {
     finishedAt: new Date().toISOString(),
     minutes: Math.round((Date.now() - startedAt) / 6000) / 10,
     dryRun,
+    shift,
+    outOfShift,
     stoppedEarly: stopped,
     sessionRotations,
     pace,
@@ -686,6 +787,18 @@ try {
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
   await fs.writeFile(REPORT_PATH, `${JSON.stringify({ ...report, priceUpdates: stats.priceUpdates.map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })) }, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
+} catch (error) {
+  if (!entryDenied) throw error;
+  // Отчёт нужен и здесь: утренняя проверка судит по нему, а не по журналу.
+  await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
+  await fs.writeFile(REPORT_PATH, `${JSON.stringify({
+    startedAt: new Date(startedAt).toISOString(),
+    finishedAt: new Date().toISOString(),
+    minutes: Math.round((Date.now() - startedAt) / 6000) / 10,
+    shift,
+    entryDenied: true,
+    note: "источник не пустил: проверка «не робот» не пройдена",
+  }, null, 2)}\n`);
 } finally {
   if (browser) await browser.close().catch(() => {});
   await pool.end();

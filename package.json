@@ -34,6 +34,7 @@
     "import:guazi-global": "node scripts/import-guazi-global.mjs",
     "importv2": "node scripts/import-v2.mjs",
     "refresh": "node scripts/refresh-che168.mjs",
+    "night-watch": "node scripts/night-watch.mjs",
     "import:watch": "node scripts/watch-guazi.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:sites": "node --test tests/sites-worker.test.mjs"
