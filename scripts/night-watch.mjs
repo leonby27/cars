@@ -139,19 +139,22 @@ async function resolveChatId() {
 }
 
 console.log(text);
+// Дальше выходим с нулём в любом случае: неудачная ночь — это новость для
+// человека, а не поломка самой проверки. Иначе служба вечно висела бы в
+// systemd с отметкой «failed», и настоящий сбой в ней потерялся бы среди них.
 if (ok && !always) {
   console.log("[watch] всё в порядке — сообщение не отправляю (--always заставит)");
   process.exit(0);
 }
-if (dryRun) process.exit(ok ? 0 : 1);
+if (dryRun) process.exit(0);
 if (!token) {
   console.warn("[watch] TELEGRAM_BOT_TOKEN не задан — сообщение осталось только в журнале");
-  process.exit(ok ? 0 : 1);
+  process.exit(0);
 }
 const chatId = await resolveChatId();
 if (!chatId) {
   console.warn("[watch] боту ещё никто не писал — некуда отправлять; напишите ему любое сообщение, адрес подхватится сам");
-  process.exit(ok ? 0 : 1);
+  process.exit(0);
 }
 
 // С этого сервера телеграм доступен только по IPv6, и маршрут иногда моргает:
@@ -176,4 +179,4 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
     if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 5000));
   }
 }
-process.exit(ok ? 0 : 1);
+process.exit(0);
