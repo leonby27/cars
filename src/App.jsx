@@ -2900,7 +2900,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
 
   return (
     <div className={`${className} hover-image-preview`} ref={frameRef}>
-      {!strip && <img src={imageSource(images[active], frameWidth)} alt={car.title} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />}
+      {!strip && <img src={imageSource(images[active], frameWidth)} alt={car.title} loading="lazy" draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />}
       {strip && (
         <div
           className="car-row-mobile-image-strip"
@@ -6114,7 +6114,7 @@ function VehicleGallery({ car }) {
     <>
       <section className="gallery-panel">
         <button className={`gallery-open${dragging ? " dragging" : ""}`} style={{ "--gallery-drag-x": `${dragOffset}px` }} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}>
-          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active], IMAGE_ORIGINAL)} alt={`${car.title}, фото ${active + 1}`} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
+          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active], IMAGE_ORIGINAL)} alt={`${car.title}, фото ${active + 1}`} fetchPriority="high" draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
         </button>
         <span aria-live="polite">
           <Images size={17} />
