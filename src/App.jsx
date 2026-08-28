@@ -1,4 +1,4 @@
-import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
@@ -2823,20 +2823,31 @@ function HeroSearch({ value, onChange, filtersOpen = false, onToggleFilters = nu
   );
 }
 
+// Ширина экрана как состояние. Не useState с matchMedia, а useSyncExternalStore:
+// главную страницу собирает и сервер, где экрана нет, — там ширина берётся из
+// третьего аргумента («настольный» вариант). Браузер при оживлении готовой разметки
+// сначала рисует так же, а сразу после сверки перечитывает настоящую ширину — React
+// перерисовывает только компоненты с этим хуком, а не всю страницу, как было бы
+// при расхождении серверной и браузерной разметки. На страницах, которые рисуются
+// с нуля (каталог, карточка), хук ведёт себя как прежний useState: настоящая ширина
+// известна с первого рисования.
+const useMediaQuery = (query) => {
+  const subscribe = useCallback(
+    (notify) => {
+      const media = window.matchMedia(query);
+      media.addEventListener("change", notify);
+      return () => media.removeEventListener("change", notify);
+    },
+    [query],
+  );
+  return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches, () => false);
+};
+
 // Порог тот же, что в стилях: до 700 точек карточка показывает ленту фотографий,
 // выше — один кадр, который меняется под курсором.
 const NARROW_VIEWPORT = "(max-width: 700px)";
 
-function useNarrowViewport() {
-  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW_VIEWPORT).matches);
-  useEffect(() => {
-    const media = window.matchMedia(NARROW_VIEWPORT);
-    const update = () => setNarrow(media.matches);
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-  return narrow;
-}
+const useNarrowViewport = () => useMediaQuery(NARROW_VIEWPORT);
 
 function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, badge = null }) {
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
@@ -3870,7 +3881,13 @@ function PopularBrands({ navigate, cars, apiMode }) {
   const [columns, setColumns] = useState(4);
   const [type, setType] = useState("Все");
   const [expanded, setExpanded] = useState(false);
-  const [remoteBrands, setRemoteBrands] = useState(initialBrandCounts);
+  // Начинаем без счётчиков даже когда мета уже пришла: серверная разметка главной
+  // собрана без них, и первый браузерный кадр обязан совпасть с ней. Настоящие
+  // значения ставит слой ниже — до первого кадра, посетитель пустых плиток не видит.
+  const [remoteBrands, setRemoteBrands] = useState({});
+  useLayoutEffect(() => {
+    setRemoteBrands((current) => (Object.keys(current).length ? current : initialBrandCounts()));
+  }, []);
   const selectedType = typeValue(type);
 
   const switchRef = useRef(null);
@@ -4147,7 +4164,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   const randomPool = useRef([]);
   const nextItemKey = useRef(0);
   const feedSource = useRef(cars);
-  const [useCatalogCards, setUseCatalogCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
+  const useCatalogCards = useMediaQuery(NARROW_VIEWPORT);
   // На телефоне карточки идут в одну колонку, и двадцать штук — это очень длинная
   // страница: до блоков под каталогом посетитель просто не доходит. Поэтому там
   // порция вдвое короче, а продолжение открывает кнопка «Подгрузить ещё».
@@ -4222,13 +4239,6 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     if (openQuickView(item.car)) return;
     navigate(carHref(item.car));
   };
-
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 700px)");
-    const updateLayout = () => setUseCatalogCards(media.matches);
-    media.addEventListener("change", updateLayout);
-    return () => media.removeEventListener("change", updateLayout);
-  }, []);
 
   useEffect(() => {
     if (feedSource.current === cars) return;
@@ -6439,6 +6449,12 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
 // которых есть свой сдвиг или обрезка по краям, координаты окна считались бы от
 // этого блока, и подсказка уезжала за экран.
 function ActionTooltip({ text, className = "", tapToOpen = false }) {
+  // Подсказка рисуется порталом в body, а портал существует только в браузере:
+  // сервер, собирая готовую разметку главной, на нём бы упал. Поэтому до оживления
+  // страницы подсказки нет вовсе — она и так невидима, пока к кнопке не подвели
+  // курсор, так что посетитель разницы не видит.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const anchorRef = useRef(null);
   const tooltipRef = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -6530,7 +6546,7 @@ function ActionTooltip({ text, className = "", tapToOpen = false }) {
   return (
     <>
       <span ref={anchorRef} hidden />
-      {createPortal(
+      {mounted && createPortal(
         <span
           ref={tooltipRef}
           className={`detail-action-tooltip${className ? ` ${className}` : ""}${box?.above === false ? " is-below" : ""}${visible ? " is-visible" : ""}`}
@@ -6891,16 +6907,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
 // всю страницу автомобиля и мешала бы прокрутке выдачи.
 const DESKTOP_VIEWPORT = "(min-width: 981px)";
 
-function useDesktopViewport() {
-  const [desktop, setDesktop] = useState(() => window.matchMedia(DESKTOP_VIEWPORT).matches);
-  useEffect(() => {
-    const media = window.matchMedia(DESKTOP_VIEWPORT);
-    const update = () => setDesktop(media.matches);
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-  return desktop;
-}
+const useDesktopViewport = () => useMediaQuery(DESKTOP_VIEWPORT);
 
 // Выдача из API несёт карточку целиком, статическая сборка — только сводку,
 // поэтому для быстрого просмотра полную карточку в этом режиме дозапрашиваем.
@@ -9611,13 +9618,7 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
   const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:true });
   const [error, setError] = useState("");
   // На телефоне подписи полей скрыты (styles.css), их роль играют плейсхолдеры.
-  const [mobileLayout, setMobileLayout] = useState(() => window.matchMedia("(max-width: 700px)").matches);
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 700px)");
-    const updateLayout = () => setMobileLayout(media.matches);
-    media.addEventListener("change", updateLayout);
-    return () => media.removeEventListener("change", updateLayout);
-  }, []);
+  const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
   const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
   const blockPhoneWhitespace = (event) => {
@@ -10338,7 +10339,7 @@ export function App() {
   // По умолчанию цены в белорусских рублях: сайт для покупателей в Беларуси, и
   // в рублях сумма понятнее без пересчёта в уме. Доллары остаются в переключателе,
   // и выбранная валюта запоминается в браузере.
-  const [currency, setCurrency] = useState(() => (window.localStorage.getItem("navostok-currency") === "USD" ? "USD" : "BYN"));
+  const [currency, setCurrency] = useState("BYN");
   // Режим цен: включённый переключатель — цены по льготной квоте, выключенный —
   // с пошлиной 15%. Выбор запоминается в браузере, расчёту цен он передаётся
   // отдельно: тот держит его в модуле, чтобы не тянуть флаг через все карточки.
@@ -10352,17 +10353,21 @@ export function App() {
       setQuotaPricingOn(on);
     },
   }), [quotaPricingOn]);
-  const [themeMode, setThemeMode] = useState(() => {
+  // Сохранённую тему и системное оформление читаем не в первом рисовании, а слоем
+  // ниже (useLayoutEffect — до первого кадра): главную собирает и сервер, где ни
+  // хранилища, ни системной темы нет. Внешний вид страницы от этого не мигает —
+  // цвета задаёт атрибут data-theme на html, его ставит ранний скрипт страницы;
+  // от React здесь зависит только кнопка смены темы.
+  const [themeMode, setThemeMode] = useState("system");
+  const [systemTheme, setSystemTheme] = useState("light");
+  useLayoutEffect(() => {
     const savedTheme = window.localStorage.getItem("abcars-theme");
-    if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
-    return "system";
-  });
-  const [systemTheme, setSystemTheme] = useState(() => (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-  // Пока вкладка открыта, система может переключиться на тёмное оформление (по
-  // расписанию или вручную). Слушаем это и переключаемся следом — иначе «системная»
-  // тема была бы системной только в момент загрузки страницы.
-  useEffect(() => {
+    if (savedTheme === "light" || savedTheme === "dark") setThemeMode(savedTheme);
     const media = window.matchMedia("(prefers-color-scheme: dark)");
+    if (media.matches) setSystemTheme("dark");
+    // Пока вкладка открыта, система может переключиться на тёмное оформление (по
+    // расписанию или вручную). Слушаем это и переключаемся следом — иначе «системная»
+    // тема была бы системной только в момент загрузки страницы.
     const follow = (event) => setSystemTheme(event.matches ? "dark" : "light");
     media.addEventListener("change", follow);
     return () => media.removeEventListener("change", follow);
@@ -10374,10 +10379,21 @@ export function App() {
   const [apiMode, setApiMode] = useState(null);
   // The total only moves when an import runs, so the last known value is a sound placeholder
   // while the catalog request is in flight and keeps the search button from reading "0+".
-  const [catalogTotal, setCatalogTotal] = useState(() => Number(window.localStorage.getItem(catalogTotalKey)) || 0);
+  const [catalogTotal, setCatalogTotal] = useState(0);
   // Дата последней актуализации каталога — как и total, последнее известное значение
   // годится как заглушка, пока ответ каталога в пути.
-  const [catalogUpdatedAt, setCatalogUpdatedAt] = useState(() => window.localStorage.getItem(catalogUpdatedKey) || "");
+  const [catalogUpdatedAt, setCatalogUpdatedAt] = useState("");
+  // Запомненные значения — валюту, размер каталога и дату обновления — читаем из
+  // хранилища только после оживления страницы. Главную собирает и сервер, у которого
+  // хранилища нет: прочитай мы их прямо в первом рисовании, серверная и браузерная
+  // разметка разошлись бы, и React перерисовал бы всю страницу заново.
+  useEffect(() => {
+    if (window.localStorage.getItem("navostok-currency") === "USD") setCurrency("USD");
+    const storedTotal = Number(window.localStorage.getItem(catalogTotalKey)) || 0;
+    if (storedTotal) setCatalogTotal((current) => current || storedTotal);
+    const storedUpdatedAt = window.localStorage.getItem(catalogUpdatedKey) || "";
+    if (storedUpdatedAt) setCatalogUpdatedAt((current) => current || storedUpdatedAt);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(Boolean(targetId));
   const [loadError, setLoadError] = useState(false);
