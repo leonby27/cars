@@ -6226,21 +6226,26 @@ function VehicleGallery({ car }) {
     snapOff(true);
     drag.current = { id: event.pointerId, x: event.clientX, left: strip.scrollLeft, moved: false };
     setFreeScroll(true);
-    // Захват указателя: если мышь уйдёт за край кадра, движение всё равно наше.
-    // Браузер может отказать (указатель уже отпущен) — тогда просто работаем без.
-    try {
-      strip.setPointerCapture?.(event.pointerId);
-    } catch {
-      /* не критично */
-    }
   };
   const onPointerMove = (event) => {
     const start = drag.current;
     const strip = stripRef.current;
     if (!start || start.id !== event.pointerId || !strip) return;
     const distance = event.clientX - start.x;
-    if (Math.abs(distance) > 4) start.moved = true;
-    strip.scrollLeft = start.left - distance;
+    if (!start.moved && Math.abs(distance) > 4) {
+      start.moved = true;
+      // Захват указателя — только когда мышь реально повели: если мышь уйдёт за
+      // край кадра, движение всё равно наше. Захватывать прямо при нажатии нельзя:
+      // с захватом браузер отдаёт и последующий щелчок самой ленте, а не кадру
+      // под курсором — и открытие галереи по клику переставало работать.
+      // Браузер может и отказать (указатель уже отпущен) — тогда работаем без.
+      try {
+        strip.setPointerCapture?.(event.pointerId);
+      } catch {
+        /* не критично */
+      }
+    }
+    if (start.moved) strip.scrollLeft = start.left - distance;
   };
   const endDrag = (event) => {
     const start = drag.current;
