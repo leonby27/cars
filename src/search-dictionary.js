@@ -461,6 +461,12 @@ const HERO_QUERY_REWRITES = [
   [/(^|[^0-9a-zа-я])глс(?![а-я])/g, "$1gls"],
   [/(^|[^0-9a-zа-я])гла(?![а-я])/g, "$1gla"],
   [/(^|[^0-9a-zа-я])глб(?![а-я])/g, "$1glb"],
+  // Хвосты названий кузова, которые пишут по звучанию: «спортбэк» это Sportback,
+  // а буква в букву получалось бы «sportbek» — и модель не находилась.
+  [/спортб[эе]к[а-я]*/g, "sportback"],
+  [/фастб[эе]к[а-я]*/g, "fastback"],
+  [/лифтб[эе]к[а-я]*/g, "liftback"],
+  [/хэтчб[эе]к[а-я]*|хетчб[эе]к[а-я]*/g, "hatchback"],
 ];
 export const rewriteQueryNames = (query) => HERO_QUERY_REWRITES.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), String(query ?? "").toLocaleLowerCase("ru").replace(/ё/g, "е"));
 

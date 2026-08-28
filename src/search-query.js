@@ -496,7 +496,10 @@ const transliterate = (text, map) => text.replace(/[а-я]/g, (letter) => map[le
 
 /** Латинские написания кириллического запроса; для латиницы — пустой список. */
 export const latinVariants = (text) => {
-  const source = String(text ?? "");
+  // Приводим к строчным сразу: телефонная клавиатура ставит заглавную букву в
+  // начале слова («Спортб»), а карта заглавных не знает — первая буква оставалась
+  // кириллической, получалось «Спортb», и слово не находилось.
+  const source = String(text ?? "").toLocaleLowerCase("ru").replace(/ё/g, "е");
   if (!/[а-я]/.test(source)) return [];
   const spelled = source.replace(LETTER_NAMES_RE, (name) => LETTER_NAMES[name]);
   const variants = [transliterate(source, CYRILLIC_TO_LATIN), transliterate(source, CYRILLIC_LOOKALIKE), transliterate(source, CYRILLIC_ALTERNATE)];

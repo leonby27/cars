@@ -126,3 +126,20 @@ test("поиск в списке марок понимает часть слов
   // Пустая строка ничего не фильтрует.
   assert.deepEqual(listSearchVariants("   "), []);
 });
+
+test("заглавная буква с телефонной клавиатуры не мешает поиску", () => {
+  const models = ["A5L Sportback", "E5 Sportback", "Han", "Yuan UP"];
+  const found = (query) => {
+    const variants = listSearchVariants(query);
+    return models.filter((model) => variants.some((variant) => searchNormalize(model).includes(variant)));
+  };
+  // Телефон сам ставит заглавную в начале слова — раньше она оставалась
+  // кириллической («Спортb») и не находилось ничего.
+  assert.deepEqual(found("Спортб"), ["A5L Sportback", "E5 Sportback"]);
+  assert.deepEqual(found("Хан"), ["Han"]);
+  assert.deepEqual(found("ХАН"), ["Han"]);
+  assert.deepEqual(found("Юань"), ["Yuan UP"]);
+  // Хвост названия кузова по звучанию: буква в букву вышло бы «sportbek».
+  assert.deepEqual(found("Спортбэк"), ["A5L Sportback", "E5 Sportback"]);
+  assert.deepEqual(found("спортбека"), ["A5L Sportback", "E5 Sportback"]);
+});
