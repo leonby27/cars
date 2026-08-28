@@ -2995,6 +2995,37 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
 // Five rows of the four-column grid, matching the home page feed.
 const SIMILAR_CARS_BATCH = 20;
 
+// Другие машины той же модели. Раньше эти ссылки жили только в невидимой версии
+// страницы для поисковика («Другие BMW 5 Series в наличии») — единственный путь
+// робота из карточки в карточку. Теперь карточку собирает сервер из разметки самого
+// приложения, и блок стал видимым: посетителю выбор из той же модели полезен не
+// меньше, чем роботу. Данные кладёт сервер (соседи по модели, по цене), а после
+// загрузки каталога блок живёт из общего списка машин.
+function SameModelCars({ car, cars, onOpenCar }) {
+  const sameModelPricingOn = useQuotaPricing()?.on;
+  const sameModel = useMemo(
+    () =>
+      cars
+        .filter((candidate) => !sameListing(candidate.id, car.id) && String(candidate.brand) === String(car.brand) && String(candidate.model) === String(car.model))
+        .sort((left, right) => (Number(estimateLandedCost(left).totalUsd) || 0) - (Number(estimateLandedCost(right).totalUsd) || 0) || String(left.id).localeCompare(String(right.id)))
+        .slice(0, 8),
+    [car, cars, sameModelPricingOn],
+  );
+  if (!sameModel.length) return null;
+  return (
+    <section className="similar-cars" aria-labelledby="same-model-title">
+      <div className="similar-cars-heading">
+        <h2 id="same-model-title">Другие {carTitle(car.brand, car.model)} в наличии</h2>
+      </div>
+      <div className="featured-grid">
+        {sameModel.map((candidate) => (
+          <FeaturedCard key={candidate.id} car={candidate} onClick={() => onOpenCar(candidate)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SimilarCars({ car, cars, onOpenCar }) {
   const similarPricingOn = useQuotaPricing()?.on;
   const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars, similarPricingOn]);
@@ -6436,6 +6467,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         {car.model} {car.year}
       </div>
       <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} />
+      <SameModelCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       <SimilarCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       {quickViewModal}
     </main>
@@ -10312,6 +10344,14 @@ let bootListMinimal = isCatalogPath(currentAppPath());
 let showcaseListRequest = null;
 const requestShowcaseList = () => (showcaseListRequest ||= fetchCarsJson("/api/cars?limit=60&sort=variety"));
 const requestBootCar = (id) => (window.__boot?.carId === id && window.__boot.car) || fetchCarsJson(`/api/cars/${encodeURIComponent(id)}`);
+// Машина, встроенная прямо в страницу. Сервер, собирая карточку, кладёт её данные
+// в window.__boot.carValue (вместе с соседями той же модели) и рендерит разметку из
+// них же: браузер при оживлении рисует первый кадр из тех же байт, ничего не ждёт
+// и совпадает с серверной разметкой. На прочих страницах значения нет.
+// Сравнение по номеру объявления (sameListing): в адресе номер короткий, а в данных
+// полный идентификатор с приставкой источника.
+const bootCarSync = (id) => (id && window.__boot?.carValue && sameListing(window.__boot.carId, id) ? window.__boot.carValue : null);
+const bootRelatedSync = () => (Array.isArray(window.__boot?.relatedValue) ? window.__boot.relatedValue : []);
 
 export function App() {
   const { path, navigate, backToCatalog } = useRoute();
@@ -10377,7 +10417,11 @@ export function App() {
     return () => media.removeEventListener("change", follow);
   }, []);
   const theme = themeMode === "system" ? systemTheme : themeMode;
-  const [cars, setCars] = useState([]);
+  const [cars, setCars] = useState(() => {
+    // Карточка машины: данные уже в странице — рисуем сразу, не дожидаясь каталога.
+    const bootCar = bootCarSync(targetId);
+    return bootCar ? [bootCar, ...bootRelatedSync()].map(normalizeImportedCar) : [];
+  });
   // Three states, not two: null means the boot request has not answered yet. Routes that can
   // fetch on their own must not be forced down the static-catalog path while it is pending.
   const [apiMode, setApiMode] = useState(null);
@@ -10399,7 +10443,7 @@ export function App() {
     if (storedUpdatedAt) setCatalogUpdatedAt((current) => current || storedUpdatedAt);
   }, []);
   const [loading, setLoading] = useState(true);
-  const [routeLoading, setRouteLoading] = useState(Boolean(targetId));
+  const [routeLoading, setRouteLoading] = useState(() => Boolean(targetId) && !bootCarSync(targetId));
   const [loadError, setLoadError] = useState(false);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -10558,6 +10602,12 @@ export function App() {
           // Already in flight since index.html on a deep link, so this does not queue behind the list.
           const detailCar = await requestBootCar(targetId).catch(() => null);
           if (detailCar) initialCars = [...initialCars, detailCar];
+        }
+        // Соседи той же модели, встроенные в страницу карточки: не даём каталогу их
+        // вытеснить, иначе блок «Другие … в наличии» опустел бы через секунду после
+        // загрузки. Дубли отсеиваем по номеру объявления.
+        for (const embedded of bootRelatedSync()) {
+          if (!initialCars.some((car) => sameListing(car.id, embedded.id))) initialCars = [...initialCars, embedded];
         }
         if (!cancelled) {
           setCars(initialCars.map(normalizeImportedCar));
@@ -11019,6 +11069,11 @@ export function App() {
       // экземпляр: заголовок менялся, а выдача оставалась от прежней марки. С разным
       // ключом каждый раздел создаётся заново и читает свой фильтр.
       <Catalog key={catalogKey.current} navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} deleteSavedSearch={deleteSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath)} />
+    ) : detailId && findCarByListing(cars, detailId) ? (
+      // Машина уже известна (встроена в страницу или успела прийти) — карточку
+      // рисуем сразу, не дожидаясь остального каталога: его ждёт только блок
+      // похожих, а он умеет дорисоваться.
+      <Detail car={findCarByListing(cars, detailId)} cars={cars} apiMode={apiMode} navigate={navigate} backToCatalog={backToCatalog} favorite={hasFavoriteListing(favorites, detailId)} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : loading || routeLoading ? (
       <AppLoader />
     ) : loadError ? (

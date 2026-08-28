@@ -41,10 +41,14 @@ function start() {
   // Главную страницу сборка кладёт в #root уже нарисованной (scripts/prerender-home.mjs):
   // её не перерисовываем, а оживляем — React сверяет готовую разметку со своей и просто
   // добавляет поведение. Так заголовок и первый экран видны сразу, до загрузки скрипта.
-  // Вторая проверка — на адрес: готовая разметка собрана именно для главной. Если
-  // файл главной вдруг отдан по другому адресу (запасная подложка веб-сервера),
-  // оживлять её бессмысленно — приложение нарисует тот адрес с нуля, как раньше.
-  if (root.dataset.prerender === "app" && window.location.pathname.replace(/\/+$/, "") === (import.meta.env.BASE_URL.replace(/\/$/, "") || "")) {
+  // В метке лежит адрес, для которого разметка собрана ("/" или "/cars/<номер>").
+  // Сверяем с настоящим адресом: файл главной веб-сервер подкладывает и под чужие
+  // адреса (/favorites и т.п.), а карточку могли открыть по неканонической ссылке —
+  // в обоих случаях оживлять чужую разметку бессмысленно, приложение рисует с нуля.
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const currentPath = (window.location.pathname.replace(/\/+$/, "") || "/").replace(base, "") || "/";
+  const prerenderedFor = (root.dataset.prerender || "").replace(/\/+$/, "") || (root.dataset.prerender ? "/" : "");
+  if (prerenderedFor && prerenderedFor === currentPath) {
     document.documentElement.classList.remove("booting");
     const ready = () => installRussianTypography(root);
     hydrateRoot(

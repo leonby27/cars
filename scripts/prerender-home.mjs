@@ -75,7 +75,7 @@ for (;;) {
 
 const before = html.slice(0, open);
 const after = html.slice(close + "</div>".length);
-const withRoot = `${before}<div id="root" data-prerender="app">${body}</div>${after}`;
+const withRoot = `${before}<div id="root" data-prerender="/">${body}</div>${after}`;
 const replaced = hoisted.length ? withRoot.replace("</head>", `${hoisted.join("")}</head>`) : withRoot;
 writeFileSync(indexPath, replaced);
 

@@ -342,13 +342,38 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   // Текст для поисковиков лежит в `.seo-body`: браузер с работающим скриптом прячет
   // его до запуска приложения (правило `html.booting` в index.html), а перед ним рисует
   // первый экран из `boot-screen.mjs`. Поисковику и браузеру без скриптов видно всё.
-  function renderHtml({ title, description, canonical, body, image = `${base}/og.jpg`, type, indexable = allowIndexing, schemas = [], boot = "header", prev = null, next = null }) {
+  function renderHtml({ title, description, canonical, body, image = `${base}/og.jpg`, type, indexable = allowIndexing, schemas = [], boot = "header", prev = null, next = null, appRoot = null, appRootPath = null, bootData = null }) {
     const head = metadata({ title, description, canonical, image, type, indexable, schemas, prev, next });
-    const first = bootScreen({ kind: boot, hrefRoute });
-    return stripSeoHead(shell)
+    const page = stripSeoHead(shell)
       .replace(/<html\s+lang="ru"[^>]*>/i, `<html lang="ru" data-seo-indexing="${indexable}">`)
-      .replace("</head>", `${head}\n  </head>`)
-      .replace(/<div id="root"><\/div>/, `<div id="root">${first}<div class="seo-body">${body}</div></div>`);
+      .replace("</head>", `${head}\n  </head>`);
+    // Обычная страница: заглушка первого экрана и текст для поисковика, приложение
+    // потом рисует себя с нуля.
+    if (!appRoot) {
+      const first = bootScreen({ kind: boot, hrefRoute });
+      return page.replace(/<div id="root"><\/div>/, `<div id="root">${first}<div class="seo-body">${body}</div></div>`);
+    }
+    // Страница с готовой разметкой приложения: браузер её оживит, не перерисовывая
+    // (hydrateRoot в main.jsx по метке data-prerender). Подсказки-предзагрузки React
+    // кладёт в начало разметки, а при оживлении ждёт их в шапке — переносим.
+    let markup = appRoot;
+    const hoisted = [];
+    for (;;) {
+      const match = /^<link\b[^>]*>/.exec(markup);
+      if (!match) break;
+      hoisted.push(match[0]);
+      markup = markup.slice(match[0].length);
+    }
+    // Данные, из которых собрана разметка, — в страницу: браузер рисует первый кадр
+    // из тех же байт и совпадает с сервером. Object.assign, а не присваивание: скрипт
+    // в шапке уже завёл window.__boot со своими запросами. </script> в данных не
+    // выживает (обычное правило встраивания JSON в страницу).
+    const bootScript = bootData
+      ? `<script>window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(bootData).replace(/</g, "\\u003c")});</script>`
+      : "";
+    return page
+      .replace("</head>", `${hoisted.join("")}${bootScript}</head>`)
+      .replace(/<div id="root"><\/div>/, `<div id="root" data-prerender="${escapeHtml(appRootPath || "/")}">${markup}</div>`);
   }
 
   // ── Страница машины ───────────────────────────────────────────────────────────
@@ -383,7 +408,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * каталогу, которого иначе нет: списки в приложении рисует скрипт).
    * `modelPage` — обзор модели из `src/model-pages.js`, если он есть.
    */
-  function carPage({ car, related = [], modelPage = null, sections = [], indexable = allowIndexing }) {
+  function carPage({ car, related = [], modelPage = null, sections = [], indexable = allowIndexing, appRoot = null, appRootPath = null, bootData = null }) {
     const titleText = carTitle(car);
     const route = carRoute(car);
     const canonical = routeUrl(route);
@@ -458,6 +483,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         description,
         canonical,
         body,
+        appRoot,
+        appRootPath: appRootPath || route.replace(/\/+$/, ""),
+        bootData,
         image,
         type: "product",
         indexable,

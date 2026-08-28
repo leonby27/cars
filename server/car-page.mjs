@@ -7,9 +7,11 @@
 //
 // Ответ помечен как общий кэш на 10 минут: тридцать тысяч страниц обходит робот, и без
 // кэша каждый его заход был бы отдельным запросом к базе.
+import { existsSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { getCar, listCars } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
-import { createSeoRenderer } from "./seo-render.mjs";
+import { createSeoRenderer, carRoute } from "./seo-render.mjs";
 // Обзоры моделей весят больше мегабайта, поэтому этот модуль сам подключается только
 // по требованию — из обработчика запросов страницы машины. Обычные запросы к каталогу
 // его не загружают, а сборщик функции видит обе зависимости и точно их упакует.
@@ -23,6 +25,35 @@ const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXI
 // путь, по которому робот переходит из карточки в карточку: списки в приложении рисует
 // скрипт, и в разметке их нет.
 const relatedLimit = 12;
+
+// Готовая разметка приложения (сборка vite --ssr). Загружаем лениво и один раз:
+// модуль тянет всё приложение. Если сборки нет (локальная разработка без
+// `npm run build`) или отрисовка упала — карточка отдаётся в прежнем виде, с
+// заглушкой и текстом для поисковика: страница хуже на секунды, но живая.
+const entryServerPath = fileURLToPath(new URL("../dist/ssr/entry-server.js", import.meta.url));
+let entryServerPromise = null;
+const loadEntryServer = () => {
+  if (!entryServerPromise) {
+    entryServerPromise = existsSync(entryServerPath)
+      ? import(pathToFileURL(entryServerPath).href).catch((error) => {
+          console.error("страницы машин: сборка приложения не загрузилась, отдаём прежний вид", error);
+          return null;
+        })
+      : Promise.resolve(null);
+  }
+  return entryServerPromise;
+};
+
+async function renderCarAppMarkup(route, car, related) {
+  const entry = await loadEntryServer();
+  if (!entry?.renderCarApp) return null;
+  try {
+    return entry.renderCarApp(route, { car, related });
+  } catch (error) {
+    console.error("страницы машин: отрисовка приложения упала, отдаём прежний вид", error);
+    return null;
+  }
+}
 
 async function relatedCars(car) {
   if (!car.brand || !car.model) return [];
@@ -44,11 +75,22 @@ export async function renderCarPage(id) {
   // из неё уже не получится, а 200 держал бы её в индексе поисковика как живую.
   if (!car || car.available === false) return { status: 404, html: renderer.carGonePage() };
   const related = await relatedCars(car);
+  // Разметка приложения собирается из сырых записей — тех же, что отдаёт /api/cars:
+  // приложение нормализует их само, и браузер при оживлении повторит это с теми же
+  // данными (renderHtml встраивает их в страницу). Адрес в метке — тот, по которому
+  // страницу запросили (машину открывают и по короткому номеру, и по полному
+  // идентификатору): браузер оживляет разметку, только когда метка совпадает с
+  // адресной строкой.
+  const route = `/cars/${encodeURIComponent(String(id).trim())}`;
+  const appRoot = await renderCarAppMarkup(route, car, related);
   const page = renderer.carPage({
     car: { ...car, drive: normalizeDrive(car.drive) },
     related,
     modelPage: modelPageForCar(car),
     sections: landingsForCar(car),
+    appRoot,
+    appRootPath: route,
+    bootData: appRoot ? { carId: car.id, carValue: car, relatedValue: related } : null,
   });
   return { status: 200, html: page.html };
 }

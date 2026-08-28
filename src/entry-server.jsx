@@ -13,14 +13,34 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { App } from "./App.jsx";
 
-/** Готовая разметка страницы по адресу. Сейчас используется только "/" — главная. */
-export function renderAppPage(pathname = "/") {
-  setServerLocation(pathname);
+const render = () =>
   // Тот же StrictMode, что в main.jsx: на разметку он не влияет, но пусть обе точки
   // входа остаются зеркальными — расхождение здесь стоило бы часов поиска.
-  return renderToString(
+  renderToString(
     <React.StrictMode>
       <App />
     </React.StrictMode>,
   );
+
+/** Готовая разметка страницы по адресу — для страниц без данных (главная). */
+export function renderAppPage(pathname = "/") {
+  setServerLocation(pathname);
+  globalThis.window.__boot = undefined;
+  return render();
+}
+
+/**
+ * Готовая разметка карточки машины. `car` и `related` — сырые записи в том виде,
+ * в каком их отдаёт /api/cars: приложение нормализует их само, и браузер при
+ * оживлении сделает то же самое с теми же данными (сервер встраивает их в страницу),
+ * поэтому серверный и браузерный первый кадр совпадают байт в байт.
+ */
+export function renderCarApp(pathname, { car, related = [] }) {
+  setServerLocation(pathname);
+  globalThis.window.__boot = { carId: car.id, carValue: car, relatedValue: related };
+  try {
+    return render();
+  } finally {
+    globalThis.window.__boot = undefined;
+  }
 }
