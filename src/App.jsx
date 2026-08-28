@@ -4493,7 +4493,11 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         ) : (
           <div className="hero-updated boot-invisible">&nbsp;</div>
         )}
-        <h1>Доставим б/у авто из Китая в Беларусь</h1>
+        {/* Неразрывные пробелы стоят прямо в тексте, а не появляются типографикой
+            после оживления: заголовок — главный элемент страницы для PageSpeed, и
+            любая замена его текста после первого кадра считается новой отрисовкой
+            и сдвигом строк — метрика готовности уезжала с 0,2 с обратно на 3+ с. */}
+        <h1>Доставим б/у авто из Китая в Беларусь</h1>
         <ul className="hero-benefits" aria-label="Преимущества заказа">
           <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
           <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
