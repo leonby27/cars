@@ -1780,7 +1780,7 @@ const powertrainLabel = (item) => (item === "Все" ? "Все типы двиг
 // двух списках ниже, считается китайским.
 const GERMAN_BRANDS = new Set(["Audi", "BMW", "Mercedes-Benz", "MINI", "Porsche", "Volkswagen"]);
 // Спорные случаи решены так, как их ищут: MINI — марка BMW, поэтому она у немцев;
-// Volvo принадлежит Geely, но остаётся шведской и стоит в «Других»; MG числится
+// Volvo принадлежит Geely, но остаётся шведской и стоит в «Другом»; MG числится
 // китайской — марка британская, но принадлежит SAIC, а машины делают и продают
 // в Китае как местные.
 const FOREIGN_BRANDS = new Set([
@@ -1788,8 +1788,8 @@ const FOREIGN_BRANDS = new Set([
   "Infiniti", "Jaguar", "Jeep", "Kia", "Land Rover", "Lexus", "Lincoln", "Maserati",
   "Mazda", "Mitsubishi", "Nissan", "Peugeot", "Skoda", "Subaru", "Tesla", "Toyota", "Volvo",
 ]);
-const BRAND_GROUPS = ["Все", "Китайские", "Немецкие", "Другие"];
-const brandGroupOf = (brand) => (GERMAN_BRANDS.has(brand) ? "Немецкие" : FOREIGN_BRANDS.has(brand) ? "Другие" : "Китайские");
+const BRAND_GROUPS = ["Все", "Китай", "Германия", "Другое"];
+const brandGroupOf = (brand) => (GERMAN_BRANDS.has(brand) ? "Германия" : FOREIGN_BRANDS.has(brand) ? "Другое" : "Китай");
 
 function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, onSaveSearch, searchSaved = false, searchUpdate = false, hasActiveFilters = false, initiallyExpanded = false, onExpandedChange = null }) {
   const currency = useCurrency();
@@ -1995,9 +1995,16 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
       )}
       {narrow && sheet === "brands" && (
         <FilterSheet title="Марки" onClose={() => setSheet(null)} footer={sheetFooter} fill>
+          {/* Крестик очистки — свой, как в строке поиска на главной: у браузерного
+              нет ни плашки, ни отступа от края. */}
           <div className="sheet-search">
             <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
             <input type="search" value={sheetQuery} placeholder="Поиск марки" aria-label="Поиск марки" autoComplete="off" onChange={(event) => setSheetQuery(event.target.value)} />
+            {sheetQuery && (
+              <button type="button" className="sheet-search-clear" aria-label="Очистить поиск" onClick={() => setSheetQuery("")}>
+                <X size={18} weight="bold" />
+              </button>
+            )}
           </div>
           <div className="sheet-tabs" role="tablist" aria-label="Группы марок">
             {BRAND_GROUPS.map((group) => (
@@ -2008,7 +2015,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           </div>
           <div className="sheet-options">
             {/* Строка «Все марки» есть только в общей группе: под вкладкой
-                «Немецкие» она сбрасывала бы выбор ко всему каталогу. Значок
+                «Германия» она сбрасывала бы выбор ко всему каталогу. Значок
                 лежит в такой же коробке, как знак марки, иначе названия в
                 списке начинались бы на разной ширине от края. */}
             {brandGroup === "Все" && (
@@ -2041,6 +2048,11 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           <div className="sheet-search">
             <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
             <input type="search" value={sheetQuery} placeholder="Поиск модели" aria-label="Поиск модели" autoComplete="off" onChange={(event) => setSheetQuery(event.target.value)} />
+            {sheetQuery && (
+              <button type="button" className="sheet-search-clear" aria-label="Очистить поиск" onClick={() => setSheetQuery("")}>
+                <X size={18} weight="bold" />
+              </button>
+            )}
           </div>
           <div className="sheet-options">
             {searchRows(modelRows).map((model) => {
@@ -9358,7 +9370,34 @@ function InfoCta({ navigate, title, text }) {
 // Каталог не отвечает — например, база на обслуживании. Показываем не ошибку импорта,
 // а спокойную заглушку по центру экрана: посетителю важно понять, что сайт живой и
 // стоит зайти позже, а не что у нас не нашёлся последний импорт.
-function MaintenancePage() {
+// Пробуем сами, а не просим человека нажимать. Кнопка «Обновить страницу» здесь была
+// худшим, что можно предложить: чаще всего сюда приводит отказ нашей же защиты от
+// наплыва, и каждая перезагрузка добавляла запросов и продлевала отказ. Ждём всё дольше
+// (5, 10, 20 секунд), чтобы не долбить сервер, которому и так плохо, и после трёх попыток
+// останавливаемся — дальше уже нужна кнопка.
+const MAINTENANCE_RETRY_DELAYS = [5, 10, 20];
+function MaintenancePage({ onRetry }) {
+  const [attempt, setAttempt] = useState(0);
+  const delay = MAINTENANCE_RETRY_DELAYS[attempt] ?? null;
+  const [left, setLeft] = useState(delay);
+  useEffect(() => {
+    setLeft(delay);
+    if (delay === null || !onRetry) return undefined;
+    const tick = setInterval(() => setLeft((value) => (value === null ? null : value - 1)), 1000);
+    const retry = setTimeout(() => {
+      setAttempt((value) => value + 1);
+      onRetry();
+    }, delay * 1000);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(retry);
+    };
+  }, [attempt, delay, onRetry]);
+  const manualRetry = () => {
+    setAttempt((value) => value + 1);
+    if (onRetry) onRetry();
+    else window.location.reload();
+  };
   return (
     <main className="maintenance-page" aria-live="polite">
       <div className="maintenance-card">
@@ -9366,9 +9405,14 @@ function MaintenancePage() {
           <Gear size={44} weight="fill" />
         </span>
         <h1>Идут технические работы</h1>
-        <p>Обновляем каталог — скоро всё вернётся. Зайдите, пожалуйста, через несколько минут.</p>
-        <button className="primary" onClick={() => window.location.reload()}>
-          Обновить страницу
+        <p>Обновляем каталог — скоро всё вернётся.</p>
+        {delay === null ? (
+          <p className="maintenance-countdown">Пока не отвечает. Зайдите, пожалуйста, через несколько минут.</p>
+        ) : (
+          <p className="maintenance-countdown">Пробуем снова{left > 0 ? ` через ${left} с` : ""}…</p>
+        )}
+        <button className="primary" onClick={manualRetry}>
+          Попробовать сейчас
         </button>
       </div>
     </main>
@@ -9419,17 +9463,33 @@ const storeFavorites = (key, values) => window.localStorage.setItem(key, JSON.st
 // Единичный сбой сервера — обрыв сети или ответ 5xx в момент выкладки — не означает,
 // что API здесь нет: такие запросы повторяются с паузой. Признак отсутствия API — только 404,
 // иначе сессия из-за секундного сбоя навсегда пересаживалась на пустую копию в браузере.
-const transientStatuses = new Set([500, 502, 503, 504]);
+//
+// 429 здесь же и по той же причине: так отвечает наша защита от наплыва, когда с одного
+// адреса пришло слишком много запросов сразу. Это всегда на секунды, и правильный ответ —
+// подождать и повторить молча. Раньше 429 проваливался до заглушки «идут технические
+// работы» с кнопкой «Обновить страницу», а нажатие добавляло запросов и продлевало отказ.
+const transientStatuses = new Set([429, 500, 502, 503, 504]);
+// Сколько ждать перед повтором. Сервер при отказе присылает `Retry-After` — слушаем его,
+// иначе ждём сами, всё дольше с каждой попыткой. Верхнюю границу держим в пять секунд:
+// дольше человек смотрит на пустое место и уходит.
+const retryPause = (response, attempt) => {
+  const asked = Number(response?.headers?.get?.("retry-after"));
+  if (Number.isFinite(asked) && asked > 0) return Math.min(asked * 1000, 5000);
+  return Math.min(700 * attempt, 5000);
+};
 const fetchWithRetry = async (url, options = {}, attempts = 3) => {
   let lastError = null;
+  let pause = 0;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, pause || 700 * attempt));
     try {
       const response = await fetch(url, options);
       if (!transientStatuses.has(response.status) || attempt === attempts - 1) return response;
+      pause = retryPause(response, attempt + 1);
     } catch (error) {
       if (error?.name === "AbortError") throw error;
       lastError = error;
+      pause = 0;
     }
   }
   throw lastError;
@@ -10297,7 +10357,12 @@ async function loadStaticCar(id, signal) {
 // Как и в index.html, без `cache: "no-store"`: иначе запрос уходит с пометкой «не бери
 // из кэша» и сеть Vercel отвечает мимо своего кэша. Ответы каталога несут `max-age=0`,
 // поэтому браузер всё равно ничего не хранит у себя.
-const fetchCarsJson = (url, signal) => fetch(url, { signal }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("api unavailable"))));
+// Через повтор, а не голым `fetch`: этим запросом грузится каталог, и его неудача уводит
+// приложение сначала на запасную выгрузку, а потом на заглушку «идут технические работы».
+// Секундный сбой сервера или отказ защиты от наплыва (429) такого не заслуживает —
+// пробуем ещё раз молча, посетитель ничего не замечает.
+const fetchCarsJson = (url, signal) =>
+  fetchWithRetry(url, { signal }).then((response) => (response.ok ? response.json() : Promise.reject(new Error("api unavailable"))));
 // Справочник фильтров спрашивают и поиск на главной, и блок популярных марок, причём
 // об одном и том же. Держим обещание по строке запроса: второй потребитель дожидается
 // первого ответа вместо того, чтобы отправлять свой.
@@ -10343,6 +10408,17 @@ const requestBootCatalog = () => (catalogRequest ||= window.__boot?.catalog || f
 let bootListMinimal = isCatalogPath(currentAppPath());
 let showcaseListRequest = null;
 const requestShowcaseList = () => (showcaseListRequest ||= fetchCarsJson("/api/cars?limit=60&sort=variety"));
+// Повторная попытка после неудачи должна именно спросить заново. И запомненное обещание,
+// и то, что начала страница ещё до загрузки приложения, остаются неудачными навсегда —
+// без этой очистки повтор мгновенно упирался бы в тот же отказ, что и первый раз.
+const forgetBootCatalog = () => {
+  catalogRequest = null;
+  showcaseListRequest = null;
+  if (window.__boot) {
+    window.__boot.catalog = null;
+    window.__boot.car = null;
+  }
+};
 const requestBootCar = (id) => (window.__boot?.carId === id && window.__boot.car) || fetchCarsJson(`/api/cars/${encodeURIComponent(id)}`);
 // Машина, встроенная прямо в страницу. Сервер, собирая карточку, кладёт её данные
 // в window.__boot.carValue (вместе с соседями той же модели) и рендерит разметку из
@@ -10445,6 +10521,15 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(() => Boolean(targetId) && !bootCarSync(targetId));
   const [loadError, setLoadError] = useState(false);
+  // Счётчик попыток загрузить каталог. Меняется — загрузчик ниже запускается заново,
+  // без перезагрузки всей страницы: заглушка «идут технические работы» пробует сама.
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const retryCatalog = useCallback(() => {
+    forgetBootCatalog();
+    setLoadError(false);
+    setLoading(true);
+    setLoadAttempt((value) => value + 1);
+  }, []);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authPending, setAuthPending] = useState(false);
@@ -10646,7 +10731,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
   // Первый уход со страницы каталога после урезанного старта: дозапрашиваем
   // обычный список витрины, чтобы главной и похожим было из чего собираться.
   useEffect(() => {
@@ -11079,7 +11164,7 @@ export function App() {
     ) : loading || routeLoading ? (
       <AppLoader />
     ) : loadError ? (
-      <MaintenancePage />
+      <MaintenancePage onRetry={retryCatalog} />
     ) : showAccountFromAuthRoute ? (
       <AccountPage user={user} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} authBackend={authBackend} navigate={navigate} onLogout={logout} onSaveProfile={saveProfile} onDeleteAccount={removeAccount} pending={authPending} />
     ) : contentPath === "/favorites" ? (

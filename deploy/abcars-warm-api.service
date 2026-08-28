@@ -1,0 +1,17 @@
+# Прогрев кэша данных: просим у своего же сайта те адреса, которые запрашивают главная
+# и каталог, чтобы готовые ответы лежали у nginx до прихода посетителя. Мимо кэша те же
+# запросы занимают около четырёх секунд, из кэша — четверть. Что и зачем — в шапке
+# scripts/warm-api.mjs. Ставится на сервер так:
+#   install -m644 /srv/abcars/deploy/abcars-warm-api.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now abcars-warm-api.timer
+[Unit]
+Description=Прогрев кэша данных каталога
+After=network-online.target nginx.service abcars.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+ExecStart=/usr/bin/npm run warm:api
+# Проход занимает доли секунды на прогретом кэше и пару секунд на холодном.
+TimeoutStartSec=300
+Nice=15

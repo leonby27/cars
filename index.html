@@ -65,11 +65,29 @@
       // Waiting for React to mount first put the whole bundle on the critical path of the
       // very first request, which is what the boot loader was mostly waiting for.
       (() => {
+        // Секундный сбой сервера (5xx в момент выкладки) и отказ защиты от наплыва (429)
+        // повторяем с паузой — молча, до трёх попыток. Без этого неудача такого запроса
+        // уводила приложение на заглушку «идут технические работы»: этот запрос грузит
+        // каталог, и приложение подхватывает уже начатое здесь обещание, а не своё.
+        const retryable = { 429: 1, 500: 1, 502: 1, 503: 1, 504: 1 };
         const start = (url) => {
           // Без `cache: "no-store"`: он заставлял браузер добавлять к запросу «не бери
           // из кэша», а по этой пометке сеть Vercel отдаёт мимо своего кэша. Свежесть
           // задаёт сам ответ каталога — там `max-age=0`, то есть браузер своё не хранит.
-          const request = fetch(url).then((response) => (response.ok ? response.json() : Promise.reject(new Error(url))));
+          const attempt = (left) =>
+            fetch(url).then(
+              (response) => {
+                if (response.ok) return response.json();
+                if (left > 0 && retryable[response.status]) {
+                  const asked = Number(response.headers.get("retry-after"));
+                  const pause = asked > 0 ? Math.min(asked * 1000, 5000) : 700 * (3 - left);
+                  return new Promise((resolve) => setTimeout(resolve, pause)).then(() => attempt(left - 1));
+                }
+                return Promise.reject(new Error(url));
+              },
+              (error) => (left > 0 ? new Promise((resolve) => setTimeout(resolve, 700 * (3 - left))).then(() => attempt(left - 1)) : Promise.reject(error)),
+            );
+          const request = attempt(2);
           // Nothing awaits these until the bundle boots; keep rejections from going unhandled.
           request.catch(() => {});
           return request;

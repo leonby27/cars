@@ -2555,6 +2555,12 @@ body.header-menu-open .detail-floating-availability {
   font-size: 16px;
   line-height: 1.6;
 }
+/* Строка обратного отсчёта: служебная подпись о том, что сайт занят делом сам. Мельче
+   основного текста, но тем же цветом — приглушать сильнее нельзя, контраст и так на
+   нижней границе читаемости. */
+.maintenance-card .maintenance-countdown {
+  font-size: 14px;
+}
 .maintenance-card .primary {
   margin-top: 4px;
   padding: 0 22px;
@@ -7440,7 +7446,11 @@ html[data-theme="dark"] #root .spec-search,
   font: inherit;
   font-size: clamp(13px, 3.6vw, 15px);
   font-weight: 700;
+  /* Длинное название сжимается многоточием, а не распирает дорожку: боковые
+     отступы шторки остаются на месте. */
+  overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
   cursor: pointer;
   transition:
     background 0.16s ease,
@@ -7468,6 +7478,33 @@ html[data-theme="dark"] #root .spec-search,
   color: var(--ink);
   font: inherit;
   font-size: 16px;
+}
+/* Браузерный крестик у type="search" рисуется своим размером и вплотную к краю
+   поля — прячем его и ставим свой, такой же, как в строке поиска на главной:
+   плашка на тон светлее поля, отступ от края равен просвету сверху и снизу. */
+.sheet-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.sheet-search-clear {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: calc(11px * var(--corner-scale));
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--motion-fast) ease;
+}
+.sheet-search-clear:hover {
+  color: var(--ink);
+}
+:root[data-theme="dark"] .sheet-search-clear {
+  background: #3a4049;
 }
 /* Всплывающая подсказка внизу: цвета вывернуты относительно страницы, поэтому
    она читается поверх любой выдачи. Закрывается крестиком и сама по времени. */
