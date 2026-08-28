@@ -4,7 +4,7 @@ import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Arrow
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
-import { collectHeroAliases, isHeroExcludeWord, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
+import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
 import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
@@ -1477,9 +1477,8 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     // Поиск по списку идёт тем же приведением, что и поиск по каталогу: «skoda»
     // находит «Škoda», «mercedes benz» — «Mercedes-Benz».
     // Ищем и по набранному кириллицей: «ау» — это «au», а значит Audi.
-    const variants = listSearchVariants(query);
-    if (!searchable || !variants.length) return options;
-    return options.filter((item) => variants.some((variant) => searchNormalize(item).includes(variant)));
+    if (!searchable) return options;
+    return listSearchMatches(options, query);
   }, [options, query, searchable]);
 
   const close = (restoreFocus = false) => {
@@ -1913,15 +1912,12 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
   const brandRows = options.brands.filter((item) => item !== "Все марки");
   const modelRows = options.models.filter((item) => item !== ANY_MODEL);
   // Ищем так же, как умный поиск: понимаем набранное кириллицей («ауди», «зикр»),
-  // незаконченные слова («ау» — это «au») и текст, набранный в русской раскладке
-  // вместо латинской. Все написания собирает listSearchVariants.
-  const searchRows = (rows) => {
-    const variants = listSearchVariants(sheetQuery);
-    if (!variants.length) return rows;
-    return rows.filter((item) => variants.some((variant) => searchNormalize(item).includes(variant)));
-  };
+  // незаконченные слова («ау» — это «au», «зик» — начало «зикр»), заглавные буквы
+  // с телефонной клавиатуры и текст, набранный в русской раскладке вместо латинской.
+  const searchRows = (rows) => listSearchMatches(rows, sheetQuery);
   // Список марок в шторке: сначала выбранная группа, потом поиск по строке.
   const brandSheetRows = searchRows(brandGroup === "Все" ? brandRows : brandRows.filter((item) => brandGroupOf(item) === brandGroup));
+  const modelSearchRows = searchRows(modelRows);
 
   return (
     <section className={`search-box${constrained ? " search-box--constrained" : ""}`}>
@@ -2019,7 +2015,14 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
               placeholder={sheet === "models" ? "Поиск модели" : "Поиск марки"}
               aria-label={sheet === "models" ? "Поиск модели" : "Поиск марки"}
               autoComplete="off"
-              onChange={(event) => setSheetQuery(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setSheetQuery(next);
+                // Ищем всегда по всем маркам: на вкладке «Германия» запрос «Зикр»
+                // показывал пустоту, хотя марка в каталоге есть. Начали печатать —
+                // вкладка возвращается на «Все», чтобы было видно, где ищем.
+                if (next.trim()) setBrandGroup("Все");
+              }}
             />
             {sheetQuery && (
               <button type="button" className="sheet-search-clear" aria-label="Очистить поиск" onClick={() => setSheetQuery("")}>
@@ -2063,7 +2066,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
             </>
           ) : (
             <div className="sheet-options">
-              {searchRows(modelRows).map((model) => {
+              {modelSearchRows.map((model) => {
                 const checked = selectedModels.includes(model);
                 return (
                   <div className={`sheet-option sheet-option--check${checked ? " chosen" : ""}`} key={model}>
@@ -2086,7 +2089,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
                   </div>
                 );
               })}
-              {!searchRows(modelRows).length && <p className="select-empty">{modelRows.length ? "Ничего не найдено" : "Загружаем модели…"}</p>}
+              {!modelSearchRows.length && <p className="select-empty">{modelRows.length ? "Ничего не найдено" : "Загружаем модели…"}</p>}
             </div>
           )}
         </FilterSheet>
@@ -6078,20 +6081,55 @@ function VehicleGallery({ car }) {
   const images = car.images?.length ? car.images : [car.image];
   const [active, setActive] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
-  const [dragOffset, setDragOffset] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [slideDirection, setSlideDirection] = useState("idle");
-  const swipe = useRef(null);
-  const suppressOpen = useRef(false);
+  // Соседние кадры ставим в ленту не сразу, а как только приехал главный снимок:
+  // иначе первая загрузка страницы качала бы шесть фотографий вместо одной и
+  // главный кадр — тот самый, по которому считают скорость сайта, — ждал бы в
+  // очереди. Смахивание тоже включает готовность: если человек листает раньше,
+  // чем доехало первое фото, соседние нужны немедленно.
+  const [ready, setReady] = useState(false);
+  const stripRef = useRef(null);
   const thumbsRef = useRef(null);
+  // Фотографии лежат лентой в прокручиваемой полосе с прилипанием кадра. Раньше
+  // смахивание тянуло единственный кадр в сторону, а за ним не было ничего —
+  // отсюда пустое поле на мгновение. Теперь палец тянет ленту, и соседний снимок
+  // приезжает вместе с пальцем, как в любой привычной галерее.
+  // Пока лента сама плавно доезжает до кадра, событий прокрутки приходит много, и
+  // на полпути номер снимка ещё старый — счётчик успевал дёрнуться туда и обратно.
+  // Поэтому на время своего перехода слушаем только приезд в нужный кадр.
+  const pending = useRef(null);
+  const scrollToIndex = (index, smooth) => {
+    const strip = stripRef.current;
+    if (!strip || !strip.clientWidth) return;
+    pending.current = index;
+    window.clearTimeout(pendingTimer.current);
+    pendingTimer.current = window.setTimeout(() => {
+      pending.current = null;
+    }, 700);
+    strip.scrollTo({ left: strip.clientWidth * index, behavior: smooth ? "smooth" : "auto" });
+  };
+  const pendingTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(pendingTimer.current), []);
   const move = (step) => {
-    setSlideDirection(step > 0 ? "next" : "prev");
-    setActive((current) => (current + step + images.length) % images.length);
+    const next = (active + step + images.length) % images.length;
+    // Плавно — только к соседнему кадру. Перескок с последнего фото на первое
+    // плавной прокруткой пролетал бы через всю ленту: это долго и мельтешит.
+    scrollToIndex(next, Math.abs(next - active) === 1);
+    setActive(next);
   };
   const selectImage = (index) => {
     if (index === active) return;
-    setSlideDirection(index > active ? "next" : "prev");
+    scrollToIndex(index, Math.abs(index - active) === 1);
     setActive(index);
+  };
+  const onStripScroll = () => {
+    const strip = stripRef.current;
+    if (!strip || !strip.clientWidth) return;
+    const index = Math.min(images.length - 1, Math.max(0, Math.round(strip.scrollLeft / strip.clientWidth)));
+    if (pending.current !== null) {
+      if (index !== pending.current) return;
+      pending.current = null;
+    }
+    if (index !== active) setActive(index);
   };
   useEffect(() => {
     const thumb = thumbsRef.current?.children[active];
@@ -6106,87 +6144,86 @@ function VehicleGallery({ car }) {
         behavior: "smooth",
       });
   }, [active]);
-  const onPointerDown = (event) => {
-    if (!event.isPrimary) return;
-    swipe.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
-    setDragging(true);
-    setDragOffset(0);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-  const onPointerMove = (event) => {
-    const start = swipe.current;
-    if (!start || start.id !== event.pointerId) return;
-    const distanceX = event.clientX - start.x;
-    const distanceY = event.clientY - start.y;
-    if (Math.abs(distanceX) > Math.abs(distanceY)) setDragOffset(distanceX);
-  };
-  const onPointerUp = (event) => {
-    const start = swipe.current;
-    swipe.current = null;
-    if (!start || start.id !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    const distanceX = event.clientX - start.x;
-    const distanceY = event.clientY - start.y;
-    setDragging(false);
-    setDragOffset(0);
-    if (Math.abs(distanceX) > 8) suppressOpen.current = true;
-    if (Math.abs(distanceX) >= 45 && Math.abs(distanceX) > Math.abs(distanceY)) {
-      move(distanceX > 0 ? -1 : 1);
-    }
-    window.setTimeout(() => {
-      suppressOpen.current = false;
-    }, 0);
-  };
   // Пустой лист при смахивании: браузер выбрасывает прежний кадр в тот же миг, когда
   // ему дают адрес нового, а оригинал снимка ещё едет по сети. Поэтому, во-первых, под
-  // большим кадром лежит облегчённая версия того же снимка (600 точек, ~30 КБ — её
-  // браузер уже скачал для плитки в каталоге): она появляется почти сразу и её
+  // каждым большим кадром лежит облегчённая версия того же снимка (600 точек, ~30 КБ —
+  // её браузер уже скачал для плитки в каталоге): она появляется почти сразу и её
   // накрывает оригинал, когда придёт. Во-вторых, соседние снимки запрашиваем заранее,
   // пока посетитель смотрит текущий, — тогда смахивание чаще всего не ждёт сети вовсе.
   const preloadKeeper = useRef([]);
   useEffect(() => {
-    if (images.length < 2) return;
+    if (images.length < 2 || !ready) return;
     const link = navigator.connection;
     if (link?.saveData) return;
     const at = (step) => images[(active + step + images.length * 2) % images.length];
-    const wanted = [];
-    // Соседние кадры готовим целиком, через один — только облегчённую версию: она
-    // страхует от белого листа, если посетитель листает быстрее, чем едет оригинал.
-    for (const step of [1, -1]) wanted.push(imageSource(at(step), IMAGE_ORIGINAL), imageSource(at(step), IMAGE_WIDTH_CARD));
-    for (const step of [2, -2]) wanted.push(imageSource(at(step), IMAGE_WIDTH_CARD));
+    // Кадр через один: качаем только облегчённую версию (13 КБ). Она страхует от
+    // белого листа, если посетитель пролистнул дальше, чем мы успели приготовить, —
+    // а тянуть вперёд по два оригинала на 70 КБ значило бы жечь мобильный трафик
+    // на снимки, которых человек может и не увидеть.
+    const wanted = [2, -2].map((step) => imageSource(at(step), IMAGE_WIDTH_CARD));
     const started = [];
     for (const href of new Set(wanted.filter(Boolean))) {
       const image = new Image();
       image.decoding = "async";
+      image.fetchPriority = "low";
       image.src = href;
       started.push(image);
     }
     // Ссылки держим, чтобы сборщик мусора не оборвал запрос на полпути.
     preloadKeeper.current = [...started, ...preloadKeeper.current].slice(0, 12);
-  }, [active, images]);
-  const openGallery = () => {
-    if (suppressOpen.current) {
-      suppressOpen.current = false;
-      return;
+  }, [active, images, ready]);
+  // Страховка к onLoad: если главный снимок уже лежал в кэше, браузер успевает
+  // отметить его загруженным до того, как разметка оживёт, и события мы не увидим.
+  // Тогда смотрим на признак «кадр готов» напрямую, а на совсем медленной сети
+  // сдаёмся через две секунды и всё равно готовим соседей.
+  useEffect(() => {
+    if (stripRef.current?.querySelector(".gallery-frame-full")?.complete) {
+      setReady(true);
+      return undefined;
     }
-    setModalOpen(true);
-  };
-  const cancelSwipe = () => {
-    swipe.current = null;
-    setDragging(false);
-    setDragOffset(0);
-  };
-  const full = imageSource(images[active], IMAGE_ORIGINAL);
-  const preview = imageSource(images[active], IMAGE_WIDTH_CARD);
+    const timer = window.setTimeout(() => setReady(true), 2000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  // Соседний кадр слева и справа держим готовым — это ровно то, что палец вытягивает
+  // в поле зрения. Дальше не забегаем: у иных объявлений снимков по сотне, и каждый
+  // лишний кадр — это 83 КБ мобильного трафика впустую.
+  const near = ready ? 1 : 0;
   return (
     <>
       <section className="gallery-panel">
-        <button className={`gallery-open${dragging ? " dragging" : ""}`} style={{ "--gallery-drag-x": `${dragOffset}px` }} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}>
-          <span key={`${active}-${images[active]}`} className={`gallery-frame gallery-slide-${slideDirection}`}>
-            {preview && preview !== full && <img className="gallery-frame-preview" src={preview} alt="" aria-hidden="true" draggable="false" />}
-            <img className="gallery-frame-full" src={full} alt={`${car.title}, фото ${active + 1}`} fetchPriority="high" draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
-          </span>
-        </button>
+        {/* Кадры дальше двух от текущего в разметку не ставим: у иных объявлений
+            снимков под сотню, и сотня рамок в ленте — это лишняя работа браузеру.
+            Соседние всегда на месте, поэтому тянуть ленту не во что пустое. */}
+        <div className="gallery-strip" ref={stripRef} onScroll={onStripScroll} onPointerDown={() => setReady(true)}>
+          {images.map((image, index) => (
+            <button
+              key={`${image}-${index}`}
+              type="button"
+              className="gallery-slide"
+              tabIndex={index === active ? 0 : -1}
+              onClick={() => setModalOpen(true)}
+              aria-label={`Фото ${index + 1} из ${images.length}: ${car.title}. Открыть все фотографии`}
+            >
+              {Math.abs(index - active) <= near && (
+                <>
+                  <img className="gallery-frame-preview" src={imageSource(image, IMAGE_WIDTH_CARD)} alt="" aria-hidden="true" draggable="false" />
+                  <img
+                    className="gallery-frame-full"
+                    src={imageSource(image, IMAGE_ORIGINAL)}
+                    alt={`${car.title}, фото ${index + 1}`}
+                    fetchPriority={index === 0 ? "high" : "low"}
+                    draggable="false"
+                    onLoad={index === 0 ? () => setReady(true) : undefined}
+                    onError={(event) => {
+                      if (index === 0) setReady(true);
+                      retryWithFullImage(event, image);
+                    }}
+                  />
+                </>
+              )}
+            </button>
+          ))}
+        </div>
         <span aria-live="polite">
           <Images size={17} />
           {active + 1} из {images.length}

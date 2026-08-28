@@ -1055,6 +1055,13 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 .featured-favorite:hover {
   background: rgba(14, 16, 19, 0.8);
 }
+/* Отмеченное сердечко лежит на фотографии, в тёмном кружке: тёмно-красный
+   (`--accent-dark`, им общее правило `.selected` красит отметки на светлых
+   подложках) на нём выглядит грязно. Берём светлый оттенок красного — тот же,
+   что везде, где красное лежит на тёмном. */
+.featured-favorite.selected {
+  color: var(--accent-on-dark) !important;
+}
 .featured-image {
   position: relative;
   height: 218px;
@@ -5930,33 +5937,40 @@ footer {
 }
 
 /* Immersive vehicle gallery */
-.gallery-panel {
-  touch-action: pan-y;
+/* Фотографии лежат лентой: прокрутка с прилипанием кадра. Так смахивание тянет не
+   один кадр в пустоту, а саму ленту — соседний снимок приезжает вместе с пальцем.
+   Прилипание делает браузер сам, поэтому у ленты родная инерция и родное
+   сопротивление на краях. */
+.gallery-strip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
 }
-.gallery-open {
+.gallery-strip::-webkit-scrollbar {
+  display: none;
+}
+.gallery-slide {
+  position: relative;
+  flex: 0 0 100%;
   width: 100%;
   height: 100%;
-  display: block;
-  overflow: hidden;
   padding: 0;
   border: 0;
   background: transparent;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
   cursor: zoom-in;
-  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
 }
-.gallery-open .gallery-frame {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: block;
-  overflow: hidden;
-  transform: translate3d(var(--gallery-drag-x, 0), 0, 0);
-  transition: transform 0.16s cubic-bezier(0.22, 0.7, 0.35, 1);
-  will-change: transform, opacity;
-}
-.gallery-open .gallery-frame img {
+.gallery-slide img {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -5968,37 +5982,8 @@ footer {
 }
 /* Облегчённый кадр лежит под оригиналом: пока оригинал едет, посетитель видит фото,
    а не белый лист. Лёгкое увеличение прячет мягкость краёв при растяжении. */
-.gallery-open .gallery-frame-preview {
+.gallery-slide .gallery-frame-preview {
   transform: scale(1.02);
-}
-.gallery-open.dragging .gallery-frame {
-  transition: none;
-}
-.gallery-open:not(.dragging) .gallery-slide-next {
-  animation: gallery-slide-next 0.16s cubic-bezier(0.22, 0.7, 0.35, 1);
-}
-.gallery-open:not(.dragging) .gallery-slide-prev {
-  animation: gallery-slide-prev 0.16s cubic-bezier(0.22, 0.7, 0.35, 1);
-}
-@keyframes gallery-slide-next {
-  from {
-    opacity: 0.72;
-    transform: translate3d(34px, 0, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-@keyframes gallery-slide-prev {
-  from {
-    opacity: 0.72;
-    transform: translate3d(-34px, 0, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
 }
 .gallery-panel > span {
   top: 14px;
