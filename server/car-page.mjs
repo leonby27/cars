@@ -59,7 +59,15 @@ async function relatedCars(car) {
   if (!car.brand || !car.model) return [];
   const params = new URLSearchParams({ brand: car.brand, model: car.model, sort: "price_asc", limit: String(relatedLimit + 1) });
   const { items } = await listCars(params);
-  return items.filter((item) => item.id !== car.id).slice(0, relatedLimit);
+  return (
+    items
+      .filter((item) => item.id !== car.id)
+      .slice(0, relatedLimit)
+      // Лента фотографий в карточке списка показывает пять кадров — остальные адреса
+      // (у машины их бывает сорок) только раздували бы страницу: соседи с их данными
+      // встраиваются в неё целиком. Поля не трогаем: по ним считается цена.
+      .map((item) => ({ ...item, images: (item.images || []).slice(0, 5) }))
+  );
 }
 
 /**
