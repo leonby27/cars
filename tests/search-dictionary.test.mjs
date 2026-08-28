@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectHeroAliases, rankSearchEntries, rewriteQueryNames, searchNormalize, translateBrandWords, translateModelWords } from "../src/search-dictionary.js";
+import { collectHeroAliases, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, translateBrandWords, translateModelWords } from "../src/search-dictionary.js";
 
 // Строка запроса проходит тот же путь, что и в приложении: разбор чисел отдаёт
 // остаток, он режется на слова, из них вынимаются кузов, привод, тип и коробка,
@@ -104,4 +104,25 @@ test("надстрочные знаки в марках не мешают пои
 test("название модели без суффикса находит каталожное с суффиксом", () => {
   const models = [{ name:"Tiguan L", count:700 }, { name:"Tayron", count:900 }];
   assert.equal(rankSearchEntries(models, "tiguan")[0]?.name, "Tiguan L");
+});
+
+test("поиск в списке марок понимает часть слова и кириллицу", () => {
+  const brands = ["Audi", "Avatr", "BMW", "Chery", "Haval", "Li Auto", "Zeekr"];
+  const found = (query) => {
+    const variants = listSearchVariants(query);
+    return brands.filter((brand) => variants.some((variant) => searchNormalize(brand).includes(variant)));
+  };
+  // Незаконченное слово кириллицей: словарь марок «ау» не знает, а буква
+  // в букву это «au» — и находится всё, где такие буквы есть.
+  assert.deepEqual(found("ау"), ["Audi", "Li Auto"]);
+  assert.deepEqual(found("ват"), ["Avatr"]);
+  // Целые русские написания по-прежнему работают через словарь.
+  assert.deepEqual(found("зикр"), ["Zeekr"]);
+  assert.deepEqual(found("чери"), ["Chery"]);
+  assert.deepEqual(found("хавал"), ["Haval"]);
+  // Латиница как есть и середина слова.
+  assert.deepEqual(found("ud"), ["Audi"]);
+  assert.deepEqual(found("вмw"), ["BMW"]);
+  // Пустая строка ничего не фильтрует.
+  assert.deepEqual(listSearchVariants("   "), []);
 });

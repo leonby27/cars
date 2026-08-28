@@ -503,6 +503,23 @@ export const translateBrandWords = (words) => translateAliasWords(words, HERO_BR
 // Модели переводим после марок: «джили тигго» — сначала марка, потом её модель.
 export const translateModelWords = (words) => translateAliasWords(words, HERO_MODEL_RU);
 
+// Написания набранного, по которым ищем в списках марок и моделей. Кроме самой
+// строки пробуем её же в другой раскладке, её же латиницей буква в букву и её же
+// через словарь названий. Латиница буква в букву нужна для незаконченных слов:
+// «ауди» словарь знает, а «ау» — нет, зато это ровно «au», и Audi находится.
+const dictionaryVariant = (text) => {
+  const words = searchNormalize(rewriteQueryNames(text)).split(" ").filter(Boolean);
+  return words.length ? translateModelWords(translateBrandWords(words)).join(" ") : "";
+};
+export const listSearchVariants = (value) => {
+  const text = String(value ?? "");
+  // Раскладку подменяем только у слов от трёх букв: у двух получается слишком
+  // много случайных попаданий — «ау» в русской раскладке это «fe», и находился
+  // бы ещё Dongfeng.
+  const typed = [text, ...(text.trim().length > 2 ? [swapKeyboardLayout(text)] : []), ...latinVariants(text)];
+  return [...new Set([...typed, ...typed.map(dictionaryVariant)].map(searchNormalize).filter(Boolean))];
+};
+
 // в «или» ещё при разборе чисел): «001 и 007» — два куска текста, каждый ищется сам.
 const MODEL_SEPARATORS = new Set(["или", "и", "либо"]);
 export const splitModelSegments = (value) => {

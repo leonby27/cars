@@ -4,7 +4,7 @@ import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Arrow
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
-import { collectHeroAliases, isHeroExcludeWord, rankSearchEntries, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
+import { collectHeroAliases, isHeroExcludeWord, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
 import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
@@ -1476,9 +1476,10 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
   const filteredOptions = useMemo(() => {
     // Поиск по списку идёт тем же приведением, что и поиск по каталогу: «skoda»
     // находит «Škoda», «mercedes benz» — «Mercedes-Benz».
-    const normalizedQuery = searchNormalize(query);
-    if (!searchable || !normalizedQuery) return options;
-    return options.filter((item) => searchNormalize(item).includes(normalizedQuery));
+    // Ищем и по набранному кириллицей: «ау» — это «au», а значит Audi.
+    const variants = listSearchVariants(query);
+    if (!searchable || !variants.length) return options;
+    return options.filter((item) => variants.some((variant) => searchNormalize(item).includes(variant)));
   }, [options, query, searchable]);
 
   const close = (restoreFocus = false) => {
@@ -1911,14 +1912,11 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
   );
   const brandRows = options.brands.filter((item) => item !== "Все марки");
   const modelRows = options.models.filter((item) => item !== ANY_MODEL);
-  // Ищем так же, как умный поиск: понимаем набранное кириллицей («ауди», «зикр»)
-  // и текст, набранный в русской раскладке вместо латинской.
-  const translated = (text) => {
-    const words = searchNormalize(rewriteQueryNames(text)).split(" ").filter(Boolean);
-    return words.length ? translateModelWords(translateBrandWords(words)).join(" ") : "";
-  };
+  // Ищем так же, как умный поиск: понимаем набранное кириллицей («ауди», «зикр»),
+  // незаконченные слова («ау» — это «au») и текст, набранный в русской раскладке
+  // вместо латинской. Все написания собирает listSearchVariants.
   const searchRows = (rows) => {
-    const variants = [...new Set([sheetQuery, swapKeyboardLayout(sheetQuery), translated(sheetQuery), translated(swapKeyboardLayout(sheetQuery))].map(searchNormalize).filter(Boolean))];
+    const variants = listSearchVariants(sheetQuery);
     if (!variants.length) return rows;
     return rows.filter((item) => variants.some((variant) => searchNormalize(item).includes(variant)));
   };
@@ -2039,11 +2037,12 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
                 ))}
               </div>
               <div className="sheet-options">
-                {/* Строка «Все марки» есть только в общей группе: под вкладкой
-                    «Германия» она сбрасывала бы выбор ко всему каталогу. Значок
+                {/* Строка «Все марки» есть только в общей группе и только пока
+                    не ищут: под вкладкой «Германия» она сбрасывала бы выбор ко
+                    всему каталогу, а в результатах поиска была бы лишней. Значок
                     лежит в такой же коробке, как знак марки, иначе названия в
                     списке начинались бы на разной ширине от края. */}
-                {brandGroup === "Все" && (
+                {brandGroup === "Все" && !sheetQuery.trim() && (
                   <button type="button" className={`sheet-option${brandChosen ? "" : " chosen"}`} onClick={() => { actions.brand("Все марки"); setSheet(null); }}>
                     <span className="brand-logo" aria-hidden="true"><SquaresFour size={20} weight="fill" /></span>
                     <span className="sheet-option-name">Все марки</span>
