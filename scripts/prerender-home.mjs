@@ -76,7 +76,14 @@ for (;;) {
 const before = html.slice(0, open);
 const after = html.slice(close + "</div>".length);
 const withRoot = `${before}<div id="root" data-prerender="/">${body}</div>${after}`;
-const replaced = hoisted.length ? withRoot.replace("</head>", `${hoisted.join("")}</head>`) : withRoot;
+// Веб-сервер подкладывает этот файл под адреса, у которых нет своего (/favorites,
+// /login и т.п.). Там разметка главной — чужая: до загрузки приложения показываем
+// только шапку, как делала прежняя заглушка, а не всю главную со скелетами.
+// Приложение, стартуя с нуля, снимает пометку (main.jsx).
+const foreignGuard =
+  `<script>if(location.pathname.replace(/\/+$/,"")!=="")document.documentElement.classList.add("foreign-boot");</script>` +
+  `<style>html.foreign-boot #root .app-content > :not(header){display:none}</style>`;
+const replaced = withRoot.replace("</head>", `${hoisted.join("")}${foreignGuard}</head>`);
 writeFileSync(indexPath, replaced);
 
 const kb = (value) => (value / 1024).toFixed(1);

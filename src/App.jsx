@@ -11069,10 +11069,12 @@ export function App() {
       // экземпляр: заголовок менялся, а выдача оставалась от прежней марки. С разным
       // ключом каждый раздел создаётся заново и читает свой фильтр.
       <Catalog key={catalogKey.current} navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} deleteSavedSearch={deleteSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath)} />
-    ) : detailId && findCarByListing(cars, detailId) ? (
+    ) : !showAccountFromAuthRoute && detailId && findCarByListing(cars, detailId) ? (
       // Машина уже известна (встроена в страницу или успела прийти) — карточку
       // рисуем сразу, не дожидаясь остального каталога: его ждёт только блок
-      // похожих, а он умеет дорисоваться.
+      // похожих, а он умеет дорисоваться. Проверка кабинета обязательна, как у
+      // главной и каталога: без неё вошедший со страницы машины видел бы карточку
+      // вместо личного кабинета — detailId на адресах входа берётся из фона.
       <Detail car={findCarByListing(cars, detailId)} cars={cars} apiMode={apiMode} navigate={navigate} backToCatalog={backToCatalog} favorite={hasFavoriteListing(favorites, detailId)} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : loading || routeLoading ? (
       <AppLoader />

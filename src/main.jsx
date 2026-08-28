@@ -67,6 +67,9 @@ function start() {
   // Текст для поисковиков `index.html` прячет до запуска приложения, чтобы он не мелькал
   // простой вёрсткой. Он уже убран — снимаем скрытие, иначе не покажется и само приложение.
   document.documentElement.classList.remove("booting");
+  // Пометку «чужой адрес с разметкой главной» ставит сама страница (prerender-home):
+  // до этого места была видна только шапка, дальше рисуем настоящую страницу.
+  document.documentElement.classList.remove("foreign-boot");
   installRussianTypography(root);
 
   createRoot(root).render(app);
