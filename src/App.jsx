@@ -6109,25 +6109,76 @@ function VehicleGallery({ car }) {
     const second = strip.children[1];
     return second ? second.offsetLeft - first.offsetLeft : strip.clientWidth;
   };
-  const scrollToIndex = (index, smooth) => {
+  // Прилипание кадра снимаем не классом, а прямым свойством: класс приезжает
+  // только со следующей отрисовкой, а к тому времени браузер уже успевает вернуть
+  // ленту к ближайшему снимку, и свой переход рвётся на первом же кадре.
+  const snapOff = (off) => {
     const strip = stripRef.current;
-    const slide = strip?.children[index];
-    if (!strip || !slide) return;
+    if (strip) strip.style.scrollSnapType = off ? "none" : "";
+  };
+  const glide = useRef(0);
+  const targetLeft = (index) => stripRef.current?.children[index]?.offsetLeft ?? null;
+  const stopGlide = () => {
+    window.cancelAnimationFrame(glide.current);
+    glide.current = 0;
+  };
+  const holdPending = (index) => {
     pending.current = index;
     window.clearTimeout(pendingTimer.current);
     pendingTimer.current = window.setTimeout(() => {
       pending.current = null;
     }, 700);
-    strip.scrollTo({ left: slide.offsetLeft, behavior: smooth ? "smooth" : "auto" });
   };
-  const goTo = (index, smooth) => {
-    scrollToIndex(index, smooth);
+  // Мгновенный переход — для прыжков через несколько кадров: по миниатюре или с
+  // последнего снимка на первый. Анимировать пролёт через десять фотографий
+  // бессмысленно, а под курсором, который скользит по миниатюрам, любая анимация
+  // отстаёт и выглядит рваной.
+  const jumpTo = (index) => {
+    const strip = stripRef.current;
+    const left = targetLeft(index);
+    if (!strip || left === null) return;
+    stopGlide();
+    snapOff(false);
+    holdPending(index);
+    strip.scrollLeft = left;
+  };
+  // Переход к соседнему кадру — своей анимацией на 0,17 с. Родная плавная прокрутка
+  // браузера для этого слишком долгая (около трети секунды) и на новом наведении
+  // мыши обрывается рывком; свою мы обрываем чисто и начинаем с текущего места.
+  const glideTo = (index) => {
+    const strip = stripRef.current;
+    const to = targetLeft(index);
+    if (!strip || to === null) return;
+    const from = strip.scrollLeft;
+    stopGlide();
+    if (Math.abs(to - from) < 1) {
+      jumpTo(index);
+      return;
+    }
+    holdPending(index);
+    snapOff(true);
+    const started = performance.now();
+    const step = (now) => {
+      const part = Math.min(1, (now - started) / 170);
+      const eased = 1 - (1 - part) ** 3;
+      strip.scrollLeft = from + (to - from) * eased;
+      if (part < 1) {
+        glide.current = window.requestAnimationFrame(step);
+        return;
+      }
+      glide.current = 0;
+      strip.scrollLeft = to;
+      snapOff(false);
+    };
+    glide.current = window.requestAnimationFrame(step);
+  };
+  const goTo = (index, animated) => {
+    if (animated) glideTo(index);
+    else jumpTo(index);
     setActive(index);
   };
   const move = (step) => {
     const next = (active + step + images.length) % images.length;
-    // Плавно — только к соседнему кадру. Перескок с последнего фото на первое
-    // плавной прокруткой пролетал бы через всю ленту: это долго и мельтешит.
     goTo(next, Math.abs(next - active) === 1);
   };
   const selectImage = (index) => {
@@ -6153,27 +6204,26 @@ function VehicleGallery({ car }) {
   const drag = useRef(null);
   const suppressOpen = useRef(false);
   const [freeScroll, setFreeScroll] = useState(false);
-  const freeTimer = useRef(0);
-  const settleRef = useRef(null);
-  const stopFreeScroll = () => {
-    window.clearTimeout(freeTimer.current);
-    if (settleRef.current) stripRef.current?.removeEventListener("scrollend", settleRef.current);
-    settleRef.current = null;
-  };
   useEffect(
     () => () => {
       window.clearTimeout(pendingTimer.current);
-      stopFreeScroll();
+      stopGlide();
     },
     [],
   );
   const onPointerDown = (event) => {
     setReady(true);
-    if (event.pointerType !== "mouse" || event.button !== 0 || images.length < 2) return;
+    // Любое касание ленты прерывает свой переход: дальше человек ведёт её сам.
+    // Пальцу при этом возвращаем прилипание — прокрутку он ведёт средствами
+    // браузера, и без прилипания лента остановилась бы между кадрами.
+    stopGlide();
     const strip = stripRef.current;
-    if (!strip) return;
+    if (!strip || event.pointerType !== "mouse" || event.button !== 0 || images.length < 2) {
+      snapOff(false);
+      return;
+    }
     pending.current = null;
-    stopFreeScroll();
+    snapOff(true);
     drag.current = { id: event.pointerId, x: event.clientX, left: strip.scrollLeft, moved: false };
     setFreeScroll(true);
     // Захват указателя: если мышь уйдёт за край кадра, движение всё равно наше.
@@ -6198,6 +6248,7 @@ function VehicleGallery({ car }) {
     drag.current = null;
     if (!start || !strip) {
       setFreeScroll(false);
+      snapOff(false);
       return;
     }
     try {
@@ -6222,18 +6273,9 @@ function VehicleGallery({ car }) {
         suppressOpen.current = false;
       }, 0);
     }
+    setFreeScroll(false);
+    // Доводим ленту до кадра своей анимацией: она же вернёт прилипание в конце.
     goTo(clampIndex(from + step), true);
-    // Прилипание возвращаем, когда лента уже доехала: включённым посреди плавного
-    // перехода оно обрывало бы его и дёргало кадр. Ждём события «прокрутка
-    // закончилась», а где браузер его не знает — сдаёмся через семь десятых
-    // секунды: к этому времени переход всегда завершён.
-    const settle = () => {
-      stopFreeScroll();
-      setFreeScroll(false);
-    };
-    settleRef.current = settle;
-    strip.addEventListener("scrollend", settle);
-    freeTimer.current = window.setTimeout(settle, 700);
   };
   const openModal = () => {
     if (suppressOpen.current) {
@@ -6298,6 +6340,27 @@ function VehicleGallery({ car }) {
   // Соседний кадр слева и справа держим готовым — это ровно то, что палец вытягивает
   // в поле зрения. Дальше не забегаем: у иных объявлений снимков по сотне, и каждый
   // лишний кадр — это 83 КБ мобильного трафика впустую.
+  // Курсор зашёл на полосу миниатюр — значит, человек собрался листать фотографии.
+  // Заранее качаем облегчённые копии всех кадров (по 13 КБ): после этого прыжок по
+  // любой миниатюре показывает снимок сразу, а не через ожидание сети. До того как
+  // курсор коснулся полосы, не тратим ни байта — большинство посетителей её не
+  // трогает. Больше сорока кадров не берём: у иных объявлений снимков под сотню.
+  const railWarmed = useRef(false);
+  const railKeeper = useRef([]);
+  const warmRail = () => {
+    if (railWarmed.current || images.length < 2) return;
+    railWarmed.current = true;
+    if (navigator.connection?.saveData) return;
+    for (const image of images.slice(0, 40)) {
+      const href = imageSource(image, IMAGE_WIDTH_CARD);
+      if (!href) continue;
+      const loader = new Image();
+      loader.decoding = "async";
+      loader.fetchPriority = "low";
+      loader.src = href;
+      railKeeper.current.push(loader);
+    }
+  };
   const near = ready ? 1 : 0;
   return (
     <>
@@ -6357,7 +6420,7 @@ function VehicleGallery({ car }) {
             </button>
           </div>
         )}
-        <div className="gallery-thumbs" ref={thumbsRef}>
+        <div className="gallery-thumbs" ref={thumbsRef} onMouseEnter={warmRail}>
           {images.map((image, index) => (
             <button key={`${image}-${index}`} className={active === index ? "active" : ""} onMouseEnter={() => selectImage(index)} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}>
               <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, image)} />
