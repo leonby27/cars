@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectHeroAliases, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, translateBrandWords, translateModelWords } from "../src/search-dictionary.js";
+import { collectHeroAliases, listSearchMatches, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, translateBrandWords, translateModelWords } from "../src/search-dictionary.js";
 
 // Строка запроса проходит тот же путь, что и в приложении: разбор чисел отдаёт
 // остаток, он режется на слова, из них вынимаются кузов, привод, тип и коробка,
@@ -142,4 +142,26 @@ test("заглавная буква с телефонной клавиатуры
   // Хвост названия кузова по звучанию: буква в букву вышло бы «sportbek».
   assert.deepEqual(found("Спортбэк"), ["A5L Sportback", "E5 Sportback"]);
   assert.deepEqual(found("спортбека"), ["A5L Sportback", "E5 Sportback"]);
+});
+
+test("список марок и моделей ищется по всем написаниям справочника", () => {
+  const brands = ["Zeekr", "Audi", "Mercedes-Benz", "Land Rover", "Great Wall", "Xiaomi", "Li Auto"];
+  const models = ["Dargo", "Han", "Preface", "Coolray", "A5L Sportback", "G-Class"];
+  // Недописанное русское написание: словарь знает «зикр», и его начало тоже годится.
+  assert.deepEqual(listSearchMatches(brands, "зик"), ["Zeekr"]);
+  assert.deepEqual(listSearchMatches(brands, "Зик"), ["Zeekr"]);
+  assert.deepEqual(listSearchMatches(brands, "зее"), ["Zeekr"]);
+  assert.deepEqual(listSearchMatches(brands, "мер"), ["Mercedes-Benz"]);
+  assert.deepEqual(listSearchMatches(brands, "мерин"), ["Mercedes-Benz"]);
+  assert.deepEqual(listSearchMatches(brands, "рендж"), ["Land Rover"]);
+  assert.deepEqual(listSearchMatches(brands, "грейт"), ["Great Wall"]);
+  assert.deepEqual(listSearchMatches(brands, "сяо"), ["Xiaomi"]);
+  // Модели — по тому же справочнику: «биг дог» это Dargo, «гелик» — G-Class.
+  assert.deepEqual(listSearchMatches(models, "биг дог"), ["Dargo"]);
+  assert.deepEqual(listSearchMatches(models, "дагоу"), ["Dargo"]);
+  assert.deepEqual(listSearchMatches(models, "Хан"), ["Han"]);
+  assert.deepEqual(listSearchMatches(models, "гелик"), ["G-Class"]);
+  assert.deepEqual(listSearchMatches(models, "Спортбэк"), ["A5L Sportback"]);
+  // Пустой запрос ничего не отсеивает.
+  assert.deepEqual(listSearchMatches(brands, "  "), brands);
 });

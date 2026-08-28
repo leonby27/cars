@@ -526,6 +526,28 @@ export const listSearchVariants = (value) => {
   return [...new Set([...typed, ...typed.map(dictionaryVariant)].map(searchNormalize).filter(Boolean))];
 };
 
+// Все русские написания каждого каталожного названия: справочник знает, что Zeekr
+// пишут «зикр», «зикер» и «зеекр», а Dargo — «биг дог» и «дагоу». По ним ищем
+// тоже, иначе недописанное слово не находится: словарь ждёт слово целиком, а
+// буква в букву «зик» — это «zik», чего в «zeekr» нет.
+const NAME_SPELLINGS = new Map();
+for (const [spelling, name] of [...HERO_BRAND_RU, ...HERO_MODEL_RU]) {
+  const key = searchNormalize(name);
+  const list = NAME_SPELLINGS.get(key) || [];
+  list.push(searchNormalize(spelling));
+  NAME_SPELLINGS.set(key, list);
+}
+/** Отбирает из списка названий (марки, модели) подходящие под набранное. */
+export const listSearchMatches = (items, query) => {
+  const variants = listSearchVariants(query);
+  if (!variants.length) return items;
+  return items.filter((item) => {
+    const name = searchNormalize(item);
+    if (variants.some((variant) => name.includes(variant))) return true;
+    return (NAME_SPELLINGS.get(name) || []).some((spelling) => variants.some((variant) => spelling.includes(variant)));
+  });
+};
+
 // в «или» ещё при разборе чисел): «001 и 007» — два куска текста, каждый ищется сам.
 const MODEL_SEPARATORS = new Set(["или", "и", "либо"]);
 export const splitModelSegments = (value) => {
