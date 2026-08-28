@@ -1728,8 +1728,14 @@ function Toast({ text, onClose }) {
 
 // Шторка фильтра на телефоне: шапка с заголовком (и стрелкой «назад», когда шаг не
 // первый), прокручиваемая середина и кнопка результата, которая всегда видна внизу.
-function FilterSheet({ title, onBack = null, onClose, footer = null, fill = false, compact = false, icon = null, hideClose = false, children }) {
+function FilterSheet({ title, onBack = null, onClose, footer = null, fill = false, compact = false, icon = null, hideClose = false, scrollResetKey = null, children }) {
   const titleId = useId();
+  const bodyRef = useRef(null);
+  // Шторка марок и моделей живёт между шагами: содержимое сменилось, а прокрутка
+  // осталась от прошлого списка — возвращаем её к началу.
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [scrollResetKey]);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event) => {
@@ -1764,7 +1770,7 @@ function FilterSheet({ title, onBack = null, onClose, footer = null, fill = fals
             </button>
           )}
         </header>
-        <div className="mobile-filter-sheet-body">{children}</div>
+        <div className="mobile-filter-sheet-body" ref={bodyRef}>{children}</div>
         {Boolean(footer) && <footer className="mobile-filter-sheet-actions">{footer}</footer>}
       </section>
     </div>
@@ -1993,93 +1999,97 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           {extraFilters()}
         </div>
       )}
-      {narrow && sheet === "brands" && (
-        <FilterSheet title="Марки" onClose={() => setSheet(null)} footer={sheetFooter} fill>
+      {/* Марки и модели — два шага одной шторки: меняется только её содержимое.
+          Раньше это были две шторки, и при переходе вторая заново выезжала
+          снизу — получался блик. */}
+      {narrow && (sheet === "brands" || sheet === "models") && (
+        <FilterSheet
+          title={sheet === "models" ? (brandChosen ? values.brand : "Модели") : "Марки"}
+          onBack={sheet === "models" ? () => { setSheetQuery(""); setSheet("brands"); } : null}
+          onClose={() => setSheet(null)}
+          footer={sheetFooter}
+          scrollResetKey={sheet}
+          fill
+        >
           {/* Крестик очистки — свой, как в строке поиска на главной: у браузерного
               нет ни плашки, ни отступа от края. */}
           <div className="sheet-search">
             <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
-            <input type="search" value={sheetQuery} placeholder="Поиск марки" aria-label="Поиск марки" autoComplete="off" onChange={(event) => setSheetQuery(event.target.value)} />
+            <input
+              type="search"
+              value={sheetQuery}
+              placeholder={sheet === "models" ? "Поиск модели" : "Поиск марки"}
+              aria-label={sheet === "models" ? "Поиск модели" : "Поиск марки"}
+              autoComplete="off"
+              onChange={(event) => setSheetQuery(event.target.value)}
+            />
             {sheetQuery && (
               <button type="button" className="sheet-search-clear" aria-label="Очистить поиск" onClick={() => setSheetQuery("")}>
                 <X size={18} weight="bold" />
               </button>
             )}
           </div>
-          <div className="sheet-tabs" role="tablist" aria-label="Группы марок">
-            {BRAND_GROUPS.map((group) => (
-              <button type="button" key={group} role="tab" aria-selected={brandGroup === group} className={`sheet-tab${brandGroup === group ? " chosen" : ""}`} onClick={() => setBrandGroup(group)}>
-                {group}
-              </button>
-            ))}
-          </div>
-          <div className="sheet-options">
-            {/* Строка «Все марки» есть только в общей группе: под вкладкой
-                «Германия» она сбрасывала бы выбор ко всему каталогу. Значок
-                лежит в такой же коробке, как знак марки, иначе названия в
-                списке начинались бы на разной ширине от края. */}
-            {brandGroup === "Все" && (
-              <button type="button" className={`sheet-option${brandChosen ? "" : " chosen"}`} onClick={() => { actions.brand("Все марки"); setSheet(null); }}>
-                <span className="brand-logo" aria-hidden="true"><SquaresFour size={20} weight="fill" /></span>
-                <span className="sheet-option-name">Все марки</span>
-                <span className="sheet-option-count">{number(optionCounts?.brands?.get("Все марки") || 0)}</span>
-              </button>
-            )}
-            {brandSheetRows.map((brand) => (
-              <button type="button" key={brand} className={`sheet-option${values.brand === brand ? " chosen" : ""}`} onClick={() => { actions.brand(brand); setSheetQuery(""); setSheet("models"); }}>
-                <BrandMark brand={brand} />
-                <span className="sheet-option-name">{brand}</span>
-                <span className="sheet-option-count">{number(optionCounts?.brands?.get(brand) || 0)}</span>
-                <CaretRight size={16} weight="bold" aria-hidden="true" />
-              </button>
-            ))}
-            {!brandSheetRows.length && <p className="select-empty">Ничего не найдено</p>}
-          </div>
-        </FilterSheet>
-      )}
-      {narrow && sheet === "models" && (
-        <FilterSheet
-          title={brandChosen ? values.brand : "Модели"}
-          onBack={() => { setSheetQuery(""); setSheet("brands"); }}
-          onClose={() => setSheet(null)}
-          footer={sheetFooter}
-          fill
-        >
-          <div className="sheet-search">
-            <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
-            <input type="search" value={sheetQuery} placeholder="Поиск модели" aria-label="Поиск модели" autoComplete="off" onChange={(event) => setSheetQuery(event.target.value)} />
-            {sheetQuery && (
-              <button type="button" className="sheet-search-clear" aria-label="Очистить поиск" onClick={() => setSheetQuery("")}>
-                <X size={18} weight="bold" />
-              </button>
-            )}
-          </div>
-          <div className="sheet-options">
-            {searchRows(modelRows).map((model) => {
-              const checked = selectedModels.includes(model);
-              return (
-                <div className={`sheet-option sheet-option--check${checked ? " chosen" : ""}`} key={model}>
-                  {/* По строке — только эта модель, и шторка закрывается. По галочке —
-                      набор из нескольких моделей, шторка остаётся открытой. */}
-                  <button type="button" className="sheet-option-main" onClick={() => { actions.model([model]); setSheet(null); }}>
-                    <span className="sheet-option-name">{model}</span>
-                    <span className="sheet-option-count">{number(optionCounts?.models?.get(model) || 0)}</span>
+          {sheet === "brands" ? (
+            <>
+              <div className="sheet-tabs" role="tablist" aria-label="Группы марок">
+                {BRAND_GROUPS.map((group) => (
+                  <button type="button" key={group} role="tab" aria-selected={brandGroup === group} className={`sheet-tab${brandGroup === group ? " chosen" : ""}`} onClick={() => setBrandGroup(group)}>
+                    {group}
                   </button>
-                  <button
-                    type="button"
-                    className="sheet-option-check"
-                    role="checkbox"
-                    aria-checked={checked}
-                    aria-label={`${model}: ${checked ? "убрать" : "добавить к выбранным"}`}
-                    onClick={() => actions.model(checked ? selectedModels.filter((item) => item !== model) : [...selectedModels, model])}
-                  >
-                    {checked && <Check size={14} weight="bold" aria-hidden="true" />}
+                ))}
+              </div>
+              <div className="sheet-options">
+                {/* Строка «Все марки» есть только в общей группе: под вкладкой
+                    «Германия» она сбрасывала бы выбор ко всему каталогу. Значок
+                    лежит в такой же коробке, как знак марки, иначе названия в
+                    списке начинались бы на разной ширине от края. */}
+                {brandGroup === "Все" && (
+                  <button type="button" className={`sheet-option${brandChosen ? "" : " chosen"}`} onClick={() => { actions.brand("Все марки"); setSheet(null); }}>
+                    <span className="brand-logo" aria-hidden="true"><SquaresFour size={20} weight="fill" /></span>
+                    <span className="sheet-option-name">Все марки</span>
+                    <span className="sheet-option-count">{number(optionCounts?.brands?.get("Все марки") || 0)}</span>
+                    <CaretRight size={16} weight="bold" aria-hidden="true" />
                   </button>
-                </div>
-              );
-            })}
-            {!searchRows(modelRows).length && <p className="select-empty">{modelRows.length ? "Ничего не найдено" : "Загружаем модели…"}</p>}
-          </div>
+                )}
+                {brandSheetRows.map((brand) => (
+                  <button type="button" key={brand} className={`sheet-option${values.brand === brand ? " chosen" : ""}`} onClick={() => { actions.brand(brand); setSheetQuery(""); setSheet("models"); }}>
+                    <BrandMark brand={brand} />
+                    <span className="sheet-option-name">{brand}</span>
+                    <span className="sheet-option-count">{number(optionCounts?.brands?.get(brand) || 0)}</span>
+                    <CaretRight size={16} weight="bold" aria-hidden="true" />
+                  </button>
+                ))}
+                {!brandSheetRows.length && <p className="select-empty">Ничего не найдено</p>}
+              </div>
+            </>
+          ) : (
+            <div className="sheet-options">
+              {searchRows(modelRows).map((model) => {
+                const checked = selectedModels.includes(model);
+                return (
+                  <div className={`sheet-option sheet-option--check${checked ? " chosen" : ""}`} key={model}>
+                    {/* По строке — только эта модель, и шторка закрывается. По галочке —
+                        набор из нескольких моделей, шторка остаётся открытой. */}
+                    <button type="button" className="sheet-option-main" onClick={() => { actions.model([model]); setSheet(null); }}>
+                      <span className="sheet-option-name">{model}</span>
+                      <span className="sheet-option-count">{number(optionCounts?.models?.get(model) || 0)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="sheet-option-check"
+                      role="checkbox"
+                      aria-checked={checked}
+                      aria-label={`${model}: ${checked ? "убрать" : "добавить к выбранным"}`}
+                      onClick={() => actions.model(checked ? selectedModels.filter((item) => item !== model) : [...selectedModels, model])}
+                    >
+                      {checked && <Check size={14} weight="bold" aria-hidden="true" />}
+                    </button>
+                  </div>
+                );
+              })}
+              {!searchRows(modelRows).length && <p className="select-empty">{modelRows.length ? "Ничего не найдено" : "Загружаем модели…"}</p>}
+            </div>
+          )}
         </FilterSheet>
       )}
       {narrow && sheet === "filters" && (
