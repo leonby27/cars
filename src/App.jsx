@@ -2280,9 +2280,11 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
       controller.abort();
     };
   }, [apiMode, hasActiveFilters, normalizedType, brand, model, bodyType, color, yearMin, yearMax, mileage, priceMin, priceMax, drive, owners, battery, condition, accel, tire, range, engine, power, gearbox, fuel]);
+  // Выбранная модель при смене типа двигателя остаётся: марку и модель посетитель
+  // выбирал сам, и сбрасывать их за него нельзя. Не совпало с типом — он увидит
+  // пустую выдачу и снимет лишнее сам.
   const changeType = (value) => {
     setType(value);
-    setModel([]);
     // Фильтры своего топлива при смене вкладки уходят с экрана — см. POWERTRAIN_FILTER_RESET.
     setBattery(ANY_BATTERY);
     setRange(ANY_RANGE);
@@ -2337,10 +2339,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         },
         priceMax: setPriceMax,
         mileage: setMileage,
-        bodyType: (value) => {
-          setBodyType(value);
-          setModel([]);
-        },
+        bodyType: setBodyType,
         color: setColor,
         drive: setDrive,
         owners: setOwners,
@@ -2919,6 +2918,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
   // скрыт (`display: none`), но браузер всё равно его качал: на главной это двадцать
   // невидимых снимков и почти мегабайт мимо экрана.
   const strip = mobileStrip && narrow;
+  const hiddenImages = Math.max(0, (car.images?.length || 1) - images.length);
 
   return (
     <div className={`${className} hover-image-preview`} ref={frameRef}>
@@ -2940,16 +2940,28 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
             if (!mobileStripMoved.current) onMobileOpen?.();
           }}
         >
-          {images.map((image, index) => (
-            <img
-              src={imageSource(image, IMAGE_WIDTH_STRIP)}
-              alt={index === 0 ? car.title : ""}
-              draggable="false"
-              onError={(event) => retryWithFullImage(event, image)}
-              loading="lazy"
-              key={`${image}-mobile-${index}`}
-            />
-          ))}
+          {images.map((image, index) => {
+            const frame = (
+              <img
+                src={imageSource(image, IMAGE_WIDTH_STRIP)}
+                alt={index === 0 ? car.title : ""}
+                draggable="false"
+                onError={(event) => retryWithFullImage(event, image)}
+                loading="lazy"
+              />
+            );
+            // На последнем кадре ленты видно, что снимков больше, чем поместилось:
+            // сам кадр приглушён и размыт, поверх — сколько фотографий осталось.
+            if (index === images.length - 1 && hiddenImages > 0) {
+              return (
+                <div className="car-row-mobile-image-more" key={`${image}-mobile-${index}`}>
+                  {frame}
+                  <span>и ещё {hiddenImages} фото</span>
+                </div>
+              );
+            }
+            return <Fragment key={`${image}-mobile-${index}`}>{frame}</Fragment>;
+          })}
         </div>
       )}
       {images.length > 1 && (
@@ -4733,7 +4745,8 @@ const emptyCatalogFilters = () => ({
 
 function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
-  const changeType = (value) => setFilters((old) => ({ ...old, type: value, model: [], ...POWERTRAIN_FILTER_RESET }));
+  // Модель не сбрасываем: её выбирал посетитель, см. такой же changeType выше.
+  const changeType = (value) => setFilters((old) => ({ ...old, type: value, ...POWERTRAIN_FILTER_RESET }));
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
   const selectedType = typeLabel(filters.type);
   const selectType = (value) => changeType(typeValue(value));
@@ -4752,7 +4765,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
         priceMin: (value) => setFilters((old) => ({ ...old, priceMin: value, priceMax: clampPriceMax(value, old.priceMax) })),
         priceMax: update("priceMax"),
         mileage: update("mileage"),
-        bodyType: (value) => setFilters((old) => ({ ...old, bodyType: value, model: [] })),
+        bodyType: update("bodyType"),
         color: update("color"),
         drive: update("drive"),
         owners: update("owners"),

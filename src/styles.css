@@ -4528,6 +4528,40 @@ html[data-theme="dark"] #root .load-more {
   .car-row-mobile-image-strip > img:last-child {
     border-radius: 0 calc(9px * var(--corner-scale)) calc(9px * var(--corner-scale)) 0;
   }
+  .car-row-mobile-image-more {
+    position: relative;
+    width: 66%;
+    min-width: 66%;
+    height: 100%;
+    flex: 0 0 66%;
+    overflow: hidden;
+    border-radius: 0 calc(9px * var(--corner-scale)) calc(9px * var(--corner-scale)) 0;
+    scroll-snap-align: start;
+  }
+  .car-row-mobile-image-more > img {
+    width: 100%;
+    min-width: 100%;
+    height: 100%;
+    object-fit: cover;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  .car-row-mobile-image-more > span {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 0 10px;
+    background: rgba(12, 14, 18, 0.46);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
   .car-row-image .hover-image-segments {
     display: none;
   }
@@ -7683,9 +7717,16 @@ html[data-theme="dark"] #root .spec-search,
   .desktop-filter-extra {
     display: none;
   }
+  /* Затемнение ростом в видимую часть экрана (dvh), а не в разметочную (inset: 0):
+     иначе невысокие шторки прижимаются к низу, который уехал под адресную строку
+     браузера. Высокая шторка от затемнения не зависит — она прибита к экрану сама
+     (правило ниже). */
   .mobile-filter-sheet-backdrop {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100dvh;
     z-index: 120;
     width: 100%;
     display: flex;
@@ -7701,8 +7742,11 @@ html[data-theme="dark"] #root .spec-search,
     /* Обычная шторка ростом по содержимому: у поля с одним списком не должно
        быть пустоты в пол-экрана. Постоянную высоту держат только списки марок
        и моделей — там она меняется при поиске (класс ниже). Прокручивается
-       середина: шапка и кнопка держатся по краям. */
-    max-height: min(88dvh, 720px);
+       середина: шапка и кнопка держатся по краям. Потолок — во весь экран за
+       вычетом полоски в 16 пикселей сверху, чтобы было видно, что за шторкой
+       страница. Считаем вычитанием, а не долей от затемнения: доля в разных
+       браузерах берётся то от края, то от отступа, и кнопка уезжала за экран. */
+    max-height: calc(100dvh - 16px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -7724,13 +7768,20 @@ html[data-theme="dark"] #root .spec-search,
     border-radius: 999px;
     background: var(--line-strong);
   }
-  .mobile-filter-sheet--fill {
-    height: min(88dvh, 720px);
-  }
-  /* Пока в невысокой шторке раскрыт список, шторка растягивается на полный рост:
-     список лежит отдельным слоем, роста шторке не добавляет и обрезался её краем. */
-  .mobile-filter-sheet:has(.custom-select.open) {
-    height: min(88dvh, 720px);
+  /* Высокие шторки (марки, модели, а также любая, в которой раскрыт список —
+     он лежит отдельным слоем, роста шторке не добавляет и обрезался её краем)
+     прибиты к экрану сами: 16 пикселей от верхнего края, низ вплотную к нижнему.
+     Рост при этом не считается вовсе — ни долями, ни вычитанием из dvh, поэтому
+     кнопка внизу не может уехать за экран ни в одном браузере. */
+  .mobile-filter-sheet--fill,
+  .mobile-filter-sheet:not(.mobile-filter-sheet--compact):has(.custom-select.open) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 16px;
+    bottom: 0;
+    height: auto;
+    max-height: none;
   }
   /* Шторка одного фильтра («Цена», «Год», «Пробег») в прокрутке не нуждается, поэтому
      ей растягиваться незачем: она остаётся ростом по содержимому, а раскрытый список
