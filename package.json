@@ -8,7 +8,7 @@
     "dev:web": "vite",
     "dev:all": "concurrently -k -n api,crawler,web -c blue,yellow,magenta \"npm run api:watch\" \"npm run worker\" \"npm run dev:web\"",
     "api": "node server/index.mjs",
-    "api:watch": "node --watch server/index.mjs",
+    "api:watch": "node server/dev.mjs",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "rates": "node scripts/update-rates.mjs",
