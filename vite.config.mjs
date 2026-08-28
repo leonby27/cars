@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { trimModelPages } from "./scripts/vite-trim-model-pages.mjs";
 
 export default defineConfig({
   base: "/",
@@ -32,6 +33,9 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Из браузерной сборки убираем поля обзоров, которые читает только сервер:
+    // подробности в scripts/vite-trim-model-pages.mjs.
+    trimModelPages(),
     // Стили обычной ссылкой на время разработки.
     //
     // В собранном сайте файл стилей подключён ссылкой в <head>: браузер не рисует

@@ -983,7 +983,12 @@ const routeSeo = {
 // Страницы моделей описаны в model-pages.js; их заголовки попадают в ту же карту,
 // чтобы SEO-механика работала для них без отдельной ветки.
 routeSeo[MODELS_INDEX.path] = [MODELS_INDEX.seoTitle, MODELS_INDEX.seoDescription];
-for (const modelPage of MODEL_PAGES) routeSeo[modelPage.path] = [modelPage.seoTitle, modelPage.seoDescription];
+// Описания обзоров (`seoDescription`) в браузерную сборку не попадают: 449 описаний —
+// это 58 КБ, которые скачивал каждый посетитель, а нужны они только там, где страницу
+// собирает сервер (scripts/vite-trim-model-pages.mjs). Поэтому у страниц обзоров здесь
+// стоит заголовок и `null` вместо описания: описание уже лежит в полученной от сервера
+// странице, и его достаточно не трогать.
+for (const modelPage of MODEL_PAGES) routeSeo[modelPage.path] = [modelPage.seoTitle, null];
 for (const tool of TOOL_PAGES) routeSeo[tool.path] = [tool.seoTitle, tool.seoDescription];
 // Журнал попадает в эту карту только вместе с выключателем: пока раздел выключен,
 // у его адресов нет ни заголовка, ни разрешения на индексацию — как у несуществующей
@@ -1034,13 +1039,15 @@ function ClientSeo({ path, car, landing }) {
       element.setAttribute(attribute, value);
     };
     document.title = title;
-    ensureMeta('meta[name="description"]', "content", description);
+    // `null` означает «описание уже стоит в странице, менять нечем»: так помечены
+    // страницы обзоров, чьи описания живут только на сервере.
+    if (description) ensureMeta('meta[name="description"]', "content", description);
     ensureMeta('meta[name="robots"]', "content", indexable ? "index, follow, max-image-preview:large" : "noindex, nofollow, noarchive");
     ensureMeta('meta[property="og:title"]', "content", title);
-    ensureMeta('meta[property="og:description"]', "content", description);
+    if (description) ensureMeta('meta[property="og:description"]', "content", description);
     ensureMeta('meta[property="og:url"]', "content", canonical);
     ensureMeta('meta[name="twitter:title"]', "content", title);
-    ensureMeta('meta[name="twitter:description"]', "content", description);
+    if (description) ensureMeta('meta[name="twitter:description"]', "content", description);
     let canonicalLink = document.head.querySelector('link[rel="canonical"]');
     if (!canonicalLink) {
       canonicalLink = document.createElement("link");
