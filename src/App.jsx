@@ -2957,8 +2957,10 @@ function SimilarCars({ car, cars, onOpenCar }) {
 // Страница модели: текст о машине плюс живой срез каталога по этой модели. Машины
 // страница запрашивает сама, как каталог: при прямом заходе boot-запрос нужных
 // карточек не несёт.
-// Двадцать машин — пять рядов по четыре карточки, как в подборке на главной.
-const MODEL_PAGE_CARS_LIMIT = 20;
+// Восемь машин — два ряда по четыре карточки. Пять рядов отодвигали сам обзор далеко
+// вниз: срез каталога здесь не список, а показ «что есть и почём», а весь список
+// открывается кнопкой под ним.
+const MODEL_PAGE_CARS_LIMIT = 8;
 
 function useModelPageCars(modelPage, { sort, priceMax, mileage }) {
   const [cars, setCars] = useState([]);
@@ -3045,8 +3047,9 @@ function ModelPageCatalog({ modelPage, carsState, filters, navigate, favorites, 
   const narrowed = filters.priceMax !== ANY_PRICE_MAX || filters.mileage !== ANY_MILEAGE;
   const nothingFound = !failed && !loading && !cars.length;
   // Вид выдачи общий со всем сайтом: выбрали список в каталоге — обзор откроется
-  // списком, и наоборот. Своей памяти у страницы модели нет намеренно.
-  const [view, setView] = useState(readCatalogView);
+  // списком, и наоборот. Своей памяти у страницы модели нет намеренно, разница только
+  // в том, что показать, пока выбора не было (см. readModelPageView).
+  const [view, setView] = useState(readModelPageView);
   const updateView = (value) => {
     setView(value);
     window.localStorage.setItem(catalogViewKey, value);
@@ -5089,6 +5092,10 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
 
 const catalogViewKey = "navostok-catalog-view";
 const readCatalogView = () => (window.localStorage.getItem(catalogViewKey) === "grid" ? "grid" : "list");
+// На странице обзора машины по умолчанию идут плиткой, а не списком: это витрина
+// «что есть и почём» на два ряда, а не выдача каталога. Свой выбор посетителя, если
+// он его делал, страница слушается — вид у всего сайта общий.
+const readModelPageView = () => (window.localStorage.getItem(catalogViewKey) === "list" ? "list" : "grid");
 
 // Фильтры каталога из параметров адреса. Одним разбором пользуются три входа:
 // обычное открытие каталога, ссылки страниц марок и разделов и умный поиск —
