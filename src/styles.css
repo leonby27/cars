@@ -5948,7 +5948,9 @@ footer {
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
+  /* none, а не contain: заодно с жестом «назад» в браузере убирает и упругую
+     оттяжку на крайних снимках — она открывала за фотографией пустое поле. */
+  overscroll-behavior-x: none;
   scrollbar-width: none;
   touch-action: pan-x pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
