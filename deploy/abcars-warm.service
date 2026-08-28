@@ -12,10 +12,13 @@ After=network-online.target nginx.service postgresql.service
 Type=oneshot
 WorkingDirectory=/srv/abcars
 EnvironmentFile=/srv/abcars/.env.local
-ExecStart=/usr/bin/npm run warm -- --all --concurrency=6
-# Первый полный проход качает у хранилища около 3 ГБ и идёт часа два-три;
-# дальше почти всё берётся из своей же копии и проход занимает минуты.
-TimeoutStartSec=18000
+ExecStart=/usr/bin/npm run warm -- --all --concurrency=10
+# Полный проход греет три размера первого снимка: исходник продавца для большого фото
+# в карточке машины, 900 для карточки списка на компьютере и 600 для телефона. После
+# смены размеров первый проход качает у хранилища около 12 ГБ и идёт часов пять; дальше
+# почти всё берётся из своей же копии и проход занимает минуты. Потоков десять вместо
+# шести: скрипт почти всё время ждёт ответа из Китая, а не считает.
+TimeoutStartSec=43200
 Nice=15
 CPUWeight=20
 IOWeight=20

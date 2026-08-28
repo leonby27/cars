@@ -47,9 +47,18 @@ export const photoHref = (source, width = 0) => {
     const url = new URL(source);
     if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return source;
     // Хранилище Che168 отдаёт снимок любой ширины: она стоит в адресе перед именем
-    // файла. Оригинал на 1400 точек весит втрое больше нужного, поэтому там, где
-    // известна ширина показа, просим её (высоту хранилище считает само).
-    const path = width ? url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`) : url.pathname;
+    // файла. Кадр на 1400 точек весит втрое больше нужного, поэтому там, где известна
+    // ширина показа, просим её (высоту хранилище считает само). Особый случай —
+    // "original": настоящий оригинал лежит по тому же адресу без части «1400x0_c42_»,
+    // он крупнее (до 2016 точек) и сжат вдвое слабее. Так же его просит и приложение
+    // (IMAGE_ORIGINAL в src/App.jsx) — адреса обязаны совпадать, иначе браузер
+    // скачает одну и ту же фотографию дважды.
+    const path =
+      width === "original"
+        ? url.pathname.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, "/")
+        : width
+          ? url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`)
+          : url.pathname;
     return `/photo${path}`;
   } catch {
     return source;
@@ -385,7 +394,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // по тому же адресу (свой кэш фотографий, /photo/…), иначе браузер скачает
     // одну и ту же фотографию дважды. Разметке для поисковиков оставляем прямой
     // адрес хранилища: там важен исходник, а не наша копия.
-    const proxiedPhoto = photoHref(image);
+    const proxiedPhoto = photoHref(image, "original");
     const imageOnPage = proxiedPhoto?.startsWith("/") ? `${siteBasePath}${proxiedPhoto}` : proxiedPhoto;
     const modelName = [car.brand, car.model].filter(Boolean).join(" ");
     const schema = {

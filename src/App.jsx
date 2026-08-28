@@ -342,7 +342,10 @@ const proxiedImageHosts = new Set(["image-public.guazistatic.com", "image-overse
 // 400 точек — это уже 12 КБ. Высоту хранилище считает само, поэтому ставим ноль.
 const resizedImageHref = (url, width) => {
   if (!width || !/(^|\.)autoimg\.cn$/.test(url.hostname)) return null;
-  const path = url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`);
+  const path =
+    width === IMAGE_ORIGINAL
+      ? url.pathname.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, "/")
+      : url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`);
   if (path === url.pathname) return null;
   const resized = new URL(url.href);
   resized.pathname = path;
@@ -378,11 +381,20 @@ const imageSource = (source, width) => {
   }
 };
 // Ширины под места, где показываем фото: с запасом для экранов с двойной плотностью.
-// Большое фото в галерее оставляем как есть — там оригинал и нужен.
+// Большое фото в карточке машины и в галерее просит настоящий оригинал — см.
+// IMAGE_ORIGINAL ниже.
 // Кадр карточки на широком экране занимает 250 точек, лента фото на телефоне — около
 // 250: просить 800 значило качать снимок в четыре раза крупнее, чем он показан. На
 // главной это была ровно половина её веса — 68 фотографий вместо 1,4 МБ дают 0,4 МБ.
 const IMAGE_WIDTH_CARD = 600;
+// Кадр карточки на компьютере. Показан он в 308 точек (сетка из четырёх колонок при
+// ширине страницы 1280), то есть 600 — ровно двойная плотность, придираться к
+// разрешению не к чему. Но хранилище жмёт webp тем сильнее, чем меньше ширина: на
+// 600 выходит 0,09 байта на пиксель, на 900 — 0,07. Уменьшенный браузером кадр на
+// 900 чище, и это единственная причина ширины: не разрешение, а качество сжатия.
+// На телефоне остаётся 600: там карточка показана в 165 точек (две в ряд), 900 не
+// даст ничего видимого, зато утяжелит страницу вдвое на мобильном интернете.
+const IMAGE_WIDTH_CARD_WIDE = 900;
 const IMAGE_WIDTH_STRIP = 500;
 const IMAGE_WIDTH_TILE = 600;
 const IMAGE_WIDTH_THUMB = 240;
@@ -397,6 +409,14 @@ const IMAGE_WIDTH_ARTICLE = 800;
 // видно: на снимке шириной 780 точек экран с двойной плотностью просит 1560, и 1400
 // от них отличается неразличимо.
 const IMAGE_WIDTH_DOUBLE_CAP = 1400;
+// Особая «ширина» для больших фото: настоящий оригинал снимка. Хранилище отдаёт его
+// по тому же адресу без части «1400x0_c42_» перед именем файла, и это не просто более
+// широкий кадр — версия с кодом c42 сжата вдвое сильнее (0,06 байта на пиксель против
+// 0,12 у оригинала) и вдобавок подрезана. Замер 28.08.2026 на 12 снимках: у половины
+// объявлений исходник всего 1024 точки, у остальных 1601–2016, средний вес оригинала
+// 70,7 КБ против 55 КБ у кадра 1400x0_c42. Дороже на четверть, а разрешение и чистота
+// заметно выше — для снимка, показанного во всю ширину галереи, это того стоит.
+const IMAGE_ORIGINAL = "original";
 
 /**
  * Второй, вдвое более широкий кадр для экранов с двойной плотностью. На обычном экране
@@ -407,7 +427,7 @@ const IMAGE_WIDTH_DOUBLE_CAP = 1400;
  * а выше 1537 возвращает оригинал, поэтому вторая ширина ограничена.
  */
 const imageSourceSet = (source, width) => {
-  if (!source || !width) return undefined;
+  if (!source || !width || typeof width !== "number") return undefined;
   const single = imageSource(source, width);
   const double = imageSource(source, Math.min(width * 2, IMAGE_WIDTH_DOUBLE_CAP));
   return single && double && double !== single ? `${single} 1x, ${double} 2x` : undefined;
@@ -2782,6 +2802,9 @@ function useNarrowViewport() {
 function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, badge = null }) {
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
   const narrow = useNarrowViewport();
+  // Ширина кадра зависит от экрана: на телефоне карточка вдвое меньше, чем на
+  // компьютере, и просить для неё широкий снимок значит платить весом впустую.
+  const frameWidth = narrow ? IMAGE_WIDTH_CARD : IMAGE_WIDTH_CARD_WIDE;
   const [active, setActive] = useState(0);
   const preloadStarted = useRef(false);
   const frameRef = useRef(null);
@@ -2794,7 +2817,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
     preloadStarted.current = true;
     images.slice(1).forEach((src) => {
       const image = new Image();
-      image.src = imageSource(src, IMAGE_WIDTH_CARD);
+      image.src = imageSource(src, frameWidth);
     });
   };
   // Карточку целиком перекрывает ссылка-подложка, поэтому до самого превью события
@@ -2827,7 +2850,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
 
   return (
     <div className={`${className} hover-image-preview`} ref={frameRef}>
-      {!strip && <img src={imageSource(images[active], IMAGE_WIDTH_CARD)} alt={car.title} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />}
+      {!strip && <img src={imageSource(images[active], frameWidth)} alt={car.title} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />}
       {strip && (
         <div
           className="car-row-mobile-image-strip"
@@ -5912,7 +5935,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
                 imageRefs.current[index] = node;
               }}
             >
-              <img src={imageSource(image)} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"} onError={(event) => retryWithFullImage(event, image)} />
+              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"} onError={(event) => retryWithFullImage(event, image)} />
               <figcaption>
                 {index + 1} из {images.length}
               </figcaption>
@@ -6003,7 +6026,7 @@ function VehicleGallery({ car }) {
     <>
       <section className="gallery-panel">
         <button className={`gallery-open${dragging ? " dragging" : ""}`} style={{ "--gallery-drag-x": `${dragOffset}px` }} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}>
-          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active])} alt={`${car.title}, фото ${active + 1}`} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
+          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active], IMAGE_ORIGINAL)} alt={`${car.title}, фото ${active + 1}`} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
         </button>
         <span aria-live="polite">
           <Images size={17} />

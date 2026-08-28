@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSeoRenderer } from "../server/seo-render.mjs";
+import { createSeoRenderer, photoHref } from "../server/seo-render.mjs";
 
 // Заготовка страницы — то, что отдаёт сборка: пустое место под содержимое и ссылки
 // на стили со скриптами. Отрисовщик обязан работать с любой такой заготовкой, поэтому
@@ -119,4 +119,23 @@ test("чужая разметка в данных объявления не по
   const { html } = render().carPage({ car: dangerous });
   assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+});
+
+// Адреса фотографий должны совпадать с теми, что просит приложение (imageSource
+// в src/App.jsx): серверная разметка и приложение показывают один и тот же снимок,
+// и если адреса разойдутся, браузер скачает фотографию дважды.
+test("photoHref просит у хранилища нужный размер снимка", () => {
+  const source = "https://erscglobal2.autoimg.cn/escimg/auto/g34/M02/DF/A9/1400x0_c42_autohomecar__Chtp063.jpg.webp";
+  // Настоящий оригинал: части «1400x0_c42_» в адресе нет.
+  assert.equal(
+    photoHref(source, "original"),
+    "/photo/escimg/auto/g34/M02/DF/A9/autohomecar__Chtp063.jpg.webp",
+  );
+  // Обычная ширина по-прежнему подставляется на место прежней.
+  assert.equal(
+    photoHref(source, 900),
+    "/photo/escimg/auto/g34/M02/DF/A9/900x0_c42_autohomecar__Chtp063.jpg.webp",
+  );
+  // Чужие адреса не трогаем.
+  assert.equal(photoHref("https://example.com/a.jpg", "original"), "https://example.com/a.jpg");
 });

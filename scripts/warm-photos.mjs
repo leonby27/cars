@@ -8,13 +8,13 @@
 // китайцев; теперь за него это делает ночная задача.
 //
 // Запуск: node scripts/warm-photos.mjs [--limit=1500] [--site=https://abcars.by]
-//         [--concurrency=8] [--widths=600,240] [--all]
+//         [--concurrency=8] [--widths=original,900,600] [--all]
 // С ключом --all берёт первый снимок каждой машины каталога прямо из базы, а не
 // первые страницы через API. Это нужно из-за витрины главной: она показывает по
 // одной случайной машине каждой модели, то есть в неё может попасть любая карточка
 // каталога — прогреть «первые страницы» и накрыть главную нельзя. Первый полный
-// проход качает у хранилища около 3 ГБ и идёт часа два-три; последующие почти
-// целиком уходят в нашу же копию и стоят считанные минуты.
+// проход после смены размеров качает у хранилища около 12 ГБ и идёт часов пять;
+// последующие почти целиком уходят в нашу же копию и стоят считанные минуты.
 // Ничего не пишет в базу и не меняет файлы: только запрашивает картинки.
 const arg = (name, fallback) => {
   const found = process.argv.find((value) => value.startsWith(`--${name}=`));
@@ -24,12 +24,19 @@ const arg = (name, fallback) => {
 const site = String(arg("site", "https://abcars.by")).replace(/\/$/, "");
 const limit = Math.max(1, Number(arg("limit", 1500)) || 1500);
 const concurrency = Math.max(1, Number(arg("concurrency", 8)) || 8);
-// Ширины, в которых сайт показывает фото в списках: карточка каталога и лента
-// миниатюр. Держим их в согласии с IMAGE_WIDTH_* в src/App.jsx.
-const widths = String(arg("widths", "600"))
+// Размеры, в которых сайт показывает первый снимок машины. Держим их в согласии с
+// IMAGE_WIDTH_* в src/App.jsx:
+//   original — большое фото в карточке машины и в быстром просмотре (исходник продавца,
+//              адрес без части «1400x0_c42_»; в среднем 71 КБ);
+//   900      — карточка списка на компьютере (35 КБ);
+//   600      — карточка списка на телефоне (19 КБ).
+// Греем все три: иначе часть посетителей ждала бы китайское хранилище по секунде.
+const widths = String(arg("widths", "original,900,600"))
   .split(",")
-  .map((value) => Number(value.trim()))
-  .filter((value) => Number.isFinite(value) && value > 0);
+  .map((value) => value.trim())
+  .filter(Boolean)
+  .map((value) => (value === "original" ? value : Number(value)))
+  .filter((value) => value === "original" || (Number.isFinite(value) && value > 0));
 
 const everything = process.argv.includes("--all");
 
@@ -65,7 +72,13 @@ const photoPaths = (car) => {
   } catch {
     return [];
   }
-  return widths.map((width) => `${site}/photo${path.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`)}`);
+  return widths.map((width) => {
+    const resized =
+      width === "original"
+        ? path.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, "/")
+        : path.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`);
+    return `${site}/photo${resized}`;
+  });
 };
 
 const wanted = new Set();
