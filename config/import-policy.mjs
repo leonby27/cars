@@ -316,3 +316,30 @@ export function importPolicyViolation(car, { combustion = false } = {}) {
 export function isEligibleNewImport(car, options) {
   return importPolicyViolation(car, options) === null;
 }
+
+// У части объявлений Che168 одна и та же фотография лежит в списке дважды под
+// разными именами файлов — обычно это первый кадр, и в галерее он показывался
+// два раза подряд. Совпадает у таких пар только середина имени: 11 знаков, в
+// которых хранилище кодирует размер и содержимое снимка (в начале имени — узел
+// хранения и время, в конце — случайный хвост, они у копий разные).
+//
+// Замер 28.08.2026: у 34 машин из 100 такая пара есть; 14 пар скачаны и совпали
+// байт в байт, ни одного ложного срабатывания. У трёх машин скачаны все снимки —
+// признак нашёл все повторы и ни разу не счёл разные кадры одинаковыми.
+const PHOTO_NAME = /autohomecar__([A-Za-z0-9_-]{30})/;
+const photoIdentity = (url) => {
+  const name = String(url).split("/").pop()?.match(PHOTO_NAME)?.[1];
+  // Снимок не из хранилища Che168 — сравниваем целый адрес.
+  return name ? name.slice(16, 27) : String(url);
+};
+
+export function uniquePhotos(images) {
+  const seen = new Set();
+  return (Array.isArray(images) ? images : []).filter((url) => {
+    if (!url) return false;
+    const key = photoIdentity(url);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}

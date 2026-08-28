@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { canonicalImportName } from "../config/import-policy.mjs";
+import { canonicalImportName, uniquePhotos } from "../config/import-policy.mjs";
 import { pool, withTransaction } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { normalizeBodyType } from "../src/body-types.js";
@@ -16,7 +16,10 @@ export function normalizeCar(car) {
   // Марка и модель приводятся вместе: часть машин при переименовании на беларуское имя
   // заодно меняет марку (银河E5 → Geely EX5, модели альянса Huawei → AITO, Luxeed и далее).
   const { brand, model } = canonicalImportName(car.brand, car.model, car.type);
-  return { ...car, brand, model, title:carTitle(brand, model, car.year), bodyType:normalizeBodyType({ ...car, brand, model }), drive:normalizeDrive(car.drive), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
+  // Повторы фотографий убираем здесь, потому что через эту воронку проходит и
+  // запись при импорте, и каждое чтение из базы: чинится и то, что уже лежит.
+  const photos = car.images ? uniquePhotos(car.images) : null;
+  return { ...car, ...(photos?.length ? { images: photos, image: photos[0] } : {}), brand, model, title:carTitle(brand, model, car.year), bodyType:normalizeBodyType({ ...car, brand, model }), drive:normalizeDrive(car.drive), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
 }
 
 export async function upsertCar(car, client = pool) {

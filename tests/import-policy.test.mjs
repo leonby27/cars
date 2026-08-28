@@ -10,6 +10,7 @@ import {
   importPolicyViolation,
   isAllowedImportBrand,
   isEligibleNewImport,
+  uniquePhotos,
 } from "../config/import-policy.mjs";
 import { normalizeChe168Energy } from "../scripts/lib/che168-parser.mjs";
 
@@ -176,4 +177,21 @@ test("завод в названии модели отбрасывается", (
   assert.equal(canonicalImportModel("Volkswagen", "FAW-Volkswagen CC"), "Passat CC");
   assert.equal(canonicalImportModel("Volkswagen", "SAIC-Volkswagen Lavida"), "Lavida");
   assert.equal(canonicalImportModel("Volkswagen", "Golf"), "Golf");
+});
+
+test("одна фотография под двумя именами не показывается дважды", () => {
+  const photo = (folder, name) => `https://erscglobal2.autoimg.cn/escimg/auto/g33/${folder}/85/5A/1400x0_c42_autohomecar__${name}.jpg.webp`;
+  // Настоящая пара из объявления: совпадают только знаки с 17-го по 27-й — в них
+  // хранилище кодирует размер и содержимое кадра. Файлы совпали байт в байт.
+  const first = photo("M06", "ChxpVmpRxNeAHZbfAAKM7acuCqc337");
+  const copy = photo("M03", "ChxpVmpRxNeADjILAAKM7acuCqc181");
+  const other = photo("M07", "Chto52nDRGCACT85AAO6OxC_i20103");
+  assert.deepEqual(uniquePhotos([first, copy, other]), [first, other]);
+  // Разные снимки остаются оба, порядок не меняется.
+  assert.deepEqual(uniquePhotos([other, first]), [other, first]);
+  // Снимок не из хранилища Che168 сравнивается целым адресом.
+  assert.deepEqual(uniquePhotos(["/photo/a.jpg", "/photo/a.jpg", "/photo/b.jpg"]), ["/photo/a.jpg", "/photo/b.jpg"]);
+  // Пустые значения и отсутствующий список не роняют галерею.
+  assert.deepEqual(uniquePhotos(null), []);
+  assert.deepEqual(uniquePhotos([null, first, undefined]), [first]);
 });
