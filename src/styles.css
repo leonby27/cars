@@ -5958,6 +5958,14 @@ footer {
 .gallery-strip::-webkit-scrollbar {
   display: none;
 }
+/* Пока ленту тянут мышью, прилипание выключено — иначе браузер возвращал кадр на
+   место после каждого движения руки. */
+.gallery-strip.free {
+  scroll-snap-type: none;
+}
+.gallery-strip.free .gallery-slide {
+  cursor: grabbing;
+}
 .gallery-slide {
   position: relative;
   flex: 0 0 100%;

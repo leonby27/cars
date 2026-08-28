@@ -6097,39 +6097,150 @@ function VehicleGallery({ car }) {
   // на полпути номер снимка ещё старый — счётчик успевал дёрнуться туда и обратно.
   // Поэтому на время своего перехода слушаем только приезд в нужный кадр.
   const pending = useRef(null);
+  const pendingTimer = useRef(0);
+  const clampIndex = (index) => Math.min(images.length - 1, Math.max(0, index));
+  // Ширину кадра берём у самой ленты, а не считаем как «ширина окна × номер»:
+  // в сетке страницы кадр выходит дробной ширины (838,4 точки), целые 838 копили
+  // ошибку, и к четвёртому снимку сбоку торчала полоска соседнего фото.
+  const slideWidth = () => {
+    const strip = stripRef.current;
+    if (!strip) return 0;
+    const first = strip.children[0];
+    const second = strip.children[1];
+    return second ? second.offsetLeft - first.offsetLeft : strip.clientWidth;
+  };
   const scrollToIndex = (index, smooth) => {
     const strip = stripRef.current;
-    if (!strip || !strip.clientWidth) return;
+    const slide = strip?.children[index];
+    if (!strip || !slide) return;
     pending.current = index;
     window.clearTimeout(pendingTimer.current);
     pendingTimer.current = window.setTimeout(() => {
       pending.current = null;
     }, 700);
-    strip.scrollTo({ left: strip.clientWidth * index, behavior: smooth ? "smooth" : "auto" });
+    strip.scrollTo({ left: slide.offsetLeft, behavior: smooth ? "smooth" : "auto" });
   };
-  const pendingTimer = useRef(0);
-  useEffect(() => () => window.clearTimeout(pendingTimer.current), []);
+  const goTo = (index, smooth) => {
+    scrollToIndex(index, smooth);
+    setActive(index);
+  };
   const move = (step) => {
     const next = (active + step + images.length) % images.length;
     // Плавно — только к соседнему кадру. Перескок с последнего фото на первое
     // плавной прокруткой пролетал бы через всю ленту: это долго и мельтешит.
-    scrollToIndex(next, Math.abs(next - active) === 1);
-    setActive(next);
+    goTo(next, Math.abs(next - active) === 1);
   };
   const selectImage = (index) => {
     if (index === active) return;
-    scrollToIndex(index, Math.abs(index - active) === 1);
-    setActive(index);
+    goTo(index, Math.abs(index - active) === 1);
   };
   const onStripScroll = () => {
     const strip = stripRef.current;
-    if (!strip || !strip.clientWidth) return;
-    const index = Math.min(images.length - 1, Math.max(0, Math.round(strip.scrollLeft / strip.clientWidth)));
+    const width = slideWidth();
+    if (!strip || !width) return;
+    const index = clampIndex(Math.round(strip.scrollLeft / width));
     if (pending.current !== null) {
       if (index !== pending.current) return;
       pending.current = null;
     }
     if (index !== active) setActive(index);
+  };
+  // Мышью ленту тоже можно тянуть за собой — на компьютере это привычный способ
+  // листать фотографии, и он работал до того, как галерея стала лентой. Пальцу
+  // такая помощь не нужна: прокрутку он ведёт сам, поэтому берём только мышь.
+  // Прилипание кадра на время перетаскивания отключаем: с ним браузер возвращал
+  // ленту к ближайшему снимку на каждое движение руки, и лента стояла на месте.
+  const drag = useRef(null);
+  const suppressOpen = useRef(false);
+  const [freeScroll, setFreeScroll] = useState(false);
+  const freeTimer = useRef(0);
+  const settleRef = useRef(null);
+  const stopFreeScroll = () => {
+    window.clearTimeout(freeTimer.current);
+    if (settleRef.current) stripRef.current?.removeEventListener("scrollend", settleRef.current);
+    settleRef.current = null;
+  };
+  useEffect(
+    () => () => {
+      window.clearTimeout(pendingTimer.current);
+      stopFreeScroll();
+    },
+    [],
+  );
+  const onPointerDown = (event) => {
+    setReady(true);
+    if (event.pointerType !== "mouse" || event.button !== 0 || images.length < 2) return;
+    const strip = stripRef.current;
+    if (!strip) return;
+    pending.current = null;
+    stopFreeScroll();
+    drag.current = { id: event.pointerId, x: event.clientX, left: strip.scrollLeft, moved: false };
+    setFreeScroll(true);
+    // Захват указателя: если мышь уйдёт за край кадра, движение всё равно наше.
+    // Браузер может отказать (указатель уже отпущен) — тогда просто работаем без.
+    try {
+      strip.setPointerCapture?.(event.pointerId);
+    } catch {
+      /* не критично */
+    }
+  };
+  const onPointerMove = (event) => {
+    const start = drag.current;
+    const strip = stripRef.current;
+    if (!start || start.id !== event.pointerId || !strip) return;
+    const distance = event.clientX - start.x;
+    if (Math.abs(distance) > 4) start.moved = true;
+    strip.scrollLeft = start.left - distance;
+  };
+  const endDrag = (event) => {
+    const start = drag.current;
+    const strip = stripRef.current;
+    drag.current = null;
+    if (!start || !strip) {
+      setFreeScroll(false);
+      return;
+    }
+    try {
+      strip.releasePointerCapture?.(event.pointerId);
+    } catch {
+      /* не критично */
+    }
+    const width = slideWidth();
+    const distance = start.id === event.pointerId ? event.clientX - start.x : 0;
+    const from = width ? Math.round(start.left / width) : active;
+    // Порог — четверть кадра, но не больше 70 точек: короткого движения рукой
+    // достаточно, чтобы перейти к следующему снимку.
+    const threshold = width ? Math.min(70, width / 4) : 70;
+    const step = Math.abs(distance) >= threshold ? (distance > 0 ? -1 : 1) : 0;
+    // Перетаскивание не должно открывать все фотографии. Браузер всё равно пришлёт
+    // клик сразу за отпусканием кнопки — он и погасит признак. Но если клика не
+    // будет, признак снимаем сам следующим же тиком, иначе он проглотит
+    // следующее честное нажатие.
+    if (start.moved) {
+      suppressOpen.current = true;
+      window.setTimeout(() => {
+        suppressOpen.current = false;
+      }, 0);
+    }
+    goTo(clampIndex(from + step), true);
+    // Прилипание возвращаем, когда лента уже доехала: включённым посреди плавного
+    // перехода оно обрывало бы его и дёргало кадр. Ждём события «прокрутка
+    // закончилась», а где браузер его не знает — сдаёмся через семь десятых
+    // секунды: к этому времени переход всегда завершён.
+    const settle = () => {
+      stopFreeScroll();
+      setFreeScroll(false);
+    };
+    settleRef.current = settle;
+    strip.addEventListener("scrollend", settle);
+    freeTimer.current = window.setTimeout(settle, 700);
+  };
+  const openModal = () => {
+    if (suppressOpen.current) {
+      suppressOpen.current = false;
+      return;
+    }
+    setModalOpen(true);
   };
   useEffect(() => {
     const thumb = thumbsRef.current?.children[active];
@@ -6194,14 +6305,22 @@ function VehicleGallery({ car }) {
         {/* Кадры дальше двух от текущего в разметку не ставим: у иных объявлений
             снимков под сотню, и сотня рамок в ленте — это лишняя работа браузеру.
             Соседние всегда на месте, поэтому тянуть ленту не во что пустое. */}
-        <div className="gallery-strip" ref={stripRef} onScroll={onStripScroll} onPointerDown={() => setReady(true)}>
+        <div
+          className={`gallery-strip${freeScroll ? " free" : ""}`}
+          ref={stripRef}
+          onScroll={onStripScroll}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
           {images.map((image, index) => (
             <button
               key={`${image}-${index}`}
               type="button"
               className="gallery-slide"
               tabIndex={index === active ? 0 : -1}
-              onClick={() => setModalOpen(true)}
+              onClick={openModal}
               aria-label={`Фото ${index + 1} из ${images.length}: ${car.title}. Открыть все фотографии`}
             >
               {Math.abs(index - active) <= near && (
