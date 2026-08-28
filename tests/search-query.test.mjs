@@ -329,7 +329,9 @@ test("постороннее слово между границами не пу�
 });
 
 test("кириллица в названии модели читается латиницей", () => {
-  assert.deepEqual(latinVariants("8х"), ["8x"]);
+  assert.ok(latinVariants("8х").includes("8x"));
+  // «х» пишут и как x (по начертанию), и как h (по звучанию): «хан» — это Han.
+  assert.ok(latinVariants("хан").includes("han"));
   assert.ok(latinVariants("007гт").includes("007gt"));
   // «у» пишут и как u (по звучанию), и как y (по начертанию) — годятся оба.
   assert.deepEqual(latinVariants("у"), ["u", "y"]);

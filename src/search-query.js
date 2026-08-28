@@ -484,6 +484,10 @@ const CYRILLIC_TO_LATIN = {
   щ:"sch", ъ:"", ы:"y", ь:"", э:"e", ю:"yu", я:"ya",
 };
 const CYRILLIC_LOOKALIKE = { в:"b", н:"h", р:"p", с:"c", у:"y", х:"x" };
+// Третье написание — для букв, у которых два равноправных латинских варианта:
+// «хан» это Han, а не Xan, «жун» — Jun, «щи» — Shi. Остальные буквы берутся
+// из основной карты.
+const CYRILLIC_ALTERNATE = { х:"h", ц:"ts", ж:"j", щ:"sh", ы:"i", й:"y" };
 // Названия латинских букв словами: «эль7» — это L7, «икс9» — X9. Берём только те,
 // что не спутать с русскими словами, и только целой группой букв («иксбандит» — нет).
 const LETTER_NAMES = { икс:"x", эль:"l", эйч:"h", джи:"g", джей:"j", кей:"k", уай:"y", зет:"z", дабл:"w", ку:"q", эм:"m", эн:"n", эф:"f", эр:"r", эс:"s" };
@@ -495,7 +499,7 @@ export const latinVariants = (text) => {
   const source = String(text ?? "");
   if (!/[а-я]/.test(source)) return [];
   const spelled = source.replace(LETTER_NAMES_RE, (name) => LETTER_NAMES[name]);
-  const variants = [transliterate(source, CYRILLIC_TO_LATIN), transliterate(source, CYRILLIC_LOOKALIKE)];
+  const variants = [transliterate(source, CYRILLIC_TO_LATIN), transliterate(source, CYRILLIC_LOOKALIKE), transliterate(source, CYRILLIC_ALTERNATE)];
   if (spelled !== source) variants.push(transliterate(spelled, CYRILLIC_TO_LATIN));
   return [...new Set(variants)].filter((item) => item !== source);
 };
