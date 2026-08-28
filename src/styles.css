@@ -7685,6 +7685,9 @@ html[data-theme="dark"] #root .spec-search,
   flex: 0 0 26px;
   display: grid;
   place-items: center;
+  /* У кнопки остаются браузерные внутренние отступы (1px сверху, 6px по бокам):
+     значку в 14 точек не хватало места, и галочка прижималась вправо-вниз. */
+  padding: 0;
   margin-left: 10px;
   border: 2px solid var(--line-strong);
   border-radius: calc(7px * var(--corner-scale));
