@@ -7409,6 +7409,56 @@ html[data-theme="dark"] #root .spec-search,
   background: var(--filter-pill-bg);
   color: var(--muted);
 }
+/* Поле поиска в шторке стоит на подложке самой шторки, а не на странице: фон
+   плашек фильтра в тёмной теме темнее этой подложки, и поле в ней пропадало.
+   Здесь оно, наоборот, светлее шторки — без обводки, одним фоном. */
+:root[data-theme="dark"] .mobile-filter-sheet .sheet-search {
+  background: var(--filter-field-open-bg);
+}
+/* Группы марок под поиском: сделаны как переключатель валюты в шапке — общая
+   дорожка, выбранная кнопка приподнята своей плашкой. Обводок нет, тона держат
+   всё сами, и их ровно три: подложка шторки, дорожка, выбранная плашка. В
+   светлой теме дорожка того же тона, что поле поиска над ней, а плашка белая.
+   В тёмной дорожка чуть темнее шторки, а плашка светлее; цвета заданы числами,
+   потому что готовые переменные там почти совпадают со шторкой. */
+.sheet-tabs {
+  display: flex;
+  margin-bottom: 10px;
+  padding: 3px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--filter-pill-bg);
+}
+.sheet-tab {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: calc(9px * var(--corner-scale));
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: clamp(13px, 3.6vw, 15px);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+}
+.sheet-tab.chosen {
+  background: var(--panel);
+  color: var(--accent-dark);
+  box-shadow: 0 1px 4px rgba(23, 25, 28, 0.14);
+}
+:root[data-theme="dark"] .sheet-tabs {
+  background: #15181c;
+}
+:root[data-theme="dark"] .sheet-tab.chosen {
+  background: #343941;
+  color: #ff6870;
+  box-shadow: none;
+}
 .sheet-search input {
   flex: 1;
   min-width: 0;
@@ -13437,11 +13487,8 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 
 /* Ярлык «Новое» — зелёный чип с белым текстом. Цвет задан числом, а не темовой
    переменной: в тёмной теме --green светлый, и белые буквы на нём терялись бы. */
-/* Ярлык мельче остальных чипов на снимке: подпись стала длиннее («Добавлено 3 дня
-   назад» вместо «Новое»), и прежним размером она заняла бы полкадра. */
-.new-listing-badge > i {
-  font-style: normal;
-}
+/* Ярлык мельче остальных чипов на снимке: подпись длиннее («3 дня назад» вместо
+   «Новое»), и прежним размером она заняла бы полкадра. */
 .new-listing-badge {
   display: inline-flex;
   align-items: center;
@@ -13498,10 +13545,6 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
    кадра, а счётчик кадров — в левый верх. Блок стоит ниже всех правил про эти два
    чипа (в том числе ниже `@media (hover: none)`), иначе они бы его перебили. */
 @media (max-width: 700px) {
-  /* На телефоне ярлык короче: «Добавлено» прячем, остаётся «3 дня назад». */
-  .new-listing-badge > i {
-    display: none;
-  }
   /* Отступ слева на 6 точек больше, чем сверху и снизу: столько лента отводит себе
      по краям, и без поправки ярлык прижимался к краю кадра ближе, чем к его низу. */
   .car-row-image > span.new-listing-badge {
@@ -13969,7 +14012,7 @@ html[data-theme="dark"] .blog-share-trigger[aria-expanded="true"] {
 .blog-masthead {
   margin: 0;
 }
-.blog-masthead > :is(h1, a) {
+.blog-masthead > :is(h1, p, a) {
   display: block;
   margin: 0;
   font-size: 33px;
@@ -13979,13 +14022,24 @@ html[data-theme="dark"] .blog-share-trigger[aria-expanded="true"] {
   color: var(--ink);
   text-decoration: none;
 }
-.blog-masthead > a:hover {
+/* В материале ссылкой стоит только слово «Журнал» — остальная строка обычный текст.
+   Подчёркивание такое же, как у ссылок в таблицах журнала: толще обычного и отодвинуто
+   от букв, иначе на крупном начертании его почти не видно. На высоту строки оно не
+   влияет, поэтому шапка стоит там же, где заголовок общей страницы. */
+.blog-masthead > p > a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+.blog-masthead > a:hover,
+.blog-masthead > p > a:hover {
   color: var(--accent-dark);
 }
 /* На телефоне строка меньше — как заголовок каталога. Медиазапрос стоит сразу за
    основным правилом: тот же вес селектора, и побеждает то, что ниже. */
 @media (max-width: 700px) {
-  .blog-masthead > :is(h1, a) {
+  .blog-masthead > :is(h1, p, a) {
     font-size: 27px;
   }
 }

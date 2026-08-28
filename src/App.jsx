@@ -811,11 +811,10 @@ function NewListingBadge({ car, className }) {
   // машины стояли разные числа.
   const added = formatDayAgo(getListingAddedAt(car));
   if (!added) return null;
-  // На телефоне остаётся только «3 дня назад»: слово «Добавлено» съедало половину
-  // узкого кадра, а смысл плашки понятен и без него.
+  // В плашке остаётся только «3 дня назад»: слово «Добавлено» съедало половину
+  // кадра, а смысл понятен и без него.
   return (
     <span className={`new-listing-badge${className ? ` ${className}` : ""}`}>
-      <i>Добавлено </i>
       {added}
     </span>
   );
@@ -1768,6 +1767,23 @@ function FilterSheet({ title, onBack = null, onClose, footer = null, fill = fals
 // «Все» в списке типов двигателя само по себе ничего не говорит: подписываем полем.
 const powertrainLabel = (item) => (item === "Все" ? "Все типы двигателей" : item);
 
+// Группы марок в шторке выбора. Перечислены не китайские марки, а иностранные:
+// каталог собран на китайском рынке, местных марок там больше и они постоянно
+// прибавляются — незнакомое имя почти всегда китайское, поэтому всё, чего нет в
+// двух списках ниже, считается китайским.
+const GERMAN_BRANDS = new Set(["Audi", "BMW", "Mercedes-Benz", "MINI", "Porsche", "Volkswagen"]);
+// Спорные случаи решены так, как их ищут: MINI — марка BMW, поэтому она у немцев;
+// Volvo принадлежит Geely, но остаётся шведской и стоит в «Других»; MG числится
+// китайской — марка британская, но принадлежит SAIC, а машины делают и продают
+// в Китае как местные.
+const FOREIGN_BRANDS = new Set([
+  "Alfa Romeo", "Buick", "Cadillac", "Chevrolet", "Citroen", "Ford", "Honda", "Hyundai",
+  "Infiniti", "Jaguar", "Jeep", "Kia", "Land Rover", "Lexus", "Lincoln", "Maserati",
+  "Mazda", "Mitsubishi", "Nissan", "Peugeot", "Skoda", "Subaru", "Tesla", "Toyota", "Volvo",
+]);
+const BRAND_GROUPS = ["Все", "Китайские", "Немецкие", "Другие"];
+const brandGroupOf = (brand) => (GERMAN_BRANDS.has(brand) ? "Немецкие" : FOREIGN_BRANDS.has(brand) ? "Другие" : "Китайские");
+
 function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, onSaveSearch, searchSaved = false, searchUpdate = false, hasActiveFilters = false, initiallyExpanded = false, onExpandedChange = null }) {
   const currency = useCurrency();
   const narrow = useNarrowViewport();
@@ -1776,6 +1792,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => initiallyExpanded && !window.matchMedia("(max-width: 700px)").matches);
   const [sheet, setSheet] = useState(null);
   const [sheetQuery, setSheetQuery] = useState("");
+  const [brandGroup, setBrandGroup] = useState("Все");
   const extraFiltersId = useId();
 
   // Обе границы живут в одной ячейке сетки, чтобы читались как один диапазон.
@@ -1892,6 +1909,8 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
     if (!variants.length) return rows;
     return rows.filter((item) => variants.some((variant) => searchNormalize(item).includes(variant)));
   };
+  // Список марок в шторке: сначала выбранная группа, потом поиск по строке.
+  const brandSheetRows = searchRows(brandGroup === "Все" ? brandRows : brandRows.filter((item) => brandGroupOf(item) === brandGroup));
 
   return (
     <section className={`search-box${constrained ? " search-box--constrained" : ""}`}>
@@ -1973,13 +1992,26 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
             <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
             <input type="search" value={sheetQuery} placeholder="Поиск марки" aria-label="Поиск марки" autoComplete="off" onChange={(event) => setSheetQuery(event.target.value)} />
           </div>
+          <div className="sheet-tabs" role="tablist" aria-label="Группы марок">
+            {BRAND_GROUPS.map((group) => (
+              <button type="button" key={group} role="tab" aria-selected={brandGroup === group} className={`sheet-tab${brandGroup === group ? " chosen" : ""}`} onClick={() => setBrandGroup(group)}>
+                {group}
+              </button>
+            ))}
+          </div>
           <div className="sheet-options">
-            <button type="button" className={`sheet-option${brandChosen ? "" : " chosen"}`} onClick={() => { actions.brand("Все марки"); setSheet(null); }}>
-              <SquaresFour size={20} weight="fill" aria-hidden="true" />
-              <span className="sheet-option-name">Все марки</span>
-              <span className="sheet-option-count">{number(optionCounts?.brands?.get("Все марки") || 0)}</span>
-            </button>
-            {searchRows(brandRows).map((brand) => (
+            {/* Строка «Все марки» есть только в общей группе: под вкладкой
+                «Немецкие» она сбрасывала бы выбор ко всему каталогу. Значок
+                лежит в такой же коробке, как знак марки, иначе названия в
+                списке начинались бы на разной ширине от края. */}
+            {brandGroup === "Все" && (
+              <button type="button" className={`sheet-option${brandChosen ? "" : " chosen"}`} onClick={() => { actions.brand("Все марки"); setSheet(null); }}>
+                <span className="brand-logo" aria-hidden="true"><SquaresFour size={20} weight="fill" /></span>
+                <span className="sheet-option-name">Все марки</span>
+                <span className="sheet-option-count">{number(optionCounts?.brands?.get("Все марки") || 0)}</span>
+              </button>
+            )}
+            {brandSheetRows.map((brand) => (
               <button type="button" key={brand} className={`sheet-option${values.brand === brand ? " chosen" : ""}`} onClick={() => { actions.brand(brand); setSheetQuery(""); setSheet("models"); }}>
                 <BrandMark brand={brand} />
                 <span className="sheet-option-name">{brand}</span>
@@ -1987,7 +2019,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
                 <CaretRight size={16} weight="bold" aria-hidden="true" />
               </button>
             ))}
-            {!searchRows(brandRows).length && <p className="select-empty">Ничего не найдено</p>}
+            {!brandSheetRows.length && <p className="select-empty">Ничего не найдено</p>}
           </div>
         </FilterSheet>
       )}
@@ -3973,8 +4005,12 @@ function PopularBrands({ navigate, cars, apiMode }) {
           const href = landing
             ? `${landing}${typeQuery ? `?${typeQuery}` : ""}`
             : `/catalog?brand=${encodeURIComponent(brand)}${typeQuery ? `&${typeQuery}` : ""}`;
+          // Подпись обязана начинаться с того, что написано на плитке: голосовое
+          // управление ищет ссылку по видимому тексту («нажать Audi»), а проверка
+          // доступности требует, чтобы видимый текст входил в подпись с начала.
+          // Прежнее «Перейти к предложениям: Audi 8 525» это правило нарушало.
           return (
-            <AppLink className="brand-link" key={brand} href={href} navigate={navigate} aria-label={countsKnown ? `Перейти к предложениям: ${brand} ${number(count)} объявлений` : `Перейти к предложениям: ${brand}`}>
+            <AppLink className="brand-link" key={brand} href={href} navigate={navigate} aria-label={countsKnown ? `${brand} ${number(count)} объявлений` : brand}>
               <BrandMark brand={brand} />
               <span className="brand-name" title={brand}>{brand}</span>
               <span className="brand-count" aria-hidden="true">{countsKnown ? number(count) : ""}</span>
@@ -8623,12 +8659,30 @@ function BlogSidebar({ navigate, filter = null, onFilter = null, currentPath = n
  * журнала не выглядел уходом на другую часть сайта. На общей странице это заголовок
  * страницы, на остальных — ссылка обратно в журнал: свой заголовок там уже есть,
  * а двух главных заголовков на странице быть не должно.
+ *
+ * Внутри материала ссылкой стоит только слово «Журнал», а адрес сайта рядом — обычный
+ * текст: подчёркнутая целиком строка «Журнал abcars.by» читается как ссылка на сайт,
+ * а ведёт она в раздел. Строка при этом остаётся тем же блоком того же размера, что и
+ * заголовок общей страницы, — иначе при переходе внутрь журнала содержимое прыгает.
  */
 function BlogMasthead({ navigate, main = false }) {
+  // Хвост строки («abcars.by») отделяется от названия раздела, чтобы имя раздела не
+  // пришлось писать в шапке ещё раз: если h1 когда-нибудь перестанет начинаться со
+  // слова «Журнал», ссылкой станет вся строка — как было раньше.
+  const tail = BLOG_INDEX.h1.startsWith(BLOG_INDEX.name)
+    ? BLOG_INDEX.h1.slice(BLOG_INDEX.name.length)
+    : null;
   return (
     <div className={main ? "blog-masthead" : "blog-masthead blog-masthead-link"}>
       {main ? (
         <h1>{BLOG_INDEX.h1}</h1>
+      ) : tail ? (
+        <p>
+          <AppLink href={BLOG_INDEX.path} navigate={navigate}>
+            {BLOG_INDEX.name}
+          </AppLink>
+          {tail}
+        </p>
       ) : (
         <AppLink href={BLOG_INDEX.path} navigate={navigate}>
           {BLOG_INDEX.h1}

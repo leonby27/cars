@@ -55,6 +55,12 @@ const acceptsGzip = (response) => /\bgzip\b/.test(String(response.req?.headers?.
 // Помечаем так только чтение каталога: у него нет ничего личного и он не зависит от
 // сессии, поэтому общий на всех кэш безопасен.
 const catalogCache = { "cache-control":"public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
+// Справочники фильтров — списки марок и моделей со счётчиками — считаются по всему
+// каталогу, и холодный ответ занимает около 1,8 секунды (23 КБ). Меняются они только
+// после ночного пополнения, поэтому держим их час, а сутки после этого отдаём прежний
+// ответ, пока в фоне готовится новый: в холодный ответ тогда почти никто не попадает.
+// PageSpeed 28.08.2026 поймал именно такой холодный ответ — 5,1 с на медленной сети.
+const metaCache = { "cache-control":"public, max-age=0, s-maxage=3600, stale-while-revalidate=86400" };
 // Страницу машины собирает робот десятками тысяч раз. Без общего кэша каждый его заход —
 // это запрос к базе; с ним сеть Vercel десять минут отдаёт готовый ответ, а сутки после
 // этого показывает прежний, пока в фоне готовится новый.
@@ -413,8 +419,8 @@ export async function handleApiRequest(request, response) {
       }
     }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams), catalogCache);
-    if (request.method === "GET" && url.pathname === "/api/model-facts") return json(response, 200, await getModelFacts(), catalogCache);
-    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")), catalogCache);
+    if (request.method === "GET" && url.pathname === "/api/model-facts") return json(response, 200, await getModelFacts(), metaCache);
+    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")), metaCache);
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.
     // Стоит до разбора адреса машины — иначе «summary» приняли бы за номер объявления.
     if (request.method === "GET" && url.pathname === "/api/cars/summary") return json(response, 200, await modelSummary(url.searchParams), catalogCache);
