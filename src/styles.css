@@ -1010,6 +1010,11 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   color: inherit;
   text-decoration: none;
 }
+/* Шеврон нужен только на телефоне: там ссылка блока становится такой же квадратной
+   кнопкой, как «Все предложения» у марок. На широком экране остаётся подпись со стрелкой. */
+.section-heading-link-caret {
+  display: none;
+}
 .featured-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1633,11 +1638,20 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   color: var(--muted);
   font-size: 16px;
 }
+/* Плашки стоят одной строкой и не переносятся. Машине с двигателем их достаётся
+   больше (объём и наддув сверх батареи и запаса хода), и на узкой колонке строка
+   раньше вылезала на цену справа: теперь она прокручивается внутри себя, полосу
+   прокрутки не показывая. */
 .mini-specs {
   display: flex;
   min-width: 0;
   flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mini-specs::-webkit-scrollbar {
+  display: none;
 }
 .mini-specs > span {
   flex: 0 0 auto;
@@ -2059,12 +2073,6 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
 }
 /* Ярлык над заголовком: у самого заголовка сверху свой отступ, поэтому здесь
    зазор нужен только снизу. */
-.detail-title > div > .new-listing-badge {
-  margin: 0;
-}
-.detail-title > div > .new-listing-badge + .detail-title-line {
-  margin-top: 6px;
-}
 .detail-title .detail-title-line h1 {
   margin: 0;
 }
@@ -2215,9 +2223,6 @@ body.header-menu-open .detail-floating-availability {
 }
 /* Ярлык «Новое» на фотографии машины нужен только на узком экране (см. правило
    в блоке для 700 точек): на широком его место — над заголовком. */
-.gallery-panel > span.new-listing-badge {
-  display: none;
-}
 .gallery-badges {
   position: absolute;
   left: 14px;
@@ -3319,6 +3324,11 @@ body.header-menu-open .detail-floating-availability {
 :root[data-theme="dark"] :where(.select-menu .select-options :is(button, a):hover, .select-menu .select-options :is(button, a).active, .load-more:hover, .car-row:hover, button.customer-order-stage-heading:hover:not(:disabled)) {
   background: var(--surface);
 }
+/* В тёмной теме «Подгрузить ещё» отделяется от страницы фоном, обводка лишняя —
+   и под курсором тоже: светлая рамка из дневного правила там смотрелась чужой. */
+html[data-theme="dark"] #root .load-more {
+  border-color: transparent;
+}
 :root[data-theme="dark"] :where(.secondary, .side-card .secondary, .danger-button) {
   background: var(--panel);
   border-color: #454b55;
@@ -4031,9 +4041,23 @@ body.header-menu-open .detail-floating-availability {
   }
   .hero {
     min-height: auto;
-    /* Отступ от шапки до заголовка — вдвое меньше десктопного ритма. */
-    padding: 26px 14px 13px;
+    /* Отступ от шапки до заголовка — вдвое меньше десктопного ритма. Снизу отступа
+       нет: расстояние до марок целиком задаёт сам блок марок (12 точек), иначе
+       отступы складывались втрое. */
+    padding: 26px 14px 0;
     text-align: center;
+  }
+  .hero .hero-search {
+    margin-bottom: 0;
+  }
+  /* Раскрытые быстрые фильтры не должны прилипать к строке поиска — отступ,
+     который раньше давала сама строка, теперь их собственный. */
+  .hero-quick-search.open {
+    margin-top: 14px;
+  }
+  /* Во время поиска марок нет, и расстояние до выдачи держит уже секция выдачи. */
+  .featured.featured--search {
+    padding-top: 19px;
   }
   .hero h1,
   .hero .hero-title {
@@ -4129,38 +4153,56 @@ body.header-menu-open .detail-floating-availability {
     grid-column: span 2;
   }
   .popular-brands {
-    padding: 11px 0 30px;
+    padding: 12px 0 30px;
   }
   .popular-brands-heading {
     align-items: center;
     gap: 10px;
     margin-bottom: 15px;
   }
+  /* Список и стрелка в строке — одна пара, ростом с сортировку в каталоге:
+     36 точек высоты, то же скругление, тот же фон и кегль подписи. */
   .popular-brands-heading > button,
   .popular-brands-heading > .popular-brands-all {
-    width: 44px;
-    min-height: 44px;
-    flex: 0 0 44px;
+    width: 36px;
+    min-height: 36px;
+    flex: 0 0 36px;
     justify-content: center;
     gap: 0;
     padding: 0;
+    border-radius: calc(10px * var(--corner-scale));
     font-size: 0;
+  }
+  .popular-brands-heading > .popular-brands-all svg {
+    width: 18px;
+    height: 18px;
   }
   /* Четыре кнопки в ширину телефона не встают — вместо них список. */
   .brand-type-switch {
     display: none;
   }
-  /* Ширина под самую длинную подпись, а не во всю строку: список выбирает тип, а не
-     принимает текст. Она же постоянная — от выбора поле не прыгает. Высота — как у
-     круглой кнопки рядом. Своей ширины у поля нет: надпись внутри лежит отдельным
-     слоем и на размер не влияет. */
+  /* Ширина по надписи, как у сортировки в каталоге: надпись внутри обычно лежит
+     отдельным слоем и ширины полю не даёт, поэтому её возвращаем в поток. */
   .popular-brands-heading > .brand-type-select {
-    width: 202px;
-    max-width: calc(100% - 54px);
-    flex: 0 0 auto;
+    width: fit-content;
+    min-width: 0;
+    max-width: calc(100% - 46px);
+    flex: 0 1 auto;
     display: flex;
-    height: 44px;
-    border-radius: calc(12px * var(--corner-scale));
+    height: 36px;
+    border-radius: calc(10px * var(--corner-scale));
+    background: var(--surface);
+  }
+  .popular-brands-heading > .brand-type-select .select-trigger {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    padding: 0 11px;
+  }
+  .popular-brands-heading > .brand-type-select .select-trigger b {
+    font-size: 14px;
   }
   .popular-brands-more {
     padding-top: 16px;
@@ -4197,12 +4239,40 @@ body.header-menu-open .detail-floating-availability {
     padding: 54px 0;
   }
   .section-heading {
-    align-items: baseline;
+    align-items: center;
   }
-  .section-heading > button,
-  .section-heading > .section-heading-link {
+  /* Заголовок встаёт ровно по середине квадратной кнопки-стрелки: верхний отступ,
+     которым он на широком экране отбит от надзаголовка, на телефоне уводил строку
+     вниз, и «Каталог» с «Журналом» висели ниже середины кнопки. */
+  .section-heading h2 {
+    margin-top: 0;
+  }
+  .section-heading > button {
     font-size: 0;
     white-space: nowrap;
+  }
+  /* Подпись убираем размером шрифта, а не display: none — она остаётся для чтения
+     с экрана. Селектор с тегом ссылки нужен, чтобы перебить общий размер 16px,
+     заданный ниже по файлу в наборе правил про читаемость. */
+  .section-heading > a.section-heading-link {
+    width: 36px;
+    min-height: 36px;
+    flex: 0 0 36px;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+    border-radius: calc(10px * var(--corner-scale));
+    background: var(--surface);
+    font-size: 0;
+    white-space: nowrap;
+  }
+  .section-heading > .section-heading-link .section-heading-link-arrow {
+    display: none;
+  }
+  .section-heading > .section-heading-link .section-heading-link-caret {
+    display: block;
+    width: 18px;
+    height: 18px;
   }
   .featured-grid {
     grid-template-columns: 1fr;
@@ -4257,16 +4327,30 @@ body.header-menu-open .detail-floating-availability {
   }
   /* В журнале крошки нужны и на телефоне: из статьи возвращаются в журнал и на главную,
      а другого пути назад на странице нет. Набраны мельче обычного и с небольшими
-     полями: это служебная строка, а не часть материала. Длинное название переносится
-     на вторую строку, а не растягивает страницу. */
+     полями: это служебная строка, а не часть материала. Длинное название не переносится
+     на вторую строку, а уезжает за край: строка прокручивается вбок внутри себя. */
   .blog-page > .breadcrumbs {
     display: flex;
-    flex-wrap: wrap;
-    row-gap: 0;
+    flex-wrap: nowrap;
     padding: 8px 0 6px;
     font-size: 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    white-space: nowrap;
   }
-  /* Между строкой «Журнал abcars.by» и самим материалом на телефоне хватает
+  .blog-page > .breadcrumbs > * {
+    flex: 0 0 auto;
+  }
+  .blog-page > .breadcrumbs::-webkit-scrollbar {
+    display: none;
+  }
+  /* Шапку журнала на телефоне не показываем там, где она всего лишь ссылка обратно:
+     свой заголовок у материала уже есть, а путь назад дают крошки над ним. На общей
+     странице журнала это заголовок страницы — он остаётся. */
+  .blog-masthead-link {
+    display: none;
+  }
+  /* Между служебной строкой сверху и самим материалом на телефоне хватает
      половины десктопного зазора. */
   .blog-page > .blog-layout {
     margin-top: 14px;
@@ -4297,6 +4381,12 @@ body.header-menu-open .detail-floating-availability {
   }
   .catalog-heading h1 {
     font-size: 27px;
+  }
+  /* Только на телефоне заголовок каталога встаёт двумя строками: у всех разделов
+     перенос в одном и том же месте — перед «с пробегом из Китая». На компьютере
+     фраза помещается в строку целиком, и половинки идут через пробел. */
+  .catalog-heading h1 > span {
+    display: block;
   }
   .catalog-heading > span {
     display: none;
@@ -4441,17 +4531,9 @@ body.header-menu-open .detail-floating-availability {
   .car-row-info .row-title {
     display: none;
   }
-  /* Лента фотографий занимает всю ширину, поэтому ярлык на ней перекрывал бы
-     соседний кадр: на узком экране он стоит отдельной строкой под лентой. */
-  .car-row-image > span.new-listing-badge {
-    display: none;
-  }
-  .car-row-info > .car-row-info-badge {
-    display: inline-flex;
-    margin: 10px 0 0;
-    padding: 4px 8px;
-    font-size: 14px;
-  }
+  /* Ярлык «Новое» лежит на первом кадре ленты, в левом нижнем углу: отдельной
+     строкой под лентой он сдвигал вниз всё содержимое карточки, и при прокрутке
+     списка строки прыгали. Второй ярлык, тот что под лентой, на телефоне не нужен. */
   .car-row-price {
     display: none;
   }
@@ -4461,11 +4543,6 @@ body.header-menu-open .detail-floating-availability {
   }
   .mini-specs {
     gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .mini-specs::-webkit-scrollbar {
-    display: none;
   }
   .car-row .mini-specs > span {
     gap: 4px;
@@ -4479,13 +4556,11 @@ body.header-menu-open .detail-floating-availability {
     width: 15px;
     height: 15px;
   }
-  .mini-specs .body-type-spec {
-    max-width: none;
-    flex: 0 0 auto;
-  }
+  /* На узком экране в карточке списка кузов и город не показываем: место
+     дороже, а обе строчки видны в самой карточке машины. */
+  .car-row .mini-specs .body-type-spec,
   .car-row .source-line {
-    margin-top: 10px;
-    font-size: 15px;
+    display: none;
   }
   .back-mobile {
     display: flex;
@@ -4537,6 +4612,13 @@ body.header-menu-open .detail-floating-availability {
     width: 36px;
     height: 36px;
   }
+  /* Знак с китайским именем модели носит тот же класс, что и стрелка «назад»,
+     и вставал в ту же клетку сетки — стрелка пропадала под ним. Места для двух
+     кружков в строке заголовка на телефоне нет, и «назад» важнее подсказки
+     с китайским именем, поэтому знак на телефоне не показываем. */
+  .chinese-name-mark {
+    display: none;
+  }
   .detail-mobile-price {
     display: block;
     grid-column: 2;
@@ -4573,30 +4655,6 @@ body.header-menu-open .detail-floating-availability {
   }
   .gallery-badges {
     display: none;
-  }
-  /* Над заголовком ярлык прячем — он занимал отдельную строку и отодвигал цену;
-     вместо него зелёный чип стоит поверх фотографии в свободном левом верхнем
-     углу (справа сверху — счётчик кадров). */
-  .detail-title > div > .new-listing-badge {
-    display: none;
-  }
-  .gallery-panel > span.new-listing-badge {
-    top: 12px;
-    right: auto;
-    bottom: auto;
-    left: 12px;
-    display: inline-flex;
-    width: fit-content;
-    height: fit-content;
-    margin: 0;
-    padding: 5px 9px;
-    border-radius: calc(7px * var(--corner-scale));
-    background: #1b8551;
-    color: #ffffff;
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1.25;
-    box-shadow: 0 2px 8px rgba(14, 16, 19, 0.28);
   }
   .order-card {
     display: block;
@@ -5584,7 +5642,16 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
   text-decoration: none;
   white-space: nowrap;
 }
+/* Подборка на главной на широком экране всегда идёт плиткой — переключатель вида
+   там не нужен и показывается только на телефоне (см. правило ниже, в @media). */
+#root .section-heading > .home-feed-view-toggle {
+  display: none;
+}
 #root .result-view-toggle {
+  /* Подложку переключатель несёт на себе, а не берёт у соседей: в каталоге он
+     стоит внутри .result-controls, где переменная задана, а у заголовка подборки
+     на главной такой обёртки нет — и «пилюля» там оставалась прозрачной. */
+  --result-pill-bg: var(--model-chip-bg);
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -5623,14 +5690,30 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
 #root .result-view-toggle button:active {
   transform: scale(0.96);
 }
+:root[data-theme="dark"] #root .result-view-toggle {
+  --result-pill-bg: var(--surface);
+}
 :root[data-theme="dark"] #root .result-view-toggle button.active {
   background: #383d45;
   color: #ff7a81;
   box-shadow: none;
 }
 @media (max-width: 700px) {
+  /* Переключатель вида есть и на телефоне — рядом с сортировкой, только уже:
+     в строку помещаются счётчик, название сортировки и обе кнопки. */
   #root .result-view-toggle {
-    display: none;
+    gap: 1px;
+    padding: 2px;
+  }
+  #root .result-view-toggle button {
+    width: 30px;
+    height: 30px;
+  }
+  /* Переключатель вида у заголовка подборки на главной прижат к кнопке-стрелке. */
+  #root .section-heading > .home-feed-view-toggle {
+    display: flex;
+    margin-left: auto;
+    margin-right: 8px;
   }
   /* На телефоне жёлтая «В каталог» ужимается до одной стрелки. */
   .search-catalog-link .search-catalog-link-label {
@@ -6936,11 +7019,15 @@ html[data-theme="dark"] #root .spec-search,
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 8px;
-  border-radius: calc(7px * var(--corner-scale));
+  padding: 3px 7px;
+  border-radius: calc(6px * var(--corner-scale));
   color: #fff;
   background: rgba(14, 16, 19, 0.75);
-  font-size: 16px;
+  /* Мельче и жирнее: чип стоит рядом с зелёной плашкой и должен совпадать с ней
+     по высоте, а мелкий шрифт обычной насыщенности на фотографии читался бы хуже. */
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
   pointer-events: none;
 }
 .hover-image-segments {
@@ -7133,6 +7220,353 @@ html[data-theme="dark"] #root .spec-search,
 .more-filters-toggle[aria-expanded="true"] svg:last-child {
   transform: rotate(180deg);
 }
+/* ── Фильтры на телефоне ───────────────────────────────────────────────────────
+   Марка и модель одной кнопкой, под ней строка быстрых фильтров, а выбор идёт
+   в шторках снизу. Разметка этих блоков создаётся только на узких экранах. */
+/* Фон плашек фильтра — тот же, что у пилюли сортировки под выдачей: на светлой
+   теме поле #f4f5f6 почти сливалось с белой страницей. */
+.search-box {
+  --filter-pill-bg: var(--model-chip-bg);
+}
+:root[data-theme="dark"] .search-box {
+  --filter-pill-bg: var(--surface);
+}
+.brand-model-field {
+  display: flex;
+  align-items: stretch;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--filter-pill-bg);
+  overflow: hidden;
+}
+.brand-model-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.brand-model-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.brand-model-text b {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.brand-model-text small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.brand-model-clear {
+  width: 52px;
+  flex: 0 0 52px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.brand-model-clear:hover {
+  color: var(--ink);
+}
+.filter-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filter-chip-row::-webkit-scrollbar {
+  display: none;
+}
+/* Высота и кегль — как у сортировки под выдачей: строка фильтров и строка
+   с сортировкой читаются как один ряд одинаковых плашек. */
+.filter-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--filter-pill-bg);
+  color: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Выбранное показываем тёмной плашкой — так же, как это делают каталоги
+   объявлений: видно и что выбрано, и что это можно снять. */
+.filter-chip.active {
+  background: var(--ink);
+  color: var(--page);
+}
+/* Иконка сохранения поиска стоит между «Фильтрами» и выбранным — только значок. */
+.filter-chip--save {
+  width: 36px;
+  flex: 0 0 36px;
+  justify-content: center;
+  padding: 0;
+}
+.filter-chip--save.saved {
+  color: var(--accent-dark);
+}
+/* Поиск уже сохранён, но фильтры с тех пор поменяли: закладка залита, как
+   у сохранённого, но серая — следующее нажатие не создаёт новый поиск,
+   а записывает изменения в прежний. */
+.filter-chip--save.pending,
+.search-save.pending {
+  color: var(--muted);
+}
+/* Выбранный параметр — одна плашка из двух кнопок: тело открывает этот фильтр
+   заново, крестик его снимает. */
+.filter-chip-pair {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: stretch;
+}
+.filter-chip-pair .filter-chip.active {
+  padding-right: 6px;
+  border-radius: 999px 0 0 999px;
+}
+.filter-chip-clear {
+  display: grid;
+  place-items: center;
+  padding: 0 12px 0 2px;
+  border: 0;
+  border-radius: 0 999px 999px 0;
+  background: var(--ink);
+  color: var(--page);
+  cursor: pointer;
+}
+.filter-chip-x {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: -5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--page) 22%, transparent);
+}
+.brand-model-clear-plate {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel);
+  color: var(--muted);
+}
+/* В тёмной теме подложка страницы и плашка почти одного тона — крестику нужен
+   свой, чуть светлее поля. */
+:root[data-theme="dark"] .brand-model-clear-plate {
+  background: var(--filter-field-open-bg);
+}
+.brand-model-clear:hover .brand-model-clear-plate {
+  color: var(--ink);
+}
+.filter-chip-badge {
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.sheet-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin-bottom: 8px;
+  padding: 0 14px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--filter-pill-bg);
+  color: var(--muted);
+}
+.sheet-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+/* Всплывающая подсказка внизу: цвета вывернуты относительно страницы, поэтому
+   она читается поверх любой выдачи. Закрывается крестиком и сама по времени. */
+.app-toast {
+  position: fixed;
+  z-index: 140;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(460px, calc(100vw - 28px));
+  padding: 11px 11px 11px 16px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--ink);
+  color: var(--page);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  animation: app-toast-in var(--motion-medium) var(--motion-ease);
+}
+.app-toast span {
+  flex: 1;
+  min-width: 0;
+}
+.app-toast button {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--page) 20%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+/* Заглушка сохранения поиска: значок над заголовком, короткая строка, всё
+   по центру. Цвет значка — как у выбранного пункта в списке. */
+.mobile-filter-sheet-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 24px auto 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+/* В шторке с иконкой заголовок и пояснение под ним — одна мысль, поэтому между ними
+   отступ меньше, чем в обычной шторке фильтров. */
+.mobile-filter-sheet-icon ~ .mobile-filter-sheet-header {
+  padding-bottom: 4px;
+}
+.sheet-hint {
+  max-width: 280px;
+  margin: 0 auto;
+  padding: 2px 0 6px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: center;
+}
+.sheet-options {
+  display: flex;
+  flex-direction: column;
+}
+.sheet-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 54px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.sheet-option-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.sheet-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sheet-option-count {
+  min-width: 46px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: right;
+}
+.sheet-option.chosen .sheet-option-name {
+  color: var(--accent-dark);
+}
+/* Галочка кликается отдельно от строки: по строке уходим в модели марки,
+   по галочке — просто отмечаем. */
+.sheet-option-check {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+  margin-left: 10px;
+  border: 2px solid var(--line-strong);
+  border-radius: calc(7px * var(--corner-scale));
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.sheet-option--check.chosen .sheet-option-check {
+  border-color: var(--accent);
+  background: var(--accent);
+}
 .mobile-filter-sheet-backdrop {
   display: none;
 }
@@ -7147,6 +7581,16 @@ html[data-theme="dark"] #root .spec-search,
 @media (max-width: 700px) {
   .unified-filter-primary {
     grid-template-columns: 1fr;
+  }
+  /* В каталоге фильтры не обрамляем: кнопка марки и лента фильтров лежат прямо
+     на странице. На главной панель раскрывается из строки поиска и остаётся
+     в своём блоке. Второе правило перебивает тёмную тему, где у панели свой фон. */
+  .catalog > .search-box,
+  html[data-theme="dark"] #root .catalog > .search-box {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
   }
   .mobile-sheet-filter-source,
   .desktop-filter-extra {
@@ -7167,9 +7611,14 @@ html[data-theme="dark"] #root .spec-search,
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    /* Обычная шторка ростом по содержимому: у поля с одним списком не должно
+       быть пустоты в пол-экрана. Постоянную высоту держат только списки марок
+       и моделей — там она меняется при поиске (класс ниже). Прокручивается
+       середина: шапка и кнопка держатся по краям. */
     max-height: min(88dvh, 720px);
-    overflow-y: auto;
-    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     /* Без верхнего отступа: иначе над прилипающей шапкой остаётся прозрачная
        полоса, сквозь которую при прокрутке видно уезжающие поля. */
     padding: 0 18px calc(18px + env(safe-area-inset-bottom));
@@ -7183,14 +7632,54 @@ html[data-theme="dark"] #root .spec-search,
   .mobile-filter-sheet-handle {
     width: 42px;
     height: 4px;
+    flex: 0 0 4px;
     margin: 8px auto 6px;
     border-radius: 999px;
     background: var(--line-strong);
   }
+  .mobile-filter-sheet--fill {
+    height: min(88dvh, 720px);
+  }
+  /* Пока в невысокой шторке раскрыт список, шторка растягивается на полный рост:
+     список лежит отдельным слоем, роста шторке не добавляет и обрезался её краем. */
+  .mobile-filter-sheet:has(.custom-select.open) {
+    height: min(88dvh, 720px);
+  }
+  /* Шторка одного фильтра («Цена», «Год», «Пробег») в прокрутке не нуждается, поэтому
+     ей растягиваться незачем: она остаётся ростом по содержимому, а раскрытый список
+     рисуется НАД полем — поверх шапки шторки и затемнения, а не под ним. */
+  .mobile-filter-sheet--compact:has(.custom-select.open) {
+    height: auto;
+    overflow: visible;
+  }
+  .mobile-filter-sheet--compact:has(.custom-select.open) .mobile-filter-sheet-body {
+    overflow: visible;
+  }
+  /* Раскрытое поле поднимаем над шапкой шторки (30) и кнопкой результата (20):
+     иначе список, раскрытый вверх, уходил под них и обрезался краем шторки. */
+  .mobile-filter-sheet--compact .custom-select.open {
+    z-index: 45;
+  }
+  .mobile-filter-sheet--compact .custom-select.open .select-menu {
+    top: auto;
+    bottom: calc(100% + 8px);
+    transform-origin: bottom center;
+  }
+  /* Прокручиваемая середина идёт до краёв шторки, а отступ живёт внутри неё:
+     раскрытый список на пиксель шире поля, и у края его срезало вместе с тенью,
+     а заодно появлялась лишняя прокрутка вбок. */
+  .mobile-filter-sheet-body {
+    flex: 1;
+    min-height: 0;
+    margin: 0 -18px;
+    padding: 0 18px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
   .mobile-filter-sheet-header {
-    position: sticky;
+    flex: 0 0 auto;
     z-index: 30;
-    top: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -7199,10 +7688,28 @@ html[data-theme="dark"] #root .spec-search,
     background: var(--panel);
   }
   .mobile-filter-sheet-header h2 {
+    flex: 1;
+    min-width: 0;
     margin: 0;
-    font-size: 24px;
-    line-height: 1.15;
-    letter-spacing: -0.6px;
+    overflow: hidden;
+    font-size: 19px;
+    line-height: 1.2;
+    letter-spacing: -0.3px;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  /* Слева всегда 40 точек: со стрелкой «назад» или пустые, чтобы заголовок
+     стоял по центру и не прыгал при переходе между шагами. */
+  span.mobile-filter-sheet-back {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+  }
+  /* Быстрые кнопки моделей под панелью на телефоне не нужны: модели выбирают
+     в шторке марки. */
+  .model-quick-chips {
+    display: none;
   }
   .mobile-filter-sheet-header button {
     width: 40px;
@@ -7234,14 +7741,13 @@ html[data-theme="dark"] #root .spec-search,
     display: none;
   }
   .mobile-filter-sheet-actions {
-    position: sticky;
+    flex: 0 0 auto;
     z-index: 20;
-    bottom: calc(-18px - env(safe-area-inset-bottom));
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-top: 16px;
-    padding: 12px 0 calc(18px + env(safe-area-inset-bottom));
+    margin-top: 12px;
+    padding: 12px 0 0;
     background: var(--panel);
   }
   .mobile-filter-sheet-actions .search-reset {
@@ -10766,9 +11272,62 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width: 620px) {
-  .catalog-card-grid {
-    grid-template-columns: 1fr;
+/* Плитка на телефоне: две карточки в ряд. Кадр, подписи и сердце ужимаются —
+   в половину экрана карточка каталога целиком не помещается. Правила висят на
+   отдельном классе, потому что тот же `.featured-grid` рисует подборку на
+   главной и «похожие» в карточке: там колонка по-прежнему одна. */
+@media (max-width: 700px) {
+  .featured-grid.mobile-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .mobile-cards-grid .featured-image {
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+  .mobile-cards-grid .featured-body {
+    gap: 3px;
+    padding: 11px 12px 13px;
+  }
+  /* Название в узкой плитке переносим на вторую строку, а не рубим троеточием:
+     иначе у длинных марок пропадал бы год в конце строки. Дальше двух строк
+     название не растёт. Место под две строки занято всегда — иначе цена в
+     соседних карточках ряда стояла бы на разной высоте. */
+  .mobile-cards-grid .featured-body h3 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    min-height: 2.7em;
+    white-space: normal;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+  .mobile-cards-grid .featured-body > p {
+    font-size: 14px;
+  }
+  .mobile-cards-grid .featured-body strong {
+    font-size: calc(18px * var(--price-fit, 1));
+  }
+  /* Тип с приводом и «размещено N дней назад» в узкой плитке не показываем:
+     они бы обрезались троеточием и съели место у цены. */
+  .mobile-cards-grid .featured-card-specs-more,
+  .mobile-cards-grid .featured-body > .featured-listing-age {
+    display: none;
+  }
+  .mobile-cards-grid .featured-favorite {
+    right: 8px;
+    top: 8px;
+    width: 32px;
+    height: 32px;
+  }
+  .mobile-cards-grid .featured-image > span.new-listing-badge {
+    right: 8px;
+    bottom: 12px;
+    padding: 3px 6px;
+    font-size: 12px;
+  }
+  .mobile-cards-grid .skeleton-body {
+    gap: 9px;
   }
 }
 
@@ -11349,72 +11908,6 @@ html[data-theme="dark"] .model-page-back:hover {
 html[data-theme="dark"] :is(.model-page-intro, .model-page-article, .model-page-faq, .catalog-landing-article) p {
   opacity: 0.8;
 }
-/* Мозаика фотографий над текстом: первый кадр вдвое крупнее остальных, поэтому сетка
-   не выглядит однообразной. Фон плитки светлее подложки блока — пока фото грузится,
-   место под него видно. */
-.model-page-gallery {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  /* Строка ниже колонки: плитки чуть вытянуты по горизонтали, но не панорамные. */
-  grid-auto-rows: 158px;
-  gap: 12px;
-  width: min(860px, calc(100% - 48px));
-  margin-inline: auto;
-}
-.model-page-gallery > button {
-  position: relative;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  border-radius: calc(12px * var(--corner-scale));
-  background: var(--surface);
-  cursor: pointer;
-}
-/* Цена до Минска поверх снимка — тем же тёмным чипом, что и счётчик кадров в
-   карточках каталога. Стоит в левом верхнем углу: правый угол на широком кадре
-   чаще занят самой машиной. Событий мыши чип не ловит — клик уходит на плитку. */
-.model-page-gallery-price,
-.model-page-gallery-mileage {
-  position: absolute;
-  left: 9px;
-  padding: 5px 8px;
-  border-radius: calc(7px * var(--corner-scale));
-  background: rgba(14, 16, 19, 0.75);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.25;
-  white-space: nowrap;
-  pointer-events: none;
-}
-.model-page-gallery-price {
-  top: 9px;
-}
-/* Пробег — отдельной плашкой в нижнем углу снимка: рядом с ценой он спорил бы
-   с ней за внимание. Поэтому написан мельче и чуть приглушённее. */
-.model-page-gallery-mileage {
-  bottom: 9px;
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-}
-html[data-theme="dark"] .model-page-gallery > button {
-  background: var(--model-nested-bg);
-}
-.model-page-gallery > button:first-child {
-  grid-column: span 2;
-  grid-row: span 2;
-}
-.model-page-gallery img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform var(--motion-medium) var(--motion-ease);
-}
-.model-page-gallery > button:hover img {
-  transform: scale(1.04);
-}
 /* Полоса главных цифр после вступления. Плитки светлее (в тёмной теме) или
    серее (в светлой) подложки блока, поэтому читаются как отдельный элемент. */
 .model-page-numbers {
@@ -11819,6 +12312,12 @@ html[data-theme="dark"] .tool-page-links {
   background: var(--header-control-bg);
   box-shadow: none;
 }
+/* Блок переходов стоит под лентой каталога и читается вместе с ней, поэтому идёт
+   во всю ширину выдачи, а не по колонке текста: под широкой лентой узкий блок
+   выглядел обрубком. */
+.model-page-ways {
+  width: min(1280px, calc(100% - 48px));
+}
 .model-page-ways h2 {
   margin: 0 0 6px;
   font-size: 27px;
@@ -11829,6 +12328,12 @@ html[data-theme="dark"] .tool-page-links {
    подложка здесь светлая, поэтому плашке нужен более заметный фон. */
 .model-page-ways .catalog-landing-links a {
   background: var(--header-control-bg);
+}
+/* В тёмной теме подложка самого блока — как раз --header-control-bg, и плашки на ней
+   пропадали: были видны только надписи. Берём тот же тон вложенных блоков, что у
+   вопросов и карточек версий. */
+html[data-theme="dark"] .model-page-ways .catalog-landing-links a {
+  background: var(--model-nested-bg);
 }
 .model-page-faq h2 {
   margin: 0 0 18px;
@@ -11858,40 +12363,141 @@ html[data-theme="dark"] .model-page-faq .home-faq-item {
   line-height: 30px;
   letter-spacing: 0;
 }
-/* Сетка каталога в конце страницы идёт во всю ширину, как на главной. Перед ней
-   отступ больше: тут заканчивается статья и начинается другой по смыслу блок. */
+/* Хлебные крошки над заголовком обзора: своё верхнее поле им не нужно — его уже
+   даёт отступ страницы, а снизу расстояние задаёт зазор между блоками. */
+.model-page-crumbs {
+  padding: 0;
+}
+/* Заголовок обзора стоит без подложки и по левому краю — на одной линии с сеткой
+   машин под ним. Ширину держим по колонке текста: строка во всю ширину страницы
+   не читается. */
+.model-page-head .model-page-hero-copy {
+  max-width: 860px;
+}
+/* Отбор над сеткой на странице обзора: сортировка, «Цена до», «Пробег до» и переход
+   ко всем фильтрам каталога. Ряд переносится на вторую строку, когда четыре элемента
+   рядом с заголовком уже не помещаются. */
+.model-page-catalog-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+/* Список сортировки короткий и раскрывается целиком, а цена и пробег — это полтора
+   десятка ступеней: без своей прокрутки такой список закрывал бы пол-экрана. */
+.model-page-catalog-controls .select-options {
+  max-height: 320px;
+  overflow-y: auto;
+}
+/* Кнопка «Все фильтры» по высоте и скруглению повторяет соседние списки: общая
+   высота основных кнопок (50) в этом ряду выбивалась бы. */
+.model-page-catalog-filters {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 0;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: calc(10px * var(--corner-scale));
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+/* Сетка каталога идёт во всю ширину, как на главной. Она стоит сразу под
+   заголовком страницы, поэтому собственного крупного заголовка у неё нет — только
+   строка «Каталог» с переключателем. Снизу отступ больше зазора между блоками:
+   ниже начинается статья, и она не должна казаться подписью к машинам. */
 .model-page-catalog {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  margin-top: 40px;
+  /* Зазор небольшой: строка «Каталог» с кнопками — не отдельный заголовок, а часть
+     выдачи, и широкий отступ отрывал её от машин. Расстояние под машинами задаёт
+     собственное поле кнопки «Смотреть все», поэтому оно не изменилось. */
+  gap: 11px;
+  margin-bottom: 34px;
 }
-/* Поисковый заголовок блока — по центру и крупно; под ним строка «Каталог» с
-   переключателем, как на главной. */
-.model-page-catalog-title {
-  margin: 0 auto;
-  max-width: 760px;
-  font-size: 32px;
-  line-height: 1.2;
-  letter-spacing: -1.2px;
-  text-align: center;
-}
-.model-page-catalog .section-heading {
+/* Слово «Каталог» стоит на одной линии с кнопками по центру, а не по нижнему краю:
+   в каталоге рядом с ним крупный заголовок страницы, и там низ строки — общая
+   опора, а здесь надпись такого же роста, как кнопки, и по низу она провисала. */
+.model-page-catalog .catalog-heading {
+  align-items: center;
   margin-bottom: 0;
 }
-.model-page-catalog .section-heading h3 {
-  position: relative;
-  top: 2px;
+.model-page-catalog .catalog-heading h2 {
   margin: 0;
   font-size: 22px;
   letter-spacing: -0.6px;
 }
-.model-page-catalog .featured-load-more {
+/* Расстояние между строками списка на телефоне задаёт верхнее поле самой строки.
+   В каталоге строки лежат прямо в колонке выдачи, а здесь — в блоке с зазором 22,
+   и над первой строкой два отступа складывались в заметную пустоту. */
+.model-page-car-list > :first-child {
+  margin-top: 0;
+}
+/* Заглушка вместо пустой сетки. Как и остальные блоки сайта, отделена фоном, а не
+   обводкой: подложка светлее (в тёмной теме — темнее) страницы. */
+.model-page-catalog-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 46px 24px;
+  border-radius: calc(20px * var(--corner-scale));
+  background: var(--surface);
+  color: var(--muted);
+  text-align: center;
+}
+html[data-theme="dark"] .model-page-catalog-empty {
+  background: var(--header-control-bg);
+}
+.model-page-catalog-empty > svg {
+  color: var(--muted);
+}
+.model-page-catalog-empty h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  letter-spacing: -0.5px;
+}
+.model-page-catalog-empty p {
+  max-width: 520px;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.45;
+}
+/* Кнопка сброса — служебная, а не главное действие блока, поэтому не жёлтая
+   и мельче кнопки под сеткой. Тон обратный подложке заглушки: серые оттенки на сером
+   фоне почти не читались. */
+.model-page-catalog-empty button {
+  min-height: 0;
+  height: 40px;
+  margin-top: 8px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--ink);
+  color: var(--panel);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.model-page-catalog-empty button:hover {
+  background: color-mix(in srgb, var(--ink) 86%, #ffffff);
+}
+html[data-theme="dark"] .model-page-catalog-empty button:hover {
+  background: color-mix(in srgb, var(--ink) 86%, #000000);
+}
+/* Кнопка под сеткой ведёт в каталог модели — это главное действие блока, поэтому
+   она жёлтая, как остальные основные кнопки сайта. */
+.model-page-catalog-all {
   align-self: center;
+  min-width: min(100%, 360px);
+  /* Вместе с уменьшенным зазором блока (11) выходит то же расстояние под машинами,
+     что было при зазоре 22 и поле 28. */
+  margin-top: 39px;
+  padding: 0 22px;
   text-decoration: none;
 }
-/* Лента идёт ровно по краям блока с текстом, а не во всю ширину страницы: иначе
-   она выпирала бы за колонку и разрывала строй страницы. */
 /* Рекламный блок в разрыве текста: слева иллюстрация со страницы «О сервисе»,
    справа заголовок, короткое пояснение и кнопка. Оформлен как текстовый блок —
    белый с рамкой и тенью в светлой теме, серый в тёмной. */
@@ -11949,83 +12555,6 @@ html[data-theme="dark"] .model-page-promo {
   padding: 0 20px;
   text-decoration: none;
 }
-.model-page-cars {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  width: min(860px, calc(100% - 48px));
-}
-.model-page-cars-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-.model-page-cars-heading h2 {
-  margin: 0;
-  font-size: 27px;
-  line-height: 1.2;
-  letter-spacing: -0.8px;
-}
-.model-page-cars-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-/* Стрелки листания: те же кружки, что у кнопки «назад». На краю ленты кнопка
-   гаснет — дальше листать нечего. */
-.model-page-cars-nav {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--panel);
-  color: var(--ink);
-  cursor: pointer;
-  transition:
-    transform var(--motion-fast) var(--motion-ease),
-    opacity var(--motion-fast) var(--motion-ease);
-}
-.model-page-cars-nav:hover:not(:disabled) {
-  transform: translateY(-2px);
-}
-.model-page-cars-nav:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-html[data-theme="dark"] .model-page-cars-nav {
-  border-color: transparent;
-  background: var(--surface);
-}
-/* Лента с прокруткой в сторону: карточки одинаковой ширины, полосу прокрутки
-   прячем. Поля сверху и снизу — чтобы при наведении карточка приподнималась и
-   её тень не обрезалась краем ленты. */
-.model-page-cars-track {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 300px;
-  gap: 16px;
-  overflow-x: auto;
-  /* Запас сверху и снизу — под подъём карточки и её тень при наведении: боковая
-     прокрутка обрезает всё, что выходит за края ленты. Лишнюю высоту забираем
-     обратно отрицательными полями, чтобы отступы блока не разъезжались. */
-  padding: 10px 2px 46px;
-  margin: -10px 0 -34px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-  overscroll-behavior-inline: contain;
-}
-.model-page-cars-track::-webkit-scrollbar {
-  display: none;
-}
-.model-page-cars-track > * {
-  scroll-snap-align: start;
-}
 /* Юридическая оговорка: без подложки и иконки, мелко и по центру — её читают в
    последнюю очередь, но на странице она быть должна. */
 .model-page-disclaimer {
@@ -12074,41 +12603,30 @@ html[data-theme="dark"] .model-page-cars-nav {
   .model-page-article h2 {
     font-size: 23px;
   }
-  .model-page-cars-heading h2 {
-    font-size: 23px;
-  }
-  .model-page-catalog-title {
-    font-size: 25px;
-    letter-spacing: -0.8px;
-  }
-  .model-page-catalog .section-heading h3 {
+  .model-page-catalog .catalog-heading h2 {
     font-size: 19px;
   }
-  .model-page-cars-track {
-    grid-auto-columns: 268px;
+  /* На телефоне над сеткой остаётся только самое нужное: переключатель вида и значок
+     перехода ко всем фильтрам — как в каталоге. Сортировка, «Цена до» и «Пробег до»
+     втроём занимали две строки под заголовком и оттесняли машины ниже экрана; весь
+     этот отбор есть в каталоге, куда и ведёт значок. */
+  .model-page-catalog-controls .select-field {
+    display: none;
+  }
+  .model-page-catalog-controls {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .model-page-catalog-filters {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .model-page-catalog-filters span {
+    display: none;
   }
   .model-page-numbers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  /* На телефоне мозаика в две колонки: крупный кадр занимает всю ширину. */
-  .model-page-gallery {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: 108px;
-    gap: 8px;
-  }
-  /* Плитки вдвое меньше, поэтому чип с ценой тоже ужимается. */
-  .model-page-gallery-price,
-  .model-page-gallery-mileage {
-    left: 6px;
-    padding: 3px 6px;
-    font-size: 14px;
-  }
-  .model-page-gallery-price {
-    top: 6px;
-  }
-  .model-page-gallery-mileage {
-    bottom: 6px;
-    font-size: 12px;
   }
   .model-page-compare,
   .model-page-versions-cards,
@@ -12900,7 +13418,6 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
     .quick-view-toggle .quick-view-toggle-track,
     .quick-view-toggle .quick-view-toggle-track i,
     .model-page-back,
-    .model-page-cars-nav,
     .quota-panel-bar,
     .quota-panel-bar > b,
     .tool-live-bar,
@@ -12920,17 +13437,22 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 
 /* Ярлык «Новое» — зелёный чип с белым текстом. Цвет задан числом, а не темовой
    переменной: в тёмной теме --green светлый, и белые буквы на нём терялись бы. */
+/* Ярлык мельче остальных чипов на снимке: подпись стала длиннее («Добавлено 3 дня
+   назад» вместо «Новое»), и прежним размером она заняла бы полкадра. */
+.new-listing-badge > i {
+  font-style: normal;
+}
 .new-listing-badge {
   display: inline-flex;
   align-items: center;
   margin-bottom: 4px;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: calc(6px * var(--corner-scale));
   background: #1b8551;
   color: #ffffff;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.3;
   white-space: nowrap;
 }
 /* В карточках каталога чип лежит поверх фотографии, в свободном углу: у карточки
@@ -12949,13 +13471,13 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   width: fit-content;
   height: fit-content;
   margin: 0;
-  padding: 5px 8px;
-  border-radius: calc(7px * var(--corner-scale));
+  padding: 3px 7px;
+  border-radius: calc(6px * var(--corner-scale));
   background: #1b8551;
   color: #ffffff;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.3;
   box-shadow: 0 2px 8px rgba(14, 16, 19, 0.28);
   pointer-events: none;
 }
@@ -12965,15 +13487,35 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   bottom: auto;
   left: auto;
 }
-/* Второй ярлык — для узкого экрана; на широком видно только тот, что на фото. */
-.car-row-info-badge {
-  display: none;
-}
 .featured-image > span.new-listing-badge {
   top: auto;
   right: 12px;
   bottom: 18px;
   left: auto;
+}
+/* На телефоне карточка списка показывает ленту кадров во всю ширину: правый верхний
+   угол приходится уже на соседний кадр, поэтому ярлык уходит в левый низ первого
+   кадра, а счётчик кадров — в левый верх. Блок стоит ниже всех правил про эти два
+   чипа (в том числе ниже `@media (hover: none)`), иначе они бы его перебили. */
+@media (max-width: 700px) {
+  /* На телефоне ярлык короче: «Добавлено» прячем, остаётся «3 дня назад». */
+  .new-listing-badge > i {
+    display: none;
+  }
+  /* Отступ слева на 6 точек больше, чем сверху и снизу: столько лента отводит себе
+     по краям, и без поправки ярлык прижимался к краю кадра ближе, чем к его низу. */
+  .car-row-image > span.new-listing-badge {
+    top: auto;
+    right: auto;
+    bottom: 9px;
+    left: 15px;
+  }
+  .car-row-image > .hover-image-count {
+    top: 9px;
+    bottom: auto;
+    left: 15px;
+    right: auto;
+  }
 }
 
 /* Стрелка изменения цены. Вверх — подорожала (красная), вниз — подешевела
@@ -13122,8 +13664,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 
 /* Размытая подложка у плашек поверх фотографий.
 
-   Все эти чипы — цена и пробег на мозаике страницы модели, счётчик кадров,
-   ярлыки на фотографии машины, сердце избранного, кнопка «Все фото» — лежат
+   Все эти чипы — счётчик кадров, ярлыки на фотографии машины, сердце избранного, кнопка «Все фото» — лежат
    на снимке и подкрашены полупрозрачным тёмным (у ярлыков на карточке машины —
    светлым). На пёстром кадре текст на них читался хуже: под цифрами могли
    оказаться и блик, и тень. Размытие снимка под плашкой убирает эту пестроту,
@@ -13132,8 +13673,6 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
    Свойство перечислено дважды: в Safari оно до сих пор работает только со
    своей приставкой. Браузер, который не умеет размывать, просто покажет
    плашку как раньше — сплошной полупрозрачной подложкой. */
-.model-page-gallery-price,
-.model-page-gallery-mileage,
 .blog-card-tags > span,
 .blog-top-rank,
 .hover-image-count,
@@ -14283,14 +14822,16 @@ html[data-theme="dark"] .blog-tool-button:hover {
     line-height: 25px;
   }
   /* На телефоне у подложки статьи нет тени, но поля ей нужны настоящие: с отступом
-     в пару точек текст прилипал к её краю. Тонкая рамка остаётся в обеих темах —
-     в тёмной подложка почти сливается с фоном страницы, и без неё край материала
-     не виден. */
-  .blog-article,
-  html[data-theme="dark"] .blog-article {
+     в пару точек текст прилипал к её краю. В светлой теме край материала показывает
+     тонкая рамка, в тёмной — сама подложка: она заметно светлее фона страницы,
+     и обводка поверх неё выглядит лишней. */
+  .blog-article {
     padding: 18px 16px 20px;
     border: 1px solid var(--line);
     box-shadow: none;
+  }
+  html[data-theme="dark"] .blog-article {
+    border-color: transparent;
   }
   /* Кнопка «поделиться» остаётся в углу подложки, только ближе к краю: в поток над
      заголовком она уводила первую строку статьи слишком далеко вниз. Строка «раздел ·

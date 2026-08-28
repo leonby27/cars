@@ -11,6 +11,12 @@ import { cityName } from "../src/city-names.js";
 import { brandNotice } from "../src/brand-notice.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
+import { landingHeading } from "../src/catalog-landings.js";
+
+// Заголовок каталога и его разделов: две половины отдельными кусками, между ними пробел.
+// На телефоне стили ставят каждую своей строкой, на компьютере они идут одной строкой.
+const headingLines = ({ title, tail }) =>
+  tail ? `<span>${escapeHtml(title)}</span> <span>${escapeHtml(tail)}</span>` : escapeHtml(title);
 // Страницы-расчёты нужны подвалу: ссылки на них должны стоять на каждой странице сайта.
 import { TOOL_PAGES } from "../src/tool-pages.js";
 // Журнал: ссылка на него нужна в подвале каждой страницы. Пока раздел выключен,
@@ -515,7 +521,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     route: "/catalog/",
     title: "Автомобили с пробегом из Китая — каталог и цены | abcars.by",
     description: "Каталог автомобилей с пробегом из Китая: бензиновые, электрические и гибридные, с характеристиками, пробегом и ориентировочной стоимостью доставки в Минск.",
-    h1: "Автомобили с пробегом из Китая",
+    h1: "Все авто с пробегом из Китая",
     lead: "Выберите автомобиль, изучите характеристики и получите предварительный расчёт стоимости до Минска.",
   };
 
@@ -537,8 +543,11 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const paging = paginationLinks({ route: CATALOG_INDEX.route, page, pages });
     const list = items.length ? `<section><h2>Актуальные предложения</h2>${carLinks(items)}${paging}</section>` : "";
     const sectionBlock = sections.length ? sectionLinks(sections, { heading: "Автомобили из Китая по маркам и типам" }) : "";
-    const heading = page > 1 ? `${CATALOG_INDEX.h1} — страница ${page}` : CATALOG_INDEX.h1;
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(CATALOG_INDEX.lead)}</p>${countLine}${list}${sectionBlock}</main>${footer()}`;
+    // Заголовок общего каталога разложен так же, как у разделов: две строки и общая
+    // подпись под ними, чтобы при переходе в раздел верх страницы не дёргался.
+    const index = landingHeading(CATALOG_INDEX.h1);
+    const heading = `${headingLines(index)}${page > 1 ? ` — страница ${page}` : ""}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${heading}</h1><p>${escapeHtml(index.subtitle)}</p><p>${escapeHtml(CATALOG_INDEX.lead)}</p>${countLine}${list}${sectionBlock}</main>${footer()}`;
     const itemList = {
       "@context": "https://schema.org",
       "@type": "ItemList",
@@ -606,8 +615,12 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       : "";
     // Заголовок страницы повторяет заголовок раздела: это один и тот же раздел, просто
     // другой его кусок. Номер страницы стоит рядом, в строке с количеством.
-    const heading = page > 1 ? `${landing.h1} — страница ${page}` : landing.h1;
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${escapeHtml(heading)}</h1>${countLine}${list}${notes}${faq}${reviews}${near}</main>${footer()}`;
+    // Длинный заголовок раздела разложен на две строки и подпись под ними — тем же
+    // правилом, что и в приложении: слова остаются те же, меняется только размер.
+    const parts = landingHeading(landing.h1);
+    const subtitle = parts.subtitle;
+    const heading = `${headingLines(parts)}${page > 1 ? ` — страница ${page}` : ""}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${heading}</h1>${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}${countLine}${list}${notes}${faq}${reviews}${near}</main>${footer()}`;
     // Разметка списка: по ней поисковик понимает, что это подборка предложений, а не
     // одна страница товара.
     const itemList = {

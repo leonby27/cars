@@ -34,6 +34,23 @@ export const engineVolume = (car) => {
   return value >= 0.5 && value <= 8 ? value : null;
 };
 
+/**
+ * Наддув словом. В строке мотора его выдаёт буква сразу за объёмом: «1.4T» — турбо,
+ * «1.5L» — атмосферный. Буквы нет (электромобиль, гибрид с генератором) — пусто,
+ * и в карточке плашка не появляется. Буква L4 дальше по строке — это число
+ * цилиндров, до неё разбор не доходит: берётся первое совпадение с объёмом.
+ */
+export const engineAspiration = (car) => {
+  const letter = engineText(car).match(/\d+(?:\.\d+)? ?([LT])/)?.[1];
+  return letter === "T" ? "Турбо" : letter === "L" ? "Атмосферный" : "";
+};
+
+/** Объём для плашки в карточке: всегда с одним знаком после точки — «2.0 л», «1.4 л». */
+export const engineVolumeBadge = (car) => {
+  const value = engineVolume(car);
+  return value === null ? "" : `${value.toFixed(1)} л`;
+};
+
 /** Мощность в лошадиных силах: «2.5T 367-horsepower L6» → 367. */
 export const enginePower = (car) => {
   const value = Number(engineText(car).match(/(\d{2,4}) ?-? ?(?:HP|HORSEPOWER)/)?.[1]);

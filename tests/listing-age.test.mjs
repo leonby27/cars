@@ -30,3 +30,4 @@ test("the first bulk import is never treated as new", () => {
   assert.equal(isNewListing({ firstSeenAt:"2026-08-17T21:00:00Z", importedAt:"2026-08-17T21:00:00Z" }, now), false);
   assert.equal(isNewListing({ firstSeenAt:"2026-08-24T09:00:00Z" }, now), true);
 });
+

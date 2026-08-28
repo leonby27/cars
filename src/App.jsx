@@ -3,11 +3,11 @@ import { createPortal } from "react-dom";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
-import { FUEL_TYPES, GEARBOX_TYPES, engineBounds, engineLabel, enginePower, engineVolume, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
+import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
 import { collectHeroAliases, isHeroExcludeWord, rankSearchEntries, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
-import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingsForCar, relatedLandings } from "./catalog-landings.js";
+import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
@@ -781,11 +781,24 @@ function renderInlineText(text, navigate) {
 }
 
 // Ярлык новой машины. Показывается только у карточек, попавших в каталог за
-// последние дни (см. src/listing-age.js). В карточках каталога он лежит поверх
-// фотографии, в свободном углу: в списке — сверху справа, в плитке — снизу справа.
+// последние дни (см. src/listing-age.js), и говорит, сколько дней назад это было.
+// В карточках каталога он лежит поверх фотографии, в свободном углу: в списке —
+// сверху справа, в плитке — снизу справа.
 function NewListingBadge({ car, className }) {
   if (!isNewListing(car)) return null;
-  return <span className={`new-listing-badge${className ? ` ${className}` : ""}`}>Новое</span>;
+  // Дни считаем тем же способом, что и строка дат в открытой карточке (по датам,
+  // а не по суткам от момента до момента), иначе в списке и в карточке у одной
+  // машины стояли разные числа.
+  const added = formatDayAgo(getListingAddedAt(car));
+  if (!added) return null;
+  // На телефоне остаётся только «3 дня назад»: слово «Добавлено» съедало половину
+  // узкого кадра, а смысл плашки понятен и без него.
+  return (
+    <span className={`new-listing-badge${className ? ` ${className}` : ""}`}>
+      <i>Добавлено </i>
+      {added}
+    </span>
+  );
 }
 
 // Стрелка изменения цены: вверх красная, вниз зелёная. По наведению — цена до
@@ -1364,6 +1377,36 @@ const skeletonCards = ["a", "b", "c", "d", "e", "f"];
 
 // Reuses the real card classes so the placeholder occupies the exact geometry the loaded
 // card will, which keeps the feed from shifting once the catalog request resolves.
+// Переключатель вида выдачи: списком или плиткой. Один и тот же в каталоге, в
+// избранном и на главной — и в строке с сортировкой, и у заголовка подборки,
+// поэтому и разметка, и подписи для чтения с экрана живут в одном месте.
+function ViewToggle({ value, onChange, className = "" }) {
+  return (
+    <div className={className ? `result-view-toggle ${className}` : "result-view-toggle"} role="group" aria-label="Вид выдачи">
+      <button
+        type="button"
+        className={value === "list" ? "active" : ""}
+        aria-pressed={value === "list"}
+        aria-label="Показать списком"
+        title="Списком"
+        onClick={() => onChange("list")}
+      >
+        <Rows size={19} />
+      </button>
+      <button
+        type="button"
+        className={value === "grid" ? "active" : ""}
+        aria-pressed={value === "grid"}
+        aria-label="Показать карточками"
+        title="Карточками"
+        onClick={() => onChange("grid")}
+      >
+        <SquaresFour size={19} />
+      </button>
+    </div>
+  );
+}
+
 function CardSkeleton({ row }) {
   const body = (
     <>
@@ -1454,8 +1497,11 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
 
   // Внутри мобильной шторки фильтров меню раскрывается вниз и может уйти за
   // нижний край; докручиваем шторку, чтобы раскрытый список был виден целиком.
+  // В шторке одного фильтра список открывается вверх и виден целиком сам — крутить
+  // там нечего, а вызов сдвигал бы страницу под затемнением.
   useEffect(() => {
     if (!open || !rootRef.current?.closest(".mobile-filter-sheet")) return;
+    if (rootRef.current.closest(".mobile-filter-sheet--compact")) return;
     rootRef.current.querySelector(".select-menu")?.scrollIntoView({ block: "nearest" });
   }, [open]);
 
@@ -1635,23 +1681,82 @@ const localAvailability = (cars) => ({
   fuel: new Set(cars.map((car) => fuelType(car)).filter(Boolean)).size,
 });
 
-function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, onSaveSearch, searchSaved = false, searchUpdate = false, hasActiveFilters = false, initiallyExpanded = false }) {
-  const currency = useCurrency();
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => initiallyExpanded && !window.matchMedia("(max-width: 700px)").matches);
-  const extraFiltersId = useId();
-  const mobileFiltersId = useId();
-
+// Всплывающая подсказка внизу экрана: инверсия цветов страницы, крестик и
+// самостоятельное закрытие через несколько секунд.
+function Toast({ text, onClose }) {
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    if (!moreFiltersOpen || !window.matchMedia("(max-width: 700px)").matches) return undefined;
+    const timer = window.setTimeout(() => close.current(), 4000);
+    return () => window.clearTimeout(timer);
+  }, [text]);
+  return (
+    <div className="app-toast" role="status">
+      <span>{text}</span>
+      <button type="button" onClick={() => close.current()} aria-label="Закрыть">
+        <X size={16} weight="bold" />
+      </button>
+    </div>
+  );
+}
+
+// Шторка фильтра на телефоне: шапка с заголовком (и стрелкой «назад», когда шаг не
+// первый), прокручиваемая середина и кнопка результата, которая всегда видна внизу.
+function FilterSheet({ title, onBack = null, onClose, footer = null, fill = false, compact = false, icon = null, hideClose = false, children }) {
+  const titleId = useId();
+  useEffect(() => {
     const previousOverflow = document.body.style.overflow;
-    const closeOnEscape = (event) => event.key === "Escape" && setMoreFiltersOpen(false);
+    const closeOnEscape = (event) => {
+      if (event.key !== "Escape") return;
+      if (onBack) onBack();
+      else onClose();
+    };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [moreFiltersOpen]);
+  }, [onBack, onClose]);
+  return (
+    <div className="mobile-filter-sheet-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className={`mobile-filter-sheet${fill ? " mobile-filter-sheet--fill" : ""}${compact ? " mobile-filter-sheet--compact" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div className="mobile-filter-sheet-handle" aria-hidden="true" />
+        {Boolean(icon) && <span className="mobile-filter-sheet-icon" aria-hidden="true">{icon}</span>}
+        <header className="mobile-filter-sheet-header">
+          {onBack ? (
+            <button type="button" className="mobile-filter-sheet-back" onClick={onBack} aria-label="Назад">
+              <ArrowLeft size={20} />
+            </button>
+          ) : (
+            !hideClose && <span className="mobile-filter-sheet-back" aria-hidden="true" />
+          )}
+          <h2 id={titleId}>{title}</h2>
+          {!hideClose && (
+            <button type="button" onClick={onClose} aria-label="Закрыть фильтры">
+              <X size={20} weight="bold" />
+            </button>
+          )}
+        </header>
+        <div className="mobile-filter-sheet-body">{children}</div>
+        {Boolean(footer) && <footer className="mobile-filter-sheet-actions">{footer}</footer>}
+      </section>
+    </div>
+  );
+}
+
+// «Все» в списке типов двигателя само по себе ничего не говорит: подписываем полем.
+const powertrainLabel = (item) => (item === "Все" ? "Все типы двигателей" : item);
+
+function VehicleSearch({ constrained = false, selectedType, onTypeChange, values, actions, options, optionCounts, availability, resultCount, onSubmit, onReset, onSaveSearch, searchSaved = false, searchUpdate = false, hasActiveFilters = false, initiallyExpanded = false, onExpandedChange = null }) {
+  const currency = useCurrency();
+  const narrow = useNarrowViewport();
+  // На широком экране «Ещё фильтры» раскрывают строку прямо в панели, на телефоне
+  // фильтры живут в шторках: марка и модель, «Фильтры» целиком, цена, год, пробег.
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => initiallyExpanded && !window.matchMedia("(max-width: 700px)").matches);
+  const [sheet, setSheet] = useState(null);
+  const [sheetQuery, setSheetQuery] = useState("");
+  const extraFiltersId = useId();
 
   // Обе границы живут в одной ячейке сетки, чтобы читались как один диапазон.
   const yearRange = (className = "") => (
@@ -1670,6 +1775,10 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
 
   const extraFilters = (className = "") => (
     <>
+      {/* Тип двигателя стоит первым среди остальных фильтров: раньше он был
+          вкладками над панелью, теперь это обычное поле — и на телефоне, и на
+          широком экране. */}
+      <SelectField className={className} label="Тип двигателя" icon={Engine} value={selectedType} onChange={onTypeChange} options={POWERTRAIN_TABS} formatOption={powertrainLabel} />
       <SelectField className={className} label="Пробег" icon={Gauge} value={values.mileage} onChange={actions.mileage} options={mileageOptions} />
       <SelectField className={className} label="Кузов" icon={CarProfile} value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple />
       <SelectField className={className} label="Цвет" icon={Palette} value={values.color} onChange={actions.color} options={[ANY_COLOR, ...COLOR_LABELS]} multiple />
@@ -1687,47 +1796,245 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
     </>
   );
 
+  // Каждый фильтр умеет открыться сам по себе: по нажатию на плашку с выбранным
+  // значением и по быстрой кнопке в ленте. Здесь — заголовок шторки и само поле.
+  const filterFields = {
+    type: ["Тип двигателя", () => <SelectField label="Тип двигателя" icon={Engine} value={selectedType} onChange={onTypeChange} options={POWERTRAIN_TABS} formatOption={powertrainLabel} />],
+    price: ["Цена", () => priceRange()],
+    year: ["Год выпуска", () => yearRange()],
+    mileage: ["Пробег", () => <SelectField label="Пробег" icon={Gauge} value={values.mileage} onChange={actions.mileage} options={mileageOptions} />],
+    bodyType: ["Кузов", () => <SelectField label="Кузов" icon={CarProfile} value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple />],
+    color: ["Цвет", () => <SelectField label="Цвет" icon={Palette} value={values.color} onChange={actions.color} options={[ANY_COLOR, ...COLOR_LABELS]} multiple />],
+    drive: ["Привод", () => <SelectField label="Привод" icon={SteeringWheel} value={values.drive} onChange={actions.drive} options={options.drives} />],
+    owners: ["Владельцы", () => <SelectField label="Владельцы" icon={UsersThree} value={values.owners} onChange={actions.owners} options={ownerOptions} />],
+    battery: ["Батарея", () => <SelectField label="Батарея" icon={BatteryHigh} value={values.battery} onChange={actions.battery} options={batteryOptions} />],
+    condition: ["Состояние", () => <SelectField label="Состояние" icon={ShieldCheck} value={values.condition} onChange={actions.condition} options={conditionOptions} />],
+    engine: ["Объём двигателя", () => <SelectField label="Объём двигателя" icon={Engine} value={values.engine || ANY_ENGINE} onChange={actions.engine} options={engineOptions} />],
+    power: ["Мощность", () => <SelectField label="Мощность" icon={Lightning} value={values.power || ANY_POWER} onChange={actions.power} options={powerOptions} />],
+    gearbox: ["Коробка", () => <SelectField label="Коробка" icon={Gear} value={values.gearbox || ANY_GEARBOX} onChange={actions.gearbox} options={gearboxOptions} />],
+    fuel: ["Топливо", () => <SelectField label="Топливо" icon={GasPump} value={values.fuel || ANY_FUEL} onChange={actions.fuel} options={fuelOptions} />],
+    accel: ["Разгон до 100 км/ч", () => <SelectField label="Разгон до 100 км/ч" icon={Timer} value={values.accel} onChange={actions.accel} options={accelOptions} />],
+    tire: ["Размер шин", () => <SelectField label="Размер шин" icon={Tire} value={values.tire} onChange={actions.tire} options={tireOptions} />],
+    range: ["Запас хода", () => <SelectField label="Запас хода" icon={RoadHorizon} value={values.range || ANY_RANGE} onChange={actions.range} options={rangeOptions} />],
+  };
+  // Что выбрано в фильтрах, кроме марки, модели, цены, года и пробега: их на телефоне
+  // показывают отдельные кнопки, а всё остальное — плашками с крестиком.
+  const extraChips = [
+    ...multiValues(values.bodyType, ANY_BODY_TYPE).map((item) => ({ key: `body-${item}`, field: "bodyType", label: item, clear: () => actions.bodyType(multiValues(values.bodyType, ANY_BODY_TYPE).filter((entry) => entry !== item)) })),
+    ...multiValues(values.color, ANY_COLOR).map((item) => ({ key: `color-${item}`, field: "color", label: item, clear: () => actions.color(multiValues(values.color, ANY_COLOR).filter((entry) => entry !== item)) })),
+    values.drive !== ANY_DRIVE && { key: "drive", field: "drive", label: values.drive, clear: () => actions.drive(ANY_DRIVE) },
+    values.owners !== ANY_OWNERS && { key: "owners", field: "owners", label: values.owners, clear: () => actions.owners(ANY_OWNERS) },
+    values.battery !== ANY_BATTERY && { key: "battery", field: "battery", label: values.battery, clear: () => actions.battery(ANY_BATTERY) },
+    values.condition !== ANY_CONDITION && { key: "condition", field: "condition", label: values.condition, clear: () => actions.condition(ANY_CONDITION) },
+    (values.engine || ANY_ENGINE) !== ANY_ENGINE && { key: "engine", field: "engine", label: values.engine, clear: () => actions.engine(ANY_ENGINE) },
+    (values.power || ANY_POWER) !== ANY_POWER && { key: "power", field: "power", label: values.power, clear: () => actions.power(ANY_POWER) },
+    (values.gearbox || ANY_GEARBOX) !== ANY_GEARBOX && { key: "gearbox", field: "gearbox", label: values.gearbox, clear: () => actions.gearbox(ANY_GEARBOX) },
+    (values.fuel || ANY_FUEL) !== ANY_FUEL && { key: "fuel", field: "fuel", label: values.fuel, clear: () => actions.fuel(ANY_FUEL) },
+    values.accel !== ANY_ACCEL && { key: "accel", field: "accel", label: values.accel, clear: () => actions.accel(ANY_ACCEL) },
+    values.tire !== ANY_TIRE && { key: "tire", field: "tire", label: values.tire, clear: () => actions.tire(ANY_TIRE) },
+    (values.range || ANY_RANGE) !== ANY_RANGE && { key: "range", field: "range", label: values.range, clear: () => actions.range(ANY_RANGE) },
+    selectedType !== "Все" && { key: "type", field: "type", label: selectedType, clear: () => onTypeChange("Все") },
+  ].filter(Boolean);
+
+  const selectedModels = multiValues(values.model, ANY_MODEL);
+  const brandChosen = values.brand !== "Все марки";
+  // Крестик у кнопки марки снимает выбор по одной ступени: сначала модели, потом марку.
+  const stepBack = () => (selectedModels.length ? actions.model([]) : actions.brand("Все марки"));
+  const yearChip = hasYearRange(values.yearMin, values.yearMax)
+    ? `${yearBound(values.yearMin, ANY_YEAR_MIN) ? `от ${values.yearMin}` : ""}${yearBound(values.yearMin, ANY_YEAR_MIN) && yearBound(values.yearMax, ANY_YEAR_MAX) ? " " : ""}${yearBound(values.yearMax, ANY_YEAR_MAX) ? `до ${values.yearMax}` : ""}`
+    : "Год";
+  const priceChip = hasPriceRange(values.priceMin, values.priceMax)
+    ? `${priceBound(values.priceMin, ANY_PRICE_MIN) !== null ? `от ${money(Number(values.priceMin), currency)}` : ""}${priceBound(values.priceMin, ANY_PRICE_MIN) !== null && priceBound(values.priceMax, ANY_PRICE_MAX) !== null ? " " : ""}${priceBound(values.priceMax, ANY_PRICE_MAX) !== null ? `до ${money(Number(values.priceMax), currency)}` : ""}`
+    : "Цена";
+  const mileageChip = values.mileage !== ANY_MILEAGE ? values.mileage : "Пробег";
+  // Всё выбранное одной лентой: цена, год и пробег впереди, за ними остальные поля.
+  const chosenChips = [
+    hasPriceRange(values.priceMin, values.priceMax) && { key: "price", field: "price", label: priceChip, clear: () => { actions.priceMin(ANY_PRICE_MIN); actions.priceMax(ANY_PRICE_MAX); } },
+    hasYearRange(values.yearMin, values.yearMax) && { key: "year", field: "year", label: yearChip, clear: () => { actions.yearMin(ANY_YEAR_MIN); actions.yearMax(ANY_YEAR_MAX); } },
+    values.mileage !== ANY_MILEAGE && { key: "mileage", field: "mileage", label: values.mileage, clear: () => actions.mileage(ANY_MILEAGE) },
+    ...extraChips,
+  ].filter(Boolean);
+  const sheetFooter = (
+    <button type="button" className="primary sheet-submit" onClick={() => { setSheet(null); onSubmit?.(); }}>
+      {resultCount == null ? "Показать авто" : `Показать ${resultCount} авто`}
+    </button>
+  );
+  const brandRows = options.brands.filter((item) => item !== "Все марки");
+  const modelRows = options.models.filter((item) => item !== ANY_MODEL);
+  // Ищем так же, как умный поиск: понимаем набранное кириллицей («ауди», «зикр»)
+  // и текст, набранный в русской раскладке вместо латинской.
+  const translated = (text) => {
+    const words = searchNormalize(rewriteQueryNames(text)).split(" ").filter(Boolean);
+    return words.length ? translateModelWords(translateBrandWords(words)).join(" ") : "";
+  };
+  const searchRows = (rows) => {
+    const variants = [...new Set([sheetQuery, swapKeyboardLayout(sheetQuery), translated(sheetQuery), translated(swapKeyboardLayout(sheetQuery))].map(searchNormalize).filter(Boolean))];
+    if (!variants.length) return rows;
+    return rows.filter((item) => variants.some((variant) => searchNormalize(item).includes(variant)));
+  };
+
   return (
     <section className={`search-box${constrained ? " search-box--constrained" : ""}`}>
-      <div className="type-tabs">
-        {POWERTRAIN_TABS.map((item) => (
-          <button type="button" key={item} className={selectedType === item ? "active" : ""} onClick={() => onTypeChange(item)}>
-            {item}
-          </button>
-        ))}
-      </div>
-      <div className="filter-primary-row unified-filter-primary">
-        <SelectField label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} optionIcon={(brand) => (brand === "Все марки" ? <SquaresFour size={18} weight="fill" /> : <BrandMark brand={brand} />)} searchable />
-        <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} optionCounts={optionCounts?.models} searchable multiple disabled={values.brand === "Все марки"} />
-        {yearRange("mobile-sheet-filter-source")}
-        {priceRange("mobile-sheet-filter-source")}
-      </div>
-      {moreFiltersOpen && (
+      {narrow ? (
         <>
-          <div className="filter-extra-row desktop-filter-extra" id={extraFiltersId}>
-            {extraFilters()}
+          {/* Одна кнопка вместо двух списков: марка сверху, под ней модели или
+              подсказка «Указать модель». Крестик снимает выбор по ступеням. */}
+          <div className={`brand-model-field${brandChosen ? " chosen" : ""}`}>
+            <button type="button" className="brand-model-open" onClick={() => setSheet(brandChosen ? "models" : "brands")}>
+              <CarProfile size={22} weight="duotone" aria-hidden="true" />
+              <span className="brand-model-text">
+                <b>{brandChosen ? values.brand : "Марка и модель"}</b>
+                {brandChosen && <small>{selectedModels.length ? selectedModels.join(", ") : "Указать модель"}</small>}
+              </span>
+              {!brandChosen && <CaretRight size={18} weight="bold" aria-hidden="true" />}
+            </button>
+            {brandChosen && (
+              <button type="button" className="brand-model-clear" onClick={stepBack} aria-label={selectedModels.length ? "Убрать модели" : "Убрать марку"}>
+                <span className="brand-model-clear-plate"><X size={16} weight="bold" /></span>
+              </button>
+            )}
           </div>
-          <div className="mobile-filter-sheet-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setMoreFiltersOpen(false)}>
-            <section className="mobile-filter-sheet" id={mobileFiltersId} role="dialog" aria-modal="true" aria-labelledby={`${mobileFiltersId}-title`}>
-              <div className="mobile-filter-sheet-handle" aria-hidden="true" />
-              <header className="mobile-filter-sheet-header">
-                <h2 id={`${mobileFiltersId}-title`}>Фильтры</h2>
-                <button type="button" onClick={() => setMoreFiltersOpen(false)} aria-label="Закрыть фильтры">
-                  <X size={20} weight="bold" />
+          {/* Порядок строки: «Фильтры», иконка сохранения поиска, потом всё выбранное
+              плашками (нажатие снимает этот параметр), а в конце — что ещё можно задать. */}
+          <div className="filter-chip-row">
+            {Boolean(onSaveSearch) && (
+              <button
+                type="button"
+                className={`filter-chip filter-chip--save${searchSaved ? " saved" : ""}${searchUpdate ? " pending" : ""}`}
+                onClick={() => (hasActiveFilters ? onSaveSearch() : setSheet("save-hint"))}
+                aria-label={searchSaved ? "Убрать из сохранённых" : searchUpdate ? "Обновить поиск" : "Сохранить поиск"}
+                title={searchSaved ? "Поиск сохранён — нажмите, чтобы убрать" : searchUpdate ? "Записать изменения в сохранённый поиск" : "Сохранить поиск"}
+              >
+                <BookmarkSimple size={18} weight={searchSaved || searchUpdate ? "fill" : "bold"} />
+              </button>
+            )}
+            <button type="button" className={`filter-chip filter-chip--filters${extraChips.length ? " active" : ""}`} onClick={() => setSheet("filters")}>
+              <SlidersHorizontal size={17} weight="bold" />
+              Фильтры
+              {Boolean(extraChips.length) && <span className="filter-chip-badge">{extraChips.length}</span>}
+            </button>
+            {chosenChips.map((chip) => (
+              <span className="filter-chip-pair" key={chip.key}>
+                <button type="button" className="filter-chip active" onClick={() => setSheet(`field:${chip.field}`)}>
+                  {chip.label}
                 </button>
-              </header>
-              <div className="mobile-filter-sheet-fields">
-                {yearRange()}
-                {priceRange()}
-                {extraFilters()}
-              </div>
-              <footer className="mobile-filter-sheet-actions">
-                {hasActiveFilters && <button type="button" className="search-reset" onClick={onReset}>Сбросить</button>}
-                <button type="button" className="primary" onClick={() => setMoreFiltersOpen(false)}>Готово</button>
-              </footer>
-            </section>
+                <button type="button" className="filter-chip-clear" onClick={chip.clear} aria-label={`Убрать: ${chip.label}`}>
+                  <span className="filter-chip-x" aria-hidden="true"><X size={12} weight="bold" /></span>
+                </button>
+              </span>
+            ))}
+            {!hasPriceRange(values.priceMin, values.priceMax) && (
+              <button type="button" className="filter-chip" onClick={() => setSheet("field:price")}>Цена</button>
+            )}
+            {!hasYearRange(values.yearMin, values.yearMax) && (
+              <button type="button" className="filter-chip" onClick={() => setSheet("field:year")}>Год</button>
+            )}
+            {values.mileage === ANY_MILEAGE && (
+              <button type="button" className="filter-chip" onClick={() => setSheet("field:mileage")}>Пробег</button>
+            )}
           </div>
         </>
+      ) : (
+        <div className="filter-primary-row unified-filter-primary">
+          <SelectField label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} optionIcon={(brand) => (brand === "Все марки" ? <SquaresFour size={18} weight="fill" /> : <BrandMark brand={brand} />)} searchable />
+          <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} optionCounts={optionCounts?.models} searchable multiple disabled={values.brand === "Все марки"} />
+          {yearRange()}
+          {priceRange()}
+        </div>
+      )}
+      {!narrow && moreFiltersOpen && (
+        <div className="filter-extra-row desktop-filter-extra" id={extraFiltersId}>
+          {extraFilters()}
+        </div>
+      )}
+      {narrow && sheet === "brands" && (
+        <FilterSheet title="Марки" onClose={() => setSheet(null)} footer={sheetFooter} fill>
+          <div className="sheet-search">
+            <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
+            <input type="search" value={sheetQuery} placeholder="Поиск марки" aria-label="Поиск марки" autoComplete="off" onChange={(event) => setSheetQuery(event.target.value)} />
+          </div>
+          <div className="sheet-options">
+            <button type="button" className={`sheet-option${brandChosen ? "" : " chosen"}`} onClick={() => { actions.brand("Все марки"); setSheet(null); }}>
+              <SquaresFour size={20} weight="fill" aria-hidden="true" />
+              <span className="sheet-option-name">Все марки</span>
+              <span className="sheet-option-count">{number(optionCounts?.brands?.get("Все марки") || 0)}</span>
+            </button>
+            {searchRows(brandRows).map((brand) => (
+              <button type="button" key={brand} className={`sheet-option${values.brand === brand ? " chosen" : ""}`} onClick={() => { actions.brand(brand); setSheetQuery(""); setSheet("models"); }}>
+                <BrandMark brand={brand} />
+                <span className="sheet-option-name">{brand}</span>
+                <span className="sheet-option-count">{number(optionCounts?.brands?.get(brand) || 0)}</span>
+                <CaretRight size={16} weight="bold" aria-hidden="true" />
+              </button>
+            ))}
+            {!searchRows(brandRows).length && <p className="select-empty">Ничего не найдено</p>}
+          </div>
+        </FilterSheet>
+      )}
+      {narrow && sheet === "models" && (
+        <FilterSheet
+          title={brandChosen ? values.brand : "Модели"}
+          onBack={() => { setSheetQuery(""); setSheet("brands"); }}
+          onClose={() => setSheet(null)}
+          footer={sheetFooter}
+          fill
+        >
+          <div className="sheet-search">
+            <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
+            <input type="search" value={sheetQuery} placeholder="Поиск модели" aria-label="Поиск модели" autoComplete="off" onChange={(event) => setSheetQuery(event.target.value)} />
+          </div>
+          <div className="sheet-options">
+            {searchRows(modelRows).map((model) => {
+              const checked = selectedModels.includes(model);
+              return (
+                <div className={`sheet-option sheet-option--check${checked ? " chosen" : ""}`} key={model}>
+                  {/* По строке — только эта модель, и шторка закрывается. По галочке —
+                      набор из нескольких моделей, шторка остаётся открытой. */}
+                  <button type="button" className="sheet-option-main" onClick={() => { actions.model([model]); setSheet(null); }}>
+                    <span className="sheet-option-name">{model}</span>
+                    <span className="sheet-option-count">{number(optionCounts?.models?.get(model) || 0)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="sheet-option-check"
+                    role="checkbox"
+                    aria-checked={checked}
+                    aria-label={`${model}: ${checked ? "убрать" : "добавить к выбранным"}`}
+                    onClick={() => actions.model(checked ? selectedModels.filter((item) => item !== model) : [...selectedModels, model])}
+                  >
+                    {checked && <Check size={14} weight="bold" aria-hidden="true" />}
+                  </button>
+                </div>
+              );
+            })}
+            {!searchRows(modelRows).length && <p className="select-empty">{modelRows.length ? "Ничего не найдено" : "Загружаем модели…"}</p>}
+          </div>
+        </FilterSheet>
+      )}
+      {narrow && sheet === "filters" && (
+        <FilterSheet title="Фильтры" onClose={() => setSheet(null)} footer={sheetFooter}>
+          <div className="mobile-filter-sheet-fields">
+            {yearRange()}
+            {priceRange()}
+            {extraFilters()}
+          </div>
+        </FilterSheet>
+      )}
+      {narrow && sheet === "save-hint" && (
+        <FilterSheet
+          title="Сохранить поиск"
+          onClose={() => setSheet(null)}
+          hideClose
+          icon={<BookmarkSimple size={26} weight="bold" />}
+          footer={<button type="button" className="primary sheet-submit" onClick={() => setSheet(null)}>Понятно</button>}
+        >
+          <p className="sheet-hint">Выберите марку или фильтр — тогда поиск будет что запомнить.</p>
+        </FilterSheet>
+      )}
+      {narrow && String(sheet).startsWith("field:") && Boolean(filterFields[String(sheet).slice(6)]) && (
+        <FilterSheet title={filterFields[String(sheet).slice(6)][0]} onClose={() => setSheet(null)} footer={sheetFooter} compact>
+          <div className="mobile-filter-sheet-fields">{filterFields[String(sheet).slice(6)][1]()}</div>
+        </FilterSheet>
       )}
       {hasExclusions(values) && (
         <div className="filter-exclusions">
@@ -1740,36 +2047,49 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           )))}
         </div>
       )}
-      <div className="filter-actions-row">
-        <button type="button" className="more-filters-toggle" aria-expanded={moreFiltersOpen} aria-controls={`${extraFiltersId} ${mobileFiltersId}`} onClick={() => setMoreFiltersOpen((open) => !open)}>
-          <SlidersHorizontal size={17} />
-          <span className="more-filters-toggle-label">{moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}</span>
-          <CaretDown size={15} weight="bold" />
-        </button>
-        {hasActiveFilters && onSaveSearch && (
+      {/* Нижняя строка панели — только на широком экране: на телефоне сохранение
+          поиска ушло иконкой в ленту фильтров, а результат показывает сама выдача. */}
+      {!narrow && (
+        <div className="filter-actions-row">
           <button
             type="button"
-            className={`search-save${searchSaved ? " saved" : ""}`}
-            onClick={onSaveSearch}
-            aria-label={searchSaved ? "Поиск сохранён" : searchUpdate ? "Обновить поиск" : "Сохранить поиск"}
-            title={searchSaved ? "Поиск сохранён — открыть «Мои поиски»" : searchUpdate ? "Записать изменения в сохранённый поиск" : "Сохранить поиск"}
+            className="more-filters-toggle"
+            aria-expanded={moreFiltersOpen}
+            aria-controls={extraFiltersId}
+            onClick={() => setMoreFiltersOpen((open) => {
+              onExpandedChange?.(!open);
+              return !open;
+            })}
           >
-            <BookmarkSimple size={18} weight={searchSaved ? "fill" : "bold"} />
-            <span>{searchSaved ? "Поиск сохранён" : searchUpdate ? "Обновить поиск" : "Сохранить поиск"}</span>
+            <SlidersHorizontal size={17} />
+            <span className="more-filters-toggle-label">{moreFiltersOpen ? "Скрыть фильтры" : "Ещё фильтры"}</span>
+            <CaretDown size={15} weight="bold" />
           </button>
-        )}
-        {hasActiveFilters && onSaveSearch && <span className="filter-actions-divider" aria-hidden="true" />}
-        {hasActiveFilters && (
-          <button type="button" className="search-reset" onClick={onReset}>
-            <X size={16} weight="bold" />
-            Сбросить
+          {hasActiveFilters && onSaveSearch && (
+            <button
+              type="button"
+              className={`search-save${searchSaved ? " saved" : ""}${searchUpdate ? " pending" : ""}`}
+              onClick={onSaveSearch}
+              aria-label={searchSaved ? "Поиск сохранён" : searchUpdate ? "Обновить поиск" : "Сохранить поиск"}
+              title={searchSaved ? "Поиск сохранён — открыть «Мои поиски»" : searchUpdate ? "Записать изменения в сохранённый поиск" : "Сохранить поиск"}
+            >
+              <BookmarkSimple size={18} weight={searchSaved || searchUpdate ? "fill" : "bold"} />
+              <span>{searchSaved ? "Поиск сохранён" : searchUpdate ? "Обновить поиск" : "Сохранить поиск"}</span>
+            </button>
+          )}
+          {hasActiveFilters && onSaveSearch && <span className="filter-actions-divider" aria-hidden="true" />}
+          {hasActiveFilters && (
+            <button type="button" className="search-reset" onClick={onReset}>
+              <X size={16} weight="bold" />
+              Сбросить
+            </button>
+          )}
+          <button type="button" className="primary search-submit" onClick={onSubmit}>
+            <MagnifyingGlass size={20} weight="bold" />
+            {resultCount == null ? "Показать авто" : `Показать ${resultCount} авто`}
           </button>
-        )}
-        <button type="button" className="primary search-submit" onClick={onSubmit}>
-          <MagnifyingGlass size={20} weight="bold" />
-          {resultCount == null ? "Показать авто" : `Показать ${resultCount} авто`}
-        </button>
-      </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -2545,7 +2865,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
         </div>
       )}
       <span className="hover-image-count">
-        <Images size={15} />
+        <Images size={13} weight="bold" />
         {car.images?.length || 1}
       </span>
       {badge}
@@ -2579,8 +2899,11 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
       )}
       <div className="featured-body">
         <h3><AppLink href={carHref(car)} navigate={onClick} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
+        {/* Тип и привод — отдельной обёрткой: в узкой плитке на телефоне (две в
+            ряд) для них нет места, и там строка остаётся одним пробегом. */}
         <p>
-          {number(car.mileage)} км · {powertrainName(car.type)} · {car.drive}
+          {number(car.mileage)} км
+          <span className="featured-card-specs-more"> · {powertrainName(car.type)} · {car.drive}</span>
         </p>
         {listingAge && (
           <div className="featured-listing-age">
@@ -2636,24 +2959,24 @@ function SimilarCars({ car, cars, onOpenCar }) {
 // карточек не несёт.
 // Двадцать машин — пять рядов по четыре карточки, как в подборке на главной.
 const MODEL_PAGE_CARS_LIMIT = 20;
-// Лента «Самые низкие цены» в разрыве текста берёт первые десять из того же среза.
-const MODEL_PAGE_SLIDER_LIMIT = 10;
 
-function useModelPageCars(modelPage) {
+function useModelPageCars(modelPage, { sort, priceMax, mileage }) {
   const [cars, setCars] = useState([]);
   const [total, setTotal] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(false);
-  const carsQuery = (offset) =>
-    new URLSearchParams({ brand: modelPage.brand, model: modelPage.model, sort: "price_asc", limit: String(MODEL_PAGE_CARS_LIMIT), offset: String(offset) });
   useEffect(() => {
     const controller = new AbortController();
     setCars([]);
     setTotal(null);
     setLoading(true);
     setFailed(false);
-    fetch(`/api/cars?${carsQuery(0)}`, { signal: controller.signal })
+    // Сортировка и два фильтра над сеткой уходят в тот же запрос, что и в каталоге,
+    // поэтому число рядом с «Каталогом» всегда считает выбранный отбор.
+    const carsQuery = new URLSearchParams({ brand: modelPage.brand, model: modelPage.model, sort, limit: String(MODEL_PAGE_CARS_LIMIT), offset: "0" });
+    appendPriceRange(carsQuery, ANY_PRICE_MIN, priceMax);
+    appendMileageRange(carsQuery, mileage);
+    fetch(`/api/cars?${carsQuery}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model page catalog unavailable"))))
       .then((catalog) => {
         setCars(catalog.items.map(normalizeImportedCar));
@@ -2666,89 +2989,19 @@ function useModelPageCars(modelPage) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [modelPage]);
-  // «Подгрузить ещё» подгружает следующие двадцать машин к уже показанным. Совпадения
-  // по идентификатору отбрасываем: пока человек читает, срез каталога мог сдвинуться.
-  const loadMore = () => {
-    if (loading || loadingMore || failed) return;
-    setLoadingMore(true);
-    fetch(`/api/cars?${carsQuery(cars.length)}`)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model page catalog page unavailable"))))
-      .then((catalog) => {
-        const next = catalog.items.map(normalizeImportedCar);
-        setCars((current) => {
-          const seen = new Set(current.map((car) => car.id));
-          return [...current, ...next.filter((car) => !seen.has(car.id))];
-        });
-        setTotal(catalog.total);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingMore(false));
-  };
-  return { cars, total, loading, loadingMore, failed, loadMore, hasMore: total != null && cars.length < total };
+  }, [modelPage, sort, priceMax, mileage]);
+  return { cars, total, loading, failed };
 }
 
-const modelPageCatalogHref = (modelPage) => `/catalog?brand=${encodeURIComponent(modelPage.brand)}&model=${encodeURIComponent(modelPage.model)}`;
-
-// Срез каталога внутри текста страницы: десять самых доступных машин этой модели
-// лентой с прокруткой в сторону. Стрелки нужны на компьютере — мышью боковую
-// прокрутку не крутят; на телефоне лента листается пальцем.
-function ModelPageCars({ modelPage, carsState, navigate, favorites, toggleFavorite, onOpenCar }) {
-  const { cars, loading, failed } = carsState;
-  const catalogTarget = modelPageCatalogHref(modelPage);
-  const trackRef = useRef(null);
-  const [atStart, setAtStart] = useState(true);
-  const [atEnd, setAtEnd] = useState(true);
-  const syncEdges = useCallback(() => {
-    const track = trackRef.current;
-    if (!track) return;
-    const rest = track.scrollWidth - track.clientWidth - track.scrollLeft;
-    setAtStart(track.scrollLeft <= 2);
-    setAtEnd(rest <= 2);
-  }, []);
-  useEffect(() => {
-    syncEdges();
-    window.addEventListener("resize", syncEdges);
-    return () => window.removeEventListener("resize", syncEdges);
-  }, [syncEdges, cars.length, loading]);
-  const slide = (direction) => {
-    const track = trackRef.current;
-    if (!track) return;
-    const card = track.firstElementChild;
-    const step = card ? (card.getBoundingClientRect().width + 16) * 2 : track.clientWidth * 0.8;
-    track.scrollBy({ left: step * direction, behavior: "smooth" });
-  };
-  return (
-    <section className="model-page-cars page-width" aria-labelledby="model-page-cars-title">
-      <div className="model-page-cars-heading">
-        <h2 id="model-page-cars-title">Самые низкие цены</h2>
-        <div className="model-page-cars-controls">
-          <button type="button" className="model-page-cars-nav" aria-label="Предыдущие автомобили" onClick={() => slide(-1)} disabled={atStart}>
-            <ArrowLeft size={18} />
-          </button>
-          <button type="button" className="model-page-cars-nav" aria-label="Следующие автомобили" onClick={() => slide(1)} disabled={atEnd}>
-            <ArrowRight size={18} />
-          </button>
-        </div>
-      </div>
-      {failed ? (
-        <p className="catalog-message">
-          Не получилось загрузить список. Обновите страницу или откройте <AppLink href={catalogTarget} navigate={navigate}>каталог</AppLink>.
-        </p>
-      ) : (
-        <div className="model-page-cars-track" ref={trackRef} onScroll={syncEdges}>
-          {(loading ? Array.from({ length: MODEL_PAGE_SLIDER_LIMIT }) : cars.slice(0, MODEL_PAGE_SLIDER_LIMIT)).map((car, index) =>
-            car ? (
-              <FeaturedCard key={car.id} car={car} onClick={() => onOpenCar(car)} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} />
-            ) : (
-              <CardSkeleton key={index} />
-            ),
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
+// Переход в каталог с той же моделью и тем же отбором, что выбран над сеткой:
+// в каталоге он открывается уже применённым, вместе со всеми остальными фильтрами.
+const modelPageCatalogHref = (modelPage, filters = {}) => {
+  const params = new URLSearchParams({ brand: modelPage.brand, model: modelPage.model });
+  if (filters.mileage && filters.mileage !== ANY_MILEAGE) params.set("mileage", filters.mileage);
+  if (priceBound(filters.priceMax, ANY_PRICE_MAX) !== null) params.set("priceTo", String(filters.priceMax));
+  if (filters.sort && filters.sort !== "default") params.set("sort", filters.sort);
+  return `/catalog?${params}`;
+};
 
 // Частые вопросы по модели: те же плашки, что на главной, плюс разметка для
 // поисковика — по ней вопросы и ответы попадают прямо в выдачу.
@@ -2779,32 +3032,106 @@ function ArticleFaq({ faq, title }) {
   );
 }
 
-// Тот же срез каталога сеткой в конце страницы — с переходом ко всем машинам модели.
-function ModelPageCatalog({ modelPage, carsState, navigate, favorites, toggleFavorite, onOpenCar, quickViewToggle }) {
-  const { cars, loading, loadingMore, failed, loadMore, hasMore } = carsState;
-  const catalogTarget = modelPageCatalogHref(modelPage);
+// Срез каталога сеткой сразу под заголовком страницы — с переходом ко всем машинам
+// модели. Люди приходят из поиска, чтобы посмотреть, что есть и почём, поэтому машины
+// стоят выше статьи; своего крупного заголовка у блока нет — его роль играет
+// заголовок страницы прямо над ним.
+function ModelPageCatalog({ modelPage, carsState, filters, navigate, favorites, toggleFavorite, onOpenCar }) {
+  const { cars, loading, failed } = carsState;
+  const currency = useCurrency();
+  // Сколько машин этой модели подходит под выбранный отбор — числом рядом
+  // с «Каталогом»: раньше общее число стояло в кнопке над сеткой, а её убрали.
+  const selectedSort = HERO_SORT_OPTIONS.find((option) => option.value === filters.sort) || HERO_SORT_OPTIONS[0];
+  const narrowed = filters.priceMax !== ANY_PRICE_MAX || filters.mileage !== ANY_MILEAGE;
+  const nothingFound = !failed && !loading && !cars.length;
+  // Вид выдачи общий со всем сайтом: выбрали список в каталоге — обзор откроется
+  // списком, и наоборот. Своей памяти у страницы модели нет намеренно.
+  const [view, setView] = useState(readCatalogView);
+  const updateView = (value) => {
+    setView(value);
+    window.localStorage.setItem(catalogViewKey, value);
+  };
+  const catalogTarget = modelPageCatalogHref(modelPage, filters);
+  // Когда под выбранный отбор ничего не нашлось, жёлтая кнопка ведёт в каталог без
+  // него: с ним посетитель попал бы на такую же пустую страницу.
+  const allCarsTarget = nothingFound ? modelPageCatalogHref(modelPage, { sort: filters.sort }) : catalogTarget;
   return (
     <section className="model-page-catalog page-width" aria-labelledby="model-page-catalog-title">
-      <h2 className="model-page-catalog-title" id="model-page-catalog-title">
-        Цены на {modelPage.name} с доставкой в Минск
-      </h2>
-      {/* Строка под заголовком — как на главной: слева «Каталог» и переключатель
-          быстрого просмотра, справа переход ко всем машинам модели. */}
-      <div className="section-heading">
-        <div className="section-heading-title">
-          <h3>Каталог</h3>
-          {quickViewToggle}
+      {/* Строка над сеткой: слева «Каталог» с числом машин, справа сортировка,
+          два самых частых фильтра и переход ко всем фильтрам каталога. Остальной
+          отбор живёт в каталоге — здесь только то, с чего выбор обычно начинают. */}
+      {/* Ряд собран как заголовок каталога, а не как заголовок подборки на главной:
+          в подборке все вложенные надписи набраны красными прописными, и списки
+          отбора наследовали это оформление. */}
+      <div className="catalog-heading">
+        <h2 id="model-page-catalog-title">Каталог{carsState.total ? ` · ${number(carsState.total)}` : ""}</h2>
+        <div className="result-controls model-page-catalog-controls">
+          <SelectField
+            className="sort-custom-select"
+            label="Сортировка"
+            value={selectedSort.label}
+            options={HERO_SORT_OPTIONS.map((option) => option.label)}
+            onChange={(label) => filters.onSort(HERO_SORT_OPTIONS.find((option) => option.label === label)?.value || "price_asc")}
+          />
+          <SelectField
+            className="sort-custom-select"
+            label="Цена до"
+            value={filters.priceMax}
+            options={priceMaxOptions}
+            onChange={filters.onPriceMax}
+            formatOption={(item) => (item === ANY_PRICE_MAX ? "Цена до" : `до ${money(Number(item), currency)}`)}
+          />
+          <SelectField
+            className="sort-custom-select"
+            label="Пробег до"
+            value={filters.mileage}
+            options={mileageOptions}
+            onChange={filters.onMileage}
+            formatOption={(item) => (item === ANY_MILEAGE ? "Пробег до" : item)}
+          />
+          <ViewToggle value={view} onChange={updateView} />
+          {/* На телефоне от кнопки остаётся один значок: три списка отбора рядом
+              с заголовком там не помещались, а надпись рядом со значком отнимала
+              место у переключателя вида. Название остаётся для чтения вслух. */}
+          <AppLink className="invert-button model-page-catalog-filters" href={catalogTarget} navigate={navigate} aria-label="Все фильтры">
+            <SlidersHorizontal size={17} weight="bold" />
+            <span>Все фильтры</span>
+          </AppLink>
         </div>
-        <AppLink className="section-heading-link" href={catalogTarget} navigate={navigate}>
-          Все {modelPage.name} <ArrowRight size={18} />
-        </AppLink>
       </div>
       {failed ? (
         <p className="catalog-message">
           Не получилось загрузить список. Обновите страницу или откройте <AppLink href={catalogTarget} navigate={navigate}>каталог</AppLink>.
         </p>
+      ) : nothingFound ? (
+        /* Пустая сетка выглядела поломкой: вместо неё — заглушка, которая объясняет,
+           почему машин нет, и даёт вернуться к полному списку модели. */
+        <div className="model-page-catalog-empty">
+          <CarProfile size={26} />
+          <h3>{narrowed ? "По этим параметрам ничего не найдено" : `${modelPage.name} сейчас нет в наличии`}</h3>
+          <p>
+            {narrowed
+              ? "Попробуйте поднять цену или пробег — или сбросьте отбор и посмотрите все машины модели."
+              : "Каталог пополняется каждую ночь: загляните позже или посмотрите похожие машины в каталоге."}
+          </p>
+          {narrowed && (
+            <button type="button" onClick={filters.onReset}>
+              Сбросить
+            </button>
+          )}
+        </div>
+      ) : view === "list" ? (
+        <div className="car-list model-page-car-list">
+          {(loading ? Array.from({ length: MODEL_PAGE_CARS_LIMIT }) : cars).map((car, index) =>
+            car ? (
+              <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} onOpen={onOpenCar} />
+            ) : (
+              <CardSkeleton key={index} row />
+            ),
+          )}
+        </div>
       ) : (
-        <div className="featured-grid">
+        <div className="featured-grid mobile-cards-grid">
           {(loading ? Array.from({ length: MODEL_PAGE_CARS_LIMIT }) : cars).map((car, index) =>
             car ? (
               <FeaturedCard key={car.id} car={car} onClick={() => onOpenCar(car)} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} />
@@ -2814,64 +3141,14 @@ function ModelPageCatalog({ modelPage, carsState, navigate, favorites, toggleFav
           )}
         </div>
       )}
-      {!failed && !loading && hasMore && (
-        <button type="button" className="load-more featured-load-more" onClick={loadMore} disabled={loadingMore}>
-          {loadingMore ? "Загружаем…" : "Подгрузить ещё"}
-        </button>
+      {/* Под сеткой — переход в каталог этой модели: догружать машины прямо здесь
+          незачем, дальше идёт обзор, а весь список удобнее смотреть с фильтрами. */}
+      {!failed && !loading && (
+        <AppLink className="primary model-page-catalog-all" href={allCarsTarget} navigate={navigate}>
+          Смотреть все {modelPage.name} <ArrowRight size={18} />
+        </AppLink>
       )}
     </section>
-  );
-}
-
-// Мозаика фотографий над текстом. Машины берём самые дорогие в наличии — у них лучше
-// и состояние, и съёмка. Из каждого объявления берём кадр со своим номером: у первой
-// машины первый снимок, у второй второй и так далее, иначе все пять кадров были бы
-// однотипными «три четверти спереди».
-const MODEL_PAGE_GALLERY_LIMIT = 5;
-
-function useModelPageGalleryCars(modelPage) {
-  const [cars, setCars] = useState([]);
-  useEffect(() => {
-    const controller = new AbortController();
-    setCars([]);
-    const query = new URLSearchParams({ brand: modelPage.brand, model: modelPage.model, sort: "price_desc", limit: String(MODEL_PAGE_GALLERY_LIMIT), offset: "0" });
-    fetch(`/api/cars?${query}`, { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model gallery unavailable"))))
-      .then((catalog) => setCars(catalog.items.map(normalizeImportedCar)))
-      .catch(() => {});
-    return () => controller.abort();
-  }, [modelPage]);
-  return cars;
-}
-
-function ModelPageGallery({ cars, onOpenCar }) {
-  const currency = useCurrency();
-  const shots = cars
-    .map((car, index) => {
-      const gallery = car.images?.length ? car.images : [car.image].filter(Boolean);
-      // Номер кадра растёт через один: у первой машины первый снимок, у второй третий,
-      // у третьей пятый. Так в мозаике не собираются одинаковые ракурсы. Если снимков
-      // в объявлении меньше, берём последний.
-      const source = gallery[Math.min(index * 2, gallery.length - 1)];
-      return { car, source: source || null, image: imageSource(source || null, IMAGE_WIDTH_TILE) };
-    })
-    .filter((shot) => shot.image)
-    .slice(0, MODEL_PAGE_GALLERY_LIMIT);
-  if (shots.length < MODEL_PAGE_GALLERY_LIMIT) return null;
-  return (
-    <div className="model-page-gallery">
-      {shots.map(({ car, source, image }) => (
-        <button type="button" key={car.id} onClick={() => onOpenCar(car)} aria-label={`Открыть объявление: ${car.title}`}>
-          <img src={image} srcSet={imageSourceSet(source, IMAGE_WIDTH_TILE)} alt={car.title} loading="lazy" onError={(event) => retryWithFullImage(event, source)} />
-          {/* Две плашки по углам снимка: сверху цена до Минска, снизу пробег. Раньше
-              мозаика была просто набором фотографий и не говорила, за сколько эта
-              машина и сколько она прошла. Цена считается так же, как в карточках,
-              пробег написан без слова «пробег» — по «км» и так понятно. */}
-          <span className="model-page-gallery-price">≈ {money(estimateLandedCost(car).totalUsd, currency)}</span>
-          {car.mileage ? <span className="model-page-gallery-mileage">{number(car.mileage)} км</span> : null}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -3171,54 +3448,58 @@ function useModelText(slug) {
 }
 
 function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
-  const carsState = useModelPageCars(modelPage);
-  const { total } = carsState;
-  const catalogTarget = modelPageCatalogHref(modelPage);
+  // Отбор над сеткой машин: сортировка и два самых частых фильтра. По умолчанию
+  // сначала самые доступные — так страница и открывалась раньше.
+  const [sort, setSort] = useState("price_asc");
+  const [priceMax, setPriceMax] = useState(ANY_PRICE_MAX);
+  const [mileage, setMileage] = useState(ANY_MILEAGE);
+  const resetFilters = () => {
+    setPriceMax(ANY_PRICE_MAX);
+    setMileage(ANY_MILEAGE);
+  };
+  const filters = { sort, priceMax, mileage, onSort: setSort, onPriceMax: setPriceMax, onMileage: setMileage, onReset: resetFilters };
+  const carsState = useModelPageCars(modelPage, { sort, priceMax, mileage });
   const text = useModelText(modelPage.slug);
   // Текст разрываем примерно посередине: между половинами встаёт рекламный блок.
   const sections = text?.sections || [];
   const splitAt = Math.ceil(sections.length / 2);
   const firstSections = sections.slice(0, splitAt);
   const restSections = sections.slice(splitAt);
-  // Шаг назад по истории работает, только если на страницу пришли с другой страницы
-  // сайта. По прямой ссылке из поиска или мессенджера возвращаться некуда, поэтому
-  // ведём в каталог, уже отфильтрованный по этой модели.
-  const goBack = () =>
-    window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : navigate(catalogTarget);
   // Клик по машине раскрывает быстрый просмотр — как в каталоге и на главной. Если
   // он выключен или экран узкий, открывается полная страница автомобиля.
-  const galleryCars = useModelPageGalleryCars(modelPage);
-  const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
+  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
   const openCar = (car) => {
     if (openQuickView(car)) return;
     navigate(carHref(car));
   };
   return (
     <main className="model-page">
-      {/* Всё, что читают, лежит в одной дорожке: кружок «назад» едет рядом с текстом
-          до самого конца статьи и уходит только на большом каталоге внизу. */}
-      <div className="model-page-reading">
-        <div className="model-page-back-rail">
-          <button type="button" className="model-page-back" aria-label="Назад" onClick={goBack}>
-            <ArrowLeft size={24} />
-          </button>
+      {/* Обычные хлебные крошки вместо кружка «назад»: путь наверх виден словами и
+          совпадает с тем, что мы отдаём поисковику разметкой. */}
+      <div className="breadcrumbs model-page-crumbs page-width">
+        <button onClick={() => goBackTo(navigate, "/")}>Главная</button>
+        <CaretRight size={13} />
+        <button onClick={() => goBackTo(navigate, MODELS_INDEX.path)}>О моделях авто</button>
+        <CaretRight size={13} />
+        {modelPage.name}
+      </div>
+      {/* Заголовок страницы без подложки и по левому краю: он относится и к сетке
+          машин под ним, и ко всей странице, поэтому стоит на одной линии с ней.
+          Аннотации под ним нет — сразу за заголовком идут машины. */}
+      <section className="model-page-hero model-page-head page-width">
+        <div className="model-page-hero-copy">
+          <h1>{modelPage.h1}</h1>
         </div>
-      {/* Мозаика фотографий стоит выше блока с текстом и вне него. */}
-      <ModelPageGallery cars={galleryCars} onOpenCar={openCar} />
+      </section>
+      {/* Сетка машин сразу под заголовком: из поиска сюда приходят прежде всего
+          посмотреть, что есть в наличии и почём. Обзор начинается ниже. */}
+      <ModelPageCatalog modelPage={modelPage} carsState={carsState} filters={filters} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpenCar={openCar} />
+      {/* Сам обзор — ниже машин, одной колонкой. */}
+      <div className="model-page-reading">
       <div className="model-page-body page-width">
-        <section className="model-page-hero">
-          <div className="model-page-hero-copy">
-            <h1>{modelPage.h1}</h1>
-            <p>{modelPage.lead}</p>
-            <div className="info-actions">
-              <AppLink className="primary" href={catalogTarget} navigate={navigate}>
-                {total ? `Смотреть ${total} в наличии` : "Смотреть в наличии"} <ArrowRight size={18} />
-              </AppLink>
-            </div>
-          </div>
-        </section>
         <article className="model-page-article">
           <div className="model-page-intro">
+            <h2>Обзор {modelPage.name}</h2>
             {text?.intro.map((paragraph) => (
               <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
             ))}
@@ -3237,9 +3518,6 @@ function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
           )}
         </article>
       </div>
-      {/* Лента машин разрывает текст после вступления: дальше идут подробности,
-          и посетителю полезно сначала увидеть, что вообще есть в наличии. */}
-      <ModelPageCars modelPage={modelPage} carsState={carsState} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpenCar={openCar} />
       <div className="model-page-body page-width">
         <article className="model-page-article">
           {firstSections.map((section) => (
@@ -3288,7 +3566,6 @@ function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
       </div>
       <ArticleFaq faq={text?.faq} title={`Частые вопросы про ${modelPage.name}`} />
       </div>
-      <ModelPageCatalog modelPage={modelPage} carsState={carsState} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpenCar={openCar} quickViewToggle={quickViewToggle} />
       <ModelPageWays modelPage={modelPage} cars={carsState.cars} navigate={navigate} />
       <p className="model-page-disclaimer page-width">{text?.disclaimer}</p>
       {quickViewModal}
@@ -3796,13 +4073,16 @@ function HomeConversionSections({ navigate }) {
 }
 
 function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorites, toggleFavorite, loading }) {
-  const batchSize = 20;
   // Сумма без валюты в строке поиска читается в валюте переключателя сайта.
   const currency = useCurrency();
   const randomPool = useRef([]);
   const nextItemKey = useRef(0);
   const feedSource = useRef(cars);
   const [useCatalogCards, setUseCatalogCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
+  // На телефоне карточки идут в одну колонку, и двадцать штук — это очень длинная
+  // страница: до блоков под каталогом посетитель просто не доходит. Поэтому там
+  // порция вдвое короче, а продолжение открывает кнопка «Подгрузить ещё».
+  const batchSize = useCatalogCards ? 10 : 20;
   const takeRandomBatch = (precedingCars = [], count = batchSize) => {
     const batch = [];
     if (!cars.length) return batch;
@@ -4188,8 +4468,12 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
               <h2>Каталог</h2>
               {quickViewToggle}
             </div>
+            {/* Вид подборки выбирают только на телефоне: на широком экране она
+                всегда идёт плиткой, и переключателя там нет. */}
+            <ViewToggle className="home-feed-view-toggle" value={heroView} onChange={updateHeroView} />
             <AppLink className="section-heading-link" href="/catalog" navigate={navigate}>
-              Все автомобили <ArrowRight size={18} />
+              Все автомобили <ArrowRight size={18} className="section-heading-link-arrow" />
+              <CaretRight size={20} weight="bold" className="section-heading-link-caret" aria-hidden="true" />
             </AppLink>
           </div>
         )}
@@ -4215,29 +4499,23 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
                 options={HERO_SORT_OPTIONS.map((option) => option.label)}
                 onChange={(label) => setHeroSort(HERO_SORT_OPTIONS.find((option) => option.label === label)?.value || "default")}
               />
-              <div className="result-view-toggle" role="group" aria-label="Вид выдачи">
-                <button type="button" className={heroView === "list" ? "active" : ""} aria-pressed={heroView === "list"} aria-label="Показать списком" title="Списком" onClick={() => updateHeroView("list")}>
-                  <Rows size={19} />
-                </button>
-                <button type="button" className={heroView === "grid" ? "active" : ""} aria-pressed={heroView === "grid"} aria-label="Показать карточками" title="Карточками" onClick={() => updateHeroView("grid")}>
-                  <SquaresFour size={19} />
-                </button>
-              </div>
+              <ViewToggle value={heroView} onChange={updateHeroView} />
               <AppLink className="primary search-catalog-link" href={heroSearch.href || "/catalog"} navigate={navigate} aria-label="В каталог">
                 <span className="search-catalog-link-label">В каталог</span> <ArrowRight size={17} />
               </AppLink>
             </div>
           </div>
         )}
-        {/* На телефоне выдача всегда списочными карточками каталога (заголовок и
-            цена сверху, лента фото); переключатель вида есть только на широких. */}
+        {/* На широком экране подборка всегда плиткой. На телефоне (и в выдаче
+            поиска на любом экране) вид выбирает посетитель: списочные карточки
+            каталога или плитка — на телефоне по две карточки в ряд. */}
         {searchEmpty ? (
           <div className="empty-state search-empty">
             <MagnifyingGlass size={26} />
             <h3>Ничего не найдено</h3>
             <p>Попробуйте изменить запрос: марка, модель, год, цена («до 40 тыс»), пробег («до 50 тыс км»), запас хода («от 500 км»), разгон («до 5 сек»), батарея («от 70») или номер объявления. Лишнее убирает слово «кроме»: «зикр кроме 001».</p>
           </div>
-        ) : (searching ? useCatalogCards || heroView === "list" : useCatalogCards) ? (
+        ) : (searching || useCatalogCards) && heroView === "list" ? (
           <div className="car-list home-car-list" aria-busy={gridBusy ? "true" : undefined}>
             {gridBusy
               ? skeletonCards.map((key) => <CardSkeleton key={key} row />)
@@ -4254,7 +4532,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
                 ))}
           </div>
         ) : (
-          <div className="featured-grid" aria-busy={gridBusy ? "true" : undefined}>
+          <div className="featured-grid mobile-cards-grid" aria-busy={gridBusy ? "true" : undefined}>
             {gridBusy
               ? skeletonCards.map((key) => <CardSkeleton key={key} />)
               : displayItems.map(({ car, key }) => (
@@ -4289,37 +4567,42 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   );
 }
 
-function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, optionCounts, availability, onSaveSearch, searchSaved, searchUpdate }) {
+// Выбрано ли в фильтрах хоть что-то и «чистый» набор фильтров. Ими пользуются и сама
+// панель, и строка «Сохранить поиск / Сбросить» над ней в каталоге.
+const catalogFiltersActive = (filters) => filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL || hasExclusions(filters);
+const emptyCatalogFilters = () => ({
+  type: "Все",
+  brand: "Все марки",
+  model: [],
+  bodyType: [],
+  color: [],
+  yearMin: ANY_YEAR_MIN,
+  yearMax: ANY_YEAR_MAX,
+  mileage: ANY_MILEAGE,
+  priceMin: ANY_PRICE_MIN,
+  priceMax: ANY_PRICE_MAX,
+  drive: ANY_DRIVE,
+  owners: ANY_OWNERS,
+  battery: ANY_BATTERY,
+  condition: ANY_CONDITION,
+  accel: ANY_ACCEL,
+  tire: ANY_TIRE,
+  range: ANY_RANGE,
+  engine: ANY_ENGINE,
+  power: ANY_POWER,
+  gearbox: ANY_GEARBOX,
+  fuel: ANY_FUEL,
+  ...emptyExclusions(),
+});
+
+function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, model: [], ...POWERTRAIN_FILTER_RESET }));
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
   const selectedType = typeLabel(filters.type);
   const selectType = (value) => changeType(typeValue(value));
-  const hasActiveFilters = filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL || hasExclusions(filters);
-  const resetFilters = () => setFilters(() => ({
-    type: "Все",
-    brand: "Все марки",
-    model: [],
-    bodyType: [],
-    color: [],
-    yearMin: ANY_YEAR_MIN,
-    yearMax: ANY_YEAR_MAX,
-    mileage: ANY_MILEAGE,
-    priceMin: ANY_PRICE_MIN,
-    priceMax: ANY_PRICE_MAX,
-    drive: ANY_DRIVE,
-    owners: ANY_OWNERS,
-    battery: ANY_BATTERY,
-    condition: ANY_CONDITION,
-    accel: ANY_ACCEL,
-    tire: ANY_TIRE,
-    range: ANY_RANGE,
-    engine: ANY_ENGINE,
-    power: ANY_POWER,
-    gearbox: ANY_GEARBOX,
-    fuel: ANY_FUEL,
-    ...emptyExclusions(),
-  }));
+  const hasActiveFilters = catalogFiltersActive(filters);
+  const resetFilters = () => setFilters(() => ({ ...emptyCatalogFilters() }));
   return (
     <VehicleSearch
       selectedType={selectedType}
@@ -4357,7 +4640,8 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
       onSaveSearch={onSaveSearch}
       searchSaved={searchSaved}
       searchUpdate={searchUpdate}
-      initiallyExpanded={filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL}
+      onExpandedChange={onExpandedChange}
+      initiallyExpanded={expanded || filters.type !== "Все" || filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL}
     />
   );
 }
@@ -4391,10 +4675,6 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       </div>
       <HoverImagePreview car={car} className="car-row-image" mobileStrip onMobileOpen={open} badge={<NewListingBadge car={car} />} />
       <div className="car-row-info">
-        {/* На узком экране фотографии идут лентой во всю ширину, и ярлык поверх
-            них попадал на соседний кадр — там он стоит строкой под лентой. Какой
-            из двух показать, решает ширина экрана в стилях. */}
-        <NewListingBadge car={car} className="car-row-info-badge" />
         <div className="row-title">
           <div>
             <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
@@ -4422,10 +4702,19 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
               {car.battery} кВт·ч
             </span>
           )}
-          {car.range && (
+          {/* Машине с двигателем плашки батареи не достаются, и строка оставалась
+              пустой: у бензиновой и дизельной там объём и наддув. Гибриду с бензиновым
+              мотором они тоже пишутся — рядом с батареей и запасом хода. */}
+          {engineVolumeBadge(car) && (
             <span>
-              <Gauge size={17} />
-              {car.range} км
+              <Engine size={17} />
+              Объём {engineVolumeBadge(car)}
+            </span>
+          )}
+          {engineAspiration(car) && (
+            <span>
+              <Timer size={17} />
+              {engineAspiration(car)}
             </span>
           )}
           <span className="body-type-spec" title={car.bodyType}>
@@ -4534,9 +4823,8 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
   const sortableCars = favoriteCars.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd }));
   const sortedCars = sort === "default" ? favoriteCars : sortCars(sortableCars, sort);
   // Вид выдачи общий с каталогом: переключили здесь — каталог откроется так же.
-  // На телефоне переключателя нет и выдача всегда списочными карточками.
+  // На телефоне плитка идёт двумя карточками в ряд (см. .mobile-cards-grid).
   const [view, setView] = useState(readCatalogView);
-  const [mobileCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
   const updateView = (value) => {
     setView(value);
     window.localStorage.setItem(catalogViewKey, value);
@@ -4563,34 +4851,13 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
         {favoriteCars.length > 0 && (
           <div className="result-controls">
             <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => setSort(sortOptions.find((option) => option.label === label)?.value || "default")} />
-            <div className="result-view-toggle" role="group" aria-label="Вид выдачи">
-              <button
-                type="button"
-                className={view === "list" ? "active" : ""}
-                aria-pressed={view === "list"}
-                aria-label="Показать списком"
-                title="Списком"
-                onClick={() => updateView("list")}
-              >
-                <Rows size={19} />
-              </button>
-              <button
-                type="button"
-                className={view === "grid" ? "active" : ""}
-                aria-pressed={view === "grid"}
-                aria-label="Показать карточками"
-                title="Карточками"
-                onClick={() => updateView("grid")}
-              >
-                <SquaresFour size={19} />
-              </button>
-            </div>
+            <ViewToggle value={view} onChange={updateView} />
           </div>
         )}
       </div>
       {sortedCars.length ? (
-        !mobileCards && view === "grid" ? (
-          <div className="featured-grid catalog-card-grid">
+        view === "grid" ? (
+          <div className="featured-grid catalog-card-grid mobile-cards-grid">
             {sortedCars.map((car) => (
               <FeaturedCard key={car.id} car={car} favorite toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
             ))}
@@ -4823,29 +5090,16 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
 const catalogViewKey = "navostok-catalog-view";
 const readCatalogView = () => (window.localStorage.getItem(catalogViewKey) === "grid" ? "grid" : "list");
 
-function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearch, updateSavedSearch, savedSearches, landing = null }) {
-  // Сотня машин на страницу — то же число, по которому сервер режет список для
-  // поисковика. Если развести эти числа, адрес «?page=2» из выдачи покажет человеку
-  // не те машины, которые по нему проиндексированы.
-  const pageSize = CATALOG_PAGE_SIZE;
-  const currency = useCurrency();
-  // Pending and api resolve to the same value, so the boot request answering does not
-  // retrigger the query this component already issued at mount.
-  const useApi = apiMode !== false;
-  const sortOptions = [
-    { value: "default", label: "По умолчанию" },
-    { value: "price_asc", label: "Дешёвые" },
-    { value: "price_desc", label: "Дорогие" },
-    { value: "newest", label: "Новые объявления" },
-    { value: "mileage_asc", label: "С наименьшим пробегом" },
-    { value: "range_desc", label: "С наибольшим запасом хода" },
-    { value: "year_desc", label: "Новые по году" },
-    { value: "year_asc", label: "Старые по году" },
-  ];
-  // Страница марки или типа задаёт свой фильтр самим адресом. Параметры в адресе имеют
-  // приоритет: с них работают ссылки из умного поиска и сохранённые поиски.
-  const params = new URLSearchParams(window.location.search);
-  for (const [key, value] of landingFilterParams(landing)) if (!params.has(key)) params.set(key, value);
+// Фильтры каталога из параметров адреса. Одним разбором пользуются три входа:
+// обычное открытие каталога, ссылки страниц марок и разделов и умный поиск —
+// он приводит запрос к такому же набору параметров.
+// Раздел, на который увёл выбранный фильтр, — не новая страница: фильтры уже
+// выставлены, и пересоздавать каталог незачем. Без этого выдача на секунду
+// подменялась заглушками и «мигала». Флаг ставит сам каталог перед таким
+// переходом, а гасит его отрисовка, которая этот переход показала.
+let catalogFilterMoveTarget = null;
+
+function catalogFiltersFromParams(params) {
   const rawType = params.get("type");
   const rawBrand = params.get("brand");
   const rawModels = params.getAll("model");
@@ -4874,7 +5128,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const rawPower = params.get("power");
   const rawGearbox = params.get("gearbox");
   const rawFuel = params.get("fuel");
-  const initialFilters = {
+  return {
     type: typeValue(rawType),
     brand: rawBrand && rawBrand !== "Все марки" ? rawBrand : "Все марки",
     model: multiValues(rawModels, ANY_MODEL),
@@ -4905,6 +5159,32 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     fuel: FUEL_TYPES.includes(rawFuel) ? rawFuel : ANY_FUEL,
     ...exclusionsFromParams(params),
   };
+}
+
+function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearch, updateSavedSearch, deleteSavedSearch, savedSearches, landing = null }) {
+  // Сотня машин на страницу — то же число, по которому сервер режет список для
+  // поисковика. Если развести эти числа, адрес «?page=2» из выдачи покажет человеку
+  // не те машины, которые по нему проиндексированы.
+  const pageSize = CATALOG_PAGE_SIZE;
+  const currency = useCurrency();
+  // Pending and api resolve to the same value, so the boot request answering does not
+  // retrigger the query this component already issued at mount.
+  const useApi = apiMode !== false;
+  const sortOptions = [
+    { value: "default", label: "По умолчанию" },
+    { value: "price_asc", label: "Дешёвые" },
+    { value: "price_desc", label: "Дорогие" },
+    { value: "newest", label: "Новые объявления" },
+    { value: "mileage_asc", label: "С наименьшим пробегом" },
+    { value: "range_desc", label: "С наибольшим запасом хода" },
+    { value: "year_desc", label: "Новые по году" },
+    { value: "year_asc", label: "Старые по году" },
+  ];
+  // Страница марки или типа задаёт свой фильтр самим адресом. Параметры в адресе имеют
+  // приоритет: с них работают ссылки из умного поиска и сохранённые поиски.
+  const params = new URLSearchParams(window.location.search);
+  for (const [key, value] of landingFilterParams(landing)) if (!params.has(key)) params.set(key, value);
+  const initialFilters = catalogFiltersFromParams(params);
   // Поисковая строка в адресе: `/catalog?q=byd han до 25000`. Нужна двум вещам —
   // разметке «поиск по сайту», по которой Google показывает строку поиска прямо
   // в выдаче, и внешним ссылкам на готовый поиск. Разбираем ту же строку тем же
@@ -4971,9 +5251,12 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     return Math.min(Number(requested) - 1, CATALOG_MAX_PAGES - 1) * pageSize;
   });
   const restoredOrder = useRef(restoredCatalog?.order || null);
+  // Раскрытая строка «Ещё фильтры» переезжает в снимок страницы: смена типа
+  // двигателя или кузова уводит на свой раздел, страница собирается заново —
+  // и без этого фильтры закрывались прямо во время выбора.
+  const [filtersExpanded, setFiltersExpanded] = useState(() => Boolean(restoredCatalog?.filtersExpanded));
   const [view, setView] = useState(readCatalogView);
-  // На телефоне переключателя вида нет и выдача всегда списочными карточками.
-  const [mobileCards] = useState(() => window.matchMedia("(max-width: 700px)").matches);
+  // На телефоне плитка идёт двумя карточками в ряд (см. .mobile-cards-grid).
   const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:useApi, favorites, toggleFavorite, navigate });
   const loadMoreRequest = useRef(null);
   const loadingMore = useRef(false);
@@ -4990,6 +5273,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       filters,
       sort,
       shuffleSeed,
+      filtersExpanded,
       loadedCount: Math.max(loadedLimit, remoteCars.length),
       order: remoteCars.slice(0, 600).map((car) => car.id),
     };
@@ -5019,22 +5303,27 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // а если такого нет, в общий каталог. Фильтры, сортировка и порядок перемешивания
   // переезжают снимком, поэтому выбранное не теряется.
   const landingPath = landing?.path || "/catalog";
+  // Заголовок раздела и обычного каталога режется на крупную часть и мелкую подпись
+  // одним правилом (src/catalog-landings.js) — тем же, что и в серверной версии страницы.
+  const heading = landingHeading(landing ? landing.h1 : "Все авто с пробегом из Китая");
   useEffect(() => {
     // Раздел, который описывает выбранное точнее всего и при этом остаётся правдой:
     // на странице BYD можно выбрать модель или год, а выбрать к седанам ещё и
     // кроссоверы — уже нет, такую выдачу раздел седанов не описывает.
     const target = landingForFilters(filters, landingPath)?.path || "/catalog";
     if (target === landingPath) return undefined;
-    const move = () =>
+    const move = () => {
+      catalogFilterMoveTarget = target;
       navigate(target, {
         replace: true,
         preserveScroll: true,
-        catalogState: { catalog: { filters, sort, shuffleSeed, loadedCount: pageSize, order: [] }, scrollY: window.scrollY },
+        catalogState: { catalog: { filters, sort, shuffleSeed, filtersExpanded, loadedCount: pageSize, order: [] }, scrollY: window.scrollY },
       });
-    // Пока открыт список фильтра, страницу не переключаем: кузова и цвета выбирают
-    // галочками по нескольку штук, и переход посреди выбора закрывал бы список после
-    // первой же галочки, которая уводит с раздела.
-    const listOpen = () => Boolean(document.querySelector(".select-menu.open"));
+    };
+    // Пока открыт список фильтра или шторка на телефоне, страницу не переключаем:
+    // кузова, цвета и модели выбирают галочками по нескольку штук, и переход посреди
+    // выбора закрывал бы список после первой же галочки, которая уводит с раздела.
+    const listOpen = () => Boolean(document.querySelector(".select-menu.open, .mobile-filter-sheet"));
     if (!listOpen()) {
       move();
       return undefined;
@@ -5250,15 +5539,23 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // из «Моих поисков», либо поиск сохранили здесь. Изменённые фильтры тогда не
   // плодят новую запись, а обновляют её кнопкой «Обновить поиск».
   const [baseSearchKey, setBaseSearchKey] = useState(() => currentSearchKey);
+  const [toast, setToast] = useState(null);
   const baseSearch = (savedSearches || []).find((item) => savedSearchKey(item.filters) === baseSearchKey) || null;
   const searchUpdate = !searchSaved && Boolean(baseSearch);
+  // Нажатие на закладку: не сохранён — сохраняем, уже сохранён — убираем,
+  // а если это правка ранее сохранённого поиска — записываем изменения и говорим
+  // об этом всплывающей подсказкой (иначе нажатие выглядит как «ничего не было»).
   const submitSearch = () => {
     if (searchSaved) {
-      navigate("/searches");
+      const saved = (savedSearches || []).find((item) => savedSearchKey(item.filters) === currentSearchKey);
+      if (saved) deleteSavedSearch?.(saved.id);
+      setBaseSearchKey("");
       return;
     }
-    if (baseSearch) updateSavedSearch(baseSearch.id, { ...filters, sort });
-    else saveSearch({ ...filters, sort });
+    if (baseSearch) {
+      updateSavedSearch(baseSearch.id, { ...filters, sort });
+      setToast("Сохранённый поиск обновлён");
+    } else saveSearch({ ...filters, sort });
     setBaseSearchKey(currentSearchKey);
   };
   return (
@@ -5277,9 +5574,17 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         )}
       </div>
       <div className="catalog-heading">
-        <h1>{landing ? landing.h1 : "Автомобили с пробегом из Китая"}</h1>
+        <div>
+          {/* Две половины заголовка — отдельными кусками, чтобы на телефоне каждая
+              встала своей строкой (правило в стилях), а на компьютере они шли одной
+              строкой через пробел. Перенос задан руками: браузер ломал строку в своём
+              месте на каждой ширине, и «с пробегом из Китая» скакало от раздела
+              к разделу. Для поиска текст один и тот же — слова и пробел на месте. */}
+          <h1>{Boolean(heading.tail) ? <><span>{heading.title}</span> <span>{heading.tail}</span></> : heading.title}</h1>
+          {Boolean(heading.subtitle) && <p>{heading.subtitle}</p>}
+        </div>
       </div>
-      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} />
+      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} />
       {filters.brand !== "Все марки" && models.length > 1 && (
         <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
           {models.map((model) => {
@@ -5307,34 +5612,13 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             </div>
             <div className="result-controls">
               <SelectField className="sort-custom-select" label="Сортировка" value={selectedSort.label} options={sortOptions.map((option) => option.label)} onChange={(label) => updateSort(sortOptions.find((option) => option.label === label)?.value || "default")} />
-              <div className="result-view-toggle" role="group" aria-label="Вид выдачи">
-                <button
-                  type="button"
-                  className={view === "list" ? "active" : ""}
-                  aria-pressed={view === "list"}
-                  aria-label="Показать списком"
-                  title="Списком"
-                  onClick={() => updateView("list")}
-                >
-                  <Rows size={19} />
-                </button>
-                <button
-                  type="button"
-                  className={view === "grid" ? "active" : ""}
-                  aria-pressed={view === "grid"}
-                  aria-label="Показать карточками"
-                  title="Карточками"
-                  onClick={() => updateView("grid")}
-                >
-                  <SquaresFour size={19} />
-                </button>
-              </div>
+              <ViewToggle value={view} onChange={updateView} />
             </div>
           </div>
           {remoteError && <div className="catalog-message">Не удалось обновить выдачу. Попробуйте ещё раз.</div>}
           {displayed.length ? (
-            !mobileCards && view === "grid" ? (
-              <div className="featured-grid catalog-card-grid">
+            view === "grid" ? (
+              <div className="featured-grid catalog-card-grid mobile-cards-grid">
                 {displayed.map((car) => (
                   <FeaturedCard key={car.id} car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
                 ))}
@@ -5343,8 +5627,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
               displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpen={openCar} />)
             )
           ) : remoteLoading ? (
-            !mobileCards && view === "grid" ? (
-              <div className="featured-grid catalog-card-grid">
+            view === "grid" ? (
+              <div className="featured-grid catalog-card-grid mobile-cards-grid">
                 {skeletonCards.map((key) => <CardSkeleton key={key} />)}
               </div>
             ) : (
@@ -5397,6 +5681,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         {landing ? <CatalogLandingNotes landing={landing} models={models} navigate={navigate} total={knownResultCount} /> : <CatalogSectionLinks navigate={navigate} />}
       </div>
       <ScrollToTopButton />
+      {Boolean(toast) && <Toast text={toast} onClose={() => setToast(null)} />}
       {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
       {quickViewModal}
     </main>
@@ -5713,10 +5998,6 @@ function VehicleGallery({ car }) {
         <button className={`gallery-open${dragging ? " dragging" : ""}`} style={{ "--gallery-drag-x": `${dragOffset}px` }} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}>
           <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active])} alt={`${car.title}, фото ${active + 1}`} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
         </button>
-        {/* Ярлык «Новое» поверх фотографии — только для узкого экрана: там строка
-            ярлыка над заголовком отодвигала цену вниз. На широком экране виден
-            ярлык у заголовка, а этот скрыт стилями. */}
-        <NewListingBadge car={car} />
         <span aria-live="polite">
           <Images size={17} />
           {active + 1} из {images.length}
@@ -6376,9 +6657,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
     <>
       <div className="detail-title">
         <div>
-          {/* Ярлык «Новое» стоит над заголовком отдельной строкой, а не рядом с
-              названием: в строке заголовка он спорил за место со стрелками. */}
-          <NewListingBadge car={car} />
+          {/* Ярлыка о новизне здесь нет: под заголовком и так стоит строка «Добавлено
+              … · Обновлено …», и зелёная плашка её повторяла. */}
           <div className="detail-title-line">
             {goBack && (
               <button type="button" className="detail-back" aria-label="Назад" onClick={goBack}>
@@ -8157,7 +8437,8 @@ function HomeCollections({ navigate }) {
           <h2 id="home-collections-title">{BLOG_INDEX.name}</h2>
         </div>
         <AppLink className="section-heading-link" href={BLOG_INDEX.path} navigate={navigate}>
-          Смотреть всё <ArrowRight size={18} />
+          Смотреть всё <ArrowRight size={18} className="section-heading-link-arrow" />
+          <CaretRight size={20} weight="bold" className="section-heading-link-caret" aria-hidden="true" />
         </AppLink>
       </div>
       <div className="blog-card-grid">
@@ -8315,7 +8596,7 @@ function BlogSidebar({ navigate, filter = null, onFilter = null, currentPath = n
  */
 function BlogMasthead({ navigate, main = false }) {
   return (
-    <div className="blog-masthead">
+    <div className={main ? "blog-masthead" : "blog-masthead blog-masthead-link"}>
       {main ? (
         <h1>{BLOG_INDEX.h1}</h1>
       ) : (
@@ -10558,6 +10839,15 @@ export function App() {
   };
   const authModalOpen = !authLoading && !user && (authRoute || path === "/account" || path === "/favorites" || path === "/searches");
   const contentPath = authRoute || authModalOpen ? authBackgroundPath : path;
+  // Ключ каталога. Обычно он равен адресу — так каждый раздел создаётся заново
+  // и читает свой фильтр. Но когда на раздел увёл фильтр самого каталога, ключ
+  // оставляем прежним: выдача уже та, что нужна, и пересоздание только мигало бы
+  // заглушками. Метку ставит каталог, а гасит её отрисовка ниже.
+  const catalogKey = useRef(contentPath);
+  if (isCatalogPath(contentPath) && catalogFilterMoveTarget !== contentPath) catalogKey.current = contentPath;
+  useEffect(() => {
+    catalogFilterMoveTarget = null;
+  });
   const showAccountFromAuthRoute = authRoute && Boolean(user);
   const closeAuthModal = () => {
     setPendingFavorite(null);
@@ -10617,7 +10907,7 @@ export function App() {
       // создании, а при переходе с одного раздела на другой React оставил бы тот же
       // экземпляр: заголовок менялся, а выдача оставалась от прежней марки. С разным
       // ключом каждый раздел создаётся заново и читает свой фильтр.
-      <Catalog key={contentPath} navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath)} />
+      <Catalog key={catalogKey.current} navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} deleteSavedSearch={deleteSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath)} />
     ) : loading || routeLoading ? (
       <AppLoader />
     ) : loadError ? (
