@@ -3446,7 +3446,9 @@ function ModelsIndexPage({ navigate }) {
   const [sort, setSort] = useState("default");
   const [visibleCount, setVisibleCount] = useState(MODELS_INDEX_BATCH);
   const facts = useModelsIndexFacts();
-  const search = query.trim().toLowerCase();
+  // Ищем так же, как в списках марок: понимаем часть слова, кириллицу («ауди»)
+  // и набранное не в той раскладке.
+  const searchVariants = listSearchVariants(query);
   const selectedSort = MODELS_INDEX_SORTS.find((option) => option.value === sort) || MODELS_INDEX_SORTS[0];
   // Сколько обзоров у каждой марки — числом рядом с маркой в списке выбора.
   const brandCounts = useMemo(() => {
@@ -3462,7 +3464,10 @@ function ModelsIndexPage({ navigate }) {
         // Модель без машин в наличии не знает своего типа — под конкретный фильтр
         // (не «Все типы») она не попадает.
         (!wantedType || facts[modelPage.slug]?.types?.has(wantedType)) &&
-        (!search || `${modelPage.name} ${modelPage.brand} ${modelPage.tagline} ${modelPage.teaser}`.toLowerCase().includes(search)),
+        (!searchVariants.length || (() => {
+          const haystack = searchNormalize(`${modelPage.name} ${modelPage.brand} ${modelPage.tagline} ${modelPage.teaser}`);
+          return searchVariants.some((variant) => haystack.includes(variant));
+        })()),
     );
     if (sort === "default") return matches;
     if (sort === "name_asc") return [...matches].sort((a, b) => a.name.localeCompare(b.name, "ru"));
@@ -3477,10 +3482,10 @@ function ModelsIndexPage({ navigate }) {
       if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
       return option.direction === "asc" ? left - right : right - left;
     });
-  }, [brand, type, search, sort, facts]);
+  }, [brand, type, searchVariants.join("|"), sort, facts]);
   // Список короче фильтра — а не наоборот — не остаётся с кнопкой «подгрузить»
   // в никуда: любая смена фильтра или поиска возвращает список к первой порции.
-  useEffect(() => setVisibleCount(MODELS_INDEX_BATCH), [brand, type, search, sort]);
+  useEffect(() => setVisibleCount(MODELS_INDEX_BATCH), [brand, type, searchVariants.join("|"), sort]);
   const visible = found.slice(0, visibleCount);
   return (
     <main className="model-page">
@@ -6132,6 +6137,33 @@ function VehicleGallery({ car }) {
       suppressOpen.current = false;
     }, 0);
   };
+  // Пустой лист при смахивании: браузер выбрасывает прежний кадр в тот же миг, когда
+  // ему дают адрес нового, а оригинал снимка ещё едет по сети. Поэтому, во-первых, под
+  // большим кадром лежит облегчённая версия того же снимка (600 точек, ~30 КБ — её
+  // браузер уже скачал для плитки в каталоге): она появляется почти сразу и её
+  // накрывает оригинал, когда придёт. Во-вторых, соседние снимки запрашиваем заранее,
+  // пока посетитель смотрит текущий, — тогда смахивание чаще всего не ждёт сети вовсе.
+  const preloadKeeper = useRef([]);
+  useEffect(() => {
+    if (images.length < 2) return;
+    const link = navigator.connection;
+    if (link?.saveData) return;
+    const at = (step) => images[(active + step + images.length * 2) % images.length];
+    const wanted = [];
+    // Соседние кадры готовим целиком, через один — только облегчённую версию: она
+    // страхует от белого листа, если посетитель листает быстрее, чем едет оригинал.
+    for (const step of [1, -1]) wanted.push(imageSource(at(step), IMAGE_ORIGINAL), imageSource(at(step), IMAGE_WIDTH_CARD));
+    for (const step of [2, -2]) wanted.push(imageSource(at(step), IMAGE_WIDTH_CARD));
+    const started = [];
+    for (const href of new Set(wanted.filter(Boolean))) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = href;
+      started.push(image);
+    }
+    // Ссылки держим, чтобы сборщик мусора не оборвал запрос на полпути.
+    preloadKeeper.current = [...started, ...preloadKeeper.current].slice(0, 12);
+  }, [active, images]);
   const openGallery = () => {
     if (suppressOpen.current) {
       suppressOpen.current = false;
@@ -6144,11 +6176,16 @@ function VehicleGallery({ car }) {
     setDragging(false);
     setDragOffset(0);
   };
+  const full = imageSource(images[active], IMAGE_ORIGINAL);
+  const preview = imageSource(images[active], IMAGE_WIDTH_CARD);
   return (
     <>
       <section className="gallery-panel">
         <button className={`gallery-open${dragging ? " dragging" : ""}`} style={{ "--gallery-drag-x": `${dragOffset}px` }} onClick={openGallery} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={cancelSwipe} aria-label={`Открыть все фотографии ${car.title}. Смахните влево или вправо, чтобы сменить фото`}>
-          <img key={`${active}-${images[active]}`} className={`gallery-slide-${slideDirection}`} src={imageSource(images[active], IMAGE_ORIGINAL)} alt={`${car.title}, фото ${active + 1}`} fetchPriority="high" draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
+          <span key={`${active}-${images[active]}`} className={`gallery-frame gallery-slide-${slideDirection}`}>
+            {preview && preview !== full && <img className="gallery-frame-preview" src={preview} alt="" aria-hidden="true" draggable="false" />}
+            <img className="gallery-frame-full" src={full} alt={`${car.title}, фото ${active + 1}`} fetchPriority="high" draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />
+          </span>
         </button>
         <span aria-live="polite">
           <Images size={17} />
@@ -6221,16 +6258,23 @@ function TechnicalSpecs({ car }) {
   }, [car.technicalSpecs, car.bodyColor]);
   const [query, setQuery] = useState("");
   const searchBoxRef = useRef(null);
-  const needle = query.trim().toLocaleLowerCase("ru");
+  // Тот же умный поиск: часть слова, кириллица и набранное не в той раскладке.
+  const needles = listSearchVariants(query);
   // Выдача поиска — слой поверх аккордеона: сами группы не перестраиваются,
   // поэтому страница не дёргается при наборе (ищем и по названию, и по значению).
   const found = useMemo(() => {
-    if (!needle) return [];
+    if (!needles.length) return [];
     return groups
-      .map((group) => ({ ...group, items: group.items.filter((item) => `${item.name} ${item.value}`.toLocaleLowerCase("ru").includes(needle)) }))
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          const haystack = searchNormalize(`${item.name} ${item.value}`);
+          return needles.some((needle) => haystack.includes(needle));
+        }),
+      }))
       .filter((group) => group.items.length);
-  }, [groups, needle]);
-  const searching = Boolean(needle);
+  }, [groups, needles.join("|")]);
+  const searching = needles.length > 0;
   // Клик мимо панели или Escape закрывают выдачу вместе с запросом. Escape
   // перехватываем на capture-фазе, чтобы в быстром просмотре он сперва закрыл
   // выдачу, а не модалку целиком.

@@ -5946,18 +5946,32 @@ footer {
   user-select: none;
   -webkit-user-select: none;
 }
-.gallery-open img {
+.gallery-open .gallery-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+  transform: translate3d(var(--gallery-drag-x, 0), 0, 0);
+  transition: transform 0.16s cubic-bezier(0.22, 0.7, 0.35, 1);
+  will-change: transform, opacity;
+}
+.gallery-open .gallery-frame img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
   pointer-events: none;
   -webkit-user-drag: none;
-  transform: translate3d(var(--gallery-drag-x, 0), 0, 0);
-  transition: transform 0.16s cubic-bezier(0.22, 0.7, 0.35, 1);
-  will-change: transform, opacity;
 }
-.gallery-open.dragging img {
+/* Облегчённый кадр лежит под оригиналом: пока оригинал едет, посетитель видит фото,
+   а не белый лист. Лёгкое увеличение прячет мягкость краёв при растяжении. */
+.gallery-open .gallery-frame-preview {
+  transform: scale(1.02);
+}
+.gallery-open.dragging .gallery-frame {
   transition: none;
 }
 .gallery-open:not(.dragging) .gallery-slide-next {
