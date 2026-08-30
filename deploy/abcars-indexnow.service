@@ -1,0 +1,22 @@
+# Утренняя отправка изменившихся адресов в IndexNow (Яндекс, Bing, Seznam, Naver).
+# Google в протоколе не участвует — ему об изменениях говорит карта сайта с датами.
+# Ставится на сервер так:
+#   install -m644 /srv/abcars/deploy/abcars-indexnow.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now abcars-indexnow.timer
+[Unit]
+Description=Сообщить поисковикам об изменившихся адресах (IndexNow)
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/npm run indexnow
+TimeoutStartSec=600
+Nice=10
+CPUWeight=20
+IOWeight=20
+MemoryHigh=1000M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-indexnow
