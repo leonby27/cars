@@ -9,10 +9,13 @@
     <!-- Иконка сайта. SVG — для браузеров, PNG и ICO — для Google: в поиске рядом со
          ссылкой он рисует растровую картинку и надёжнее всего берёт её из привычного
          /favicon.ico или квадратного PNG, кратного 48 точкам. -->
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
+    <link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-96.png?v=3" type="image/png" sizes="96x96" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />
+    <!-- Ярлык сайта на телефоне: по этому файлу Chrome берёт крупную иконку и
+         открывает сайт отдельным окном, без адресной строки браузера. -->
+    <link rel="manifest" href="/manifest.json?v=3" />
     <!-- Шрифт интерфейса начинаем скачивать сразу, не дожидаясь файла стилей: иначе
          страница успевает нарисоваться системным шрифтом и текст на первой загрузке
          заметно прыгает. Два файла — кириллица и латиница с цифрами; обе части нужны

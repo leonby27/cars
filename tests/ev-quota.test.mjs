@@ -5,7 +5,8 @@ import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
 const state = () => evQuotaState({ today: new Date("2026-08-22T00:00:00Z") });
 
 test("takes the remaining quota from the latest customs report", () => {
-  const last = EV_QUOTA.reports.filter(([, personal]) => personal !== null).at(-1);
+  // Сводки после дня расчёта не в счёт: их не было, когда этот день наступал.
+  const last = EV_QUOTA.reports.filter(([day, personal]) => personal !== null && day <= "2026-08-22").at(-1);
   const quota = state();
   assert.equal(quota.remaining, last[1]);
   assert.equal(quota.spent, EV_QUOTA.personalTotal - last[1]);

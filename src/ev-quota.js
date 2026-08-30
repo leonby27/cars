@@ -142,11 +142,14 @@ export const formatQuotaDay = (ms) => {
 
 // Квота одна, но делится на две: гражданам («физ. лица») и торговому обороту
 // («юр. лица»). Считаем их одинаково, отличается только колонка в сводках.
-const seriesFor = (audience) => {
+const seriesFor = (audience, todayMs = Infinity) => {
   const column = audience === "business" ? 2 : 1;
   const total = audience === "business" ? EV_QUOTA.businessTotal : EV_QUOTA.personalTotal;
+  // Сводки позже названного дня в расчёт не идут: на сайте это ничего не меняет
+  // (там «сегодня» — настоящее), а расчёт на прошедшую дату остаётся таким,
+  // каким он был в тот день, и не переписывается задним числом.
   const points = EV_QUOTA.reports
-    .filter((report) => Number.isFinite(report[column]))
+    .filter((report) => Number.isFinite(report[column]) && dayMs(report[0]) <= todayMs)
     .map((report) => ({ ms: dayMs(report[0]), remaining: report[column] }));
   // Начало отсчёта — день вступления квоты в силу с полным объёмом: без него
   // не с чем сравнивать первую сводку.
@@ -245,10 +248,10 @@ const spentByPeriod = (points) => {
  * и без свежего запуска скрипта они постепенно врут.
  */
 export function evQuotaState({ audience = "personal", today = new Date() } = {}) {
-  const { total, points } = seriesFor(audience);
+  const todayMs = dayMs(new Date(today).toISOString().slice(0, 10));
+  const { total, points } = seriesFor(audience, todayMs);
   const last = points[points.length - 1];
   const remaining = last.remaining;
-  const todayMs = dayMs(new Date(today).toISOString().slice(0, 10));
 
   const windowStart = last.ms - RATE_WINDOW_DAYS * DAY_MS;
   const base = [...points].reverse().find((point) => point.ms <= windowStart) || points[0];
