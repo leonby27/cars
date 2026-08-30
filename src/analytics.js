@@ -1,6 +1,16 @@
 const visitorKey = "abcars-analytics-visitor";
 const sessionKey = "abcars-analytics-session";
 
+// Служебная CRM не является страницей сайта: её адрес не должен становиться ни
+// просмотром, ни целью, ни подтверждением «живого» посетителя. Учитываем также
+// завершающую черту и будущие вложенные экраны CRM.
+export const isAnalyticsPath = (value = "") => {
+  let pathname = String(value || "");
+  try { pathname = new URL(pathname, "https://abcars.invalid").pathname; } catch { pathname = pathname.split(/[?#]/, 1)[0]; }
+  const clean = pathname.replace(/\/+$/, "") || "/";
+  return clean === "/analytics" || clean.startsWith("/analytics/");
+};
+
 const randomId = () => window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const storedId = (storage, key) => {
   try {
@@ -43,8 +53,8 @@ export const isRepeatEvent = (key, now = Date.now()) => {
 const BOT_AGENT = /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i;
 export const isBotAgent = (agent = "") => BOT_AGENT.test(String(agent));
 
-export const isSkippedVisit = ({ hostname, nocount, automated, agent = "" }) =>
-  isLocalVisit(hostname) || nocount === "1" || Boolean(automated) || isBotAgent(agent);
+export const isSkippedVisit = ({ hostname, nocount, automated, agent = "", path = "" }) =>
+  isAnalyticsPath(path) || isLocalVisit(hostname) || nocount === "1" || Boolean(automated) || isBotAgent(agent);
 
 const skipThisVisit = () => {
   let nocount = null;
@@ -54,6 +64,7 @@ const skipThisVisit = () => {
     nocount,
     automated:window.navigator?.webdriver,
     agent:window.navigator?.userAgent,
+    path:window.location.pathname,
   });
 };
 
@@ -91,6 +102,9 @@ const post = (path, payload) => {
 // `action` — было настоящее действие, а не просто время на странице. Отметку по времени
 // шлём один раз, отметку по действию — даже если время уже отправлено: она сильнее.
 const confirmHuman = (action) => {
+  // Слушатели могли включиться на публичной странице, а затем пережить переход в
+  // CRM без перезагрузки. Действие уже внутри CRM не подтверждает тот публичный визит.
+  if (skipThisVisit()) return;
   if (humanActed || (humanConfirmed && !action)) return;
   humanConfirmed = true;
   if (action) humanActed = true;
@@ -147,9 +161,10 @@ export function trackEvent(eventName, details = {}) {
 let lastMetrikaView = typeof window === "undefined" ? null : window.location.href;
 
 export function trackMetrikaView(url, options = {}) {
+  const absolute = new URL(url, window.location.href).href;
+  if (isAnalyticsPath(absolute) || isAnalyticsPath(window.location.pathname)) return;
   const counter = window.__ym;
   if (!counter || typeof window.ym !== "function") return;
-  const absolute = new URL(url, window.location.href).href;
   if (absolute === lastMetrikaView) return;
   lastMetrikaView = absolute;
   window.ym(counter, "hit", absolute, options);
@@ -158,7 +173,19 @@ export function trackMetrikaView(url, options = {}) {
 // Отдельная отметка «машину посмотрели в модалке»: в отчётах такой просмотр ничем не
 // отличается от обычного, а по этой цели видно, каким способом смотрят машины.
 export function trackMetrikaGoal(goal, params = undefined) {
+  if (isAnalyticsPath(window.location.pathname)) return;
   const counter = window.__ym;
   if (!counter || typeof window.ym !== "function") return;
   window.ym(counter, "reachGoal", goal, params);
+}
+
+// При переходе в CRM без перезагрузки уже запущенный Webvisor продолжил бы запись,
+// даже если не посылать новый `hit`. Штатный `destruct` полностью останавливает
+// счётчик на этом документе; обычные ссылки из CRM открывают сайт с новой загрузкой.
+export function stopMetrika() {
+  const counter = window.__ym;
+  if (!counter || typeof window.ym !== "function") return;
+  window.ym(counter, "destruct");
+  window.__ym = undefined;
+  lastMetrikaView = null;
 }

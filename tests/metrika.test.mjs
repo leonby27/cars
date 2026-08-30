@@ -24,6 +24,8 @@ test("счётчик Метрики стоит на странице", () => {
   assert.ok(html.includes("localStorage.getItem('nocount')"), "выключатель своих заходов пропал");
   // Автоматические браузеры (проверки и роботы) в статистику тоже не идут.
   assert.match(html, /navigator\.webdriver/);
+  // Внутренняя CRM не запускает ни счётчик, ни Webvisor даже при прямом входе.
+  assert.ok(html.includes("page === '/analytics'"), "нет раннего выключателя для CRM");
 });
 
 test("правила безопасности пускают Метрику", () => {
@@ -40,11 +42,11 @@ test("правила безопасности пускают Метрику", ()
 test("быстрый просмотр Метрика засчитывает как просмотр страницы машины", async () => {
   const calls = [];
   globalThis.window = {
-    location:{ href:"https://abcars.by/catalog" },
+    location:{ href:"https://abcars.by/catalog", pathname:"/catalog" },
     __ym:111868764,
     ym:(...args) => calls.push(args),
   };
-  const { trackMetrikaGoal, trackMetrikaView } = await import("../src/analytics.js");
+  const { stopMetrika, trackMetrikaGoal, trackMetrikaView } = await import("../src/analytics.js");
 
   // Модалка не меняет адрес в браузере, поэтому просмотр называем Метрике сами —
   // адресом и заголовком страницы этой машины.
@@ -63,10 +65,19 @@ test("быстрый просмотр Метрика засчитывает ка
   trackMetrikaGoal("quick_view");
   assert.deepEqual(calls[2], [111868764, "reachGoal", "quick_view", undefined]);
 
+  // Даже уже работающий счётчик полностью останавливается при входе в CRM.
+  globalThis.window.location.pathname = "/analytics";
+  trackMetrikaView("/analytics");
+  trackMetrikaGoal("quick_view");
+  assert.equal(calls.length, 3, "CRM отправила просмотр или цель");
+  stopMetrika();
+  assert.deepEqual(calls[3], [111868764, "destruct"]);
+  assert.equal(globalThis.window.__ym, undefined);
+
   // Без счётчика (свой заход, робот) не отправляется ничего.
-  globalThis.window.__ym = undefined;
+  globalThis.window.location.pathname = "/catalog";
   trackMetrikaView("/cars/13579");
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   delete globalThis.window;
 });
 

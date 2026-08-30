@@ -18,6 +18,21 @@ const COOKIE_NAME = "abcars_analytics";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 const text = (value, max) => String(value || "").trim().slice(0, max);
 
+// `/analytics` — внутренняя CRM. Фильтр стоит и перед записью, и во всех отчётах:
+// второй слой сразу прячет старые строки, записанные браузерами с прошлой сборкой.
+export const isInternalAnalyticsPath = (value = "") => {
+  let pathname = String(value || "");
+  try { pathname = new URL(pathname, "https://abcars.invalid").pathname; } catch { pathname = pathname.split(/[?#]/, 1)[0]; }
+  const clean = pathname.replace(/\/+$/, "") || "/";
+  return clean === "/analytics" || clean.startsWith("/analytics/");
+};
+
+export const fromAnalyticsPage = (headers = {}) => {
+  const referer = String(headers.referer || "");
+  if (!referer) return false;
+  try { return isInternalAnalyticsPath(new URL(referer).pathname); } catch { return false; }
+};
+
 export function normalizeAnalyticsEvent(body = {}) {
   const eventName = text(body.eventName, 64);
   if (!ANALYTICS_EVENTS.has(eventName)) return { error:"invalid_event" };
@@ -25,6 +40,7 @@ export function normalizeAnalyticsEvent(body = {}) {
   const visitorId = text(body.visitorId, 80);
   const sessionId = text(body.sessionId, 80);
   const path = text(body.path, 400) || "/";
+  if (isInternalAnalyticsPath(path)) return { ignored:true };
   if (!eventId || !visitorId || !sessionId) return { error:"invalid_event_identity" };
   const properties = body.properties && typeof body.properties === "object" && !Array.isArray(body.properties) ? body.properties : {};
   // Личные данные в события не принимаем вообще, даже если их пришлёт браузер: приём
@@ -151,6 +167,7 @@ export async function isDatacenterAddress(address, { db = pool, now = Date.now()
 
 export async function recordAnalyticsEvent(body, { db = pool } = {}) {
   const event = normalizeAnalyticsEvent(body);
+  if (event.ignored) return { ok:true, recorded:false };
   if (event.error) return event;
   const result = await db.query(INSERT_EVENT_SQL,
     [event.eventId,event.visitorId,event.sessionId,event.eventName,event.path,event.listingId,event.listingTitle,JSON.stringify(event.properties),event.human,event.humanAction],
@@ -174,6 +191,7 @@ export async function confirmHumanVisit(body = {}, { db = pool } = {}) {
   const result = await db.query(
     `UPDATE analytics_events SET human = true, human_action = human_action OR $3
        WHERE visitor_id = $1 AND session_id = $2 AND NOT (human AND (human_action OR NOT $3))
+         AND path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%'
          AND created_at > now() - interval '12 hours'`,
     [visitorId, sessionId, action],
   );
@@ -264,10 +282,11 @@ export function normalizeAnalyticsRange(value, now = Date.now()) {
 // непризнанным из-за случайной очерёдности двух запросов. Именно действием, а не
 // просто отметкой «живой»: одно лишь время на странице подделывает обходчик, который
 // ходит через домашние адреса и по адресу не отличается от людей (26.08.2026).
-const humanVisitor = (compare = ">=") => `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at ${compare} $1 AND human_action)`;
+const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%'";
+const humanVisitor = (compare = ">=") => `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at ${compare} $1 AND human_action AND ${PUBLIC_EVENT})`;
 // В разделе период ограничен с двух сторон, поэтому «живой посетитель» ищется
 // внутри тех же границ: иначе вчерашний день подхватывал бы сегодняшние отметки.
-const HUMAN_VISITOR = "visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND human_action)";
+const HUMAN_VISITOR = `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND human_action AND ${PUBLIC_EVENT})`;
 
 export async function getAnalyticsDashboard(rangeValue) {
   const range = normalizeAnalyticsRange(rangeValue);
@@ -287,14 +306,14 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(*) FILTER (WHERE event_name='availability_request_click' AND ${HUMAN_VISITOR})::int AS availability_requests,
       count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_request_click' AND ${HUMAN_VISITOR})::int AS availability_request_people,
       count(DISTINCT visitor_id) FILTER (WHERE NOT (${HUMAN_VISITOR}))::int AS robot_visits
-      FROM analytics_events WHERE created_at >= $1 AND created_at < $2`, [from, to]),
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}`, [from, to]),
     // «Заход» считаем по паузе, а не по вкладке: страница помнит номер захода, пока
     // вкладка открыта, поэтому три карточки, открытые в трёх вкладках, выглядели бы
     // тремя разными заходами, а вкладка, забытая на сутки, — одним. Новый заход
     // начинается там, где между двумя шагами посетителя прошло больше получаса.
     pool.query(`WITH steps AS (
         SELECT created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap
-        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR}
+        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
       )
       SELECT count(*) FILTER (WHERE gap IS NULL OR gap > interval '30 minutes')::int AS visits FROM steps`, [from, to]),
     pool.query(`SELECT
@@ -306,7 +325,7 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(DISTINCT visitor_id)::int AS visitors,
       count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views,
       count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
-      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR}
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
       GROUP BY created_at::date ORDER BY created_at::date`, [from, to]),
     pool.query(`WITH views AS (
         SELECT listing_id, max(listing_title) AS listing_title,
@@ -314,7 +333,7 @@ export async function getAnalyticsDashboard(rangeValue) {
           count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers,
           max(created_at) FILTER (WHERE event_name='vehicle_view') AS last_viewed,
           count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
-        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${HUMAN_VISITOR} GROUP BY listing_id
+        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR} GROUP BY listing_id
       ), asks AS (
         SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${notStaffAccount("customer_id")} GROUP BY listing_id
       ), drafts AS (
@@ -361,7 +380,7 @@ export async function getAnalyticsDashboard(rangeValue) {
       FROM customer_accounts WHERE created_at >= $1 AND created_at < $2 AND NOT staff
       ORDER BY created_at DESC LIMIT 100`, [from, to]),
     pool.query(`SELECT event_name,listing_id,listing_title,path,created_at
-      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR} ORDER BY created_at DESC LIMIT 30`, [from, to]),
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR} ORDER BY created_at DESC LIMIT 30`, [from, to]),
     // Регистрации считаем по аккаунтам, а не по событиям — тем же источником, из которого
     // берётся список ниже. Иначе счётчик и список расходятся: событий может не быть вовсе
     // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
@@ -376,7 +395,7 @@ export async function getAnalyticsDashboard(rangeValue) {
           btrim(properties->>'query') AS query,
           nullif(properties->>'found','')::int AS found
         FROM analytics_events
-        WHERE event_name='search_query' AND created_at >= $1 AND created_at < $2 AND ${HUMAN_VISITOR}
+        WHERE event_name='search_query' AND created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
           AND btrim(coalesce(properties->>'query','')) <> ''
       ), settled AS (
         SELECT * FROM asked a WHERE NOT EXISTS (
@@ -486,9 +505,9 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
   const [overview, vehicles, searches, leads, customers] = await Promise.all([
     // Ярлык «новое с прошлого раза» тоже считает только живых людей, иначе он
     // зажигался бы от заходов роботов.
-    pool.query(`SELECT count(DISTINCT visitor_id)::int AS n FROM analytics_events WHERE created_at > $1 AND ${humanVisitor(">")}`, [since.overview]),
-    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${humanVisitor(">")}`, [since.vehicles]),
-    pool.query(`SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND ${humanVisitor(">")} AND btrim(coalesce(properties->>'query','')) <> ''`, [since.searches]),
+    pool.query(`SELECT count(DISTINCT visitor_id)::int AS n FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.overview]),
+    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicles]),
+    pool.query(`SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")} AND btrim(coalesce(properties->>'query','')) <> ''`, [since.searches]),
     pool.query(`SELECT (SELECT count(*) FROM order_drafts WHERE created_at > $1 AND ${notStaffContact("contact")})::int
       + (SELECT count(*) FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")})::int AS n`, [since.leads]),
     pool.query("SELECT count(*)::int AS n FROM customer_accounts WHERE created_at > $1 AND NOT staff", [since.customers]),

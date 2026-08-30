@@ -105,6 +105,15 @@ test("keeps private application routes available but non-indexable", async () =>
   assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
 });
 
+test("keeps the CRM non-indexable when public indexing is enabled", async () => {
+  const response = await worker.fetch(new Request("https://example.test/analytics", { headers:{ accept:"text/html" } }), {
+    SEO_ALLOW_INDEXING:"true",
+    ASSETS:{ fetch:async () => new Response("crm", { status:200, headers:{ "content-type":"text/html" } }) },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
+});
+
 test("does not turn missing API or write requests into the app shell", async () => {
   for (const request of [
     new Request("https://example.test/api/missing", { headers: { accept: "application/json" } }),

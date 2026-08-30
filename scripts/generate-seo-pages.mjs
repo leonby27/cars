@@ -130,6 +130,13 @@ const publicPages = [
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
 
+// В боевом HTML CRM не оставляем даже выключенный код Метрики. Проверка адреса в
+// общем шаблоне нужна для локальной разработки и перехода без перезагрузки, а
+// отдельный готовый файл `/analytics` может и должен быть полностью чистым.
+const withoutMetrika = (html) => html
+  .replace(/\s*<script\b[^>]*id=["']yandex-metrika["'][^>]*>[\s\S]*?<\/script>/i, "")
+  .replace(/\s*<noscript\b[^>]*id=["']yandex-metrika-noscript["'][^>]*>[\s\S]*?<\/noscript>/i, "");
+
 // ── Куда идти дальше с информационной страницы ────────────────────────────────
 // Страницы про растаможку, квоту, стоимость доставки, расчёт, гарантии и вопросы —
 // самые содержательные на сайте, от 1 100 до 1 800 слов. При этом они были тупиками:
@@ -756,7 +763,8 @@ for (const car of cars) {
 
 for (const route of privateRoutes) {
   const name = route.split("/").filter(Boolean).join(" ") || "Личный раздел";
-  writeRoute(route, renderHtml({ title: `${name} | abcars.by`, description: "Личный раздел пользователя abcars.by.", canonical: routeUrl(route), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false }));
+  const html = renderHtml({ title: `${name} | abcars.by`, description: "Личный раздел пользователя abcars.by.", canonical: route === "/analytics/" ? null : routeUrl(route), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
+  writeRoute(route, route === "/analytics/" ? withoutMetrika(html) : html);
 }
 
 const privateHtml = renderHtml({ title: "Личный раздел | abcars.by", description: "Личный раздел пользователя abcars.by.", canonical: routeUrl("/account/"), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });

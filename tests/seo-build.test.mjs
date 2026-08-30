@@ -109,6 +109,14 @@ test("preview build ships public pages as noindex and no vehicle pages", async (
   await missing("data/catalog.json");
 });
 
+test("внутренняя CRM не содержит счётчиков и поисковых сигналов", async () => {
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  const analytics = await read("analytics/index.html");
+  assert.match(analytics, /<meta name="robots" content="noindex, nofollow, noarchive"/);
+  assert.doesNotMatch(analytics, /rel="canonical"/);
+  assert.doesNotMatch(analytics, /mc\.yandex\.|window\.__ym|\bym\(/, "в HTML CRM остался код Метрики");
+});
+
 test("предсказуемых имён карты сайта в сборке нет", async () => {
   const { read, missing } = await build();
   // `/sitemap.xml` — готовый список адресов каталога для конкурента, поэтому карта лежит

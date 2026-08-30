@@ -6,7 +6,7 @@ import { authenticateAccount, clearSessionCookie, createAccount, createSession, 
 import { createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelSummary } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
-import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, isDatacenterAddress, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, isDatacenterAddress, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
@@ -143,7 +143,7 @@ export async function handleApiRequest(request, response) {
       const body = await readJson(request);
       // Отвечаем как обычно и молчим о причине: незачем подсказывать, как
       // подделать событие. Для страницы сайта разницы нет — она ответ не читает.
-      if (!fromOwnPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, recorded:false });
+      if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, recorded:false });
       if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, recorded:false });
       // Свой человек, вошедший в кабинет служебным аккаунтом, статистику не наполняет:
       // метку «не считать» браузер помнит не везде, а вход — надёжный признак своего.
@@ -157,7 +157,7 @@ export async function handleApiRequest(request, response) {
       const limit = await checkRateLimit("analyticsEvents", [clientAddress(request)]);
       if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const body = await readJson(request);
-      if (!fromOwnPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0 });
+      if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0 });
       if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0 });
       if (await isStaffVisit(request)) return json(response, 202, { ok:true, confirmed:0 });
       const result = await confirmHumanVisit(body);

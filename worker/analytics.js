@@ -5,6 +5,19 @@ const encoder = new TextEncoder();
 const clean = (value, max) => String(value || "").trim().slice(0, max);
 let schemaPromise;
 
+const workerInternalAnalyticsPath = (value = "") => {
+  let pathname = String(value || "");
+  try { pathname = new URL(pathname, "https://abcars.invalid").pathname; } catch { pathname = pathname.split(/[?#]/, 1)[0]; }
+  const cleanPath = pathname.replace(/\/+$/, "") || "/";
+  return cleanPath === "/analytics" || cleanPath.startsWith("/analytics/");
+};
+const workerFromAnalyticsPage = (request) => {
+  const referer = request.headers.get("referer") || "";
+  if (!referer) return false;
+  try { return workerInternalAnalyticsPath(new URL(referer).pathname); } catch { return false; }
+};
+const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%'";
+
 const json = (payload, status = 200, headers = {}) => Response.json(payload, { status, headers:{ "cache-control":"no-store", ...headers } });
 const base64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 const fromBase64url = (value) => Uint8Array.from(atob(String(value).replace(/-/g, "+").replace(/_/g, "/")), (char) => char.charCodeAt(0));
@@ -34,6 +47,8 @@ export function normalizeWorkerEvent(body = {}) {
   const eventId = clean(body.eventId, 80);
   const visitorId = clean(body.visitorId, 80);
   const sessionId = clean(body.sessionId, 80);
+  const path = clean(body.path, 400) || "/";
+  if (workerInternalAnalyticsPath(path)) return { ignored:true };
   if (!eventId || !visitorId || !sessionId) return { error:"invalid_event_identity" };
   const source = body.properties && typeof body.properties === "object" && !Array.isArray(body.properties) ? body.properties : {};
   // Личные данные в события не принимаем: приём событий открыт без пароля, поэтому имя
@@ -45,7 +60,7 @@ export function normalizeWorkerEvent(body = {}) {
     visitorId,
     sessionId,
     eventName,
-    path:clean(body.path, 400) || "/",
+    path,
     listingId:clean(body.listingId, 200) || null,
     listingTitle:clean(body.listingTitle, 240) || null,
     properties,
@@ -124,22 +139,22 @@ async function dashboard(db, days) {
       sum(CASE WHEN event_name='registration_completed' THEN 1 ELSE 0 END) AS registrations,
       sum(CASE WHEN event_name='custom_search_submitted' THEN 1 ELSE 0 END) AS custom_searches,
       sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1)`).bind(cutoff, cutoff).first(),
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT} AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})`).bind(cutoff, cutoff).first(),
     db.prepare(`SELECT date(created_at) AS day, count(DISTINCT visitor_id) AS visitors,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS vehicle_views,
       sum(CASE WHEN event_name='availability_click' THEN 1 ELSE 0 END) AS availability_clicks,
       sum(CASE WHEN event_name='registration_completed' THEN 1 ELSE 0 END) AS registrations,
       sum(CASE WHEN event_name='custom_search_submitted' THEN 1 ELSE 0 END) AS custom_searches
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1)
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT} AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})
       GROUP BY date(created_at) ORDER BY date(created_at)`).bind(cutoff, cutoff).all(),
     db.prepare(`SELECT listing_id, max(listing_title) AS listing_title,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS views,
       sum(CASE WHEN event_name='availability_click' THEN 1 ELSE 0 END) AS availability_clicks,
       sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND listing_id IS NOT NULL AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1)
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND listing_id IS NOT NULL AND ${PUBLIC_EVENT} AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})
       GROUP BY listing_id ORDER BY availability_clicks DESC, views DESC LIMIT 30`).bind(cutoff, cutoff).all(),
     db.prepare(`SELECT event_name,listing_id,listing_title,path,created_at
-      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1) ORDER BY created_at DESC LIMIT 30`).bind(cutoff, cutoff).all(),
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT} AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT}) ORDER BY created_at DESC LIMIT 30`).bind(cutoff, cutoff).all(),
   ]);
   const safeSummary = Object.fromEntries(Object.entries(summary || {}).map(([key,value]) => [key,Number(value) || 0]));
   return {
@@ -171,8 +186,9 @@ export async function handleAnalyticsRequest(request, env, url) {
   if (request.method === "POST" && url.pathname === "/api/analytics/events") {
     // Отвечаем как обычно и молчим о причине: незачем подсказывать, как подделать
     // событие. Страница сайта ответ всё равно не читает.
-    if (!workerOwnPage(request, env) || workerBotAgent(request.headers.get("user-agent"))) return json({ ok:true, recorded:false }, 202);
+    if (!workerOwnPage(request, env) || workerFromAnalyticsPage(request) || workerBotAgent(request.headers.get("user-agent"))) return json({ ok:true, recorded:false }, 202);
     const event = normalizeWorkerEvent(await request.json().catch(() => ({})));
+    if (event.ignored) return json({ ok:true, recorded:false }, 202);
     if (event.error) return json(event, 400);
     await env.DB.prepare(`INSERT INTO analytics_events (event_id,visitor_id,session_id,event_name,path,listing_id,listing_title,properties,human,human_action)
       VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING`)
@@ -182,14 +198,15 @@ export async function handleAnalyticsRequest(request, env, url) {
   // Страница сообщает, что за заходом стоит живой человек: он подвигал мышью,
   // коснулся экрана, прокрутил или нажал клавишу.
   if (request.method === "POST" && url.pathname === "/api/analytics/human") {
-    if (!workerOwnPage(request, env) || workerBotAgent(request.headers.get("user-agent"))) return json({ ok:true, confirmed:0 }, 202);
+    if (!workerOwnPage(request, env) || workerFromAnalyticsPage(request) || workerBotAgent(request.headers.get("user-agent"))) return json({ ok:true, confirmed:0 }, 202);
     const body = await request.json().catch(() => ({}));
     const visitorId = clean(body.visitorId, 80);
     const sessionId = clean(body.sessionId, 80);
     if (!visitorId || !sessionId) return json({ error:"invalid_event_identity" }, 400);
     const action = body.action === true ? 1 : 0;
     const result = await env.DB.prepare(`UPDATE analytics_events SET human = 1, human_action = max(human_action, ?)
-        WHERE visitor_id = ? AND session_id = ? AND NOT (human = 1 AND (human_action = 1 OR ? = 0))`)
+        WHERE visitor_id = ? AND session_id = ? AND NOT (human = 1 AND (human_action = 1 OR ? = 0))
+          AND ${PUBLIC_EVENT}`)
       .bind(action, visitorId, sessionId, action).run();
     return json({ ok:true, confirmed:result?.meta?.changes || 0 }, 202);
   }

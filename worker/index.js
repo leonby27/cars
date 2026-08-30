@@ -3,6 +3,8 @@ import { handleAnalyticsRequest } from "./analytics.js";
 export default {
   async fetch(request, env) {
     const requestUrl = new URL(request.url);
+    const cleanRequestPath = requestUrl.pathname.replace(/\/+$/, "") || "/";
+    const analyticsPage = cleanRequestPath === "/analytics" || cleanRequestPath.startsWith("/analytics/");
     const analyticsResponse = await handleAnalyticsRequest(request, env, requestUrl);
     if (analyticsResponse) return analyticsResponse;
     const indexingEnabled = String(env.SEO_ALLOW_INDEXING || "").toLowerCase() === "true";
@@ -23,7 +25,7 @@ export default {
       const headers = new Headers(response.headers);
       if (isHtml) {
         for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
-        if (!indexingEnabled) headers.set("x-robots-tag", "noindex, nofollow, noarchive");
+        if (!indexingEnabled || analyticsPage) headers.set("x-robots-tag", "noindex, nofollow, noarchive");
       }
       return new Response(response.body, { status:response.status, statusText:response.statusText, headers });
     };

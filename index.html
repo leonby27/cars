@@ -127,12 +127,14 @@
         meta?.then((value) => { window.__boot.metaValue = value; }).catch(() => {});
       })();
     </script>
-    <!-- Яндекс.Метрика. Счётчик считает живых посетителей, поэтому заходы с рабочего
-         компьютера (localhost и домашняя сеть) в него не идут: иначе наша же отладка
-         выглядела бы трафиком. Номер счётчика лежит в window.__ym — приложение берёт
-         его оттуда, чтобы сообщать метрике о переходах внутри сайта. -->
-    <script>
+    <script id="yandex-metrika">
       (() => {
+        // Яндекс.Метрика считает живых посетителей. Номер лежит в window.__ym:
+        // приложение берёт его оттуда для переходов внутри сайта.
+        // `/analytics` — внутренняя CRM, а не страница сайта. На прямом входе не
+        // создаём даже очередь счётчика: ни просмотр, ни Webvisor не должны начаться.
+        const page = location.pathname.replace(/\/+$/, '') || '/';
+        if (page === '/analytics' || page.startsWith('/analytics/')) return;
         const host = location.hostname;
         if (/^(localhost|127\.0\.0\.1|\[?::1\]?|.*\.local)$/i.test(host) || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return;
         // Свои заходы с обычного адреса сайта тоже можно не считать: откройте любую
@@ -185,7 +187,7 @@
   <body>
     <!-- Картинка-счётчик для браузеров без JavaScript. В <head> её держать нельзя —
          сборщик считает это ошибкой разметки, поэтому она стоит здесь. -->
-    <noscript><div><img src="https://mc.yandex.ru/watch/111868764" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+    <noscript id="yandex-metrika-noscript"><div><img src="https://mc.yandex.ru/watch/111868764" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

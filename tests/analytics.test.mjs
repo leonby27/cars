@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromOwnPage, isBotAgent, isDatacenterAddress, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
-import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
+import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
   const event = normalizeAnalyticsEvent({
@@ -20,6 +20,23 @@ test("analytics events are allowlisted and drop personal data", () => {
   for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted"]) {
     assert.equal(normalizeAnalyticsEvent({ eventId:`event-${eventName}`, visitorId:"visitor", sessionId:"session", eventName, path:"/" }).eventName, eventName);
   }
+});
+
+test("внутренняя CRM нигде не считается страницей сайта", async () => {
+  for (const path of ["/analytics", "/analytics/", "/analytics/customers?period=30", "https://abcars.by/analytics#leads"]) {
+    assert.equal(isAnalyticsPath(path), true, path);
+    assert.equal(isInternalAnalyticsPath(path), true, path);
+    assert.equal(normalizeAnalyticsEvent({ eventId:"crm", visitorId:"staff", sessionId:"crm", eventName:"page_view", path }).ignored, true);
+  }
+  assert.equal(isAnalyticsPath("/catalog?from=analytics"), false);
+  assert.equal(isSkippedVisit({ hostname:"abcars.by", nocount:null, automated:false, agent:"Mozilla/5.0", path:"/analytics" }), true);
+  assert.equal(fromAnalyticsPage({ referer:"https://abcars.by/analytics?period=7" }), true);
+  assert.equal(fromAnalyticsPage({ referer:"https://abcars.by/catalog" }), false);
+
+  let writes = 0;
+  const result = await recordAnalyticsEvent({ eventId:"crm", visitorId:"staff", sessionId:"crm", eventName:"page_view", path:"/analytics" }, { db:{ query:async () => { writes += 1; } } });
+  assert.deepEqual(result, { ok:true, recorded:false });
+  assert.equal(writes, 0, "CRM-событие дошло до базы");
 });
 
 test("нажатие кнопки проверки объявления считается без текста комментария", () => {
@@ -314,4 +331,3 @@ test("время на странице человеком не делает — 
   assert.equal(normalizeAnalyticsEvent({ eventId:"e3", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/", human:true, humanAction:true }).humanAction, true);
   assert.equal(normalizeAnalyticsEvent({ eventId:"e4", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/", human:true }).humanAction, false);
 });
-

@@ -38,7 +38,7 @@ import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecR
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
-import { trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
+import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
 // таблиц) не кладём в общий файл приложения, а подгружаем отдельным файлом при
 // первом открытии /analytics: каждому посетителю сайта он не нужен.
@@ -10856,7 +10856,11 @@ export function App() {
   // иначе весь визит выглядит как одна страница.
   const metrikaStarted = useRef(false);
   useEffect(() => {
-    if (path !== "/analytics") trackEvent("page_view");
+    if (path === "/analytics") {
+      stopMetrika();
+      return;
+    }
+    trackEvent("page_view");
     if (metrikaStarted.current) trackMetrikaView(window.location.href);
     metrikaStarted.current = true;
   }, [path]);
