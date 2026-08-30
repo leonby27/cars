@@ -231,11 +231,11 @@ export async function listCars(searchParams) {
       ? Promise.resolve({ rows:[] })
       : pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
     // max(last_seen_at) едет в том же скане, что и count(*): отдельного запроса дата не стоит.
-    pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+    pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at, ${SECTION_CHANGED_AT} AS changed_at FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
   const total = countResult.rows[0].total;
   const items = itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row)));
-  return { items, total, refreshedAt:countResult.rows[0].refreshed_at, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
+  return { items, total, refreshedAt:countResult.rows[0].refreshed_at, changedAt:countResult.rows[0].changed_at || null, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
 }
 
 // Адрес карточки несёт короткий номер объявления («/cars/59334290»), а идентификатор
@@ -256,14 +256,24 @@ export async function listCarPage(searchParams, { limit = 100, offset = 0 } = {}
   const { where, values } = buildCarFilters(searchParams);
   const order = buildCarOrder(searchParams);
   const [itemsResult, countResult] = await Promise.all([
-    pool.query(`SELECT l.id, l.title, l.mileage_km, v.brand, v.model, v.model_year
+    // Главный снимок объявления берётся отдельным подзапросом по ключу
+    // (listing_id, position) — это уникальный индекс таблицы, поэтому строка находится
+    // за один поиск и на времени страницы не сказывается (замер на 50-й странице
+    // каталога: 26–52 мс против 37 мс без снимка). Целиком список фотографий здесь
+    // не нужен: в списке показывается один кадр на машину.
+    pool.query(`SELECT l.id, l.title, l.mileage_km, v.brand, v.model, v.model_year,
+      (SELECT m.url FROM listing_media m WHERE m.listing_id=l.id AND m.position=0) AS image
       FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
       ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, offset]),
-    pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+    // Дата последнего изменения набора едет в том же скане, что и подсчёт: страница
+    // раздела показывает её подписью и отдаёт в карту сайта, а отдельного запроса
+    // она не стоит.
+    pool.query(`SELECT count(*)::int AS total, ${SECTION_CHANGED_AT} AS changed_at FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
   return {
-    items: itemsResult.rows.map((row) => ({ id:row.id, title:row.title, brand:row.brand, model:row.model, year:row.model_year, mileage:row.mileage_km })),
+    items: itemsResult.rows.map((row) => ({ id:row.id, title:row.title, brand:row.brand, model:row.model, year:row.model_year, mileage:row.mileage_km, image:row.image || null })),
     total: countResult.rows[0].total,
+    changedAt: countResult.rows[0].changed_at || null,
   };
 }
 
@@ -318,9 +328,27 @@ export async function modelSummary(searchParams) {
 
 /** Сколько машин в разделе. Нужно сборке: по этому числу в карту сайта попадают страницы раздела. */
 export async function countCars(searchParams) {
+  return (await sectionStats(searchParams)).total;
+}
+
+// Когда набор машин в последний раз менялся: у какой-то из его машин изменились данные
+// объявления (`content_changed_at` ставится только при настоящем изменении — цена,
+// пробег, фотографии) или в набор добавилась новая машина (`first_seen_at`).
+// `last_seen_at` для этого не годится: она обновляется у всех машин при каждой ночной
+// проверке, и все разделы получили бы одну и ту же сегодняшнюю дату — ровно та беда,
+// из-за которой у 31 тысячи карточек в карте сайта стояло одно число.
+export const SECTION_CHANGED_AT = "max(GREATEST(COALESCE(l.content_changed_at, l.imported_at), l.first_seen_at))";
+
+/**
+ * Сколько машин в наборе и когда набор менялся в последний раз — одним запросом.
+ * Дата нужна карте сайта (`lastmod` у 163 разделов и 449 обзоров: без неё поисковик
+ * не знает, что раздел вчера обновился) и подписи «данные обновлены» на самой странице.
+ */
+export async function sectionStats(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
-  const result = await pool.query(`SELECT count(*)::int AS total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
-  return result.rows[0].total;
+  const result = await pool.query(`SELECT count(*)::int AS total, ${SECTION_CHANGED_AT} AS changed_at
+    FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
+  return { total: result.rows[0].total, changedAt: result.rows[0].changed_at || null };
 }
 
 /**
@@ -460,18 +488,21 @@ export async function getModelFacts() {
   const result = await pool.query(`WITH active AS (
       SELECT l.id, v.brand, v.model, v.powertrain, l.estimated_total_usd AS price,
         NULLIF(v.specifications->>'acceleration','')::numeric AS accel,
-        COALESCE(v.electric_range_km, v.combined_range_km) AS range
+        COALESCE(v.electric_range_km, v.combined_range_km) AS range,
+        -- Когда у модели в последний раз что-то менялось: нужно карте сайта, чтобы
+        -- у 449 обзоров стояла своя дата, а не пустое место.
+        GREATEST(COALESCE(l.content_changed_at, l.imported_at), l.first_seen_at) AS changed_at
       FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'
     ), summary AS (
       SELECT brand, model, count(*)::int AS count, min(price) AS price_min, max(price) AS price_max,
-        min(accel) AS accel, max(range) AS range,
+        min(accel) AS accel, max(range) AS range, max(changed_at) AS changed_at,
         array_agg(DISTINCT powertrain) FILTER (WHERE powertrain IS NOT NULL) AS powertrains
       FROM active GROUP BY brand, model
     ), cheapest AS (
       SELECT DISTINCT ON (brand, model) brand, model, id
       FROM active ORDER BY brand, model, price ASC NULLS LAST, id
     )
-    SELECT s.brand, s.model, s.count, s.price_min, s.price_max, s.accel, s.range, s.powertrains,
+    SELECT s.brand, s.model, s.count, s.price_min, s.price_max, s.accel, s.range, s.powertrains, s.changed_at,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=c.id ORDER BY m.position LIMIT 1) AS image
     FROM summary s LEFT JOIN cheapest c ON c.brand=s.brand AND c.model=s.model
     ORDER BY s.brand, s.model`);
@@ -484,6 +515,7 @@ export async function getModelFacts() {
     accel:Number(row.accel) || null,
     range:Number(row.range) || null,
     powertrains:row.powertrains || [],
+    changedAt:row.changed_at || null,
     image:row.image || null,
   })) };
 }

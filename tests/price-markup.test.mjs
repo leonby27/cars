@@ -109,3 +109,60 @@ test("когда модели нет в наличии, вилки цен не �
   assert.doesNotMatch(page.html, /AggregateOffer/);
   assert.doesNotMatch(page.html, /"price":/);
 });
+
+// ── Фотографии ────────────────────────────────────────────────────────────────
+// До 30.08.2026 в списках машин не было ни одного снимка (их рисует скрипт уже в
+// браузере), а в разметке снимки указывались прямым адресом китайского хранилища —
+// оно отвечает роботу за 1,4 с против 0,36 с у нашей копии и может закрыться.
+
+const withPhoto = (id, chinaPrice) => ({
+  ...car(id, chinaPrice),
+  image: "https://erscglobal2.autoimg.cn/escimg/auto/g33/M06/A2/5B/1400x0_c42_autohomecar__test.jpg.webp",
+  images: ["https://erscglobal2.autoimg.cn/escimg/auto/g33/M06/A2/5B/1400x0_c42_autohomecar__test.jpg.webp"],
+});
+
+test("в списке машин есть снимки, и они идут со своего адреса", () => {
+  const page = renderer.landingPage({
+    landing: findCatalogLanding("/catalog/byd"),
+    cars: [withPhoto(11, 90000), withPhoto(12, 120000)],
+    total: 2,
+    page: 1,
+    pages: 1,
+    perPage: 99,
+    priced: [withPhoto(11, 90000)],
+  });
+  assert.match(page.html, /<img src="\/photo\/escimg\/[^"]+600x0_c42_[^"]+" alt="BYD Han 2023 из Китая"/);
+  // Отложенная загрузка обязательна: до запуска приложения весь блок скрыт, и без
+  // неё браузер посетителя качал бы сотню снимков впустую.
+  assert.match(page.html, /loading="lazy"/);
+  // Прямых адресов китайского хранилища на странице не остаётся — ни в списке,
+  // ни в разметке для поисковика.
+  assert.doesNotMatch(page.html, /erscglobal2\.autoimg\.cn/);
+  assert.match(page.html, /"image":\["https:\/\/abcars\.by\/photo\/escimg\/[^"]+"\]/);
+});
+
+test("страница машины отдаёт снимок со своего адреса и разметке, и соцсетям", () => {
+  const page = renderer.carPage({ car: withPhoto(13, 90000) });
+  assert.match(page.html, /<meta property="og:image" content="https:\/\/abcars\.by\/photo\//);
+  assert.match(page.html, /"image":\["https:\/\/abcars\.by\/photo\//);
+});
+
+test("страница «такой страницы нет» закрыта от индексации и ведёт в каталог", () => {
+  const html = renderer.notFoundPage();
+  assert.match(html, /<h1>Такой страницы нет<\/h1>/);
+  assert.match(html, /<meta name="robots" content="noindex, nofollow, noarchive"/);
+  assert.match(html, /href="\/catalog"/);
+});
+
+test("подпись с датой обновления появляется только когда дата известна", () => {
+  const args = {
+    landing: findCatalogLanding("/catalog/byd"),
+    cars: [withPhoto(14, 90000)],
+    total: 1,
+    page: 1,
+    pages: 1,
+    perPage: 99,
+  };
+  assert.match(renderer.landingPage({ ...args, changedAt: "2026-08-29T10:00:00.000Z" }).html, /Наличие и цены обновлены 29 августа 2026\./);
+  assert.doesNotMatch(renderer.landingPage(args).html, /Наличие и цены обновлены/);
+});

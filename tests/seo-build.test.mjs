@@ -441,3 +441,22 @@ test("включённый журнал собирается страницам�
     assert.doesNotMatch(html, /"item":"https:\/\/abcars\.by\/[^"]+\/"/, `${name}: крошки с чертой`);
   }
 });
+
+test("страница «такой страницы нет» собирается и ведёт в каталог", async () => {
+  const { read } = await build();
+  const html = await read("404.html");
+  // Её подставляет nginx вместо главной, когда адрес неизвестен (deploy/nginx-abcars-site.conf).
+  assert.match(html, /<h1>Такой страницы нет<\/h1>/);
+  assert.match(html, /<meta name="robots" content="noindex, nofollow, noarchive"/);
+  assert.match(html, /href="\/catalog"/);
+  // Первоисточника у неё быть не должно: страницы по этому адресу нет.
+  assert.doesNotMatch(html, /rel="canonical"/);
+});
+
+test("в списках машин на собранных страницах есть снимки с подписями", async () => {
+  // Витрина главной берётся из дампа каталога, а он читается только вместе со
+  // страницами машин; на хостинге те же снимки приходят из базы.
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
+  const home = await read("index.html");
+  assert.match(home, /<img src="[^"]+" alt="BYD [^"]+ из Китая" width="600" height="450" loading="lazy" decoding="async" \/>/);
+});

@@ -22,7 +22,7 @@ import { TOOL_PAGES } from "../src/tool-pages.js";
 // Журнал: ссылка на него нужна в подвале каждой страницы. Пока раздел выключен,
 // ссылки нет — как и самих страниц журнала.
 import { BLOG_ENABLED } from "../src/feature-flags.js";
-import { BLOG_INDEX, blogPostsForModel } from "../src/blog-posts.js";
+import { BLOG_INDEX, blogDateLabel, blogPostsForModel } from "../src/blog-posts.js";
 // Живые ссылки внутри абзацев обзора модели — тот же разбор, что в приложении.
 import { splitInlineLinks } from "../src/inline-links.js";
 // Первый экран, который браузер показывает до запуска приложения.
@@ -64,6 +64,15 @@ export const photoHref = (source, width = 0) => {
     return source;
   }
 };
+// Ширина снимка в списках: столько же просит плитка каталога в приложении
+// (IMAGE_WIDTH_TILE в src/App.jsx). Совпадение важно не для вида, а для кэша
+// фотографий: два разных числа завели бы на диске две копии каждого снимка.
+export const IMAGE_WIDTH_TILE = 600;
+// Ширина снимка в разметке для поисковика. 1400 — та ширина, что стоит в адресах
+// объявлений источника, то есть эти кадры кэш уже знает; Google для карточек товара
+// просит снимок покрупнее, чем показан в списке.
+export const IMAGE_WIDTH_SCHEMA = 1400;
+
 export const jsonLd = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
 export const number = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 /** Склонение существительного при числе: 1 автомобиль, 2 автомобиля, 5 автомобилей. */
@@ -211,8 +220,28 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return `<nav aria-label="Страницы каталога">${back}<ul>${around}</ul>${forward}</nav>`;
   }
 
+  /**
+   * Список машин для поисковика. С 30.08.2026 — со снимком объявления.
+   *
+   * Зачем снимок: до этого ни на главной, ни в каталоге, ни в 163 разделах в самой
+   * странице не было ни одной фотографии машины — их рисовал скрипт уже после
+   * загрузки. Поисковик по картинкам такие снимки не видит, и в «товарных» блоках
+   * выдачи нам показывать было нечего (у WestMotors на странице марки 156 снимков).
+   *
+   * Ширина 600 — та же, что просит плитка каталога в приложении (IMAGE_WIDTH_TILE),
+   * поэтому кадр берётся из уже прогретого кэша фотографий и второй копии того же
+   * снимка на диске не заводит. `loading="lazy"` обязателен: до запуска приложения
+   * весь этот блок скрыт правилом `html.booting`, и отложенные снимки браузер в нём
+   * не качает — вес страницы для живого посетителя не растёт.
+   */
   function carLinks(items, limit = items.length) {
-    return `<ul>${items.slice(0, limit).map((car) => `<li><a href="${hrefRoute(carRoute(car))}">${escapeHtml(carTitle(car))}</a> — ${number(car.mileage)} км</li>`).join("")}</ul>`;
+    const photo = (car) => {
+      const source = photoHref(String(car.image || car.images?.[0] || ""), IMAGE_WIDTH_TILE);
+      if (!source || !/^(https:\/\/|\/)/.test(source)) return "";
+      const href = source.startsWith("/") ? `${siteBasePath}${source}` : source;
+      return `<img src="${escapeHtml(href)}" alt="${escapeHtml(carTitle(car))} из Китая" width="600" height="450" loading="lazy" decoding="async" />`;
+    };
+    return `<ul>${items.slice(0, limit).map((car) => `<li><a href="${hrefRoute(carRoute(car))}">${photo(car)}${escapeHtml(carTitle(car))}</a> — ${number(car.mileage)} км</li>`).join("")}</ul>`;
   }
 
   /**
@@ -231,10 +260,21 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     };
   }
 
-  /** Фотография объявления для разметки: только настоящий внешний адрес. */
+  /**
+   * Фотография объявления для разметки — со своего адреса, а не из китайского хранилища.
+   *
+   * Раньше здесь стоял прямой адрес источника: рассуждение было «поисковику важен
+   * исходник». На деле картинку из разметки Google скачивает сам, и китайское
+   * хранилище отвечает ему за 1,4 секунды против 0,36 у нашей копии, а в любой день
+   * может перестать пускать чужого робота — тогда снимки выпадут из поиска по
+   * картинкам вместе с товарными блоками выдачи. Наш кэш держит тот же кадр
+   * (см. photoHref), поэтому отдаём его.
+   */
   const carPhoto = (car) => {
     const url = String(car.image || car.images?.[0] || "");
-    return /^https:\/\//.test(url) ? url : null;
+    if (!/^https:\/\//.test(url)) return null;
+    const proxied = photoHref(url, IMAGE_WIDTH_SCHEMA);
+    return proxied?.startsWith("/") ? `${base}${proxied}` : proxied;
   };
 
   /**
@@ -283,6 +323,21 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
 
   /** Словами: «от 9 950 $» или «от 9 950 до 56 300 $». */
   const spreadText = (spread) => (spread.to > spread.from ? `от ${number(spread.from)} до ${number(spread.to)} $` : `от ${number(spread.from)} $`);
+
+  /**
+   * Подпись «данные обновлены такого-то числа». Ставится там, где содержимое страницы
+   * живёт вместе с каталогом: в разделах и в обзорах моделей.
+   *
+   * Зачем: наличие и цены в разделе меняются каждую ночь, но ни на странице, ни в карте
+   * сайта об этом ничего не говорилось — для поисковика раздел выглядел неизменным
+   * с самой первой сборки. Дата берётся из базы (последнее настоящее изменение среди
+   * машин набора), а не ставится «сегодня»: иначе это было бы обещание свежести,
+   * которое не проверить.
+   */
+  function freshnessLine(changedAt) {
+    const label = blogDateLabel(changedAt);
+    return label ? `<p class="seo-updated">Наличие и цены обновлены ${escapeHtml(label)}.</p>` : "";
+  }
 
   function breadcrumbsSchema(items) {
     return {
@@ -417,17 +472,18 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const image = /^https:\/\//.test(String(car.image || "")) ? car.image : null;
     // Тот же снимок, что откроет галерея после запуска приложения, — и просим его
     // по тому же адресу (свой кэш фотографий, /photo/…), иначе браузер скачает
-    // одну и ту же фотографию дважды. Разметке для поисковиков оставляем прямой
-    // адрес хранилища: там важен исходник, а не наша копия.
+    // одну и ту же фотографию дважды.
     const proxiedPhoto = photoHref(image, "original");
     const imageOnPage = proxiedPhoto?.startsWith("/") ? `${siteBasePath}${proxiedPhoto}` : proxiedPhoto;
+    // Снимок для разметки и для ссылки в соцсетях — тоже со своего адреса: см. carPhoto.
+    const schemaPhoto = carPhoto(car);
     const modelName = [car.brand, car.model].filter(Boolean).join(" ");
     const schema = {
       "@context": "https://schema.org",
       "@type": "Vehicle",
       name: titleText,
       url: canonical,
-      image: image ? [image] : undefined,
+      image: schemaPhoto ? [schemaPhoto] : undefined,
       brand: car.brand ? { "@type": "Brand", name: car.brand } : undefined,
       model: car.model || undefined,
       vehicleModelDate: String(car.year || ""),
@@ -486,7 +542,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         appRoot,
         appRootPath: appRootPath || route.replace(/\/+$/, ""),
         bootData,
-        image,
+        image: schemaPhoto,
         type: "product",
         indexable,
         schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [titleText, route]]), schema],
@@ -566,7 +622,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * Общая страница каталога: заголовок, количество машин, ссылки на свежие объявления
    * и на все разделы. `sections` — разделы из `src/catalog-landings.js`.
    */
-  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [] }) {
+  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null }) {
     const canonical = routeUrl(pageRoute(CATALOG_INDEX.route, page));
     const first = (page - 1) * perPage;
     const spread = priceSpread(edges, priced);
@@ -584,7 +640,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // подпись под ними, чтобы при переходе в раздел верх страницы не дёргался.
     const index = landingHeading(CATALOG_INDEX.h1);
     const heading = `${headingLines(index)}${page > 1 ? ` — страница ${page}` : ""}`;
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${heading}</h1><p>${escapeHtml(index.subtitle)}</p><p>${escapeHtml(CATALOG_INDEX.lead)}</p>${countLine}${list}${sectionBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>${heading}</h1><p>${escapeHtml(index.subtitle)}</p><p>${escapeHtml(CATALOG_INDEX.lead)}</p>${countLine}${freshnessLine(changedAt)}${list}${sectionBlock}</main>${footer()}`;
     const itemList = {
       "@context": "https://schema.org",
       "@type": "ItemList",
@@ -643,7 +699,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * и переходы на соседние разделы. Приложение поверх этого рисует обычный каталог с
    * выставленным фильтром.
    */
-  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [] }) {
+  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null }) {
     const canonical = routeUrl(pageRoute(landing.path, page));
     const first = (page - 1) * perPage;
     const spread = priceSpread(edges, priced);
@@ -683,7 +739,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const parts = landingHeading(landing.h1);
     const subtitle = parts.subtitle;
     const heading = `${headingLines(parts)}${page > 1 ? ` — страница ${page}` : ""}`;
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${heading}</h1>${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}${countLine}${list}${notes}${faq}${reviews}${near}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${heading}</h1>${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}${countLine}${freshnessLine(changedAt)}${list}${notes}${faq}${reviews}${near}</main>${footer()}`;
     // Разметка списка: по ней поисковик понимает, что это подборка предложений, а не
     // одна страница товара.
     const itemList = {
@@ -730,6 +786,30 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return renderHtml({
       title: "Раздел каталога не найден | abcars.by",
       description: "Такого раздела каталога нет. Все автомобили с пробегом из Китая собраны в каталоге abcars.by.",
+      canonical: null,
+      body,
+      image: null,
+      indexable: false,
+    });
+  }
+
+  /**
+   * Страница «такого адреса нет» — файл `404.html` в сборке, его подставляет nginx
+   * вместо главной.
+   *
+   * До 30.08.2026 любой неизвестный адрес (`/чтоугодно`, `/blog/несуществующий-пост`)
+   * отдавал главную с кодом «страница найдена». Первоисточником у неё была указана
+   * главная, поэтому в выдачу такие адреса попасть не могли, но поисковик тратил
+   * на них обход, а проверялки ссылок считали сайт исправным там, где ссылка битая.
+   *
+   * Ссылки здесь ведут в каталог, а не только на главную: человек, попавший сюда
+   * по устаревшей ссылке из поиска, чаще всего искал машину.
+   */
+  function notFoundPage({ sections = [] } = {}) {
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>Такой страницы нет</h1><p>Возможно, ссылка устарела или в адресе опечатка. Автомобили с пробегом из Китая собраны в каталоге — там же расчёт стоимости до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей из Китая</a></p><p><a href="${hrefRoute("/models/")}">Обзоры моделей</a> · <a href="${hrefRoute("/customs/")}">Растаможка</a> · <a href="${hrefRoute("/how-it-works/")}">Как это работает</a></p>${sections.length ? sectionLinks(sections, { heading: "Разделы каталога" }) : ""}</main>${footer()}`;
+    return renderHtml({
+      title: "Страница не найдена | abcars.by",
+      description: "Такой страницы на abcars.by нет. Автомобили с пробегом из Китая собраны в каталоге.",
       canonical: null,
       body,
       image: null,
@@ -787,7 +867,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * `cars` — самые доступные машины этой модели, `total` — сколько их всего,
    * `siblings` — другие модели той же марки, `brandLanding` — раздел каталога марки.
    */
-  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing, edges = null, sections = [], similar = [] }) {
+  function modelPage({ modelPage: page, cars: items = [], total = 0, siblings = [], brandLanding = null, indexable = allowIndexing, edges = null, sections = [], similar = [], changedAt = null }) {
     const canonical = routeUrl(page.path);
     // Вилку берём по всем машинам модели, а не по загруженной дюжине: дюжина — самые
     // доступные, и верхняя граница по ней вышла бы заниженной.
@@ -821,7 +901,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
           links: blogPostsForModel(page.path).map((post) => [`${post.path}/`, post.name, post.teaser || null]),
         })
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/models/")}">О моделях авто</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${availability}${modelPageArticle(page)}${offers}${journal}${catalogWays}${alike}${modelLinks(siblings, { heading: `Другие модели ${page.brand}`, skip: page.path })}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/models/")}">О моделях авто</a></p><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.lead)}</p>${availability}${freshnessLine(changedAt)}${modelPageArticle(page)}${offers}${journal}${catalogWays}${alike}${modelLinks(siblings, { heading: `Другие модели ${page.brand}`, skip: page.path })}</main>${footer()}`;
     const schemas = [
       breadcrumbsSchema([["Главная", "/"], ["О моделях авто", "/models/"], [page.name, page.path]]),
     ];
@@ -892,5 +972,5 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     });
   }
 
-  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, pathwayLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, catalogIndexPage, carPage, carGonePage, carDescription, landingPage, landingMissingPage, modelPageArticle, modelPage };
+  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, pathwayLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, catalogIndexPage, carPage, carGonePage, carDescription, landingPage, landingMissingPage, notFoundPage, modelPageArticle, modelPage };
 }
