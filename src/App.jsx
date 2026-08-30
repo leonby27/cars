@@ -31,7 +31,7 @@ import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_COPY } from "./legal-copy.js";
 import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
-import { TOOL_PAGES, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
+import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED } from "./feature-flags.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogDateLine, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogRelativeDateSentence, blogSidebarItems, blogUpdatedAt, findBlogPost, homeBlogPosts } from "./blog-posts.js";
@@ -7594,6 +7594,14 @@ function OrderDraft({ car, navigate }) {
               <Info size={18} />
               <p>Курс НБРБ на {PRICING.rateDate}. Это предварительная модель, а не оферта. Итог меняется после подтверждения цены продавцом, VIN, маршрута и таможенных параметров.</p>
             </div>
+            {/* Куда идти за объяснением сметы. Раньше из карточки на страницы расчётов
+                вела только ссылка в подвале: человек, который смотрит строку «таможня
+                и сборы», упирался в цифру без продолжения. */}
+            <p className="order-tool-links">
+              <AppLink href="/customs" navigate={navigate}>Как считается таможня</AppLink>
+              <AppLink href="/calculator" navigate={navigate}>Посчитать другую машину</AppLink>
+              {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}>Остаток квоты</AppLink>}
+            </p>
           </section>
           <section className="order-section">
             <div className="order-section-title">
@@ -8209,6 +8217,12 @@ function ToolPage({ tool, navigate }) {
             {tool.kind === "customs" && <ToolPageTable table={customsExample()} />}
             {tool.kind === "cost" && <ToolPageTable table={deliveryStages()} />}
             {tool.kind === "calculator" && <LandedCostCalculator />}
+            {/* Готовые расчёты сразу под формой. Форму рисует скрипт, и до этой
+                таблицы на странице калькулятора не было ни одной посчитанной суммы,
+                которую видел бы поисковик: он читал рассказ о калькуляторе, а не
+                расчёт. Человеку она тоже к месту — цену прикидывают до того, как
+                начинают перебирать поля. */}
+            {tool.kind === "calculator" && <ToolPageTable table={calculatorExamples()} />}
           </article>
         </div>
         <div className="model-page-body page-width">
@@ -8326,7 +8340,7 @@ function QuotaFigures() {
       : `При таком темпе квота заканчивается около ${state.runsOutLabel}, а дальше к цене каждого электромобиля добавляется ввозная пошлина 15%.`;
   return (
     <section className="tool-live">
-      <h2>Сколько осталось сейчас</h2>
+      <h2>Сколько квоты на электромобили осталось сейчас</h2>
       <div className="tool-live-figure">
         <div className="tool-live-main">
           <span>Осталось у граждан</span>

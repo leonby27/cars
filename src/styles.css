@@ -6409,6 +6409,21 @@ footer {
 .order-disclaimer p {
   margin: 0;
 }
+.order-tool-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 0 0;
+  font-size: 16px;
+}
+.order-tool-links a {
+  color: var(--accent-dark);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-dark) 35%, transparent);
+}
+.order-tool-links a:hover {
+  border-bottom-color: var(--accent-dark);
+}
 .order-facts {
   display: grid;
   grid-template-columns: 1fr 1fr;

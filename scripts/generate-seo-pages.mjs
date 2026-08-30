@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS, catalogPageCount, landingApiParams, landingsForCar } from "../src/catalog-landings.js";
-import { TOOL_PAGES, customsExample, deliveryStages, toolPageStats } from "../src/tool-pages.js";
+import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, toolPageStats } from "../src/tool-pages.js";
 // Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
 // отдельным файлом, а сборке нужны целиком — склеиваем запись с её текстами.
 import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
@@ -249,7 +249,7 @@ function toolArticle(tool) {
     const state = evQuotaState();
     const rows = [...EV_QUOTA.reports].reverse().slice(0, 12);
     // Живая часть страницы: остаток, темп и история сводок. Это то, за чем сюда придут.
-    live = `<section><h2>Сколько осталось сейчас</h2><p><strong>Гражданам доступно ещё ${number(state.remaining)} ${plural(state.remaining, "электромобиль", "электромобиля", "электромобилей")}</strong> из ${number(state.total)} по квоте ${EV_QUOTA.year} года — по сводке на ${escapeHtml(state.asOfLabel)}.</p>${
+    live = `<section><h2>Сколько квоты на электромобили осталось сейчас</h2><p><strong>Гражданам доступно ещё ${number(state.remaining)} ${plural(state.remaining, "электромобиль", "электромобиля", "электромобилей")}</strong> из ${number(state.total)} по квоте ${EV_QUOTA.year} года — по сводке на ${escapeHtml(state.asOfLabel)}.</p>${
       state.perWeek ? `<p>Темп расхода — около ${number(state.perWeek)} машин в неделю.${state.runsOutLabel && !state.overdue ? ` При таком темпе квота заканчивается около ${escapeHtml(state.runsOutLabel)}.` : ""}</p>` : ""
     }<p>Квота для торгового оборота (юридические лица) объёмом ${number(EV_QUOTA.businessTotal)} машин выбрана полностью.</p></section><section><h2>Остаток по месяцам</h2><dl>${state.periods
       .map((period) => `<dt>${escapeHtml(period.label)}</dt><dd>${period.left == null ? "нет данных" : number(period.left)}</dd>`)
@@ -259,6 +259,10 @@ function toolArticle(tool) {
   }
   if (tool.kind === "customs") live = table(customsExample());
   if (tool.kind === "cost") live = table(deliveryStages());
+  // У калькулятора живая часть — форма, а её рисует скрипт. Поисковику вместо неё
+  // отдаём готовые расчёты той же механикой: иначе страница расчёта приходит в поиск
+  // без единой посчитанной суммы.
+  if (tool.kind === "calculator") live = table(calculatorExamples());
   // Частые вопросы: в странице это обычный текст, разметку FAQPage добавляем отдельно.
   const faq = tool.faq?.length
     ? `<section><h2>Частые вопросы</h2>${tool.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
@@ -665,6 +669,23 @@ function blogPostImage(post) {
   return /^https:\/\//.test(String(source || "")) ? source : undefined;
 }
 
+/**
+ * Дата обновления страницы-расчёта. Без неё поисковик не показывает дату рядом со
+ * ссылкой и перечитывает страницу тем реже, чем дольше она в индексе, — а страница
+ * квоты только свежестью и ценна.
+ *
+ * Дату не берём «сегодня»: пересборка сайта каждую ночь ещё не значит, что страница
+ * изменилась, а ежедневно обновляемая дата на неменяющемся тексте — обман поисковика.
+ * У квоты это день последней сводки таможни (та самая цифра, за которой приходят),
+ * у остальных — день последней правки текстов и тарифов, из которых страница собрана.
+ */
+const toolSourceModified = ["src/tool-pages.js", "src/tool-page-texts.js", "src/pricing.js", "src/china-logistics.js"]
+  .map((file) => statSync(path.join(root, file)).mtime.getTime())
+  .sort()
+  .pop();
+const toolLastmod = (tool) =>
+  (tool.kind === "quota" ? isoDate(EV_QUOTA.reports.at(-1)?.[0]) : null) || isoDate(toolSourceModified);
+
 for (const page of publicPages) {
   // Хлебные крошки: у материала журнала и у страницы расчёта их три ступени —
   // главная, журнал, страница. Расчёты живут в журнале, и путь к ним должен быть
@@ -693,6 +714,20 @@ for (const page of publicPages) {
       publisher: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
     });
     if (page.post.faq?.length) schemas.push(renderer.faqSchema(page.post.faq));
+  }
+  // Страница-расчёт — не статья, но дата обновления ей нужна не меньше: см.
+  // `toolLastmod` выше. Отдаём её обычной разметкой страницы.
+  if (page.tool) {
+    schemas.push({
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      name: page.h1,
+      description: page.description,
+      inLanguage: "ru-BY",
+      url: routeUrl(page.route),
+      dateModified: toolLastmod(page.tool),
+      publisher: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
+    });
   }
   if (page.route === "/") schemas.unshift(renderer.organizationSchema(), renderer.webSiteSchema());
   // Вопросы со страницы «Вопросы и ответы» — по этой разметке они попадают
@@ -912,7 +947,7 @@ const blogIndexLastmod = BLOG_ENABLED
 const pageEntries = [
   ...publicPages.map((page) => ({
     loc: routeUrl(page.route),
-    lastmod: page.post ? blogLastmod(page.post) : page.blogIndex ? blogIndexLastmod : null,
+    lastmod: page.post ? blogLastmod(page.post) : page.blogIndex ? blogIndexLastmod : page.tool ? toolLastmod(page.tool) : null,
   })),
   // Каталог и его разделы файлами не собираются, но в карте сайта им место.
   { loc: routeUrl("/catalog/"), lastmod: null },

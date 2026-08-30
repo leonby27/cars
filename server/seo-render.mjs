@@ -475,7 +475,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const sectionBlock = sections.length
       ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({
@@ -613,6 +613,28 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     };
   }
 
+  /**
+   * Ссылки на страницы-расчёты из карточки машины и из раздела каталога.
+   *
+   * До этого на каждый расчёт вела ровно одна ссылка — из подвала, одинаковая на всех
+   * страницах сайта. Ссылка из подвала веса почти не передаёт, а человеку, который
+   * смотрит строку «таможня и сборы» в карточке, идти за объяснением было некуда.
+   * Здесь ссылка стоит по делу и рядом с тем, что она объясняет.
+   *
+   * У электромобиля добавляется остаток квоты: для него это не общая справка, а
+   * причина, по которой в его цене нет пошлины.
+   */
+  function toolPageLinks({ electric = false } = {}) {
+    const parts = [
+      `Из чего складывается таможенный платёж — на странице <a href="${hrefRoute("/customs/")}">Растаможка авто из Китая в Беларуси</a>.`,
+      `Другую цену, год и объём двигателя можно посчитать в <a href="${hrefRoute("/calculator/")}">калькуляторе растаможки и доставки</a>.`,
+    ];
+    // Про квоту говорим так, чтобы фраза оставалась верной и в карточке, и в разделе,
+    // и после того, как льгота закончится: состояние квоты здесь не утверждается.
+    if (electric) parts.push(`Пошлина на электромобиль зависит от льготной квоты — сколько её осталось, видно на странице <a href="${hrefRoute("/ev-quota/")}">Квота на электромобили</a>.`);
+    return `<p>${parts.join(" ")}</p>`;
+  }
+
   // ── Страница каталога под марку, тип двигателя или кузов ──────────────────────
 
   /**
@@ -636,7 +658,11 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       : "";
     const paging = paginationLinks({ route: landing.path, page, pages });
     const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}${paging}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
-    const notes = `<section><h2>${escapeHtml(landing.name)} из Китая: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}</section>`;
+    // Ссылки на расчёты — только на первой странице раздела: на страницах 2–50 это был
+    // бы один и тот же блок пятьдесят раз подряд.
+    const notes = `<section><h2>${escapeHtml(landing.name)} из Китая: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}${
+      page > 1 ? "" : toolPageLinks({ electric: landing.path === "/catalog/electric" || /^\/catalog\/electric-/.test(landing.path) })
+    }</section>`;
     const reviews = modelPages.length
       ? `<section><h2>Обзоры моделей ${escapeHtml(landing.brand || landing.name)}</h2><ul>${modelPages.map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a></li>`).join("")}</ul></section>`
       : "";

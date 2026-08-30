@@ -200,13 +200,13 @@ test("страницы-инструменты собираются с живым
   // в карточке, поэтому страница не может разойтись с каталогом.
   const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
   const quota = await read("ev-quota/index.html");
-  assert.match(quota, /<h1>Квота на беспошлинный ввоз электромобилей в Беларусь<\/h1>/);
+  assert.match(quota, /<h1>Квота на беспошлинный ввоз электромобилей в Беларусь в \d{4} году<\/h1>/);
   assert.match(quota, /Гражданам доступно ещё [\d\s  ]+ электромобил/);
   assert.match(quota, /История сводок таможни/);
   for (const [file, heading] of [
     ["customs/index.html", "Растаможка авто из Китая"],
     ["delivery-cost/index.html", "Сколько стоит привезти авто из Китая"],
-    ["calculator/index.html", "Калькулятор стоимости авто из Китая"],
+    ["calculator/index.html", "Калькулятор растаможки"],
   ]) {
     const html = await read(file);
     assert.match(html, new RegExp(heading));
@@ -215,10 +215,27 @@ test("страницы-инструменты собираются с живым
     const words = body.replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
     assert.ok(words >= 150, `${file}: слов ${words}, ожидалось не меньше 150`);
   }
-  // Все четыре попадают в карту сайта.
+  // Год в заголовке: запросы про растаможку и квоту почти всегда задают с годом.
+  const year = String(new Date().getFullYear());
+  for (const file of ["ev-quota/index.html", "customs/index.html", "delivery-cost/index.html", "calculator/index.html"]) {
+    const html = await read(file);
+    const title = html.match(/<title>([^<]*)<\/title>/)[1];
+    assert.ok(title.includes(year), `${file}: в заголовке нет года — ${title}`);
+    const description = html.match(/<meta name="description" content="([^"]*)"/)[1];
+    assert.ok(description.length <= 165, `${file}: описание ${description.length} знаков, в выдаче обрежется`);
+    // Дата обновления: без неё поисковик не показывает дату и реже перечитывает
+    // страницу, а страница квоты только свежестью и ценна.
+    assert.match(html, /"@type":"WebPage"[^<]*"dateModified":"\d{4}-\d{2}-\d{2}"/);
+  }
+  // На странице калькулятора форму рисует скрипт: посчитанные суммы поисковику даёт
+  // таблица примеров, без неё страница расчёта приходит в поиск без единой цифры.
+  const calculator = await read("calculator/index.html");
+  assert.match(calculator, /Примеры расчёта/);
+  assert.match(calculator, /<td>≈ [\d\s  ]+ \$<\/td>/);
+  // Все четыре попадают в карту сайта — с датой обновления.
   const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
   for (const path of ["/ev-quota", "/customs", "/delivery-cost", "/calculator"]) {
-    assert.match(pagesXml, new RegExp(`<loc>https://abcars\\.by${path}</loc>`));
+    assert.match(pagesXml, new RegExp(`<loc>https://abcars\\.by${path}</loc><lastmod>\\d{4}-\\d{2}-\\d{2}</lastmod>`));
   }
 });
 
