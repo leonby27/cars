@@ -7184,6 +7184,15 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             <div className="price-assumption">
               <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
             </div>
+            {/* Куда идти за объяснением сметы. Раньше из карточки на страницы расчётов
+                вела только ссылка в подвале: человек, который смотрит строку
+                «растаможка и сборы», упирался в цифру без продолжения, а страницы
+                расчётов не получали с сайта ни одной ссылки по делу. */}
+            <p className="order-tool-links">
+              <AppLink href="/customs" navigate={navigate}>Как считается растаможка</AppLink>
+              <AppLink href="/calculator" navigate={navigate}>Посчитать другую машину</AppLink>
+              {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}>Остаток квоты</AppLink>}
+            </p>
             <section className={`delivery-disclosure${deliveryOpen ? " open" : ""}`}>
               <button type="button" className="delivery-card-heading" aria-expanded={deliveryOpen} onClick={() => setDeliveryOpen((open) => !open)}>
                 <div className="delivery-card-icon">
