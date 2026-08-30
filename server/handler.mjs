@@ -185,7 +185,7 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/updates") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
-      return json(response, 200, await getAnalyticsUpdates(Object.fromEntries(url.searchParams)));
+      return json(response, 200, await getAnalyticsUpdates({ viewing:url.searchParams.get("viewing") || "" }));
     }
     if (request.method === "DELETE" && url.pathname === "/api/analytics/events") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });

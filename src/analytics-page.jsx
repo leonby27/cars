@@ -365,16 +365,6 @@ function CustomersSection({ data }) {
   );
 }
 
-// Когда сотрудник в последний раз открывал каждый пункт. Живёт в браузере:
-// раздел смотрят с разных устройств, и у каждого свой «прочитано».
-const seenKey = "abcars-analytics-seen";
-const readSeen = () => {
-  try { return JSON.parse(window.localStorage.getItem(seenKey)) || {}; } catch { return {}; }
-};
-const writeSeen = (value) => {
-  try { window.localStorage.setItem(seenKey, JSON.stringify(value)); } catch { /* приватный режим */ }
-};
-
 // «Сегодня» и «вчера» — это календарные сутки по Минску, остальное — скользящее окно.
 const analyticsPeriods = [
   { id:"today", label:"Сегодня" },
@@ -395,38 +385,25 @@ const sections = [
 function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads }) {
   const [section, setSection] = useState("leads");
   // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
+  // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
+  // цифры на компьютере.
   const [updates, setUpdates] = useState({});
-  const seenRef = useRef(null);
-  if (seenRef.current === null) {
-    const stored = readSeen();
-    const now = new Date().toISOString();
-    // Пункт, в который ещё ни разу не заходили, отсчитывает новое от этой минуты:
-    // показать всю прошлую историю как непрочитанное — только напугать цифрой.
-    for (const item of sections) if (!stored[item.id]) stored[item.id] = now;
-    seenRef.current = stored;
-    writeSeen(stored);
-  }
-  // Открытый пункт считается просмотренным всё время, пока он открыт, — как
-  // непрочитанные сообщения в чате: смотришь на них, и они перестают гореть.
-  const markSeen = useCallback((id) => {
-    seenRef.current = { ...seenRef.current, [id]:new Date().toISOString() };
-    writeSeen(seenRef.current);
-    setUpdates((current) => ({ ...current, [id]:0 }));
-  }, []);
-  const openSection = (id) => {
-    markSeen(id);
-    setSection(id);
-  };
   const sectionRef = useRef(section);
   sectionRef.current = section;
-  const loadUpdates = useCallback(async () => {
-    seenRef.current = { ...seenRef.current, [sectionRef.current]:new Date().toISOString() };
-    writeSeen(seenRef.current);
+  const loadUpdates = useCallback(async (viewing = sectionRef.current) => {
     try {
-      const response = await fetch(`/api/analytics/updates?${new URLSearchParams(seenRef.current)}`, { credentials:"same-origin" });
+      const response = await fetch(`/api/analytics/updates?viewing=${encodeURIComponent(viewing)}`, { credentials:"same-origin" });
       if (response.ok) setUpdates(await response.json());
     } catch { /* счётчики — не повод ломать раздел */ }
   }, []);
+  // Открытый пункт считается просмотренным всё время, пока он открыт, — как
+  // непрочитанные сообщения в чате: смотришь на них, и они перестают гореть.
+  const openSection = (id) => {
+    setSection(id);
+    // Цифру гасим сразу, не дожидаясь ответа сервера.
+    setUpdates((current) => ({ ...current, [id]:0 }));
+    loadUpdates(id);
+  };
   // Считаем заново при каждом обновлении среза: и при заходе, и после кнопки «обновить».
   useEffect(() => { loadUpdates(); }, [data, leads, loadUpdates]);
   const [resetOpen, setResetOpen] = useState(false);

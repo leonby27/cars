@@ -449,10 +449,11 @@ export async function getAnalyticsDashboard(rangeValue) {
 }
 
 // Красные счётчики у пунктов раздела: сколько нового появилось с тех пор, как
-// сотрудник в последний раз открывал этот пункт. Момент последнего просмотра
-// приходит из браузера — он там и хранится, у каждого свой. Дата, которой браузер
-// не прислал (или прислал мусор), считается «только что»: показывать всю историю
-// как новинку хуже, чем не показать ничего.
+// сотрудник в последний раз открывал этот пункт. Моменты последнего просмотра
+// лежат в базе, а не в браузере: вход в раздел один на всех, и посмотренное с
+// телефона должно гаснуть и на компьютере. Дата, которой в базе нет (или она
+// испорчена), считается «только что»: показывать всю историю как новинку хуже,
+// чем не показать ничего.
 export const ANALYTICS_SECTIONS = ["overview", "leads", "vehicles", "searches", "customers"];
 
 export const seenMoment = (value, now = Date.now()) => {
@@ -463,7 +464,24 @@ export const seenMoment = (value, now = Date.now()) => {
   return new Date(Math.max(moment.getTime(), now - 30 * 86_400_000)).toISOString();
 };
 
-export async function getAnalyticsUpdates(seenBySection = {}, { now = Date.now() } = {}) {
+// Пункт, открытый прямо сейчас, считается просмотренным на всё время, пока он
+// открыт, — как непрочитанные сообщения в чате. Пункт, в который не заходили ни
+// разу, начинает отсчёт от этой минуты: вываливать всю прошлую историю как
+// непрочитанное — только пугать цифрой.
+export async function readAnalyticsSeen(viewing = "") {
+  await pool.query(
+    `INSERT INTO analytics_seen(section, seen_at) SELECT unnest($1::text[]), now() ON CONFLICT (section) DO NOTHING`,
+    [ANALYTICS_SECTIONS],
+  );
+  if (ANALYTICS_SECTIONS.includes(viewing)) {
+    await pool.query("UPDATE analytics_seen SET seen_at=now() WHERE section=$1", [viewing]);
+  }
+  const stored = await pool.query("SELECT section, seen_at FROM analytics_seen");
+  return Object.fromEntries(stored.rows.map((row) => [row.section, row.seen_at?.toISOString?.() || row.seen_at]));
+}
+
+export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.now() } = {}) {
+  const seenBySection = await readAnalyticsSeen(viewing);
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
   const [overview, vehicles, searches, leads, customers] = await Promise.all([
     // Ярлык «новое с прошлого раза» тоже считает только живых людей, иначе он
