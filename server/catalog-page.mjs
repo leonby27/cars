@@ -75,7 +75,7 @@ export async function renderCatalogIndex(searchParams) {
   // Порядок по цене, а не выдача по умолчанию: та перемешана и от запроса к запросу
   // меняется, а страницы списка должны делить каталог на непересекающиеся куски.
   const query = new URLSearchParams({ sort: "price_asc" });
-  const [{ items, total }, edges] = await Promise.all([
+  const [{ items, total, changedAt }, edges] = await Promise.all([
     listCarPage(query, { limit: carsOnPage, offset: (number - 1) * carsOnPage }),
     priceEdges(query),
   ]);
@@ -87,7 +87,7 @@ export async function renderCatalogIndex(searchParams) {
   // машины дочитываем по номерам — поиск по ключу, от глубины страницы не зависит.
   const priced = await carsByIds(items.slice(0, 24).map((car) => car.id));
   const stock = await brandStock();
-  const page = renderer.catalogIndexPage({ cars: items, total, sections: CATALOG_LANDINGS.filter(visibleLandings(stock)), page: number, pages, perPage: carsOnPage, edges, priced });
+  const page = renderer.catalogIndexPage({ cars: items, total, sections: CATALOG_LANDINGS.filter(visibleLandings(stock)), page: number, pages, perPage: carsOnPage, edges, priced, changedAt });
   return { status: 200, html: page.html };
 }
 
@@ -118,7 +118,7 @@ export async function renderCatalogPage(slug, searchParams) {
 
   const params = landingApiParams(landing);
   params.set("sort", "price_asc");
-  const [{ items, total }, edges] = await Promise.all([
+  const [{ items, total, changedAt }, edges] = await Promise.all([
     listCarPage(params, { limit: carsOnPage, offset: (number - 1) * carsOnPage }),
     priceEdges(params),
   ]);
@@ -137,6 +137,6 @@ export async function renderCatalogPage(slug, searchParams) {
   const stock = await brandStock();
   const others = relatedLandings(landing).filter(visibleLandings(stock));
 
-  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage, edges, priced });
+  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage, edges, priced, changedAt });
   return { status: 200, html: page.html };
 }

@@ -762,8 +762,11 @@ for (const route of privateRoutes) {
 const privateHtml = renderHtml({ title: "Личный раздел | abcars.by", description: "Личный раздел пользователя abcars.by.", canonical: routeUrl("/account/"), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
 writeFileSync(path.join(clientDir, "private.html"), privateHtml);
 
-const notFoundHtml = renderHtml({ title: "Страница не найдена | abcars.by", description: "Запрошенная страница не найдена.", canonical: routeUrl("/404/"), body: `${navigation(MODELS_INDEX.path)}<main class="page-width"><h1>Страница не найдена</h1><p><a href="${hrefRoute("/")}">Вернуться на главную</a></p></main>${footer()}`, image: null, indexable: false });
-writeFileSync(path.join(clientDir, "404.html"), notFoundHtml);
+// Страница «такой страницы нет». С 30.08.2026 её показывает nginx вместо главной,
+// когда адрес неизвестен, — и с честным кодом 404 (см. deploy/nginx-abcars-site.conf).
+// Раньше здесь были заголовок и одна ссылка на главную; человеку, пришедшему по
+// устаревшей ссылке, полезнее сразу попасть в каталог.
+writeFileSync(path.join(clientDir, "404.html"), renderer.notFoundPage({ sections: liveSections }));
 
 // Пустая заготовка приложения. Её читает сервер, когда собирает страницу машины:
 // в ней лежат ссылки на стили и скрипты с хешами этой сборки, а место под содержимое
@@ -810,15 +813,17 @@ async function readLiveCatalog() {
     }
     return counts;
   };
-  const nothing = { showcase: [], models: new Map(), carEntries: [], listPages: new Map(), stock: new Map(), collections: new Map() };
+  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map() };
   if (cars.length) {
     return {
       showcase: cars.slice(0, showcaseSize),
       models: countByModel(cars),
+      modelChanged: new Map(),
       carEntries: carsSitemap ? cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) })) : [],
       listPages: new Map(),
       stock: new Map(),
       collections: new Map(),
+      changed: new Map(),
     };
   }
   if (!carsFromDatabase) {
@@ -828,7 +833,7 @@ async function readLiveCatalog() {
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
-    const { countCars, getModelFacts, listCars, modelSummary } = await import("../server/repository.mjs");
+    const { getModelFacts, listCars, modelSummary, sectionStats } = await import("../server/repository.mjs");
     // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
     // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
     // модель займёт весь блок.
@@ -846,11 +851,18 @@ async function readLiveCatalog() {
     // до середины он дошёл бы нескоро.
     const listPages = new Map();
     const stock = new Map();
-    listPages.set("/catalog", catalogPageCount(await countCars(new URLSearchParams())));
+    // Вместе с количеством берём дату последнего изменения раздела: тот же скан по базе,
+    // отдельного запроса она не стоит, а карте сайта без неё нечего сказать поисковику
+    // о 163 разделах — они уходили туда вовсе без `lastmod`.
+    const changed = new Map();
+    const whole = await sectionStats(new URLSearchParams());
+    listPages.set("/catalog", catalogPageCount(whole.total));
+    changed.set("/catalog", isoDate(whole.changedAt));
     for (const landing of CATALOG_LANDINGS) {
-      const total = await countCars(landingApiParams(landing));
+      const { total, changedAt } = await sectionStats(landingApiParams(landing));
       stock.set(landing.path, total);
       listPages.set(landing.path, catalogPageCount(total));
+      changed.set(landing.path, isoDate(changedAt));
     }
     // Живые списки подборок журнала: сам список машин, сколько их всего и цифры
     // для полосы под вступлением. Считаем здесь же, на том же соединении с базой.
@@ -910,9 +922,12 @@ async function readLiveCatalog() {
       showcase,
       collections,
       models: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.count])),
+      // Дата последнего изменения по каждой модели — для `lastmod` у обзоров.
+      modelChanged: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, isoDate(row.changedAt)])),
       carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) })),
       listPages,
       stock,
+      changed,
     };
   } catch (error) {
     console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);
@@ -930,7 +945,10 @@ async function readLiveCatalog() {
 // первоисточник и живой список машин, поэтому в карте сайта им место наравне с первой.
 const listPageEntries = (route) => {
   const pages = live.listPages.get(trimRoute(route)) || 1;
-  return Array.from({ length: Math.max(0, pages - 1) }, (_, index) => ({ loc: `${routeUrl(route)}?page=${index + 2}`, lastmod: null }));
+  // Дата у всех страниц одного раздела общая: список машин на них — куски одного набора,
+  // и меняются они вместе.
+  const lastmod = live.changed.get(trimRoute(route)) || null;
+  return Array.from({ length: Math.max(0, pages - 1) }, (_, index) => ({ loc: `${routeUrl(route)}?page=${index + 2}`, lastmod }));
 };
 
 // Дата последнего обновления материала журнала: тот же день, что стоит в разметке
@@ -949,11 +967,14 @@ const pageEntries = [
     loc: routeUrl(page.route),
     lastmod: page.post ? blogLastmod(page.post) : page.blogIndex ? blogIndexLastmod : page.tool ? toolLastmod(page.tool) : null,
   })),
-  // Каталог и его разделы файлами не собираются, но в карте сайта им место.
-  { loc: routeUrl("/catalog/"), lastmod: null },
+  // Каталог и его разделы файлами не собираются, но в карте сайта им место. Дата —
+  // последнее настоящее изменение среди машин раздела: до 30.08.2026 все 3 600 адресов
+  // разделов и обзоров уходили в карту сайта вовсе без даты, и поисковик не знал, что
+  // раздел обновляется каждую ночь.
+  { loc: routeUrl("/catalog/"), lastmod: live.changed.get("/catalog") || null },
   ...listPageEntries("/catalog/"),
-  ...MODEL_PAGES.map((modelPage) => ({ loc: routeUrl(modelPage.path), lastmod: null })),
-  ...liveSections.flatMap((landing) => [{ loc: routeUrl(landing.path), lastmod: null }, ...listPageEntries(landing.path)]),
+  ...MODEL_PAGES.map((modelPage) => ({ loc: routeUrl(modelPage.path), lastmod: live.modelChanged.get(`${modelPage.brand}|${modelPage.model}`) || null })),
+  ...liveSections.flatMap((landing) => [{ loc: routeUrl(landing.path), lastmod: live.changed.get(landing.path) || null }, ...listPageEntries(landing.path)]),
 ];
 writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
 

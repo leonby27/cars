@@ -79,7 +79,7 @@ export async function renderModelPage(slug) {
   const params = new URLSearchParams({ brand: page.brand, model: page.model, sort: "price_asc", limit: String(offersOnPage) });
   // Вилка цен — по всем машинам модели: загруженная дюжина это самые доступные,
   // и верхняя граница по ней вышла бы заниженной.
-  const [{ items, total }, edges, stock, brands] = await Promise.all([
+  const [{ items, total, changedAt }, edges, stock, brands] = await Promise.all([
     listCars(params),
     priceEdges(params),
     modelClassStock(),
@@ -102,6 +102,6 @@ export async function renderModelPage(slug) {
     .slice(0, sectionsOnPage);
   const similar = similarModelPages(stock, page, klass);
 
-  const rendered = renderer.modelPage({ modelPage: page, cars: items, total, siblings, brandLanding, edges, sections, similar });
+  const rendered = renderer.modelPage({ modelPage: page, cars: items, total, siblings, brandLanding, edges, sections, similar, changedAt });
   return { status: 200, html: rendered.html };
 }
