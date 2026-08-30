@@ -73,9 +73,31 @@ for (;;) {
   body = body.slice(match[0].length);
 }
 
+// Текст для поисковика из прежнего содержимого #root: витрина машин со снимками,
+// ссылки на все разделы каталога, на обзоры моделей и на журнал — всё то, чего в
+// разметке приложения нет, потому что каталог оно запрашивает уже в браузере.
+// Разметка приложения этот блок собой заменила, и с 28.08.2026 на главной не
+// оставалось ни одной ссылки на машину и ни одной на обзор модели. Поэтому блок
+// переезжает наружу, сразу за #root: React его не видит и при оживлении не трогает,
+// а браузер убирает его сам, как только приложение встало на ноги (src/main.jsx).
+const rootContent = html.slice(contentAt, close);
+const seoBody = (() => {
+  const start = rootContent.indexOf('<div class="seo-body">');
+  if (start === -1) return "";
+  let level = 1;
+  const scan = /<div\b|<\/div>/g;
+  scan.lastIndex = start + '<div class="seo-body">'.length;
+  for (let match = scan.exec(rootContent); match; match = scan.exec(rootContent)) {
+    level += match[0] === "</div>" ? -1 : 1;
+    if (level === 0) return rootContent.slice(start, match.index + "</div>".length);
+  }
+  return "";
+})();
+if (!seoBody) console.warn("[prerender] в главной не нашлось текста для поисковика — страница соберётся без него");
+
 const before = html.slice(0, open);
 const after = html.slice(close + "</div>".length);
-const withRoot = `${before}<div id="root" data-prerender="/">${body}</div>${after}`;
+const withRoot = `${before}<div id="root" data-prerender="/">${body}</div>${seoBody}${after}`;
 // Веб-сервер подкладывает этот файл под адреса, у которых нет своего (/favorites,
 // /login и т.п.). Там разметка главной — чужая: до загрузки приложения показываем
 // только шапку, как делала прежняя заглушка, а не всю главную со скелетами.
@@ -89,5 +111,6 @@ writeFileSync(indexPath, replaced);
 const kb = (value) => (value / 1024).toFixed(1);
 console.log(
   `[prerender] главная: разметка приложения ${kb(app.length)} КБ вместо заглушки, ` +
+    `текст для поисковика вынесен за #root (${kb(seoBody.length)} КБ), ` +
     `в шапку перенесено подсказок: ${hoisted.length}, страница ${kb(html.length)} → ${kb(replaced.length)} КБ`,
 );

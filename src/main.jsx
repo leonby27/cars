@@ -32,6 +32,14 @@ function AfterHydration({ onReady, children }) {
   return children;
 }
 
+// Текст для поисковика на главной лежит рядом с #root, а не внутри: разметку внутри
+// React оживляет и сверяет, а этот блок ему видеть не нужно (prerender-home.mjs).
+// Как только приложение запустилось, блок убираем — иначе после снятия «booting»
+// он показался бы посетителю второй, простой копией страницы.
+const dropSeoBody = () => {
+  for (const node of document.querySelectorAll(".seo-body")) if (!root.contains(node)) node.remove();
+};
+
 function start() {
   const app = (
     <React.StrictMode>
@@ -50,6 +58,7 @@ function start() {
   const prerenderedFor = (root.dataset.prerender || "").replace(/\/+$/, "") || (root.dataset.prerender ? "/" : "");
   if (prerenderedFor && prerenderedFor === currentPath) {
     document.documentElement.classList.remove("booting");
+    dropSeoBody();
     const ready = () => installRussianTypography(root);
     hydrateRoot(
       root,
@@ -64,6 +73,7 @@ function start() {
   // Build-time SEO pages contain meaningful HTML for crawlers and no-JS clients.
   // The interactive application takes over once its bundle is ready.
   if (root.hasChildNodes()) root.replaceChildren();
+  dropSeoBody();
   // Текст для поисковиков `index.html` прячет до запуска приложения, чтобы он не мелькал
   // простой вёрсткой. Он уже убран — снимаем скрытие, иначе не покажется и само приложение.
   document.documentElement.classList.remove("booting");
