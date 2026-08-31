@@ -61,11 +61,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { extractChe168ListPayload, extractChe168DetailPayload } from "./lib/che168-parser.mjs";
+import { extractChe168ListPayload, extractChe168DetailPayload, buildChe168Car } from "./lib/che168-parser.mjs";
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
-import { IMPORT_BRANDS, ICE_IMPORT_BRANDS, canonicalImportBrand } from "../config/import-policy.mjs";
+import { IMPORT_BRANDS, ICE_IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -159,6 +159,30 @@ const petrolShifts = petrolShiftByBrand(brandMap);
 const inShift = (row) => {
   const own = shiftOfCar({ type: row.type, brand: row.brand }, petrolShifts.byCanonical);
   return own === null || own === shift;
+};
+
+// ---- Фильтры источника ------------------------------------------------------
+// Проверено 31.08.2026: список слушается параметрами min_price/max_price (в тысячах
+// долларов, цена в Китае) и min_regdate (год первой регистрации). У Volkswagen год
+// от 2021 срезает ровно половину выдачи — то есть это вдвое меньше страниц за тот же
+// результат, и заодно мы не читаем машины, которые всё равно не завели бы.
+// Числа живут в config/refresh-order.json, здесь только значения на случай, если
+// файла нет.
+const FILTERS_FALLBACK = {
+  chinese: { minPrice: 7, maxPrice: 100, minYear: 2021 },
+  other: { minPrice: 15, maxPrice: 100, minYear: 2022 },
+  chineseBrands: [],
+};
+let filters = FILTERS_FALLBACK;
+let chineseBrandSet = new Set();
+// Фильтр для марки: у китайских порог ниже и год раньше — их машины и так свежие,
+// а дешёвый сегмент у них самый ходовой.
+const filterFor = (brandCanon) => (chineseBrandSet.has(brandCanon) ? filters.chinese : filters.other);
+const filterParams = (brandCanon, { minPrice = null, maxPrice = null } = {}) => {
+  const own = filterFor(brandCanon);
+  const lo = minPrice ?? own.minPrice;
+  const hi = maxPrice ?? own.maxPrice;
+  return `min_price=${lo}&max_price=${hi}&min_regdate=${own.minYear}`;
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -447,37 +471,6 @@ async function reportBurst(reason, { force = false } = {}) {
   await sendTelegram(lines.join("\n"), { root: ROOT, log: console.log }).catch(() => {});
 }
 
-// Единственное сообщение за прогон: что обновили, по каким маркам, сколько
-// новых нашли — и честная пометка, если что-то не получилось.
-async function reportRun(stats, extra) {
-  const trouble = [];
-  if (extra.stoppedEarly) trouble.push("Источник закрылся раньше, чем мы прошли очередь.");
-  if (extra.noAnswer > 0) trouble.push(`${extra.noAnswer} машин не ответили — проверим в следующий раз.`);
-  if (extra.listPages > 0 && extra.listPagesEmpty / extra.listPages > 0.2) {
-    trouble.push(`Пятая часть страниц пришла пустыми (${extra.listPagesEmpty} из ${extra.listPages}).`);
-  }
-  const brands = [...allBrandsThisRun];
-  const brandLine = brands.length > 12 ? `${brands.slice(0, 12).join(", ")} и ещё ${brands.length - 12}` : brands.join(", ");
-  const lines = [
-    trouble.length ? "⚠️ Обновление каталога: с оговорками" : "✅ Обновление каталога прошло",
-    `Заняло ${extra.minutes} мин · подходов ${extra.burstsDone}, передышек ${extra.wallPauses}`,
-    "",
-    `Проверено цен: ${extra.pricedByLists} машин`,
-    `Изменились цены: ${stats.rePriced} (подешевело ${extra.priceDrops}, подорожало ${extra.priceRises})`,
-    `Ушло с продажи: ${stats.sold}`,
-    `Найдено новых: ${extra.discovered} — заведёт пополнение`,
-    `Прочитано страниц: ${extra.listPages}`,
-  ];
-  if (brandLine) lines.push("", `Обошли марки: ${brandLine}`);
-  lines.push("", extra.circleClosed
-    ? `Круг по каталогу замкнулся, следующий прогон начнёт заново.`
-    : `В круге обойдено марок: ${extra.brandsCoveredInCircle}, остальные — следующими прогонами.`);
-  if (trouble.length) lines.push("", ...trouble.map((t) => `• ${t}`));
-  if (dryRun) lines.push("", "(пробный прогон, в базу ничего не пишется)");
-  if (tgQuiet) { console.log("[tg] тихий режим: " + lines.join(" | ")); return; }
-  await sendTelegram(lines.join("\n"), { root: ROOT, log: console.log }).catch(() => {});
-}
-
 async function safeFlight(url, expectMarker) {
   if (rotating) await rotating;
   // Норма подхода: набрали столько обращений — отдыхаем. Иначе источник
@@ -584,6 +577,8 @@ async function listFlight(params) {
 }
 
 const { pool } = await import("../server/db.mjs");
+// Запись новых машин: та же функция, которой пользуется пополнение каталога.
+const { importCars } = await import("../server/repository.mjs");
 // Порядок важен: очередь поштучных проверок берётся из этого же списка, и
 // «сначала самые давно не проверенные» превращает ограниченный ночной запас
 // проверок в честную карусель по всему каталогу.
@@ -679,7 +674,7 @@ function absorbList(payload, fuelType) {
     // прочитана ради цен. Отбор идёт по списку, окончательное решение
     // остаётся за карточкой при скачивании.
     if (id && !knownIds.has(`che168-${id}`) && !discoveries.has(id)) {
-      const candidate = discoveryCandidate(item, { fuelType, knownIds });
+      const candidate = discoveryCandidate(item, { fuelType, knownIds, requirePowertrain: false });
       if (candidate) discoveries.set(id, candidate);
       else discoveriesSkipped += 1;
     }
@@ -749,129 +744,109 @@ async function walkSlice(baseParams, pageCount, fuelType, depthCap) {
   return { complete: walked > 0 ? complete : !stopped, maxUsd };
 }
 
-async function sweepLists() {
-  // Марка обрабатывается целиком — разведка и все её страницы — и только потом
-  // очередь идёт дальше. Так отметка «обойдена» честная, а курсор двигается
-  // марка за маркой даже через обрывы и паузы.
-
-  // Раньше фиды 7/5/6 листались целиком, вместе с сотней марок, которых мы не
-  // берём: их страницы читались и выбрасывались (31% и 26% обращений впустую).
-  // Теперь, как у бензина, идём по своим маркам и в порядке из настройки.
-  for (const fuelType of activeFeeds.filter((f) => f !== 1)) {
-    const table = await loadBrandTable(fuelType);
-    const wanted = orderedBrands(fuelType, table);
-    console.log(`[feed] fueltype=${fuelType}: беру ${wanted.length} своих марок из ${Object.keys(table).length}`);
-    for (const brand of wanted) {
-      if (stopped) break;
-      const payload = await listFlight(`fueltype=${fuelType}&brandid=${brand.id}&sort=2`);
-      await noteAnswer(Boolean(payload));
-      await sleep(pace);
-      if (!payload?.pageCount || !payload.totalCount) continue;
-      absorbList(payload, fuelType);
-      brandsWalked += 1;
-      burstBrands.add(brand.name);
-      allBrandsThisRun.add(brand.name);
-      const { complete } = await walkSlice(`fueltype=${fuelType}&brandid=${brand.id}&sort=2`, payload.pageCount, fuelType, SLICE_MAX_PAGES);
-      if (complete && payload.pageCount <= SLICE_MAX_PAGES) {
-        answeredBrands.add(canonicalImportBrand(brand.name));
-        coveredBrands.add(canonicalImportBrand(brand.name));
-      } else if (complete) {
-        // Марка глубже потолка среза: пролистана её дешёвая часть, за остальное
-        // не отвечаем, но в курсоре она пройдена — очередь должна двигаться.
-        coveredBrands.add(canonicalImportBrand(brand.name));
-      }
+// ---- Очередь марок ----------------------------------------------------------
+// Одна марка — один адрес, без разделения по типу топлива: фильтр в адресе и так
+// отбирает нужное, а прежний обход по фидам заходил в каждую марку трижды.
+// Номера марок берём из наших переписей (config/che168-brands*.json) — спрашивать
+// источник не нужно. У части марок номеров два (Audi 33 и 626 — обычная и новая
+// электрическая AUDI): обходим оба.
+async function brandQueue(ourCountByBrand) {
+  const ids = new Map();
+  for (const file of ["config/che168-brands.json", "config/che168-brands-5-6.json", "config/che168-brands-1.json"]) {
+    let table;
+    try { table = JSON.parse(await fs.readFile(path.join(ROOT, file), "utf8")).brands || {}; }
+    catch { continue; }
+    for (const [name, value] of Object.entries(table)) {
+      if (!value.brandId) continue;
+      const canon = canonicalImportBrand(name);
+      if (!IMPORT_BRANDS.includes(canon) && !ICE_IMPORT_BRANDS.includes(canon)) continue;
+      // Вычеркнутую марку не обходим, даже если она осталась в списках ввоза.
+      if (EXCLUDED_BRANDS.includes(canon)) continue;
+      const rec = ids.get(canon) || { brand: canon, ids: new Set(), sourceCount: 0 };
+      rec.ids.add(value.brandId);
+      const per = value.byFuelType
+        ? Object.values(value.byFuelType).reduce((sum, x) => sum + (Number(x) || 0), 0)
+        : (value.electricListings ?? value.listings ?? 0);
+      rec.sourceCount += per;
+      ids.set(canon, rec);
     }
   }
+  const done = new Set(cursor?.brandsDone || []);
+  const list = [...ids.values()].map((rec) => ({
+    brand: rec.brand,
+    ids: [...rec.ids],
+    sourceCount: rec.sourceCount,
+    ourCars: ourCountByBrand.get(rec.brand) || 0,
+  }));
+  // Мелкие первыми: марка укладывается в один подход целиком, и отбивка по ней
+  // уходит сразу. Крупные иначе выели бы весь дневной запас источника.
+  const smallestFirst = String(orderConfig?.order || "smallest-first") !== "largest-first";
+  list.sort((a, b) => (smallestFirst ? a.ourCars - b.ourCars || a.sourceCount - b.sourceCount : b.ourCars - a.ourCars || b.sourceCount - a.sourceCount));
+  const left = list.filter((item) => !done.has(item.brand));
+  return { all: list, queue: left.length ? left : list, restarted: !left.length };
+}
 
-  // Бензиновый фид глубокой пагинации не переживает — режем по маркам, а самые
-  // крупные марки по моделям. sort=2 (по цене) даёт устойчивую мелкую пагинацию.
-  if (activeFeeds.includes(1)) {
-    const giantSeries = JSON.parse(await fs.readFile(GIANT_SERIES_PATH, "utf8"));
-    let brands = Object.entries(brandMap.brands)
-      .map(([name, value]) => ({ name, id: value.brandId, censusListings: value.listings || 0 }))
-      .sort((a, b) => b.censusListings - a.censusListings);
-    // Раньше бензин делился между тремя календарными ночами. Теперь очередь
-    // задаётся настройкой, а докуда дошли — помнит курсор: смена больше не нужна.
-    brands = orderedBrands(1, Object.fromEntries(brands.map((b) => [b.name, { brandId: b.id, listings: b.censusListings }])));
-    if (brandLimit) brands = brands.slice(0, brandLimit);
-    console.log(`[feed] fueltype=1: беру ${brands.length} своих марок в порядке настройки`);
-
-    for (const brand of brands) {
-      if (stopped) break;
-      const payload = await listFlight(`fueltype=1&brandid=${brand.id}&sort=2`);
-      // Марка, у которой сегодня ноль машин, — это ответ, а не молчание.
-      await noteAnswer(Boolean(payload));
-      await sleep(pace);
-      if (!payload?.pageCount || !payload.totalCount) continue;
-      absorbList(payload, 1);
-      brandsWalked += 1;
-      burstBrands.add(brand.name);
-      allBrandsThisRun.add(brand.name);
-
-      if (payload.pageCount <= SLICE_MAX_PAGES) {
-        const { complete } = await walkSlice(`fueltype=1&brandid=${brand.id}&sort=2`, payload.pageCount, 1, SLICE_MAX_PAGES);
-        if (complete) {
-          answeredBrands.add(canonicalImportBrand(brand.name));
-          coveredBrands.add(canonicalImportBrand(brand.name));
-        }
-        continue;
-      }
-
-      // Крупная марка — по моделям, с ценовым срезом: каждая модель листается
-      // до конца, если она мельче среза, и только на первые страницы по цене,
-      // если крупнее (посетителей интересуют дешёвые предложения модели).
-      const giant = { ...brand, totalCount: payload.totalCount };
-      const fallback = (giantSeries.seriesByBrand[String(giant.id)]?.series || []).map((s) => s.id);
-      const live = await autohomeSeriesIds(giant.id);
-      const seriesIds = [...new Set([...live, ...fallback])];
-      if (!seriesIds.length) {
-        // Некуда резать — берём хотя бы дешёвый край марки, без отметки
-        // «обойдена»: за невиданные машины этой марки не отвечаем.
-        console.log(`[feed] ${giant.name}: списка моделей нет, листаю дешёвый край марки`);
-        await walkSlice(`fueltype=1&brandid=${giant.id}&sort=2`, payload.pageCount, 1, 100);
-        continue;
-      }
-      let covered = 0;
-      let allSeriesDone = true;
-      for (const seriesId of seriesIds) {
-        if (stopped) { allSeriesDone = false; break; }
-        const seriesPayload = await listFlight(`fueltype=1&seriesid=${seriesId}&sort=2`);
-        await noteAnswer(Boolean(seriesPayload));
-        await sleep(pace);
-        if (!seriesPayload?.pageCount || !seriesPayload.totalCount) continue;
-        absorbList(seriesPayload, 1);
-        // Страница марки на Autohome ссылается и на «рекомендованные» чужие
-        // модели — такой номер источнику знаком, но это не наша марка.
-        // Первую страницу мы уже забрали (цены лишними не бывают), а вглубь
-        // не идём: чужая модель обойдётся в срезе своей марки.
-        if (seriesPayload.items?.[0]?.brandname && seriesPayload.items[0].brandname !== giant.name) continue;
-        seriesWalked += 1;
-        covered += seriesPayload.totalCount;
-        const seriesName = seriesKeyOf(seriesPayload.items?.[0]?.seriesname);
-        const sliced = modelTopPages > 0 && seriesPayload.pageCount > modelTopPages;
-        const depthCap = sliced ? modelTopPages : SLICE_MAX_PAGES;
-        const { complete, maxUsd } = await walkSlice(`fueltype=1&seriesid=${seriesId}&sort=2`, seriesPayload.pageCount, 1, depthCap);
-        if (!complete) { allSeriesDone = false; continue; }
-        if (!seriesName) continue;
-        if (sliced) {
-          const firstPageMax = pageMaxUsd(seriesPayload);
-          seriesCeiling.set(seriesName, Math.max(maxUsd, firstPageMax));
-        } else if (seriesPayload.pageCount <= SLICE_MAX_PAGES) {
-          answeredSeries.add(seriesName);
-        }
-      }
-      const share = Math.round((covered / giant.totalCount) * 100);
-      console.log(`[feed] ${giant.name}: ${seriesIds.length} моделей (${live.length ? "живой список" : "запасной список"}), покрывают ${covered} из ${giant.totalCount} (${share}%)`);
-      if (share < 80) console.log(`[feed] ${giant.name}: покрытие моделей просело — пора обновить перепись (runtime/census-series.mjs)`);
-      if (allSeriesDone) {
-        giantAnswered.add(canonicalImportBrand(giant.name));
-        coveredBrands.add(canonicalImportBrand(giant.name));
-      }
-    }
+// Крупную марку режем окнами по цене: окно из нескольких страниц источник отдаёт
+// целиком, а на двухсотой странице выдача уже «вязнет» и перемешивается — оттуда и
+// брались пропавшие машины, которые потом приходилось проверять поштучно.
+// Границы окон считаем по ценам НАШИХ машин этой марки: свои данные знаем, лишних
+// обращений к источнику не нужно.
+function priceWindowsFor(brandCanon, ourPrices, pageCount) {
+  const own = filterFor(brandCanon);
+  if (pageCount <= SLICE_MAX_PAGES) return [{ minPrice: own.minPrice, maxPrice: own.maxPrice }];
+  const parts = Math.min(8, Math.ceil(pageCount / 150));
+  const prices = ourPrices.filter((usd) => usd > 0).sort((a, b) => a - b);
+  if (prices.length < parts * 10) {
+    // Своих машин мало — делим диапазон цен ровно, без квантилей.
+    const step = (own.maxPrice - own.minPrice) / parts;
+    return Array.from({ length: parts }, (_, i) => ({
+      minPrice: Math.round(own.minPrice + step * i),
+      maxPrice: i === parts - 1 ? own.maxPrice : Math.round(own.minPrice + step * (i + 1)),
+    }));
   }
+  const bounds = [own.minPrice];
+  for (let i = 1; i < parts; i += 1) {
+    const usd = prices[Math.floor((prices.length * i) / parts)];
+    const thousands = Math.max(bounds[bounds.length - 1] + 1, Math.round(usd / 1000));
+    bounds.push(thousands);
+  }
+  bounds.push(own.maxPrice);
+  return bounds.slice(0, -1).map((lo, i) => ({ minPrice: lo, maxPrice: bounds[i + 1] }));
+}
 
-  console.log(`[lists] done: ${listPages} pages (${listPagesEmpty} empty), ${seenPrices.size} cars priced`);
-  console.log(`[new] ${discoveries.size} машин источника нам подходят и ещё не заведены (${discoveriesSkipped} мимо правил)`);
+// Отбивка по марке: успешно или нет, сколько новых, снятых, оставшихся и у скольких
+// изменилась цена. Одно сообщение на марку — так и просил Сергей.
+async function reportBrand(entry, res) {
+  const head = res.ok ? `✅ ${entry.brand}` : `⚠️ ${entry.brand} — не до конца`;
+  const lines = [
+    head,
+    `Машин в выдаче источника: ${res.priced}`,
+    `Цены изменились у: ${res.rePriced}`,
+    `Новых заведено: ${res.added}${res.addFailed ? ` (не удалось: ${res.addFailed})` : ""}`,
+    `Снято с продажи: ${res.sold}`,
+    `Осталось в каталоге: ${res.remaining}`,
+    `Страниц прочитано: ${res.pages}${res.windows > 1 ? ` в ${res.windows} ценовых окнах` : ""} · ${res.minutes} мин`,
+  ];
+  if (!res.ok && res.why) lines.push("", res.why);
+  if (dryRun) lines.push("", "(пробный прогон, в базу ничего не пишется)");
+  if (tgQuiet) { console.log(`[tg] ${lines.join(" | ")}`); return; }
+  await sendTelegram(lines.join("\n"), { root: ROOT, log: console.log }).catch(() => {});
+}
+
+// Итог круга: последняя марка пройдена, каталог обновлён целиком.
+async function reportCircleDone(round, totals) {
+  const lines = [
+    "🏁 Каталог обновлён целиком",
+    `Круг №${round} закрыт: обойдено марок ${totals.brands}`,
+    "",
+    `Проверено цен: ${totals.priced} · изменилось: ${totals.rePriced}`,
+    `Новых заведено: ${totals.added}`,
+    `Снято с продажи: ${totals.sold}`,
+    `В каталоге сейчас: ${totals.remaining}`,
+    `Заняло: ${totals.hours} ч`,
+  ];
+  if (tgQuiet) { console.log(`[tg] ${lines.join(" | ")}`); return; }
+  await sendTelegram(lines.join("\n"), { root: ROOT, log: console.log }).catch(() => {});
 }
 
 // Находки переживают прогон в файле: пополнение запускается отдельной службой
@@ -901,6 +876,25 @@ async function checkDetail(externalId) {
   if (!payload?.detail) return { verdict: "unknown", status };
   const price = Number(String(payload.detail.price ?? "").replace(/[^\d.]/g, "")) || null;
   return price ? { verdict: "alive", price } : { verdict: "sold" };
+}
+
+// Заводим новую машину сразу, не откладывая на отдельную ночную службу: карточка
+// нужна ради фотографий и характеристик (в списке их нет), а посетитель должен
+// увидеть машину в тот же проход. Возвращает 'added' | 'rejected' | 'failed'.
+async function addNewCar(externalId) {
+  const { status, text } = await safeFlight(`/en/detail/${externalId}?_rsc=new${externalId}`, "ssrCarDetail");
+  const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
+  if (!payload?.detail) return "failed";
+  const car = buildChe168Car(payload);
+  if (!car) return "rejected";
+  // Правила ввоза и потолок цены проверяем здесь же: список показывает цену в
+  // Китае, а решает стоимость под ключ.
+  if (importPolicyViolation(car, { combustion: true })) return "rejected";
+  if (isAbovePriceCeiling(estimateLandedCost(car).totalUsd)) return "rejected";
+  if (knownIds.has(car.id)) return "rejected";
+  if (!dryRun) await importCars([car]);
+  knownIds.add(car.id);
+  return "added";
 }
 
 const landedTotal = (row, usd) => estimateLandedCost({
@@ -1047,74 +1041,157 @@ try {
   if (!args.get("model-top") && orderConfig?.modelPriceSlice?.pages != null) {
     modelTopPages = Number(orderConfig.modelPriceSlice.pages) || 0;
   }
+  if (orderConfig?.filters) {
+    filters = { ...FILTERS_FALLBACK, ...orderConfig.filters };
+    chineseBrandSet = new Set((filters.chineseBrands || []).map((name) => canonicalImportBrand(name)));
+    console.log(`[filters] китайские: от ${filters.chinese.minPrice} тыс. \$ и от ${filters.chinese.minYear} года · прочие: от ${filters.other.minPrice} тыс. \$ и от ${filters.other.minYear} года · потолок ${filters.other.maxPrice} тыс. \$`);
+  } else {
+    console.log("[filters] в настройке нет фильтров — обхожу списки целиком, как раньше");
+  }
   console.log(`[burst] норма подхода ${burstLimit} обращений, пауза ${burstPauseMin} мин, подходов за сессию до ${burstsMax}`);
   if (modelTopPages > 0) console.log(`[order] ценовой срез моделей: первые ${modelTopPages} страниц по возрастанию цены (~${modelTopPages * 24} самых дешёвых машин модели)`);
   console.log(`[order] круг №${cursor.round}, в нём уже обойдено марок: ${cursor.brandsDone.length}`);
-  await sweepLists();
-  // Записываем сразу после обхода, до долгой проверки пропавших карточек: если
-  // прогон оборвётся на ней, находки уже лежат на диске и пополнение их получит.
-  if (!dryRun) await writeDiscoveries();
-
+  // ---- Проход по маркам ---------------------------------------------------
+  // Марка обрабатывается целиком и по порядку: списки с фильтрами, потом сразу
+  // новые машины (чтобы появились на сайте в этот же проход), потом проверка
+  // пропавших, потом отбивка в телеграм. Только затем следующая марка.
+  // Поле осталось в отчёте ради совместимости с утренней проверкой: теперь мы
+  // отвечаем за марки поимённо, и «ждут своей смены» превратилось в «в очереди».
   let outOfShift = 0;
-  const beyondRows = [];
+  const ourRowsByBrand = new Map();
+  const ourPricesByBrand = new Map();
   for (const row of rows) {
     if (prioritized.has(row.id)) continue;
-    const liveUsd = seenPrices.get(String(row.external_id));
-    if (liveUsd) { classify(row, liveUsd); continue; }
-    // Машину, чьи списки сегодня не листались, нельзя считать пропавшей —
-    // иначе каждая ночь отправляла бы в поштучную очередь весь остальной
-    // каталог, вдесятеро больше обращений, чем экономит сам пропуск.
     const canon = canonicalImportBrand(row.brand);
-    if (answeredBrands.has(canon)) { missing.push(row); continue; }
-    if (giantAnswered.has(canon)) {
-      // Крупная марка пройдена по моделям. Модель, пролистанная целиком, —
-      // как простая марка. Модель с ценовым срезом отвечает только за машины
-      // дешевле потолка (с запасом на дневное дрожание цен у источника);
-      // дорогая часть — «за срезом», её проверяет карусель поштучных проверок.
-      const key = seriesKeyOf(row.raw_series);
-      const ceiling = seriesCeiling.get(key);
-      if (answeredSeries.has(key)) missing.push(row);
-      else if (ceiling && Number(row.usd_price) > 0 && Number(row.usd_price) <= ceiling * 0.95) missing.push(row);
-      else { beyondSlice += 1; beyondRows.push(row); }
-      continue;
-    }
-    outOfShift += 1;
+    if (!ourRowsByBrand.has(canon)) { ourRowsByBrand.set(canon, []); ourPricesByBrand.set(canon, []); }
+    ourRowsByBrand.get(canon).push(row);
+    const usd = Number(row.usd_price) || 0;
+    if (usd > 0) ourPricesByBrand.get(canon).push(usd);
   }
-  console.log(`[match] ${rows.length - prioritized.size - missing.length - outOfShift - beyondSlice} in lists · ${priceUpdates.length} re-priced · ${missing.length} need a detail check · ${beyondSlice} за ценовым срезом · ${outOfShift} ждут своей очереди`);
-  // Всё, что списки подтвердили, записываем сразу — до долгой детальной фазы.
-  await flushWrites();
+  const ourCountByBrand = new Map([...ourRowsByBrand].map(([brand, list]) => [brand, list.length]));
+  const { all: allBrands, queue: fullQueue, restarted } = await brandQueue(ourCountByBrand);
+  // `--brand-limit` для проверочных прогонов: взять только первые N марок очереди.
+  const brandsToWalk = brandLimit ? fullQueue.slice(0, brandLimit) : fullQueue;
+  if (restarted) console.log("[order] круг был пройден — начинаю заново");
+  console.log(`[order] в очереди ${brandsToWalk.length} марок из ${allBrands.length}; первые: ${brandsToWalk.slice(0, 5).map((b) => `${b.brand} (${b.ourCars})`).join(", ")}`);
 
-  if (!skipDetail && !stopped) {
-    const queue = missing.slice(0, detailLimit);
-    detailSkipped = missing.length - queue.length;
-    if (detailSkipped > 0) console.log(`[detail] потолок за сессию: ${detailSkipped} из ${missing.length} карточек дождутся следующего прогона`);
-    // Свободный остаток лимита отдаём машинам «за ценовым срезом»: списки их
-    // не видят, и без этой карусели (сначала самые давно не проверенные) их
-    // цены и проданность не обновлялись бы никогда.
-    if (queue.length < detailLimit && beyondRows.length) {
-      const topUp = beyondRows.slice(0, detailLimit - queue.length);
-      queue.push(...topUp);
-      console.log(`[detail] свободный остаток лимита: ${topUp.length} машин за срезом идут на поштучную проверку`);
+  // Потолки на одну марку, чтобы одна крупная не выела весь дневной запас.
+  const newPerBrand = Number(args.get("new-per-brand") || 120);
+  const detailPerBrand = Number(args.get("detail-per-brand") || 150);
+  const totals = { brands: 0, priced: 0, rePriced: 0, added: 0, sold: 0 };
+
+  for (const entry of brandsToWalk) {
+    if (stopped) break;
+    const began = Date.now();
+    const ourRows = ourRowsByBrand.get(entry.brand) || [];
+    const ourPrices = ourPricesByBrand.get(entry.brand) || [];
+    const pricedBefore = seenPrices.size;
+    const pagesBefore = listPages;
+    const rePricedBefore = priceUpdates.length;
+    let ok = true;
+    let why = null;
+    let windows = 0;
+
+    for (const brandId of entry.ids) {
+      if (stopped) break;
+      const probe = await listFlight(`brandid=${brandId}&${filterParams(entry.brand)}&sort=2`);
+      await noteAnswer(Boolean(probe));
+      await sleep(pace);
+      if (!probe?.pageCount || !probe.totalCount) {
+        // Молчание на разведке — не «марка пустая», а закрытая дверь: отмечать её
+        // пройденной нельзя, иначе её машины уйдут в проверку пропавших зря.
+        if (!probe) { ok = false; why = "источник не ответил на разведку марки"; }
+        continue;
+      }
+      absorbList(probe, null);
+      brandsWalked += 1;
+      const wins = priceWindowsFor(entry.brand, ourPrices, probe.pageCount);
+      if (wins.length > 1) windows += wins.length;
+      if (wins.length > 1) console.log(`[brand] ${entry.brand}: ${probe.totalCount} машин, ${probe.pageCount} страниц — режу на ${wins.length} ценовых окон`);
+      for (const win of wins) {
+        if (stopped) break;
+        const base = `brandid=${brandId}&${filterParams(entry.brand, win)}&sort=2`;
+        let pageCount = probe.pageCount;
+        if (wins.length > 1) {
+          const head = await listFlight(base);
+          await noteAnswer(Boolean(head));
+          await sleep(pace);
+          if (!head?.pageCount) { ok = false; why = "источник не отдал окно по цене"; continue; }
+          absorbList(head, null);
+          pageCount = head.pageCount;
+        }
+        const walked = await walkSlice(base, pageCount, null, SLICE_MAX_PAGES);
+        if (!walked.complete) { ok = false; why = "источник оборвал выдачу на середине"; }
+      }
     }
-    const worker = async () => {
-      while (queue.length && !stopped) {
-        const row = queue.shift();
+
+    // Новые машины этой марки — сразу в каталог.
+    let added = 0;
+    let addFailed = 0;
+    const fresh = [...discoveries.values()].filter((item) => canonicalImportBrand(item.brand) === entry.brand).slice(0, newPerBrand);
+    for (const item of fresh) {
+      if (stopped) break;
+      const verdict = await addNewCar(String(item.externalId));
+      if (verdict === "added") added += 1;
+      else if (verdict === "failed") addFailed += 1;
+      discoveries.delete(String(item.externalId));
+      await sleep(pace);
+    }
+
+    // Цены и пропавшие — только по этой марке.
+    const missingHere = [];
+    for (const row of ourRows) {
+      const liveUsd = seenPrices.get(String(row.external_id));
+      if (liveUsd) classify(row, liveUsd);
+      else if (ok) missingHere.push(row);
+    }
+    let soldHere = 0;
+    if (!skipDetail && ok && !stopped) {
+      const queue = missingHere.slice(0, detailPerBrand);
+      detailSkipped += missingHere.length - queue.length;
+      for (const row of queue) {
+        if (stopped) break;
         const result = await checkDetail(row.external_id);
         await noteAnswer(result.verdict !== "unknown");
-        if (result.verdict === "sold") soldIds.push(row.id);
+        if (result.verdict === "sold") { soldIds.push(row.id); soldHere += 1; }
         else if (result.verdict === "alive") classify(row, result.price);
         else unknown += 1;
         detailChecked += 1;
-        if (detailChecked % 200 === 0) console.log(`[detail] ${detailChecked} checked · ${stats.sold + soldIds.length} sold · ${unknown} no answer · ${Math.round((Date.now() - startedAt) / 60000)}min`);
-        // Пишем по ходу дела: прогон длинный, и прерванный на середине он должен
-        // оставить в базе всё, что успел проверить, а не выбросить результат.
-        if (detailChecked % 1000 === 0) await flushWrites();
         await sleep(pace);
       }
+    }
+    await flushWrites();
+
+    coveredBrands.add(entry.brand);
+    allBrandsThisRun.add(entry.brand);
+    const res = {
+      ok: ok && !stopped,
+      why: stopped ? "прогон свернулся: дневной запас источника исчерпан" : why,
+      priced: seenPrices.size - pricedBefore,
+      rePriced: priceUpdates.length - rePricedBefore,
+      added,
+      addFailed,
+      sold: soldHere,
+      remaining: Math.max(0, ourRows.length - soldHere + added),
+      pages: listPages - pagesBefore,
+      windows,
+      minutes: Math.round((Date.now() - began) / 6000) / 10,
     };
-    await Promise.all(Array.from({ length: concurrency }, worker));
-    console.log(`[detail] done: ${detailChecked} checked, ${soldIds.length} sold, ${unknown} without a clear answer`);
+    totals.brands += 1;
+    totals.priced += res.priced;
+    totals.rePriced += res.rePriced;
+    totals.added += added;
+    totals.sold += soldHere;
+    console.log(`[brand] ${entry.brand}: ${res.priced} цен, ${res.rePriced} изменилось, +${added} новых, ${soldHere} снято, ${res.pages} страниц, ${res.minutes} мин${res.ok ? "" : " — не до конца"}`);
+    await reportBrand(entry, res);
+    // Курсор двигаем после каждой марки: обрыв не потеряет пройденное.
+    await saveCursor({ brandsDone: [...new Set([...(cursor.brandsDone || []), ...coveredBrands])], round: cursor.round || 1 });
   }
+
+  console.log(`[lists] done: ${listPages} pages (${listPagesEmpty} empty), ${seenPrices.size} cars priced`);
+  // Ненайденные находки остаются в файле: их подберёт пополнение, если прогон
+  // оборвался до того, как дошёл до их марки.
+  if (!dryRun) await writeDiscoveries();
 
   await flushWrites();
 
@@ -1132,13 +1209,8 @@ try {
   // была ошибка: остаток считался по уже отфильтрованному списку, и круг
   // «замыкался» после первой же ночи, а хвост очереди не доходил никогда.
   const doneNow = new Set([...(cursor.brandsDone || []), ...coveredBrands]);
-  let remainingBrands = 0;
-  for (const feed of activeFeeds) {
-    const table = feed === 1
-      ? Object.fromEntries(Object.entries(brandMap.brands).map(([name, v]) => [name, { brandId: v.brandId, listings: v.listings || 0 }]))
-      : await loadBrandTable(feed);
-    remainingBrands += orderedBrands(feed, table, doneNow, { restartWhenEmpty: false }).length;
-  }
+  const remainingBrands = allBrands.filter((item) => !doneNow.has(item.brand)).length;
+  outOfShift = remainingBrands;
   const circleClosed = doneNow.size > 0 && remainingBrands === 0;
   const nextCursor = circleClosed
     ? { brandsDone: [], round: (cursor.round || 1) + 1 }
@@ -1198,7 +1270,22 @@ try {
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
   await fs.writeFile(REPORT_PATH, `${JSON.stringify({ ...report, priceUpdates: stats.priceUpdates.map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })) }, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
-  await reportRun(stats, report);
+  // Отбивки по маркам уходят по ходу дела. Общее сообщение — одно и только когда
+  // круг закрыт: каталог обновлён целиком. Иначе сессия просто продолжится в
+  // следующий раз с того места, где остановилась, и сообщать об этом нечего.
+  if (circleClosed) {
+    await reportCircleDone(cursor.round || 1, {
+      brands: totals.brands,
+      priced: totals.priced,
+      rePriced: totals.rePriced,
+      added: totals.added,
+      sold: totals.sold,
+      remaining: (await pool.query("SELECT count(*)::int AS n FROM listings WHERE source='Che168' AND status='active'")).rows[0].n,
+      hours: Math.round((Date.now() - startedAt) / 360000) / 10,
+    });
+  } else {
+    console.log("[tg] круг не закрыт — общего сообщения не отправляю, отбивки по маркам уже ушли");
+  }
 } catch (error) {
   if (!entryDenied) throw error;
   // Отчёт нужен и здесь: утренняя проверка судит по нему, а не по журналу.

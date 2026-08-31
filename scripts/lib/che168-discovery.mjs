@@ -35,12 +35,17 @@ export function listedYear(item) {
 // `knownIds` — идентификаторы вида `che168-<infoid>`, все, что у нас уже есть,
 // вместе с проданными: иначе проданная машина, снова мелькнувшая в списке,
 // качалась бы каждую ночь заново.
-export function discoveryCandidate(item, { fuelType, knownIds }) {
+export function discoveryCandidate(item, { fuelType, knownIds, requirePowertrain = true }) {
   const externalId = String(item?.infoid || "").trim();
   if (!externalId || knownIds.has(`che168-${externalId}`)) return null;
 
   const type = FUEL_TYPE_POWERTRAIN[fuelType];
-  if (!type) return null;
+  // Обход одним адресом на марку (31.08.2026) не знает типа топлива: он больше не
+  // стоит в адресе, а список его не сообщает. Тогда здесь остаются дешёвые проверки
+  // — потолок цены — а правила ввоза и год проверяет карточка, куда мы всё равно
+  // заходим ради фотографий. Раньше отсутствие типа отвергало вообще все карточки,
+  // и новые машины перестали находиться совсем.
+  if (!type && requirePowertrain) return null;
 
   // Цена в списке — китайская, без доставки и пошлины, то есть заведомо ниже
   // итоговой. Поэтому здесь она отсекает только безнадёжное: если машина уже
@@ -51,6 +56,7 @@ export function discoveryCandidate(item, { fuelType, knownIds }) {
 
   const brand = canonicalImportBrand(item?.brandname);
   const year = listedYear(item);
+  if (!type) return { externalId, brand, year, carname: String(item?.carname || "").trim(), fuelType: null };
   // Бензиновым маркам свой список разрешён только в бензиновом фиде: электрический
   // Bentley из списка марок для ДВС в каталог попасть не должен.
   if (importPolicyViolation({ brand, year, type }, { combustion: type === "ДВС" })) return null;

@@ -85,3 +85,17 @@ test("карточка без номера объявления не стано�
   assert.equal(discoveryCandidate(listItem({ infoid: "" }), { fuelType: 7, knownIds: empty }), null);
   assert.equal(discoveryCandidate(null, { fuelType: 7, knownIds: empty }), null);
 });
+
+test("без известного типа топлива карточка всё равно попадает в находки", () => {
+  // Обход одним адресом на марку не знает типа топлива: его больше нет в адресе.
+  // Раньше это отвергало все карточки подряд, и новые машины не находились совсем.
+  const item = { infoid: "777001", brandname: "BYD", carname: "BYD Song L 2024", regdate: "2024-05", price: "18500" };
+  const strict = discoveryCandidate(item, { fuelType: null, knownIds: new Set() });
+  assert.equal(strict, null, "со строгой проверкой тип обязателен");
+  const relaxed = discoveryCandidate(item, { fuelType: null, knownIds: new Set(), requirePowertrain: false });
+  assert.equal(relaxed?.externalId, "777001");
+  assert.equal(relaxed?.brand, "BYD");
+  assert.equal(relaxed?.fuelType, null, "тип определит карточка при заведении");
+  // Потолок цены работает и без типа: заведомо дорогую машину не берём.
+  assert.equal(discoveryCandidate({ ...item, price: "150000" }, { fuelType: null, knownIds: new Set(), requirePowertrain: false }), null);
+});
