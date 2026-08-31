@@ -312,10 +312,22 @@ if (!headless && process.platform === "linux" && !process.env.DISPLAY) {
   throw new Error("нужен экран: запускайте через `xvfb-run -a` (или --headless=true, но источник такое окно не пустит)");
 }
 const browser = await chromium.launch({ headless, args: ["--disable-blink-features=AutomationControlled"] });
+// Пропуск проверки «не робот», выданный человеком: без него источник обрывает
+// выдачу списков примерно на сотом запросе (замер 31.08.2026), с ним прошло 500
+// страниц подряд. Файла может не быть — тогда работаем как раньше.
+let sourceState = null;
+try {
+  const raw = JSON.parse(await fs.readFile(path.join(ROOT, "runtime", "source-state.json"), "utf8"));
+  const ticket = (raw.cookies || []).find((c) => /EO-Bot-Captcha/i.test(c.name));
+  const daysLeft = ticket ? (ticket.expires * 1000 - Date.now()) / 86400000 : 0;
+  if (daysLeft > 0) { sourceState = raw; console.log(`[pass] пропуск на месте, годен ещё ${daysLeft.toFixed(1)} суток`); }
+  else console.log("[pass] пропуск просрочен или отсутствует — источник будет прижимать");
+} catch { console.log("[pass] пропуска нет — иду без него"); }
 const context = await browser.newContext({
   locale: "en-US",
   viewport: { width: 1440, height: 900 },
   userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  ...(sourceState ? { storageState: sourceState } : {}),
 });
 const page = await context.newPage();
 
@@ -428,6 +440,30 @@ try {
     // Details: parsed and policy-checked in Node; a batch write happens every
     // `batchSize` accepted cards so a long run keeps making durable progress.
     let cursor = 0;
+    // Источник с 27.08.2026 обрывает выдачу после сотни-двух обращений и
+    // отпускает через ~15 минут (замеры и живой прогон 31.08.2026). Раньше
+    // пополнение этого не знало: при стене каждая следующая карточка отвечала
+    // пустотой, и прогон «прожигал» весь список находок, не заведя ни одной
+    // машины. Теперь отдыхаем — сами до стены и обязательно после неё.
+    const burstLimit = Number(args.get("burst") || 140);
+    const burstPauseMin = Number(args.get("burst-pause") || 15);
+    // Безответная карточка дорога: внутренние повторы растягивают её на 10–15
+    // секунд. Поэтому стену распознаём с восьми, а не с двадцати — иначе только
+    // на распознавание уходит пять минут (проверено 31.08.2026: старая версия
+    // без этого перебирала 150 карточек вхолостую и не завела ни одной).
+    const wallLimit = Number(args.get("wall") || 8);
+    let burstRequests = 0;
+    let consecutiveFailures = 0;
+    let wallPauses = 0;
+    let successesSinceWall = 0;
+    let givenUp = false;
+    const restIfNeeded = async (reason) => {
+      console.warn(`[pause] ${reason} — отдыхаю ${burstPauseMin} мин`);
+      const until = Date.now() + burstPauseMin * 60_000;
+      while (Date.now() < until && !outOfTime()) await sleep(5_000);
+      burstRequests = 0;
+      consecutiveFailures = 0;
+    };
     const worker = async (workerPage) => {
       while (accepted.length < limit) {
         if (outOfTime()) {
@@ -439,19 +475,39 @@ try {
           await sleep(250);
           continue;
         }
+        if (givenUp) return;
+        // Норма подхода: отдыхаем добровольно, не доводя до стены.
+        if (burstLimit && burstRequests >= burstLimit) {
+          await restIfNeeded(`подход ${burstLimit} карточек закончен`);
+          if (outOfTime()) return;
+        }
         const candidate = candidates[cursor++];
         try {
           const { text, status } = await flight(workerPage, `/en/detail/${candidate.externalId}?_rsc=d${candidate.externalId}`, "ssrCarDetail");
           detailReads += 1;
-          if (status !== 200 || !text) {
-            reject(`detail request failed (${status})`, candidate.externalId);
-            continue;
-          }
-          const payload = extractChe168DetailPayload([`[1,${JSON.stringify(text)}])`]);
+          burstRequests += 1;
+          const payload = status === 200 && text ? extractChe168DetailPayload([`[1,${JSON.stringify(text)}])`]) : null;
           if (!payload) {
-            reject("payload lacks ssrCarDetail", candidate.externalId);
+            // Пустой ответ — почти всегда стена источника, а не беда карточки.
+            // Возвращаем карточку в очередь: после отдыха она прочитается.
+            reject(status === 200 ? "payload lacks ssrCarDetail" : `detail request failed (${status})`, candidate.externalId);
+            consecutiveFailures += 1;
+            if (consecutiveFailures >= wallLimit) {
+              if (wallPauses >= 2 && successesSinceWall < 20) {
+                givenUp = true;
+                console.warn("[stop] источник молчит и после двух передышек — заканчиваю, набранное записано");
+                return;
+              }
+              wallPauses += 1;
+              successesSinceWall = 0;
+              cursor = Math.max(0, cursor - consecutiveFailures);
+              await restIfNeeded(`источник замолчал (${consecutiveFailures} карточек без ответа)`);
+              if (outOfTime()) return;
+            }
             continue;
           }
+          consecutiveFailures = 0;
+          successesSinceWall += 1;
           const car = buildChe168Car(payload);
           if (!car) {
             reject("detail page lacks required structured fields or gallery", candidate.externalId);

@@ -3195,6 +3195,13 @@ function ModelPageCatalog({ modelPage, carsState, filters, navigate, favorites, 
     window.localStorage.setItem(catalogViewKey, value);
   };
   const catalogTarget = modelPageCatalogHref(modelPage, filters);
+  // Замена для случая «модели нет в каталоге»: раздел своей марки и до четырёх её
+  // обзоров. Считаем только когда пригодится — на обычной странице это лишняя работа.
+  const emptyBrandPath = nothingFound && !narrowed ? brandLandingPath(modelPage.brand) : null;
+  const emptySiblings =
+    nothingFound && !narrowed
+      ? MODEL_PAGES.filter((item) => item.brand === modelPage.brand && item.path !== modelPage.path).slice(0, 4)
+      : [];
   // Когда под выбранный отбор ничего не нашлось, жёлтая кнопка ведёт в каталог без
   // него: с ним посетитель попал бы на такую же пустую страницу.
   const allCarsTarget = nothingFound ? modelPageCatalogHref(modelPage, { sort: filters.sort }) : catalogTarget;
@@ -3247,20 +3254,47 @@ function ModelPageCatalog({ modelPage, carsState, filters, navigate, favorites, 
           Не получилось загрузить список. Обновите страницу или откройте <AppLink href={catalogTarget} navigate={navigate}>каталог</AppLink>.
         </p>
       ) : nothingFound ? (
-        /* Пустая сетка выглядела поломкой: вместо неё — заглушка, которая объясняет,
-           почему машин нет, и даёт вернуться к полному списку модели. */
+        /* Пустая сетка выглядела поломкой: вместо неё — заглушка. Отбор посетителя и
+           отсутствие модели в каталоге — разные случаи: в первом надо сбросить отбор,
+           во втором предложить подбор под заказ и другие модели марки, иначе страница
+           становится тупиком (а часть моделей не проходит правила ввоза совсем). */
         <div className="model-page-catalog-empty">
           <CarProfile size={26} />
-          <h3>{narrowed ? "По этим параметрам ничего не найдено" : `${modelPage.name} сейчас нет в наличии`}</h3>
+          <h3>{narrowed ? "По этим параметрам ничего не найдено" : `${modelPage.name} сейчас нет в каталоге`}</h3>
           <p>
             {narrowed
               ? "Попробуйте поднять цену или пробег — или сбросьте отбор и посмотрите все машины модели."
-              : "Каталог пополняется каждую ночь: загляните позже или посмотрите похожие машины в каталоге."}
+              : `Мы возим эту модель под заказ: найдём подходящий вариант в Китае, проверим и рассчитаем цену до Минска. Или выберите другую модель ${modelPage.brand} — они есть в наличии.`}
           </p>
-          {narrowed && (
+          {narrowed ? (
             <button type="button" onClick={filters.onReset}>
               Сбросить
             </button>
+          ) : (
+            <>
+              <div className="model-page-empty-actions">
+                <AppLink href="/how-it-works" navigate={navigate} className="primary model-page-empty-primary">
+                  Заказать подбор
+                </AppLink>
+                {emptyBrandPath && (
+                  <AppLink href={emptyBrandPath} navigate={navigate} className="model-page-empty-secondary">
+                    Все {modelPage.brand} в каталоге
+                  </AppLink>
+                )}
+              </div>
+              {emptySiblings.length > 0 && (
+                <div className="model-page-empty-siblings">
+                  <p>Другие модели {modelPage.brand}</p>
+                  <div>
+                    {emptySiblings.map((page) => (
+                      <AppLink key={page.path} href={page.path} navigate={navigate}>
+                        {page.name}
+                      </AppLink>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       ) : view === "list" ? (

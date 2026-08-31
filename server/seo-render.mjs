@@ -711,7 +711,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         }.${
           pages > 1 ? ` Страница ${page} из ${pages}: автомобили с ${number(first + 1)}-го по ${number(first + items.length)}-й по возрастанию цены.` : ""
         }</p>`
-      : "";
+      // Пустой раздел без объяснения — тонкая страница и тупик. Часть марок мы
+      // перестали возить из наличия, но привезти под заказ можем: так и пишем,
+      // а ниже идут ссылки на соседние разделы и весь каталог.
+      : `<p><strong>Сейчас в этом разделе машин нет.</strong> Привезём под заказ: подберём подходящий вариант в Китае, проверим и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>. Или посмотрите <a href="${hrefRoute("/catalog/")}">весь каталог автомобилей из Китая</a>.</p>`;
     const paging = paginationLinks({ route: landing.path, page, pages });
     const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}${paging}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
     // Ссылки на расчёты — только на первой странице раздела: на страницах 2–50 это был
@@ -875,7 +878,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // Строка с наличием и ценой — то, чего человек ждёт от запроса «сколько стоит».
     const availability = total
       ? `<p><strong>${escapeHtml(page.name)} в наличии: ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${spread ? `, ${spreadText(spread)} с доставкой до Минска` : ""}.</strong>${brandLanding ? ` Все <a href="${hrefRoute(brandLanding.path)}">автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`
-      : `<p>Сейчас ${escapeHtml(page.name)} в наличии нет. <a href="${hrefRoute("/catalog/")}">Посмотрите каталог</a> — он обновляется ежедневно.</p>`;
+      // Пустая страница без выходов — тупик и для человека, и для поисковика.
+      // Поэтому здесь честное «нет», предложение подбора под заказ и ссылки на
+      // замену: раздел марки и её другие обзоры (они идут блоком ниже).
+      : `<p><strong>Сейчас ${escapeHtml(page.name)} в каталоге нет.</strong> Мы возим эту модель под заказ: найдём подходящий вариант в Китае, проверим и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>.${brandLanding ? ` Или выберите другую модель: <a href="${hrefRoute(brandLanding.path)}">все автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`;
     const offers = items.length
       ? `<section><h2>${escapeHtml(page.name)} в наличии — цены до Минска</h2>${carLinks(items, 12)}${brandLanding ? `<p><a href="${hrefRoute(brandLanding.path)}">Все ${escapeHtml(page.brand)} в каталоге</a></p>` : ""}</section>`
       : "";

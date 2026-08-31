@@ -25,11 +25,9 @@ export const IMPORTABLE_POWERTRAINS = Object.freeze(["Электромобиль
 // есть хотя бы 20 живых объявлений, — то есть те, что тут реально ездят.
 export const ICE_IMPORT_BRANDS = Object.freeze([
   "Volkswagen", "Mercedes-Benz", "BMW", "Audi", "Toyota", "Honda", "Buick", "Porsche",
-  "Geely", "Nissan", "Land Rover", "Ford", "Haval", "Changan", "Hyundai",
-  "Mazda", "Chevrolet", "Chery", "Volvo", "Lexus", "Kia", "MINI", "MG",
-  "Peugeot", "Jaguar", "Jeep", "Jetour", "BYD", "Maserati",
-  "Infiniti", "Mitsubishi", "Subaru", "Suzuki", "smart", "Great Wall",
-  "Renault", "Chrysler", "GMC", "Fiat",
+  "Geely", "Nissan", "Land Rover", "Haval", "Changan", "Hyundai",
+  "Mazda", "Chery", "Volvo", "Lexus", "Kia", "MINI", "MG",
+  "Jetour", "BYD",
 ]);
 
 // Марки, вычеркнутые Сергеем 25.08.2026 после просмотра каталога: американский
@@ -42,6 +40,13 @@ export const EXCLUDED_BRANDS = Object.freeze([
   // Škoda вычеркнута 25.08.2026: в Китае марку почти не покупают, а в Беларуси
   // её же модели есть из Европы. Заведённые машины из базы удалены.
   "Škoda",
+  // Вычеркнуты Сергеем 31.08.2026. Причина одна для всех: из Китая эти марки не
+  // возят — их же модели на рынке Беларуси есть из Америки и Европы, дешевле и
+  // без месяца ожидания. Первые десять были в каталоге (3 438 машин, удалены),
+  // остальные шесть значились в правилах, но ни одной машины по ним не заведено.
+  "Ford", "Chevrolet", "Jaguar", "Mitsubishi", "Jeep", "Subaru", "Peugeot",
+  "Maserati", "Great Wall", "Infiniti",
+  "Fiat", "GMC", "Chrysler", "Renault", "Suzuki", "smart",
 ]);
 
 // Потолок итоговой цены. Считается по стоимости «под ключ» в Беларуси, а не по

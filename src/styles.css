@@ -12651,6 +12651,61 @@ html[data-theme="dark"] .model-page-catalog-empty {
 html[data-theme="dark"] .model-page-catalog-empty button:hover {
   background: color-mix(in srgb, var(--ink) 86%, #000000);
 }
+/* Модели нет в каталоге: подбор под заказ и замена. Два действия рядом — жёлтое
+   главное и обводкой второстепенное; ниже плитки других моделей марки, чтобы
+   страница не была тупиком. */
+.model-page-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+}
+.model-page-empty-primary,
+.model-page-empty-secondary {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: calc(10px * var(--corner-scale));
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.model-page-empty-secondary {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+}
+.model-page-empty-secondary:hover {
+  border-color: var(--ink);
+}
+.model-page-empty-siblings {
+  margin-top: 18px;
+}
+.model-page-empty-siblings p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.model-page-empty-siblings > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.model-page-empty-siblings a {
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: none;
+}
+.model-page-empty-siblings a:hover {
+  border-color: var(--ink);
+}
 /* Кнопка под сеткой ведёт в каталог модели — это главное действие блока, поэтому
    она жёлтая, как остальные основные кнопки сайта. */
 .model-page-catalog-all {

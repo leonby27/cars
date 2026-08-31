@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { ICE_IMPORT_BRANDS, IMPORT_BRANDS } from "../config/import-policy.mjs";
+import { EXCLUDED_BRANDS, ICE_IMPORT_BRANDS, IMPORT_BRANDS } from "../config/import-policy.mjs";
 import { visibleLandings } from "../server/catalog-page.mjs";
 import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
@@ -314,9 +314,11 @@ test("у каждой марки из списка ввоза есть свой 
 test("марка раздела написана ровно так же, как в базе", () => {
   // Иначе раздел останется пустым навсегда: фильтр ищет точное совпадение, а опечатку
   // видно только по нулю машин на странице.
-  const allowed = new Set([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS]);
+  // Вычеркнутые марки — законное исключение: их разделы оставлены с предложением
+  // привезти под заказ (31.08.2026), и марка там написана так же, как была в базе.
+  const allowed = new Set([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS, ...EXCLUDED_BRANDS]);
   const strange = CATALOG_LANDINGS.filter((landing) => landing.brand && !allowed.has(landing.brand)).map((landing) => landing.brand);
-  assert.deepEqual(strange, [], `таких марок в списке ввоза нет: ${strange.join(", ")}`);
+  assert.deepEqual(strange, [], `таких марок нет ни в списке ввоза, ни среди вычеркнутых: ${strange.join(", ")}`);
 });
 
 test("раздел марки без машин не показывается", () => {

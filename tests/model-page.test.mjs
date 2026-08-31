@@ -59,9 +59,21 @@ test("текст обзора и частые вопросы остаются в
 
 test("модель без машин в наличии не обещает предложений", () => {
   const { html } = render().modelPage({ modelPage: page, cars: [], total: 0, siblings, brandLanding });
-  assert.match(html, /в наличии нет/);
+  assert.match(html, /в каталоге нет/);
   assert.doesNotMatch(html, /<ul><\/ul>/);
   assert.doesNotMatch(html, /"@type":"ItemList"/);
+  // Ни цены, ни числа предложений: часть моделей не проходит правила ввоза совсем,
+  // и такая страница обещала бы то, чего у нас нет.
+  assert.doesNotMatch(html, /"@type":"AggregateOffer"/);
+});
+
+test("модель без машин предлагает подбор и замену, а не тупик", () => {
+  const { html } = render().modelPage({ modelPage: page, cars: [], total: 0, siblings, brandLanding });
+  // Подбор под заказ — единственное, что мы можем предложить по модели, которой нет.
+  assert.match(html, /<a href="\/how-it-works\/?">/);
+  // Замена: раздел своей марки и другие её обзоры, иначе страница никуда не ведёт.
+  assert.match(html, new RegExp(`<a href="${brandLanding.path}">`));
+  assert.match(html, /Другие модели/);
 });
 
 test("страница машины ведёт в разделы своей марки, типа и кузова", () => {
