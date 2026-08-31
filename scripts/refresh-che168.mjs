@@ -192,7 +192,25 @@ const asFlightScript = (text) => `[1,${JSON.stringify(text)}])`;
 // Same in-page fetch as import-v2: the request must run inside the challenged
 // page so it carries the anti-bot cookies. 429 and the quieter empty-shell
 // throttle answer are both retried against the marker the caller expects.
+// Жёсткий предел на одно обращение. Своего лимита времени у fetch внутри страницы
+// мало: 31.08.2026 источник подсунул страницу проверки, и `page.evaluate` не
+// завершился вообще — прогон стоял 13 минут без единой доли процессора, а
+// предохранитель молчания даже не начал считать (он считает ОТВЕТЫ, а тут не было
+// и их). Теперь не ответил за FLIGHT_TIMEOUT — значит безответный, идём дальше.
+const FLIGHT_TIMEOUT = Number(args.get("flight-timeout") || 45_000);
 async function flight(page, url, expectMarker) {
+  let timer = null;
+  const guard = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ status: 0, text: "", timedOut: true }), FLIGHT_TIMEOUT);
+  });
+  try {
+    return await Promise.race([flightInPage(page, url, expectMarker), guard]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function flightInPage(page, url, expectMarker) {
   return page.evaluate(async ([target, marker]) => {
     let last = { status: 0, text: "" };
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -1034,9 +1052,12 @@ try {
   cursor = await loadCursor();
   await loadOrder();
   if (orderConfig?.burst) {
-    if (!args.get("burst")) burstLimit = Number(orderConfig.burst.requests || burstLimit);
-    if (!args.get("burst-pause")) burstPauseMin = Number(orderConfig.burst.pauseMinutes || burstPauseMin);
-    if (!args.get("bursts")) burstsMax = Number(orderConfig.burst.burstsPerSession || orderConfig.burst.burstsPerNight || burstsMax);
+    // Ноль — осмысленное значение («заранее не отдыхаем»), поэтому проверяем
+    // именно «задано или нет», а не правдивость: `0 || 450` вернуло бы 450.
+    const given = (value, fallback) => (value === null || value === undefined || value === "" ? fallback : Number(value));
+    if (!args.get("burst")) burstLimit = given(orderConfig.burst.requests, burstLimit);
+    if (!args.get("burst-pause")) burstPauseMin = given(orderConfig.burst.pauseMinutes, burstPauseMin);
+    if (!args.get("bursts")) burstsMax = given(orderConfig.burst.burstsPerSession ?? orderConfig.burst.burstsPerNight, burstsMax);
   }
   if (!args.get("model-top") && orderConfig?.modelPriceSlice?.pages != null) {
     modelTopPages = Number(orderConfig.modelPriceSlice.pages) || 0;
@@ -1048,7 +1069,9 @@ try {
   } else {
     console.log("[filters] в настройке нет фильтров — обхожу списки целиком, как раньше");
   }
-  console.log(`[burst] норма подхода ${burstLimit} обращений, пауза ${burstPauseMin} мин, подходов за сессию до ${burstsMax}`);
+  console.log(burstLimit
+    ? `[burst] норма подхода ${burstLimit} обращений, пауза ${burstPauseMin} мин, подходов за сессию до ${burstsMax}`
+    : `[burst] заранее не отдыхаем: работаем, пока источник отвечает, и встаём на ${burstPauseMin} мин только когда он остановил`);
   if (modelTopPages > 0) console.log(`[order] ценовой срез моделей: первые ${modelTopPages} страниц по возрастанию цены (~${modelTopPages * 24} самых дешёвых машин модели)`);
   console.log(`[order] круг №${cursor.round}, в нём уже обойдено марок: ${cursor.brandsDone.length}`);
   // ---- Проход по маркам ---------------------------------------------------
@@ -1070,8 +1093,16 @@ try {
   }
   const ourCountByBrand = new Map([...ourRowsByBrand].map(([brand, list]) => [brand, list.length]));
   const { all: allBrands, queue: fullQueue, restarted } = await brandQueue(ourCountByBrand);
-  // `--brand-limit` для проверочных прогонов: взять только первые N марок очереди.
-  const brandsToWalk = brandLimit ? fullQueue.slice(0, brandLimit) : fullQueue;
+  // Для проверочных прогонов: `--brand-limit=N` берёт первые N марок очереди,
+  // `--brands=Stelato,Kia` — только названные (имена как в каталоге, регистр не важен).
+  const wantedBrands = args.get("brands")
+    ? new Set(args.get("brands").split(",").map((name) => canonicalImportBrand(name.trim())).filter(Boolean))
+    : null;
+  let brandsToWalk = wantedBrands
+    ? allBrands.filter((item) => wantedBrands.has(item.brand))
+    : fullQueue;
+  if (wantedBrands && !brandsToWalk.length) throw new Error(`марок не нашлось: ${args.get("brands")}`);
+  if (brandLimit) brandsToWalk = brandsToWalk.slice(0, brandLimit);
   if (restarted) console.log("[order] круг был пройден — начинаю заново");
   console.log(`[order] в очереди ${brandsToWalk.length} марок из ${allBrands.length}; первые: ${brandsToWalk.slice(0, 5).map((b) => `${b.brand} (${b.ourCars})`).join(", ")}`);
 
