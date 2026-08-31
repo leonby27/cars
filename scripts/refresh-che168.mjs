@@ -76,8 +76,14 @@ const REPORT_PATH = path.join(ROOT, "runtime", "refresh-report.json");
 const DISCOVERIES_PATH = path.join(ROOT, "runtime", "che168-discoveries.json");
 const BRAND_MAP_PATH = path.join(ROOT, "config", "che168-brands-1.json");
 const GIANT_SERIES_PATH = path.join(ROOT, "config", "che168-giant-series.json");
-const FEED_URL = "https://global.che168.com/en/used-cars?vehicle_list=1&fueltype=7";
-const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+const FEED_URL = "https://global.che168.com/ru/used-cars?vehicle_list=1&fueltype=7";
+// Подпись браузера НЕ подменяем: пусть говорит правду о себе. Мы годами выдавали
+// себя за макбук, работая на линуксовом сервере, — а всё остальное в нас (набор
+// шрифтов, тип системы внутри страницы, отпечаток соединения) кричало «линукс».
+// Замеры 31.08.2026: ручной прогон в этом же браузере БЕЗ подмены прошёл 150–211
+// страниц, наш скрипт С подменой останавливали на 107–113. Для запросов к
+// Autohome (не к источнику) подпись всё ещё нужна — там она безобидна.
+const USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 // Feeds 7/5/6 (EV, plug-in, hybrid) are walked whole; feed 1 (petrol) is the
 // one that needs brand/series slicing — see the header note.
 const FUEL_TYPES = [7, 5, 6, 1];
@@ -213,7 +219,10 @@ async function flight(page, url, expectMarker) {
 async function flightInPage(page, url, expectMarker) {
   return page.evaluate(async ([target, marker]) => {
     let last = { status: 0, text: "" };
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    // Одна повторная попытка вместо четырёх: четыре обращения к одному адресу
+    // подряд — картина сборщика, а рядом со стеной ещё и трата запаса впустую.
+    // Пропущенную страницу подберёт следующий круг (31.08.2026).
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       // Сорванное соединение — обычное дело на длинном прогоне. Раньше такая
       // ошибка выбрасывалась наружу и роняла весь скрипт вместе с несохранёнными
       // результатами; теперь это просто ещё одна попытка.
@@ -246,6 +255,9 @@ let browser = null;
 let context = null;
 let page = null;
 let sessionRequests = 0;
+// Все обращения к источнику за прогон, включая загрузку страниц и их скрипты.
+let sourceRequests = 0;
+let requestCounterOn = false;
 let sessionRotations = 0;
 let rotating = null;
 
@@ -253,11 +265,22 @@ let rotating = null;
 // (см. заметку 1a в шапке). На сервере экран виртуальный: служба запускает
 // прогон через `xvfb-run`. `--headless=true` оставлен для отладки.
 const headless = args.get("headless") === "true";
+// Постоянный профиль браузера: тот же каталог на диске от прогона к прогону.
+// Смысл — накапливать то, что сайт сам про нас записывает (свои метки посетителя,
+// счётчики, кэш кусков приложения), вместо того чтобы каждый раз приходить с
+// чистого листа. Лучший результат за 31.08.2026 (500 страниц подряд) был получен
+// именно в постоянном профиле; чистые окна останавливали на 51–170.
+const PROFILE_DIR = args.get("profile") || path.join(ROOT, "runtime", "source-profile-run");
 async function launchBrowser() {
   if (!headless && process.platform === "linux" && !process.env.DISPLAY) {
     throw new Error("нужен экран: запускайте через `xvfb-run -a npm run refresh` (или --headless=true, но источник такое окно не пустит)");
   }
-  return chromium.launch({ headless, args: ["--disable-blink-features=AutomationControlled"] });
+  return chromium.launchPersistentContext(PROFILE_DIR, {
+    headless,
+    viewport: { width: 1440, height: 900 },
+    locale: "en-US",
+    args: ["--disable-blink-features=AutomationControlled"],
+  });
 }
 
 // Пропуск проверки «не робот», выданный человеком (см. runtime/iptest/hold.mjs).
@@ -371,23 +394,47 @@ async function saveCursor(cursor) {
 async function openSession() {
   // Браузер мог умереть целиком (сигнал остановки, сбой) — тогда поднимаем новый,
   // а не пытаемся открыть окно в мёртвом.
-  if (browser && !browser.isConnected()) browser = null;
-  browser = browser || await launchBrowser();
-  const state = await loadSourceState();
-  const freshContext = await browser.newContext({
-    locale: "en-US",
-    viewport: { width: 1440, height: 900 },
-    userAgent: USER_AGENT,
-    ...(state ? { storageState: state } : {}),
-  });
+  // Постоянный профиль — это сразу контекст, а не браузер: новых контекстов в нём
+  // не создают, работаем в том же и просто открываем новую страницу.
+  if (browser && !browser.browser()?.isConnected()) browser = null;
+  if (!browser) {
+    browser = await launchBrowser();
+    // Пропуск подкладываем только в свежий профиль: если сайт уже записал в него
+    // свои метки, свои и оставляем — они как раз и делают нас «знакомым».
+    // Пропуск подкладываем только если попросили явно (`--use-pass=true`): метка,
+    // выданная другому браузеру, выглядит как чужой паспорт, а вход с сервера
+    // 31.08.2026 открыт и без неё.
+    if (args.get("use-pass") === "true") {
+      const state = await loadSourceState();
+      const own = await browser.cookies().catch(() => []);
+      if (state?.cookies?.length && !own.some((c) => /EO-Bot-Captcha/i.test(c.name))) {
+        await browser.addCookies(state.cookies).catch(() => {});
+        console.log("[pass] подложил пропуск по просьбе (--use-pass)");
+      }
+    }
+  }
+  const freshContext = browser;
+  if (!requestCounterOn) {
+    requestCounterOn = true;
+    freshContext.on("request", (r) => {
+      if (/che168\.com|autoimg\.cn/.test(r.url())) sourceRequests += 1;
+    });
+  }
   const freshPage = await freshContext.newPage();
   await freshPage.goto(FEED_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await freshPage.waitForFunction(() => document.querySelectorAll("[data-uc-car-card]").length > 0, null, { timeout: 60_000 });
-  const stale = context;
+  // Даём странице отстояться: приложение сайта дозагружает свои куски, регистрирует
+  // сессию в их аналитике и ставит собственные метки. Во всех успешных опытах
+  // 31.08.2026 страница жила минуту-другую до первого запроса за данными, а наш
+  // прогон начинал через две секунды — то есть просил данные у ещё не ожившей
+  // страницы. Секунды дешевле, чем стена.
+  const settle = Number(args.get("settle") || 12_000);
+  if (settle > 0) await freshPage.waitForTimeout(settle);
+  const stalePage = page;
   context = freshContext;
   page = freshPage;
   sessionRequests = 0;
-  if (stale) await stale.close().catch(() => {});
+  if (stalePage) await stalePage.close().catch(() => {});
 }
 
 // Первый вход — единственное место, где источник встречает нас проверкой «не
@@ -395,9 +442,43 @@ async function openSession() {
 // (ночь 26→27.08.2026: скрипт умер через 78 секунд и до утра никто не знал).
 // Проверка бывает и капризной, поэтому ждём и пробуем снова — но редко и не
 // подряд: стучаться чаще в закрытую дверь только вредит.
+// Две попытки вместо пяти, и после них — тишина на два часа.
+// 31.08.2026 мы весь день стучались в закрытую дверь: пять попыток подряд, потом
+// перезапуск, потом снова. Каждый стук продлевал наказание — часть блокировок мы
+// устроили себе сами. Правило теперь простое: не пустили дважды — уходим надолго
+// и говорим об этом, а не пробуем ещё.
 const ENTRY_WAITS_MS = args.get("entry-waits")
   ? args.get("entry-waits").split(",").filter(Boolean).map(Number)
-  : [60_000, 180_000, 600_000, 1200_000];
+  : [60_000, 300_000];
+const LOCKOUT_HOURS = Number(args.get("lockout-hours") || 2);
+const LOCKOUT_PATH = path.join(ROOT, "runtime", "source-lockout.json");
+
+// Дверь закрыта: запоминаем, до какого времени не тревожить источник, и молчим.
+async function markLockout(reason) {
+  const until = new Date(Date.now() + LOCKOUT_HOURS * 3600_000).toISOString();
+  await fs.writeFile(LOCKOUT_PATH, `${JSON.stringify({ until, reason, at: new Date().toISOString() }, null, 2)}\n`).catch(() => {});
+  console.log(`[lockout] источник не пустил дважды — не тревожу его до ${until.slice(11, 16)} UTC`);
+  if (!tgQuiet) {
+    await sendTelegram(
+      [`⛔️ Источник не пускает`, "", `Прогон не начался: ${reason}.`, `Следующая попытка не раньше чем через ${LOCKOUT_HOURS} ч.`, "", "Стучаться чаще нельзя — от этого запрет только продлевается."].join("\n"),
+      { root: ROOT, log: console.log },
+    ).catch(() => {});
+  }
+}
+
+// Не пора ли ещё молчать: если запрет свежий, прогон даже не поднимает браузер.
+async function underLockout() {
+  try {
+    const saved = JSON.parse(await fs.readFile(LOCKOUT_PATH, "utf8"));
+    const until = new Date(saved.until).getTime();
+    if (Number.isFinite(until) && until > Date.now()) {
+      const minutes = Math.round((until - Date.now()) / 60_000);
+      console.log(`[lockout] источник закрыт после прошлой неудачи, до конца тишины ${minutes} мин — выхожу, не тревожа его`);
+      return true;
+    }
+  } catch {}
+  return false;
+}
 
 async function openSessionWithRetries() {
   for (let attempt = 0; ; attempt += 1) {
@@ -409,7 +490,10 @@ async function openSessionWithRetries() {
     } catch (error) {
       const wait = ENTRY_WAITS_MS[attempt];
       console.log(`[browser] источник не пустил (${String(error.message).slice(0, 80)})`);
-      if (wait === undefined) return false;
+      if (wait === undefined) {
+        await markLockout(String(error.message).slice(0, 80));
+        return false;
+      }
       console.log(`[browser] жду ${Math.round(wait / 60_000)} мин и пробую снова (попытка ${attempt + 2} из ${ENTRY_WAITS_MS.length + 1})`);
       await new Promise((resolve) => setTimeout(resolve, wait));
       if (stopped) return false;
@@ -581,16 +665,22 @@ async function noteAnswer(ok) {
   if (answersSinceWallPause < 40) restMinutes = Math.min(restMinutes + 10, 45);
   else if (answersSinceWallPause >= 100) restMinutes = Math.max(burstPauseMin, restMinutes - 5);
   wallPauses += 1;
-  console.log(`[wall] источник замолчал после ${answersSinceWallPause} ответов — отдыхаю ${restMinutes} мин (передышка ${wallPauses} из 4)`);
+  console.log(`[wall] источник замолчал после ${answersSinceWallPause} ответов (всего обращений к источнику: ${sourceRequests}) — отдыхаю ${restMinutes} мин (передышка ${wallPauses} из 4)`);
   answersSinceWallPause = 0;
   const until = Date.now() + restMinutes * 60_000;
   while (Date.now() < until && !stopped) await sleep(5_000);
 }
 
-let rscSeq = 0;
+// Метка `_rsc` — ключ кэша, по которому приложение сайта просит данные. Настоящее
+// приложение ставит ОДНО значение на раздел, чтобы ответ можно было переиспользовать.
+// Мы её нумеровали (r1, r2, r3…) — то есть каждым запросом требовали считать заново.
+// Замеры 31.08.2026 показали: во всех успешных прогонах руками (браузер Сергея —
+// 150 страниц, инкогнито — 125, наш браузер на сервере — 70+) метка была одна и та
+// же, а наш скрипт со сквозной нумерацией останавливали на 51–170. Ставим постоянную.
+const RSC_LIST = args.get("rsc") || "r2";
+const RSC_DETAIL = args.get("rsc-detail") || "d2";
 async function listFlight(params) {
-  rscSeq += 1;
-  const { status, text } = await safeFlight(`/en/used-cars?vehicle_list=1&${params}&_rsc=r${rscSeq}`, "infoid");
+  const { status, text } = await safeFlight(`/ru/used-cars?vehicle_list=1&${params}&_rsc=${RSC_LIST}`, "infoid");
   return status === 200 && text ? extractChe168ListPayload([asFlightScript(text)]) : null;
 }
 
@@ -832,6 +922,39 @@ function priceWindowsFor(brandCanon, ourPrices, pageCount) {
   return bounds.slice(0, -1).map((lo, i) => ({ minPrice: lo, maxPrice: bounds[i + 1] }));
 }
 
+// Переводим открытую страницу на адрес того самого среза, который собираемся
+// листать. Зачем: замеры 31.08.2026 показали, что запрос за данными «с чужой
+// страницы» источник терпит вдвое хуже. Наш прогон стоял на общей странице
+// электромобилей и спрашивал с неё сорок четыре марки подряд — у настоящего
+// приложения так не бывает: страница и запрос всегда об одном и том же. Руками с
+// той же машины: со своей страницы 211 страниц до стены, наш скрипт с чужой — 107.
+async function standOn(params) {
+  try {
+    await page.goto(`https://global.che168.com/ru/used-cars?vehicle_list=1&${params}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await page.waitForFunction(() => document.querySelectorAll("[data-uc-car-card]").length > 0, null, { timeout: 30_000 });
+    await page.waitForTimeout(Number(args.get("stand-settle") || 3000));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Сброс кэша готовых страниц: без него заведённая машина появится на витрине
+// только после следующей выкладки. Работает, когда прогон запущен от root (боевая
+// служба); иначе молча пропускаем. 31.08.2026 функция пропала при правках, и 98
+// новых машин не появлялись, пока кэш не сбросили руками — отсюда и тест на неё.
+async function purgePageCache(added) {
+  try {
+    const { execFile } = await import("node:child_process");
+    await new Promise((resolve, reject) => {
+      execFile("/bin/bash", ["-c", "find /var/cache/nginx/abcars -type f -delete && systemctl reload nginx"], (error) => (error ? reject(error) : resolve()));
+    });
+    console.log(`[cache] кэш страниц сброшен: ${added} новых машин уже видны на сайте`);
+  } catch (error) {
+    console.log(`[cache] сбросить кэш не удалось (${String(error.message).slice(0, 60)}) — машины появятся после выкладки`);
+  }
+}
+
 // Отбивка по марке: успешно или нет, сколько новых, снятых, оставшихся и у скольких
 // изменилась цена. Одно сообщение на марку — так и просил Сергей.
 async function reportBrand(entry, res) {
@@ -889,7 +1012,7 @@ async function writeDiscoveries() {
 // after retries) stays untouched and is only counted: guessing here would
 // either hide a live car or keep advertising a sold one.
 async function checkDetail(externalId) {
-  const { status, text } = await safeFlight(`/en/detail/${externalId}?_rsc=rfd${externalId}`, "ssrCarDetail");
+  const { status, text } = await safeFlight(`/ru/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
   const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
   if (!payload?.detail) return { verdict: "unknown", status };
   const price = Number(String(payload.detail.price ?? "").replace(/[^\d.]/g, "")) || null;
@@ -900,7 +1023,7 @@ async function checkDetail(externalId) {
 // нужна ради фотографий и характеристик (в списке их нет), а посетитель должен
 // увидеть машину в тот же проход. Возвращает 'added' | 'rejected' | 'failed'.
 async function addNewCar(externalId) {
-  const { status, text } = await safeFlight(`/en/detail/${externalId}?_rsc=new${externalId}`, "ssrCarDetail");
+  const { status, text } = await safeFlight(`/ru/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
   const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
   if (!payload?.detail) return "failed";
   const car = buildChe168Car(payload);
@@ -939,6 +1062,11 @@ let entryDenied = false;
 
 try {
   console.log(`[feeds] фиды этой ночи: ${activeFeeds.join(", ")}${args.get("shift") ? ` (ограничено ключом --shift=${args.get("shift")})` : ""}`);
+  // Если дверь закрыли в прошлый раз — даже не подходим к ней.
+  if (await underLockout()) {
+    entryDenied = true;
+    throw new Error("источник под запретом после прошлой неудачи");
+  }
   if (!await openSessionWithRetries()) {
     // Не пустили совсем — это не поломка кода, а закрытая дверь. Уходим с
     // понятным следом в журнале: утренняя проверка (scripts/night-watch.mjs)
@@ -1029,7 +1157,12 @@ try {
   // Priority pass: the cars visitors opened get their authoritative detail
   // check and a write immediately, before the long list walk begins.
   const prioritized = new Set();
-  if (!skipDetail && popularRows.length) {
+  // По умолчанию проверку «популярных» машин делаем ПОСЛЕ обхода списков: раньше
+  // она шла первой и съедала часть запаса источника до того, как прочитана хотя бы
+  // одна страница. Ручные замеры 31.08.2026 карточек не трогают и проходят вдвое
+  // дальше. `--priority-first=true` возвращает прежний порядок.
+  const priorityFirst = args.get("priority-first") === "true";
+  if (priorityFirst && !skipDetail && popularRows.length) {
     console.log(`[priority] ${popularRows.length} visitor-viewed cars go first`);
     const queue = [...popularRows];
     const worker = async () => {
@@ -1118,14 +1251,25 @@ try {
     const ourPrices = ourPricesByBrand.get(entry.brand) || [];
     const pricedBefore = seenPrices.size;
     const pagesBefore = listPages;
-    const rePricedBefore = priceUpdates.length;
+    const rePricedBefore = stats.rePriced;
     let ok = true;
     let why = null;
     let windows = 0;
 
     for (const brandId of entry.ids) {
       if (stopped) break;
-      const probe = await listFlight(`brandid=${brandId}&${filterParams(entry.brand)}&sort=2`);
+      const brandParams = `brandid=${brandId}&${filterParams(entry.brand)}&sort=2`;
+      // Вставать на страницу каждой марки оказалось вредно: загрузка страницы стоит
+      // 113 обращений на холодном профиле, а потолок источника считается по всем
+      // обращениям. Замеры 31.08.2026: со «своей» страницей 113 прочитанных страниц,
+      // без неё 107 — разницы нет, а половина запаса уходила на саму загрузку.
+      // `--stand-on-brand=true` включает прежнее поведение для опытов.
+      if (args.get("stand-on-brand") === "true" && !(await standOn(brandParams))) {
+        ok = false;
+        why = "не удалось открыть страницу марки";
+        continue;
+      }
+      const probe = await listFlight(brandParams);
       await noteAnswer(Boolean(probe));
       await sleep(pace);
       if (!probe?.pageCount || !probe.totalCount) {
@@ -1144,6 +1288,7 @@ try {
         const base = `brandid=${brandId}&${filterParams(entry.brand, win)}&sort=2`;
         let pageCount = probe.pageCount;
         if (wins.length > 1) {
+          if (args.get("stand-on-brand") === "true" && !(await standOn(base))) { ok = false; why = "не удалось открыть окно по цене"; continue; }
           const head = await listFlight(base);
           await noteAnswer(Boolean(head));
           await sleep(pace);
@@ -1193,13 +1338,16 @@ try {
     }
     await flushWrites();
 
+    // Машина в базе — ещё не машина на сайте: каталог отдаётся из кэша.
+    if (added > 0 && !dryRun) await purgePageCache(added);
+
     coveredBrands.add(entry.brand);
     allBrandsThisRun.add(entry.brand);
     const res = {
       ok: ok && !stopped,
       why: stopped ? "прогон свернулся: дневной запас источника исчерпан" : why,
       priced: seenPrices.size - pricedBefore,
-      rePriced: priceUpdates.length - rePricedBefore,
+      rePriced: stats.rePriced - rePricedBefore,
       added,
       addFailed,
       sold: soldHere,
@@ -1279,6 +1427,7 @@ try {
     activeBefore: rows.length,
     listPages,
     listPagesEmpty,
+    sourceRequests,
     brandsWalked,
     seriesWalked,
     pricedByLists: seenPrices.size,

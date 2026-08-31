@@ -326,7 +326,9 @@ try {
 const context = await browser.newContext({
   locale: "en-US",
   viewport: { width: 1440, height: 900 },
-  userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  // Подпись браузера не подменяем: она говорила «макбук», а сервер линуксовый, и
+  // всё остальное в браузере это выдавало. Из-за этого противоречия источник
+  // 31.08.2026 обрывал обход втрое раньше — см. память che168-working-list-walk.
   ...(sourceState ? { storageState: sourceState } : {}),
 });
 const page = await context.newPage();
