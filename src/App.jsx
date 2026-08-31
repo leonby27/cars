@@ -7,6 +7,7 @@ import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel,
 import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
+import { EXCLUDED_BRANDS } from "../config/import-policy.mjs";
 import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
@@ -3901,7 +3902,12 @@ const brandLogos = {
 // Brands the importer keeps supplying, but the home page showcase leaves out.
 // A showcase decision only: the import policy still allows them and their cards
 // stay in the catalog, the brand filter, and search.
-const showcaseHiddenBrands = new Set(["AION", "Denza", "Dongfeng", "Hongqi", "ORA"]);
+// Плюс вычеркнутые марки: их машины удалены из каталога (31.08.2026), и логотип с
+// нулём был бы тупиком. Список берём из правил ввоза, а не переписываем руками —
+// иначе он разойдётся с ними при следующей правке. Здесь он нужен и потому, что
+// при сборке страницы чисел ещё нет: без него серверная разметка показала бы марку,
+// а браузер убрал — и сверка разметки при запуске приложения не сошлась бы.
+const showcaseHiddenBrands = new Set(["AION", "Denza", "Dongfeng", "Hongqi", "ORA", ...EXCLUDED_BRANDS]);
 
 // Марки, которых нет в свёрнутом блоке, но которые открываются кнопкой «Показать
 // все марки». Машин у них много, и по одной популярности они занимали половину
@@ -4074,14 +4080,16 @@ function PopularBrands({ navigate, cars, apiMode }) {
   // Before the catalog answers there are no counts at all, and rendering every brand as "0"
   // reads as an empty catalog rather than a pending one.
   const countsKnown = brandCounts.size > 0;
-  // Every brand the catalog can show, plus the configured marks that currently
-  // have no listings, so the block is the full inventory rather than a preview.
-  // Под выбранный тип двигателя пустые марки убираем: раздела «электрический
-  // Bentley» не существует, и вести по такой ссылке некуда.
+  // Марку без машин не показываем нигде, даже на вкладке «Все марки»: часть марок
+  // мы перестали возить (31.08.2026), и «Ford 0» в списке — тупик, а не предложение.
+  // Правило считает по числу, а не по списку имён: вычеркнули марку — она исчезла
+  // сама, завезли новую — появилась. Пока каталог не ответил, чисел нет вообще
+  // (`countsKnown` ложно) — тогда показываем все логотипы без чисел, иначе блок
+  // выглядел бы пустым каталогом.
   const brands = [...new Set([...Object.keys(brandLogos), ...availableBrands.map((item) => item.brand)])]
     .filter((brand) => !showcaseHiddenBrands.has(brand))
     .map((brand) => ({ brand, count: brandCounts.get(brand) || 0 }))
-    .filter((item) => selectedType === "Все" || item.count > 0)
+    .filter((item) => !countsKnown || item.count > 0)
     .sort((a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }));
   const limit = columns * BRAND_SHOWCASE_ROWS;
   // В сокращённом виде оставляем самые многочисленные марки, но показываем их всё равно

@@ -47,6 +47,9 @@ export const EXCLUDED_BRANDS = Object.freeze([
   "Ford", "Chevrolet", "Jaguar", "Mitsubishi", "Jeep", "Subaru", "Peugeot",
   "Maserati", "Great Wall", "Infiniti",
   "Fiat", "GMC", "Chrysler", "Renault", "Suzuki", "smart",
+  // Dongfeng вычеркнут там же: под своим именем у источника это подбренды,
+  // которых в Беларуси не спрашивают, а у нас по нему было две машины.
+  "Dongfeng",
 ]);
 
 // Потолок итоговой цены. Считается по стоимости «под ключ» в Беларуси, а не по
@@ -85,7 +88,6 @@ export const HOMEPAGE_POPULAR_BRANDS = Object.freeze([
   "Voyah",
   "Deepal",
   "Geely Galaxy",
-  "Dongfeng",
   "Avatr",
   "AITO",
   "Xiaomi",
