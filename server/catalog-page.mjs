@@ -9,6 +9,11 @@ import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
+// Вычеркнутые марки: из наличия их убрали, но раздел оставили с предложением
+// привезти под заказ — см. ветку «раздел без единой машины» ниже.
+import { EXCLUDED_BRANDS } from "../config/import-policy.mjs";
+
+const droppedBrands = new Set(EXCLUDED_BRANDS);
 
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
@@ -124,8 +129,11 @@ export async function renderCatalogPage(slug, searchParams) {
   ]);
   const pages = catalogPageCount(total);
   if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
-  // Раздел без единой машины — пустая страница: пока марку не загрузили, её здесь нет.
-  if (!total) return { status: 404, html: renderer.landingMissingPage() };
+  // Раздел без единой машины обычно значит «марку ещё не загрузили» — такой страницы
+  // для посетителя нет. Но у вычеркнутых марок (31.08.2026) машин не будет никогда,
+  // а привезти их под заказ мы можем: страница остаётся и честно это предлагает.
+  // Иначе 21 раздел, уже отданный поисковику, разом превратился бы в 404.
+  if (!total && !droppedBrands.has(landing.brand)) return { status: 404, html: renderer.landingMissingPage() };
   const priced = await carsByIds(items.slice(0, 24).map((car) => car.id));
 
   // Обзоры моделей этой марки — сильные внутренние ссылки: у каждой такой страницы
