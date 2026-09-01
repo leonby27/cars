@@ -21,7 +21,7 @@ import { formatListingAge, getListingAddedAt, getSourceListedAt, isNewListing } 
 import { formatChangeDate, getPriceChange } from "./price-change.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar, modelPageRedirect } from "./model-pages.js";
-import { carTitle } from "./car-title.js";
+import { carTitle, carTitleDetails } from "./car-title.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
 import { splitInlineLinks } from "./inline-links.js";
 import { loadModelText, loadedModelText } from "./model-text-load.js";
@@ -55,7 +55,7 @@ const carHref = (car) => `/cars/${encodeURIComponent(listingNumber(car?.id))}`;
 // Заголовок страницы машины. Он же уходит в Метрику, когда карточку открывают
 // быстрым просмотром: в отчётах такой просмотр должен выглядеть ровно так же,
 // как открытая страница этой машины, а не как что-то отдельное.
-const carPageTitle = (car) => `${car?.title || carTitle(car?.brand, car?.model, car?.year)}, ${number(car?.mileage)} км — цена до Минска | abcars.by`;
+const carPageTitle = (car) => `${car?.title || carTitle(car?.brand, car?.model, car?.year)}, ${carTitleDetails(car, estimateLandedCost(car).totalUsd)} | abcars.by`;
 // Адрес несёт короткий номер, а карточки и избранное — полный идентификатор,
 // поэтому сравниваем их по номеру.
 const sameListing = (left, right) => Boolean(left) && Boolean(right) && listingNumber(left) === listingNumber(right);

@@ -8,6 +8,7 @@
 // на выходе строка. Поэтому модуль проверяется тестами без сборки и без Postgres.
 import { estimateLandedCost, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
+import { carTitleDetails } from "../src/car-title.js";
 import { brandNotice } from "../src/brand-notice.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
@@ -535,7 +536,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: `${titleText}, ${number(car.mileage)} км — цена до Минска | abcars.by`,
+        title: `${titleText}, ${carTitleDetails(car, landed.totalUsd)} | abcars.by`,
         description,
         canonical,
         body,

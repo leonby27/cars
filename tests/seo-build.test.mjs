@@ -167,7 +167,7 @@ test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", asyn
   // Адрес карточки — короткий номер объявления: приставка источника из ссылок убрана.
   assert.match(home, /<a href="\/cars\/170268619192114"/);
   assert.doesNotMatch(home, /<a href="\/cars\/guazi-/);
-  assert.match(html, /<title>BYD Song Pro 2024, 21[^<]*400 км — цена до Минска/);
+  assert.match(html, /<title>BYD Song Pro 2024, пробег 21[^<]*400 км, гибрид — [^<]+\$ до Минска/);
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/cars\/170268619192114"/);
   assert.match(html, /<meta name="robots" content="index, follow/);
   assert.match(html, /"@type":"Vehicle"/);

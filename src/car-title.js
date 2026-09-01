@@ -29,3 +29,19 @@ export function carModelLabel(brand, model) {
 export function carTitle(brand, model, year) {
   return [String(brand || "").trim(), carModelLabel(brand, model), year].filter(Boolean).join(" ");
 }
+
+// Хвост служебного заголовка страницы машины — то, что идёт после «Марка Модель Год»:
+// пробег, у электромобиля батарея, у гибрида слово «гибрид», и цена до Минска.
+// Пробег и цена делают заголовок уникальным: без цены у половины каталога заголовки
+// совпадали (та же модель, тот же год, одинаковый витринный пробег), и поисковики
+// считали страницы копиями друг друга. Сервер и приложение зовут одну эту функцию,
+// иначе заголовок вкладки менялся бы после загрузки приложения.
+const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
+
+export function carTitleDetails(car, totalUsd) {
+  const parts = [`пробег ${formatNumber(car?.mileage)} км`];
+  if (car?.type === "Электромобиль" && Number(car?.battery) > 0) parts.push(`батарея ${formatNumber(car.battery)} кВт·ч`);
+  if (car?.type === "Гибрид") parts.push("гибрид");
+  const price = Number(totalUsd) > 0 ? `${formatNumber(totalUsd)} $ до Минска` : "цена до Минска";
+  return `${parts.join(", ")} — ${price}`;
+}
