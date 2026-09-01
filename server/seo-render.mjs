@@ -25,7 +25,7 @@ import { TOOL_PAGES } from "../src/tool-pages.js";
 import { BLOG_ENABLED } from "../src/feature-flags.js";
 import { BLOG_INDEX, blogDateLabel, blogPostsForModel } from "../src/blog-posts.js";
 // Живые ссылки внутри абзацев обзора модели — тот же разбор, что в приложении.
-import { splitInlineLinks } from "../src/inline-links.js";
+import { plainInlineText, splitInlineLinks } from "../src/inline-links.js";
 // Первый экран, который браузер показывает до запуска приложения.
 import { bootScreen } from "./boot-screen.mjs";
 
@@ -38,6 +38,7 @@ export const linkifyText = (text, hrefRoute) =>
   splitInlineLinks(text)
     .map((part) => (typeof part === "string" ? escapeHtml(part) : `<a href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`))
     .join("");
+
 // Фотографии машин отдаём со своего адреса /photo/… — наш сервер держит копию
 // снимка у себя и отдаёт её вчетверо быстрее, чем китайское хранилище отвечает на
 // первый запрос. Подробности — в snippets/abcars-photo-location.conf на сервере
@@ -390,7 +391,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       mainEntity: faq.map((item) => ({
         "@type": "Question",
         name: item.q,
-        acceptedAnswer: { "@type": "Answer", text: item.a },
+        acceptedAnswer: { "@type": "Answer", text: plainInlineText(item.a) },
       })),
     };
   }

@@ -4,6 +4,8 @@ import { shippedFlag } from "../src/feature-flags.js";
 import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, blogAllPosts, findBlogPost, homeBlogPosts } from "../src/blog-posts.js";
 import { BLOG_TEXTS, BLOG_TEXTS_RAW } from "../src/blog-texts.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "../src/blog-report.js";
+import { blogFigureSvg } from "../src/blog-figures.js";
+import { plainInlineText } from "../src/inline-links.js";
 import { catalogLandingForParams } from "../src/catalog-landings.js";
 
 // Журнал открыт посетителям 27.08.2026. Проверка осталась, только с обратным знаком:
@@ -86,10 +88,20 @@ test("год в заголовках подставляется, а в текс�
   }
   assert.ok(blogPosts(2031).some((post) => post.seoTitle.includes("2031")), "ни в одном заголовке нет года — подстановка не работает");
   // В самом тексте статьи года быть не должно: он бы устарел молча.
+  //
+  // Исключение — полная дата («1 января 2026 года»): это не обещание свежести, а
+  // привязанный ко времени факт, который не устаревает. Дата вступления указа в силу
+  // останется верной и через десять лет, а вот «лучшие кроссоверы 2026 года» — нет.
+  // Поэтому полные даты вырезаем перед проверкой, а голый год по-прежнему запрещён.
+  const MONTHS_IN_TEXT = "января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря";
+  const fullDates = new RegExp(`\\d{1,2}\\s(?:${MONTHS_IN_TEXT})\\s20[2-9]\\d`, "g");
   const years = /\b20[2-9]\d\b/;
+  // Адреса в проверку не идут: год бывает частью имени страницы
+  // (/blog/hybrid-duty-2026) и частью ссылки на источник — там он не текст, а адрес.
+  const linkTargets = /\]\([^)]*\)|https?:\/\/[^"\s]+/g;
   for (const [slug, text] of Object.entries(BLOG_TEXTS)) {
-    const found = JSON.stringify(text).match(years);
-    assert.equal(found, null, `в тексте ${slug} написан год ${found?.[0]} — он устареет молча`);
+    const found = JSON.stringify(text).replace(linkTargets, "]").replace(fullDates, "").match(years);
+    assert.equal(found, null, `в тексте ${slug} написан год ${found?.[0]} без месяца и числа — он устареет молча`);
   }
 });
 
@@ -134,7 +146,16 @@ test("на карточке и в шапке статьи стоит день в
 // «Мы проверяем», «мы подтверждаем» — это услуга, которую придётся оказывать всегда,
 // а текст живёт годами. Тот же факт пишется безлично или советом покупателю.
 test("в текстах нет обещаний от первого лица", () => {
-  const banned = [/\bмы\b/i, /\bнам\b/i, /\bнаши[йемх]?\b/i, /подтверждаем/i, /проверяем/i, /сверяем/i, /гарантируем/i, /обеспечиваем/i];
+  // Границы слова (\b) в JavaScript считают буквами только латиницу, поэтому прежний
+  // список с \bмы\b не ловил в кириллице ничего и правило держалось на честном слове.
+  // Здесь границы заданы явно — «не буква кириллицы слева и справа».
+  //
+  // Слова «наш» и «у нас» из списка убраны намеренно: «наши дороги», «принято у нас» —
+  // это разговор о стране, а не обещание услуги, и запрещать его не за что.
+  const word = (stem) => new RegExp(`(^|[^а-яёА-ЯЁ])${stem}([^а-яёА-ЯЁ]|$)`, "i");
+  // Глаголы тоже по границам слова: «проверяемо» и «сверяем» — разные вещи, и
+  // прежний список ловил безобидное «что из этого проверяемо».
+  const banned = ["мы", "нам", "подтверждаем", "проверяем", "сверяем", "гарантируем", "обеспечиваем", "привезём", "доставим"].map(word);
   for (const [slug, text] of Object.entries(BLOG_TEXTS_RAW)) {
     const sentences = JSON.stringify(text).split(/(?<=[.!?])\s+/);
     const guilty = sentences.filter((sentence) => banned.some((pattern) => pattern.test(sentence)));
@@ -318,4 +339,44 @@ test("проценты пишутся со знаком, а ноль — без"
   assert.equal(percent(2.6), "+2,6%");
   assert.equal(percent(0.01), "0%");
   assert.equal(percent(null), null);
+});
+
+// Ссылки внутри текста разбираются везде, где текст показывается: в абзацах, списках,
+// врезках, шагах и ответах на вопросы. В разметке для поисковика ссылок быть не должно
+// — там нужен чистый текст, иначе в выдаче появится «[калькулятор](/calculator)».
+test("ссылки в текстах статей не остаются разметкой", () => {
+  const links = /\[[^\]]+\]\(\/[a-z0-9/_-]+\)/i;
+  for (const [slug, text] of Object.entries(BLOG_TEXTS)) {
+    for (const item of text.faq || []) {
+      assert.ok(!links.test(plainInlineText(item.a)), `в ответе материала ${slug} ссылка осталась разметкой для поисковика`);
+    }
+  }
+  assert.equal(plainInlineText("Считает [калькулятор](/calculator) сам."), "Считает калькулятор сам.");
+});
+
+// Каждая статья обязана нести хотя бы одну картинку: либо фотографии настоящих машин
+// по своему срезу каталога, либо свой график. Текст без единой картинки читается как
+// стена, и Сергей просил этого не допускать.
+test("у каждой статьи есть чем проиллюстрироваться", () => {
+  for (const post of blogAllPosts().filter((item) => item.kind === "article")) {
+    const text = BLOG_TEXTS[post.slug];
+    const figures = (text.sections || []).filter((section) => section.figure);
+    for (const section of figures) {
+      assert.ok(blogFigureSvg(section.figure), `в материале ${post.slug} раздел «${section.title}» ссылается на несуществующую картинку ${section.figure}`);
+    }
+    assert.ok(post.photos?.filters || figures.length, `у статьи ${post.slug} нет ни среза для фотографий, ни своего графика`);
+  }
+});
+
+// Первоисточники обязательны там, где статья опирается на чужие цифры. Ссылка должна
+// вести на первоисточник, а не на конкурента: конкуренту это отдаёт и вес, и читателя.
+test("источники статей ведут на первоисточники, а не на конкурентов", () => {
+  const rivals = /westmotors|multimotors|voltauto|autogarage|intercargo|privatauto|autokatalog|d2auto|lemon-cars|yankeemotors/i;
+  for (const [slug, text] of Object.entries(BLOG_TEXTS)) {
+    for (const source of text.sources || []) {
+      assert.match(source.url, /^https:\/\//, `в материале ${slug} источник без адреса`);
+      assert.ok(!rivals.test(source.url), `в материале ${slug} ссылка на конкурента: ${source.url}`);
+      assert.ok(source.name, `в материале ${slug} у источника нет названия`);
+    }
+  }
 });

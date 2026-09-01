@@ -26,6 +26,7 @@ import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE
 // выключен, у сайта нет ни страниц журнала, ни его адресов в карте сайта.
 import { BLOG_ENABLED } from "../src/feature-flags.js";
 import { SAMPLE_REPORT, groups, indexChartSvg, percent } from "../src/blog-report.js";
+import { blogFigureSvg } from "../src/blog-figures.js";
 import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt } from "../src/blog-posts.js";
 import { blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
@@ -236,9 +237,22 @@ function toolArticle(tool) {
   const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
   const extras = (section) =>
     [
-      section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${escapeHtml(item.text)}</dd>`).join("")}</dl>` : "",
-      section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${escapeHtml(option.text)}</p>`).join("") : "",
-      section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${escapeHtml(section.callout.text)}</p>` : "",
+      // Ссылки внутри списков и врезок разбираются так же, как в абзацах: в статьях
+      // журнала половина переходов в каталог живёт именно там.
+      section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${linkifyText(item.text, hrefRoute)}</dd>`).join("")}</dl>` : "",
+      section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${linkifyText(option.text, hrefRoute)}</p>`).join("") : "",
+      // Нумерованные шаги: обычный <ol>, номер рисует сам список.
+      section.steps ? `<ol>${section.steps.map((step) => `<li><strong>${escapeHtml(step.title)}.</strong> ${linkifyText(step.text, hrefRoute)}</li>`).join("")}</ol>` : "",
+      section.table
+        ? `<table>${section.table.caption ? `<caption>${escapeHtml(section.table.caption)}</caption>` : ""}<thead><tr>${section.table.head
+            .map((cell) => `<th>${escapeHtml(cell)}</th>`)
+            .join("")}</tr></thead><tbody>${section.table.rows
+            .map((row) => `<tr>${row.map((cell, index) => (index ? `<td>${escapeHtml(cell)}</td>` : `<th scope="row">${escapeHtml(cell)}</th>`)).join("")}</tr>`)
+            .join("")}</tbody></table>`
+        : "",
+      // Свой график — та же разметка, что видит человек: рисует общий код.
+      section.figure ? blogFigureSvg(section.figure) : "",
+      section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${linkifyText(section.callout.text, hrefRoute)}</p>` : "",
     ].join("");
   const sections = tool.sections
     .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}${extras(section)}</section>`)
@@ -366,9 +380,22 @@ function blogArticleBody(text, cars = [], shown = new Set()) {
     [
       // Подразделы: маленький заголовок и абзацы под ним — разбивка длинного раздела.
       section.parts ? section.parts.map((part) => `<h3>${escapeHtml(part.title)}</h3>${paragraphs(part.paragraphs)}`).join("") : "",
-      section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${escapeHtml(item.text)}</dd>`).join("")}</dl>` : "",
-      section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${escapeHtml(option.text)}</p>`).join("") : "",
-      section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${escapeHtml(section.callout.text)}</p>` : "",
+      // Ссылки внутри списков и врезок разбираются так же, как в абзацах: в статьях
+      // журнала половина переходов в каталог живёт именно там.
+      section.list ? `<dl>${section.list.map((item) => `<dt>${escapeHtml(item.term)}</dt><dd>${linkifyText(item.text, hrefRoute)}</dd>`).join("")}</dl>` : "",
+      section.compare ? section.compare.map((option) => `<p><strong>${escapeHtml(option.name)}.</strong> ${linkifyText(option.text, hrefRoute)}</p>`).join("") : "",
+      // Нумерованные шаги: обычный <ol>, номер рисует сам список.
+      section.steps ? `<ol>${section.steps.map((step) => `<li><strong>${escapeHtml(step.title)}.</strong> ${linkifyText(step.text, hrefRoute)}</li>`).join("")}</ol>` : "",
+      section.table
+        ? `<table>${section.table.caption ? `<caption>${escapeHtml(section.table.caption)}</caption>` : ""}<thead><tr>${section.table.head
+            .map((cell) => `<th>${escapeHtml(cell)}</th>`)
+            .join("")}</tr></thead><tbody>${section.table.rows
+            .map((row) => `<tr>${row.map((cell, index) => (index ? `<td>${escapeHtml(cell)}</td>` : `<th scope="row">${escapeHtml(cell)}</th>`)).join("")}</tr>`)
+            .join("")}</tbody></table>`
+        : "",
+      // Свой график — та же разметка, что видит человек: рисует общий код.
+      section.figure ? blogFigureSvg(section.figure) : "",
+      section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${linkifyText(section.callout.text, hrefRoute)}</p>` : "",
     ].join("");
   const sections = text.sections || [];
   const withoutCover = cars.filter((item) => !shown.has(item.id));
@@ -565,7 +592,34 @@ function blogReportArticle(post) {
     ${blogArticleBody(post, [], new Set())}${faq}${blogCatalogWays(post)}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
 }
 
+/**
+ * Статья для поисковика: связный текст с фотографиями настоящих машин, без списка
+ * объявлений. Разделы те же, что видит человек, включая шаги, таблицы и графики —
+ * их рисует общий `blogArticleBody`.
+ */
+function blogArticleArticle(post) {
+  const found = live.collections.get(post.slug) || null;
+  const photos = found?.cars || [];
+  const published = blogPostDateLabel(post);
+  const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
+  const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
+  const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  const cover = photos[0] ? blogFigure(photos[0], 0) : "";
+  const faq = post.faq?.length
+    ? `<section><h2>Частые вопросы</h2>${post.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${linkifyText(item.a, hrefRoute)}</p>`).join("")}</section>`
+    : "";
+  // Источники — обычные ссылки наружу: на первоисточники вес отдавать не жалко,
+  // а без них текст про пошлины ничем не отличается от пересказа слухов.
+  const sources = post.sources?.length
+    ? `<section><h2>Источники</h2><ul>${post.sources
+        .map((source) => `<li><a href="${escapeHtml(source.url)}" rel="noopener">${escapeHtml(source.name)}</a>${source.note ? ` — ${escapeHtml(source.note)}` : ""}</li>`)
+        .join("")}</ul></section>`
+    : "";
+  return `${date}${cover}${intro}${blogArticleBody(post, photos, new Set([photos[0]?.id]))}${faq}${sources}${blogCatalogWays(post)}${blogModelWays(post)}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+}
+
 function blogPostArticle(post) {
+  if (post.kind === "article") return blogArticleArticle(post);
   if (post.kind === "report") return blogReportArticle(post);
   if (post.kind === "duel") return blogDuelArticle(post);
   const found = live.collections.get(post.slug) || null;
@@ -930,9 +984,17 @@ async function readLiveCatalog() {
     // Живые списки подборок журнала: сам список машин, сколько их всего и цифры
     // для полосы под вступлением. Считаем здесь же, на том же соединении с базой.
     const collections = new Map();
-    for (const post of BLOG_ENABLED ? blogPosts() : []) {
+    for (const post of BLOG_ENABLED ? blogAllPosts() : []) {
       // Отчёт живого среза каталога не требует: все его цифры уже посчитаны.
       if (post.kind === "report") continue;
+      // Статье нужны только фотографии: списка объявлений в ней нет, и правила
+      // отбора тоже — срез для кадров задан отдельным полем `photos`.
+      if (post.kind === "article") {
+        if (!post.photos?.filters) continue;
+        const shots = await listCars(blogListParams({ slug: post.slug, filters: post.photos.filters }, "6"));
+        collections.set(post.slug, { cars: shots.items.filter((car) => car.images?.length || car.image), total: shots.total, changedAt: shots.changedAt || null });
+        continue;
+      }
       // У сравнения не один срез каталога, а по срезу на модель: наличие, самая
       // доступная машина и лучшие цифры версий считаются для каждой стороны отдельно.
       if (post.kind === "duel") {

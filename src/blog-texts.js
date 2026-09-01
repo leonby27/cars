@@ -19,6 +19,11 @@ import almost_new from "./blog-texts/almost-new.js";
 import suv_under_20000 from "./blog-texts/suv-under-20000.js";
 import xiaomi_su7_vs_tesla_model_3 from "./blog-texts/xiaomi-su7-vs-tesla-model-3.js";
 import market_report_sample from "./blog-texts/market-report-sample.js";
+import used_ev_worth_it from "./blog-texts/used-ev-worth-it.js";
+import ev_winter_belarus from "./blog-texts/ev-winter-belarus.js";
+import hybrid_duty_2026 from "./blog-texts/hybrid-duty-2026.js";
+import how_to_read_listing from "./blog-texts/how-to-read-listing.js";
+import range_cycles from "./blog-texts/range-cycles.js";
 
 /** Тексты как написаны, без поправки на состояние квоты: нужны тестам. */
 export const BLOG_TEXTS_RAW = Object.freeze({
@@ -28,6 +33,11 @@ export const BLOG_TEXTS_RAW = Object.freeze({
   "suv-under-20000": suv_under_20000,
   "xiaomi-su7-vs-tesla-model-3": xiaomi_su7_vs_tesla_model_3,
   "market-report-sample": market_report_sample,
+  "used-ev-worth-it": used_ev_worth_it,
+  "ev-winter-belarus": ev_winter_belarus,
+  "hybrid-duty-2026": hybrid_duty_2026,
+  "how-to-read-listing": how_to_read_listing,
+  "range-cycles": range_cycles,
 });
 
 // Пока льгота на электромобили действует, тексты отдаются слово в слово; когда квота

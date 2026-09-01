@@ -23,7 +23,7 @@ import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar, modelPageRedirect } from "./model-pages.js";
 import { carTitle, carTitleDetails } from "./car-title.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
-import { splitInlineLinks } from "./inline-links.js";
+import { splitInlineLinks, plainInlineText } from "./inline-links.js";
 import { loadModelText, loadedModelText } from "./model-text-load.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
 import { brandNotice } from "./brand-notice.js";
@@ -36,7 +36,8 @@ import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToo
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
-import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
+import { blogFigureSvg } from "./blog-figures.js";
+import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
@@ -997,7 +998,10 @@ for (const tool of TOOL_PAGES) routeSeo[tool.path] = [tool.seoTitle, tool.seoDes
 // страницы, которой он для посетителя и является.
 if (BLOG_ENABLED) {
   routeSeo[BLOG_INDEX.path] = [BLOG_INDEX.seoTitle, BLOG_INDEX.seoDescription];
-  for (const post of blogPosts()) routeSeo[post.path] = [post.seoTitle, post.seoDescription];
+  // Черновики тоже: страница у них есть, и заголовок вкладки должен быть свой.
+  // Без этого черновик показывался с заголовком «Страница не найдена», хотя
+  // содержимое рисовалось целиком — и та же ошибка ждала бы статью в день выпуска.
+  for (const post of blogAllPosts()) routeSeo[post.path] = [post.seoTitle, post.seoDescription];
 }
 
 const privateRouteSeo = {
@@ -1653,7 +1657,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
   );
 }
 
-function HomeFaqItem({ item, initiallyOpen = false }) {
+function HomeFaqItem({ item, initiallyOpen = false, navigate = null }) {
   const [open, setOpen] = useState(initiallyOpen);
   return (
     <article className={`home-faq-item${open ? " open" : ""}`}>
@@ -1662,7 +1666,7 @@ function HomeFaqItem({ item, initiallyOpen = false }) {
         <CaretDown size={20} weight="bold" aria-hidden="true" />
       </button>
       <div className="animated-disclosure" aria-hidden={!open}>
-        <div><p>{item.answer}</p></div>
+        <div><p>{navigate ? renderInlineText(item.answer, navigate) : item.answer}</p></div>
       </div>
     </article>
   );
@@ -3152,7 +3156,7 @@ const modelPageCatalogHref = (modelPage, filters = {}) => {
 // Частые вопросы в конце статьи — и в обзорах моделей, и на страницах расчётов.
 // Кроме самого блока отдаём разметку FAQPage: по ней вопросы попадают в выдачу
 // раскрывающимся списком.
-function ArticleFaq({ faq, title }) {
+function ArticleFaq({ faq, title, navigate = null }) {
   if (!faq?.length) return null;
   const schema = {
     "@context": "https://schema.org",
@@ -3160,7 +3164,9 @@ function ArticleFaq({ faq, title }) {
     mainEntity: faq.map((item) => ({
       "@type": "Question",
       name: item.q,
-      acceptedAnswer: { "@type": "Answer", text: item.a },
+      // В разметке — чистый текст: поисковик показывает его как есть, и
+      // «[калькулятор](/calculator)» выглядел бы в выдаче ошибкой.
+      acceptedAnswer: { "@type": "Answer", text: plainInlineText(item.a) },
     })),
   };
   return (
@@ -3168,7 +3174,7 @@ function ArticleFaq({ faq, title }) {
       <h2 id="model-page-faq-title">{title}</h2>
       <div className="model-page-faq-list">
         {faq.map((item, index) => (
-          <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} />
+          <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} navigate={navigate} />
         ))}
       </div>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
@@ -3357,7 +3363,10 @@ function ModelPageSection({ section, navigate }) {
           {section.list.map((item) => (
             <div key={item.term}>
               <dt>{item.term}</dt>
-              <dd>{item.text}</dd>
+              {/* Ссылки внутри списков и врезок разбираются так же, как в абзацах:
+                  в статьях журнала половина полезных переходов в каталог живёт
+                  именно в списках, а раньше там оставалась голая разметка. */}
+              <dd>{renderInlineText(item.text, navigate)}</dd>
             </div>
           ))}
         </dl>
@@ -3367,17 +3376,52 @@ function ModelPageSection({ section, navigate }) {
           {section.compare.map((option) => (
             <div key={option.name}>
               <strong>{option.name}</strong>
-              <p>{option.text}</p>
+              <p>{renderInlineText(option.text, navigate)}</p>
             </div>
           ))}
         </div>
       )}
+      {/* Нумерованные шаги: порядок действий, где номер несёт смысл — сначала
+          документы, потом осмотр, потом расчёт. Обычный список тут врал бы,
+          изображая набор равноправных пунктов. */}
+      {section.steps && (
+        <ol className="article-steps">
+          {section.steps.map((step) => (
+            <li key={step.title}>
+              <strong>{step.title}</strong>
+              <span>{renderInlineText(step.text, navigate)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {section.table && (
+        <figure className="article-table">
+          <div className="article-table-scroll">
+            <table>
+              <thead>
+                <tr>{section.table.head.map((cell) => <th key={cell}>{cell}</th>)}</tr>
+              </thead>
+              <tbody>
+                {section.table.rows.map((row) => (
+                  <tr key={row.join("|")}>{row.map((cell, index) => (index ? <td key={cell + index}>{cell}</td> : <th key={cell} scope="row">{cell}</th>))}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {section.table.caption ? <figcaption>{section.table.caption}</figcaption> : null}
+        </figure>
+      )}
+      {/* Свой график: разметку строит общий код, поэтому в приложении и в версии
+          для поисковика он один и тот же. */}
+      {section.figure && blogFigureSvg(section.figure) ? (
+        <div className="article-figure" dangerouslySetInnerHTML={{ __html: blogFigureSvg(section.figure) }} />
+      ) : null}
       {section.callout && (
         <aside className="model-page-callout">
           <Info size={20} weight="duotone" />
           <div>
             <strong>{section.callout.title}</strong>
-            <p>{section.callout.text}</p>
+            <p>{renderInlineText(section.callout.text, navigate)}</p>
           </div>
         </aside>
       )}
@@ -5977,7 +6021,9 @@ function CatalogLandingFaq({ landing, total }) {
     mainEntity: faq.map((item) => ({
       "@type": "Question",
       name: item.q,
-      acceptedAnswer: { "@type": "Answer", text: item.a },
+      // В разметке — чистый текст: поисковик показывает его как есть, и
+      // «[калькулятор](/calculator)» выглядел бы в выдаче ошибкой.
+      acceptedAnswer: { "@type": "Answer", text: plainInlineText(item.a) },
     })),
   };
   return (
@@ -5985,7 +6031,7 @@ function CatalogLandingFaq({ landing, total }) {
       <h3>{landingFaqTitle(landing)}</h3>
       <div className="catalog-landing-faq-list">
         {faq.map((item, index) => (
-          <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} />
+          <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} navigate={navigate} />
         ))}
       </div>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
@@ -9563,6 +9609,7 @@ function BlogArticleShell({ post, navigate, quickViewModal, children }) {
 
 /** Страница материала: у подборки и у сравнения общая рамка и разное тело. */
 function BlogPostPage({ post, navigate, favorites, toggleFavorite }) {
+  if (post.kind === "article") return <BlogArticlePage post={post} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />;
   if (post.kind === "report") return <BlogReportPage post={post} navigate={navigate} />;
   return post.kind === "duel"
     ? <BlogDuelPage post={post} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
@@ -9657,7 +9704,92 @@ function BlogReportPage({ post, navigate }) {
           <ModelPageSection key={section.title} section={section} navigate={navigate} />
         ))}
       </div>
-      <ArticleFaq faq={text?.faq} title="Частые вопросы" />
+      <ArticleFaq faq={text?.faq} title="Частые вопросы" navigate={navigate} />
+      {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
+    </BlogArticleShell>
+  );
+}
+
+/**
+ * Фотографии машин для статьи. У статьи нет правила отбора — она ничего не отбирает,
+ * — но иллюстрировать её чем-то нужно, и фотографии настоящих машин из каталога
+ * лучше любого фотобанка: в фотобанках китайских моделей попросту нет.
+ *
+ * Срез задаётся полем `photos`, а не `filters`: это разные вещи, и путать их нельзя.
+ * По `filters` подборка собирает список, который виден читателю; по `photos` берутся
+ * только кадры, и на содержание статьи они не влияют.
+ *
+ * Порядок постоянный (перемешивание с зерном по адресу материала): иначе картинки
+ * менялись бы при каждой перезагрузке, и статья выглядела бы подменённой.
+ */
+function useArticlePhotos(post, limit = 6) {
+  const [cars, setCars] = useState([]);
+  const query = post?.photos?.filters ? String(blogListParams({ slug: post.slug, filters: post.photos.filters }, limit)) : null;
+  useEffect(() => {
+    if (!query) return undefined;
+    const controller = new AbortController();
+    fetch(`/api/cars?${query}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("article photos unavailable"))))
+      .then((catalog) => setCars(catalog.items.map(normalizeImportedCar).filter((car) => car.images?.length || car.image)))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [query]);
+  return cars;
+}
+
+/**
+ * Статья: связный текст с фотографиями, без списка машин.
+ *
+ * Четвёртый вид материала журнала. Отвечает на «объясни» и «помоги решить» — запросы,
+ * которых не закрывают ни разделы каталога (они показывают машины), ни обзоры моделей
+ * (они описывают одну модель). Разделы статьи те же, что в обзорах, плюс три блока,
+ * которых там не было: нумерованные шаги, таблица и свой график.
+ *
+ * Фотографии стоят между разделами — сплошной текст, пусть и с врезками, читать
+ * тяжело; кадры настоящие, из каталога, и кликаются в объявление.
+ */
+function BlogArticlePage({ post, navigate, favorites, toggleFavorite }) {
+  const text = useBlogText(post.slug);
+  const photos = useArticlePhotos(post);
+  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
+  const sections = text?.sections || [];
+  return (
+    <BlogArticleShell post={post} navigate={navigate} quickViewModal={quickViewModal}>
+      {photos[0] ? <BlogFigure car={photos[0]} index={0} navigate={navigate} onOpen={openQuickView} eager /> : null}
+      <div className="model-page-intro">
+        {text?.intro.map((paragraph) => (
+          <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
+        ))}
+      </div>
+      <div className="model-page-article">
+        {sections.map((section, index) => {
+          // Кадр после раздела, но не после последнего: за ним идут вопросы,
+          // и фотография между текстом и вопросами читается как обрыв.
+          const car = index < sections.length - 1 ? photos[index + 1] : null;
+          return (
+            <Fragment key={section.title}>
+              <ModelPageSection section={section} navigate={navigate} />
+              {car ? <BlogFigure car={car} index={index + 1} navigate={navigate} onOpen={openQuickView} /> : null}
+            </Fragment>
+          );
+        })}
+      </div>
+      <ArticleFaq faq={text?.faq} title="Частые вопросы" navigate={navigate} />
+      {text?.sources?.length ? (
+        <section className="article-sources">
+          <h2>Источники</h2>
+          <ul>
+            {text.sources.map((source) => (
+              <li key={source.url}>
+                {/* Ссылки наружу — только на первоисточники и в новой вкладке:
+                    прочитанное не должно закрываться. */}
+                <a href={source.url} target="_blank" rel="noreferrer">{source.name}</a>
+                {source.note ? <span> — {source.note}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
     </BlogArticleShell>
   );
@@ -9719,7 +9851,7 @@ function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
           );
         })}
       </div>
-      <ArticleFaq faq={text?.faq} title="Частые вопросы" />
+      <ArticleFaq faq={text?.faq} title="Частые вопросы" navigate={navigate} />
       {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
     </BlogArticleShell>
   );
@@ -9768,7 +9900,7 @@ function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
       {data.map((entry) => (
         <BlogDuelSideCars key={entry.side.name} entry={entry} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpen={openQuickView} />
       ))}
-      <ArticleFaq faq={text?.faq} title="Частые вопросы" />
+      <ArticleFaq faq={text?.faq} title="Частые вопросы" navigate={navigate} />
       {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
     </BlogArticleShell>
   );

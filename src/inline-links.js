@@ -20,3 +20,14 @@ export function splitInlineLinks(text) {
   if (cursor < value.length) parts.push(value.slice(cursor));
   return parts;
 }
+
+/**
+ * Тот же текст без ссылок: остаются только их названия. Нужен там, где требуется
+ * чистый текст, а не разметка, — в первую очередь в разметке вопросов и ответов:
+ * поисковик показывает её как есть, и «[калькулятор](/calculator)» в выдаче
+ * выглядел бы ошибкой.
+ */
+export const plainInlineText = (text) =>
+  splitInlineLinks(text)
+    .map((part) => (typeof part === "string" ? part : part.label))
+    .join("");
