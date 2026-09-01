@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { estimateLandedCost, PRICING } from "../src/pricing.js";
+import { estimateLandedCost, PRICING, CLEARANCE_MONTHS } from "../src/pricing.js";
 import { engineVolume } from "../src/engine-spec.js";
 
 test("keeps the landed estimate internally consistent", () => {
@@ -145,15 +145,23 @@ test("keeps a petrol car out of the import VAT rule for electric cars", () => {
 });
 
 test("counts the age at the expected clearance date, not at today", () => {
-  // Дата курса — 25.08.2026, машина приезжает через два месяца. Машина выпуска
-  // октября 2021 года к оформлению ровно пятилетняя и проходит по выгодной ставке,
-  // а машина сентября порог уже перешла — ставка вдвое выше. На сегодняшнюю дату
-  // обе выглядели бы младше пяти лет, и цена сентябрьской была бы обещанием,
-  // которого к оформлению уже не выполнить.
-  const base = { chinaPrice:100000, usdPrice:20000, source:"Che168", type:"ДВС", engine:"2.0T", year:2021 };
-  const beforeEdge = estimateLandedCost({ ...base, manufactureDate:"2021-10-01" });
-  const pastEdge = estimateLandedCost({ ...base, manufactureDate:"2021-09-01" });
-  assert.ok(beforeEdge.ageYears <= 5 && pastEdge.ageYears > 5);
+  // Машина приезжает через два месяца после покупки, и возраст для пошлины считается
+  // на день оформления. Даты берём не готовыми, а от нынешней даты курса: она
+  // обновляется каждую ночь, и вписанные руками числа ломались бы каждый месяц.
+  const [, rateMonth, rateYear] = PRICING.rateDate.split(".").map(Number);
+  // На сколько месяцев раньше оформления выпущена машина, в виде «2021-10».
+  const madeBefore = (months) => {
+    const shift = rateMonth + CLEARANCE_MONTHS - months;
+    const year = rateYear + Math.floor((shift - 1) / 12);
+    const month = ((((shift - 1) % 12) + 12) % 12) + 1;
+    return `${year}-${String(month).padStart(2, "0")}-01`;
+  };
+  const base = { chinaPrice:100000, usdPrice:20000, source:"Che168", type:"ДВС", engine:"2.0T" };
+  // На месяц не дотянула до пяти лет — ставка выгодная; на месяц перешагнула — вдвое выше.
+  const beforeEdge = estimateLandedCost({ ...base, manufactureDate: madeBefore(59) });
+  const pastEdge = estimateLandedCost({ ...base, manufactureDate: madeBefore(61) });
+  assert.ok(beforeEdge.ageYears <= 5, `машина младше пяти лет посчитана как ${beforeEdge.ageYears}`);
+  assert.ok(pastEdge.ageYears > 5, `машина старше пяти лет посчитана как ${pastEdge.ageYears}`);
   assert.ok(pastEdge.customsUsd > beforeEdge.customsUsd * 1.7);
 });
 

@@ -414,13 +414,15 @@ test("у каждого графика есть заголовок", () => {
 
 // Выключатель публикации — день выпуска, и больше ничего. Ошибка здесь выкладывает
 // сразу весь журнал или не выкладывает ничего, а заметно это станет только на сайте.
-test("материал выходит в свой день, ни раньше, ни позже", () => {
-  const day = "2026-09-10";
-  assert.equal(blogPostHidden({ published: "2026-09-11" }, day), true, "завтрашний материал показывать рано");
-  assert.equal(blogPostHidden({ published: day }, day), false, "сегодняшний материал должен быть виден");
-  assert.equal(blogPostHidden({ published: "2026-09-09" }, day), false, "вчерашний материал должен оставаться виден");
-  assert.equal(blogPostHidden({ published: "2026-09-09", draft: true }, day), true, "черновик не выходит по дате");
-  assert.equal(blogPostHidden({}, day), false, "материал без даты — обычный, показываем");
+test("материал выходит в своё утро, ни раньше, ни позже", () => {
+  const night = new Date("2026-09-10T02:00:00Z"); // полпятого утра в Минске
+  const morning = new Date("2026-09-10T07:00:00Z"); // десять утра в Минске
+  assert.equal(blogPostHidden({ published: "2026-09-10" }, night), true, "ночная пересборка выкладывать не должна");
+  assert.equal(blogPostHidden({ published: "2026-09-10" }, morning), false, "утром материал должен быть виден");
+  assert.equal(blogPostHidden({ published: "2026-09-11" }, morning), true, "завтрашний материал показывать рано");
+  assert.equal(blogPostHidden({ published: "2026-09-09" }, night), false, "вчерашний материал остаётся виден и ночью");
+  assert.equal(blogPostHidden({ published: "2026-09-09", draft: true }, morning), true, "черновик не выходит по дате");
+  assert.equal(blogPostHidden({}, morning), false, "материал без даты — обычный, показываем");
 });
 
 // Все материалы расписания держатся только на дате: если у кого-то осталась пометка
