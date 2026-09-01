@@ -1,3 +1,5 @@
+import { findPostByTopic } from "./blog-topic-post.mjs";
+
 // Расписание журнала: из этого списка собирается BLOG_TOPICS.md.
 //
 // Зачем скриптом, а не руками: даты и чередование тем легко разъезжаются. Здесь
@@ -116,20 +118,24 @@ while (dates.length < ITEMS.length) {
 const human = (d) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 const short = (d) => `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 
+// Колонка про картинки: у части тем есть своя, подобранная под материал; у
+// остальных обложка берётся из каталога. Признак — поле cover у материала, то же
+// самое, что показывается на карточке и в начале статьи.
+const covers = ITEMS.map((item) => Boolean(findPostByTopic(item[0])?.cover?.src));
+
 const lines = [];
 ITEMS.forEach((item, index) => {
-  const [topic, , , , , ready] = item;
-  lines.push(`| ${index + 1} | ${topic} | ${human(dates[index])} |`);
+  const [topic] = item;
+  lines.push(`| ${index + 1} | ${topic} | ${human(dates[index])} | ${covers[index] ? "Есть картинка" : "—"} |`);
 });
-const readyNumbers = ITEMS.map((item, index) => (item[5] ? index + 1 : null)).filter(Boolean);
 
 const table = `# Темы журнала
 
-Материалы выходят по вторникам, четвергам и субботам. Уже написаны и ждут правок
-темы ${readyNumbers.slice(0, -1).join(", ")} и ${readyNumbers.at(-1)}.
+Материалы выходят по вторникам, четвергам и субботам. Тексты написаны у всех тем и ждут правок.
+Своя картинка есть у ${covers.filter(Boolean).length} тем, у остальных обложка берётся из каталога.
 
-| № | Тема | Дата публикации |
-|---:|---|---|
+| № | Тема | Дата публикации | Картинка |
+|---:|---|---|---|
 ${lines.join("\n")}
 `;
 import("node:fs").then((fs) => {

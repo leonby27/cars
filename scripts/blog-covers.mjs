@@ -18,7 +18,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { blogAllPosts } from "../src/blog-posts.js";
+import { findPostByTopic } from "./blog-topic-post.mjs";
 
 const SOURCE_DIR = process.argv[2] || path.join(os.homedir(), "Downloads", "Картинки");
 const OUT_DIR = new URL("../public/blog/", import.meta.url);
@@ -27,13 +27,6 @@ const TARGETS = [
   { name: "card", width: 600, ratio: 16 / 10 },
   { name: "hero", width: 1200, ratio: 16 / 9 },
 ];
-// Темы, названия которых в таблице и в коде разошлись на слово-другое. Список
-// короткий и пополняется руками — автоматика по началу строки тут ошибается.
-const ALIASES = { 15: "util-fee", 24: "home-charging" };
-
-const normalize = (value) =>
-  String(value || "").toLowerCase().replace(/\{top\}/g, "10").replace(/[^а-яёa-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-
 /** Номер строки таблицы → материал. Таблица — то, что видит владелец, она и главная. */
 function scheduleBySlug() {
   const rows = fs
@@ -44,19 +37,9 @@ function scheduleBySlug() {
       const cells = line.split("|").map((cell) => cell.trim());
       return { number: Number(cells[1]), topic: cells[2] };
     });
-  const posts = blogAllPosts();
   const found = new Map();
   for (const row of rows) {
-    if (ALIASES[row.number]) {
-      found.set(row.number, posts.find((post) => post.slug === ALIASES[row.number]));
-      continue;
-    }
-    const topic = normalize(row.topic);
-    const post =
-      posts.find((item) => normalize(item.name) === topic) ||
-      posts.find((item) => normalize(item.h1) === topic) ||
-      posts.find((item) => topic.startsWith(normalize(item.name))) ||
-      posts.find((item) => normalize(item.h1).startsWith(topic.slice(0, 40)));
+    const post = findPostByTopic(row.topic);
     if (post) found.set(row.number, post);
   }
   return found;
