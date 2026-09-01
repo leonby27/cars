@@ -675,22 +675,45 @@ export const blogDateLabel = (value) => {
 };
 
 /**
- * Когда подборка обновлялась в последний раз: берём проверку каталога — список машин
- * и цифры в тексте живут вместе с ним. Раньше дня выпуска материала эта дата быть не
- * может: «обновлено вчера, опубликовано сегодня» поисковик читает как сломанную
- * разметку. Каталог не ответил — остаётся дата выпуска: выдумывать свежесть нельзя,
- * а совсем без даты страница выглядит брошенной.
+ * Дата материала — день, когда он вышел. Её видит посетитель: на карточке журнала и
+ * строкой над заголовком статьи.
+ *
+ * Раньше на этом месте стояла дата последней проверки каталога, и все карточки
+ * журнала одинаково показывали «Сегодня»: ночная проверка трогает все объявления
+ * разом, поэтому такая дата ничего не говорит о самом материале и читается как
+ * заглушка. Свежесть наличия и цен — отдельный факт, он пишется подписью над списком
+ * машин (`blogFreshnessLabel`).
  */
-export const blogUpdatedAt = (post, catalogRefreshedAt = null) => {
+export const blogPostDateLabel = (post) => blogDateLabel(post?.published);
+
+/** Та же дата по-человечески: «сегодня», «4 дня назад», дальше — числом. */
+export const blogPostDateSentence = (post, now = new Date()) => blogRelativeDateSentence(post?.published, now);
+
+/**
+ * Когда содержимое материала правда менялось: берём настоящее изменение набора машин
+ * (`changedAt` из базы — цена, пробег, фотографии или новая машина в наборе), а не
+ * «последнюю проверку»: проверка идёт каждую ночь по всему каталогу и одинакова у
+ * всех наборов. Раньше дня выпуска материала эта дата быть не может: «обновлено
+ * вчера, опубликовано сегодня» поисковик читает как сломанную разметку. Каталог не
+ * ответил — остаётся дата выпуска: выдумывать свежесть нельзя, а совсем без даты
+ * страница выглядит брошенной.
+ *
+ * Отсюда `dateModified` в разметке статьи и `lastmod` в карте сайта.
+ */
+export const blogUpdatedAt = (post, catalogChangedAt = null) => {
   const published = post?.published ? new Date(`${post.published}T00:00:00Z`) : null;
-  const refreshed = catalogRefreshedAt ? new Date(catalogRefreshedAt) : null;
-  const valid = [published, refreshed].filter((date) => date && !Number.isNaN(date.getTime()));
+  const changed = catalogChangedAt ? new Date(catalogChangedAt) : null;
+  const valid = [published, changed].filter((date) => date && !Number.isNaN(date.getTime()));
   if (!valid.length) return null;
   return new Date(Math.max(...valid.map((date) => date.getTime())));
 };
 
-/** Та же дата словами — её видит посетитель. */
-export const blogUpdatedLabel = (post, catalogRefreshedAt = null) => blogDateLabel(blogUpdatedAt(post, catalogRefreshedAt)?.toISOString());
+/**
+ * Подпись над живым списком машин: «наличие и цены обновлены такого-то числа». Та же
+ * подпись стоит в разделах каталога и в обзорах моделей, и берётся из того же места —
+ * последнего настоящего изменения среди машин набора.
+ */
+export const blogFreshnessLabel = (catalogChangedAt) => blogDateLabel(catalogChangedAt);
 
 /**
  * Дата словами по-человечески: «сегодня», «вчера», «5 дней назад», а дальше обычная
@@ -716,22 +739,6 @@ export const blogRelativeDate = (value, now = new Date()) => {
 export const blogRelativeDateSentence = (value, now = new Date()) => {
   const text = blogRelativeDate(value, now);
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : null;
-};
-
-/**
- * Строка с датой для страницы материала: «Обновлено» — только если каталог
- * действительно проверялся после выпуска. Пока материал свежий, честнее написать
- * «Опубликовано»: слово «обновлено» в день выхода читается как приписка для вида.
- */
-export const blogDateLine = (post, catalogRefreshedAt = null, now = null) => {
-  const shown = blogUpdatedAt(post, catalogRefreshedAt);
-  if (!shown) return null;
-  const published = post?.published ? new Date(`${post.published}T00:00:00Z`) : null;
-  const sameDay = published && shown.toISOString().slice(0, 10) === published.toISOString().slice(0, 10);
-  // `now` передаёт приложение: там фраза считается в браузере и может быть «сегодня».
-  // Без него отдаём обычную дату — так собирается страница для поисковика.
-  const date = now ? blogRelativeDate(shown.toISOString(), now) : blogDateLabel(shown.toISOString());
-  return { updated: !sameDay, word: sameDay ? "Опубликовано" : "Обновлено", date };
 };
 
 const decimal = (value) => String(Number(value)).replace(".", ",");

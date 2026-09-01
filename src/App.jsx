@@ -35,7 +35,7 @@ import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.j
 import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED } from "./feature-flags.js";
-import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogDateLine, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogRelativeDateSentence, blogSidebarItems, blogUpdatedAt, findBlogPost, homeBlogPosts } from "./blog-posts.js";
+import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
@@ -8611,7 +8611,9 @@ function useBlogText(slug) {
 function useCollectionCars(post, { limit = BLOG_POST_CARS_LIMIT } = {}) {
   const [cars, setCars] = useState([]);
   const [total, setTotal] = useState(null);
-  const [refreshedAt, setRefreshedAt] = useState(null);
+  // Не «последняя проверка» (`refreshedAt`), а настоящее изменение набора: проверка
+  // идёт каждую ночь по всему каталогу и у всех наборов одинаковая.
+  const [changedAt, setChangedAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const query = post ? String(blogListParams(post, limit)) : null;
@@ -8620,7 +8622,7 @@ function useCollectionCars(post, { limit = BLOG_POST_CARS_LIMIT } = {}) {
     const controller = new AbortController();
     setCars([]);
     setTotal(null);
-    setRefreshedAt(null);
+    setChangedAt(null);
     setLoading(true);
     setFailed(false);
     fetch(`/api/cars?${query}`, { signal: controller.signal })
@@ -8628,7 +8630,7 @@ function useCollectionCars(post, { limit = BLOG_POST_CARS_LIMIT } = {}) {
       .then((catalog) => {
         setCars(catalog.items.map(normalizeImportedCar));
         setTotal(catalog.total);
-        setRefreshedAt(catalog.refreshedAt || null);
+        setChangedAt(catalog.changedAt || null);
       })
       .catch((error) => {
         if (error.name !== "AbortError") setFailed(true);
@@ -8638,7 +8640,7 @@ function useCollectionCars(post, { limit = BLOG_POST_CARS_LIMIT } = {}) {
       });
     return () => controller.abort();
   }, [query]);
-  return { cars, total, refreshedAt, loading, failed };
+  return { cars, total, changedAt, loading, failed };
 }
 
 /**
@@ -8692,16 +8694,14 @@ function useCollectionEdges(post) {
  * перезагрузке, и главная выглядела бы так, будто её подменили.
  */
 function useCollectionCover(post) {
-  const [cover, setCover] = useState({ car: null, refreshedAt: null });
+  const [cover, setCover] = useState({ car: null });
   const query = post ? String(blogApiParams(post, { sort: "price_desc", limit: 1 })) : null;
   useEffect(() => {
     if (!query) return undefined;
     const controller = new AbortController();
     fetch(`/api/cars?${query}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("collection cover unavailable"))))
-      // Тем же ответом приходит дата последней проверки каталога — она и стоит на
-      // карточке. Отдельный запрос ради даты не нужен.
-      .then((catalog) => setCover({ car: catalog.items.length ? normalizeImportedCar(catalog.items[0]) : null, refreshedAt: catalog.refreshedAt || null }))
+      .then((catalog) => setCover({ car: catalog.items.length ? normalizeImportedCar(catalog.items[0]) : null }))
       .catch(() => {});
     return () => controller.abort();
   }, [query]);
@@ -8830,11 +8830,12 @@ function BlogCollectionCard({ post, navigate }) {
  * одного. Широкую карточку на две колонки пробовали и отказались: в сетке журнала все
  * карточки одного размера.
  */
-function BlogCardShell({ post, navigate, cover, refreshedAt }) {
+function BlogCardShell({ post, navigate, cover }) {
   const tags = blogPostTags(post);
   // На карточке дата стоит сама по себе, поэтому пишем её по-человечески: «Сегодня»,
-  // «Вчера», «5 дней назад», а после недели — обычную дату.
-  const date = blogRelativeDateSentence(blogUpdatedAt(post, refreshedAt)?.toISOString());
+  // «Вчера», «5 дней назад», а после недели — обычную дату. Это день выпуска
+  // материала: свежесть наличия и цен написана внутри, над списком машин.
+  const date = blogPostDateSentence(post);
   // Нажимается вся карточка, но внутри неё есть своя кнопка «поделиться», а кнопку
   // нельзя положить внутрь ссылки. Поэтому ссылка — отдельный прозрачный слой поверх
   // карточки, а кнопка лежит выше него.
@@ -8866,14 +8867,13 @@ function BlogCardShell({ post, navigate, cover, refreshedAt }) {
 
 /** Карточка подборки: обложка — самая дорогая машина по правилу отбора. */
 function BlogCollectionCoverCard({ post, navigate }) {
-  const { car, refreshedAt } = useCollectionCover(post);
+  const { car } = useCollectionCover(post);
   const source = car?.images?.[0] || car?.image || null;
   const cover = imageSource(source, IMAGE_WIDTH_CARD);
   return (
     <BlogCardShell
       post={post}
       navigate={navigate}
-      refreshedAt={refreshedAt}
       cover={cover ? <img src={cover} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, source)} /> : null}
     />
   );
@@ -8887,7 +8887,6 @@ function BlogDuelCard({ post, navigate }) {
     <BlogCardShell
       post={post}
       navigate={navigate}
-      refreshedAt={data.find((entry) => entry.refreshedAt)?.refreshedAt || null}
       cover={
         photos.some(Boolean) ? (
           <span className="blog-card-duel">
@@ -9206,7 +9205,7 @@ function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpe
 // собирается вся страница — шапка с фотографиями, таблица различий и списки машин, —
 // поэтому руками в сравнении не написано ни одной цифры.
 
-const DUEL_SIDE_EMPTY = { cars: [], total: null, refreshedAt: null, priceFromUsd: null, hero: null };
+const DUEL_SIDE_EMPTY = { cars: [], total: null, changedAt: null, priceFromUsd: null, hero: null };
 
 /**
  * Живые данные сторон. По стороне три крошечных запроса: сводка по модели (сколько
@@ -9241,7 +9240,7 @@ function useDuelSides(post, { deep = true, listLimit = 5 } = {}) {
       query
         ? fetch(`/api/cars?${query}`, { signal: controller.signal })
             .then((response) => (response.ok ? response.json() : Promise.reject(new Error("duel side unavailable"))))
-            .then((catalog) => ({ total: catalog.total ?? null, refreshedAt: catalog.refreshedAt || null, cars: catalog.items.map(normalizeImportedCar) }))
+            .then((catalog) => ({ total: catalog.total ?? null, changedAt: catalog.changedAt || null, cars: catalog.items.map(normalizeImportedCar) }))
         : Promise.resolve(null);
     const loadSummary = (query) =>
       fetch(`/api/cars/summary?${query}`, { signal: controller.signal })
@@ -9262,7 +9261,7 @@ function useDuelSides(post, { deep = true, listLimit = 5 } = {}) {
             return {
             side: sides[index],
             cars,
-            refreshedAt: summary?.refreshedAt || list?.refreshedAt || cheapest?.refreshedAt || null,
+            changedAt: summary?.changedAt || list?.changedAt || cheapest?.changedAt || null,
             priceFromUsd: prices.length ? Math.min(...prices) : null,
             // Кадр для шапки — первая машина со снимком: у части объявлений
             // фотографий нет вовсе.
@@ -9420,15 +9419,19 @@ function BlogDuelSideCars({ entry, navigate, favorites, toggleFavorite, onOpen }
 }
 
 /** Сам список с заголовком и переходом в каталог. */
-function BlogTopList({ post, cars, total, navigate, onOpen }) {
+function BlogTopList({ post, cars, total, changedAt, navigate, onOpen }) {
   if (!cars.length) return null;
   const catalogTarget = blogCatalogHref(post);
+  // Когда набор машин последний раз правда менялся — цена, пробег, фотографии или
+  // новая машина в подборке. Не «последняя проверка каталога»: она у всех наборов
+  // одинаковая и обещает свежесть, которой может и не быть.
+  const freshness = blogFreshnessLabel(changedAt);
   return (
     <section className="blog-top" aria-labelledby="blog-top-title">
       {/* Список живой: он собирается из каталога при каждом открытии страницы.
           Мелкой строкой над заголовком говорим об этом прямо — иначе подборку
           читают как написанную однажды и с тех пор устаревшую. */}
-      <p className="blog-top-note">Обновляем топ автоматически из нашего каталога</p>
+      <p className="blog-top-note">Обновляем топ автоматически из нашего каталога{freshness ? `. Наличие и цены обновлены ${freshness}` : ""}</p>
       <h2 id="blog-top-title">{post.name}</h2>
       <div className="blog-top-list">
         {cars.map((car, index) => (
@@ -9503,8 +9506,10 @@ function BlogRelated({ post, navigate }) {
  * статьи, кнопка «поделиться», похожие материалы и меню сбоку. Внутрь ставится тело
  * материала — у подборки и у сравнения оно разное, а рамка одна.
  */
-function BlogArticleShell({ post, navigate, dateLine, quickViewModal, children }) {
-  const shown = dateLine ? { ...dateLine, date: dateLine.date.charAt(0).toUpperCase() + dateLine.date.slice(1) } : null;
+function BlogArticleShell({ post, navigate, quickViewModal, children }) {
+  // Дата — день выпуска материала. Свежесть наличия и цен пишется отдельной подписью
+  // над списком машин: она про каталог, а не про статью.
+  const date = blogPostDateSentence(post);
   return (
     <main className="blog-page page-width">
       <div className="breadcrumbs">
@@ -9539,7 +9544,7 @@ function BlogArticleShell({ post, navigate, dateLine, quickViewModal, children }
                 >
                   {post.rubricName || BLOG_INDEX.name}
                 </AppLink>
-                {shown ? <span>{shown.date}</span> : null}
+                {date ? <span>{date}</span> : null}
               </span>
               <h1>{post.h1}</h1>
               <p>{post.lead}</p>
@@ -9574,16 +9579,12 @@ function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
   // и видит наверху статьи ту же машину, а не другую.
   const { car: coverCar } = useCollectionCover(post);
   const topCars = blogTopCars(carsState.cars, post);
-  // Дата обновления — когда каталог последний раз проверялся: список машин и цифры
-  // в тексте живут вместе с ним, а не с датой, когда статью написали. Пока проверок
-  // после выпуска не было, пишем «Опубликовано».
-  const dateLine = blogDateLine(post, carsState.refreshedAt, new Date());
   const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
   // Цифры в тексте — из каталога: сколько машин подходит, от какой суммы и какой
   // запас хода у самой дальнобойной. Чего каталог не отдал, того в полосе нет.
   const stats = blogPostStats({ total: carsState.total, ...edges });
   return (
-    <BlogArticleShell post={post} navigate={navigate} dateLine={dateLine} quickViewModal={quickViewModal}>
+    <BlogArticleShell post={post} navigate={navigate} quickViewModal={quickViewModal}>
       {/* Открывающая фотография — сразу после описания, до текста: статья без
           картинки на первом экране читается как стена. */}
       {coverCar ? <BlogFigure car={coverCar} index={0} navigate={navigate} onOpen={openQuickView} eager /> : null}
@@ -9604,7 +9605,7 @@ function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
       )}
       {/* Сам список — сразу после полосы цифр: за ним и приходят, а разборы
           читают уже после. */}
-      <BlogTopList post={post} cars={topCars} total={carsState.total} navigate={navigate} onOpen={openQuickView} />
+      <BlogTopList post={post} cars={topCars} total={carsState.total} changedAt={carsState.changedAt} navigate={navigate} onOpen={openQuickView} />
       {/* Между разделами статьи встают фотографии машин из этой же подборки:
           сплошной текст, пусть и с врезками, читать тяжело. Последний раздел
           оставляем без снимка — дальше идут вопросы и список машин. */}
@@ -9637,7 +9638,6 @@ function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
 function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
   const text = useBlogText(post.slug);
   const data = useDuelSides(post);
-  const dateLine = blogDateLine(post, data.find((entry) => entry.refreshedAt)?.refreshedAt || null, new Date());
   const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
   // Снимки между разделами берём у обеих сторон по очереди: иначе половина статьи
   // была бы проиллюстрирована одной моделью.
@@ -9650,7 +9650,7 @@ function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
     }
   }
   return (
-    <BlogArticleShell post={post} navigate={navigate} dateLine={dateLine} quickViewModal={quickViewModal}>
+    <BlogArticleShell post={post} navigate={navigate} quickViewModal={quickViewModal}>
       <BlogDuelHero data={data} navigate={navigate} onOpen={openQuickView} />
       <div className="model-page-intro">
         {text?.intro.map((paragraph) => (

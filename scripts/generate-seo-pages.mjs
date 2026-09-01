@@ -25,7 +25,7 @@ import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE
 // Журнал: подборки. Раздел собирается только при включённом выключателе — пока он
 // выключен, у сайта нет ни страниц журнала, ни его адресов в карте сайта.
 import { BLOG_ENABLED } from "../src/feature-flags.js";
-import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogDateLine, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogRelatedPosts, blogTopCars, blogUpdatedAt, blogUpdatedLabel } from "../src/blog-posts.js";
+import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt } from "../src/blog-posts.js";
 import { blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
@@ -387,9 +387,9 @@ function blogArticleBody(text, cars = [], shown = new Set()) {
 function blogDuelArticle(post) {
   const found = live.collections.get(post.slug) || null;
   const sides = found?.duel || [];
-  const updated = blogDateLine(post, found?.refreshedAt);
+  const published = blogPostDateLabel(post);
   const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
-  const date = `<p>${rubric}${updated ? ` · ${escapeHtml(updated.date)}` : ""}</p>`;
+  const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
   const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
   // Шапка: по кадру на модель. Без снимков блока нет — заголовок над пустотой
   // поисковик читает как сломанную страницу.
@@ -523,13 +523,12 @@ function blogPostArticle(post) {
   const found = live.collections.get(post.slug) || null;
   const stats = blogPostStats({ total: found?.total || null, priceFromUsd: found?.priceFromUsd || null, highlight: found?.highlight || null });
   const numbers = stats.length ? `<ul>${stats.map((stat) => `<li><strong>${escapeHtml(stat.value)}</strong> — ${escapeHtml(stat.label)}</li>`).join("")}</ul>` : "";
-  // Дата обновления — когда каталог последний раз проверялся: список машин и цифры
-  // в тексте живут вместе с ним. Её же получает поисковик в разметке статьи.
-  // Строка над текстом — та же, что видит человек: раздел и дата через точку.
-  const updated = blogDateLine(post, found?.refreshedAt);
+  // Строка над текстом — та же, что видит человек: раздел и день выпуска материала
+  // через точку. Свежесть наличия и цен — отдельная подпись над списком машин.
+  const published = blogPostDateLabel(post);
   // Раздел ссылкой в журнал: из статьи ведёт путь к списку материалов.
   const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
-  const date = `<p>${rubric}${updated ? ` · ${escapeHtml(updated.date)}` : ""}</p>`;
+  const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
   const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
   // Открывающая фотография — сразу после описания, до текста.
   const cover = found?.cover ? blogFigure(found.cover, 0) : "";
@@ -537,8 +536,12 @@ function blogPostArticle(post) {
   // четыре характеристики. Когда база при сборке недоступна, блока просто нет:
   // заголовок над пустым списком поисковик читает как сломанную страницу.
   const top = blogTopCars(found?.cars || [], post);
+  // Подпись со свежестью — та же, что видит человек и что стоит в разделах каталога:
+  // последнее настоящее изменение среди машин набора. Дату «сегодня» на этом месте
+  // ставить нельзя: это было бы обещание свежести, которое не проверить.
+  const freshness = blogFreshnessLabel(found?.changedAt);
   const offers = top.length
-    ? `<section><h2>${escapeHtml(post.name)}</h2><ol>${top
+    ? `<section><h2>${escapeHtml(post.name)}</h2>${freshness ? `<p class="seo-updated">Наличие и цены обновлены ${escapeHtml(freshness)}.</p>` : ""}<ol>${top
         .map((car) => {
           const href = escapeHtml(hrefRoute(carRoute(car)));
           const title = escapeHtml(carTitle(car));
@@ -572,7 +575,7 @@ function blogIndexArticle() {
   const items = blogPosts()
     .map((post) => {
       const tags = blogPostTags(post).map((tag) => tag.name).join(", ");
-      const date = blogUpdatedLabel(post, live.collections.get(post.slug)?.refreshedAt);
+      const date = blogPostDateLabel(post);
       const meta = [tags, date].filter(Boolean).join(". ");
       return `<li><a href="${hrefRoute(`${post.path}/`)}">${escapeHtml(post.name)}</a> — ${escapeHtml(post.lead)}${meta ? ` (${escapeHtml(meta)})` : ""}</li>`;
     })
@@ -716,7 +719,7 @@ for (const page of publicPages) {
       inLanguage: "ru-BY",
       mainEntityOfPage: routeUrl(page.route),
       datePublished: page.post.published,
-      dateModified: isoDate(blogUpdatedAt(page.post, live.collections.get(page.post.slug)?.refreshedAt)) || page.post.published,
+      dateModified: isoDate(blogUpdatedAt(page.post, live.collections.get(page.post.slug)?.changedAt)) || page.post.published,
       author: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
       publisher: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
     });
@@ -897,12 +900,12 @@ async function readLiveCatalog() {
             ...summary,
             side,
             cars,
-            refreshedAt: summary.refreshedAt || list.refreshedAt || null,
+            changedAt: summary.changedAt || list.changedAt || null,
             priceFromUsd: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
             hero: byRange.find((car) => car.images?.length || car.image) || cars[0] || null,
           });
         }
-        collections.set(post.slug, { duel: sides, cars: sides.flatMap((entry) => entry.cars), total: null, refreshedAt: sides.find((entry) => entry.refreshedAt)?.refreshedAt || null });
+        collections.set(post.slug, { duel: sides, cars: sides.flatMap((entry) => entry.cars), total: null, changedAt: sides.find((entry) => entry.changedAt)?.changedAt || null });
         continue;
       }
       const list = await listCars(blogListParams(post, String(blogCarsOnPage)));
@@ -921,7 +924,9 @@ async function readLiveCatalog() {
         cover,
         cars: list.items,
         total: list.total,
-        refreshedAt: list.refreshedAt || null,
+        // Когда набор правда менялся — цена, пробег, фотографии или новая машина.
+        // «Последняя проверка» здесь не годится: она у всех наборов одна и та же.
+        changedAt: list.changedAt || null,
         priceFromUsd: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
         highlight: blogHighlight(post, notable),
       });
@@ -964,7 +969,7 @@ const listPageEntries = (route) => {
 // машин и цифры в подборках пересобираются каждую ночь, — без даты он приходит
 // перепроверять страницу тем реже, чем дольше она в индексе. У остальных страниц
 // даты нет: их содержимое от каталога не зависит.
-const blogLastmod = (post) => isoDate(blogUpdatedAt(post, live.collections.get(post.slug)?.refreshedAt)) || post.published || null;
+const blogLastmod = (post) => isoDate(blogUpdatedAt(post, live.collections.get(post.slug)?.changedAt)) || post.published || null;
 // У самого журнала дата — самая свежая из его материалов: список на нём и есть они.
 const blogIndexLastmod = BLOG_ENABLED
   ? blogPosts().map(blogLastmod).filter(Boolean).sort().pop() || null

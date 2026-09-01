@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { shippedFlag } from "../src/feature-flags.js";
-import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogDateLine, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedLabel, findBlogPost, homeBlogPosts } from "../src/blog-posts.js";
+import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, findBlogPost, homeBlogPosts } from "../src/blog-posts.js";
 import { BLOG_TEXTS, BLOG_TEXTS_RAW } from "../src/blog-texts.js";
 import { catalogLandingForParams } from "../src/catalog-landings.js";
 
@@ -102,30 +102,31 @@ test("список подборки идёт в постоянном поряд�
   }
 });
 
-// Дата обновления — настоящая проверка каталога, но никогда не раньше дня выпуска:
-// «обновлено вчера, опубликовано сегодня» поисковик читает как сломанную разметку.
+// Дата в разметке (`dateModified`) и в карте сайта — настоящее изменение набора машин,
+// но никогда не раньше дня выпуска: «обновлено вчера, опубликовано сегодня» поисковик
+// читает как сломанную разметку.
 test("дата обновления не бывает раньше дня выпуска материала", () => {
   const post = { published: "2026-08-27" };
-  assert.equal(blogUpdatedLabel(post, "2026-08-26T21:00:00Z"), "27 августа 2026");
-  assert.equal(blogUpdatedLabel(post, "2026-09-14T03:00:00Z"), "14 сентября 2026");
-  assert.equal(blogUpdatedLabel(post, null), "27 августа 2026");
-  assert.equal(blogUpdatedLabel(post, "не дата"), "27 августа 2026");
-  assert.equal(blogUpdatedLabel({}, null), null);
+  const label = (entry, changedAt) => blogDateLabel(blogUpdatedAt(entry, changedAt)?.toISOString());
+  assert.equal(label(post, "2026-08-26T21:00:00Z"), "27 августа 2026");
+  assert.equal(label(post, "2026-09-14T03:00:00Z"), "14 сентября 2026");
+  assert.equal(label(post, null), "27 августа 2026");
+  assert.equal(label(post, "не дата"), "27 августа 2026");
+  assert.equal(label({}, null), null);
 });
 
 // Метки на карточке — названия из того же меню, что и фильтры: иначе посетитель
 // увидит на карточке слово, которого в навигации нет.
-// «Обновлено» пишем только когда каталог правда проверялся после выпуска материала:
-// это слово в день выхода читается как приписка для вида.
-test("до первой проверки каталога пишем «Опубликовано»", () => {
+// Дата, которую видит посетитель, — день выпуска материала. Ночная проверка каталога
+// её не двигает: до 31.08.2026 здесь стояла дата проверки, и все карточки журнала
+// одинаково показывали «Сегодня».
+test("на карточке и в шапке статьи стоит день выпуска материала", () => {
   const post = { published: "2026-08-27" };
-  assert.deepEqual(blogDateLine(post, null), { updated: false, word: "Опубликовано", date: "27 августа 2026" });
-  assert.deepEqual(blogDateLine(post, "2026-08-27T22:00:00Z"), { updated: false, word: "Опубликовано", date: "27 августа 2026" });
-  assert.deepEqual(blogDateLine(post, "2026-08-26T21:00:00Z"), { updated: false, word: "Опубликовано", date: "27 августа 2026" });
-  assert.deepEqual(blogDateLine(post, "2026-09-14T03:00:00Z"), { updated: true, word: "Обновлено", date: "14 сентября 2026" });
-  // С переданным «сейчас» приложение пишет ту же дату словами.
-  assert.deepEqual(blogDateLine(post, "2026-09-14T03:00:00Z", new Date("2026-09-14T20:00:00Z")), { updated: true, word: "Обновлено", date: "сегодня" });
-  assert.equal(blogDateLine({}, null), null);
+  assert.equal(blogPostDateLabel(post), "27 августа 2026");
+  assert.equal(blogPostDateSentence(post, new Date("2026-08-27T20:00:00Z")), "Сегодня");
+  assert.equal(blogPostDateSentence(post, new Date("2026-08-31T09:00:00Z")), "4 дня назад");
+  assert.equal(blogPostDateSentence(post, new Date("2026-09-14T09:00:00Z")), "27 августа 2026");
+  assert.equal(blogPostDateLabel({}), null);
 });
 
 // Главное правило текстов (ТЗ в BLOG_TEXTS_TZ.md): ничего не обещать от своего имени.

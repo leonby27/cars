@@ -301,7 +301,7 @@ export async function modelSummary(searchParams) {
   // Мощность в характеристики не переносится: она лежит в исходном ответе источника.
   const payload = (name) => numeric(`l.source_payload->>'${name}'`);
   const result = await pool.query(`SELECT count(*)::int AS total,
-      max(l.last_seen_at) AS refreshed_at,
+      max(l.last_seen_at) AS refreshed_at, ${SECTION_CHANGED_AT} AS changed_at,
       min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
       min(NULLIF(l.mileage_km, 0))::int AS mileage_min,
       max(COALESCE(v.electric_range_km, v.combined_range_km))::int AS range_max,
@@ -315,6 +315,9 @@ export async function modelSummary(searchParams) {
   return {
     total: row.total || 0,
     refreshedAt: row.refreshed_at || null,
+    // Когда набор правда менялся. `refreshedAt` для подписей не годится: ночная
+    // проверка обновляет её у всех машин разом (см. SECTION_CHANGED_AT ниже).
+    changedAt: row.changed_at || null,
     yearMin: value("year_min"),
     yearMax: value("year_max"),
     mileageMin: value("mileage_min"),
