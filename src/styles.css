@@ -14740,9 +14740,6 @@ html[data-theme="dark"] .blog-duel-table tbody td {
 .blog-figure-own {
   gap: 0;
 }
-.blog-figure-own picture {
-  display: block;
-}
 .blog-figure-own img {
   width: 100%;
   aspect-ratio: 16 / 9;

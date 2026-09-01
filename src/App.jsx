@@ -9528,30 +9528,14 @@ function BlogTopList({ post, cars, total, changedAt, navigate, onOpen }) {
  * на карточке в журнале и первым кадром в самой статье, чтобы человек нажал на
  * карточку и увидел наверху то же изображение, а не другое.
  *
- * Два файла на каждое место и два формата: avif лёгкий и его понимают нынешние
- * браузеры, jpeg остаётся запасным. Размеры нарезаны заранее (scripts/blog-covers.mjs),
- * поэтому здесь только выбор нужного.
+ * Файл на каждое место свой и нарезан заранее (scripts/blog-covers.mjs), поэтому
+ * здесь только выбор нужного. Формат обычный jpeg: avif вдвое легче, но часть
+ * браузеров показывала вместо него пустую рамку, а запасной вариант в <picture>
+ * в этом случае не подставляется — браузер считает, что формат он поддерживает.
  */
 function BlogCoverImage({ cover, place, eager = false }) {
   if (!cover?.src) return null;
-  const base = appHref(`${cover.src}-${place}`);
-  // Если браузер взялся за avif и не осилил его, обычной замены не происходит:
-  // формат он объявил поддерживаемым, а картинка не нарисовалась. Тогда убираем
-  // строку с avif и грузим jpeg — его открывают все. Повторяем один раз, иначе
-  // сломанный jpeg увёл бы страницу в бесконечную перезагрузку картинки.
-  const fallBackToJpeg = (event) => {
-    const image = event.currentTarget;
-    if (image.dataset.jpegTried) return;
-    image.dataset.jpegTried = "1";
-    for (const source of image.parentElement?.querySelectorAll("source") || []) source.remove();
-    image.src = `${base}.jpg`;
-  };
-  return (
-    <picture>
-      <source type="image/avif" srcSet={`${base}.avif`} />
-      <img src={`${base}.jpg`} alt={cover.alt || ""} loading={eager ? "eager" : "lazy"} onError={fallBackToJpeg} />
-    </picture>
-  );
+  return <img src={appHref(`${cover.src}-${place}.jpg`)} alt={cover.alt || ""} loading={eager ? "eager" : "lazy"} />;
 }
 
 /** Открывающий кадр статьи: своя картинка вместо машины из каталога. */

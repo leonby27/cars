@@ -389,8 +389,8 @@ function infoArticle(route) {
  */
 function blogOwnCover(post) {
   if (!post.cover?.src) return "";
-  const base = hrefRoute(`${post.cover.src}-hero`);
-  return `<figure><picture><source type="image/avif" srcset="${escapeHtml(`${base}.avif`)}" /><img src="${escapeHtml(`${base}.jpg`)}" alt="${escapeHtml(post.cover.alt || "")}" width="1200" height="675" /></picture></figure>`;
+  const image = hrefRoute(`${post.cover.src}-hero.jpg`);
+  return `<figure><img src="${escapeHtml(image)}" alt="${escapeHtml(post.cover.alt || "")}" width="1200" height="675" /></figure>`;
 }
 
 function blogFigure(car, index) {
