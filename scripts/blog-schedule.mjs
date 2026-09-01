@@ -4,8 +4,12 @@
 // порядок публикаций задан один раз, а даты (вторник, четверг, суббота) и проверка
 // «два материала одной группы не идут подряд» считаются сами.
 //
-// Запуск: node scripts/blog-schedule.mjs — печатает сводку и кладёт тело файла
-// в /tmp/schedule-body.md; шапка и хвост BLOG_TOPICS.md дописываются руками.
+// Разделение простое: BLOG_TOPICS.md — то, что читает владелец: номер, тема, дата.
+// Всё остальное (вид материала, группа для чередования, главный запрос, куда ведёт,
+// признак «уже написана») живёт здесь и наружу не выносится.
+//
+// Запуск: node scripts/blog-schedule.mjs — переписывает BLOG_TOPICS.md и печатает
+// сводку с проверкой чередования.
 // Порядок публикаций: темы идут вперемешку, два подряд из одной группы не ставим.
 const ITEMS = [
 ["Стоит ли покупать китайский электромобиль с пробегом","статья","решение","стоит ли покупать китайский электромобиль","раздел электромобилей",true],
@@ -96,17 +100,22 @@ const human = (d) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFul
 const short = (d) => `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 
 const lines = [];
-let month = null;
 ITEMS.forEach((item, index) => {
-  const [topic, kind, group, query, target, ready] = item;
-  const date = dates[index];
-  const label = `${MONTHS_NOM[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
-  if (label !== month) { month = label; lines.push(`\n## ${label}\n`); }
-  lines.push(`### ${index + 1}. ${topic}`);
-  lines.push(`**${human(date)}**, ${WEEKDAYS[date.getUTCDay()]} · ${kind}${ready ? " · **написана**, ждёт правок" : ""} · запрос «${query}» · ведёт в ${target}`);
-  lines.push("- Обложка:");
-  lines.push("- В начале:");
-  lines.push("");
+  const [topic, , , , , ready] = item;
+  lines.push(`| ${index + 1} | ${topic} | ${human(dates[index])} |`);
 });
-console.log("\nпервая:", human(dates[0]), "| последняя:", human(dates[dates.length - 1]));
-import("node:fs").then((fs) => fs.writeFileSync("/tmp/schedule-body.md", lines.join("\n")));
+const readyNumbers = ITEMS.map((item, index) => (item[5] ? index + 1 : null)).filter(Boolean);
+
+const table = `# Темы журнала
+
+Материалы выходят по вторникам, четвергам и субботам. Уже написаны и ждут правок
+темы ${readyNumbers.slice(0, -1).join(", ")} и ${readyNumbers.at(-1)}.
+
+| № | Тема | Дата публикации |
+|---:|---|---|
+${lines.join("\n")}
+`;
+import("node:fs").then((fs) => {
+  fs.writeFileSync(new URL("../BLOG_TOPICS.md", import.meta.url), table);
+  console.log("\nBLOG_TOPICS.md переписан:", ITEMS.length, "строк, с", human(dates[0]), "по", human(dates[dates.length - 1]));
+});
