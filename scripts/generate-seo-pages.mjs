@@ -26,7 +26,7 @@ import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE
 // выключен, у сайта нет ни страниц журнала, ни его адресов в карте сайта.
 import { BLOG_ENABLED } from "../src/feature-flags.js";
 import { SAMPLE_REPORT, groups, indexChartSvg, percent } from "../src/blog-report.js";
-import { blogFigureSvg } from "../src/blog-figures.js";
+import { blogFigureHtml } from "../src/blog-figures.js";
 import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt } from "../src/blog-posts.js";
 import { blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
@@ -251,7 +251,7 @@ function toolArticle(tool) {
             .join("")}</tbody></table>`
         : "",
       // Свой график — та же разметка, что видит человек: рисует общий код.
-      section.figure ? blogFigureSvg(section.figure) : "",
+      section.figure ? blogFigureHtml(section.figure) : "",
       section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${linkifyText(section.callout.text, hrefRoute)}</p>` : "",
     ].join("");
   const sections = tool.sections
@@ -394,7 +394,7 @@ function blogArticleBody(text, cars = [], shown = new Set()) {
             .join("")}</tbody></table>`
         : "",
       // Свой график — та же разметка, что видит человек: рисует общий код.
-      section.figure ? blogFigureSvg(section.figure) : "",
+      section.figure ? blogFigureHtml(section.figure) : "",
       section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${linkifyText(section.callout.text, hrefRoute)}</p>` : "",
     ].join("");
   const sections = text.sections || [];

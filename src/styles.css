@@ -14858,19 +14858,170 @@ html[data-theme="dark"] .article-table-scroll {
   line-height: 1.5;
 }
 .article-figure {
-  padding: 16px 18px;
+  padding: 18px 20px;
   border-radius: calc(14px * var(--corner-scale));
   background: var(--surface);
 }
 html[data-theme="dark"] .article-figure {
   background: var(--model-nested-bg);
 }
-/* Ширину держит колонка статьи, высоту — сама картинка: график задан в единицах
-   своей системы координат и масштабируется целиком. */
-.article-figure svg {
+
+/* ── Столбики графика ─────────────────────────────────────────────────────────
+   Строка: заголовок, полоса, значение. Всё в одну линию по центру — полоса не
+   должна плавать выше или ниже заголовка. Полоса намеренно короче половины
+   ширины: заголовкам вроде «Город и трасса зимой, −10 °C» нужно место, а
+   растянутая на всю ширину полоса точности не добавляет. */
+.blog-bars {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.blog-bars-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+.blog-bars-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  min-width: 0;
+}
+.blog-bars-label strong {
+  font-weight: 700;
+  line-height: 1.3;
+}
+/* Пояснение спрятано под значок: развёрнутым оно давило на цифры и растягивало
+   график вдвое. Значок серый и оживает при наведении — так он не спорит
+   с заголовком за внимание. */
+.blog-bars-note {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: help;
+  display: grid;
+  place-items: center;
+}
+.blog-bars-note svg {
+  width: 16px;
+  height: 16px;
   display: block;
-  width: 100%;
-  height: auto;
+}
+.blog-bars-note:hover {
+  color: var(--accent-dark);
+}
+.blog-bars-tip {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max-content;
+  max-width: min(260px, 70vw);
+  padding: 7px 10px;
+  border-radius: calc(9px * var(--corner-scale));
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
+  box-shadow: var(--tooltip-shadow);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease),
+    visibility var(--motion-fast) var(--motion-ease);
+  pointer-events: none;
+}
+/* Открывается и по наведению, и по нажатию: на телефоне наводить нечем, а
+   нажатие ставит на кнопку фокус. */
+.blog-bars-note:hover + .blog-bars-tip,
+.blog-bars-note:focus + .blog-bars-tip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+.blog-bars-track {
+  height: 20px;
+  border-radius: calc(7px * var(--corner-scale));
+  background: var(--line);
+  overflow: hidden;
+}
+.blog-bars-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+.blog-bars-row.is-good .blog-bars-track i {
+  background: var(--green);
+}
+.blog-bars-row.is-warn .blog-bars-track i {
+  background: var(--accent);
+}
+.blog-bars-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.blog-bars figcaption {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+/* На узком экране полоса уходит под заголовок: втроём в одну строку они
+   помещаются только ценой нечитаемых переносов в заголовке. */
+@media (max-width: 560px) {
+  .blog-bars-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+  }
+  .blog-bars-track {
+    grid-column: 1 / -1;
+    height: 16px;
+  }
+}
+
+/* Строчные ссылки в тексте статьи — красные, подчёркиваются при наведении. Тот же
+   вид, что у ссылки-раздела над заголовком материала: в тексте ссылка должна быть
+   заметна, но не подчёркнута заранее — иначе абзац с тремя ссылками рябит. */
+.model-page-intro a,
+.model-page-article a,
+.model-page-points a,
+.model-page-compare a,
+.model-page-callout a,
+.model-page-faq a,
+.article-steps a,
+.article-table a,
+.article-sources a,
+.report-caption a,
+.blog-disclaimer a {
+  color: var(--accent-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+.model-page-intro a:hover,
+.model-page-article a:hover,
+.model-page-points a:hover,
+.model-page-compare a:hover,
+.model-page-callout a:hover,
+.model-page-faq a:hover,
+.article-steps a:hover,
+.article-table a:hover,
+.article-sources a:hover,
+.report-caption a:hover,
+.blog-disclaimer a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 /* Источники: список первоисточников внизу статьи. Мелко и серо — это служебная
    часть, но она обязана быть видимой: без неё текст про пошлины ничем не отличается

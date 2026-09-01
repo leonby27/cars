@@ -36,7 +36,7 @@ import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToo
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
-import { blogFigureSvg } from "./blog-figures.js";
+import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
@@ -3413,8 +3413,8 @@ function ModelPageSection({ section, navigate }) {
       )}
       {/* Свой график: разметку строит общий код, поэтому в приложении и в версии
           для поисковика он один и тот же. */}
-      {section.figure && blogFigureSvg(section.figure) ? (
-        <div className="article-figure" dangerouslySetInnerHTML={{ __html: blogFigureSvg(section.figure) }} />
+      {section.figure && blogFigureHtml(section.figure) ? (
+        <div className="article-figure" dangerouslySetInnerHTML={{ __html: blogFigureHtml(section.figure) }} />
       ) : null}
       {section.callout && (
         <aside className="model-page-callout">

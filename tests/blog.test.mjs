@@ -4,7 +4,7 @@ import { shippedFlag } from "../src/feature-flags.js";
 import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, blogAllPosts, findBlogPost, homeBlogPosts } from "../src/blog-posts.js";
 import { BLOG_TEXTS, BLOG_TEXTS_RAW } from "../src/blog-texts.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "../src/blog-report.js";
-import { blogFigureSvg } from "../src/blog-figures.js";
+import { blogFigureHtml } from "../src/blog-figures.js";
 import { plainInlineText } from "../src/inline-links.js";
 import { catalogLandingForParams } from "../src/catalog-landings.js";
 
@@ -362,7 +362,7 @@ test("у каждой статьи есть чем проиллюстриров�
     const text = BLOG_TEXTS[post.slug];
     const figures = (text.sections || []).filter((section) => section.figure);
     for (const section of figures) {
-      assert.ok(blogFigureSvg(section.figure), `в материале ${post.slug} раздел «${section.title}» ссылается на несуществующую картинку ${section.figure}`);
+      assert.ok(blogFigureHtml(section.figure), `в материале ${post.slug} раздел «${section.title}» ссылается на несуществующую картинку ${section.figure}`);
     }
     assert.ok(post.photos?.filters || figures.length, `у статьи ${post.slug} нет ни среза для фотографий, ни своего графика`);
   }
@@ -379,4 +379,21 @@ test("источники статей ведут на первоисточник
       assert.ok(source.name, `в материале ${slug} у источника нет названия`);
     }
   }
+});
+
+// Шаблон столбиков общий для всех графиков: заголовок, полоса, значение и пояснение
+// под значком. Пояснение обязано остаться в разметке — под значком оно спрятано от
+// глаза, но не от поисковика и не от чтения с экрана.
+test("в столбиках графика пояснение прячется под значок, а не пропадает", () => {
+  const html = blogFigureHtml("winter-range");
+  assert.match(html, /<figure class="blog-bars">/);
+  assert.match(html, /class="blog-bars-note"[^>]*aria-describedby="bar-note-winter-range-0"/);
+  assert.match(html, /id="bar-note-winter-range-0" role="tooltip">точка отсчёта/);
+  assert.ok(!html.includes("<svg class="), "столбики рисуются вёрсткой, а не картинкой");
+  // Ширина полосы — доля от наибольшего значения ряда, а не пиксели: колонку статьи
+  // задаёт оформление, и график обязан тянуться вместе с ней.
+  assert.match(html, /style="width:100\.0%"/);
+  // Имя картинки входит в связи подсказок: на странице их может быть несколько.
+  const other = blogFigureHtml("hybrid-duty");
+  assert.ok(!other.includes("bar-note-winter-range-"), "подсказки двух графиков делят одно имя связи");
 });

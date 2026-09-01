@@ -13,6 +13,11 @@
  * Разметку строит общий код: её вставляет и приложение, и версия страницы для
  * поисковика. Цвета берутся переменными оформления сайта, поэтому график сам
  * работает в тёмной теме.
+ *
+ * Почему вёрстка, а не картинка: 01.09.2026 столбики были нарисованы в SVG, и внутри
+ * картинки нельзя было ни спрятать пояснение под подсказку, ни дать длинному заголовку
+ * перенестись на вторую строку. Обычная вёрстка умеет и то и другое, читается
+ * скринридером как текст и не мылится на крупных экранах.
  */
 
 const escape = (value) =>
@@ -22,55 +27,56 @@ const escape = (value) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
+const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
+
+// Значок пояснения рядом с заголовком строки. Рисуется здесь же, а не берётся из
+// набора значков приложения: эта разметка уходит и в страницу для поисковика, где
+// никаких компонентов нет.
+const INFO_ICON =
+  '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="6.1" r="1.1" fill="currentColor"/><path d="M10 9v5.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+
 /**
- * Столбики в ряд: подпись слева, полоса, значение справа.
+ * Столбики в ряд: заголовок слева, полоса, значение справа.
  *
  * Такой график читается без осей и подписей на цифрах — им и объясняются почти все
  * величины в статьях: сколько остаётся от паспортного запаса хода при разной погоде,
  * во что превращается цена под ключ после отмены льготы, чем отличаются циклы замера.
  *
+ * Пояснение к строке (`note`) прячется под значок рядом с заголовком: в развёрнутом
+ * виде оно давило на цифры и растягивало график вдвое. Подсказка открывается и по
+ * наведению, и по нажатию — на телефоне навести некуда.
+ *
  * `tone` у строки: `plain` — обычная, `good` — то, что хорошо (зелёная), `warn` —
  * то, что плохо (красная). Цвета те же, что у стрелки цены на карточке машины.
  */
-export function barsSvg({ items = [], unit = "", max = null, width = 720, caption = null } = {}) {
+export function barsFigure({ items = [], unit = "", max = null, caption = null } = {}) {
   const rows = items.filter((item) => Number.isFinite(Number(item?.value)));
   if (rows.length < 2) return "";
-  const rowHeight = 46;
-  const labelWidth = 190;
-  const valueWidth = 96;
-  const padTop = 6;
-  const height = padTop + rows.length * rowHeight + (caption ? 26 : 6);
-  const trackLeft = labelWidth + 12;
-  const trackWidth = width - trackLeft - valueWidth;
   const top = max ?? Math.max(...rows.map((row) => Number(row.value)));
-  const scale = (value) => (top > 0 ? Math.max((Number(value) / top) * trackWidth, 2) : 2);
-  const colour = (tone) => (tone === "good" ? "var(--green)" : tone === "warn" ? "var(--accent)" : "var(--muted)");
+  const width = (value) => (top > 0 ? Math.max((Number(value) / top) * 100, 1.5) : 1.5);
 
-  const bars = rows
+  const body = rows
     .map((row, index) => {
-      const y = padTop + index * rowHeight;
-      const barY = y + 12;
       const value = Number(row.value);
-      const text = row.text ?? `${new Intl.NumberFormat("ru-RU").format(value)}${unit ? ` ${unit}` : ""}`;
-      return `<g>
-      <text x="0" y="${barY + 14}" font-size="15" fill="var(--ink)">${escape(row.label)}</text>
-      <rect x="${trackLeft}" y="${barY}" width="${trackWidth}" height="20" rx="6" fill="var(--line)" />
-      <rect x="${trackLeft}" y="${barY}" width="${scale(value).toFixed(1)}" height="20" rx="6" fill="${colour(row.tone)}" fill-opacity="${row.tone ? "0.85" : "0.35"}" />
-      <text x="${width}" y="${barY + 15}" text-anchor="end" font-size="15" font-weight="700" fill="var(--ink)">${escape(text)}</text>
-      ${row.note ? `<text x="0" y="${barY + 32}" font-size="13" fill="var(--muted)">${escape(row.note)}</text>` : ""}
-    </g>`;
+      const text = row.text ?? `${number(value)}${unit ? ` ${unit}` : ""}`;
+      // Подсказка привязана к своей строке по номеру: одна страница может нести
+      // несколько графиков, и одинаковые имена связей их бы перепутали.
+      const tipId = `bar-note-${index}`;
+      const note = row.note
+        ? `<button type="button" class="blog-bars-note" aria-describedby="${tipId}" aria-label="Пояснение: ${escape(row.note)}">${INFO_ICON}</button><span class="blog-bars-tip" id="${tipId}" role="tooltip">${escape(row.note)}</span>`
+        : "";
+      return `<div class="blog-bars-row${row.tone ? ` is-${escape(row.tone)}` : ""}">
+      <span class="blog-bars-label"><strong>${escape(row.label)}</strong>${note}</span>
+      <span class="blog-bars-track"><i style="width:${width(value).toFixed(1)}%"></i></span>
+      <b class="blog-bars-value">${escape(text)}</b>
+    </div>`;
     })
     .join("");
 
-  // Подпись под графиком — часть картинки, а не абзац рядом: когда график
-  // пересылают снимком экрана, подпись уезжает вместе с ним.
-  const captionText = caption
-    ? `<text x="0" y="${height - 6}" font-size="13" fill="var(--muted)">${escape(caption)}</text>`
-    : "";
-  const title = rows.map((row) => `${row.label}: ${row.text ?? row.value}`).join("; ");
-  return `<svg class="blog-bars" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escape(title)}">
-${bars}${captionText}
-</svg>`;
+  // Подпись — часть графика, а не абзац рядом: когда график пересылают снимком
+  // экрана, подпись должна уехать вместе с ним.
+  const captionText = caption ? `<figcaption>${escape(caption)}</figcaption>` : "";
+  return `<figure class="blog-bars">${body}${captionText}</figure>`;
 }
 
 /**
@@ -85,7 +91,7 @@ export const BLOG_FIGURES = Object.freeze({
   // Три поправки к паспортной цифре китайского объявления. Взята машина с типовым
   // паспортным запасом хода 700 км по циклу CLTC.
   "range-cycles": () =>
-    barsSvg({
+    barsFigure({
       unit: "км",
       items: [
         { label: "Паспорт CLTC", value: 700, note: "как написано в китайском объявлении" },
@@ -97,7 +103,7 @@ export const BLOG_FIGURES = Object.freeze({
     }),
   // Сколько остаётся от обычного запаса хода при разной температуре.
   "winter-range": () =>
-    barsSvg({
+    barsFigure({
       unit: "%",
       max: 100,
       items: [
@@ -111,16 +117,22 @@ export const BLOG_FIGURES = Object.freeze({
     }),
   // Что сделала с ценой отмена льготы для последовательных гибридов.
   "hybrid-duty": () =>
-    barsSvg({
+    barsFigure({
       unit: "$",
       items: [
         { label: "Цена машины в Китае", value: 25000, note: "для примера взята машина за 25 000 $" },
-        { label: "Под ключ до 2026 года", value: 30500, tone: "good", note: "льгота действовала: пошлины нет, НДС нулевой" },
+        { label: "Под ключ до 2026 года", value: 30500, tone: "good", note: "льгота действовала: пошлину не начисляли, НДС считали по ставке 0%" },
         { label: "Под ключ с 2026 года", value: 40000, tone: "warn", note: "пошлина 15% и НДС 20% сверху" },
       ],
       caption: "Пример расчёта abcars.by. Доставка и оформление в обоих случаях одинаковые, разница — только в платежах.",
     }),
 });
 
-/** Готовая разметка картинки по её имени или пустая строка, если имени нет. */
-export const blogFigureSvg = (name) => (name && BLOG_FIGURES[name] ? BLOG_FIGURES[name]() : "");
+/**
+ * Готовая разметка картинки по её имени или пустая строка, если имени нет.
+ *
+ * Имя картинки подставляется в связи подсказок: на одной странице может стоять
+ * несколько графиков, и одинаковые имена связей склеили бы их подсказки.
+ */
+export const blogFigureHtml = (name) =>
+  name && BLOG_FIGURES[name] ? BLOG_FIGURES[name]().replaceAll("bar-note-", `bar-note-${name}-`) : "";
