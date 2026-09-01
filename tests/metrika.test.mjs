@@ -9,6 +9,12 @@ const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const csp = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"))
   .headers.flatMap((entry) => entry.headers)
   .find((header) => header.key === "Content-Security-Policy").value;
+const nginxHeaders = readFileSync(new URL("../deploy/nginx-abcars-headers.conf", import.meta.url), "utf8");
+const nginxCsp = nginxHeaders.match(/add_header Content-Security-Policy "([^"]+)"/)?.[1];
+
+test("боевой nginx использует те же разрешения счетчиков", () => {
+  assert.equal(nginxCsp, csp);
+});
 
 test("счётчик Метрики стоит на странице", () => {
   assert.match(html, /mc\.yandex\.ru\/metrika\/tag\.js\?id=(\d+)/);
