@@ -59,6 +59,26 @@ import electric_vs_petrol from "./blog-texts/electric-vs-petrol.js";
 import five_years_vat from "./blog-texts/five-years-vat.js";
 import range_500_under_25000 from "./blog-texts/range-500-under-25000.js";
 import real_mileage from "./blog-texts/real-mileage.js";
+import haval_h6_vs_hongqi_hs5 from "./blog-texts/haval-h6-vs-hongqi-hs5.js";
+import which_suv_frame_or_crossover from "./blog-texts/which-suv-frame-or-crossover.js";
+import hybrid_suv_2023 from "./blog-texts/hybrid-suv-2023.js";
+import russification from "./blog-texts/russification.js";
+import lfp_vs_nmc from "./blog-texts/lfp-vs-nmc.js";
+import zeekr_001_vs_007 from "./blog-texts/zeekr-001-vs-007.js";
+import long_wheelbase_china from "./blog-texts/long-wheelbase-china.js";
+import battery_100_kwh from "./blog-texts/battery-100-kwh.js";
+import delivery_route from "./blog-texts/delivery-route.js";
+import byd_han_vs_geely_preface from "./blog-texts/byd-han-vs-geely-preface.js";
+import ev_insurance from "./blog-texts/ev-insurance.js";
+import awd_under_25000 from "./blog-texts/awd-under-25000.js";
+import petrol_duty_age from "./blog-texts/petrol-duty-age.js";
+import china_or_korea from "./blog-texts/china-or-korea.js";
+import mercedes_glc_vs_bmw_x3 from "./blog-texts/mercedes-glc-vs-bmw-x3.js";
+import hatchbacks_under_15000 from "./blog-texts/hatchbacks-under-15000.js";
+import byd_blade_battery from "./blog-texts/byd-blade-battery.js";
+import registration_belarus from "./blog-texts/registration-belarus.js";
+import avatr_07_vs_deepal_s07 from "./blog-texts/avatr-07-vs-deepal-s07.js";
+import which_minivan from "./blog-texts/which-minivan.js";
 
 /** Тексты как написаны, без поправки на состояние квоты: нужны тестам. */
 export const BLOG_TEXTS_RAW = Object.freeze({
@@ -108,6 +128,26 @@ export const BLOG_TEXTS_RAW = Object.freeze({
   "five-years-vat": five_years_vat,
   "range-500-under-25000": range_500_under_25000,
   "real-mileage": real_mileage,
+  "haval-h6-vs-hongqi-hs5": haval_h6_vs_hongqi_hs5,
+  "which-suv-frame-or-crossover": which_suv_frame_or_crossover,
+  "hybrid-suv-2023": hybrid_suv_2023,
+  "russification": russification,
+  "lfp-vs-nmc": lfp_vs_nmc,
+  "zeekr-001-vs-007": zeekr_001_vs_007,
+  "long-wheelbase-china": long_wheelbase_china,
+  "battery-100-kwh": battery_100_kwh,
+  "delivery-route": delivery_route,
+  "byd-han-vs-geely-preface": byd_han_vs_geely_preface,
+  "ev-insurance": ev_insurance,
+  "awd-under-25000": awd_under_25000,
+  "petrol-duty-age": petrol_duty_age,
+  "china-or-korea": china_or_korea,
+  "mercedes-glc-vs-bmw-x3": mercedes_glc_vs_bmw_x3,
+  "hatchbacks-under-15000": hatchbacks_under_15000,
+  "byd-blade-battery": byd_blade_battery,
+  "registration-belarus": registration_belarus,
+  "avatr-07-vs-deepal-s07": avatr_07_vs_deepal_s07,
+  "which-minivan": which_minivan,
 });
 
 // Пока льгота на электромобили действует, тексты отдаются слово в слово; когда квота

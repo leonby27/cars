@@ -298,15 +298,19 @@ export async function modelSummary(searchParams) {
   // кривой ряд ронял бы весь запрос.
   const numeric = (source) => `(CASE WHEN ${source} ~ '^[0-9]+([.,][0-9]+)?$' THEN replace(${source}, ',', '.')::numeric END)`;
   const spec = (name) => numeric(`v.specifications->>'${name}'`);
-  // Мощность в характеристики не переносится: она лежит в исходном ответе источника.
+  // Мощность лежит в двух разных местах, и это не прихоть: у электромобилей и
+  // гибридов источник отдаёт её в исходном ответе, у бензиновых машин — в разобранных
+  // характеристиках. Пока читали только первое, у 70 тысяч бензиновых машин строка
+  // «Мощность» на обзоре модели и в сравнении стояла прочерком, хотя данные были.
   const payload = (name) => numeric(`l.source_payload->>'${name}'`);
+  const powerSql = `COALESCE(${payload("horsepower")}, ${numeric("v.specifications->>'enginePower'")})`;
   const result = await pool.query(`SELECT count(*)::int AS total,
       max(l.last_seen_at) AS refreshed_at, ${SECTION_CHANGED_AT} AS changed_at,
       min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
       min(NULLIF(l.mileage_km, 0))::int AS mileage_min,
       max(COALESCE(v.electric_range_km, v.combined_range_km))::int AS range_max,
       max(v.battery_kwh)::numeric AS battery_max,
-      max(${payload("horsepower")}) AS power_max,
+      max(${powerSql}) AS power_max,
       max(${spec("torqueNm")}) AS torque_max,
       min(${spec("acceleration")}) AS accel_min
     FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
