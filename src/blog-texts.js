@@ -39,6 +39,26 @@ import charging_belarus from "./blog-texts/charging-belarus.js";
 import hybrids_big_battery from "./blog-texts/hybrids-big-battery.js";
 import phev_hev_erev from "./blog-texts/phev-hev-erev.js";
 import volkswagen_from_china from "./blog-texts/volkswagen-from-china.js";
+import ev_under_20000 from "./blog-texts/ev-under-20000.js";
+import china_cars_rust from "./blog-texts/china-cars-rust.js";
+import tesla_model_y_vs_li_auto_l7 from "./blog-texts/tesla-model-y-vs-li-auto-l7.js";
+import home_charging from "./blog-texts/home-charging.js";
+import cheap_low_mileage from "./blog-texts/cheap-low-mileage.js";
+import vin_check from "./blog-texts/vin-check.js";
+import audi_from_china from "./blog-texts/audi-from-china.js";
+import petrol_suv_25000 from "./blog-texts/petrol-suv-25000.js";
+import most_reliable_china from "./blog-texts/most-reliable-china.js";
+import bmw_x3_vs_volvo_xc60 from "./blog-texts/bmw-x3-vs-volvo-xc60.js";
+import transport_tax from "./blog-texts/transport-tax.js";
+import sedans_under_20000 from "./blog-texts/sedans-under-20000.js";
+import toyota_from_china from "./blog-texts/toyota-from-china.js";
+import service_parts_minsk from "./blog-texts/service-parts-minsk.js";
+import cars_2025 from "./blog-texts/cars-2025.js";
+import li_auto_l7_vs_zeekr_001 from "./blog-texts/li-auto-l7-vs-zeekr-001.js";
+import electric_vs_petrol from "./blog-texts/electric-vs-petrol.js";
+import five_years_vat from "./blog-texts/five-years-vat.js";
+import range_500_under_25000 from "./blog-texts/range-500-under-25000.js";
+import real_mileage from "./blog-texts/real-mileage.js";
 
 /** Тексты как написаны, без поправки на состояние квоты: нужны тестам. */
 export const BLOG_TEXTS_RAW = Object.freeze({
@@ -68,6 +88,26 @@ export const BLOG_TEXTS_RAW = Object.freeze({
   "hybrids-big-battery": hybrids_big_battery,
   "phev-hev-erev": phev_hev_erev,
   "volkswagen-from-china": volkswagen_from_china,
+  "ev-under-20000": ev_under_20000,
+  "china-cars-rust": china_cars_rust,
+  "tesla-model-y-vs-li-auto-l7": tesla_model_y_vs_li_auto_l7,
+  "home-charging": home_charging,
+  "cheap-low-mileage": cheap_low_mileage,
+  "vin-check": vin_check,
+  "audi-from-china": audi_from_china,
+  "petrol-suv-25000": petrol_suv_25000,
+  "most-reliable-china": most_reliable_china,
+  "bmw-x3-vs-volvo-xc60": bmw_x3_vs_volvo_xc60,
+  "transport-tax": transport_tax,
+  "sedans-under-20000": sedans_under_20000,
+  "toyota-from-china": toyota_from_china,
+  "service-parts-minsk": service_parts_minsk,
+  "cars-2025": cars_2025,
+  "li-auto-l7-vs-zeekr-001": li_auto_l7_vs_zeekr_001,
+  "electric-vs-petrol": electric_vs_petrol,
+  "five-years-vat": five_years_vat,
+  "range-500-under-25000": range_500_under_25000,
+  "real-mileage": real_mileage,
 });
 
 // Пока льгота на электромобили действует, тексты отдаются слово в слово; когда квота
