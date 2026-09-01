@@ -77,6 +77,28 @@ const vehiclePages = /^(1|true|yes)$/i.test(String(process.env.SEO_VEHICLE_PAGES
 // Адреса машин в карте сайта нужны, как только открыта индексация: иначе поисковику
 // неоткуда узнать про тридцать тысяч карточек — ссылок на них в разметке почти нет.
 const carsSitemap = /^(1|true|yes)$/i.test(String(process.env.SEO_CARS_SITEMAP || "")) || allowIndexing;
+
+// ── Сколько адресов уходит в карту сайта ──────────────────────────────────────
+// 01.09.2026, по данным Search Console: Google проиндексировал 336 страниц, а 107 383
+// висят в состоянии «обнаружена, не проиндексирована». Карта из ста десяти тысяч
+// карточек съедала весь бюджет обхода, и до 163 разделов с 449 обзорами робот просто
+// не доходил — они тонули среди почти одинаковых объявлений.
+//
+// Поэтому карта сужена: разделы, обзоры, информационные страницы и журнал остаются
+// целиком, а машины идут выборкой — по нескольку свежих карточек на каждую модель.
+// Остальные объявления никуда не деваются: их находят по ссылкам из разделов, а
+// Яндексу и Bing про каждое изменение отдельно сообщает IndexNow (scripts/indexnow.mjs),
+// который шлёт до десяти тысяч изменившихся карточек в сутки.
+//
+// Числа можно поднимать по мере роста доверия к домену; `SEO_SITEMAP_FULL=1`
+// возвращает прежнее поведение — все карточки и все страницы-листалки.
+const fullSitemap = /^(1|true|yes)$/i.test(String(process.env.SEO_SITEMAP_FULL || "false"));
+const carsPerModelInSitemap = fullSitemap ? 0 : Math.max(1, Number(process.env.SEO_SITEMAP_CARS_PER_MODEL) || 5);
+// Сколько страниц-«листалок» раздела попадает в карту сверх первой. Глубокие страницы
+// (в разделе электромобилей их две сотни) для поиска бесполезны: содержание у них
+// одинаковое, а бюджет обхода они забирают наравне с разделами. Робот дойдёт до них
+// по ссылкам «дальше», если захочет.
+const listPagesInSitemap = fullSitemap ? Infinity : Math.max(0, Number(process.env.SEO_SITEMAP_LIST_PAGES ?? 3) || 0);
 // Список машин для карты берётся из дампа каталога, а на хостинге дампа нет — там его
 // даёт база, но только по явному `SEO_CARS_FROM_DB=1`. Без этого условия сборка ходила бы
 // в базу и с рабочей машины: `server/db.mjs` сам подхватывает `.env.local` с боевым
@@ -930,7 +952,7 @@ async function readLiveCatalog() {
     }
     return counts;
   };
-  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map() };
+  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], activeCars: 0, listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map() };
   if (cars.length) {
     return {
       showcase: cars.slice(0, showcaseSize),
@@ -960,9 +982,26 @@ async function readLiveCatalog() {
     // изменились (см. миграцию 021). `imported_at` для этого не годится: она одинаковая
     // у всех карточек, потому что приходит из последнего полного импорта, — и поисковику
     // мы сообщали «ничего не менялось» даже при изменении цены.
-    const rows = carsSitemap
-      ? (await pool.query("SELECT l.id, COALESCE(l.content_changed_at, l.imported_at) AS changed_at FROM listings l WHERE l.status='active'")).rows
-      : [];
+    // Выборка машин для карты сайта. Без ограничения — все активные объявления;
+    // с ограничением — по `carsPerModelInSitemap` карточек на каждую модель, и первыми
+    // идут те, у которых есть фотографии и которые недавно менялись: такая карточка
+    // и роботу полезнее, и человеку из выдачи.
+    const rows = !carsSitemap
+      ? []
+      : carsPerModelInSitemap
+        ? (await pool.query(`WITH ranked AS (
+            SELECT l.id,
+              COALESCE(l.content_changed_at, l.imported_at) AS changed_at,
+              row_number() OVER (
+                PARTITION BY v.brand, v.model
+                ORDER BY EXISTS (SELECT 1 FROM listing_media m WHERE m.listing_id = l.id) DESC,
+                  COALESCE(l.content_changed_at, l.imported_at) DESC
+              ) AS place
+            FROM listings l JOIN vehicles v ON v.id = l.vehicle_id
+            WHERE l.status = 'active'
+          )
+          SELECT id, changed_at FROM ranked WHERE place <= $1`, [carsPerModelInSitemap])).rows
+        : (await pool.query("SELECT l.id, COALESCE(l.content_changed_at, l.imported_at) AS changed_at FROM listings l WHERE l.status='active'")).rows;
     // Сколько страниц в каждом разделе. Нужно карте сайта: страницы списка робот иначе
     // находит только переходами «дальше», а в разделе электромобилей их две сотни —
     // до середины он дошёл бы нескоро.
@@ -1054,6 +1093,7 @@ async function readLiveCatalog() {
       // Дата последнего изменения по каждой модели — для `lastmod` у обзоров.
       modelChanged: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, isoDate(row.changedAt)])),
       carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) })),
+      activeCars: whole.total,
       listPages,
       stock,
       changed,
@@ -1077,7 +1117,8 @@ const listPageEntries = (route) => {
   // Дата у всех страниц одного раздела общая: список машин на них — куски одного набора,
   // и меняются они вместе.
   const lastmod = live.changed.get(trimRoute(route)) || null;
-  return Array.from({ length: Math.max(0, pages - 1) }, (_, index) => ({ loc: `${routeUrl(route)}?page=${index + 2}`, lastmod }));
+  const deep = Math.min(Math.max(0, pages - 1), listPagesInSitemap);
+  return Array.from({ length: deep }, (_, index) => ({ loc: `${routeUrl(route)}?page=${index + 2}`, lastmod }));
 };
 
 // Дата последнего обновления материала журнала: тот же день, что стоит в разметке
@@ -1235,7 +1276,15 @@ rmSync(path.join(clientDir, "data", "cars.json"), { force:true });
 
 const carsInSitemap = carEntries.length;
 console.log(`Generated ${publicPages.length} public pages, ${MODEL_PAGES.length} model reviews and ${liveSections.length} catalog sections (server-rendered), ${cars.length} vehicle pages${vehiclePages ? "" : " (страницы машин собирает сервер в момент запроса)"}, sitemaps and robots.txt (indexing ${allowIndexing ? "enabled" : "disabled"}).`);
-console.log(`Адресов машин в карте сайта: ${carsInSitemap}${carsSitemap ? "" : " (включается SEO_CARS_SITEMAP=1 или открытой индексацией)"}.`);
+// Что в карту не попало — говорим вслух: молчаливое сокращение читается как
+// «в карте всё», и однажды кто-нибудь будет искать пропавшие адреса руками.
+console.log(`Адресов в карте сайта: ${pageEntries.length} страниц и ${carsInSitemap} машин${carsSitemap ? "" : " (машины включаются SEO_CARS_SITEMAP=1 или открытой индексацией)"}.`);
+if (carsSitemap && carsPerModelInSitemap) {
+  console.log(`  машины идут выборкой: до ${carsPerModelInSitemap} свежих карточек на модель из ${live.activeCars || "?"} активных; остальные робот находит по ссылкам, а Яндексу об изменениях говорит IndexNow.`);
+}
+if (Number.isFinite(listPagesInSitemap)) {
+  console.log(`  страницы-листалки: не глубже ${listPagesInSitemap + 1}-й в каждом разделе (полная карта — SEO_SITEMAP_FULL=1).`);
+}
 // Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
 // вставляют в Google Search Console и Яндекс.Вебмастер.
 console.log(`Карта сайта (в robots.txt не указана, добавить вручную в Search Console и Вебмастер): ${siteUrl}/${sitemapIndexName}`);
