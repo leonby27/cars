@@ -8866,6 +8866,11 @@ function BlogShareMenu({ post, direction = "up" }) {
 
 /** Карточка материала: обложка, метки, название, дата и «поделиться». */
 function BlogCollectionCard({ post, navigate }) {
+  // Своя картинка, если она подобрана под тему: тогда ни правило отбора, ни вид
+  // материала уже не важны — на карточке стоит именно она.
+  if (post.cover?.src) {
+    return <BlogCardShell post={post} navigate={navigate} cover={<BlogCoverImage cover={post.cover} place="card" />} />;
+  }
   // У сравнения нет одного правила отбора, поэтому и обложка у него своя: два кадра
   // вместо одного. Разные виды материалов различаются уже в сетке журнала.
   if (post.kind === "duel") return <BlogDuelCard post={post} navigate={navigate} />;
@@ -9518,6 +9523,36 @@ function BlogTopList({ post, cars, total, changedAt, navigate, onOpen }) {
  * снимок кликается в объявление. Сплошной текст так разбивается тем, за чем на
  * страницу и приходят, а поисковик получает фотографию с осмысленной подписью.
  */
+/**
+ * Своя картинка материала — та, что Сергей подобрал под тему. Стоит в двух местах:
+ * на карточке в журнале и первым кадром в самой статье, чтобы человек нажал на
+ * карточку и увидел наверху то же изображение, а не другое.
+ *
+ * Два файла на каждое место и два формата: avif лёгкий и его понимают нынешние
+ * браузеры, jpeg остаётся запасным. Размеры нарезаны заранее (scripts/blog-covers.mjs),
+ * поэтому здесь только выбор нужного.
+ */
+function BlogCoverImage({ cover, place, eager = false }) {
+  if (!cover?.src) return null;
+  const base = appHref(`${cover.src}-${place}`);
+  return (
+    <picture>
+      <source type="image/avif" srcSet={`${base}.avif`} />
+      <img src={`${base}.jpg`} alt={cover.alt || ""} loading={eager ? "eager" : "lazy"} />
+    </picture>
+  );
+}
+
+/** Открывающий кадр статьи: своя картинка вместо машины из каталога. */
+function BlogCoverFigure({ cover }) {
+  if (!cover?.src) return null;
+  return (
+    <figure className="blog-figure blog-figure-own">
+      <BlogCoverImage cover={cover} place="hero" eager />
+    </figure>
+  );
+}
+
 function BlogFigure({ car, index, navigate, onOpen = null, eager = false }) {
   const currency = useCurrency();
   const gallery = car.images?.length ? car.images : [car.image].filter(Boolean);
@@ -9775,7 +9810,11 @@ function BlogArticlePage({ post, navigate, favorites, toggleFavorite }) {
   const sections = text?.sections || [];
   return (
     <BlogArticleShell post={post} navigate={navigate} quickViewModal={quickViewModal}>
-      {photos[0] ? <BlogFigure car={photos[0]} index={0} navigate={navigate} onOpen={openQuickView} eager /> : null}
+      {post.cover?.src ? (
+        <BlogCoverFigure cover={post.cover} />
+      ) : photos[0] ? (
+        <BlogFigure car={photos[0]} index={0} navigate={navigate} onOpen={openQuickView} eager />
+      ) : null}
       <div className="model-page-intro">
         {text?.intro.map((paragraph) => (
           <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
@@ -9835,7 +9874,11 @@ function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
     <BlogArticleShell post={post} navigate={navigate} quickViewModal={quickViewModal}>
       {/* Открывающая фотография — сразу после описания, до текста: статья без
           картинки на первом экране читается как стена. */}
-      {coverCar ? <BlogFigure car={coverCar} index={0} navigate={navigate} onOpen={openQuickView} eager /> : null}
+      {post.cover?.src ? (
+        <BlogCoverFigure cover={post.cover} />
+      ) : coverCar ? (
+        <BlogFigure car={coverCar} index={0} navigate={navigate} onOpen={openQuickView} eager />
+      ) : null}
       <div className="model-page-intro">
         {text?.intro.map((paragraph) => (
           <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>

@@ -252,6 +252,7 @@ export const BLOG_POSTS = Object.freeze([
   },
   {
     slug: "range-cycles",
+    cover: { src: "/blog/range-cycles", alt: "Экран мультимедиа с показаниями запаса хода" },
     rubric: "articles",
     kind: "article",
     draft: true,
@@ -310,6 +311,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "ev-quota-end",
+    cover: { src: "/blog/ev-quota-end", alt: "Белый электромобиль на зарядной станции" },
     rubric: "law",
     kind: "article",
     draft: true,
@@ -472,6 +474,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "which-china-suv",
+    cover: { src: "/blog/which-china-suv", alt: "Китайский внедорожник на лесной грунтовой дороге" },
     rubric: "articles",
     kind: "article",
     draft: true,
@@ -504,6 +507,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "util-fee",
+    cover: { src: "/blog/util-fee", alt: "Автовоз с новыми машинами на трассе" },
     rubric: "law",
     kind: "article",
     draft: true,
@@ -552,6 +556,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "charging-belarus",
+    cover: { src: "/blog/charging-belarus", alt: "Зарядная станция и машина на зарядке зимой" },
     rubric: "tips",
     kind: "article",
     draft: true,
@@ -633,6 +638,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "china-cars-rust",
+    cover: { src: "/blog/china-cars-rust", alt: "Сквозная ржавчина на колёсной арке автомобиля" },
     rubric: "articles",
     kind: "article",
     draft: true,
@@ -680,6 +686,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "home-charging",
+    cover: { src: "/blog/home-charging", alt: "Домашняя зарядная станция во дворе частного дома" },
     rubric: "tips",
     kind: "article",
     draft: true,
@@ -712,6 +719,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "vin-check",
+    cover: { src: "/blog/vin-check", alt: "Табличка с номером кузова в дверном проёме" },
     rubric: "articles",
     kind: "article",
     draft: true,
@@ -806,6 +814,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "transport-tax",
+    cover: { src: "/blog/transport-tax", alt: "Топливораздаточная колонка на заправке" },
     rubric: "law",
     kind: "article",
     draft: true,
@@ -917,6 +926,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "electric-vs-petrol",
+    cover: { src: "/blog/electric-vs-petrol", alt: "Заправка бензином и зарядка электромобиля рядом" },
     rubric: "articles",
     kind: "article",
     draft: true,
@@ -932,6 +942,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "five-years-vat",
+    cover: { src: "/blog/five-years-vat", alt: "Площадки нового транспорта в морском порту" },
     rubric: "law",
     kind: "article",
     draft: true,
@@ -1049,6 +1060,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "lfp-vs-nmc",
+    cover: { src: "/blog/lfp-vs-nmc", alt: "Снятый с машины батарейный блок электромобиля" },
     rubric: "articles",
     kind: "article",
     draft: true,
@@ -1117,6 +1129,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "delivery-route",
+    cover: { src: "/blog/delivery-route", alt: "Автовоз с китайскими машинами на площадке" },
     rubric: "articles",
     kind: "article",
     draft: true,
@@ -1152,6 +1165,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "ev-insurance",
+    cover: { src: "/blog/ev-insurance", alt: "Оформление страхового полиса у автомобиля" },
     rubric: "tips",
     kind: "article",
     draft: true,
@@ -1184,6 +1198,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "petrol-duty-age",
+    cover: { src: "/blog/petrol-duty-age", alt: "Заправочный пистолет в баке автомобиля" },
     rubric: "law",
     kind: "article",
     draft: true,
@@ -1267,6 +1282,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "registration-belarus",
+    cover: { src: "/blog/registration-belarus", alt: "Государственный флаг Китая" },
     rubric: "law",
     kind: "article",
     draft: true,
@@ -1336,6 +1352,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "ev-tyres-suspension",
+    cover: { src: "/blog/ev-tyres-suspension", alt: "Ряды автомобильных шин на складе" },
     rubric: "tips",
     kind: "article",
     draft: true,
@@ -1499,6 +1516,7 @@ export const BLOG_POSTS = Object.freeze([
 
   {
     slug: "china-auctions-platforms",
+    cover: { src: "/blog/china-auctions-platforms", alt: "Покупатели на большой площадке подержанных автомобилей" },
     rubric: "articles",
     kind: "article",
     draft: true,

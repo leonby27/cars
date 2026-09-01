@@ -383,6 +383,16 @@ function infoArticle(route) {
  * с подписью и ссылкой в объявление. Поисковик получает снимок с осмысленным
  * описанием, а не «картинку из статьи».
  */
+/**
+ * Своя картинка материала — та же, что видит человек в приложении. Отдаём её и
+ * поисковику: страница без изображения над текстом читается как заготовка.
+ */
+function blogOwnCover(post) {
+  if (!post.cover?.src) return "";
+  const base = hrefRoute(`${post.cover.src}-hero`);
+  return `<figure><picture><source type="image/avif" srcset="${escapeHtml(`${base}.avif`)}" /><img src="${escapeHtml(`${base}.jpg`)}" alt="${escapeHtml(post.cover.alt || "")}" width="1200" height="675" /></picture></figure>`;
+}
+
 function blogFigure(car, index) {
   const gallery = car.images?.length ? car.images : [car.image].filter(Boolean);
   const source = gallery[Math.min(index, gallery.length - 1)] || null;
@@ -626,7 +636,7 @@ function blogArticleArticle(post) {
   const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
   const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
   const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
-  const cover = photos[0] ? blogFigure(photos[0], 0) : "";
+  const cover = blogOwnCover(post) || (photos[0] ? blogFigure(photos[0], 0) : "");
   const faq = post.faq?.length
     ? `<section><h2>Частые вопросы</h2>${post.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${linkifyText(item.a, hrefRoute)}</p>`).join("")}</section>`
     : "";
@@ -655,7 +665,7 @@ function blogPostArticle(post) {
   const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
   const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
   // Открывающая фотография — сразу после описания, до текста.
-  const cover = found?.cover ? blogFigure(found.cover, 0) : "";
+  const cover = blogOwnCover(post) || (found?.cover ? blogFigure(found.cover, 0) : "");
   // Живой список машин — то же, что видит человек: номер, снимок, цена под ключ и
   // четыре характеристики. Когда база при сборке недоступна, блока просто нет:
   // заголовок над пустым списком поисковик читает как сломанную страницу.
@@ -797,6 +807,9 @@ const liveSections = live.stock.size
  * отправленная в Telegram, выглядела одинаково для любой подборки.
  */
 function blogPostImage(post) {
+  // Своя картинка материала — она же и в соцсетях: там показывается то же, что
+  // человек увидит наверху статьи.
+  if (post.cover?.src) return routeUrl(`${post.cover.src}-hero.jpg`);
   const found = live.collections.get(post.slug) || null;
   // У статьи нет отдельной обложки: картинка для соцсетей — тот же первый кадр,
   // с которого материал начинается.

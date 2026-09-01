@@ -14735,6 +14735,22 @@ html[data-theme="dark"] .blog-duel-table tbody td {
   border-radius: calc(16px * var(--corner-scale));
   background: var(--surface);
 }
+/* Своя картинка материала: подписи под ней нет, поэтому и промежутка под кадром
+   быть не должно — иначе перед текстом появляется лишний провал. */
+.blog-figure-own {
+  gap: 0;
+}
+.blog-figure-own picture {
+  display: block;
+}
+.blog-figure-own img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--surface);
+  display: block;
+}
 .blog-figure figcaption {
   display: flex;
   flex-wrap: wrap;
