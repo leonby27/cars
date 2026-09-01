@@ -49,7 +49,7 @@ const INFO_ICON =
  * `tone` у строки: `plain` — обычная, `good` — то, что хорошо (зелёная), `warn` —
  * то, что плохо (красная). Цвета те же, что у стрелки цены на карточке машины.
  */
-export function barsFigure({ items = [], unit = "", max = null, caption = null } = {}) {
+export function barsFigure({ title = null, items = [], unit = "", max = null, caption = null } = {}) {
   const rows = items.filter((item) => Number.isFinite(Number(item?.value)));
   if (rows.length < 2) return "";
   const top = max ?? Math.max(...rows.map((row) => Number(row.value)));
@@ -73,10 +73,14 @@ export function barsFigure({ items = [], unit = "", max = null, caption = null }
     })
     .join("");
 
+  // Заголовок сверху: без него график читается только вместе с абзацем над ним, а
+  // взгляд по статье скользит блоками — и человек не понимает, о чём эти полосы.
+  const heading = title ? `<figcaption class="blog-bars-title">${escape(title)}</figcaption>` : "";
   // Подпись — часть графика, а не абзац рядом: когда график пересылают снимком
-  // экрана, подпись должна уехать вместе с ним.
-  const captionText = caption ? `<figcaption>${escape(caption)}</figcaption>` : "";
-  return `<figure class="blog-bars">${body}${captionText}</figure>`;
+  // экрана, подпись должна уехать вместе с ним. Отдельным абзацем, а не второй
+  // подписью: подпись у картинки может быть только одна, и ею стал заголовок.
+  const captionText = caption ? `<p class="blog-bars-source">${escape(caption)}</p>` : "";
+  return `<figure class="blog-bars">${heading}<div class="blog-bars-rows">${body}</div>${captionText}</figure>`;
 }
 
 /**
@@ -92,6 +96,7 @@ export const BLOG_FIGURES = Object.freeze({
   // паспортным запасом хода 700 км по циклу CLTC.
   "range-cycles": () =>
     barsFigure({
+      title: "Что остаётся от паспортных 700 километров",
       unit: "км",
       items: [
         { label: "Паспорт CLTC", value: 700, note: "как написано в китайском объявлении" },
@@ -104,6 +109,7 @@ export const BLOG_FIGURES = Object.freeze({
   // Сколько остаётся от обычного запаса хода при разной температуре.
   "winter-range": () =>
     barsFigure({
+      title: "Сколько остаётся от запаса хода на морозе",
       unit: "%",
       max: 100,
       items: [
@@ -118,6 +124,7 @@ export const BLOG_FIGURES = Object.freeze({
   // Что сделала с ценой отмена льготы для последовательных гибридов.
   "hybrid-duty": () =>
     barsFigure({
+      title: "Цена под ключ до и после отмены льготы",
       unit: "$",
       items: [
         { label: "Цена машины в Китае", value: 25000, note: "для примера взята машина за 25 000 $" },

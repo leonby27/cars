@@ -4,7 +4,7 @@ import { shippedFlag } from "../src/feature-flags.js";
 import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, blogAllPosts, findBlogPost, homeBlogPosts } from "../src/blog-posts.js";
 import { BLOG_TEXTS, BLOG_TEXTS_RAW } from "../src/blog-texts.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "../src/blog-report.js";
-import { blogFigureHtml } from "../src/blog-figures.js";
+import { BLOG_FIGURES, blogFigureHtml } from "../src/blog-figures.js";
 import { plainInlineText } from "../src/inline-links.js";
 import { catalogLandingForParams } from "../src/catalog-landings.js";
 
@@ -387,6 +387,8 @@ test("источники статей ведут на первоисточник
 test("в столбиках графика пояснение прячется под значок, а не пропадает", () => {
   const html = blogFigureHtml("winter-range");
   assert.match(html, /<figure class="blog-bars">/);
+  // Заголовок обязателен: без него полосы приходится расшифровывать по абзацу выше.
+  assert.match(html, /<figcaption class="blog-bars-title">Сколько остаётся/);
   assert.match(html, /class="blog-bars-note"[^>]*aria-describedby="bar-note-winter-range-0"/);
   assert.match(html, /id="bar-note-winter-range-0" role="tooltip">точка отсчёта/);
   assert.ok(!html.includes("<svg class="), "столбики рисуются вёрсткой, а не картинкой");
@@ -396,4 +398,10 @@ test("в столбиках графика пояснение прячется �
   // Имя картинки входит в связи подсказок: на странице их может быть несколько.
   const other = blogFigureHtml("hybrid-duty");
   assert.ok(!other.includes("bar-note-winter-range-"), "подсказки двух графиков делят одно имя связи");
+});
+
+test("у каждого графика есть заголовок", () => {
+  for (const name of Object.keys(BLOG_FIGURES)) {
+    assert.match(blogFigureHtml(name), /class="blog-bars-title">[^<]{8,}</, `у графика ${name} нет заголовка`);
+  }
 });
