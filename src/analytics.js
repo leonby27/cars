@@ -159,33 +159,49 @@ export function trackEvent(eventName, details = {}) {
 // посмотрел машину в модалке и следом открыл её страницу целиком — просмотр один.
 // Стартовое значение — адрес захода: его счётчик записал сам при запуске.
 let lastMetrikaView = typeof window === "undefined" ? null : window.location.href;
+let lastGoogleAnalyticsView = typeof window === "undefined" ? null : window.location.href;
 
 export function trackMetrikaView(url, options = {}) {
   const absolute = new URL(url, window.location.href).href;
   if (isAnalyticsPath(absolute) || isAnalyticsPath(window.location.pathname)) return;
-  const counter = window.__ym;
-  if (!counter || typeof window.ym !== "function") return;
-  if (absolute === lastMetrikaView) return;
-  lastMetrikaView = absolute;
-  window.ym(counter, "hit", absolute, options);
+  const metrikaCounter = window.__ym;
+  if (metrikaCounter && typeof window.ym === "function" && absolute !== lastMetrikaView) {
+    lastMetrikaView = absolute;
+    window.ym(metrikaCounter, "hit", absolute, options);
+  }
+  const googleCounter = window.__ga;
+  if (googleCounter && typeof window.gtag === "function" && absolute !== lastGoogleAnalyticsView) {
+    lastGoogleAnalyticsView = absolute;
+    window.gtag("event", "page_view", {
+      page_location:absolute,
+      page_title:options.title || window.document?.title || "",
+      send_to:googleCounter,
+    });
+  }
 }
 
 // Отдельная отметка «машину посмотрели в модалке»: в отчётах такой просмотр ничем не
 // отличается от обычного, а по этой цели видно, каким способом смотрят машины.
 export function trackMetrikaGoal(goal, params = undefined) {
   if (isAnalyticsPath(window.location.pathname)) return;
-  const counter = window.__ym;
-  if (!counter || typeof window.ym !== "function") return;
-  window.ym(counter, "reachGoal", goal, params);
+  const metrikaCounter = window.__ym;
+  if (metrikaCounter && typeof window.ym === "function") window.ym(metrikaCounter, "reachGoal", goal, params);
+  const googleCounter = window.__ga;
+  if (googleCounter && typeof window.gtag === "function") {
+    window.gtag("event", goal, { ...(params || {}), send_to:googleCounter });
+  }
 }
 
 // При переходе в CRM без перезагрузки уже запущенный Webvisor продолжил бы запись,
 // даже если не посылать новый `hit`. Штатный `destruct` полностью останавливает
 // счётчик на этом документе; обычные ссылки из CRM открывают сайт с новой загрузкой.
 export function stopMetrika() {
-  const counter = window.__ym;
-  if (!counter || typeof window.ym !== "function") return;
-  window.ym(counter, "destruct");
+  const metrikaCounter = window.__ym;
+  if (metrikaCounter && typeof window.ym === "function") window.ym(metrikaCounter, "destruct");
   window.__ym = undefined;
   lastMetrikaView = null;
+  const googleCounter = window.__ga;
+  if (googleCounter) window[`ga-disable-${googleCounter}`] = true;
+  window.__ga = undefined;
+  lastGoogleAnalyticsView = null;
 }

@@ -157,12 +157,13 @@ const publicPages = [
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
 
-// В боевом HTML CRM не оставляем даже выключенный код Метрики. Проверка адреса в
-// общем шаблоне нужна для локальной разработки и перехода без перезагрузки, а
-// отдельный готовый файл `/analytics` может и должен быть полностью чистым.
+// В боевом HTML CRM не оставляем даже выключенный код внешних счётчиков. Проверка
+// адреса в общем шаблоне нужна для локальной разработки и перехода без перезагрузки,
+// а отдельный готовый файл `/analytics` может и должен быть полностью чистым.
 const withoutMetrika = (html) => html
   .replace(/\s*<script\b[^>]*id=["']yandex-metrika["'][^>]*>[\s\S]*?<\/script>/i, "")
-  .replace(/\s*<noscript\b[^>]*id=["']yandex-metrika-noscript["'][^>]*>[\s\S]*?<\/noscript>/i, "");
+  .replace(/\s*<noscript\b[^>]*id=["']yandex-metrika-noscript["'][^>]*>[\s\S]*?<\/noscript>/i, "")
+  .replace(/\s*<script\b[^>]*id=["']google-analytics["'][^>]*>[\s\S]*?<\/script>/i, "");
 
 // ── Куда идти дальше с информационной страницы ────────────────────────────────
 // Страницы про растаможку, квоту, стоимость доставки, расчёт, гарантии и вопросы —
@@ -369,7 +370,7 @@ function infoArticle(route) {
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {
-    return `<p>${escapeHtml(legal.intro)}</p>${legal.sections.map(([title, text]) => `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p></section>`).join("")}<p>Редакция от 15 августа 2026 года.</p>`;
+    return `<p>${escapeHtml(legal.intro)}</p>${legal.sections.map(([title, text]) => `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p></section>`).join("")}<p>Редакция от ${escapeHtml(legal.updated)}.</p>`;
   }
   return "";
 }

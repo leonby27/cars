@@ -8619,7 +8619,7 @@ function LegalPage({ navigate, kind }) {
       <div className="legal-sections">
         {content.sections.map(([title, text]) => <section key={title}><h2>{title}</h2><p>{text}</p></section>)}
       </div>
-      <p className="legal-updated">Редакция от 15 августа 2026 года</p>
+      <p className="legal-updated">Редакция от {content.updated}</p>
     </main>
   );
 }

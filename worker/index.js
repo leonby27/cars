@@ -12,7 +12,7 @@ export default {
     // запрет встраивания страниц в чужую рамку, запрет угадывания типа файла, ограничение
     // источников содержимого. Карта офиса — единственная разрешённая внешняя рамка.
     const SECURITY_HEADERS = {
-      "content-security-policy":"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; frame-src 'self' https://yandex.ru https://*.yandex.ru https://yandex.by https://*.yandex.by; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "content-security-policy":"default-src 'self'; script-src 'self' 'unsafe-inline' https://mc.yandex.ru https://yastatic.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com https://*.yandex.ru https://yastatic.net wss://mc.yandex.ru wss://mc.yandex.com https://www.google-analytics.com https://*.google-analytics.com; frame-src 'self' https://yandex.ru https://*.yandex.ru https://yandex.by https://*.yandex.by; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
       "x-content-type-options":"nosniff",
       "x-frame-options":"DENY",
       "referrer-policy":"strict-origin-when-cross-origin",

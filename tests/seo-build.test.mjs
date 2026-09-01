@@ -115,6 +115,7 @@ test("внутренняя CRM не содержит счётчиков и по�
   assert.match(analytics, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   assert.doesNotMatch(analytics, /rel="canonical"/);
   assert.doesNotMatch(analytics, /mc\.yandex\.|window\.__ym|\bym\(/, "в HTML CRM остался код Метрики");
+  assert.doesNotMatch(analytics, /googletagmanager\.com|google-analytics\.com|window\.__ga|\bgtag\(/, "в HTML CRM остался код Google Analytics");
 });
 
 test("предсказуемых имён карты сайта в сборке нет", async () => {

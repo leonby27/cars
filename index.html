@@ -152,7 +152,7 @@
         // Браузеры, которыми управляет программа (автоматические проверки, роботы,
         // мои собственные заходы через такой браузер), сами о себе сообщают — их
         // в статистику тоже не берём.
-        if (navigator.webdriver) return;
+        if (navigator.webdriver || /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i.test(navigator.userAgent)) return;
         window.__ym = 111868764;
         // Очередь вызовов ставим сразу, а сам скрипт счётчика подключаем позже. Причина:
         // на телефоне tag.js занимает основной поток 2,2 секунды — вшестеро дольше всего
@@ -180,6 +180,55 @@
         // прокрутка должны попасть в статистику.
         for (const event of ['pointerdown', 'keydown', 'touchstart', 'scroll']) {
           addEventListener(event, startCounter, { once: true, passive: true });
+        }
+      })();
+    </script>
+    <script id="google-analytics">
+      (() => {
+        // Google Analytics дополняет Метрику отчётами по каналам и поведению. У него
+        // те же исключения: CRM, локальная разработка, свои визиты и автоматические
+        // проверки не должны искажать результат теста идеи.
+        const page = location.pathname.replace(/\/+$/, '') || '/';
+        if (page === '/analytics' || page.startsWith('/analytics/')) return;
+        const host = location.hostname;
+        if (/^(localhost|127\.0\.0\.1|\[?::1\]?|.*\.local)$/i.test(host) || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return;
+        try {
+          const choice = new URLSearchParams(location.search).get('nocount');
+          if (choice === '1') localStorage.setItem('nocount', '1');
+          else if (choice === '0') localStorage.removeItem('nocount');
+          if (localStorage.getItem('nocount') === '1') return;
+        } catch (error) {
+          // Если хранилище недоступно, счётчик работает как при обычном визите.
+        }
+        if (navigator.webdriver || /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i.test(navigator.userAgent)) return;
+
+        const id = 'G-964NJY891X';
+        window.__ga = id;
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = window.gtag || function(){window.dataLayer.push(arguments)};
+        window.gtag('js', new Date());
+        // Рекламные сигналы для проверки MVP не нужны: собираем только статистику
+        // посещений и конверсий, без персонализации рекламы. Просмотры отправляем
+        // сами: так переходы приложения и быстрый просмотр не считаются дважды.
+        window.gtag('config', id, { send_page_view:false, allow_google_signals:false, allow_ad_personalization_signals:false });
+        window.gtag('event', 'page_view', { page_location:location.href, page_title:document.title, send_to:id });
+
+        let started = false;
+        const startCounter = () => {
+          // Переход в CRM до отложенной загрузки отменяет запуск счётчика.
+          if (started || window.__ga !== id) return;
+          started = true;
+          const tag = document.createElement('script');
+          tag.id = 'google-analytics-library';
+          tag.async = 1;
+          tag.src = `https://www.googletagmanager.com/gtag/js?id=${id}`;
+          document.head.appendChild(tag);
+        };
+        const soon = () => (window.requestIdleCallback ? requestIdleCallback(startCounter, { timeout:1500 }) : setTimeout(startCounter, 300));
+        if (document.readyState === 'complete') soon();
+        else addEventListener('load', soon, { once:true });
+        for (const event of ['pointerdown', 'keydown', 'touchstart', 'scroll']) {
+          addEventListener(event, startCounter, { once:true, passive:true });
         }
       })();
     </script>
