@@ -102,6 +102,10 @@ test("год в заголовках подставляется, а в текс�
   // (/blog/some-post-2026) и частью ссылки на источник — там он не текст, а адрес.
   const linkTargets = /\]\([^)]*\)|https?:\/\/[^"\s]+/g;
   for (const [slug, text] of Object.entries(BLOG_TEXTS)) {
+    // Редкое исключение, заявленное в самом тексте: год — предмет материала, а не
+    // обещание свежести («Будет ли квота в 2027 году»). Ставится руками и видно в
+    // правках, поэтому случайно не проскочит.
+    if (text.yearInText) continue;
     const found = JSON.stringify(text).replace(linkTargets, "]").replace(fullDates, "").match(years);
     assert.equal(found, null, `в тексте ${slug} написан год ${found?.[0]} без месяца и числа — он устареет молча`);
   }

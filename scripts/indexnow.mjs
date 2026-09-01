@@ -31,6 +31,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
+import { BLOG_INDEX, blogPosts } from "../src/blog-posts.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPORT = path.join(ROOT, "runtime", "indexnow-report.json");
@@ -101,10 +102,17 @@ async function collect() {
     return Boolean(landing.brand || landing.bodyType || landing.powertrain || brands.size);
   }).map((landing) => `${siteUrl}${landing.path}`);
   const reviews = MODEL_PAGES.filter((page) => models.has(`${page.brand}|${page.model}`)).map((page) => `${siteUrl}${page.path}`);
+  // Журнал: вышедшие за период материалы и сам список. Без этого новая статья ждёт,
+  // пока поисковик набредёт на неё сам, — а это недели вместо одного утра. Черновики
+  // не отправляем: их страницы закрыты от индексации, сообщать о них нечего.
+  const freshPosts = blogPosts()
+    .filter((post) => post.published && new Date(`${post.published}T00:00:00Z`).toISOString() >= since)
+    .map((post) => `${siteUrl}${post.path}`);
+  const blog = freshPosts.length ? [`${siteUrl}${BLOG_INDEX.path}`, ...freshPosts] : [];
   // Каталог целиком меняется вместе с любым разделом.
-  const pages = [`${siteUrl}/catalog`, ...sections, ...reviews];
+  const pages = [`${siteUrl}/catalog`, ...sections, ...reviews, ...blog];
   const carUrls = changedCars.rows.map((row) => `${siteUrl}/cars/${encodeURIComponent(listingNumber(row.id))}`);
-  return { pages, carUrls, urls: [...new Set([...pages, ...carUrls])].slice(0, limit) };
+  return { pages, blog, carUrls, urls: [...new Set([...pages, ...carUrls])].slice(0, limit) };
 }
 
 /** Файл-ключ должен лежать на сайте: без него поисковик отвергает весь список. */
@@ -118,7 +126,7 @@ async function keyIsPublished() {
   }
 }
 
-const { pages, carUrls, urls } = await collect();
+const { pages, blog, carUrls, urls } = await collect();
 await pool.end().catch(() => {});
 
 if (!urls.length) {
@@ -126,7 +134,7 @@ if (!urls.length) {
   process.exit(0);
 }
 
-console.log(`IndexNow: страниц разделов и обзоров ${pages.length}, карточек машин ${carUrls.length}, отправляем ${urls.length} (потолок ${limit}).`);
+console.log(`IndexNow: страниц разделов и обзоров ${pages.length} (из них журнала ${blog.length}), карточек машин ${carUrls.length}, отправляем ${urls.length} (потолок ${limit}).`);
 
 if (dryRun) {
   console.log(urls.slice(0, 10).join("\n"));
