@@ -35,6 +35,7 @@ import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.j
 import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED } from "./feature-flags.js";
+import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
@@ -9562,9 +9563,104 @@ function BlogArticleShell({ post, navigate, quickViewModal, children }) {
 
 /** Страница материала: у подборки и у сравнения общая рамка и разное тело. */
 function BlogPostPage({ post, navigate, favorites, toggleFavorite }) {
+  if (post.kind === "report") return <BlogReportPage post={post} navigate={navigate} />;
   return post.kind === "duel"
     ? <BlogDuelPage post={post} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
     : <BlogCollectionPage post={post} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />;
+}
+
+/**
+ * Отчёт по рынку: цифры вместо списка машин. Порядок блоков — от общего к частному:
+ * сначала индекс с графиком (за ним и приходят), потом движение по моделям, потом
+ * квота, наличие и новинки, и только в конце текст о том, как всё это считается.
+ *
+ * Пока это образец с условными цифрами: настоящий отчёт считается из недельных
+ * снимков цен, а их пока меньше двух. Материал помечен черновиком, поэтому в списке
+ * журнала его нет, и наверху страницы стоит предупреждение.
+ */
+function BlogReportPage({ post, navigate }) {
+  const text = useBlogText(post.slug);
+  const report = SAMPLE_REPORT;
+  const chart = useMemo(() => indexChartSvg(report.index.points), [report]);
+  const modelHref = (row) => blogCatalogHref({ filters: { brand: row.brand, model: row.model } });
+  const movers = (rows, tone) => (
+    <div className="report-movers">
+      {rows.map((row) => (
+        <AppLink key={`${row.brand}-${row.model}-${row.year}`} className="report-mover" href={modelHref(row)} navigate={navigate}>
+          <span className="report-mover-name">{row.brand} {row.model}{row.year ? ` ${row.year}` : ""}</span>
+          <span className="report-mover-price">{number(row.nowUsd)} $</span>
+          <span className={`report-mover-change ${tone}`}>{percent(row.changePct)}</span>
+          <span className="report-mover-count">{number(row.listings)} в наличии</span>
+        </AppLink>
+      ))}
+    </div>
+  );
+  return (
+    <BlogArticleShell post={post} navigate={navigate}>
+      {report.sample && (
+        <p className="report-sample-note">
+          Образец. Цифры в этом отчёте условные — он показывает, как материал выглядит. Настоящий отчёт выйдет, когда накопятся недельные срезы цен.
+        </p>
+      )}
+      <div className="model-page-intro">
+        {text?.intro.map((paragraph) => (
+          <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
+        ))}
+      </div>
+
+      <section className="report-block">
+        <p className="report-week">Неделя {report.weekLabel}</p>
+        <div className="report-headline">
+          <strong className={report.index.changePct < 0 ? "down" : "up"}>{percent(report.index.changePct)}</strong>
+          <span>цена под ключ по постоянной корзине из {number(report.index.baskets)} наборов «модель и год»</span>
+        </div>
+        {/* График рисуется одним и тем же кодом для приложения и для версии страницы,
+            которую видит поисковик: иначе они однажды разойдутся. */}
+        <div className="report-chart-frame" dangerouslySetInnerHTML={{ __html: chart }} />
+        <p className="report-caption">За сто принят уровень первой недели наблюдений. В корзине {number(report.index.listings)} объявлений.</p>
+      </section>
+
+      <section className="report-block">
+        <h2>Подешевело за неделю</h2>
+        {movers(report.cheaper, "down")}
+        <h2>Подорожало за неделю</h2>
+        {movers(report.dearer, "up")}
+        <p className="report-caption">Сравниваются одинаковые наборы: та же модель того же года. Уход дорогой машины с продажи ценой модели не считается.</p>
+      </section>
+
+      <section className="report-block">
+        <h2>Квота, наличие и курс</h2>
+        <div className="model-page-numbers">
+          <div><strong>{number(report.quota.left)}</strong><span>осталось от квоты на беспошлинный ввоз электромобилей</span></div>
+          <div><strong>{report.quota.weeksLeft} нед.</strong><span>при нынешнем темпе {number(report.quota.perWeek)} машин в неделю</span></div>
+          <div><strong>{number(report.stock.total)}</strong><span>машин в каталоге, из них {number(report.stock.week)} появились за неделю</span></div>
+          <div><strong>{String(report.rate.usdByn).replace(".", ",")}</strong><span>курс доллара НБРБ на {report.rate.dateLabel}, {percent(report.rate.changePct)} за неделю</span></div>
+        </div>
+      </section>
+
+      <section className="report-block">
+        <h2>Впервые в каталоге</h2>
+        <div className="report-movers">
+          {report.newcomers.map((row) => (
+            <AppLink key={`${row.brand}-${row.model}`} className="report-mover" href={modelHref(row)} navigate={navigate}>
+              <span className="report-mover-name">{row.brand} {row.model}</span>
+              <span className="report-mover-price">от {number(row.fromUsd)} $</span>
+              <span className="report-mover-change" />
+              <span className="report-mover-count">{number(row.listings)} в наличии</span>
+            </AppLink>
+          ))}
+        </div>
+      </section>
+
+      <div className="model-page-article">
+        {(text?.sections || []).map((section) => (
+          <ModelPageSection key={section.title} section={section} navigate={navigate} />
+        ))}
+      </div>
+      <ArticleFaq faq={text?.faq} title="Частые вопросы" />
+      {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
+    </BlogArticleShell>
+  );
 }
 
 /** Подборка: статья, полоса цифр и живой список машин по правилу отбора. */

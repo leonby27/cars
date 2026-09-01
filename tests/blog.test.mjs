@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { shippedFlag } from "../src/feature-flags.js";
-import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, findBlogPost, homeBlogPosts } from "../src/blog-posts.js";
+import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, blogAllPosts, findBlogPost, homeBlogPosts } from "../src/blog-posts.js";
 import { BLOG_TEXTS, BLOG_TEXTS_RAW } from "../src/blog-texts.js";
+import { SAMPLE_REPORT, indexChartSvg, percent } from "../src/blog-report.js";
 import { catalogLandingForParams } from "../src/catalog-landings.js";
 
 // Журнал открыт посетителям 27.08.2026. Проверка осталась, только с обратным знаком:
@@ -14,7 +15,7 @@ test("на боевом сайте журнал включён", () => {
 
 test("у каждого материала есть текст, рубрика и разбираемая дата", () => {
   const rubrics = new Set(BLOG_RUBRICS.map((rubric) => rubric.slug));
-  for (const post of blogPosts()) {
+  for (const post of blogAllPosts()) {
     assert.ok(BLOG_TEXTS[post.slug], `у материала ${post.slug} нет текста в src/blog-texts/`);
     assert.ok(rubrics.has(post.rubric), `у материала ${post.slug} рубрика ${post.rubric}, которой нет`);
     assert.ok(blogDateLabel(post.published), `у материала ${post.slug} неразбираемая дата ${post.published}`);
@@ -285,4 +286,36 @@ test("правило отбора переводится и в запрос к �
   assert.equal(catalog.get("range"), "От 500 км");
   assert.equal(catalog.get("priceTo"), "30000");
   assert.equal(catalog.get("mileage"), "до 50 000 км");
+});
+
+// Черновик — способ посмотреть материал до того, как его есть чем наполнить.
+// Образец отчёта не должен попасть ни в список журнала, ни на главную, ни в боковое
+// меню: иначе посетитель придёт по нему за настоящими цифрами и получит выдуманные.
+test("черновик открывается по ссылке, но нигде не показывается", () => {
+  const drafts = blogAllPosts().filter((post) => post.draft);
+  assert.ok(drafts.length > 0, "образец отчёта пропал — если это намеренно, поправьте и проверку");
+  for (const draft of drafts) {
+    assert.ok(findBlogPost(draft.path), `черновик ${draft.slug} не находится по своему адресу`);
+    assert.ok(!blogPosts().some((post) => post.slug === draft.slug), `черновик ${draft.slug} попал в список журнала`);
+    assert.ok(!homeBlogPosts().some((post) => post.slug === draft.slug), `черновик ${draft.slug} попал на главную`);
+  }
+  const counted = blogSidebarItems().find((item) => item.kind === "all");
+  assert.equal(counted.count, blogPosts().length, "боковое меню считает черновики");
+});
+
+// График индекса рисуется общим кодом для приложения и для версии страницы, которую
+// видит поисковик. Одна точка — не график: рисовать линию не из чего.
+test("график индекса появляется со второй точки", () => {
+  assert.equal(indexChartSvg([{ date: "2026-09-06", value: 100 }]), "");
+  const svg = indexChartSvg(SAMPLE_REPORT.index.points);
+  assert.match(svg, /^<svg /);
+  assert.match(svg, /role="img"/, "у графика должна быть подпись для чтения с экрана");
+  assert.ok(!svg.includes("NaN"), "в разметке графика не должно быть пустых чисел");
+});
+
+test("проценты пишутся со знаком, а ноль — без", () => {
+  assert.equal(percent(-0.8), "−0,8%");
+  assert.equal(percent(2.6), "+2,6%");
+  assert.equal(percent(0.01), "0%");
+  assert.equal(percent(null), null);
 });

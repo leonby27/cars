@@ -21,6 +21,7 @@
     "db:discover": "node scripts/import-guazi.mjs --database-only",
     "db:expire": "node scripts/db-expire.mjs",
     "db:estimates": "node scripts/backfill-estimates.mjs",
+    "snapshot:prices": "node scripts/backfill-estimates.mjs && node scripts/snapshot-prices.mjs",
     "db:engine": "node scripts/backfill-engine.mjs",
     "db:bodies": "node scripts/fix-body-types.mjs",
     "db:models": "node scripts/fix-model-names.mjs",

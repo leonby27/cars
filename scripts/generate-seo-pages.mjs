@@ -25,7 +25,8 @@ import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE
 // Журнал: подборки. Раздел собирается только при включённом выключателе — пока он
 // выключен, у сайта нет ни страниц журнала, ни его адресов в карте сайта.
 import { BLOG_ENABLED } from "../src/feature-flags.js";
-import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt } from "../src/blog-posts.js";
+import { SAMPLE_REPORT, groups, indexChartSvg, percent } from "../src/blog-report.js";
+import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt } from "../src/blog-posts.js";
 import { blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
@@ -120,9 +121,12 @@ const publicPages = [
   ...(BLOG_ENABLED
     ? [
         { route: `${BLOG_INDEX.path}/`, title: BLOG_INDEX.seoTitle, description: BLOG_INDEX.seoDescription, h1: BLOG_INDEX.h1, lead: BLOG_INDEX.lead, blogIndex: true },
-        ...blogPosts().map((cover) => {
+        // Черновики (образец отчёта) страницу получают, иначе по прямой ссылке был бы
+        // честный 404. Но `indexable: false` закрывает её от поисковиков, а из списка
+        // журнала и карты сайта черновик исключён самим `blogPosts()`.
+        ...blogAllPosts().map((cover) => {
           const post = blogPostWithText(cover);
-          return { route: `${post.path}/`, title: post.seoTitle, description: post.seoDescription, h1: post.h1, lead: post.lead, post };
+          return { route: `${post.path}/`, title: post.seoTitle, description: post.seoDescription, h1: post.h1, lead: post.lead, post, indexable: post.draft ? false : undefined };
         }),
       ]
     : []),
@@ -518,7 +522,51 @@ function blogModelWays(post) {
   return modelLinks([...wanted.values()].slice(0, 8), { heading: "Обзоры моделей из этого материала" });
 }
 
+/**
+ * Отчёт по рынку для поисковика. Тот же порядок блоков, что видит человек, и тот же
+ * график: разметку графика рисует общий код (`indexChartSvg`), поэтому версии не
+ * разойдутся. Пока это образец с условными цифрами, страница закрыта от индексации,
+ * но собирается полностью — по ней и видно, как отчёт будет выглядеть.
+ */
+function blogReportArticle(post) {
+  const report = SAMPLE_REPORT;
+  const published = blogPostDateLabel(post);
+  const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
+  const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
+  const note = report.sample
+    ? `<p><strong>Образец. Цифры в этом отчёте условные — он показывает, как материал выглядит. Настоящий отчёт выйдет, когда накопятся недельные срезы цен.</strong></p>`
+    : "";
+  const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  const modelHref = (row) => hrefRoute(blogCatalogHref({ filters: { brand: row.brand, model: row.model } }));
+  const movers = (rows) =>
+    `<ul>${rows
+      .map((row) => `<li><a href="${escapeHtml(modelHref(row))}">${escapeHtml(`${row.brand} ${row.model}${row.year ? ` ${row.year}` : ""}`)}</a> — ${escapeHtml(`${groups(row.nowUsd)} $ под ключ, ${percent(row.changePct)} за неделю, ${groups(row.listings)} в наличии`)}</li>`)
+      .join("")}</ul>`;
+  const headline = `<p><strong>${escapeHtml(percent(report.index.changePct))}</strong> — цена под ключ по постоянной корзине из ${escapeHtml(groups(report.index.baskets))} наборов «модель и год» за неделю ${escapeHtml(report.weekLabel)}.</p>`;
+  const chart = indexChartSvg(report.index.points);
+  const facts = `<ul>
+    <li><strong>${escapeHtml(groups(report.quota.left))}</strong> — осталось от квоты на беспошлинный ввоз электромобилей</li>
+    <li><strong>${escapeHtml(String(report.quota.weeksLeft))} нед.</strong> — при нынешнем темпе ${escapeHtml(groups(report.quota.perWeek))} машин в неделю</li>
+    <li><strong>${escapeHtml(groups(report.stock.total))}</strong> — машин в каталоге, из них ${escapeHtml(groups(report.stock.week))} появились за неделю</li>
+    <li><strong>${escapeHtml(String(report.rate.usdByn).replace(".", ","))}</strong> — курс доллара НБРБ на ${escapeHtml(report.rate.dateLabel)}, ${escapeHtml(percent(report.rate.changePct))} за неделю</li>
+  </ul>`;
+  const newcomers = `<ul>${report.newcomers
+    .map((row) => `<li><a href="${escapeHtml(modelHref(row))}">${escapeHtml(`${row.brand} ${row.model}`)}</a> — от ${escapeHtml(groups(row.fromUsd))} $, ${escapeHtml(groups(row.listings))} в наличии</li>`)
+    .join("")}</ul>`;
+  const faq = post.faq?.length
+    ? `<section><h2>Частые вопросы</h2>${post.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
+    : "";
+  return `${date}${note}${intro}
+    <section><h2>Индекс цены под ключ</h2>${headline}${chart}<p>За сто принят уровень первой недели наблюдений. В корзине ${escapeHtml(groups(report.index.listings))} объявлений.</p></section>
+    <section><h2>Подешевело за неделю</h2>${movers(report.cheaper)}</section>
+    <section><h2>Подорожало за неделю</h2>${movers(report.dearer)}</section>
+    <section><h2>Квота, наличие и курс</h2>${facts}</section>
+    <section><h2>Впервые в каталоге</h2>${newcomers}</section>
+    ${blogArticleBody(post, [], new Set())}${faq}${blogCatalogWays(post)}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+}
+
 function blogPostArticle(post) {
+  if (post.kind === "report") return blogReportArticle(post);
   if (post.kind === "duel") return blogDuelArticle(post);
   const found = live.collections.get(post.slug) || null;
   const stats = blogPostStats({ total: found?.total || null, priceFromUsd: found?.priceFromUsd || null, highlight: found?.highlight || null });
@@ -747,7 +795,11 @@ for (const page of publicPages) {
   if (page.tool?.faq?.length) schemas.push(renderer.faqSchema(page.tool.faq));
   // Первый экран главной браузер рисует целиком — заголовок с поиском, а не только
   // шапку: главная и есть та страница, куда приходят по ссылке из поиска.
-  writeRoute(page.route, renderHtml({ ...page, canonical: routeUrl(page.route), image: page.post ? blogPostImage(page.post) : undefined, body: publicPageBody(page), schemas, boot: page.route === "/" ? "home" : "header" }));
+  const options = { ...page, canonical: routeUrl(page.route), image: page.post ? blogPostImage(page.post) : undefined, body: publicPageBody(page), schemas, boot: page.route === "/" ? "home" : "header" };
+  // `indexable` без значения убираем: у него в renderHtml свой разумный умолчание,
+  // а явный undefined затёр бы его.
+  if (options.indexable === undefined) delete options.indexable;
+  writeRoute(page.route, renderHtml(options));
 }
 
 function writeRoute(route, html) {
@@ -879,6 +931,8 @@ async function readLiveCatalog() {
     // для полосы под вступлением. Считаем здесь же, на том же соединении с базой.
     const collections = new Map();
     for (const post of BLOG_ENABLED ? blogPosts() : []) {
+      // Отчёт живого среза каталога не требует: все его цифры уже посчитаны.
+      if (post.kind === "report") continue;
       // У сравнения не один срез каталога, а по срезу на модель: наличие, самая
       // доступная машина и лучшие цифры версий считаются для каждой стороны отдельно.
       if (post.kind === "duel") {
@@ -976,7 +1030,9 @@ const blogIndexLastmod = BLOG_ENABLED
   : null;
 
 const pageEntries = [
-  ...publicPages.map((page) => ({
+  // Черновики (образец отчёта) в карту сайта не идут: их страница собрана только
+  // ради прямой ссылки и закрыта от индексации.
+  ...publicPages.filter((page) => !page.post?.draft).map((page) => ({
     loc: routeUrl(page.route),
     lastmod: page.post ? blogLastmod(page.post) : page.blogIndex ? blogIndexLastmod : page.tool ? toolLastmod(page.tool) : null,
   })),

@@ -1,0 +1,27 @@
+# Недельный снимок цен каталога для отчётов журнала: по строке на «модель + год».
+# Из снимков считается индекс цены под ключ и списки «подешевело / подорожало» —
+# по сегодняшней базе их не посчитать, вчерашних цен в ней нет.
+#
+# Перед снимком пересчитывается сохранённая цена под ключ (db:estimates): иначе
+# снимок унаследует суммы, посчитанные по старым правилам.
+#
+# Ставится на сервер так:
+#   install -m644 /srv/abcars/deploy/abcars-price-snapshot.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now abcars-price-snapshot.timer
+[Unit]
+Description=Недельный снимок цен каталога
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/npm run snapshot:prices
+TimeoutStartSec=1800
+Nice=10
+CPUWeight=20
+IOWeight=20
+MemoryHigh=1000M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-price-snapshot
