@@ -29,6 +29,16 @@ import mercedes_from_china from "./blog-texts/mercedes-from-china.js";
 import electric_suv_600 from "./blog-texts/electric-suv-600.js";
 import china_cars_pros_cons from "./blog-texts/china-cars-pros-cons.js";
 import byd_seagull_vs_dolphin from "./blog-texts/byd-seagull-vs-dolphin.js";
+import fast_suv_5 from "./blog-texts/fast-suv-5.js";
+import bmw_from_china from "./blog-texts/bmw-from-china.js";
+import which_china_suv from "./blog-texts/which-china-suv.js";
+import awd_electric from "./blog-texts/awd-electric.js";
+import util_fee from "./blog-texts/util-fee.js";
+import denza_d9_vs_voyah_dream from "./blog-texts/denza-d9-vs-voyah-dream.js";
+import charging_belarus from "./blog-texts/charging-belarus.js";
+import hybrids_big_battery from "./blog-texts/hybrids-big-battery.js";
+import phev_hev_erev from "./blog-texts/phev-hev-erev.js";
+import volkswagen_from_china from "./blog-texts/volkswagen-from-china.js";
 
 /** Тексты как написаны, без поправки на состояние квоты: нужны тестам. */
 export const BLOG_TEXTS_RAW = Object.freeze({
@@ -48,6 +58,16 @@ export const BLOG_TEXTS_RAW = Object.freeze({
   "electric-suv-600": electric_suv_600,
   "china-cars-pros-cons": china_cars_pros_cons,
   "byd-seagull-vs-dolphin": byd_seagull_vs_dolphin,
+  "fast-suv-5": fast_suv_5,
+  "bmw-from-china": bmw_from_china,
+  "which-china-suv": which_china_suv,
+  "awd-electric": awd_electric,
+  "util-fee": util_fee,
+  "denza-d9-vs-voyah-dream": denza_d9_vs_voyah_dream,
+  "charging-belarus": charging_belarus,
+  "hybrids-big-battery": hybrids_big_battery,
+  "phev-hev-erev": phev_hev_erev,
+  "volkswagen-from-china": volkswagen_from_china,
 });
 
 // Пока льгота на электромобили действует, тексты отдаются слово в слово; когда квота
