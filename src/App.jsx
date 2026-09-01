@@ -6001,7 +6001,7 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
           </div>
         </div>
       )}
-      <CatalogLandingFaq landing={landing} total={total} />
+      <CatalogLandingFaq landing={landing} total={total} navigate={navigate} />
     </section>
   );
 }
@@ -6012,7 +6012,7 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
    поэтому у бензинового раздела спрашивают про пошлину по объёму, а у электрического —
    про квоту. Пока количество машин не пришло, первый вопрос про цену не показываем:
    выдумывать число нельзя. */
-function CatalogLandingFaq({ landing, total }) {
+function CatalogLandingFaq({ landing, total, navigate }) {
   const faq = landingFaq(landing, { total });
   if (!faq.length) return null;
   const schema = {
