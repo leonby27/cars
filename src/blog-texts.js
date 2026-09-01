@@ -79,6 +79,23 @@ import byd_blade_battery from "./blog-texts/byd-blade-battery.js";
 import registration_belarus from "./blog-texts/registration-belarus.js";
 import avatr_07_vs_deepal_s07 from "./blog-texts/avatr-07-vs-deepal-s07.js";
 import which_minivan from "./blog-texts/which-minivan.js";
+import low_mileage_under_20000 from "./blog-texts/low-mileage-under-20000.js";
+import ev_tyres_suspension from "./blog-texts/ev-tyres-suspension.js";
+import byd_han_vs_tesla_model_3 from "./blog-texts/byd-han-vs-tesla-model-3.js";
+import buy_yourself_or_broker from "./blog-texts/buy-yourself-or-broker.js";
+import over_40000 from "./blog-texts/over-40000.js";
+import which_china_brand from "./blog-texts/which-china-brand.js";
+import paying_to_china from "./blog-texts/paying-to-china.js";
+import bmw_x5_vs_li_auto_l9 from "./blog-texts/bmw-x5-vs-li-auto-l9.js";
+import engine_lifespan from "./blog-texts/engine-lifespan.js";
+import model_names_china from "./blog-texts/model-names-china.js";
+import erev_or_ev_same_money from "./blog-texts/erev-or-ev-same-money.js";
+import china_auctions_platforms from "./blog-texts/china-auctions-platforms.js";
+import hybrids_under_20000 from "./blog-texts/hybrids-under-20000.js";
+import warranty_belarus from "./blog-texts/warranty-belarus.js";
+import geely_ex2_vs_byd_dolphin from "./blog-texts/geely-ex2-vs-byd-dolphin.js";
+import credit_leasing from "./blog-texts/credit-leasing.js";
+import resale_value from "./blog-texts/resale-value.js";
 
 /** Тексты как написаны, без поправки на состояние квоты: нужны тестам. */
 export const BLOG_TEXTS_RAW = Object.freeze({
@@ -148,6 +165,23 @@ export const BLOG_TEXTS_RAW = Object.freeze({
   "registration-belarus": registration_belarus,
   "avatr-07-vs-deepal-s07": avatr_07_vs_deepal_s07,
   "which-minivan": which_minivan,
+  "low-mileage-under-20000": low_mileage_under_20000,
+  "ev-tyres-suspension": ev_tyres_suspension,
+  "byd-han-vs-tesla-model-3": byd_han_vs_tesla_model_3,
+  "buy-yourself-or-broker": buy_yourself_or_broker,
+  "over-40000": over_40000,
+  "which-china-brand": which_china_brand,
+  "paying-to-china": paying_to_china,
+  "bmw-x5-vs-li-auto-l9": bmw_x5_vs_li_auto_l9,
+  "engine-lifespan": engine_lifespan,
+  "model-names-china": model_names_china,
+  "erev-or-ev-same-money": erev_or_ev_same_money,
+  "china-auctions-platforms": china_auctions_platforms,
+  "hybrids-under-20000": hybrids_under_20000,
+  "warranty-belarus": warranty_belarus,
+  "geely-ex2-vs-byd-dolphin": geely_ex2_vs_byd_dolphin,
+  "credit-leasing": credit_leasing,
+  "resale-value": resale_value,
 });
 
 // Пока льгота на электромобили действует, тексты отдаются слово в слово; когда квота
