@@ -101,10 +101,19 @@ function crop(source, target, width, ratio) {
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const schedule = scheduleBySlug();
-const files = fs.readdirSync(SOURCE_DIR).filter((name) => /^\d+\.(jpe?g|png|webp)$/i.test(name));
+// Один номер — одна картинка. Если на номер лежит несколько файлов (прислали замену,
+// а старый остался), берём последний по времени: замена и есть то, что нужно.
+const files = [
+  ...fs
+    .readdirSync(SOURCE_DIR)
+    .filter((name) => /^\d+\.(jpe?g|png|webp)$/i.test(name))
+    .map((name) => ({ name, number: Number.parseInt(name, 10), time: fs.statSync(path.join(SOURCE_DIR, name)).mtimeMs }))
+    .sort((a, b) => a.time - b.time)
+    .reduce((chosen, file) => chosen.set(file.number, file), new Map())
+    .values(),
+].sort((a, b) => a.number - b.number);
 const done = [];
-for (const name of files.sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10))) {
-  const number = Number.parseInt(name, 10);
+for (const { name, number } of files) {
   const post = schedule.get(number);
   if (!post) {
     console.log(`№${number}: темы с таким номером в расписании нет, пропускаю`);
