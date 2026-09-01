@@ -97,7 +97,7 @@ test("год в заголовках подставляется, а в текс�
   const fullDates = new RegExp(`\\d{1,2}\\s(?:${MONTHS_IN_TEXT})\\s20[2-9]\\d`, "g");
   const years = /\b20[2-9]\d\b/;
   // Адреса в проверку не идут: год бывает частью имени страницы
-  // (/blog/hybrid-duty-2026) и частью ссылки на источник — там он не текст, а адрес.
+  // (/blog/some-post-2026) и частью ссылки на источник — там он не текст, а адрес.
   const linkTargets = /\]\([^)]*\)|https?:\/\/[^"\s]+/g;
   for (const [slug, text] of Object.entries(BLOG_TEXTS)) {
     const found = JSON.stringify(text).replace(linkTargets, "]").replace(fullDates, "").match(years);
@@ -396,7 +396,7 @@ test("в столбиках графика пояснение прячется �
   // задаёт оформление, и график обязан тянуться вместе с ней.
   assert.match(html, /style="width:100\.0%"/);
   // Имя картинки входит в связи подсказок: на странице их может быть несколько.
-  const other = blogFigureHtml("hybrid-duty");
+  const other = blogFigureHtml("range-cycles");
   assert.ok(!other.includes("bar-note-winter-range-"), "подсказки двух графиков делят одно имя связи");
 });
 

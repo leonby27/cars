@@ -21,8 +21,6 @@ import xiaomi_su7_vs_tesla_model_3 from "./blog-texts/xiaomi-su7-vs-tesla-model-
 import market_report_sample from "./blog-texts/market-report-sample.js";
 import used_ev_worth_it from "./blog-texts/used-ev-worth-it.js";
 import ev_winter_belarus from "./blog-texts/ev-winter-belarus.js";
-import hybrid_duty_2026 from "./blog-texts/hybrid-duty-2026.js";
-import how_to_read_listing from "./blog-texts/how-to-read-listing.js";
 import range_cycles from "./blog-texts/range-cycles.js";
 
 /** Тексты как написаны, без поправки на состояние квоты: нужны тестам. */
@@ -35,8 +33,6 @@ export const BLOG_TEXTS_RAW = Object.freeze({
   "market-report-sample": market_report_sample,
   "used-ev-worth-it": used_ev_worth_it,
   "ev-winter-belarus": ev_winter_belarus,
-  "hybrid-duty-2026": hybrid_duty_2026,
-  "how-to-read-listing": how_to_read_listing,
   "range-cycles": range_cycles,
 });
 
