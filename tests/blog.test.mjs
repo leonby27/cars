@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { shippedFlag } from "../src/feature-flags.js";
-import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, blogAllPosts, findBlogPost, homeBlogPosts } from "../src/blog-posts.js";
+import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, blogAllPosts, findBlogPost, homeBlogPosts , blogPostHidden} from "../src/blog-posts.js";
 import { BLOG_TEXTS, BLOG_TEXTS_RAW } from "../src/blog-texts.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "../src/blog-report.js";
 import { BLOG_FIGURES, blogFigureHtml } from "../src/blog-figures.js";
@@ -410,4 +410,24 @@ test("у каждого графика есть заголовок", () => {
   for (const name of Object.keys(BLOG_FIGURES)) {
     assert.match(blogFigureHtml(name), /class="blog-bars-title">[^<]{8,}</, `у графика ${name} нет заголовка`);
   }
+});
+
+// Выключатель публикации — день выпуска, и больше ничего. Ошибка здесь выкладывает
+// сразу весь журнал или не выкладывает ничего, а заметно это станет только на сайте.
+test("материал выходит в свой день, ни раньше, ни позже", () => {
+  const day = "2026-09-10";
+  assert.equal(blogPostHidden({ published: "2026-09-11" }, day), true, "завтрашний материал показывать рано");
+  assert.equal(blogPostHidden({ published: day }, day), false, "сегодняшний материал должен быть виден");
+  assert.equal(blogPostHidden({ published: "2026-09-09" }, day), false, "вчерашний материал должен оставаться виден");
+  assert.equal(blogPostHidden({ published: "2026-09-09", draft: true }, day), true, "черновик не выходит по дате");
+  assert.equal(blogPostHidden({}, day), false, "материал без даты — обычный, показываем");
+});
+
+// Все материалы расписания держатся только на дате: если у кого-то осталась пометка
+// «черновик», в свой день он молча не выйдет, и заметить это будет некому.
+test("у материалов расписания нет пометки «черновик»", () => {
+  // Единственное исключение — образец отчёта: он не из расписания и ждёт не даты,
+  // а накопленных срезов цен. Пометка у него снимается вместе с настоящими цифрами.
+  const stuck = blogAllPosts().filter((post) => post.draft && post.slug !== "market-report-sample");
+  assert.deepEqual(stuck.map((post) => post.slug), [], "эти материалы не выйдут по расписанию: снята не пометка, а дата");
 });

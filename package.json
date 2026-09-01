@@ -31,6 +31,7 @@
     "worker": "node scripts/db-worker.mjs",
     "worker:once": "node scripts/db-worker.mjs --once",
     "blog:covers": "node scripts/blog-covers.mjs",
+    "blog:due": "node scripts/blog-due.mjs",
     "build": "vite build && vite build --ssr src/entry-server.jsx --outDir dist/ssr && node scripts/split-css.mjs && node scripts/generate-seo-pages.mjs && node scripts/prepare-sites-build.mjs && node scripts/prerender-home.mjs && node scripts/precompress-dist.mjs",
     "preview": "vite preview",
     "import:guazi": "node scripts/import-guazi.mjs",

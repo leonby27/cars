@@ -1,0 +1,16 @@
+[Unit]
+Description=Выложить вышедшие материалы журнала (пересборка сайта)
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/bin/bash /srv/abcars/deploy/abcars-publish.sh
+TimeoutStartSec=2400
+Nice=10
+CPUWeight=20
+IOWeight=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-publish

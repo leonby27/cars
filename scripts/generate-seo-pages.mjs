@@ -27,7 +27,7 @@ import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE
 import { BLOG_ENABLED } from "../src/feature-flags.js";
 import { SAMPLE_REPORT, groups, indexChartSvg, percent } from "../src/blog-report.js";
 import { blogFigureHtml } from "../src/blog-figures.js";
-import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt } from "../src/blog-posts.js";
+import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt, blogPostHidden } from "../src/blog-posts.js";
 import { blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
@@ -149,7 +149,7 @@ const publicPages = [
         // журнала и карты сайта черновик исключён самим `blogPosts()`.
         ...blogAllPosts().map((cover) => {
           const post = blogPostWithText(cover);
-          return { route: `${post.path}/`, title: post.seoTitle, description: post.seoDescription, h1: post.h1, lead: post.lead, post, indexable: post.draft ? false : undefined };
+          return { route: `${post.path}/`, title: post.seoTitle, description: post.seoDescription, h1: post.h1, lead: post.lead, post, indexable: blogPostHidden(post) ? false : undefined };
         }),
       ]
     : []),
@@ -1150,7 +1150,7 @@ const blogIndexLastmod = BLOG_ENABLED
 const pageEntries = [
   // Черновики (образец отчёта) в карту сайта не идут: их страница собрана только
   // ради прямой ссылки и закрыта от индексации.
-  ...publicPages.filter((page) => !page.post?.draft).map((page) => ({
+  ...publicPages.filter((page) => !page.post || !blogPostHidden(page.post)).map((page) => ({
     loc: routeUrl(page.route),
     lastmod: page.post ? blogLastmod(page.post) : page.blogIndex ? blogIndexLastmod : page.tool ? toolLastmod(page.tool) : null,
   })),
@@ -1254,6 +1254,11 @@ const robots = allowIndexing
     ].join("\n")
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;
 writeFileSync(path.join(clientDir, "robots.txt"), robots);
+
+// Список материалов, вошедших в эту сборку. По нему утреннее задание на сервере
+// понимает, надо ли пересобирать сайт ради журнала (scripts/blog-due.mjs).
+// Рядом со сборкой, а не внутри неё: посетителю этот файл не нужен.
+writeFileSync(path.join(clientDir, "..", "blog-published.json"), `${JSON.stringify(blogPosts().map((post) => post.slug), null, 1)}\n`);
 
 // Keep the initial static catalog small. Full records are loaded only when a
 // visitor opens a vehicle page on a host without the database API.
