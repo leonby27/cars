@@ -798,7 +798,9 @@ const liveSections = live.stock.size
  */
 function blogPostImage(post) {
   const found = live.collections.get(post.slug) || null;
-  const car = found?.cover || found?.duel?.find((entry) => entry.hero)?.hero || null;
+  // У статьи нет отдельной обложки: картинка для соцсетей — тот же первый кадр,
+  // с которого материал начинается.
+  const car = found?.cover || found?.duel?.find((entry) => entry.hero)?.hero || (post.kind === "article" ? found?.cars?.[0] : null) || null;
   const source = car?.images?.length ? car.images[0] : car?.image;
   return /^https:\/\//.test(String(source || "")) ? source : undefined;
 }

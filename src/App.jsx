@@ -8868,7 +8868,27 @@ function BlogShareMenu({ post, direction = "up" }) {
 function BlogCollectionCard({ post, navigate }) {
   // У сравнения нет одного правила отбора, поэтому и обложка у него своя: два кадра
   // вместо одного. Разные виды материалов различаются уже в сетке журнала.
-  return post.kind === "duel" ? <BlogDuelCard post={post} navigate={navigate} /> : <BlogCollectionCoverCard post={post} navigate={navigate} />;
+  if (post.kind === "duel") return <BlogDuelCard post={post} navigate={navigate} />;
+  // У статьи правила отбора нет вовсе, и обложку ей нужно брать из её среза для
+  // фотографий. Иначе запрос уходит без единого условия и на карточку встаёт самая
+  // дорогая машина всего каталога — одна и та же у всех статей, да ещё и не та, что
+  // человек увидит наверху материала.
+  if (post.kind === "article") return <BlogArticleCoverCard post={post} navigate={navigate} />;
+  return <BlogCollectionCoverCard post={post} navigate={navigate} />;
+}
+
+/** Карточка статьи: обложка — первый же кадр, с которого начинается сам материал. */
+function BlogArticleCoverCard({ post, navigate }) {
+  const car = useArticlePhotos(post)[0] || null;
+  const source = car?.images?.[0] || car?.image || null;
+  const cover = imageSource(source, IMAGE_WIDTH_CARD);
+  return (
+    <BlogCardShell
+      post={post}
+      navigate={navigate}
+      cover={cover ? <img src={cover} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, source)} /> : null}
+    />
+  );
 }
 
 /**
