@@ -704,7 +704,7 @@ const POWERTRAIN_FILTER_LABEL = { "Электромобиль": "Электро�
  * списка фильтр молча ничего не отберёт, поэтому за список следит тест.
  */
 export const BLOG_FILTER_KEYS = Object.freeze([
-  "brand", "model", "type", "bodyType", "yearMin", "mileageMax", "landedMin", "landedMax", "rangeMin", "batteryMin", "accelMax",
+  "brand", "model", "type", "bodyType", "drive", "yearMin", "mileageMax", "landedMin", "landedMax", "rangeMin", "batteryMin", "accelMax",
 ]);
 
 // Порядок машин в подборке. Не «в разнобой» и не по дате: и то и другое меняет
@@ -743,6 +743,9 @@ export const blogApiParams = (post, extra = {}) => {
   if (filters.model) params.set("model", filters.model);
   if (filters.type) params.set("type", filters.type);
   if (filters.bodyType) params.set("bodyType", filters.bodyType);
+  // Привод добавлен 01.09.2026: полный привод — обычное требование покупателя
+  // в наших условиях, а подборки его отобрать не умели.
+  if (filters.drive) params.set("drive", filters.drive);
   if (filters.yearMin) params.set("yearMin", String(filters.yearMin));
   if (filters.mileageMax) params.set("mileageMax", String(filters.mileageMax));
   if (filters.landedMin) params.set("landedMin", String(filters.landedMin));
@@ -762,6 +765,7 @@ export const blogCatalogHref = (post) => {
   if (filters.model) params.set("model", filters.model);
   if (filters.type) params.set("type", POWERTRAIN_FILTER_LABEL[filters.type] || filters.type);
   if (filters.bodyType) params.set("body", filters.bodyType);
+  if (filters.drive) params.set("drive", filters.drive);
   if (filters.yearMin) params.set("yearFrom", String(filters.yearMin));
   if (filters.mileageMax) params.set("mileage", `до ${String(filters.mileageMax).replace(/\B(?=(\d{3})+$)/g, " ")} км`);
   if (filters.landedMin) params.set("priceFrom", String(filters.landedMin));
