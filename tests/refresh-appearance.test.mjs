@@ -89,3 +89,20 @@ test("новые машины показываются сразу: кэш стр
   assert.match(source, /async function purgePageCache/, "сброс кэша страниц пропал из прогона");
   assert.match(source, /await purgePageCache\(added\)/, "сброс кэша больше не вызывается после заведения машин");
 });
+
+test("тип двигателя понимается и по-русски, и по-английски", async () => {
+  // 31.08.2026 сборщик перешёл на русскую версию источника, а распознавание типа
+  // было написано под английские слова — 1 547 электромобилей и гибридов записались
+  // бензиновыми, и им посчитали пошлину по объёму двигателя.
+  const { normalizeChe168Energy } = await import("../scripts/lib/che168-parser.mjs");
+  const t = (fuelname) => normalizeChe168Energy({ fuelname, carname: "", specname: "" }, []);
+  assert.equal(t("Электромобиль"), "Электромобиль");
+  assert.equal(t("Pure Electric"), "Электромобиль");
+  assert.equal(t("Подключаемый гибрид"), "Гибрид");
+  assert.equal(t("Продлённый запас хода"), "Гибрид");
+  assert.equal(t("Range Extender"), "Гибрид");
+  assert.equal(t("Бензин"), "ДВС");
+  assert.equal(t("Gasoline"), "ДВС");
+  // Мягкий гибрид заряжать нельзя — это бензиновая машина, а не гибрид.
+  assert.equal(t("Бензин+48V мягкая гибридная система"), "ДВС");
+});

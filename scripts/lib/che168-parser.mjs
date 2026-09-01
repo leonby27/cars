@@ -169,13 +169,25 @@ function cleanModel(value, brand) {
 }
 
 export function normalizeChe168Energy(detail, specs) {
-  const energy = [detail.fuelname, specValue(specs, [/^Energy Type$/i]), detail.carname, detail.specname].filter(Boolean).join(" ");
-  // A 48V mild hybrid is a petrol car that cannot be charged, and the source
-  // still spells it "Gasoline + 48V Mild Hybrid System". Matching on "hybrid"
-  // alone would file it next to the plug-ins, so it is ruled out first.
-  if (/mild hybrid|48V|MHEV|轻混/i.test(energy)) return "ДВС";
-  if (/PHEV|plug[- ]in|range extender|hybrid|DM-[ip]|增程|混动/i.test(energy)) return "Гибрид";
-  if (/Pure Electric|Battery Electric|BEV/i.test(energy)) return "Электромобиль";
+  // Слова берём и по-английски, и по-русски: с 31.08.2026 сборщик ходит по русской
+  // версии источника, и там «Электромобиль», «Продлённый запас хода», «Тип топлива»
+  // вместо Pure Electric, Range Extender, Energy Type. Пока условия были только
+  // английскими, 1 547 электромобилей и гибридов записались как бензиновые — а от
+  // типа зависит пошлина, то есть цена под ключ на карточке.
+  const energy = [
+    detail.fuelname,
+    specValue(specs, [/^Energy Type$/i, /^Тип топлива$/i, /^Тип энергии$/i]),
+    detail.carname,
+    detail.specname,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  // Мягкий гибрид (48 В) — это бензиновая машина, которую нельзя зарядить, а
+  // источник всё равно пишет «Бензин+48V мягкая гибридная система». Если ловить
+  // просто «гибрид», она уедет к подключаемым, поэтому отсекаем её первой.
+  if (/mild hybrid|48V|MHEV|轻混|мягк\w* гибрид/i.test(energy)) return "ДВС";
+  if (/PHEV|plug[- ]in|range extender|hybrid|DM-[ip]|增程|混动|гибрид\w*|подключаем\w*|продлённый запас хода|продленный запас хода|увеличенным запасом хода|электропривод/i.test(energy)) return "Гибрид";
+  if (/Pure Electric|Battery Electric|BEV|электромобил\w*|чист\w* электро|электрическ\w*/i.test(energy)) return "Электромобиль";
   return "ДВС";
 }
 
