@@ -22,6 +22,8 @@
 // пока в нём мало материалов.
 
 /** Общая страница журнала. */
+import { BLOG_DRAFTS_VISIBLE } from "./feature-flags.js";
+
 export const BLOG_INDEX = Object.freeze({
   path: "/blog",
   name: "Журнал",
@@ -285,6 +287,155 @@ export const BLOG_POSTS = Object.freeze([
     published: "2026-09-01",
   },
 
+  // ── Первая десятка расписания (см. BLOG_TOPICS.md) ──────────────────────────
+  // Все черновики: Сергей смотрит их на локальной версии до того, как материалы
+  // попадут в расписание.
+
+  {
+    slug: "fresh-2024",
+    rubric: "collections",
+    kind: "collection",
+    draft: true,
+    name: "Топ {top} самых свежих машин из Китая",
+    h1: "Топ {top} самых свежих автомобилей из Китая: 2024 года и новее",
+    seoTitle: "Самые свежие авто из Китая {year}: от 2024 года | abcars.by",
+    seoDescription: "Автомобили из Китая 2024 года выпуска и новее: сколько таких машин в наличии, чем свежая машина отличается от трёхлетней при покупке из Китая и сколько она стоит с доставкой в Минск.",
+    lead: "Машины, которым год-два: ресурс ещё не тронут, а стоят они как обычная европейская машина вдвое старше.",
+    teaser: "Машины 2024 года и новее: что это меняет при покупке.",
+    published: "2026-09-05",
+    topSize: 10,
+    filters: { yearMin: 2024 },
+    highlight: { field: "year", label: "год самой свежей машины в подборке" },
+  },
+
+  {
+    slug: "ev-quota-end",
+    rubric: "law",
+    kind: "article",
+    draft: true,
+    name: "Что будет, когда квота на электромобили кончится",
+    h1: "Что будет с ценами, когда квота на электромобили кончится",
+    seoTitle: "Квота на электромобили в Беларуси {year}: что после | abcars.by",
+    seoDescription: "Как устроена квота на беспошлинный ввоз электромобилей в Беларуси, сколько её осталось, на сколько вырастет цена под ключ после её исчерпания и что делать покупателю, который планирует покупку.",
+    lead: "Льгота кончится не когда-нибудь, а по счётчику. Разбор: как он устроен, что будет с ценой и стоит ли торопиться.",
+    teaser: "Как устроен счётчик льготы и что будет с ценами после.",
+    published: "2026-09-08",
+    photos: { filters: { type: "Электромобиль", yearMin: 2023 } },
+  },
+
+  {
+    slug: "li-auto-l7-vs-l9",
+    rubric: "comparisons",
+    kind: "duel",
+    draft: true,
+    name: "Li Auto L7 или L9: что выбрать",
+    h1: "Li Auto L7 или Li Auto L9: что выбрать с доставкой в Минск",
+    seoTitle: "Li Auto L7 или L9 — сравнение {year} | abcars.by",
+    seoDescription: "Li Auto L7 или L9: одна техника и разный размер. Чем отличаются салон и число мест, что с запасом хода и расходом, какая разница в цене под ключ в Минске и кому какая машина подходит.",
+    lead: "Два больших гибрида с генератором на одной технике: разница между ними не в моторах, а в размере и числе мест.",
+    teaser: "Одна техника, разный размер: какую из двух брать.",
+    published: "2026-09-10",
+    tags: ["hybrid"],
+    sides: [
+      {
+        brand: "Li Auto",
+        model: "L7",
+        name: "Li Auto L7",
+        short: "L7",
+        review: "/models/li-auto-l7",
+        specs: { length: "5050 мм", wheelbase: "3005 мм", body: "Кроссовер", seats: "5", plug: "GB/T" },
+      },
+      {
+        brand: "Li Auto",
+        model: "L9",
+        name: "Li Auto L9",
+        short: "L9",
+        review: "/models/li-auto-l9",
+        specs: { length: "5218 мм", wheelbase: "3105 мм", body: "Кроссовер", seats: "6", plug: "GB/T" },
+      },
+    ],
+  },
+
+  {
+    slug: "mercedes-from-china",
+    rubric: "articles",
+    kind: "article",
+    draft: true,
+    name: "Mercedes из Китая: чем отличается от европейского",
+    h1: "Mercedes из Китая: чем он отличается от европейского",
+    seoTitle: "Mercedes из Китая: отличия от европейского | abcars.by",
+    seoDescription: "Чем Mercedes китайской сборки отличается от европейского: длинная колёсная база, свои комплектации и модели, гарантия и растаможка в Беларуси. На что смотреть при покупке.",
+    lead: "Тот же трёхлучевой значок, но другая машина: длиннее, иначе укомплектована и заметно дешевле. Разбираемся, где разница настоящая.",
+    teaser: "Длинная база, свои комплектации и цена: где разница настоящая.",
+    published: "2026-09-12",
+    photos: { filters: { brand: "Mercedes-Benz", yearMin: 2022 } },
+  },
+
+  {
+    slug: "electric-suv-600",
+    rubric: "collections",
+    kind: "collection",
+    draft: true,
+    name: "Топ {top} электрических кроссоверов с запасом от 600 км",
+    h1: "Топ {top} электрических кроссоверов из Китая с запасом хода от 600 км",
+    seoTitle: "Электрокроссоверы с запасом от 600 км {year} | abcars.by",
+    seoDescription: "Электрические кроссоверы из Китая с паспортным запасом хода от 600 километров: сколько таких машин в наличии, сколько остаётся зимой и на трассе и сколько они стоят с доставкой в Минск.",
+    lead: "Кроссовер, который зимой доезжает до областного центра и обратно без зарядки: что для этого нужно от машины.",
+    teaser: "Кроссоверы, которым хватает запаса и зимой.",
+    published: "2026-09-15",
+    topSize: 10,
+    filters: { type: "Электромобиль", bodyType: "SUV / кроссовер", rangeMin: 600 },
+    highlight: { field: "range", label: "по паспорту у самого дальнобойного" },
+  },
+
+  {
+    slug: "china-cars-pros-cons",
+    rubric: "articles",
+    kind: "article",
+    draft: true,
+    name: "Плюсы и минусы китайских машин",
+    h1: "Плюсы и минусы китайских машин: что подтверждается, а что миф",
+    seoTitle: "Китайские авто: плюсы и минусы, проверка мифов | abcars.by",
+    seoDescription: "Что из разговоров о китайских машинах подтверждается опытом, а что осталось от машин десятилетней давности: качество, ржавчина, электроника, сервис, запчасти и перепродажа.",
+    lead: "Половина того, что говорят о китайских машинах, устарела лет на десять. Разбираем по пунктам: где правда, а где повторяют старое.",
+    teaser: "Где правда, а где повторяют старое десятилетней давности.",
+    published: "2026-09-19",
+    photos: { filters: { yearMin: 2023 } },
+  },
+
+  {
+    slug: "byd-seagull-vs-dolphin",
+    rubric: "comparisons",
+    kind: "duel",
+    draft: true,
+    name: "BYD Seagull или Dolphin: что выбрать",
+    h1: "BYD Seagull или BYD Dolphin: какой городской электромобиль выбрать",
+    seoTitle: "BYD Seagull или Dolphin — сравнение {year} | abcars.by",
+    seoDescription: "BYD Seagull или Dolphin: чем отличаются размеры, батареи и запас хода, сколько мест и куда их девать, какая разница в цене под ключ в Минске и кому какой из двух городских электромобилей подходит.",
+    lead: "Два самых доступных электромобиля BYD: один совсем маленький и дешёвый, второй крупнее и дальнобойнее. Где проходит граница.",
+    teaser: "Два доступных электромобиля BYD: где проходит граница.",
+    published: "2026-09-24",
+    tags: ["electric"],
+    sides: [
+      {
+        brand: "BYD",
+        model: "Seagull",
+        name: "BYD Seagull",
+        short: "Seagull",
+        review: "/models/byd-seagull",
+        specs: { length: "3780 мм", wheelbase: "2500 мм", body: "Хэтчбек", seats: "4", plug: "GB/T" },
+      },
+      {
+        brand: "BYD",
+        model: "Dolphin",
+        name: "BYD Dolphin",
+        short: "Dolphin",
+        review: "/models/byd-dolphin",
+        specs: { length: "4070–4150 мм", wheelbase: "2700 мм", body: "Хэтчбек", seats: "5", plug: "GB/T" },
+      },
+    ],
+  },
+
 ]);
 
 const RUBRIC_BY_SLUG = new Map(BLOG_RUBRICS.map((rubric) => [rubric.slug, rubric]));
@@ -326,7 +477,7 @@ export const blogAllPosts = (year = currentYear()) => BLOG_POSTS.map((post) => w
  * Так показывается образец отчёта, пока считать его не из чего: посмотреть по
  * прямой ссылке можно, наткнуться на него случайно — нет.
  */
-export const blogPosts = (year = currentYear()) => blogAllPosts(year).filter((post) => !post.draft);
+export const blogPosts = (year = currentYear()) => blogAllPosts(year).filter((post) => !post.draft || BLOG_DRAFTS_VISIBLE);
 
 /** Материал по адресу `/blog/<имя>` или `null`, если такого нет. */
 export const findBlogPost = (path) => {

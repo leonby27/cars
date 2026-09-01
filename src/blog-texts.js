@@ -22,6 +22,13 @@ import market_report_sample from "./blog-texts/market-report-sample.js";
 import used_ev_worth_it from "./blog-texts/used-ev-worth-it.js";
 import ev_winter_belarus from "./blog-texts/ev-winter-belarus.js";
 import range_cycles from "./blog-texts/range-cycles.js";
+import fresh_2024 from "./blog-texts/fresh-2024.js";
+import ev_quota_end from "./blog-texts/ev-quota-end.js";
+import li_auto_l7_vs_l9 from "./blog-texts/li-auto-l7-vs-l9.js";
+import mercedes_from_china from "./blog-texts/mercedes-from-china.js";
+import electric_suv_600 from "./blog-texts/electric-suv-600.js";
+import china_cars_pros_cons from "./blog-texts/china-cars-pros-cons.js";
+import byd_seagull_vs_dolphin from "./blog-texts/byd-seagull-vs-dolphin.js";
 
 /** Тексты как написаны, без поправки на состояние квоты: нужны тестам. */
 export const BLOG_TEXTS_RAW = Object.freeze({
@@ -34,6 +41,13 @@ export const BLOG_TEXTS_RAW = Object.freeze({
   "used-ev-worth-it": used_ev_worth_it,
   "ev-winter-belarus": ev_winter_belarus,
   "range-cycles": range_cycles,
+  "fresh-2024": fresh_2024,
+  "ev-quota-end": ev_quota_end,
+  "li-auto-l7-vs-l9": li_auto_l7_vs_l9,
+  "mercedes-from-china": mercedes_from_china,
+  "electric-suv-600": electric_suv_600,
+  "china-cars-pros-cons": china_cars_pros_cons,
+  "byd-seagull-vs-dolphin": byd_seagull_vs_dolphin,
 });
 
 // Пока льгота на электромобили действует, тексты отдаются слово в слово; когда квота
