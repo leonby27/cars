@@ -13,6 +13,7 @@
 //   callout — { title, text } врезка с тем, что легко упустить.
 // Цифры наличия и цен в тексты не пишутся: их подставляет каталог (см. blog-posts.js).
 import { rewriteEvDutyCopyDeep } from "./ev-duty-copy.js";
+import { stripUnreleasedBlogLinks } from "./blog-posts.js";
 import electric_range_700 from "./blog-texts/electric-range-700.js";
 import acceleration_under_4 from "./blog-texts/acceleration-under-4.js";
 import almost_new from "./blog-texts/almost-new.js";
@@ -189,7 +190,9 @@ export const BLOG_TEXTS_RAW = Object.freeze({
 // Пока льгота на электромобили действует, тексты отдаются слово в слово; когда квота
 // закончится, фразы про нулевую пошлину переписываются — теми же правилами, что
 // в обзорах моделей.
-export const BLOG_TEXTS = rewriteEvDutyCopyDeep(BLOG_TEXTS_RAW);
+// Плюс: ссылки на материалы, чей день выпуска ещё не наступил, остаются текстом —
+// см. `stripUnreleasedBlogLinks`.
+export const BLOG_TEXTS = stripUnreleasedBlogLinks(rewriteEvDutyCopyDeep(BLOG_TEXTS_RAW));
 
 /** Материал вместе с его текстом — для сервера и сборки. */
 export const blogPostWithText = (post) => (post ? { ...post, ...(BLOG_TEXTS[post.slug] || {}) } : post);

@@ -37,6 +37,14 @@ test("адреса материалов не повторяются и нахо�
 // одному на сторону. Пустое правило показало бы весь каталог вместо отобранного среза.
 test("правило отбора собрано из тех фильтров, которые умеет каталог", () => {
   for (const post of blogPosts()) {
+    // Статье срез каталога нужен только для кадров, и он задан отдельным полем
+    // `photos`: списка объявлений в статье нет, а значит и правила отбора у неё нет.
+    if (post.kind === "article" && post.photos?.filters && !Object.keys(post.filters || {}).length) {
+      for (const key of Object.keys(post.photos.filters)) {
+        assert.ok(BLOG_FILTER_KEYS.includes(key), `фильтр ${key} у ${post.slug} никуда не переводится`);
+      }
+      continue;
+    }
     const sets = blogFilterSets(post);
     assert.ok(sets.length > 0, `у ${post.slug} нет ни одного правила отбора`);
     for (const filters of sets) {

@@ -6,7 +6,7 @@
 // именно, написано рядом.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { blogAllPosts } from "../src/blog-posts.js";
+import { blogAllPosts, blogPostHidden } from "../src/blog-posts.js";
 import { BLOG_TEXTS } from "../src/blog-texts.js";
 import { BLOG_FIGURES } from "../src/blog-figures.js";
 import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
@@ -118,6 +118,19 @@ test("заголовок материала не повторяет заголо
   for (const post of posts) {
     const clash = taken.get(normalize(post.h1));
     assert.ok(!clash, `заголовок материала ${post.slug} дословно повторяет заголовок страницы ${clash}`);
+  }
+});
+
+// Ссылка из вышедшей статьи на статью, которая выйдет позже: страница у будущей статьи
+// уже собрана (иначе по прямой ссылке был бы 404), но в журнале её нет и от поисковика
+// она закрыта. Ссылку на такую статью `stripUnreleasedBlogLinks` превращает в текст;
+// сторож проверяет, что в готовых текстах её и правда не осталось.
+test("в текстах нет ссылок на материалы, которые ещё не вышли", () => {
+  const hidden = new Set(posts.filter((post) => blogPostHidden(post)).map((post) => post.path));
+  for (const [slug, text] of Object.entries(BLOG_TEXTS)) {
+    for (const match of JSON.stringify(text).matchAll(/\]\((\/blog\/[a-z0-9-]+)\)/gi)) {
+      assert.ok(!hidden.has(match[1]), `в материале ${slug} ссылка на ещё не вышедший материал ${match[1]}`);
+    }
   }
 });
 

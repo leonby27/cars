@@ -5,6 +5,7 @@
 // Сервер и сборка этим загрузчиком не пользуются: там нужны все тексты сразу, и они
 // читаются из `src/blog-texts.js`.
 import { rewriteEvDutyCopyDeep } from "./ev-duty-copy.js";
+import { stripUnreleasedBlogLinks } from "./blog-posts.js";
 
 const files = import.meta.glob("./blog-texts/*.js");
 const loaded = new Map();
@@ -18,7 +19,9 @@ export async function loadBlogText(slug) {
   if (loaded.has(slug)) return loaded.get(slug);
   const file = files[`./blog-texts/${slug}.js`];
   if (!file) return null;
-  const text = rewriteEvDutyCopyDeep((await file()).default);
+  // Ссылки на материалы, которые ещё не вышли, остаются текстом: страница у них есть,
+  // но в журнале её пока нет, и вести туда читателя незачем.
+  const text = stripUnreleasedBlogLinks(rewriteEvDutyCopyDeep((await file()).default));
   loaded.set(slug, text);
   return text;
 }

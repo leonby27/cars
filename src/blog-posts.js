@@ -1624,6 +1624,35 @@ const RELEASE_HOUR_UTC = "06:00:00Z";
 export const blogPostHidden = (post, now = new Date()) =>
   Boolean(post?.draft) || (post?.published ? new Date(`${post.published}T${RELEASE_HOUR_UTC}`) > now : false);
 
+/**
+ * Ссылка внутри текста на материал, который ещё не вышел, — не ссылка.
+ *
+ * Перекрёстные ссылки в текстах написаны руками и порядка выпуска не знают: статья
+ * вышедшая сегодня может ссылаться на завтрашнюю. Страница у невышедшей статьи есть
+ * (иначе по прямой ссылке был бы 404), поэтому такая ссылка открывалась бы — и вела
+ * бы читателя на страницу, которой в журнале ещё нет, а поисковика — на страницу,
+ * закрытую от индексации. Здесь она превращается в обычный текст: остаётся название,
+ * пропадает переход. Наступит день выпуска — утренняя пересборка вернёт ссылку сама.
+ *
+ * На местной версии видно всё, включая будущее: там ссылки не трогаем.
+ */
+const BLOG_LINK_PATTERN = /\[([^[\]]+)\]\((\/blog\/[a-z0-9-]+)\)/g;
+export const stripUnreleasedBlogLinks = (value, now = new Date()) => {
+  if (BLOG_DRAFTS_VISIBLE) return value;
+  if (typeof value === "string") {
+    if (!value.includes("](/blog/")) return value;
+    return value.replace(BLOG_LINK_PATTERN, (whole, label, href) => {
+      const post = findBlogPost(href);
+      return post && blogPostHidden(post, now) ? label : whole;
+    });
+  }
+  if (Array.isArray(value)) return value.map((item) => stripUnreleasedBlogLinks(item, now));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, stripUnreleasedBlogLinks(item, now)]));
+  }
+  return value;
+};
+
 export const blogPosts = (year = currentYear()) =>
   blogAllPosts(year)
     .filter((post) => BLOG_DRAFTS_VISIBLE || !blogPostHidden(post))
