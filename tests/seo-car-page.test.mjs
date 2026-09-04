@@ -160,3 +160,14 @@ test("из карточки ведут ссылки на растаможку и
   assert.doesNotMatch(article, /ev-quota/);
   assert.match(article, /href="\/customs"/);
 });
+
+// Полный идентификатор с именем источника отвечает переездом на короткий адрес:
+// такой адрес остался в старых ссылках и в кабинете, но снаружи существовать не должен.
+test("адрес с приставкой источника переезжает на короткий", async () => {
+  const { renderCarPage } = await import("../server/car-page.mjs");
+  const moved = await renderCarPage("che168-59355862");
+  assert.equal(moved.status, 301);
+  assert.equal(moved.location, "/cars/59355862");
+  const old = await renderCarPage("guazi_777");
+  assert.equal(old.location, "/cars/777");
+});

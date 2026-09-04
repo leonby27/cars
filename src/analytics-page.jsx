@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarProfile, ChartLineUp, MagnifyingGlass, ShieldCheck, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
 
+// В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
+// карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
+// приставку снимаем: иначе из кабинета уходит и попадает в переписку адрес,
+// которого у нас на сайте быть не должно (страница по нему открывается, но
+// каноническим считается короткий).
+const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
+const carHref = (id) => `/cars/${encodeURIComponent(listingNumber(id))}`;
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 const formatDate = (value, withTime = false) => {
   const date = new Date(value);
@@ -157,11 +164,11 @@ function LeadCar({ car }) {
   }
   const facts = [car.mileage ? `${formatNumber(car.mileage)} км` : "", formatUsd(car.estimatedTotalUsd)].filter(Boolean).join(" · ");
   return (
-    <a className="lead-car" href={`/cars/${encodeURIComponent(car.id)}`} target="_blank" rel="noreferrer">
+    <a className="lead-car" href={carHref(car.id)} target="_blank" rel="noreferrer">
       {car.image ? <img src={leadPhoto(car.image)} alt="" loading="lazy" width="88" height="66" /> : <span><CarProfile size={20} weight="duotone" /></span>}
       <div>
         <strong>{car.title}</strong>
-        <span>{car.missing ? "Объявление больше не в каталоге" : facts || car.id}</span>
+        <span>{car.missing ? "Объявление больше не в каталоге" : facts || listingNumber(car.id)}</span>
       </div>
     </a>
   );
@@ -291,7 +298,7 @@ function OverviewSection({ data }) {
 
 // Колонки таблицы «Интерес по автомобилям»: каждую можно поставить во главу сортировки.
 const vehicleColumns = [
-  { id:"title", label:"Автомобиль", text:true, value:(item) => item.listingTitle || item.listingId || "" },
+  { id:"title", label:"Автомобиль", text:true, value:(item) => item.listingTitle || listingNumber(item.listingId) || "" },
   { id:"viewers", label:"Люди", value:(item) => Number(item.viewers) || 0 },
   { id:"views", label:"Просмотры", value:(item) => Number(item.views) || 0 },
   { id:"asks", label:"Уточнения", value:(item) => Number(item.availabilityClicks) || 0 },
@@ -321,7 +328,7 @@ function VehiclesSection({ data }) {
   return (
     <section className="analytics-panel">
       <div className="analytics-panel-heading"><div><h2>Интерес по автомобилям</h2><p>Сверху то, что открывали последним. Нажатие на заголовок столбца меняет порядок. «Люди» — сколько разных посетителей открывали карточку; «просмотры» считают каждое открытие</p></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr>{vehicleColumns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggle(column.id)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : ""}</span></button></th>)}</tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle || item.listingId}</a></td><td>{formatNumber(item.viewers ?? 0)}</td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.availabilityRequests ?? 0)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></tr>) : <tr><td colSpan={vehicleColumns.length}>Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
+      <div className="analytics-table-wrap"><table><thead><tr>{vehicleColumns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggle(column.id)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : ""}</span></button></th>)}</tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId}><td><a href={carHref(item.listingId)}>{item.listingTitle || listingNumber(item.listingId)}</a></td><td>{formatNumber(item.viewers ?? 0)}</td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.availabilityRequests ?? 0)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></tr>) : <tr><td colSpan={vehicleColumns.length}>Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
       <FavoritesPanel favorites={data.favorites} />
     </section>
   );
@@ -334,7 +341,7 @@ function FavoritesPanel({ favorites }) {
   return (
     <div className="analytics-subpanel">
       <div className="analytics-panel-heading"><div><h2>Сейчас в избранном</h2><p>Машины, отложенные зарегистрированными посетителями. У гостя без входа в кабинет избранное остаётся в его браузере и сюда не попадает</p></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr><th>Автомобиль</th><th>Людей</th><th>Состояние</th><th>Отложили</th></tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId} className={item.gone || item.status === "unavailable" ? "analytics-row-warning" : undefined}><td><a href={`/cars/${encodeURIComponent(item.listingId)}`}>{item.listingTitle}</a>{item.priceUsd ? <span className="analytics-note"> · {formatUsd(item.priceUsd)}</span> : null}</td><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{formatLeadDate(item.addedAt)}</td></tr>) : <tr><td colSpan="4">Избранного пока нет.</td></tr>}</tbody></table></div>
+      <div className="analytics-table-wrap"><table><thead><tr><th>Автомобиль</th><th>Людей</th><th>Состояние</th><th>Отложили</th></tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId} className={item.gone || item.status === "unavailable" ? "analytics-row-warning" : undefined}><td><a href={carHref(item.listingId)}>{item.listingTitle}</a>{item.priceUsd ? <span className="analytics-note"> · {formatUsd(item.priceUsd)}</span> : null}</td><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{formatLeadDate(item.addedAt)}</td></tr>) : <tr><td colSpan="4">Избранного пока нет.</td></tr>}</tbody></table></div>
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { getCar, listCars } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
-import { createSeoRenderer, carRoute } from "./seo-render.mjs";
+import { createSeoRenderer, carRoute, listingNumber } from "./seo-render.mjs";
 // Обзоры моделей весят больше мегабайта, поэтому этот модуль сам подключается только
 // по требованию — из обработчика запросов страницы машины. Обычные запросы к каталогу
 // его не загружают, а сборщик функции видит обе зависимости и точно их упакует.
@@ -76,6 +76,13 @@ async function relatedCars(car) {
  * в индексе адреса проданных машин, каждый из которых отвечает «страница есть».
  */
 export async function renderCarPage(id) {
+  // Полный идентификатор объявления («che168-59355862») по-прежнему открывает машину:
+  // он остался в старых ссылках, закладках и заказах. Но отвечаем на него переездом на
+  // короткий адрес — иначе у одной машины два работающих адреса, а имя источника
+  // гуляет по перепискам и отчётам.
+  const raw = String(id || "").trim();
+  const short = listingNumber(raw);
+  if (short && short !== raw) return { status: 301, location: `/cars/${encodeURIComponent(short)}` };
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
   const car = await getCar(String(id || "").trim());

@@ -352,6 +352,11 @@ export async function handleApiRequest(request, response) {
       const { carShell } = await import("./dist-files.mjs");
       try {
         const page = await renderCarPage(url.searchParams.get("id"));
+        // Старый адрес с приставкой источника: отправляем на короткий.
+        if (page.location) {
+          response.writeHead(301, { location: page.location, ...seoPageCache });
+          return response.end();
+        }
         return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
       } catch (error) {
         console.error(error);
