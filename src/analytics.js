@@ -90,13 +90,29 @@ let humanConfirmed = false;
 let humanActed = false;
 let watching = false;
 
-const post = (path, payload) => {
-  fetch(path, {
-    method:"POST",
-    headers:{ "content-type":"application/json" },
-    body:JSON.stringify(payload),
-    keepalive:true,
-  }).catch(() => {});
+const post = (path, payload) => fetch(path, {
+  method:"POST",
+  headers:{ "content-type":"application/json" },
+  body:JSON.stringify(payload),
+  keepalive:true,
+}).catch(() => null);
+
+// Отметка «живой человек» ставится вдогонку к уже записанному заходу, и на первой
+// странице она иногда обгоняет сам заход: браузер отправляет оба запроса подряд,
+// а посетитель успевает шевельнуть страницу в первые же миллисекунды. Тогда отметке
+// нечего обновлять, и живой человек навсегда остаётся в «заходах без действия»
+// (04.09.2026 так потерялись двое из шестнадцати заходов за сутки). Сервер отвечает,
+// сколько строк отметил; если ни одной — повторяем с небольшой паузой.
+const CONFIRM_RETRY_MS = 1500;
+const CONFIRM_RETRIES = 4;
+export const postHumanConfirm = async (payload, attempt = 0) => {
+  const response = await post("/api/analytics/human", payload);
+  if (!response) return;
+  let confirmed = null;
+  try { confirmed = (await response.json())?.confirmed; } catch { return; }
+  if (confirmed === 0 && attempt < CONFIRM_RETRIES) {
+    window.setTimeout(() => { postHumanConfirm(payload, attempt + 1); }, CONFIRM_RETRY_MS);
+  }
 };
 
 // `action` — было настоящее действие, а не просто время на странице. Отметку по времени
@@ -108,7 +124,7 @@ const confirmHuman = (action) => {
   if (humanActed || (humanConfirmed && !action)) return;
   humanConfirmed = true;
   if (action) humanActed = true;
-  post("/api/analytics/human", {
+  postHumanConfirm({
     visitorId:storedId(window.localStorage, visitorKey),
     sessionId:storedId(window.sessionStorage, sessionKey),
     action:Boolean(action),

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
-import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit } from "../src/analytics.js";
+import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
   const event = normalizeAnalyticsEvent({
@@ -330,4 +330,40 @@ test("время на странице человеком не делает — 
   // помеченной сразу, отдельного подтверждения на каждую не нужно.
   assert.equal(normalizeAnalyticsEvent({ eventId:"e3", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/", human:true, humanAction:true }).humanAction, true);
   assert.equal(normalizeAnalyticsEvent({ eventId:"e4", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/", human:true }).humanAction, false);
+});
+
+// 04.09.2026: отметка «живой человек» обгоняла сам заход. Браузер отправляет заход и
+// отметку почти одновременно, и если посетитель шевельнул страницу в первые
+// миллисекунды, отметка приходила к серверу раньше записи — обновлять было нечего,
+// и живой человек оставался в «заходах без действия»: так за сутки потерялись двое
+// из шестнадцати. Сервер отвечает числом отмеченных строк, браузер повторяет отметку.
+test("отметка живого посетителя повторяется, если заход ещё не записан", async () => {
+  const calls = [];
+  const timers = [];
+  const previousWindow = globalThis.window;
+  const previousFetch = globalThis.fetch;
+  globalThis.window = { setTimeout:(fn) => { timers.push(fn); return timers.length; } };
+  globalThis.fetch = async (path, options) => {
+    calls.push({ path, body:JSON.parse(options.body) });
+    return { json: async () => ({ ok:true, confirmed:calls.length < 3 ? 0 : 1 }) };
+  };
+  try {
+    await postHumanConfirm({ visitorId:"v1", sessionId:"s1", action:true });
+    assert.equal(calls.length, 1);
+    // Ответ «ни одной строки» ставит повтор в очередь; отметка та же самая.
+    assert.equal(timers.length, 1);
+    const flush = () => new Promise((resolve) => setImmediate(resolve));
+    timers[0]();
+    await flush();
+    timers[1]();
+    await flush();
+    assert.equal(calls.length, 3);
+    assert.deepEqual(calls[2].body, { visitorId:"v1", sessionId:"s1", action:true });
+    assert.equal(calls[2].path, "/api/analytics/human");
+    // Как только строка отмечена, повторы прекращаются.
+    assert.equal(timers.length, 2);
+  } finally {
+    globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  }
 });
