@@ -3,7 +3,7 @@ import { engineVolume } from "./engine-spec.js";
 import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
-  usdByn:3.0687, cnyBynPer10:4.5871, eurByn:3.5507, rateDate:"03.09.2026",
+  usdByn:3.0792, cnyBynPer10:4.6064, eurByn:3.5738, rateDate:"04.09.2026",
   serviceUsd:800,
   // Обязательные сборы при оформлении: утилизационный сбор, таможенный сбор и
   // оформление. Утильсбор с 23.04.2026 (постановление Совета Министров № 195)
