@@ -12,6 +12,9 @@ export const ANALYTICS_EVENTS = new Set([
   "search_saved",
   "custom_search_submitted",
   "search_query",
+  // Рекламная врезка в статьях журнала: попала на экран и по ней нажали.
+  "article_promo_shown",
+  "article_promo_click",
 ]);
 
 const COOKIE_NAME = "abcars_analytics";
@@ -305,6 +308,9 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(*) FILTER (WHERE event_name='vehicle_view' AND ${HUMAN_VISITOR})::int AS vehicle_views,
       count(*) FILTER (WHERE event_name='availability_request_click' AND ${HUMAN_VISITOR})::int AS availability_requests,
       count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_request_click' AND ${HUMAN_VISITOR})::int AS availability_request_people,
+      count(*) FILTER (WHERE event_name='article_promo_shown' AND ${HUMAN_VISITOR})::int AS promo_shown,
+      count(*) FILTER (WHERE event_name='article_promo_click' AND ${HUMAN_VISITOR})::int AS promo_clicks,
+      count(DISTINCT visitor_id) FILTER (WHERE event_name='article_promo_click' AND ${HUMAN_VISITOR})::int AS promo_click_people,
       count(DISTINCT visitor_id) FILTER (WHERE NOT (${HUMAN_VISITOR}))::int AS robot_visits
       FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}`, [from, to]),
     // «Заход» считаем по паузе, а не по вкладке: страница помнит номер захода, пока

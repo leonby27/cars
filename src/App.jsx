@@ -9540,6 +9540,22 @@ function BlogCoverImage({ cover, place, eager = false }) {
 // чтобы её не приняли за продолжение текста.
 function ArticleAd({ navigate }) {
   const { total, updatedAt } = useCatalogFacts();
+  const box = useRef(null);
+  // Показом считаем не появление врезки в статье, а то, что её довели до экрана:
+  // статью читают сверху вниз, и до врезки доходят не все. Иначе показов было бы
+  // ровно столько же, сколько открытых статей, и отношение нажатий к показам
+  // ничего не говорило бы о самой врезке. Считаем один раз за открытую страницу.
+  useEffect(() => {
+    const node = box.current;
+    if (!node || typeof IntersectionObserver !== "function") return undefined;
+    const watcher = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      watcher.disconnect();
+      trackEvent("article_promo_shown");
+    }, { threshold: 0.5 });
+    watcher.observe(node);
+    return () => watcher.disconnect();
+  }, []);
   // Число в кнопке — живое: сколько машин в каталоге, столько и обещаем. Округляем
   // вниз до тысяч: точная цифра меняется каждую ночь и выглядит как счётчик, а
   // круглая читается как размер каталога. Пока каталог не ответил (первое рисование
@@ -9550,7 +9566,7 @@ function ArticleAd({ navigate }) {
   // мелкая и серая: это не обещание, а доказательство, что цифра рядом свежая.
   const updated = updatedAt ? catalogUpdatedDate(updatedAt) : "";
   return (
-    <aside className="article-ad">
+    <aside className="article-ad" ref={box}>
       <p className="article-ad-copy">
         {/* Название пишем логотипом. Для читалок с экрана рядом лежит то же слово
             текстом: сами картинки логотипа спрятаны от них. */}
@@ -9561,7 +9577,7 @@ function ArticleAd({ navigate }) {
         <span> — это маркетплейс б/у авто из Китая</span>
       </p>
       <div className="article-ad-action">
-        <AppLink className="primary article-ad-button" href="/catalog" navigate={navigate}>
+        <AppLink className="primary article-ad-button" href="/catalog" navigate={navigate} onClick={() => trackEvent("article_promo_click")}>
           {listings ? `${listings} объявлений` : "Каталог"} <ArrowRight size={18} />
         </AppLink>
         {updated ? <span className="article-ad-updated">Каталог обновлён {updated}</span> : null}

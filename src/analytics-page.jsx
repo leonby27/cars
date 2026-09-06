@@ -292,7 +292,31 @@ function OverviewSection({ data }) {
         })}</div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
         <div className="analytics-legend"><span><i />Посетители</span><span><i />Целевые действия</span></div>
       </section>
+      <PromoSection summary={summary} />
     </>
+  );
+}
+
+/**
+ * Рекламная врезка в материалах журнала: сколько раз её довели до экрана, сколько раз
+ * по ней нажали и какая доля. Показ отмечается не открытием статьи, а появлением
+ * врезки на экране — иначе доля нажатий говорила бы о том, доскроллили ли до неё, а
+ * не о самой врезке.
+ */
+function PromoSection({ summary }) {
+  const shown = Number(summary.promo_shown) || 0;
+  const clicks = Number(summary.promo_clicks) || 0;
+  const people = Number(summary.promo_click_people) || 0;
+  return (
+    <section className="analytics-panel">
+      <div className="analytics-panel-heading"><div><h2>Баннер в статьях</h2><p>Врезка со ссылкой в каталог после первого абзаца материала журнала. Показ засчитывается, когда врезку довели до экрана</p></div></div>
+      <dl className="analytics-figures">
+        <div><dt>Показы</dt><dd>{formatNumber(shown)}</dd><small>дочитали до врезки</small></div>
+        <div><dt>Нажатия</dt><dd>{formatNumber(clicks)}</dd><small>{formatNumber(people)} человек</small></div>
+        <div><dt>Доля нажатий</dt><dd>{percent(clicks, shown)}</dd><small>от показов</small></div>
+      </dl>
+      {shown ? null : <p className="analytics-note">Показов ещё не было: либо до врезки не доходили, либо она только что появилась на сайте.</p>}
+    </section>
   );
 }
 
