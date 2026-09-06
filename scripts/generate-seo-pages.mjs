@@ -407,6 +407,25 @@ function blogFigure(car, index) {
   return `<figure><a href="${escapeHtml(hrefRoute(carRoute(car)))}"><img src="${escapeHtml(photoHref(source, 800))}" srcset="${escapeHtml(srcset)}" alt="${escapeHtml(`${title} — автомобиль из Китая в наличии`)}" loading="lazy" /></a><figcaption><a href="${escapeHtml(hrefRoute(carRoute(car)))}">${escapeHtml(title)}</a> — ${escapeHtml(facts)}</figcaption></figure>`;
 }
 
+/**
+ * Рекламная врезка после первого абзаца вступления — то же, что видит человек в
+ * приложении (ArticleAd в src/App.jsx), но версткой попроще, как и весь этот файл:
+ * строка и ссылка в каталог. Число объявлений берём из каталога и округляем вниз до
+ * тысяч — так же, как в кнопке приложения; без каталога ссылка остаётся без числа.
+ */
+function blogAdBlock() {
+  const total = live.activeCars || 0;
+  const listings = total >= 1000 ? `${number(Math.floor(total / 1000) * 1000)} объявлений` : "Смотреть каталог";
+  return `<aside><p>abcars.by — это маркетплейс б/у авто из Китая. <a href="${hrefRoute("/catalog/")}">${escapeHtml(listings)}</a></p></aside>`;
+}
+
+/** Вступление материала с этой врезкой после первого абзаца. */
+function blogIntroWithAd(post) {
+  const items = post.intro || [];
+  if (!items.length) return blogAdBlock();
+  return items.map((value, index) => `<p>${linkifyText(value, hrefRoute)}</p>${index === 0 ? blogAdBlock() : ""}`).join("");
+}
+
 function blogArticleBody(text, cars = [], shown = new Set()) {
   const paragraphs = (items) => (items || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
   const extras = (section) =>
@@ -454,7 +473,7 @@ function blogDuelArticle(post) {
   const published = blogPostDateLabel(post);
   const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
   const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
-  const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  const intro = blogIntroWithAd(post);
   // Шапка: по кадру на модель. Без снимков блока нет — заголовок над пустотой
   // поисковик читает как сломанную страницу.
   const hero = sides.some((entry) => entry.hero)
@@ -596,7 +615,7 @@ function blogReportArticle(post) {
   const note = report.sample
     ? `<p><strong>Образец. Цифры в этом отчёте условные — он показывает, как материал выглядит. Настоящий отчёт выйдет, когда накопятся недельные срезы цен.</strong></p>`
     : "";
-  const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  const intro = blogIntroWithAd(post);
   const modelHref = (row) => hrefRoute(blogCatalogHref({ filters: { brand: row.brand, model: row.model } }));
   const movers = (rows) =>
     `<ul>${rows
@@ -636,7 +655,7 @@ function blogArticleArticle(post) {
   const published = blogPostDateLabel(post);
   const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
   const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
-  const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  const intro = blogIntroWithAd(post);
   const cover = blogOwnCover(post) || (photos[0] ? blogFigure(photos[0], 0) : "");
   const faq = post.faq?.length
     ? `<section><h2>Частые вопросы</h2>${post.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${linkifyText(item.a, hrefRoute)}</p>`).join("")}</section>`
@@ -664,7 +683,7 @@ function blogPostArticle(post) {
   // Раздел ссылкой в журнал: из статьи ведёт путь к списку материалов.
   const rubric = `<a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(blogPostTags(post)[0]?.name || BLOG_INDEX.name)}</a>`;
   const date = `<p>${rubric}${published ? ` · ${escapeHtml(published)}` : ""}</p>`;
-  const intro = (post.intro || []).map((value) => `<p>${linkifyText(value, hrefRoute)}</p>`).join("");
+  const intro = blogIntroWithAd(post);
   // Открывающая фотография — сразу после описания, до текста.
   const cover = blogOwnCover(post) || (found?.cover ? blogFigure(found.cover, 0) : "");
   // Живой список машин — то же, что видит человек: номер, снимок, цена под ключ и
