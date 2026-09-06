@@ -52,8 +52,17 @@ test("дробь через запятую не превращается в ты
   ]);
   assert.equal(commas.battery, 73.6);
   assert.equal(commas.acceleration, 5.8);
-  // Английская запись тысяч запятой остаётся тысячами.
-  assert.equal(deriveChe168SpecFields([{ name: "Battery Capacity", value: "1,234" }]).battery, 1234);
+  // Английская запись тысяч запятой остаётся тысячами: момент у крупных гибридов
+  // как раз четырёхзначный.
+  assert.equal(deriveChe168SpecFields([{ name: "Max Torque (N·m)", value: "1,040" }]).torqueNm, 1040);
+});
+
+// У части карточек ёмкость указана в ватт-часах: «63983» — это 64 кВт·ч, а не
+// шестьдесят четыре тысячи. Такая машина уезжала во все фильтры «от 100 кВт·ч».
+test("ёмкость в ватт-часах приводится к киловатт-часам", () => {
+  assert.equal(deriveChe168SpecFields([{ name: "Battery Capacity", value: "63983" }]).battery, 64);
+  assert.equal(deriveChe168SpecFields([{ name: "Энергия батареи (кВт·ч)", value: "73,6" }]).battery, 73.6);
+  assert.equal(deriveChe168SpecFields([{ name: "Энергия батареи (кВт·ч)", value: "150" }]).battery, 150);
 });
 
 test("английские названия понимаются по-прежнему", () => {
