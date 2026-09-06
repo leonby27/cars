@@ -63,6 +63,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { extractChe168ListPayload, extractChe168DetailPayload, buildChe168Car } from "./lib/che168-parser.mjs";
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
+import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { IMPORT_BRANDS, ICE_IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
@@ -217,7 +218,8 @@ async function flight(page, url, expectMarker) {
 }
 
 async function flightInPage(page, url, expectMarker) {
-  return page.evaluate(async ([target, marker]) => {
+  return page.evaluate(async ([target, marker, flightShape, minLength]) => {
+    const looksLikeFlight = (text) => Boolean(text) && text.length > minLength && new RegExp(flightShape).test(text);
     let last = { status: 0, text: "" };
     // Одна повторная попытка вместо четырёх: четыре обращения к одному адресу
     // подряд — картина сборщика, а рядом со стеной ещё и трата запаса впустую.
@@ -242,10 +244,16 @@ async function flightInPage(page, url, expectMarker) {
       }
       last = { status: response.status, text: await response.text() };
       if (!marker || last.text.includes(marker)) return last;
+      // Ответ без ожидаемого куска — ещё не молчание. Снятая с продажи машина и
+      // страница за последней страницей списка приходят как полноценный ответ
+      // приложения (те же служебные строки вида `3:I[...]`), просто без машин.
+      // Это окончательный ответ: повторять запрос незачем, а считать его
+      // молчанием — прямая дорога к выдуманной стене (06.09.2026).
+      if (looksLikeFlight(last.text)) return { ...last, answered: true };
       await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)));
     }
     return last;
-  }, [url, expectMarker]);
+  }, [url, expectMarker, FLIGHT_SHAPE, FLIGHT_MIN_LENGTH]);
 }
 
 // ---- Сессия к источнику -----------------------------------------------------
@@ -680,8 +688,13 @@ async function noteAnswer(ok) {
 const RSC_LIST = args.get("rsc") || "r2";
 const RSC_DETAIL = args.get("rsc-detail") || "d2";
 async function listFlight(params) {
-  const { status, text } = await safeFlight(`/ru/used-cars?vehicle_list=1&${params}&_rsc=${RSC_LIST}`, "infoid");
-  return status === 200 && text ? extractChe168ListPayload([asFlightScript(text)]) : null;
+  const { status, text, answered } = await safeFlight(`/ru/used-cars?vehicle_list=1&${params}&_rsc=${RSC_LIST}`, "infoid");
+  const payload = status === 200 && text ? extractChe168ListPayload([asFlightScript(text)]) : null;
+  if (payload) return { ...payload, answered: true };
+  // Страница за последней и марка, у которой под фильтрами не осталось машин, —
+  // это ответ, а не молчание (см. flightInPage). Возвращаем пустую выдачу с
+  // отметкой «ответили», чтобы предохранитель не принял конец списка за стену.
+  return answered ? { items: [], answered: true } : null;
 }
 
 const { pool } = await import("../server/db.mjs");
@@ -836,7 +849,7 @@ async function walkSlice(baseParams, pageCount, fuelType, depthCap) {
   for (let pageIndex = 2; pageIndex <= depth && !stopped; pageIndex += 1) {
     const payload = await listFlight(`${baseParams}&page=${pageIndex}`);
     const ok = absorbList(payload, fuelType);
-    await noteAnswer(ok);
+    await noteAnswer(ok || payload?.answered === true);
     if (!ok) { listPagesEmpty += 1; empties += 1; }
     else maxUsd = Math.max(maxUsd, pageMaxUsd(payload));
     listPages += 1;
@@ -1012,9 +1025,13 @@ async function writeDiscoveries() {
 // after retries) stays untouched and is only counted: guessing here would
 // either hide a live car or keep advertising a sold one.
 async function checkDetail(externalId) {
-  const { status, text } = await safeFlight(`/ru/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
+  const { status, text, answered } = await safeFlight(`/ru/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
   const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
-  if (!payload?.detail) return { verdict: "unknown", status };
+  // Машина, снятая с продажи, с начала сентября 2026 отдаётся не ошибкой, а
+  // обычной пустой страницей «ничего не найдено» (12 КБ вместо 88 КБ у живой).
+  // Пока мы этого не понимали, каждая такая машина считалась молчанием источника:
+  // тридцать подряд — и предохранитель объявлял стену там, где её не было.
+  if (!payload?.detail) return answered ? { verdict: "sold" } : { verdict: "unknown", status };
   const price = Number(String(payload.detail.price ?? "").replace(/[^\d.]/g, "")) || null;
   return price ? { verdict: "alive", price } : { verdict: "sold" };
 }
@@ -1023,9 +1040,11 @@ async function checkDetail(externalId) {
 // нужна ради фотографий и характеристик (в списке их нет), а посетитель должен
 // увидеть машину в тот же проход. Возвращает 'added' | 'rejected' | 'failed'.
 async function addNewCar(externalId) {
-  const { status, text } = await safeFlight(`/ru/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
+  const { status, text, answered } = await safeFlight(`/ru/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
   const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
-  if (!payload?.detail) return "failed";
+  // Найденная в списке машина к моменту скачивания карточки бывает уже снята —
+  // это не сбой скачивания, а «её больше нет»: молчанием источника не считаем.
+  if (!payload?.detail) return answered ? "rejected" : "failed";
   const car = buildChe168Car(payload);
   if (!car) return "rejected";
   // Правила ввоза и потолок цены проверяем здесь же: список показывает цену в

@@ -69,6 +69,12 @@ const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCom
 // перезагружая и не сбивая ни выдачу, ни прокрутку.
 const QuotaPricingContext = createContext(null);
 
+// Сколько всего машин в каталоге. Число живёт в корне приложения (его приносит
+// первый же ответ каталога) и нужно далеко от него — в рекламной врезке посреди
+// статьи. Тащить его пропсами через страницу материала и её тело незачем.
+const CatalogTotalContext = createContext(0);
+const useCatalogTotal = () => useContext(CatalogTotalContext);
+
 const CurrencyContext = createContext("USD");
 // Валюту переключают не только в шапке: в быстром просмотре шапка недоступна,
 // поэтому сеттер доступен из любого места дерева.
@@ -9120,22 +9126,9 @@ function BlogSidebar({ navigate, filter = null, onFilter = null, currentPath = n
             </a>
           );
         })}
-        {/* Переход в каталог — главное действие сайта, поэтому кнопка жёлтая, как все
-            основные кнопки. Со страницы материала открывается в новой вкладке: человек
-            читает и уходит смотреть машины, не теряя прочитанное. На самой главной
-            журнала терять нечего, поэтому там переход в этой же вкладке и без стрелок. */}
-        {sameTab ? (
-          <AppLink className="blog-tool-button accent" href="/catalog" navigate={navigate}>
-            <CarProfile size={19} />
-            <span>Каталог авто из Китая</span>
-          </AppLink>
-        ) : (
-          <a className="blog-tool-button accent" href={appHref("/catalog")} target="_blank" rel="noreferrer">
-            <CarProfile size={19} />
-            <span>Каталог авто из Китая</span>
-            <ArrowRight size={16} weight="bold" />
-          </a>
-        )}
+        {/* Кнопки «Каталог авто из Китая» здесь больше нет (решение владельца
+            06.09.2026): в статьях за этим теперь отвечает рекламная врезка в тексте,
+            а две одинаковые жёлтые кнопки на одном экране спорили друг с другом. */}
       </nav>
     </aside>
   );
@@ -9538,6 +9531,56 @@ function BlogCoverImage({ cover, place, eager = false }) {
   return <img src={appHref(`${cover.src}-${place}.jpg`)} alt={cover.alt || ""} loading={eager ? "eager" : "lazy"} />;
 }
 
+// Рекламная врезка внутри материала журнала: одна строка про каталог и кнопка.
+// Стоит в разрыве после первого абзаца вступления, то есть сразу под открывающей
+// картинкой: читатель уже понял, о чём материал, но ещё не ушёл в текст с головой.
+// Оформлена не как абзац статьи, а как плашка на своей подложке и рубленым шрифтом,
+// чтобы её не приняли за продолжение текста.
+function ArticleAd({ navigate }) {
+  const total = useCatalogTotal();
+  // Число в кнопке — живое: сколько машин в каталоге, столько и обещаем. Округляем
+  // вниз до тысяч: точная цифра меняется каждую ночь и выглядит как счётчик, а
+  // круглая читается как размер каталога. Пока каталог не ответил (первое рисование
+  // и версия для поисковика), в кнопке просто «Каталог» — врать числом нельзя, а
+  // прятать кнопку тем более.
+  const listings = total >= 1000 ? number(Math.floor(total / 1000) * 1000) : null;
+  return (
+    <aside className="article-ad">
+      <p className="article-ad-copy">
+        {/* Название пишем логотипом. Для читалок с экрана рядом лежит то же слово
+            текстом: сами картинки логотипа спрятаны от них. */}
+        <span className="wordmark article-ad-logo">
+          <SiteLogo />
+          <span className="visually-hidden">abcars.by</span>
+        </span>
+        <span> — это маркетплейс б/у авто из Китая</span>
+      </p>
+      <AppLink className="primary article-ad-button" href="/catalog" navigate={navigate}>
+        {listings ? `${listings} объявлений` : "Каталог"} <ArrowRight size={18} />
+      </AppLink>
+    </aside>
+  );
+}
+
+// Вступление материала: абзацы до первого раздела и рекламная врезка после первого
+// из них. Общее для всех видов материалов — статьи, подборки, сравнения и отчёта.
+function BlogIntro({ paragraphs, navigate }) {
+  const list = paragraphs || [];
+  return (
+    <div className="model-page-intro">
+      {list.map((paragraph, index) => (
+        <Fragment key={paragraph}>
+          <p>{renderInlineText(paragraph, navigate)}</p>
+          {index === 0 ? <ArticleAd navigate={navigate} /> : null}
+        </Fragment>
+      ))}
+      {/* Материал без текста вступления рекламу всё равно показывает: врезка
+          привязана к месту в статье, а не к наличию абзаца. */}
+      {list.length === 0 ? <ArticleAd navigate={navigate} /> : null}
+    </div>
+  );
+}
+
 /** Открывающий кадр статьи: своя картинка вместо машины из каталога. */
 function BlogCoverFigure({ cover }) {
   if (!cover?.src) return null;
@@ -9699,11 +9742,7 @@ function BlogReportPage({ post, navigate }) {
           Образец. Цифры в этом отчёте условные — он показывает, как материал выглядит. Настоящий отчёт выйдет, когда накопятся недельные срезы цен.
         </p>
       )}
-      <div className="model-page-intro">
-        {text?.intro.map((paragraph) => (
-          <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
-        ))}
-      </div>
+      <BlogIntro paragraphs={text?.intro} navigate={navigate} />
 
       <section className="report-block">
         <p className="report-week">Неделя {report.weekLabel}</p>
@@ -9810,11 +9849,7 @@ function BlogArticlePage({ post, navigate, favorites, toggleFavorite }) {
       ) : photos[0] ? (
         <BlogFigure car={photos[0]} index={0} navigate={navigate} onOpen={openQuickView} eager />
       ) : null}
-      <div className="model-page-intro">
-        {text?.intro.map((paragraph) => (
-          <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
-        ))}
-      </div>
+      <BlogIntro paragraphs={text?.intro} navigate={navigate} />
       <div className="model-page-article">
         {sections.map((section, index) => {
           // Кадр после раздела, но не после последнего: за ним идут вопросы,
@@ -9874,11 +9909,7 @@ function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
       ) : coverCar ? (
         <BlogFigure car={coverCar} index={0} navigate={navigate} onOpen={openQuickView} eager />
       ) : null}
-      <div className="model-page-intro">
-        {text?.intro.map((paragraph) => (
-          <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
-        ))}
-      </div>
+      <BlogIntro paragraphs={text?.intro} navigate={navigate} />
       {stats.length > 0 && (
         <div className="model-page-numbers">
           {stats.map((stat) => (
@@ -9938,11 +9969,7 @@ function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
   return (
     <BlogArticleShell post={post} navigate={navigate} quickViewModal={quickViewModal}>
       <BlogDuelHero data={data} navigate={navigate} onOpen={openQuickView} />
-      <div className="model-page-intro">
-        {text?.intro.map((paragraph) => (
-          <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
-        ))}
-      </div>
+      <BlogIntro paragraphs={text?.intro} navigate={navigate} />
       <BlogDuelTable post={post} data={data} navigate={navigate} />
       <div className="model-page-article">
         {(text?.sections || []).map((section, index) => {
@@ -11827,6 +11854,7 @@ export function App() {
     );
   return (
     <QuotaPricingContext.Provider value={quotaPricing}>
+    <CatalogTotalContext.Provider value={catalogTotal}>
     <CurrencyContext.Provider value={currency}>
      <SetCurrencyContext.Provider value={setCurrency}>
      <OrderedListingsContext.Provider value={orderedListings}>
@@ -11873,6 +11901,7 @@ export function App() {
      </OrderedListingsContext.Provider>
      </SetCurrencyContext.Provider>
     </CurrencyContext.Provider>
+    </CatalogTotalContext.Provider>
     </QuotaPricingContext.Provider>
   );
 }
