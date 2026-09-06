@@ -15070,6 +15070,26 @@ html[data-theme="dark"] .article-ad .article-ad-copy {
   --wordmark-height: 24px;
   vertical-align: -3px;
 }
+/* Кнопка и подпись под ней стоят колонкой у правого края врезки: подпись относится
+   к кнопке («сколько машин и на какое число»), а не ко всей плашке. */
+.article-ad-action {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+/* Дата актуализации каталога — мелкая и серая: это не обещание, а сноска к числу
+   в кнопке. Своё правило цвета нужно потому, что внутри вступления статьи текст в
+   тёмной теме приглушается, а серому приглушаться дальше некуда. */
+.article-ad .article-ad-updated {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
+  opacity: 1;
+}
 /* Кнопка — та же жёлтая, что во всём сайте. Цвет и подчёркивание задаём заново:
    правило про строчные ссылки статьи красит любые ссылки внутри вступления в красный
    и подчёркивает их при наведении. Кнопке это не нужно — подчёркнутая надпись на
@@ -15099,8 +15119,15 @@ html[data-theme="dark"] .article-ad .article-ad-copy {
   .article-ad-logo {
     --wordmark-height: 21px;
   }
+  .article-ad-action {
+    align-items: stretch;
+  }
   .article-ad .article-ad-button {
     width: 100%;
+  }
+  /* На телефоне подпись стоит под кнопкой во всю ширину и по центру. */
+  .article-ad .article-ad-updated {
+    text-align: center;
   }
 }
 

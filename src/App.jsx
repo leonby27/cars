@@ -69,11 +69,13 @@ const uniqueSorted = (values) => [...new Set(values)].sort((a, b) => a.localeCom
 // перезагружая и не сбивая ни выдачу, ни прокрутку.
 const QuotaPricingContext = createContext(null);
 
-// Сколько всего машин в каталоге. Число живёт в корне приложения (его приносит
-// первый же ответ каталога) и нужно далеко от него — в рекламной врезке посреди
-// статьи. Тащить его пропсами через страницу материала и её тело незачем.
-const CatalogTotalContext = createContext(0);
-const useCatalogTotal = () => useContext(CatalogTotalContext);
+// Сколько всего машин в каталоге и когда его обновляли. Оба числа живут в корне
+// приложения (их приносит первый же ответ каталога) и нужны далеко от него — в
+// рекламной врезке посреди статьи. Тащить их пропсами через страницу материала и
+// её тело незачем.
+const EMPTY_CATALOG_FACTS = { total: 0, updatedAt: "" };
+const CatalogFactsContext = createContext(EMPTY_CATALOG_FACTS);
+const useCatalogFacts = () => useContext(CatalogFactsContext) || EMPTY_CATALOG_FACTS;
 
 const CurrencyContext = createContext("USD");
 // Валюту переключают не только в шапке: в быстром просмотре шапка недоступна,
@@ -9537,13 +9539,16 @@ function BlogCoverImage({ cover, place, eager = false }) {
 // Оформлена не как абзац статьи, а как плашка на своей подложке и рубленым шрифтом,
 // чтобы её не приняли за продолжение текста.
 function ArticleAd({ navigate }) {
-  const total = useCatalogTotal();
+  const { total, updatedAt } = useCatalogFacts();
   // Число в кнопке — живое: сколько машин в каталоге, столько и обещаем. Округляем
   // вниз до тысяч: точная цифра меняется каждую ночь и выглядит как счётчик, а
   // круглая читается как размер каталога. Пока каталог не ответил (первое рисование
   // и версия для поисковика), в кнопке просто «Каталог» — врать числом нельзя, а
   // прятать кнопку тем более.
   const listings = total >= 1000 ? number(Math.floor(total / 1000) * 1000) : null;
+  // Дата последней актуализации — та же, что на главной, и теми же словами. Строка
+  // мелкая и серая: это не обещание, а доказательство, что цифра рядом свежая.
+  const updated = updatedAt ? catalogUpdatedDate(updatedAt) : "";
   return (
     <aside className="article-ad">
       <p className="article-ad-copy">
@@ -9555,9 +9560,12 @@ function ArticleAd({ navigate }) {
         </span>
         <span> — это маркетплейс б/у авто из Китая</span>
       </p>
-      <AppLink className="primary article-ad-button" href="/catalog" navigate={navigate}>
-        {listings ? `${listings} объявлений` : "Каталог"} <ArrowRight size={18} />
-      </AppLink>
+      <div className="article-ad-action">
+        <AppLink className="primary article-ad-button" href="/catalog" navigate={navigate}>
+          {listings ? `${listings} объявлений` : "Каталог"} <ArrowRight size={18} />
+        </AppLink>
+        {updated ? <span className="article-ad-updated">Каталог обновлён {updated}</span> : null}
+      </div>
     </aside>
   );
 }
@@ -11175,6 +11183,10 @@ export function App() {
   // Дата последней актуализации каталога — как и total, последнее известное значение
   // годится как заглушка, пока ответ каталога в пути.
   const [catalogUpdatedAt, setCatalogUpdatedAt] = useState("");
+  // Пара «размер каталога и дата обновления» для рекламной врезки в статьях. Держим
+  // её одним запомненным значением: иначе каждое рисование корня давало бы новый
+  // объект и перерисовывало всё, что слушает контекст.
+  const catalogFacts = useMemo(() => ({ total: catalogTotal, updatedAt: catalogUpdatedAt }), [catalogTotal, catalogUpdatedAt]);
   // Запомненные значения — валюту, размер каталога и дату обновления — читаем из
   // хранилища только после оживления страницы. Главную собирает и сервер, у которого
   // хранилища нет: прочитай мы их прямо в первом рисовании, серверная и браузерная
@@ -11854,7 +11866,7 @@ export function App() {
     );
   return (
     <QuotaPricingContext.Provider value={quotaPricing}>
-    <CatalogTotalContext.Provider value={catalogTotal}>
+    <CatalogFactsContext.Provider value={catalogFacts}>
     <CurrencyContext.Provider value={currency}>
      <SetCurrencyContext.Provider value={setCurrency}>
      <OrderedListingsContext.Provider value={orderedListings}>
@@ -11901,7 +11913,7 @@ export function App() {
      </OrderedListingsContext.Provider>
      </SetCurrencyContext.Provider>
     </CurrencyContext.Provider>
-    </CatalogTotalContext.Provider>
+    </CatalogFactsContext.Provider>
     </QuotaPricingContext.Provider>
   );
 }

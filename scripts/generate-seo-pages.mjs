@@ -416,7 +416,18 @@ function blogFigure(car, index) {
 function blogAdBlock() {
   const total = live.activeCars || 0;
   const listings = total >= 1000 ? `${number(Math.floor(total / 1000) * 1000)} объявлений` : "Смотреть каталог";
-  return `<aside><p>abcars.by — это маркетплейс б/у авто из Китая. <a href="${hrefRoute("/catalog/")}">${escapeHtml(listings)}</a></p></aside>`;
+  const updated = catalogUpdatedLabel(live.catalogRefreshedAt);
+  return `<aside><p>abcars.by — это маркетплейс б/у авто из Китая. <a href="${hrefRoute("/catalog/")}">${escapeHtml(listings)}</a>${
+    updated ? ` <span class="seo-updated">Каталог обновлён ${escapeHtml(updated)}.</span>` : ""
+  }</p></aside>`;
+}
+
+/** Дата актуализации словами — как в приложении: «6 сентября 2026». */
+function catalogUpdatedLabel(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(date).replace(/\s*г\.$/, "");
 }
 
 /** Вступление материала с этой врезкой после первого абзаца. */
@@ -987,7 +998,7 @@ async function readLiveCatalog() {
     }
     return counts;
   };
-  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], activeCars: 0, listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map() };
+  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], activeCars: 0, catalogRefreshedAt: null, listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map() };
   if (cars.length) {
     return {
       showcase: cars.slice(0, showcaseSize),
@@ -1011,7 +1022,8 @@ async function readLiveCatalog() {
     // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
     // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
     // модель займёт весь блок.
-    const showcase = (await listCars(new URLSearchParams({ sort: "variety", limit: String(showcaseSize) }))).items;
+    const showcaseAnswer = await listCars(new URLSearchParams({ sort: "variety", limit: String(showcaseSize) }));
+    const showcase = showcaseAnswer.items;
     const facts = await getModelFacts();
     // `content_changed_at` ставится только когда данные объявления действительно
     // изменились (см. миграцию 021). `imported_at` для этого не годится: она одинаковая
@@ -1129,6 +1141,11 @@ async function readLiveCatalog() {
       modelChanged: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, isoDate(row.changedAt)])),
       carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) })),
       activeCars: whole.total,
+      // Когда каталог последний раз проверяли — та же дата и из того же места, что
+      // приложение пишет на главной и в рекламной врезке статьи: последняя отметка
+      // проверки по всему каталогу. У `sectionStats` её нет, поэтому берём из ответа
+      // на обычный запрос списка.
+      catalogRefreshedAt: showcaseAnswer.refreshedAt || null,
       listPages,
       stock,
       changed,
