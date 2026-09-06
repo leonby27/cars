@@ -274,10 +274,13 @@ function OverviewSection({ data }) {
     // три карточки, открытые в трёх вкладках подряд, остаются одним.
     ["Уникальные посетители", summary.visitors, `${formatNumber(summary.visits)} заходов${Number(summary.robot_visits) ? ` · ещё ${formatNumber(summary.robot_visits)} без действий` : ""}`],
     ["Просмотры автомобилей", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
-    ["Заявки по автомобилю", summary.availability_clicks, `${percent(summary.availability_clicks, summary.vehicle_views)} от просмотров авто${summary.custom_searches ? ` · ещё ${formatNumber(summary.custom_searches)} на подбор` : ""}`],
-    // Кнопка на первом этапе заказа — самый близкий к сделке шаг: пока проверка
-    // объявлений выключена, заявка никуда не уходит, но нажатия считаются.
-    ["Проверка объявления", summary.availability_requests, `${formatNumber(summary.availability_request_people)} человек · ${percent(summary.availability_requests, summary.availability_clicks)} от заявок`],
+    // Машины, добавленные в кабинет: человек нажал в карточке «Уточнить актуальность»,
+    // вошёл в кабинет и там завёлся заказ. Считаем по самим заказам, а не по нажатию:
+    // нажатие бывает и у тех, кто ушёл на входе. Рядом мелким — заявки, оставленные
+    // формой, минуя кабинет. Кнопка «Уточнить актуальность» внутри самого заказа
+    // отдельной цифрой больше не выводится (решение владельца 06.09.2026): пока
+    // проверка объявлений приостановлена, эта цифра ничего не решала.
+    ["Машины в кабинете", summary.cabinet_orders, `${percent(summary.cabinet_orders, summary.vehicle_views)} от просмотров авто${summary.form_requests ? ` · ещё ${formatNumber(summary.form_requests)} заявок с форм` : ""}${summary.custom_searches ? ` · ${formatNumber(summary.custom_searches)} на подбор` : ""}`],
     ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} добавлений в избранное`],
   ];
   return (

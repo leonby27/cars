@@ -325,6 +325,10 @@ export async function getAnalyticsDashboard(rangeValue) {
     pool.query(`SELECT
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int
         + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
+      -- Машины, добавленные в кабинет: заказ заводится кнопкой «Уточнить актуальность»
+      -- в карточке. Отдельно от строки выше, где к ним прибавлены заявки с форм.
+      (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int AS cabinet_orders,
+      (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS form_requests,
       (SELECT count(*) FROM customer_favorites WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int AS favorites,
       (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND calculation->>'requestType' = 'catalog_search' AND ${notStaffContact("contact")})::int AS custom_searches`, [from, to]),
     pool.query(`SELECT created_at::date::text AS day,
