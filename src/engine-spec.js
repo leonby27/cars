@@ -15,10 +15,14 @@ export const FUEL_TYPES = ["Бензин", "Дизель"];
  * там всё сказано типом машины.
  */
 export const fuelType = (car) => {
-  const text = String(car?.sourceFuelType ?? "").toLocaleLowerCase("en-US");
+  const text = String(car?.sourceFuelType ?? "").toLocaleLowerCase("ru-RU");
   if (!text) return "";
-  if (text.includes("diesel")) return "Дизель";
-  if (text.includes("gasoline") || text.includes("petrol")) return "Бензин";
+  // Русские слова наравне с английскими: с 31.08.2026 карточки приходят с русской
+  // версии источника, где написано «Бензин», «Дизель», «Бензин+48V мягкая
+  // гибридная система». Пока ловились только английские слова, у машин с этой
+  // даты тип топлива был пуст и фильтр их не показывал.
+  if (text.includes("diesel") || text.includes("дизел")) return "Дизель";
+  if (text.includes("gasoline") || text.includes("petrol") || text.includes("бензин")) return "Бензин";
   return "";
 };
 
@@ -53,7 +57,9 @@ export const engineVolumeBadge = (car) => {
 
 /** Мощность в лошадиных силах: «2.5T 367-horsepower L6» → 367. */
 export const enginePower = (car) => {
-  const value = Number(engineText(car).match(/(\d{2,4}) ?-? ?(?:HP|HORSEPOWER)/)?.[1]);
+  // По-русски мощность в той же строке записана как «178 л.с.» — источник ставит
+  // в сокращении то точки, то запятые, поэтому знаки препинания необязательны.
+  const value = Number(engineText(car).match(/(\d{2,4}) ?-? ?(?:HP|HORSEPOWER|Л[.,]?\s?С[.,]?)/)?.[1]);
   return value >= 30 && value <= 2000 ? value : null;
 };
 
@@ -65,12 +71,17 @@ export const enginePower = (car) => {
  * («ручной режим» у автоматической коробки механикой не делает).
  */
 export const gearboxType = (car) => {
-  const text = String(car?.transmission ?? "").toLocaleLowerCase("en-US").trim();
+  const text = String(car?.transmission ?? "").toLocaleLowerCase("ru-RU").trim();
   if (!text) return "";
-  if (/dual.?clutch|dct|dsg/.test(text)) return "Робот";
-  if (/cvt|continuously variable/.test(text)) return "Вариатор";
-  if (/automatic|dht/.test(text) || text === "at") return "Автомат";
-  if (/manual/.test(text) || text === "mt") return "Механика";
+  // Русские описания идут наравне с английскими: «7-ступенчатая мокрая двойная
+  // муфта», «9-ступенчатая автоматическая коробка передач с ручным режимом»,
+  // «CVT бесступенчатая трансмиссия». Порядок проверок тот же и по той же причине:
+  // «с ручным режимом» — это по-прежнему автомат, а не механика, поэтому механика
+  // узнаётся только по своему собственному названию.
+  if (/dual.?clutch|dct|dsg|двойн[а-я]*\s+(?:сух[а-я]*\s+|мокр[а-я]*\s+)?муфт|(?:сух|мокр)[а-я]*\s+двойн[а-я]*\s+муфт|преселектив/.test(text)) return "Робот";
+  if (/cvt|continuously variable|бесступенчат/.test(text)) return "Вариатор";
+  if (/automatic|dht|автоматическ/.test(text) || text === "at") return "Автомат";
+  if (/manual|механическ|ручная коробка/.test(text) || text === "mt") return "Механика";
   return "";
 };
 

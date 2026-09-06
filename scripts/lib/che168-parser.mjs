@@ -2,7 +2,12 @@ import { canonicalImportBrand, canonicalImportModel } from "../../config/import-
 import { normalizeDrive } from "./guazi-parser.mjs";
 
 const numeric = (value) => {
-  const match = String(value ?? "").replaceAll(",", "").match(/-?\d+(?:\.\d+)?/);
+  // Запятая значит разное на разных версиях сайта источника: по-английски она
+  // отделяет тысячи («1,234»), по-русски — дробную часть («73,6»). Отличаем по
+  // числу цифр после неё: одна-две — дробь, ровно три — разряд тысяч. Пока
+  // запятая просто выбрасывалась, батарея на 73,6 кВт·ч записывалась как 736.
+  const text = String(value ?? "").replace(/(\d),(\d{1,2})(?!\d)/, "$1.$2").replaceAll(",", "");
+  const match = text.match(/-?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
 };
 
@@ -128,9 +133,13 @@ export function normalizeChe168TechnicalSpecs(groups) {
     normalizedGroups.push({ name:String(group?.name || "Other").trim() || "Other", items });
     count += items.length;
   }
+  // Язык подписей определяется по ним самим: сборщик с 31.08.2026 ходит по русской
+  // версии источника, и записывать «en» у всех подряд значило бы врать в своих же
+  // данных — а по этой отметке видно, каким разбором машину заводили.
+  const cyrillic = normalizedGroups.some((group) => group.items.some((item) => /[А-Яа-яЁё]/.test(item.name)));
   return {
     schemaVersion: 1,
-    sourceLocale: "en",
+    sourceLocale: cyrillic ? "ru" : "en",
     count,
     groups: normalizedGroups,
   };
@@ -139,6 +148,78 @@ export function normalizeChe168TechnicalSpecs(groups) {
 function specValue(specs, patterns) {
   const item = specs.find((candidate) => patterns.some((pattern) => pattern.test(candidate.name || "")));
   return actualSpecValue(item);
+}
+
+// Характеристики машины лежат в карточке строками «название — значение», и назван
+// каждая строка на языке той версии сайта, откуда карточка взята. С 31.08.2026
+// сборщик ходит по русской версии (так он проходит проверку «не робот»), а искали
+// мы по-английски — и у 6 202 машин остались пустыми батарея, запас хода, разгон,
+// момент, шины и объём двигателя. Объём вдобавок нужен расчёту пошлины: без него
+// растаможку считали по «полтора литра по умолчанию». Поэтому каждое название
+// ищется на обоих языках, и разбор вынесен сюда — им же чинятся уже заведённые
+// машины (`npm run db:respec`), у которых исходные строки сохранены в записи.
+//
+// Русские названия взяты из наших же записей, поэтому написаны буква в букву —
+// включая «(л,с,)» с запятыми вместо точек и строчные буквы в начале строки.
+export function deriveChe168SpecFields(specs) {
+  const battery = numeric(specValue(specs, [
+    /^Battery Energy \(kWh\)$/i, /^Battery Capacity/i,
+    /^Энергия батареи/i, /^[ЁЕ]мкость батареи/i,
+  ]));
+  // Машины, зарегистрированные до появления китайского стандарта CLTC, показывают
+  // запас хода по NEDC, поэтому стандарты перебираются по убыванию точности —
+  // и никогда не смешиваются с собственным замером продавца.
+  const electricRange = [
+    [/^CLTC Pure Electric Range/i, /^запас хода на электротяге по CLTC/i],
+    [/^WLTP Pure Electric Range/i, /^Запас хода на электротяге по WLTC/i],
+    [/^NEDC Pure Electric Range/i, /^Запас хода на электротяге по NEDC/i],
+    [/^Pure Electric Range/i, /^Запас хода на электротяге/i],
+  ].reduce((found, patterns) => found ?? numeric(specValue(specs, patterns)), null);
+  const horsepower = numeric(specValue(specs, [
+    /^Total Electric Motor Horsepower/i, /^Electric Motor \(Ps\)$/i,
+    /^Суммарная мощность электродвигателей \(л[.,]с[.,]\)/i,
+    /^Совокупная мощность системы \(л[.,]с[.,]\)/i,
+    /^Электродвигатель \(л[.,]с[.,]\)/i,
+    /^максимальная мощность \(л[.,]с[.,]\)/i,
+  ]));
+  const acceleration = numeric(specValue(specs, [
+    /^Official 0-100km\/h acceleration/i, /^Measured 0-100km\/h acceleration/i,
+    /^Официальное ускорение 0-100/i, /^Фактическое ускорение 0-100/i,
+  ]));
+  // Момент у гибридов и электричек разложен по нескольким строкам (ДВС, моторы,
+  // суммарный); в карточку идёт наибольший — он и описывает машину целиком.
+  const torqueValues = specs
+    .filter((item) => /^(Max Torque|Total Motor Torque|System Combined Torque) \(N·m\)$/i.test(item.name || "")
+      || /^(Максимальный крутящий момент|Суммарный крутящий момент электродвигателя|Совокупный крутящий момент системы) \(Н·м\)$/i.test(item.name || ""))
+    .map((item) => numeric(actualSpecValue(item)))
+    .filter((value) => value !== null);
+  const tireSizeFront = specValue(specs, [/^Front Tire Specification$/i, /^спецификация передней шины$/i]);
+  // В характеристиках объём стоит строкой вида «1.5T 156HP L4» (по-русски —
+  // «2.0L 178 л.с. L4»); у машины с генератором вместо объёма написана мощность,
+  // и такую строку расчёт пошлины за объём не примет.
+  const engine = specValue(specs, [/^Engine$/i, /^Двигатель$/i]);
+  return {
+    battery,
+    electricRange,
+    horsepower,
+    acceleration,
+    torqueNm: torqueValues.length ? Math.max(...torqueValues) : null,
+    tireSizeFront,
+    tireRim: numeric(String(tireSizeFront || "").match(/R\s*(\d{2})/i)?.[1]),
+    engine,
+    driveRaw: specValue(specs, [/^Drive Type$/i, /^Тип привода$/i]),
+    batteryType: specValue(specs, [/^Battery Type$/i, /^Тип батареи$/i]),
+    batteryBrand: specValue(specs, [/^Battery cell brand$/i, /^Battery Brand$/i, /^Марка ячеек батареи$/i]),
+    bodyStructure: specValue(specs, [/^Body structure$/i, /^Тип кузова$/i, /^Структура кузова$/i]),
+    seats: numeric(specValue(specs, [/^Seating capacity$/i, /^Количество мест/i])),
+    doors: numeric(specValue(specs, [/^Number of doors$/i, /^Количество дверей/i])),
+  };
+}
+
+// Те же характеристики, но из уже сохранённой в записи выжимки: там строки лежат
+// готовыми парами «название — значение», а не так, как их отдал источник.
+export function specsFromTechnicalSpecs(technicalSpecs) {
+  return (technicalSpecs?.groups || []).flatMap((group) => (group?.items || []).map((item) => ({ ...item, group: group.name })));
 }
 
 const SOURCE_BRAND_PREFIXES = new Map([
@@ -205,36 +286,16 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
   const type = normalizeChe168Energy(detail, specs);
   if (!brand || !model || !year || !sourcePriceUsd || mileage === null || images.length < 2) return null;
 
-  const battery = numeric(specValue(specs, [/^Battery Energy \(kWh\)$/i, /^Battery Capacity/i]));
-  // Cars registered before CLTC became the Chinese standard report their range
-  // as NEDC, so a CLTC-only lookup leaves a quarter of the older listings with
-  // no range at all. Standards are tried in order of accuracy and never mixed
-  // with a dealer's own measured figure.
-  const electricRange = [/^CLTC Pure Electric Range/i, /^WLTP Pure Electric Range/i, /^NEDC Pure Electric Range/i, /^Pure Electric Range/i]
-    .reduce((found, pattern) => found ?? numeric(specValue(specs, [pattern])), null);
-  const horsepower = numeric(specValue(specs, [/^Total Electric Motor Horsepower/i, /^Electric Motor \(Ps\)$/i]));
+  const {
+    battery, electricRange, horsepower, batteryType, batteryBrand, acceleration,
+    torqueNm, tireSizeFront, tireRim, engine, driveRaw: driveFromSpecs,
+    bodyStructure: structureFromSpecs, seats: seatsFromSpecs, doors: doorsFromSpecs,
+  } = deriveChe168SpecFields(specs);
   const sourceUrl = `https://global.che168.com/en/detail/${detail.infoid}`;
   const chinaPrice = Math.round((sourcePriceUsd * usdToCny) / 100) * 100;
-  const driveRaw = detail.drivingmode || specValue(specs, [/^Drive Type$/i]);
-  const batteryType = specValue(specs, [/^Battery Type$/i]);
-  const batteryBrand = specValue(specs, [/^Battery cell brand$/i, /^Battery Brand$/i]);
-  const bodyStructure = detail.structure || specValue(specs, [/^Body structure$/i]);
+  const driveRaw = detail.drivingmode || driveFromSpecs;
+  const bodyStructure = detail.structure || structureFromSpecs;
   const technicalSpecs = normalizeChe168TechnicalSpecs(payload.specGroups);
-  const acceleration = numeric(specValue(specs, [/^Official 0-100km\/h acceleration/i, /^Measured 0-100km\/h acceleration/i]));
-  // Момент у гибридов и электричек разложен по нескольким строкам (ДВС, моторы,
-  // суммарный); в карточку идёт наибольший — он и описывает машину целиком.
-  const torqueValues = specs
-    .filter((item) => /^(Max Torque|Total Motor Torque|System Combined Torque) \(N·m\)$/i.test(item.name || ""))
-    .map((item) => numeric(actualSpecValue(item)))
-    .filter((value) => value !== null);
-  const torqueNm = torqueValues.length ? Math.max(...torqueValues) : null;
-  const tireSizeFront = specValue(specs, [/^Front Tire Specification$/i]);
-  // Объём двигателя нужен расчёту пошлины у гибридов с розеткой: ставка за см³
-  // растёт ступенями, и 2,0 л обходятся дороже 1,5 л почти вдвое. В характеристиках
-  // это строка вида «1.5T 156HP L4»; у машин с генератором вместо объёма стоит
-  // «Range Extender 160 Horsepower» — такую строку расчёт не примет за объём.
-  const engine = specValue(specs, [/^Engine$/i]);
-  const tireRim = numeric(String(tireSizeFront || "").match(/R\s*(\d{2})/i)?.[1]);
 
   return {
     id: `che168-${detail.infoid}`,
@@ -280,8 +341,8 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     torqueNm,
     tireSizeFront,
     tireRim,
-    seats: numeric(detail.setcount || specValue(specs, [/^Seating capacity$/i])),
-    doors: numeric(detail.structuredoor || specValue(specs, [/^Number of doors$/i])),
+    seats: numeric(detail.setcount) ?? seatsFromSpecs,
+    doors: numeric(detail.structuredoor) ?? doorsFromSpecs,
     dimensions: detail.dimension || null,
     curbWeight: numeric(detail.curbweight),
     technicalSpecs,
