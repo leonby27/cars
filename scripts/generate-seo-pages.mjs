@@ -156,6 +156,18 @@ const publicPages = [
 ];
 
 const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
+// Названия закрытых разделов по-русски. Без них заголовок вкладки собирался из
+// самого адреса — «analytics | abcars.by», — а у аналитики он ещё и подменялся
+// приложением на «Страница не найдена»: закрытые разделы в перечень заголовков
+// не входили (см. privateRouteSeo в src/App.jsx).
+const PRIVATE_ROUTE_NAMES = {
+  "/favorites/": "Избранные автомобили",
+  "/searches/": "Мои поиски",
+  "/login/": "Вход в личный кабинет",
+  "/register/": "Регистрация",
+  "/account/": "Личный кабинет",
+  "/analytics/": "Аналитика",
+};
 
 // В боевом HTML CRM не оставляем даже выключенный код внешних счётчиков. Проверка
 // адреса в общем шаблоне нужна для локальной разработки и перехода без перезагрузки,
@@ -939,7 +951,7 @@ for (const car of cars) {
 }
 
 for (const route of privateRoutes) {
-  const name = route.split("/").filter(Boolean).join(" ") || "Личный раздел";
+  const name = PRIVATE_ROUTE_NAMES[route] || "Личный раздел";
   const html = renderHtml({ title: `${name} | abcars.by`, description: "Личный раздел пользователя abcars.by.", canonical: route === "/analytics/" ? null : routeUrl(route), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
   writeRoute(route, route === "/analytics/" ? withoutMetrika(html) : html);
 }
