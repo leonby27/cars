@@ -53,7 +53,7 @@ Unfinished-section preference (owner decision, 2026-08-27): a section that takes
 
 Analytics CRM preference (owner decision, 2026-08-30): `/analytics` is an internal CRM, not a site page. Never include it in search indexing, sitemaps, public navigation, Yandex Metrica, Webvisor, the site's own visitor/event analytics, or any aggregate derived from those events. Keep both new events and historical `/analytics` rows out of reports, and stop an already-running external counter if an in-app transition reaches the CRM.
 
-Analytics period preference (owner decision, 2026-09-07): open the shared analytics period on «Сегодня» every time. The overview visits chart has its own 90/30/7-day dropdown, defaults to 90 days on the first visit, and remembers that chart choice in the browser without changing the period used by cards, tables, or other sections.
+Analytics period preference (owner decision, 2026-09-07): an ordinary visit to `/analytics` always opens the «Обзор» section with the shared period on «Сегодня». The overview visits chart has its own 90/30/7-day dropdown, defaults to 90 days on the first visit, and remembers that chart choice in the browser without changing the period used by cards, tables, or other sections.
 
 Search analytics source preference (owner decision, 2026-09-07): the top search-traffic counters use Yandex Metrica organic visits for the total and Google/Yandex split so they are current and directly comparable to one behavioral report. Search Console and Yandex Webmaster remain the source for SEO clicks, queries, impressions, positions and landing pages; always show the latest published date because those sources lag and must not blank the Metrica visit counters.
 

@@ -616,7 +616,7 @@ const sections = [
 ];
 
 function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads }) {
-  const [section, setSection] = useState("leads");
+  const [section, setSection] = useState("overview");
   // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
   // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
   // цифры на компьютере.
