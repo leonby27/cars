@@ -66,7 +66,7 @@ import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
-import { IMPORT_BRANDS, ICE_IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
+import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, sourceBrandOf, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -140,7 +140,7 @@ const activeFeeds = args.get("feeds")
   // Смены остались только как способ вручную ограничить прогон одним типом
   // топлива (`--shift=ev`). Без явного указания доступны все фиды: что именно
   // берётся этой ночью, решают очередь из настройки и курсор.
-  : (args.get("shift") && args.get("shift") !== "auto" ? feedsForShift(shift) : [7, 5, 6, 1]);
+  : (args.get("shift") && args.get("shift") !== "auto" ? feedsForShift(shift) : [7, 5, 6, 3, 1]);
 const brandLimit = Number(args.get("brand-limit") || 0);
 // Потолок глубины среза для проверочных прогонов: боевой прогон листает срез
 // целиком, а короткая проверка — три страницы, чтобы не тревожить источник.
@@ -347,7 +347,7 @@ async function loadBrandTable(fuelType) {
 // поимённо, потом (если стоит "*") все прочие по убыванию количества машин.
 function orderedBrands(fuelType, table, doneSet, { restartWhenEmpty = true } = {}) {
   const done = doneSet ?? new Set(cursor?.brandsDone || []);
-  const allowed = new Set([...(fuelType === 1 ? ICE_IMPORT_BRANDS : []), ...IMPORT_BRANDS]);
+  const allowed = new Set(IMPORT_BRANDS);
   const rows = Object.entries(table)
     .map(([name, v]) => ({
       name,
@@ -880,7 +880,7 @@ async function brandQueue(ourCountByBrand) {
     for (const [name, value] of Object.entries(table)) {
       if (!value.brandId) continue;
       const canon = canonicalImportBrand(name);
-      if (!IMPORT_BRANDS.includes(canon) && !ICE_IMPORT_BRANDS.includes(canon)) continue;
+      if (!IMPORT_BRANDS.includes(canon)) continue;
       // Вычеркнутую марку не обходим, даже если она осталась в списках ввоза.
       if (EXCLUDED_BRANDS.includes(canon)) continue;
       const rec = ids.get(canon) || { brand: canon, ids: new Set(), sourceCount: 0 };
@@ -1049,7 +1049,7 @@ async function addNewCar(externalId) {
   if (!car) return "rejected";
   // Правила ввоза и потолок цены проверяем здесь же: список показывает цену в
   // Китае, а решает стоимость под ключ.
-  if (importPolicyViolation(car, { combustion: true })) return "rejected";
+  if (importPolicyViolation(car)) return "rejected";
   if (isAbovePriceCeiling(estimateLandedCost(car).totalUsd)) return "rejected";
   if (knownIds.has(car.id)) return "rejected";
   if (!dryRun) await importCars([car]);
@@ -1237,7 +1237,9 @@ try {
   const ourPricesByBrand = new Map();
   for (const row of rows) {
     if (prioritized.has(row.id)) continue;
-    const canon = canonicalImportBrand(row.brand);
+    // Не наша марка, а марка источника: машина под именем Jaecoo лежит в списках
+    // Chery, и искать её надо там, иначе она выпадет из обхода насовсем.
+    const canon = sourceBrandOf(row.brand);
     if (!ourRowsByBrand.has(canon)) { ourRowsByBrand.set(canon, []); ourPricesByBrand.set(canon, []); }
     ourRowsByBrand.get(canon).push(row);
     const usd = Number(row.usd_price) || 0;

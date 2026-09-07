@@ -175,6 +175,132 @@ export const MODEL_RENAMES = Object.freeze([
   { brand: "BYD", model: "Song PLUS New Energy", toModel: "Song PLUS EV", zh: "宋PLUS新能源", pinyin: "Song PLUS Xinnengyuan" },
   { brand: "Changan", model: "Eado New Energy", toModel: "Eado EV", zh: "逸动新能源", pinyin: "Yidong Xinnengyuan" },
   { brand: "Volvo", model: "XC40 New Energy", toModel: "XC40 EV", zh: "XC40新能源", pinyin: "XC40 Xinnengyuan" },
+
+  // ===== 07.09.2026: электрички и гибриды марок, которые раньше приезжали только
+  // бензиновыми. Список марок ввоза стал общим, и вместе с ним в каталог пошли
+  // машины с китайскими именами. Правила те же, что 26.08: главное имя — из
+  // справочника av.by, иначе экспортное имя завода; «New Energy» и «Plug-in Hybrid»
+  // превращаются в PHEV у гибрида и в EV у электромобиля; заводская приставка
+  // («FAW Toyota», «Dongfeng Honda») в названии модели не нужна.
+
+  // ---- Volvo: на av.by все модели стоят под обычными именами, XC60/XC90/S60/S90
+  { brand: "Volvo", model: "XC60 Plug-in Hybrid", toModel: "XC60 PHEV" },
+  { brand: "Volvo", model: "XC70 Plug-in Hybrid", toModel: "XC70 PHEV" },
+  { brand: "Volvo", model: "XC90 Plug-in Hybrid", toModel: "XC90 PHEV" },
+  { brand: "Volvo", model: "S60 Plug-in Hybrid", toModel: "S60 PHEV" },
+  { brand: "Volvo", model: "S90 Plug-in Hybrid", toModel: "S90 PHEV" },
+
+  // ---- Porsche, Land Rover: имена моделей известны, лишняя приставка только мешает
+  { brand: "Porsche", model: "Cayenne New Energy", toModel: "Cayenne PHEV", zh: "卡宴新能源" },
+  { brand: "Porsche", model: "Panamera New Energy", toModel: "Panamera PHEV", zh: "帕拉梅拉新能源" },
+  { brand: "Land Rover", model: "Range Rover Evoque New Energy", toModel: "Range Rover Evoque PHEV" },
+
+  // ---- Volkswagen: GTE — собственное имя гибрида у завода, второй приставки не нужно
+  { brand: "Volkswagen", model: "Magotan GTE Plug-in Hybrid", toModel: "Magotan GTE" },
+  { brand: "Volkswagen", model: "Tayron GTE Plug-in Hybrid", toModel: "Tayron GTE" },
+
+  // ---- Honda: 皓影 и CR-V на av.by без приставок; заводские имена e:NS2 и e:NP2
+  // источник пишет вместе с китайским («猎光» — Hunting Light, «极湃2» — Extreme Wave 2).
+  { brand: "Honda", model: "Accord New Energy", toModel: "Accord PHEV", zh: "雅阁新能源" },
+  { brand: "Honda", model: "Breeze New Energy", toModel: "Breeze PHEV", zh: "皓影新能源", pinyin: "Haoying Xinnengyuan" },
+  { brand: "Honda", model: "CR-V New Energy", toModel: "CR-V PHEV" },
+  { brand: "Honda", model: "Inspire Hybrid", toModel: "Inspire PHEV", zh: "英仕派", pinyin: "Yingshipai" },
+  { brand: "Honda", model: "Hunting Light e:NS2", toModel: "e:NS2", zh: "猎光e:NS2", pinyin: "Lieguang e:NS2" },
+  { brand: "Honda", model: "e:NP2 Extreme Wave 2", toModel: "e:NP2", zh: "极湃2", pinyin: "Jipai 2" },
+
+  // ---- Geely: китайские имена уже переведены у бензиновых версий, гибридные идут следом
+  { brand: "Geely", model: "Bin Yue New Energy", toModel: "Coolray PHEV", zh: "缤越新能源", pinyin: "Binyue Xinnengyuan" },
+  { brand: "Geely", model: "Borui PHEV", toModel: "Emgrand GT PHEV", zh: "博瑞新能源", pinyin: "Borui Xinnengyuan" },
+  { brand: "Geely", model: "Emgrand New Energy", toModel: "Emgrand PHEV", zh: "帝豪新能源" },
+  { brand: "Geely", model: "Emgrand L HiP", toModel: "Emgrand L PHEV", zh: "帝豪L雷神Hi·P" },
+  { brand: "Geely", model: "Emgrand GSe", toModel: "Emgrand GS EV", zh: "帝豪GSe" },
+  { brand: "Geely", model: "Jiaji New Energy", toModel: "Jiaji PHEV", zh: "嘉际新能源", pinyin: "Jiaji Xinnengyuan" },
+
+  // ---- Chery: у бензиновых PLUS уже стал Pro Max, гибриды идут за ними.
+  // «Kunpeng e+» — заводское имя гибридной установки, покупателю оно ничего не говорит.
+  { brand: "Chery", model: "Tiggo 7 PLUS New Energy", toModel: "Tiggo 7 Pro Max PHEV", zh: "瑞虎7 PLUS新能源" },
+  { brand: "Chery", model: "Tiggo 8 PLUS C-DM", toModel: "Tiggo 8 Pro Max C-DM", zh: "瑞虎8 PLUS" },
+  { brand: "Chery", model: "Tiggo 8 PLUS Kunpeng e+", toModel: "Tiggo 8 Pro Max PHEV", zh: "瑞虎8 PLUS鲲鹏e+" },
+
+  // ---- Haval: 大狗 уже переведён в Dargo, гибридное второе поколение идёт за ним
+  { brand: "Haval", model: "H6 New Energy", toModel: "H6 PHEV", zh: "哈弗H6新能源" },
+  { brand: "Haval", model: "Second-Generation Big Dog New Energy", toModel: "Dargo II PHEV", zh: "二代大狗新能源", pinyin: "Erdai Dagou Xinnengyuan" },
+
+  // ---- MG: на av.by марка знает ZS и 6; «EZS» — китайское имя электрического ZS
+  { brand: "MG", model: "EZS Pure Electric", toModel: "ZS EV", zh: "EZS纯电动" },
+  { brand: "MG", model: "6 New Energy", toModel: "6 PHEV", zh: "MG6新能源" },
+  { brand: "MG", model: "HS New Energy", toModel: "HS PHEV", zh: "MG HS新能源" },
+
+  // ---- Buick: электрички завод продаёт как Electra, на av.by модель так и записана
+  { brand: "Buick", model: "E4", toModel: "Electra E4", zh: "别克E4" },
+  { brand: "Buick", model: "E5", toModel: "Electra E5", zh: "别克E5" },
+  { brand: "Buick", model: "GL8 New Energy", toModel: "GL8 PHEV", zh: "GL8新能源" },
+
+  // ---- Lexus
+  { brand: "Lexus", model: "NX New Energy", toModel: "NX PHEV" },
+  { brand: "Lexus", model: "RX New Energy", toModel: "RX PHEV" },
+  { brand: "Lexus", model: "UX Electric", toModel: "UX EV" },
+
+  // ---- Toyota: 铂智 — марка электричек Toyota в Китае, экспортное имя bZ.
+  // «Twin Engine E+» и «Dual Engine E+» — как завод называет гибрид с розеткой.
+  { brand: "Toyota", model: "BoZhi 3X", toModel: "bZ3X", zh: "铂智3X", pinyin: "Bozhi 3X" },
+  { brand: "Toyota", model: "BoZhi 4X", toModel: "bZ4X", zh: "铂智4X", pinyin: "Bozhi 4X" },
+  { brand: "Toyota", model: "BoZhi 7", toModel: "bZ7", zh: "铂智7", pinyin: "Bozhi 7" },
+  { brand: "Toyota", model: "Corolla Twin Engine E+", toModel: "Corolla PHEV", zh: "卡罗拉双擎E+" },
+  { brand: "Toyota", model: "Levin Twin Engine E+", toModel: "Levin PHEV", zh: "雷凌双擎E+" },
+  { brand: "Toyota", model: "RAV4 Rongfang Dual Engine E+", toModel: "RAV4 PHEV", zh: "RAV4荣放双擎E+", pinyin: "RAV4 Rongfang" },
+  { brand: "Toyota", model: "Wildlander New Energy", toModel: "Wildlander PHEV", zh: "威兰达新能源", pinyin: "Weilanda Xinnengyuan" },
+  { brand: "Toyota", model: "Lingfang HARRIER", toModel: "Harrier", zh: "凌放HARRIER", pinyin: "Lingfang" },
+
+  // ---- Hyundai
+  { brand: "Hyundai", model: "Elantra Plug-in Hybrid", toModel: "Elantra PHEV" },
+
+  // ---- Changan: 启源 приезжает отдельной маркой, но в Беларуси это Changan
+  // с моделями «Qiyuan A05», «Qiyuan A07», «Qiyuan Q05» — так в справочнике av.by.
+  { brand: "Changan", model: "UNI-Z New Energy", toModel: "UNI-Z PHEV", zh: "UNI-Z新能源" },
+  { brand: "Changan", model: "New Energy E-Pro", toModel: "E-Pro", zh: "长安新能源E-Pro" },
+  { brand: "Changan", model: "CS55PLUS PHEV", toModel: "CS55 PLUS PHEV", zh: "CS55PLUS新能源" },
+
+  // ---- Имена, найденные за пределами av.by: официальные экспортные названия завода
+  // и то, как машину продают в России, когда в Беларуси её ещё нет (07.09.2026).
+
+  // 至境 — новая марка электричек Buick, за границей она называется Electra.
+  // Источник переводит имя по-разному: то Zhijing, то Zenith.
+  { brand: "Buick", model: "Zenith Sedan", toModel: "Electra L7", zh: "至境L7", pinyin: "Zhijing L7" },
+  { brand: "Buick", model: "Zhijing E7", toModel: "Electra E7", zh: "至境E7", pinyin: "Zhijing E7" },
+  { brand: "Buick", model: "Zhijing Shijia", toModel: "Electra Encasa", zh: "至境世家", pinyin: "Zhijing Shijia" },
+
+  // 猛龙 в России продаётся как Haval Raptor — так его называет и завод, и дилеры.
+  { brand: "Haval", model: "Meng Long NEV", toModel: "Raptor", zh: "猛龙", pinyin: "Menglong" },
+  { brand: "Haval", model: "Menglong PLUS", toModel: "Raptor Plus", zh: "猛龙PLUS", pinyin: "Menglong PLUS" },
+
+  // 昂希诺 — китайское имя Kona, 菲斯塔 — Lafesta. На av.by есть Kona.
+  { brand: "Hyundai", model: "Encino Pure Electric", toModel: "Kona EV", zh: "昂希诺纯电动", pinyin: "Angxinuo" },
+  { brand: "Hyundai", model: "Fista EV", toModel: "Lafesta EV", zh: "菲斯塔纯电", pinyin: "Feisita" },
+
+  // MINI: источник приклеивает «Electric MINI» к каждой электричке. На av.by марка
+  // знает Cooper SE и Aceman — так их здесь и ищут.
+  { brand: "MINI", model: "Electric MINI COOPER", toModel: "Cooper SE" },
+  { brand: "MINI", model: "Electric MINI ACEMAN", toModel: "Aceman" },
+  { brand: "MINI", model: "Electric MINI JCW", toModel: "JCW Electric" },
+  { brand: "MINI", model: "Electric MINI JCW ACEMAN", toModel: "Aceman JCW" },
+
+  // Прошлое поколение RX источник помечает словом Classic; на av.by поколения
+  // не разводят, там просто RX.
+  { brand: "Lexus", model: "RX Classic", toModel: "RX" },
+
+  // MG4 бывает только электрическим, приставка ничего не добавляет.
+  { brand: "MG", model: "MG4 EV", toModel: "MG4" },
+
+  // ---- Экспортные марки Chery: машина уезжает из Chery в свою марку.
+  // 探索06 источник пишет двумя способами — «Tansuo 06» у бензиновой версии и
+  // «Explore 06» у гибридной; это одна и та же машина, за границей — Jaecoo J7.
+  { brand: "Chery", model: "Tansuo 06", toBrand: "Jaecoo", toModel: "J7", zh: "探索06", pinyin: "Tansuo 06" },
+  { brand: "Chery", model: "Explore 06", toBrand: "Jaecoo", toModel: "J7", zh: "探索06", pinyin: "Tansuo 06" },
+  { brand: "Chery", model: "Explore 06 C-DM", toBrand: "Jaecoo", toModel: "J7 C-DM", zh: "探索06", pinyin: "Tansuo 06" },
+  // 欧萌达 продаётся за пределами Китая как Omoda C5 — так модель записана и на av.by.
+  { brand: "Chery", model: "Omoda", toBrand: "Omoda", toModel: "C5", zh: "欧萌达", pinyin: "Oumengda" },
+  { brand: "Chery", model: "Omoda 5", toBrand: "Omoda", toModel: "C5", zh: "欧萌达", pinyin: "Oumengda" },
 ]);
 
 const key = (brand, model) => `${String(brand || "").trim().toLocaleLowerCase("en-US")} ${String(model || "").trim().toLocaleLowerCase("en-US")}`;

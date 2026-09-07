@@ -10,6 +10,7 @@ import {
   importPolicyViolation,
   isAllowedImportBrand,
   isEligibleNewImport,
+  sourceBrandOf,
   uniquePhotos,
 } from "../config/import-policy.mjs";
 import { normalizeChe168Energy } from "../scripts/lib/che168-parser.mjs";
@@ -134,8 +135,12 @@ test("accepts 2020+ electric and hybrid cars for future imports", () => {
   assert.match(importPolicyViolation({ brand: "Haima", year: 2025, type: "Электромобиль" }), /brand/);
 });
 
-test("keeps combustion cars out, including 48V mild hybrids", () => {
-  assert.match(importPolicyViolation({ brand: "Toyota", year: 2024, type: "ДВС" }), /electric or hybrid/);
+test("тип двигателя разбирается, но во ввозе не ограничивает", () => {
+  // До 07.09.2026 бензиновая машина проходила только на «бензиновом прогоне».
+  // Теперь тип — свойство машины: он решает расчёт растаможки и фильтр в каталоге,
+  // а не право попасть в каталог. Отвергается только неразобранный тип.
+  assert.equal(importPolicyViolation({ brand: "Toyota", year: 2024, type: "ДВС" }), null);
+  assert.match(importPolicyViolation({ brand: "Toyota", year: 2024, type: "" }), /powertrain/);
   // A mild hybrid reaches the policy already classified as ДВС by the parser,
   // so the word "hybrid" in the source label never buys it a place.
   assert.equal(normalizeChe168Energy({ fuelname: "Gasoline + 48V Mild Hybrid System" }, []), "ДВС");
@@ -148,11 +153,29 @@ test("starts the petrol import at the same year as the electric one", () => {
   assert.equal(ICE_IMPORT_MIN_YEAR, 2020);
   // Машина 2020 года к оформлению старше пяти лет и приезжает дороже машины
   // 2021 года, но расчёт на карточке показывает это честно — возим и такие.
-  assert.equal(isEligibleNewImport({ brand: "BMW", year: 2020, type: "ДВС" }, { combustion: true }), true);
-  assert.match(importPolicyViolation({ brand: "BMW", year: 2019, type: "ДВС" }, { combustion: true }), /2020/);
+  assert.equal(isEligibleNewImport({ brand: "BMW", year: 2020, type: "ДВС" }), true);
+  assert.match(importPolicyViolation({ brand: "BMW", year: 2019, type: "ДВС" }), /2020/);
   // Электромобилям и гибридам граница не меняется.
   assert.equal(isEligibleNewImport({ brand: "BYD", year: 2020, type: "Электромобиль" }), true);
   assert.equal(isEligibleNewImport({ brand: "Li Auto", year: 2020, type: "Гибрид" }), true);
+});
+
+test("экспортные марки Chery уезжают в свои марки, но ищутся в списках Chery", () => {
+  // 探索06 и 欧萌达 — модели Chery в Китае, но в Беларуси их знают только как
+  // Jaecoo J7 и Omoda C5: на av.by есть обе марки. Источник присылает их под Chery.
+  assert.deepEqual(canonicalImportName("Chery", "Tansuo 06", "ДВС"), { brand: "Jaecoo", model: "J7" });
+  assert.deepEqual(canonicalImportName("Chery", "Explore 06 C-DM", "Гибрид"), { brand: "Jaecoo", model: "J7 C-DM" });
+  assert.deepEqual(canonicalImportName("Chery", "Omoda", "ДВС"), { brand: "Omoda", model: "C5" });
+  // Уже переименованная машина второй раз не переезжает.
+  assert.deepEqual(canonicalImportName("Jaecoo", "J7", "ДВС"), { brand: "Jaecoo", model: "J7" });
+  assert.equal(isAllowedImportBrand("Jaecoo"), true);
+  assert.equal(isAllowedImportBrand("Omoda"), true);
+  // Главное: у источника таких марок нет. Актуализация обходит его по ЕГО маркам,
+  // и без этой подмены машина под именем Jaecoo не попала бы ни в один обход —
+  // цена не обновлялась бы, а проданную мы бы не заметили.
+  assert.equal(sourceBrandOf("Jaecoo"), "Chery");
+  assert.equal(sourceBrandOf("Omoda"), "Chery");
+  assert.equal(sourceBrandOf("BYD"), "BYD");
 });
 
 test("«(Import)» — не отдельная модель", () => {

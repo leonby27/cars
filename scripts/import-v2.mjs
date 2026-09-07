@@ -29,7 +29,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { buildChe168Car, extractChe168DetailPayload, extractChe168ListPayload } from "./lib/che168-parser.mjs";
-import { ICE_IMPORT_BRANDS, ICE_IMPORT_MIN_YEAR, IMPORT_BRANDS, IMPORT_MIN_YEAR, MAX_LANDED_USD, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
+import { ICE_IMPORT_MIN_YEAR, IMPORT_BRANDS, IMPORT_MIN_YEAR, MAX_LANDED_USD, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -109,7 +109,8 @@ const skipHybridCandidates = fuelTypes.every((fuelType) => fuelType === ELECTRIC
 // Бензиновый прогон: свой список марок и разрешённый тип «ДВС». Определяется по
 // запрошенному фиду источника, отдельного ключа для этого не нужно.
 const combustionRun = fuelTypes.includes(GASOLINE_FUEL_TYPE);
-const policyBrands = combustionRun ? [...new Set([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS])] : IMPORT_BRANDS;
+// Список марок один на все типы двигателя (07.09.2026).
+const policyBrands = IMPORT_BRANDS;
 // Отсечка по году на слое списка: у бензина она на год выше, см. import-policy.mjs.
 const listMinYear = combustionRun ? ICE_IMPORT_MIN_YEAR : IMPORT_MIN_YEAR;
 const fuelKey = [...fuelTypes].sort((a, b) => a - b).join("-");
@@ -262,7 +263,7 @@ function report(extra = {}) {
     rejected: [...rejected.values()].reduce((total, value) => total + value, 0),
     rejectedByReason: Object.fromEntries([...rejected].sort((a, b) => b[1] - a[1])),
     rejectionExamples,
-    policy: { minYear: listMinYear, brands: policyBrands, newImports: combustionRun ? "combustion allowed" : "electric-only", cleansExistingCatalog: false },
+    policy: { minYear: listMinYear, brands: policyBrands, newImports: "any powertrain", cleansExistingCatalog: false },
     previousCount: catalog.cars?.length || 0,
     ...extra,
   };
@@ -515,7 +516,7 @@ try {
             reject("detail page lacks required structured fields or gallery", candidate.externalId);
             continue;
           }
-          const violation = importPolicyViolation(car, { combustion: combustionRun });
+          const violation = importPolicyViolation(car);
           if (violation) {
             reject(`Import policy: ${violation}`, candidate.externalId);
             continue;

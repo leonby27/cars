@@ -23,7 +23,9 @@ test("очередь смен идёт ровным кругом и не зав�
 });
 
 test("смена задаёт фиды: электрическая ночь не листает бензин и наоборот", () => {
-  assert.deepEqual(feedsForShift("ev"), [7, 5, 6]);
+  // Фид 3 (обычный гибрид) в электрической ночи с 07.09.2026: такие машины у нас
+  // числятся гибридами, и проверяет их та же смена.
+  assert.deepEqual(feedsForShift("ev"), [7, 5, 6, 3]);
   for (const shift of PETROL_SHIFTS) assert.deepEqual(feedsForShift(shift), [1]);
 });
 

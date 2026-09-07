@@ -3929,6 +3929,8 @@ const brandLogos = {
   AION: "aion.svg",
   ORA: "ora.svg",
   Hongqi: "hongqi.svg",
+  Jaecoo: "jaecoo.svg",
+  Omoda: "omoda.svg",
   "Land Rover": "land-rover.svg",
   Porsche: "porsche.svg",
   Buick: "buick.svg",

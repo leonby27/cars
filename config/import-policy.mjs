@@ -12,22 +12,28 @@ export const ICE_IMPORT_MIN_YEAR = 2020;
 // Нижняя граница года по типу машины: бензиновой — своя, остальным — общая.
 export const importMinYear = (type) => (type === "ДВС" ? ICE_IMPORT_MIN_YEAR : IMPORT_MIN_YEAR);
 
-// Electric and hybrid both belong in the catalog; a plain combustion car does
-// not. A mild-hybrid petrol car reads as "Gasoline + 48V Mild Hybrid System" at
-// the source and must not slip in on the word "hybrid" alone — the parser
-// classifies it as `ДВС`, which this list excludes.
-export const IMPORTABLE_POWERTRAINS = Object.freeze(["Электромобиль", "Гибрид"]);
+// Тип двигателя — свойство машины, а не право на въезд. Электромобиль, гибрид и
+// бензиновая машина одной марки едут по одним правилам; различаются они расчётом
+// растаможки и фильтром в каталоге, а не тем, заводим мы их или нет. Разделение
+// пришло из первой версии импорта, где возили только электромобили, и снято
+// 07.09.2026 (решение Сергея). Список нужен лишь затем, чтобы не отвергать
+// машину с неразобранным типом.
+export const IMPORTABLE_POWERTRAINS = Object.freeze(["Электромобиль", "Гибрид", "ДВС"]);
 
-// Бензиновый ввоз — отдельный список марок и отдельное разрешение. Каталог
-// источника на 181 448 бензиновых машин наполовину состоит из марок, которых в
-// Беларуси нет вообще (GAC Trumpchi, Roewe, Baojun, подбренды Dongfeng): такую
-// машину здесь не узнают и не купят. В список попали марки, у которых на av.by
-// есть хотя бы 20 живых объявлений, — то есть те, что тут реально ездят.
-export const ICE_IMPORT_BRANDS = Object.freeze([
-  "Volkswagen", "Mercedes-Benz", "BMW", "Audi", "Toyota", "Honda", "Buick", "Porsche",
+// Марки, которые в Беларуси знают. Каталог источника наполовину состоит из марок,
+// которых здесь нет вообще (GAC Trumpchi, Roewe, Baojun, подбренды Dongfeng): такую
+// машину не узнают и не купят. Порог отбора — хотя бы 20 живых объявлений на av.by,
+// то есть марка реально ездит по стране.
+//
+// Раньше этот перечень назывался «список для бензинового ввоза» и действовал только
+// на бензиновом прогоне: у Changan, Honda, Porsche, Volvo и ещё двенадцати марок мы
+// забирали бензин, а их же электромобили и гибриды проходили мимо каталога — около
+// 1 960 машин (замер 07.09.2026). Теперь список общий.
+export const MAINSTREAM_IMPORT_BRANDS = Object.freeze([
+  "Toyota", "Honda", "Buick", "Porsche",
   "Geely", "Nissan", "Land Rover", "Haval", "Changan", "Hyundai",
-  "Mazda", "Chery", "Volvo", "Lexus", "Kia", "MINI", "MG",
-  "Jetour", "BYD",
+  "Chery", "Volvo", "Lexus", "Kia", "MINI", "MG",
+  "Jetour",
 ]);
 
 // Марки, вычеркнутые Сергеем 25.08.2026 после просмотра каталога: американский
@@ -116,11 +122,24 @@ export const EXTRA_IMPORT_BRANDS = Object.freeze([
   "AION",
   "ORA",
   "Hongqi",
+  // Экспортные марки Chery. В Китае это модели самой Chery (探索06 и 欧萌达),
+  // но в Беларуси их знают только под экспортными именами: на av.by есть марка
+  // Jaecoo с моделью J7 и марка Omoda с моделью C5. Машины приезжают от источника
+  // под маркой Chery и переезжают сюда словарём названий (config/model-names-by.mjs),
+  // как это уже сделано для машин альянса Huawei.
+  "Jaecoo",
+  "Omoda",
 ]);
 
+// Единый список марок ввоза: китайские марки новой энергии с главной, довесок к
+// ним и марки, знакомые Беларуси по бензиновому рынку. Одна машина — одно правило,
+// какой бы у неё ни был двигатель.
 export const IMPORT_BRANDS = Object.freeze([
-  ...HOMEPAGE_POPULAR_BRANDS,
-  ...EXTRA_IMPORT_BRANDS,
+  ...new Set([
+    ...HOMEPAGE_POPULAR_BRANDS,
+    ...EXTRA_IMPORT_BRANDS,
+    ...MAINSTREAM_IMPORT_BRANDS,
+  ]),
 ]);
 
 export const IMPORT_BRAND_BY_SLUG = Object.freeze({
@@ -183,11 +202,17 @@ const BRAND_ALIASES = new Map([
   ["lync & co", "Lynk & Co"],
   ["mercedes benz", "Mercedes-Benz"],
   ["mercedes-benz", "Mercedes-Benz"],
+  // Подмарки Changan для новой энергии. У источника это отдельные марки со своими
+  // номерами («Changan Qiyuan» = 长安启源, brandId 582), из-за чего 476 машин
+  // A05/A06/A07/Q05/Q07 не попадали в каталог вообще. В Беларуси отдельной марки
+  // «Qiyuan» не знают: в справочнике av.by это Changan с моделями «Qiyuan A05»,
+  // «Qiyuan A07», «Qiyuan Q05» — приставка живёт в названии модели, а не марки.
+  ["changan qiyuan", "Changan"],
+  ["qiyuan", "Changan"],
 ]);
 const allowedBrands = new Set(IMPORT_BRANDS);
-const allowedIceBrands = new Set(ICE_IMPORT_BRANDS);
 const excludedBrands = new Set(EXCLUDED_BRANDS);
-const allowedBrandByLower = new Map([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS].map((brand) => [brand.toLocaleLowerCase("en-US"), brand]));
+const allowedBrandByLower = new Map(IMPORT_BRANDS.map((brand) => [brand.toLocaleLowerCase("en-US"), brand]));
 
 export function canonicalImportBrand(value) {
   const brand = String(value || "").trim();
@@ -212,6 +237,11 @@ const MODEL_PREFIX_STRIPS = new Map([
   // Один и тот же CC собирают два совместных предприятия, и источник приклеивает
   // к названию завод: «FAW-Volkswagen CC». Для покупателя это просто CC.
   ["Volkswagen", ["FAW-Volkswagen", "FAW Volkswagen", "SAIC-Volkswagen", "SAIC Volkswagen", "Shanghai Volkswagen"]],
+  // То же у японцев: одну и ту же машину в Китае собирают два совместных предприятия,
+  // и источник приклеивает завод к названию — «FAW Toyota bZ4X» и «GAC Toyota bZ4X»
+  // это один bZ4X, «Dongfeng Honda S7» и «GAC Honda P7» — просто S7 и P7.
+  ["Toyota", ["FAW Toyota", "FAW-Toyota", "GAC Toyota", "GAC-Toyota", "Guangqi Toyota", "Yiqi Toyota"]],
+  ["Honda", ["Dongfeng Honda", "Dongfeng-Honda", "GAC Honda", "GAC-Honda", "Guangqi Honda"]],
 ]);
 
 // Пометка «(Import)» у источника значит, что машину привезли в Китай целиком, а не
@@ -294,10 +324,26 @@ export function canonicalImportName(brandValue, modelValue, powertrain) {
   return belarusianName(brand, model, powertrain);
 }
 
-export function isAllowedImportBrand(value, { combustion = false } = {}) {
+// Наши марки, которых у источника нет: их машины лежат в списках чужой марки.
+// Jaecoo и Omoda — экспортные имена, в Китае это модели Chery, и в списках источника
+// они стоят под Chery. Актуализация обходит источник по ЕГО маркам и ищет там наши
+// машины: без этой таблицы машина под маркой Jaecoo не нашлась бы ни в одном обходе —
+// её цена никогда не обновилась бы, а проданную мы бы не заметили.
+const SOURCE_BRAND_BY_OUR_BRAND = new Map([
+  ["Jaecoo", "Chery"],
+  ["Omoda", "Chery"],
+]);
+
+// Под какой маркой машину искать в списках источника.
+export function sourceBrandOf(value) {
+  const brand = canonicalImportBrand(value);
+  return SOURCE_BRAND_BY_OUR_BRAND.get(brand) || brand;
+}
+
+export function isAllowedImportBrand(value) {
   const brand = canonicalImportBrand(value);
   if (excludedBrands.has(brand)) return false;
-  return allowedBrands.has(brand) || (combustion && allowedIceBrands.has(brand));
+  return allowedBrands.has(brand);
 }
 
 // Цена «под ключ» выше потолка — отказ. Значение приходит из расчёта (`totalUsd`),
@@ -308,20 +354,18 @@ export function isAbovePriceCeiling(landedUsd) {
   return Number.isFinite(value) && value > MAX_LANDED_USD;
 }
 
-// `combustion` включает бензиновый ввоз: свой список марок и тип «ДВС». Без него
-// правила остаются прежними — электромобиль или гибрид из основного списка, и
-// ночной импорт электромобилей не начинает тянуть бензин сам собой.
-export function importPolicyViolation(car, { combustion = false } = {}) {
-  if (!isAllowedImportBrand(car?.brand, { combustion })) return "brand is outside the Belarus import list";
+// Правила ввоза: марка, год и разобранный тип двигателя. Ключа `combustion` больше
+// нет — тип двигателя не решает, заводить машину или нет (07.09.2026).
+export function importPolicyViolation(car) {
+  if (!isAllowedImportBrand(car?.brand)) return "brand is outside the Belarus import list";
   const minYear = importMinYear(car?.type);
   if (!Number.isFinite(Number(car?.year)) || Number(car.year) < minYear) return `model year is below ${minYear}`;
-  const powertrains = combustion ? [...IMPORTABLE_POWERTRAINS, "ДВС"] : IMPORTABLE_POWERTRAINS;
-  if (!powertrains.includes(car?.type)) return combustion ? "unknown powertrain" : "new imports must be electric or hybrid";
+  if (!IMPORTABLE_POWERTRAINS.includes(car?.type)) return "unknown powertrain";
   return null;
 }
 
-export function isEligibleNewImport(car, options) {
-  return importPolicyViolation(car, options) === null;
+export function isEligibleNewImport(car) {
+  return importPolicyViolation(car) === null;
 }
 
 // У части объявлений Che168 одна и та же фотография лежит в списке дважды под

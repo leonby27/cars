@@ -44,12 +44,24 @@ test("отбраковывает марку вне списка и машину 
   assert.equal(discoveryCandidate(old, { fuelType: 7, knownIds: empty }), null);
 });
 
-test("бензиновый список марок действует только в бензиновом фиде", () => {
+test("список марок общий для всех фидов, а бензиновый тип — нет", () => {
+  // До 07.09.2026 список бензиновых марок действовал только в бензиновом фиде, и
+  // у шестнадцати марок (Changan, Porsche, Volvo, Lexus и других) мы забирали
+  // бензин, а их же электромобили и гибриды проходили мимо каталога.
   const porsche = listItem({ infoid: "70002", brandname: "Porsche", seriesname: "Macan", carname: "Porsche Macan 2022", specname: "2022 2.0T" });
-  // В бензиновом фиде Porsche разрешён — он есть в списке марок для ДВС.
   assert.equal(discoveryCandidate(porsche, { fuelType: 1, knownIds: empty })?.brand, "Porsche");
-  // В электрическом фиде та же марка не проходит: там свой, короткий список.
-  assert.equal(discoveryCandidate(porsche, { fuelType: 7, knownIds: empty }), null);
+  assert.equal(discoveryCandidate(porsche, { fuelType: 7, knownIds: empty })?.brand, "Porsche");
+  // Гибридный фид источника (3) тоже наш: «Hybrid» разбирается в тип «Гибрид».
+  const lexus = listItem({ infoid: "70006", brandname: "Lexus", seriesname: "ES", carname: "Lexus ES 2022", specname: "2022 300h" });
+  assert.equal(discoveryCandidate(lexus, { fuelType: 3, knownIds: empty })?.brand, "Lexus");
+});
+
+test("подмарка Changan Qiyuan заводится как Changan", () => {
+  // A05/A06/A07 у источника лежат под отдельной маркой «Changan Qiyuan», и без неё
+  // 476 машин не попадали в каталог вообще (проверка 07.09.2026). В Беларуси такой
+  // марки не знают: на av.by это Changan с моделями «Qiyuan A05», «Qiyuan A07».
+  const qiyuan = listItem({ infoid: "70008", brandname: "Changan Qiyuan", seriesname: "Changan Qiyuan A06", carname: "Changan Qiyuan A06 2025", specname: "2025 510Max" });
+  assert.equal(discoveryCandidate(qiyuan, { fuelType: 7, knownIds: empty })?.brand, "Changan");
 });
 
 test("вычеркнутые марки не проходят ни в одном фиде", () => {
@@ -69,10 +81,10 @@ test("машину дороже потолка не берём уже по це�
 });
 
 test("фид без нашего типа машин пропускается целиком", () => {
-  // 2 — дизель, 3 — обычный гибрид: их мы не возим и не обходим.
+  // Остался только дизель (2): его мы не возим. Обычный гибрид (3) с 07.09.2026
+  // наш — «Hybrid» разбирается в тип «Гибрид», который разрешён к ввозу.
   assert.equal(discoveryCandidate(listItem(), { fuelType: 2, knownIds: empty }), null);
-  assert.equal(discoveryCandidate(listItem(), { fuelType: 3, knownIds: empty }), null);
-  assert.deepEqual(Object.keys(FUEL_TYPE_POWERTRAIN).sort(), ["1", "5", "6", "7"]);
+  assert.deepEqual(Object.keys(FUEL_TYPE_POWERTRAIN).sort(), ["1", "3", "5", "6", "7"]);
 });
 
 test("год берёт из названия комплектации, а без него — из даты учёта", () => {

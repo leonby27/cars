@@ -13,7 +13,7 @@ import https from "node:https";
 import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sendTelegram } from "./lib/telegram.mjs";
-import { IMPORT_BRANDS, ICE_IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand } from "../config/import-policy.mjs";
+import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand } from "../config/import-policy.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OFFSET_PATH = path.join(ROOT, "runtime", "telegram-offset.json");
@@ -23,7 +23,7 @@ const CHAT = String(process.env.TELEGRAM_CHAT_ID || "");
 if (!TOKEN || !CHAT) throw new Error("нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID");
 
 const say = (text) => sendTelegram(text, { root: ROOT, log: console.log }).catch(() => {});
-const allowedBrands = [...new Set([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS])].filter((b) => !EXCLUDED_BRANDS.includes(b));
+const allowedBrands = IMPORT_BRANDS.filter((b) => !EXCLUDED_BRANDS.includes(b));
 
 // Долгое ожидание вместо частых опросов: телеграм сам держит соединение до 50 с.
 function poll(offset) {

@@ -13,10 +13,13 @@
 // типа топлива.
 import { MAX_LANDED_USD, canonicalImportBrand, importPolicyViolation } from "../../config/import-policy.mjs";
 
-// Фиды источника по типу топлива. 3 (обычный гибрид) не обходится: наши правила
-// его не берут, а актуализация ходит только по тем фидам, где лежит наш каталог.
+// Фиды источника по типу топлива. Обычный гибрид (3) раньше здесь не значился —
+// считалось, что наши правила его не берут. На деле берут: «Hybrid» разбирается
+// в тип «Гибрид», который разрешён к ввозу, и обход одним адресом на марку такие
+// машины уже приносит. Без строки в этой таблице фидовый прогон отвергал их все.
 export const FUEL_TYPE_POWERTRAIN = Object.freeze({
   1: "ДВС",
+  3: "Гибрид",
   5: "Гибрид",
   6: "Гибрид",
   7: "Электромобиль",
@@ -57,9 +60,9 @@ export function discoveryCandidate(item, { fuelType, knownIds, requirePowertrain
   const brand = canonicalImportBrand(item?.brandname);
   const year = listedYear(item);
   if (!type) return { externalId, brand, year, carname: String(item?.carname || "").trim(), fuelType: null };
-  // Бензиновым маркам свой список разрешён только в бензиновом фиде: электрический
-  // Bentley из списка марок для ДВС в каталог попасть не должен.
-  if (importPolicyViolation({ brand, year, type }, { combustion: type === "ДВС" })) return null;
+  // Список марок и правила общие для всех фидов (07.09.2026): электромобиль
+  // Changan или Volvo — такая же понятная в Беларуси машина, как их же бензиновая.
+  if (importPolicyViolation({ brand, year, type })) return null;
 
   return { externalId, brand, year, carname: String(item?.carname || "").trim(), fuelType };
 }

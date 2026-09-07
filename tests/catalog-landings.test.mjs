@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { EXCLUDED_BRANDS, ICE_IMPORT_BRANDS, IMPORT_BRANDS } from "../config/import-policy.mjs";
+import { EXCLUDED_BRANDS, IMPORT_BRANDS, MAINSTREAM_IMPORT_BRANDS } from "../config/import-policy.mjs";
 import { visibleLandings } from "../server/catalog-page.mjs";
 import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
@@ -307,7 +307,7 @@ test("у каждой марки из списка ввоза есть свой 
   // ночным импортом, и страница под неё должна быть уже готова, иначе ссылки с главной
   // ведут на адрес с фильтром, а отдельной страницы под запрос «Honda из Китая» нет.
   const sections = new Set(CATALOG_LANDINGS.filter((landing) => landing.kind === "brand").map((landing) => landing.brand));
-  const missing = ICE_IMPORT_BRANDS.filter((brand) => !sections.has(brand));
+  const missing = MAINSTREAM_IMPORT_BRANDS.filter((brand) => !sections.has(brand));
   assert.deepEqual(missing, [], `марки без раздела: ${missing.join(", ")}`);
 });
 
@@ -316,7 +316,7 @@ test("марка раздела написана ровно так же, как 
   // видно только по нулю машин на странице.
   // Вычеркнутые марки — законное исключение: их разделы оставлены с предложением
   // привезти под заказ (31.08.2026), и марка там написана так же, как была в базе.
-  const allowed = new Set([...IMPORT_BRANDS, ...ICE_IMPORT_BRANDS, ...EXCLUDED_BRANDS]);
+  const allowed = new Set([...IMPORT_BRANDS, ...EXCLUDED_BRANDS]);
   const strange = CATALOG_LANDINGS.filter((landing) => landing.brand && !allowed.has(landing.brand)).map((landing) => landing.brand);
   assert.deepEqual(strange, [], `таких марок нет ни в списке ввоза, ни среди вычеркнутых: ${strange.join(", ")}`);
 });

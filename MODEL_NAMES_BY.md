@@ -189,3 +189,112 @@ Ballet Cat / Lightning Cat, Leapmotor Lafa 5.
   и у электрических версий обзора пока нет: 60 машин на три модели.
 - `models-without-review.txt` — снимок до переименования, при следующем пересчёте
   обновится сам.
+
+---
+
+## Второй заход, 07.09.2026: электрички и гибриды «бензиновых» марок
+
+Список марок ввоза стал общим для всех типов двигателя, и в каталог пошли электрические
+и гибридные версии Toyota, Honda, Volvo, Porsche, Buick, Geely, Chery, Haval, MG, Lexus,
+Land Rover, Hyundai, Changan. Приезжают они под китайскими именами. Правила прежние:
+av.by → имя дилера → экспортное имя завода.
+
+**Приставка завода снимается автоматически.** «FAW Toyota bZ4X» и «GAC Toyota bZ4X» — это
+один bZ4X, «Dongfeng Honda S7» — просто S7. Правило добавлено в `MODEL_PREFIX_STRIPS`
+(config/import-policy.mjs) рядом с тем же правилом для Volkswagen.
+
+**Переименовано.** «New Energy» и «Plug-in Hybrid» → PHEV у гибрида и EV у электромобиля;
+китайские имена — на те, что знает av.by:
+
+| Приходит от источника | Станет | Основание |
+|---|---|---|
+| Toyota BoZhi 3X / 4X / 7 | **bZ3X / bZ4X / bZ7** | 铂智 — марка электричек Toyota в Китае, экспортное имя bZ |
+| Toyota Corolla / Levin Twin Engine E+ | **Corolla PHEV / Levin PHEV** | «двойной двигатель E+» — заводское имя гибрида с розеткой |
+| Toyota RAV4 Rongfang Dual Engine E+ | **RAV4 PHEV** | на av.by модель зовут RAV4 |
+| Toyota Lingfang HARRIER | **Harrier** | 凌放 — китайская приставка, имя модели Harrier |
+| Toyota Wildlander New Energy | **Wildlander PHEV** | |
+| Honda Hunting Light e:NS2 | **e:NS2** | 猎光 — китайская приставка; на av.by есть e:NS1 |
+| Honda e:NP2 Extreme Wave 2 | **e:NP2** | 极湃2 — то же самое |
+| Honda Accord / Breeze / CR-V New Energy | **Accord / Breeze / CR-V PHEV** | |
+| Honda Inspire Hybrid | **Inspire PHEV** | |
+| Buick E4 / E5 | **Electra E4 / Electra E5** | на av.by модель записана как Electra E4 |
+| Buick GL8 New Energy | **GL8 PHEV** | |
+| Geely Bin Yue New Energy | **Coolray PHEV** | бензиновый 缤越 уже переименован в Coolray |
+| Geely Borui PHEV | **Emgrand GT PHEV** | бензиновый 博瑞 уже Emgrand GT |
+| Geely Emgrand New Energy / Emgrand L HiP | **Emgrand PHEV / Emgrand L PHEV** | |
+| Geely Emgrand GSe | **Emgrand GS EV** | электрическая версия Emgrand GS |
+| Geely Jiaji New Energy | **Jiaji PHEV** | |
+| Chery Tiggo 7 PLUS New Energy | **Tiggo 7 Pro Max PHEV** | бензиновый PLUS уже Pro Max |
+| Chery Tiggo 8 PLUS C-DM / Kunpeng e+ | **Tiggo 8 Pro Max C-DM / PHEV** | «Kunpeng e+» — имя установки, не модели |
+| Haval H6 New Energy | **H6 PHEV** | |
+| Haval Second-Generation Big Dog New Energy | **Dargo II PHEV** | 大狗 уже Dargo |
+| MG EZS Pure Electric | **ZS EV** | на av.by марка знает ZS |
+| MG 6 / HS New Energy | **6 PHEV / HS PHEV** | |
+| Volvo XC60/XC70/XC90/S60/S90 Plug-in Hybrid | **… PHEV** | на av.by модели под обычными именами |
+| Porsche Cayenne / Panamera New Energy | **Cayenne PHEV / Panamera PHEV** | |
+| Land Rover Range Rover Evoque New Energy | **Range Rover Evoque PHEV** | |
+| Volkswagen Magotan / Tayron GTE Plug-in Hybrid | **Magotan GTE / Tayron GTE** | GTE у завода уже значит гибрид |
+| Lexus NX / RX New Energy, UX Electric | **NX PHEV / RX PHEV / UX EV** | |
+| Hyundai Elantra Plug-in Hybrid | **Elantra PHEV** | |
+| Changan UNI-Z New Energy | **UNI-Z PHEV** | |
+| Changan New Energy E-Pro | **E-Pro** | |
+| Changan CS55PLUS PHEV | **CS55 PLUS PHEV** | пробел как у бензиновой версии |
+
+**Подмарка Changan Qiyuan сведена в Changan.** У источника 长安启源 — отдельная марка со
+своим номером (582, 476 машин). В Беларуси такой марки не знают: в справочнике av.by это
+Changan с моделями «Qiyuan A05», «Qiyuan A06», «Qiyuan A07», «Qiyuan Q05», «Qiyuan Q07» —
+приставка живёт в названии модели. Сведение сделано словарём марок в
+`config/import-policy.mjs`, отдельных переименований моделей не потребовалось.
+
+### Имена, найденные за пределами av.by
+
+Там, где в Беларуси машины ещё нет, смотрели официальное экспортное имя завода и то,
+как модель продают в России.
+
+| Приходит от источника | Станет | Основание |
+|---|---|---|
+| Buick Zenith Sedan | **Electra L7** | 至境 — марка электричек Buick, за границей Electra; это её седан на генераторе |
+| Buick Zhijing E7 | **Electra E7** | та же марка, имя завода |
+| Buick Zhijing Shijia | **Electra Encasa** | так минивэн 至境世家 назван на экспорт |
+| Haval Meng Long NEV | **Raptor** | 猛龙 в России продаётся как Haval Raptor |
+| Haval Menglong PLUS | **Raptor Plus** | то же семейство |
+| Hyundai Encino Pure Electric | **Kona EV** | 昂希诺 — китайское имя Kona; на av.by Kona есть |
+| Hyundai Fista EV | **Lafesta EV** | 菲斯塔 — Lafesta, официальное имя Hyundai |
+| MINI Electric MINI COOPER | **Cooper SE** | на av.by есть Cooper SE |
+| MINI Electric MINI ACEMAN | **Aceman** | на av.by есть Aceman |
+| MINI Electric MINI JCW / JCW ACEMAN | **JCW Electric / Aceman JCW** | имени на av.by нет, собрано из имён завода |
+| Lexus RX Classic | **RX** | на av.by поколения не разводят |
+| MG MG4 EV | **MG4** | MG4 бывает только электрическим |
+
+### Оставлено как есть — имя завода уже понятное
+
+Geely Boyue REV (REV — собственное сокращение Geely для генератора), Haval Xiaolong MAX
+(в России продаётся под этим же именем), Nissan ARIYA / N6 / N7 / NX8 / Frontier Pro,
+Kia EV5 / EV6 / Niro / Sportage, Jetour X70 C-DM / X70S EV / X90 C-DM, Volvo C40 / EX30 /
+EM90, Porsche Taycan / Macan EV, MG Cyberster / ES5, Honda e:NP1 / e:NS1, Toyota Avalon /
+Crown Kluger, Hyundai ELEXIO, Changan Benben E-Star / Hunter / Qiyuan E07, Buick Velite 7.
+
+### Экспортные марки Chery: Jaecoo и Omoda
+
+Решение Сергея 07.09.2026. В Китае это модели самой Chery, но в Беларуси их знают только
+под экспортными именами, и на av.by заведены как отдельные марки.
+
+| Приходит от источника | Станет | В Китае |
+|---|---|---|
+| Chery Tansuo 06 | **Jaecoo J7** | 探索06 |
+| Chery Explore 06 / Explore 06 C-DM | **Jaecoo J7 / J7 C-DM** | то же самое, второе написание источника |
+| Chery Omoda | **Omoda C5** | 欧萌达 |
+
+Логотипы — `public/brands/jaecoo.svg` и `public/brands/omoda.svg`, в тёмной теме
+инвертируются (в список «цветных» марок не внесены).
+
+**Что осталось под Chery и почему.** Jaecoo J8 — это китайский Tiggo 9, а Jaecoo J6 —
+электрический iCar 03. Но на av.by обе машины стоят под маркой Chery (`chery/tiggo-9`,
+`chery/icar-03t`), поэтому переименовывать их нельзя: покупатель ищет их как Chery.
+Правило то же, что и везде — решает справочник av.by, а не логика концерна.
+
+**Ловушка обхода.** У источника марок Jaecoo и Omoda не существует, их машины лежат
+в списках Chery. Актуализация обходит источник по его маркам, поэтому в правилах ввоза
+заведена подмена (`sourceBrandOf`): наша машина под именем Jaecoo ищется в списках Chery.
+Без неё такая машина выпала бы из обхода насовсем — цена не обновлялась бы, а проданную
+мы бы не заметили.
