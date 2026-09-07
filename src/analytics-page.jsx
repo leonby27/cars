@@ -479,10 +479,6 @@ function VehiclesSection({ data, updates, markViewed }) {
     cars:(data.vehicles || []).map((item) => ({ ...item, id:item.listingId, title:item.listingTitle || listingNumber(item.listingId), asks:item.availabilityClicks })),
     favorites:(data.favorites || []).map((item) => ({ ...item, id:item.listingId, title:item.listingTitle || listingNumber(item.listingId), lastViewedAt:item.addedAt })),
   };
-  const modeTotals = {
-    cars:Number(data.summary?.vehicle_views) || 0,
-    favorites:Number(data.summary?.favorites) || 0,
-  };
   const columns = mode === "favorites"
     ? [
       { id:"title", label:"Автомобиль", text:true, value:(item) => item.title || "" },
@@ -515,7 +511,7 @@ function VehiclesSection({ data, updates, markViewed }) {
     <div className="analytics-panel-heading analytics-vehicles-heading"><div className="analytics-range" aria-label="Представление автомобилей">
       {vehicleModes.map((item) => {
         const fresh = item.id === "models" ? 0 : Number(updates[`vehicle_${item.id}`]) || 0;
-        return <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}<AnalyticsSplitCount total={modeTotals[item.id]} fresh={fresh} className="analytics-tab-count" /></button>;
+        return <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}{fresh ? <b className="analytics-tab-count" title={`Нового с прошлого просмотра: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}</button>;
       })}
     </div></div>
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
@@ -661,20 +657,58 @@ const sections = [
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
 ];
 
-function AnalyticsNavigationItems({ section, updates, totals, onChoose, mobile = false }) {
+function AnalyticsNavigationItems({ section, updates, onChoose, mobile = false }) {
   return sections.map((item) => {
     const Icon = item.icon;
+    const fresh = Number(updates[item.id]) || 0;
     return (
       <button key={item.id} type="button" role={mobile ? "menuitem" : undefined} className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => onChoose(item.id)}>
         <Icon size={21} weight="duotone" />
         <span>{item.label}</span>
-        <AnalyticsSplitCount total={totals[item.id]} fresh={updates[item.id]} />
+        {fresh ? <b className="analytics-navigation-fresh" title={`Нового с прошлого захода: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}
       </button>
     );
   });
 }
 
-function MobileAnalyticsNavigation({ active, section, period, setPeriod, updates, totals, onSection, onReset, logout }) {
+function MobileAnalyticsPeriodSelect({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const selected = analyticsPeriods.find((item) => item.id === value) || analyticsPeriods[0];
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
+  const choose = (id) => {
+    onChange(id);
+    setOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+  const handleKeyDown = (event) => {
+    if (event.key === "Escape") { setOpen(false); return; }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (!open) { setOpen(true); return; }
+    const index = analyticsPeriods.findIndex((item) => item.id === value);
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    choose(analyticsPeriods[(index + step + analyticsPeriods.length) % analyticsPeriods.length].id);
+  };
+  return <div className={`analytics-mobile-period-select${open ? " open" : ""}`} ref={rootRef}>
+    <button ref={triggerRef} className="analytics-mobile-period-trigger" type="button" aria-label={`Период аналитики: ${selected.label}`} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((state) => !state)} onKeyDown={handleKeyDown}>
+      <span>{selected.label}</span><b aria-hidden="true" />
+    </button>
+    {open && <div className="analytics-mobile-period-menu" role="listbox" aria-label="Период аналитики">
+      {analyticsPeriods.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === value} className={item.id === value ? "selected" : ""} onClick={() => choose(item.id)}>{item.label}</button>)}
+    </div>}
+  </div>;
+}
+
+function MobileAnalyticsNavigation({ active, section, period, setPeriod, updates, onSection, onReset, logout }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
@@ -714,17 +748,13 @@ function MobileAnalyticsNavigation({ active, section, period, setPeriod, updates
         <b aria-hidden="true" />
       </button>
       {open && <div className="analytics-mobile-section-menu" role="menu" aria-label="Разделы аналитики">
-        <AnalyticsNavigationItems section={section} updates={updates} totals={totals} onChoose={chooseSection} mobile />
+        <AnalyticsNavigationItems section={section} updates={updates} onChoose={chooseSection} mobile />
         <div className="analytics-mobile-menu-divider" role="separator" />
         <button className="analytics-mobile-menu-danger" type="button" role="menuitem" onClick={() => chooseAction(onReset)}><Trash size={19} /> <span>Обнулить аналитику</span></button>
         <button type="button" role="menuitem" onClick={() => chooseAction(logout)}><SignOut size={19} /> <span>Выйти</span></button>
       </div>}
     </div>
-    {active.ranged && <label className="analytics-mobile-period-select">
-      <span className="visually-hidden">Период аналитики</span>
-      <select value={period} onChange={(event) => setPeriod(event.target.value)}>{analyticsPeriods.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}</select>
-      <b aria-hidden="true" />
-    </label>}
+    {active.ranged && <MobileAnalyticsPeriodSelect value={period} onChange={setPeriod} />}
   </div>;
 }
 
@@ -759,13 +789,6 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState("");
   const active = sections.find((item) => item.id === section) || sections[0];
-  const sectionTotals = {
-    overview:Number(data.summary?.visits) || 0,
-    vehicles:Number(data.summary?.vehicle_views) || 0,
-    leads:leads.length,
-    searches:(data.searches || []).length,
-    customers:Number(data.summary?.registrations) || 0,
-  };
   const openReset = () => { setResetError(""); setResetOpen(true); };
   const resetAnalytics = async () => {
     setResetting(true);
@@ -790,13 +813,13 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
         </div>
       </header>
 
-      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} updates={updates} totals={sectionTotals} onSection={openSection} onReset={openReset} logout={logout} />
+      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} updates={updates} onSection={openSection} onReset={openReset} logout={logout} />
 
       <div className="analytics-layout">
         <div className="analytics-side-rail">
         <aside className="analytics-sidebar">
           <nav className="analytics-navigation" aria-label="Разделы аналитики">
-            <AnalyticsNavigationItems section={section} updates={updates} totals={sectionTotals} onChoose={openSection} />
+            <AnalyticsNavigationItems section={section} updates={updates} onChoose={openSection} />
           </nav>
         </aside>
         <div className="analytics-sidebar-reset">

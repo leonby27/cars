@@ -139,13 +139,17 @@ test("на мобильном контролы графика и заходов 
   assert.match(styles, /\.analytics-visits-filter-count \{ margin-left:auto; \}/);
 });
 
-test("мобильная навигация использует два селекта и хранит служебные действия в меню", async () => {
+test("мобильная навигация использует два кастомных селекта и хранит служебные действия в меню", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
   assert.match(source, /className="analytics-mobile-navigation"/);
   assert.match(source, /className="analytics-mobile-section-trigger"[^>]*aria-haspopup="menu"/);
-  assert.match(source, /className="analytics-mobile-period-select"[\s\S]*?<select value=\{period\}/);
+  assert.match(source, /function MobileAnalyticsPeriodSelect[\s\S]*?className="analytics-mobile-period-trigger"[^>]*aria-haspopup="listbox"/);
+  assert.match(source, /className="analytics-mobile-period-menu" role="listbox"/);
+  assert.doesNotMatch(source, /analytics-mobile-period-select[\s\S]{0,200}<select/);
   assert.match(source, /analytics-mobile-section-menu[\s\S]*?Обнулить аналитику[\s\S]*?Выйти/);
+  assert.doesNotMatch(source, /sectionTotals|totals\[item\.id\]/);
+  assert.match(source, /className="analytics-navigation-fresh"/);
   assert.match(styles, /\.analytics-actions, \.analytics-side-rail \{ display:none; \}/);
   assert.match(styles, /\.analytics-mobile-navigation \{[^}]*display:flex;[^}]*justify-content:space-between/);
 });
