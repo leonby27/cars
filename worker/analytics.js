@@ -125,7 +125,19 @@ async function validToken(token, secret, now = Date.now()) {
 }
 
 const sessionCookie = (token, request, clear = false) => `${COOKIE_NAME}=${clear ? "" : encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${clear ? 0 : SESSION_TTL_SECONDS}${new URL(request.url).protocol === "https:" ? "; Secure" : ""}`;
-const daysValue = (url) => [7, 30, 90].includes(Number(url.searchParams.get("days"))) ? Number(url.searchParams.get("days")) : 30;
+const daysValue = (url) => {
+  const value = Number(url.searchParams.get("period") || url.searchParams.get("days"));
+  return [7, 30, 90].includes(value) ? value : 30;
+};
+
+async function trend(db, days) {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const daily = await db.prepare(`SELECT date(created_at) AS day, count(DISTINCT visitor_id) AS visitors
+      FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT}
+        AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})
+      GROUP BY date(created_at) ORDER BY date(created_at)`).bind(cutoff, cutoff).all();
+  return { days, period:String(days), generatedAt:new Date().toISOString(), daily:daily.results || [] };
+}
 
 async function dashboard(db, days) {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
@@ -184,7 +196,12 @@ export async function handleAnalyticsRequest(request, env, url) {
   if (request.method === "GET" && url.pathname === "/api/analytics/search-traffic") {
     const token = cookieValue(request.headers.get("cookie") || "", COOKIE_NAME);
     if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
-    return json(await readSearchTraffic(url.searchParams.get("period"), env, workerSearchStore(env.DB)));
+    const period = url.searchParams.get("period");
+    const [report, metrika] = await Promise.all([
+      readSearchTraffic(period, env, workerSearchStore(env.DB)),
+      fetchMetrikaSearchTraffic(env, period),
+    ]);
+    return json({ ...report, metrika });
   }
   if (!env.DB) return json({ error:"analytics_storage_unavailable" }, 503);
   await ensureSchema(env.DB);
@@ -220,6 +237,11 @@ export async function handleAnalyticsRequest(request, env, url) {
     if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
     return json(await dashboard(env.DB, daysValue(url)));
   }
+  if (request.method === "GET" && url.pathname === "/api/analytics/trend") {
+    const token = decodeURIComponent(cookieValue(request.headers.get("cookie"), COOKIE_NAME));
+    if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
+    return json(await trend(env.DB, daysValue(url)));
+  }
   // Заявки лежат в таблицах аккаунтов и заказов, а их на этом хостинге нет: отвечаем
   // честным признаком «раздел недоступен», чтобы раздел не выглядел пустым по ошибке.
   if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
@@ -252,6 +274,51 @@ export function searchProperties(env) {
     google:{ property:env.GOOGLE_SEARCH_CONSOLE_SITE || '', configured:Boolean(env.GOOGLE_SEARCH_CONSOLE_SITE && (env.GOOGLE_SEARCH_SERVICE_ACCOUNT_JSON || (env.GOOGLE_SEARCH_CLIENT_ID && env.GOOGLE_SEARCH_CLIENT_SECRET && env.GOOGLE_SEARCH_REFRESH_TOKEN))) },
     yandex:{ property:env.YANDEX_WEBMASTER_HOST_ID || '', configured:Boolean(env.YANDEX_WEBMASTER_HOST_ID && env.YANDEX_WEBMASTER_TOKEN) },
   };
+}
+const metrikaSettings = (env) => ({
+  counter:String(env.YANDEX_METRIKA_COUNTER_ID || '111868764').trim(),
+  token:String(env.YANDEX_METRIKA_TOKEN || '').trim(),
+});
+
+// Оперативные переходы берём из одного поведенческого источника — Метрики. Так
+// общий счётчик и разбивка Google/Яндекс означают визиты, а не смесь кликов двух
+// поисковых кабинетов с разной задержкой публикации.
+export async function fetchMetrikaSearchTraffic(env, period, { now = Date.now(), fetcher = fetch } = {}) {
+  const { counter, token } = metrikaSettings(env);
+  if (!counter || !token) return { status:'not_connected' };
+  const range = searchTrafficRange(period, now);
+  const params = new URLSearchParams({
+    ids:counter,
+    date1:range.startDate,
+    date2:range.endDate,
+    dimensions:'ym:s:searchEngine',
+    metrics:'ym:s:visits,ym:s:users',
+    filters:"ym:s:trafficSource=='organic'",
+    accuracy:'full',
+    limit:'100',
+  });
+  try {
+    const result = await searchJson(fetcher, `https://api-metrika.yandex.net/stat/v1/data?${params}`, { headers:{ Authorization:`OAuth ${token}` } });
+    if (!Array.isArray(result.data) || !Array.isArray(result.totals)) throw new Error('upstream_unavailable');
+    const engines = result.data.reduce((totals, row) => {
+      const id = String(row.dimensions?.[0]?.id || '').toLowerCase();
+      const engine = id === 'google' || id.startsWith('google_') ? 'google'
+        : id === 'yandex' || id.startsWith('yandex_') ? 'yandex' : '';
+      if (engine) {
+        totals[engine].visits += searchNumber(row.metrics?.[0]);
+        totals[engine].users += searchNumber(row.metrics?.[1]);
+      }
+      return totals;
+    }, { google:{ visits:0, users:0 }, yandex:{ visits:0, users:0 } });
+    return {
+      status:'ready', period:range.period, from:range.startDate, to:range.endDate,
+      visits:searchNumber(result.totals[0]), users:searchNumber(result.totals[1]),
+      google:engines.google,
+      yandex:engines.yandex,
+    };
+  } catch (failure) {
+    return { status:'error', error:failure.message === 'access_denied' ? 'access_denied' : 'load_failed' };
+  }
 }
 async function searchJson(fetcher, url, options = {}) {
   const response = await fetcher(url, { ...options, signal:AbortSignal.timeout(15000) });
@@ -400,7 +467,10 @@ export async function readSearchTraffic(period, env, store, { now = Date.now() }
   const pairs = await Promise.all(Object.entries(properties).map(async ([source, settings]) => {
     if (!settings.property) return [source, { status:'not_connected' }];
     try {
-      const { days, state } = await store.read(source, settings.property, { ...range, startDate:previousRange.startDate });
+      // Кроме двух сравниваемых периодов читаем небольшой хвост назад: если свежий
+      // день ещё не опубликован, интерфейс всё равно должен честно назвать дату
+      // последнего доступного отчёта, а не оставлять пользователя с голым прочерком.
+      const { days, state } = await store.read(source, settings.property, { ...range, startDate:addSearchDays(previousRange.startDate, -14) });
       const current = aggregateSearchDays(days, range);
       // Compare the published prefix with exactly the same days in the previous period.
       // A missing tail is a provider delay; internal gaps or missing history prevent comparison.
@@ -415,8 +485,9 @@ export async function readSearchTraffic(period, env, store, { now = Date.now() }
           return { ...row, previousPosition:position ?? null, positionChange:comparable && row.position != null && position != null ? position - row.position : null };
         });
       }
+      const latestAvailableTo = days.map((day) => day.day).filter((day) => day <= range.endDate).sort().at(-1) || null;
       return [source, { status:current.availableDays ? 'ready' : settings.configured ? 'pending' : 'not_connected', connected:settings.configured,
-        ...current, comparisonAvailable:comparable, comparisonDays:comparable ? prefixDays : 0, previousRange:comparisonRange, lastSyncAt:state?.lastSuccessAt || null, syncError:state?.error || null }];
+        ...current, latestAvailableTo, comparisonAvailable:comparable, comparisonDays:comparable ? prefixDays : 0, previousRange:comparisonRange, lastSyncAt:state?.lastSuccessAt || null, syncError:state?.error || null }];
     } catch { return [source, { status:'storage_unavailable' }]; }
   }));
   return { ...range, generatedAt:new Date(now).toISOString(), ...Object.fromEntries(pairs) };

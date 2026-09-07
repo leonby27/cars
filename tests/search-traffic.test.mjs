@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { aggregateSearchDays, readSearchTraffic, syncSearchTraffic, fetchGoogleSearchDays, fetchYandexSearchDays, searchTrafficRange, handleAnalyticsRequest } from '../worker/analytics.js';
+import { aggregateSearchDays, readSearchTraffic, syncSearchTraffic, fetchGoogleSearchDays, fetchMetrikaSearchTraffic, fetchYandexSearchDays, searchTrafficRange, handleAnalyticsRequest } from '../worker/analytics.js';
 const now = Date.parse('2026-09-07T21:30:00Z');
 const env = { GOOGLE_SEARCH_CONSOLE_SITE:'sc-domain:abcars.by', GOOGLE_SEARCH_CLIENT_ID:'id', GOOGLE_SEARCH_CLIENT_SECRET:'private-secret', GOOGLE_SEARCH_REFRESH_TOKEN:'private-refresh', YANDEX_WEBMASTER_TOKEN:'private-yandex', YANDEX_WEBMASTER_HOST_ID:'https:abcars.by:443' };
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status });
@@ -39,6 +39,28 @@ test('archive replaces daily snapshots, retains old days, isolates properties an
 test('missing configuration triggers no external requests', async () => {
   const result = await syncSearchTraffic({}, memoryStore(), { fetcher:() => assert.fail('external request') });
   assert.equal(result.google.status, 'not_connected'); assert.equal(result.yandex.status, 'not_connected');
+});
+test('Metrika provides one comparable visit total and Google/Yandex split', async () => {
+  const result = await fetchMetrikaSearchTraffic({ YANDEX_METRIKA_TOKEN:'reader', YANDEX_METRIKA_COUNTER_ID:'111868764' }, 'yesterday', { now, fetcher:async (url, options) => {
+    const request = new URL(url);
+    assert.equal(request.searchParams.get('date1'), '2026-09-07');
+    assert.equal(request.searchParams.get('date2'), '2026-09-07');
+    assert.equal(request.searchParams.get('metrics'), 'ym:s:visits,ym:s:users');
+    assert.equal(request.searchParams.get('filters'), "ym:s:trafficSource=='organic'");
+    assert.equal(options.headers.Authorization, 'OAuth reader');
+    return json({ totals:[11, 10], data:[
+      { dimensions:[{ id:'google_search', name:'Google, результаты поиска' }], metrics:[3, 3] },
+      { dimensions:[{ id:'google_mobile_app', name:'Google: мобильное приложение' }], metrics:[1, 1] },
+      { dimensions:[{ id:'yandex_search', name:'Яндекс, результаты поиска' }], metrics:[5, 4] },
+      { dimensions:[{ id:'yandex_mobile', name:'Яндекс мобильный' }], metrics:[1, 1] },
+      { dimensions:[{ id:'bing_search', name:'Bing' }], metrics:[1, 1] },
+    ] });
+  } });
+  assert.deepEqual(result, { status:'ready', period:'yesterday', from:'2026-09-07', to:'2026-09-07', visits:11, users:10,
+    google:{ visits:4, users:4 }, yandex:{ visits:6, users:5 } });
+});
+test('Metrika is explicit when read access is missing', async () => {
+  assert.deepEqual(await fetchMetrikaSearchTraffic({}, 'today', { now, fetcher:() => assert.fail('external request') }), { status:'not_connected' });
 });
 test('Google refreshes privately, gets separate totals/queries/pages, excludes CRM and fills published gaps', async () => {
   const result = await fetchGoogleSearchDays(env, { now, days:7, fetcher:async (url, options) => {
@@ -124,6 +146,7 @@ test('position comparison requires complete adjacent periods and never treats mi
   assert.equal(partial.google.queries[0].positionChange, null);
   const today = await readSearchTraffic('today', env, store, {now});
   assert.equal(today.google.status, 'pending');
+  assert.equal(today.google.latestAvailableTo, '2026-09-07');
   await store.save('google', env.GOOGLE_SEARCH_CONSOLE_SITE, [{...day('2026-09-06', 12), queries:[]}], {});
   assert.equal((await readSearchTraffic('yesterday', env, store, {now})).google.queries[0].positionChange, null);
 });

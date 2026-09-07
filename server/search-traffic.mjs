@@ -1,5 +1,5 @@
 import { pool } from './db.mjs';
-import { readSearchTraffic, syncSearchTraffic } from '../worker/analytics.js';
+import { fetchMetrikaSearchTraffic, readSearchTraffic, syncSearchTraffic } from '../worker/analytics.js';
 
 export function postgresSearchStore(db = pool) {
   return {
@@ -29,7 +29,13 @@ export function postgresSearchStore(db = pool) {
     },
   };
 }
-export const getSearchTraffic = (period) => readSearchTraffic(period, process.env, postgresSearchStore());
+export async function getSearchTraffic(period) {
+  const [report, metrika] = await Promise.all([
+    readSearchTraffic(period, process.env, postgresSearchStore()),
+    fetchMetrikaSearchTraffic(process.env, period),
+  ]);
+  return { ...report, metrika };
+}
 export async function collectSearchTraffic() {
   const lock = await pool.connect();
   let acquired = false;

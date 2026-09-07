@@ -279,6 +279,27 @@ export function normalizeAnalyticsRange(value, now = Date.now()) {
   return { period:String(days), days, from:new Date(now - days * 86_400_000), to:new Date(now) };
 }
 
+// График обзора живёт на своём периоде, независимо от среза карточек и таблиц.
+// Для него не запускаем весь тяжёлый отчёт: достаточно одной дневной выборки.
+export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
+  const range = normalizeAnalyticsRange(rangeValue);
+  const from = range.from.toISOString();
+  const to = range.to.toISOString();
+  const result = await db.query(`SELECT created_at::date::text AS day,
+      count(DISTINCT visitor_id)::int AS visitors
+    FROM analytics_events
+    WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
+    GROUP BY created_at::date ORDER BY created_at::date`, [from, to]);
+  return {
+    days:range.days,
+    period:range.period,
+    from,
+    to,
+    generatedAt:new Date().toISOString(),
+    daily:result.rows,
+  };
+}
+
 // Посетителем считаем того, у кого хотя бы одно событие отмечено действием живого
 // человека. Именно «хотя бы одно», а не каждое: отметка приходит вдогонку, отдельным
 // запросом, и порядок записи не гарантирован — иначе первый заход человека остался бы
@@ -483,7 +504,7 @@ export async function getAnalyticsDashboard(rangeValue) {
 // телефона должно гаснуть и на компьютере. Дата, которой в базе нет (или она
 // испорчена), считается «только что»: показывать всю историю как новинку хуже,
 // чем не показать ничего.
-export const ANALYTICS_SECTIONS = ["overview", "leads", "vehicles", "searches", "customers"];
+export const ANALYTICS_SECTIONS = ["overview", "leads", "vehicles", "vehicle_cars", "vehicle_favorites", "searches", "customers"];
 
 export const seenMoment = (value, now = Date.now()) => {
   const moment = new Date(String(value || ""));
@@ -502,8 +523,9 @@ export async function readAnalyticsSeen(viewing = "") {
     `INSERT INTO analytics_seen(section, seen_at) SELECT unnest($1::text[]), now() ON CONFLICT (section) DO NOTHING`,
     [ANALYTICS_SECTIONS],
   );
-  if (ANALYTICS_SECTIONS.includes(viewing)) {
-    await pool.query("UPDATE analytics_seen SET seen_at=now() WHERE section=$1", [viewing]);
+  const viewingSections = viewing === "vehicles" ? ["vehicles", "vehicle_cars"] : ANALYTICS_SECTIONS.includes(viewing) ? [viewing] : [];
+  if (viewingSections.length) {
+    await pool.query("UPDATE analytics_seen SET seen_at=now() WHERE section = ANY($1::text[])", [viewingSections]);
   }
   const stored = await pool.query("SELECT section, seen_at FROM analytics_seen");
   return Object.fromEntries(stored.rows.map((row) => [row.section, row.seen_at?.toISOString?.() || row.seen_at]));
@@ -512,11 +534,13 @@ export async function readAnalyticsSeen(viewing = "") {
 export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.now() } = {}) {
   const seenBySection = await readAnalyticsSeen(viewing);
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
-  const [overview, vehicles, searches, leads, customers] = await Promise.all([
+  const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, customers] = await Promise.all([
     // Ярлык «новое с прошлого раза» тоже считает только живых людей, иначе он
     // зажигался бы от заходов роботов.
     pool.query(`SELECT count(DISTINCT visitor_id)::int AS n FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.overview]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicles]),
+    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicle_cars]),
+    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='favorite_added' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicle_favorites]),
     pool.query(`SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")} AND btrim(coalesce(properties->>'query','')) <> ''`, [since.searches]),
     pool.query(`SELECT (SELECT count(*) FROM order_drafts WHERE created_at > $1 AND ${notStaffContact("contact")})::int
       + (SELECT count(*) FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")})::int AS n`, [since.leads]),
@@ -525,6 +549,8 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
   return {
     overview:overview.rows[0].n,
     vehicles:vehicles.rows[0].n,
+    vehicle_cars:vehicleCars.rows[0].n,
+    vehicle_favorites:vehicleFavorites.rows[0].n,
     searches:searches.rows[0].n,
     leads:leads.rows[0].n,
     customers:customers.rows[0].n,

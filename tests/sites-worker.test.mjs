@@ -183,6 +183,10 @@ test("protects analytics reset and uses calendar-safe date filtering", async () 
   assert.equal(dashboard.status, 200);
   assert.equal(executed.filter((sql) => sql.startsWith("SELECT")).every((sql) => sql.includes("datetime(created_at) >= datetime(?)")), true);
 
+  const trend = await worker.fetch(new Request("https://example.test/api/analytics/trend?period=90", { headers:{ cookie } }), env);
+  assert.equal(trend.status, 200);
+  assert.equal((await trend.json()).period, "90");
+
   const reset = await worker.fetch(new Request("https://example.test/api/analytics/events", { method:"DELETE", headers:{ cookie } }), env);
   assert.equal(reset.status, 200);
   assert.deepEqual(await reset.json(), { ok:true, deleted:4 });

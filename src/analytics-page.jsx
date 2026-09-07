@@ -40,6 +40,19 @@ const usePersistedBoolean = (key, fallback) => {
   useEffect(() => { window.localStorage.setItem(key, String(value)); }, [key, value]);
   return [value, setValue];
 };
+const usePersistedChoice = (key, choices, fallback) => {
+  const [value, setValue] = useState(() => {
+    if (typeof window === "undefined") return fallback;
+    try {
+      const stored = window.localStorage.getItem(key);
+      return choices.includes(stored) ? stored : fallback;
+    } catch { return fallback; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(key, value); } catch { /* приватный режим может запретить хранилище */ }
+  }, [key, value]);
+  return [value, setValue];
+};
 // Фотохранилище Che168 отдаёт снимок любой ширины: она стоит в адресе перед именем
 // файла. В списке заявок фото размером с ноготь, полноразмерный кадр здесь ни к чему.
 const leadPhoto = (source, width = 240) => {
@@ -243,11 +256,72 @@ function LeadsSection({ leads, loading, error, unavailable, reload }) {
   );
 }
 
+const trendPeriods = [
+  { id:"90", label:"За 90 дней" },
+  { id:"30", label:"За 30 дней" },
+  { id:"7", label:"За 7 дней" },
+];
+const trendPeriodIds = trendPeriods.map(({ id }) => id);
+
+function TrendPeriodSelect({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const selected = trendPeriods.find((item) => item.id === value) || trendPeriods[0];
+  useEffect(() => {
+    const closeOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, []);
+  const choose = (id) => {
+    onChange(id);
+    setOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+  const handleKeyDown = (event) => {
+    if (event.key === "Escape") { setOpen(false); return; }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (!open) { setOpen(true); return; }
+    const index = trendPeriods.findIndex((item) => item.id === value);
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    choose(trendPeriods[(index + step + trendPeriods.length) % trendPeriods.length].id);
+  };
+  return <div className={`analytics-trend-period${open ? " open" : ""}`} ref={rootRef}>
+    <button ref={triggerRef} className="analytics-trend-period-trigger" type="button" aria-label={`Период графика посещений: ${selected.label}`} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((state) => !state)} onKeyDown={handleKeyDown}>
+      <span>{selected.label}</span><b aria-hidden="true" />
+    </button>
+    {open && <div className="analytics-trend-period-menu" role="listbox" aria-label="Период графика посещений">
+      {trendPeriods.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === value} className={item.id === value ? "selected" : ""} onClick={() => choose(item.id)}>{item.label}</button>)}
+    </div>}
+  </div>;
+}
+
 function OverviewSection({ data }) {
   const summary = data.summary || {};
-  const daily = data.daily || [];
+  const [trendPeriod, setTrendPeriod] = usePersistedChoice("analytics:trend-period", trendPeriodIds, "90");
+  const [trendData, setTrendData] = useState(null);
+  const [trendLoading, setTrendLoading] = useState(true);
+  const [trendError, setTrendError] = useState("");
+  const daily = trendData?.period === trendPeriod ? trendData.daily || [] : [];
   const maxDaily = Math.max(1, ...daily.map((item) => Number(item.visitors) || 0));
   const [trendOpen, setTrendOpen] = usePersistedBoolean("analytics:trend-open", true);
+  useEffect(() => {
+    const controller = new AbortController();
+    setTrendLoading(true);
+    setTrendError("");
+    fetch(`/api/analytics/trend?period=${encodeURIComponent(trendPeriod)}`, { cache:"no-store", credentials:"same-origin", signal:controller.signal })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "load_failed");
+        setTrendData(payload);
+      })
+      .catch((error) => { if (error.name !== "AbortError") setTrendError("Не удалось загрузить график."); })
+      .finally(() => { if (!controller.signal.aborted) setTrendLoading(false); });
+    return () => controller.abort();
+  }, [trendPeriod, data.generatedAt]);
   const chart = useMemo(() => daily.map((item, index) => {
     const x = daily.length > 1 ? 24 + index / (daily.length - 1) * 952 : 500;
     return { ...item, x, visitorsY:196 - Number(item.visitors || 0) / maxDaily * 164 };
@@ -276,10 +350,14 @@ function OverviewSection({ data }) {
     <>
       <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}</section>
       <section className={`analytics-panel analytics-trend ${trendOpen ? "" : "is-collapsed"}`}>
-        <button className="analytics-collapse-trigger" type="button" aria-label={trendOpen ? "Свернуть график посещений" : "Развернуть график посещений"} aria-expanded={trendOpen} onClick={() => setTrendOpen((open) => !open)}>
-          <span><h2>График посещений</h2></span><b className="analytics-chevron" aria-hidden="true" />
-        </button>
-        {trendOpen && <>{daily.length ? <div className="analytics-line-chart" role="img" aria-label="График заходов по дням">
+        <div className="analytics-trend-heading">
+          <h2>График посещений</h2>
+          <div className="analytics-trend-controls">
+            <TrendPeriodSelect value={trendPeriod} onChange={setTrendPeriod} />
+            <button className="analytics-trend-collapse" type="button" aria-label={trendOpen ? "Свернуть график посещений" : "Развернуть график посещений"} aria-expanded={trendOpen} onClick={() => setTrendOpen((open) => !open)}><b className="analytics-chevron" aria-hidden="true" /></button>
+          </div>
+        </div>
+        {trendOpen && <>{trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div className="analytics-line-chart" role="img" aria-label="График заходов по дням">
           <svg viewBox="0 0 1000 220" preserveAspectRatio="none" aria-hidden="true">
             {[32,87,142,196].map((y) => <line key={y} className="analytics-chart-grid" x1="24" x2="976" y1={y} y2={y} />)}
             <polyline className="analytics-chart-line analytics-chart-visitors" points={chart.map((item) => `${item.x},${item.visitorsY}`).join(" ")} />
@@ -317,15 +395,15 @@ function PromoSection({ summary }) {
 }
 
 const vehicleModes = [
-  { id:"models", label:"Модели" },
   { id:"cars", label:"Авто" },
+  { id:"models", label:"Модели" },
   { id:"favorites", label:"Избранное" },
 ];
 
 const modelTitle = (title) => String(title || "").replace(/\s+\d{4}\s*$/, "").trim() || title || "—";
 
-function VehiclesSection({ data }) {
-  const [mode, setMode] = useState("models");
+function VehiclesSection({ data, updates, markViewed }) {
+  const [mode, setMode] = useState("cars");
   const [sort, setSort] = useState({ column:"views", desc:true });
   const [visible, setVisible] = useState(20);
   const models = useMemo(() => Object.values((data.vehicles || []).reduce((grouped, item) => {
@@ -367,11 +445,15 @@ function VehiclesSection({ data }) {
   const setVehicleMode = (nextMode) => {
     setMode(nextMode); setVisible(20);
     setSort({ column:nextMode === "favorites" ? "lastViewed" : "views", desc:true });
+    if (nextMode === "cars" || nextMode === "favorites") markViewed(`vehicle_${nextMode}`);
   };
   const toggleSort = (column) => setSort((current) => current.column === column.id ? { column:column.id, desc:!current.desc } : { column:column.id, desc:!column.text });
   return <section className="analytics-panel" aria-label="Автомобили">
     <div className="analytics-panel-heading analytics-vehicles-heading"><div className="analytics-range" aria-label="Представление автомобилей">
-      {vehicleModes.map((item) => <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}</button>)}
+      {vehicleModes.map((item) => {
+        const fresh = item.id === "models" ? 0 : Number(updates[`vehicle_${item.id}`]) || 0;
+        return <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}{fresh ? <b className="analytics-tab-count" title={`Нового с прошлого просмотра: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}</button>;
+      })}
     </div></div>
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
       <tbody>{rows.length ? rows.slice(0, visible).map((item) => <tr key={item.id} className={mode === "favorites" && (item.gone || item.status === "unavailable") ? "analytics-row-warning" : undefined}>
@@ -394,7 +476,7 @@ function SearchesSection({ data }) {
 }
 
 
-function SearchTrafficTable({ title, rows, status, pages = false }) {
+function SearchTrafficTable({ title, rows, status, availableTo, source, pages = false }) {
   const [withClicks, setWithClicks] = useState(false);
   const [sort, setSort] = useState({ id:'count', desc:true });
   const [visible, setVisible] = useState(20);
@@ -415,7 +497,7 @@ function SearchTrafficTable({ title, rows, status, pages = false }) {
   }), [rows, withClicks, sort]);
   const toggleSort = (id) => setSort((current) => current.id === id ? { id, desc:!current.desc } : { id, desc:id !== 'value' && id !== 'engine' });
   return <section className="analytics-panel">
-    <div className="analytics-panel-heading"><h2>{title}</h2><div className="analytics-range" aria-label={`Фильтр ${title}`}><button type="button" className={!withClicks ? 'active' : ''} onClick={() => setWithClicks(false)}>Все</button><button type="button" className={withClicks ? 'active' : ''} onClick={() => setWithClicks(true)}>С кликами</button></div></div>
+    <div className="analytics-panel-heading"><div><h2>{title}</h2>{availableTo && <p>{source} · последние данные по {formatDate(availableTo)}</p>}</div><div className="analytics-range" aria-label={`Фильтр ${title}`}><button type="button" className={!withClicks ? 'active' : ''} onClick={() => setWithClicks(false)}>Все</button><button type="button" className={withClicks ? 'active' : ''} onClick={() => setWithClicks(true)}>С кликами</button></div></div>
     {status !== 'ready' ? <p role="status">{status === 'not_connected' ? 'Источник ещё не подключён.' : status === 'pending' ? 'За этот период данные ещё не накоплены.' : 'Хранилище отчётов пока недоступно.'}</p>
       : <><div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id}><button type="button" className={`analytics-sort ${sort.id === column.id ? 'active' : ''}`} onClick={() => toggleSort(column.id)}>{column.label}<span aria-hidden="true">{sort.id === column.id ? (sort.desc ? '↓' : '↑') : '↕'}</span></button></th>)}</tr></thead>
         <tbody>{sortedRows.length ? sortedRows.slice(0, visible).map((row, index) => <tr key={`${row.engine}-${row.value}-${index}`}>
@@ -466,25 +548,27 @@ function SearchTrafficSection({ period, active }) {
   }, [period, active, revision]);
   const google = report?.google;
   const yandex = report?.yandex;
-  const hasBoth = google?.total != null && yandex?.total != null;
+  const metrika = report?.metrika;
+  const metrikaReady = metrika?.status === 'ready';
   const pages = [google, yandex].flatMap((source, index) => (source?.pages || []).map((row) => ({ ...row, engine:index === 0 ? 'google' : 'yandex' }))).sort((a, b) => b.count - a.count);
   const pageRows = pages.filter((row) => pageEngine === 'all' || row.engine === pageEngine);
   return <div className="analytics-search-traffic">
     <section className="analytics-panel">
-      <div className="analytics-panel-heading"><div><h2>Переходы из поисковых систем</h2></div>
+      <div className="analytics-panel-heading"><div><h2>Визиты из поисковых систем</h2><p>По данным Яндекс Метрики</p></div>
         <button className="secondary" type="button" disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</button></div>
       {loading && <p role="status">Загружаем сводку…</p>}
       {error && <p role="alert">{error}</p>}
       {report && <>
         <section className="analytics-kpis" aria-label="Переходы из поиска">{[
-          ['Всего из Google и Яндекса', hasBoth ? google.total + yandex.total : null], ['Google', google?.total], ['Яндекс', yandex?.total],
+          ['Всего из поиска', metrikaReady ? metrika.visits : null], ['Google', metrikaReady ? metrika.google?.visits : null], ['Яндекс', metrikaReady ? metrika.yandex?.visits : null],
         ].map(([label, value]) => <article key={label}><span>{label}</span><strong>{value == null ? '—' : formatNumber(value)}</strong></article>)}</section>
+        {!metrikaReady && <p className="analytics-search-status" role="status">{metrika?.status === 'error' ? 'Метрика временно не отдала данные.' : 'Для оперативных визитов нужен доступ к API Метрики.'}</p>}
       </>}
     </section>
     {report && <>
       <div className="analytics-search-tables">
         <div className="analytics-range" aria-label="Поисковик для запросов">{[['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={queryEngine === key ? 'active' : ''} onClick={() => setQueryEngine(key)}>{label}</button>)}</div>
-        <SearchTrafficTable title={`Запросы ${queryEngine === 'google' ? 'Google' : 'Яндекса'}`} rows={report[queryEngine]?.queries?.slice(0, 1000)} status={report[queryEngine]?.status} />
+        <SearchTrafficTable title={`Запросы ${queryEngine === 'google' ? 'Google' : 'Яндекса'}`} rows={report[queryEngine]?.queries?.slice(0, 1000)} status={report[queryEngine]?.status} availableTo={report[queryEngine]?.latestAvailableTo} source={queryEngine === 'google' ? 'Search Console' : 'Вебмастер'} />
       </div>
       <div className="analytics-range" aria-label="Поисковик для страниц входа">{[['all', 'Все'], ['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={pageEngine === key ? 'active' : ''} onClick={() => setPageEngine(key)}>{label}</button>)}</div>
       <SearchTrafficTable title="Страницы входа из поиска" rows={pageRows.slice(0, 1000)} status={pageEngine === 'all' ? (google?.status === 'ready' || yandex?.status === 'ready' ? 'ready' : google?.status) : report[pageEngine]?.status} pages />
@@ -522,7 +606,7 @@ const analyticsPeriods = [
 
 const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
-  { id:"search-traffic", label:"Поисковики", icon:ChartLineUp, ranged:true },
+  { id:"search-traffic", label:"Поисковики", icon:MagnifyingGlass, ranged:true },
   { id:"vehicles", label:"Автомобили", icon:CarProfile, ranged:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:false },
   { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
@@ -548,6 +632,10 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   const openSection = (id) => {
     setSection(id);
     // Цифру гасим сразу, не дожидаясь ответа сервера.
+    setUpdates((current) => ({ ...current, [id]:0 }));
+    loadUpdates(id);
+  };
+  const markViewed = (id) => {
     setUpdates((current) => ({ ...current, [id]:0 }));
     loadUpdates(id);
   };
@@ -606,7 +694,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} updates={updates} markViewed={markViewed} /></div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} active={section === "search-traffic"} /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
@@ -618,9 +706,9 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
 }
 
 export function AnalyticsPage() {
-  // Локальная аналитика начинается со снимка за 90 дней: это сразу даёт полезный
-  // контекст вместо пустой карточки «Сегодня».
-  const [period, setPeriod] = useState("90");
+  // Оперативные цифры открываются на сегодняшнем срезе. История у графика обзора
+  // выбирается отдельно и не меняет карточки, таблицы и остальные разделы.
+  const [period, setPeriod] = useState("today");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
   const [loading, setLoading] = useState(false);

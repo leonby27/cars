@@ -7,7 +7,7 @@ import { authenticateAccount, clearSessionCookie, createAccount, createSession, 
 import { createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelSummary } from "./repository.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
-import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, isDatacenterAddress, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, isDatacenterAddress, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
@@ -183,6 +183,10 @@ export async function handleApiRequest(request, response) {
     if (request.method === "GET" && url.pathname === "/api/analytics/dashboard") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
       return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("period") || url.searchParams.get("days")));
+    }
+    if (request.method === "GET" && url.pathname === "/api/analytics/trend") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      return json(response, 200, await getAnalyticsTrend(url.searchParams.get("period")));
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });

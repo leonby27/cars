@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm } from "../src/analytics.js";
 
 test("analytics events are allowlisted and drop personal data", () => {
@@ -70,6 +70,17 @@ test("«сегодня» и «вчера» считаются по мински�
   assert.equal(normalizeAnalyticsRange("7", now).days, 7);
   assert.equal(normalizeAnalyticsRange("365", now).days, 30);
   assert.equal(normalizeAnalyticsRange("365", now).from.toISOString(), new Date(now - 30 * 86_400_000).toISOString());
+});
+
+test("график обзора получает отдельный разрешённый период", async () => {
+  const calls = [];
+  const db = { query:async (sql, values) => { calls.push({ sql, values }); return { rows:[{ day:"2026-09-07", visitors:3 }] }; } };
+  const trend = await getAnalyticsTrend("90", { db });
+  assert.equal(trend.period, "90");
+  assert.equal(trend.days, 90);
+  assert.deepEqual(trend.daily, [{ day:"2026-09-07", visitors:3 }]);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].sql, /created_at >= \$1 AND created_at < \$2/);
 });
 
 test("analytics tokens expire and reject tampering", () => {
@@ -183,7 +194,7 @@ test("момент последнего захода приводится к р�
   }
   // Дальше месяца назад не заглядываем: цифра на ярлыке должна оставаться понятной.
   assert.equal(seenMoment("2020-01-01T00:00:00Z", now), new Date(now - 30 * 86_400_000).toISOString());
-  assert.deepEqual(ANALYTICS_SECTIONS, ["overview", "leads", "vehicles", "searches", "customers"]);
+  assert.deepEqual(ANALYTICS_SECTIONS, ["overview", "leads", "vehicles", "vehicle_cars", "vehicle_favorites", "searches", "customers"]);
 });
 
 // Приём событий открыт без пароля, поэтому записываем только то, что прислала
