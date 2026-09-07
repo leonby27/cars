@@ -97,3 +97,76 @@ test('service account requests only read access and signs the token assertion', 
   }});
   assert.equal(verified,true);
 });
+
+test('positions use impression weights, retain zero-click queries and reject missing metrics', () => {
+  const day = (date, impressions, position) => ({ day:date, total:0, metricsVersion:2, queries:[{ value:'авто', count:0, impressions, position }] });
+  const range = { startDate:'2026-09-01', endDate:'2026-09-02', days:2 };
+  const result = aggregateSearchDays([day('2026-09-01', 1, 2), day('2026-09-02', 9, 12)], range);
+  assert.equal(result.queries[0].position, 11);
+  assert.equal(result.queries[0].impressions, 10);
+  assert.equal(result.queries[0].count, 0);
+  assert.equal(aggregateSearchDays([day('2026-09-01', 0, 0)], range).queries[0].position, null);
+  assert.equal(aggregateSearchDays([day('2026-09-01', 1, 2), day('2026-09-02', 9, null)], range).queries[0].position, null);
+  const legacy = aggregateSearchDays([day('2026-09-01', 1, 2), sample('2026-09-02', 2)], range);
+  assert.equal(legacy.queries[0].position, null);
+  assert.equal(legacy.queries[0].impressions, null);
+});
+
+test('position comparison requires complete adjacent periods and never treats missing query as rank zero', async () => {
+  const store = memoryStore();
+  const day = (date, position) => ({ day:date, total:1, metricsVersion:2, queries:[{value:'авто', count:1, impressions:10, position}] });
+  await store.save('google', env.GOOGLE_SEARCH_CONSOLE_SITE, [day('2026-09-06', 12), day('2026-09-07', 5)], {});
+  const report = await readSearchTraffic('yesterday', env, store, { now });
+  assert.equal(report.google.queries[0].positionChange, 7);
+  assert.equal(report.google.queries[0].previousPosition, 12);
+  assert.equal(report.google.previousRange.endDate, '2026-09-06');
+  const partial = await readSearchTraffic('7', env, store, {now});
+  assert.equal(partial.google.queries[0].positionChange, null);
+  const today = await readSearchTraffic('today', env, store, {now});
+  assert.equal(today.google.status, 'pending');
+  await store.save('google', env.GOOGLE_SEARCH_CONSOLE_SITE, [{...day('2026-09-06', 12), queries:[]}], {});
+  assert.equal((await readSearchTraffic('yesterday', env, store, {now})).google.queries[0].positionChange, null);
+});
+
+test('Google backfills metrics for existing click-only archives once', async () => {
+  const store = memoryStore();
+  const config = {...env, YANDEX_WEBMASTER_HOST_ID:''};
+  await store.save('google', env.GOOGLE_SEARCH_CONSOLE_SITE, [sample('2026-09-07', 1)], {lastSuccessAt:new Date(now).toISOString()});
+  const starts = [];
+  const fetcher = async (url, options) => {
+    if (String(url).includes('oauth2')) return json({access_token:'temporary'});
+    const body = JSON.parse(options.body); starts.push(body.startDate);
+    return json({rows:[{keys:body.dimensions.length === 1 ? ['2026-09-07'] : ['2026-09-07','авто'], clicks:1, impressions:20, position:3.5}]});
+  };
+  await syncSearchTraffic(config, store, {now, fetcher});
+  assert.equal(starts[0], '2026-03-13');
+  const report = await readSearchTraffic('yesterday', config, store, {now});
+  assert.equal(report.google.queries[0].position, 3.5);
+  assert.equal(report.google.queries[0].impressions, 20);
+  starts.length = 0;
+  await syncSearchTraffic(config, store, {now, fetcher});
+  assert.equal(starts[0], '2026-08-26');
+});
+
+test('Yandex joins daily fields regardless of order and preserves impressions without clicks', async () => {
+  const days = await fetchYandexSearchDays(env, {fetcher:async (url) => String(url).endsWith('/user') ? json({user_id:123}) : json({count:1, text_indicator_to_statistics:[{text_indicator:{value:'авто'}, statistics:[
+    {date:'2026-09-07',field:'POSITION',value:4.2},
+    {date:'2026-09-06',field:'IMPRESSIONS',value:0},
+    {date:'2026-09-07',field:'IMPRESSIONS',value:12},
+    {date:'2026-09-06',field:'POSITION',value:0},
+  ]}]})});
+  const row = days.find(day => day.day === '2026-09-07').queries[0];
+  assert.deepEqual(row, {value:'авто',count:0,impressions:12,position:4.2});
+  assert.equal(days.find(day => day.day === '2026-09-06').queries[0].position, null);
+});
+
+test('delayed tail compares equal published prefixes without borrowing extra previous days', async () => {
+  const store = memoryStore();
+  const days = Array.from({length:13}, (_,i) => ({day:new Date(Date.UTC(2026,7,26+i)).toISOString().slice(0,10), total:1, metricsVersion:2,
+    queries:[{value:'авто',count:1,impressions:10,position:i < 7 ? (i === 6 ? 100 : 10) : 5}]}));
+  await store.save('google', env.GOOGLE_SEARCH_CONSOLE_SITE, days, {});
+  const report = await readSearchTraffic('7', env, store, {now});
+  assert.equal(report.google.comparisonDays, 6);
+  assert.equal(report.google.previousRange.endDate, '2026-08-31');
+  assert.equal(report.google.queries[0].positionChange, 5);
+});

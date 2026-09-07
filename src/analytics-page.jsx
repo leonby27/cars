@@ -389,12 +389,17 @@ function SearchTrafficTable({ title, rows, unit, status, pages = false }) {
   return <section className="analytics-panel">
     <div className="analytics-panel-heading"><h2>{title}</h2></div>
     {status !== 'ready' ? <p role="status">{status === 'not_connected' ? 'Источник ещё не подключён.' : status === 'pending' ? 'За этот период данные ещё не накоплены.' : 'Хранилище отчётов пока недоступно.'}</p>
-      : <div className="analytics-table-wrap"><table><thead><tr><th>{pages ? 'Страница входа' : 'Поисковый запрос'}</th>{pages && <th>Поисковик</th>}<th>{unit}</th></tr></thead>
+      : <div className="analytics-table-wrap"><table><thead><tr><th>{pages ? 'Страница входа' : 'Поисковый запрос'}</th>{pages && <th>Поисковик</th>}<th>{unit}</th><th>Показы</th><th>Средняя позиция</th><th>Изменение</th></tr></thead>
         <tbody>{rows?.length ? rows.map((row, index) => <tr key={`${row.engine}-${row.value}-${index}`}>
           <td>{pages ? <SearchLandingLink value={row.value} /> : row.value || 'Запрос скрыт'}</td>
           {pages && <td>{row.engine === 'google' ? 'Google' : row.engine === 'yandex' ? 'Яндекс' : 'Другие'}</td>}
           <td>{formatNumber(row.count)}</td>
-        </tr>) : <tr><td colSpan={pages ? 3 : 2}>За этот период доступных данных пока нет.</td></tr>}</tbody></table></div>}
+          <td>{row.impressions == null ? '—' : formatNumber(row.impressions)}</td>
+          <td>{row.position == null ? '—' : row.position.toLocaleString('ru-RU', { maximumFractionDigits:1 })}</td>
+          <td title={row.positionChange == null ? 'Недостаточно сопоставимых данных за оба периода' : `Ранее: ${row.previousPosition.toLocaleString('ru-RU', { maximumFractionDigits:1 })}`}>
+            {row.positionChange == null ? '—' : Math.abs(row.positionChange) < 0.05 ? '0' : `${row.positionChange > 0 ? '↑' : '↓'} ${Math.abs(row.positionChange).toLocaleString('ru-RU', { maximumFractionDigits:1 })}`}
+          </td>
+        </tr>) : <tr><td colSpan={pages ? 6 : 5}>За этот период доступных данных пока нет.</td></tr>}</tbody></table></div>}
   </section>;
 }
 
@@ -452,15 +457,16 @@ function SearchTrafficSection({ period, active }) {
           ['Всего из Google и Яндекса', hasBoth ? google.total + yandex.total : null, hasBoth ? (google.partial || yandex.partial ? 'За доступные дни обоих источников' : 'За выбранный период') : 'Нужны данные обоих источников'],
           ['Google', google?.total, sourceNote(google)], ['Яндекс', yandex?.total, sourceNote(yandex)],
         ].map(([label, value, note]) => <article key={label}><span>{label}</span><strong>{value == null ? '—' : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
-        {[[google, 'Google'], [yandex, 'Яндекс']].map(([source, label]) => <p key={label} className="analytics-note">{label}: {source?.lastSyncAt ? `загружено ${formatDate(source.lastSyncAt, true)}` : sourceNote(source)}{source?.syncError ? ' · обновление не удалось, показаны ранее сохранённые данные' : ''}{source?.connected === false && source?.status === 'ready' ? ' · подключение отключено, показан архив' : ''}</p>)}
+        {[[google, 'Google'], [yandex, 'Яндекс']].map(([source, label]) => <p key={label} className="analytics-note">{label}: {source?.lastSyncAt ? `загружено ${formatDate(source.lastSyncAt, true)}` : sourceNote(source)}{source?.syncError ? ' · обновление не удалось, показаны ранее сохранённые данные' : ''}{source?.connected === false && source?.status === 'ready' ? ' · подключение отключено, показан архив' : ''}{source?.comparisonAvailable ? ` · сравнение за ${source.comparisonDays} дн. с ${source.previousRange.startDate} — ${source.previousRange.endDate}` : ' · для сравнения пока недостаточно данных'}</p>)}
         <p className="analytics-note">Последние дни поступают с задержкой и могут уточняться. Отсутствующие дни не считаются нулевыми. Период: {report.startDate} — {report.endDate}; Google считает дни по тихоокеанскому времени, Яндекс — по московскому.</p>
       </>}
     </section>
     {report && <>
-      <div className="analytics-two-column">
+      <div className="analytics-search-tables">
         <SearchTrafficTable title="Запросы Google" rows={google?.queries?.slice(0, 1000)} unit="Клики" status={google?.status} />
         <SearchTrafficTable title="Запросы Яндекса" rows={yandex?.queries?.slice(0, 1000)} unit="Клики" status={yandex?.status} />
       </div>
+      <p className="analytics-note">Позиция — среднее место в поиске за доступные дни с учётом числа показов; чем меньше число, тем лучше. ↑ — рост, ↓ — снижение относительно предыдущего периода такой же длины. Для сравнения берём одинаковое число доступных дней от начала каждого периода. При пропусках внутри периода сравнение не показывается. Прочерк означает, что данных недостаточно. Последние значения могут уточняться.</p>
       <p className="analytics-note">Часть запросов поисковики скрывают, поэтому сумма строк может отличаться от общего числа переходов. В каждой таблице показано до 1000 наиболее частых строк; дневная история хранится полностью в пределах данных, доступных поисковикам.</p>
       <div className="analytics-range" aria-label="Поисковик для страниц входа">{[['all', 'Все'], ['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={engine === key ? 'active' : ''} onClick={() => setEngine(key)}>{label}</button>)}</div>
       <SearchTrafficTable title="Страницы входа из поиска" rows={pageRows.slice(0, 1000)} unit="Клики" status={engine === 'all' ? (google?.status === 'ready' || yandex?.status === 'ready' ? 'ready' : google?.status) : report[engine]?.status} pages />

@@ -173,3 +173,5 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
 .analytics-search-traffic > .analytics-range { justify-self: start; }
 
 @media (max-width: 620px) { .analytics-search-traffic .analytics-kpis { grid-template-columns: 1fr; } }
+
+.analytics-search-tables { display: grid; gap: 16px; }

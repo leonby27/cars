@@ -258,7 +258,7 @@ async function searchJson(fetcher, url, options = {}) {
   if (!response.ok) throw new Error([401, 403].includes(response.status) ? 'access_denied' : 'upstream_unavailable');
   return response.json();
 }
-const searchSort = (rows) => rows.sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+const searchSort = (rows) => rows.sort((a, b) => b.count - a.count || (b.impressions || 0) - (a.impressions || 0) || a.value.localeCompare(b.value));
 
 export async function fetchGoogleSearchDays(env, { now = Date.now(), days = 14, fetcher = fetch } = {}) {
   let token;
@@ -310,12 +310,12 @@ export async function fetchGoogleSearchDays(env, { now = Date.now(), days = 14, 
   // actually returned date; never invent zeros for the not-yet-published tail.
   const latest = totals.rows.map((row) => row.keys[0]).sort().at(-1);
   if (latest) for (let day = startDate; day <= latest; day = addSearchDays(day, 1)) {
-    daily.set(day, { day, total:0, queries:[], pages:[], preliminary:Boolean(totals.incomplete && day >= totals.incomplete) });
+    daily.set(day, { day, total:0, metricsVersion:2, queries:[], pages:[], preliminary:Boolean(totals.incomplete && day >= totals.incomplete) });
   }
-  for (const row of totals.rows) daily.set(row.keys[0], { day:row.keys[0], total:searchNumber(row.clicks), queries:[], pages:[], preliminary:Boolean(totals.incomplete && row.keys[0] >= totals.incomplete) });
+  for (const row of totals.rows) daily.set(row.keys[0], { day:row.keys[0], total:searchNumber(row.clicks), metricsVersion:2, queries:[], pages:[], preliminary:Boolean(totals.incomplete && row.keys[0] >= totals.incomplete) });
   for (const [kind, report] of [['queries', queries], ['pages', pages]]) for (const row of report.rows) {
     const day = daily.get(row.keys[0]);
-    if (day) day[kind].push({ value:row.keys[1], count:searchNumber(row.clicks) });
+    if (day) day[kind].push({ value:row.keys[1], count:searchNumber(row.clicks), impressions:searchNumber(row.impressions), position:searchNumber(row.position) || null });
   }
   return [...daily.values()];
 }
@@ -345,13 +345,21 @@ export async function fetchYandexSearchDays(env, { fetcher = fetch } = {}) {
   for (const [index, kind] of [[1, 'pages'], [0, 'queries']]) for (const row of results[index].value) {
     const value = row.text_indicator?.value;
     if (!value || (kind === 'pages' && workerInternalAnalyticsPath(value))) continue;
+    const metrics = new Map();
     for (const stat of row.statistics || []) {
-      if (stat.field !== 'CLICKS' || !/^\d{4}-\d{2}-\d{2}$/.test(stat.date)) continue;
-      if (!daily.has(stat.date)) daily.set(stat.date, { day:stat.date, total:0, queries:[], pages:[], preliminary:true });
-      const day = daily.get(stat.date);
-      day[kind].push({ value, count:searchNumber(stat.value) });
-      // Complete URL pagination gives page clicks including hidden queries.
-      if (kind === 'pages') day.total += searchNumber(stat.value);
+      if (!['CLICKS', 'IMPRESSIONS', 'POSITION'].includes(stat.field) || !/^\d{4}-\d{2}-\d{2}$/.test(stat.date)) continue;
+      if (!metrics.has(stat.date)) metrics.set(stat.date, { value, count:0, impressions:0, position:null });
+      const item = metrics.get(stat.date);
+      if (stat.field === 'CLICKS') item.count = searchNumber(stat.value);
+      if (stat.field === 'IMPRESSIONS') item.impressions = searchNumber(stat.value);
+      if (stat.field === 'POSITION') item.position = searchNumber(stat.value) || null;
+    }
+    for (const [date, item] of metrics) {
+      if (!daily.has(date)) daily.set(date, { day:date, total:0, metricsVersion:2, queries:[], pages:[], preliminary:true });
+      const day = daily.get(date);
+      day[kind].push(item);
+      // Complete URL pagination includes clicks from hidden queries.
+      if (kind === 'pages') day.total += item.count;
     }
   }
   return [...daily.values()];
@@ -361,24 +369,54 @@ export function aggregateSearchDays(days, range) {
   const selected = days.filter((day) => day.day >= range.startDate && day.day <= range.endDate);
   const aggregate = (kind) => {
     const counts = new Map();
-    for (const day of selected) for (const row of day[kind] || []) counts.set(row.value, (counts.get(row.value) || 0) + searchNumber(row.count));
-    return searchSort([...counts].map(([value, count]) => ({ value, count })));
+    const legacy = selected.some((day) => day.metricsVersion !== 2);
+    for (const day of selected) for (const row of day[kind] || []) {
+      if (!counts.has(row.value)) counts.set(row.value, { value:row.value, count:0, impressions:0, weighted:0, weight:0, missingPosition:false });
+      const item = counts.get(row.value);
+      item.count += searchNumber(row.count);
+      const impressions = searchNumber(row.impressions);
+      item.impressions += impressions;
+      if (impressions > 0 && searchNumber(row.position) > 0) {
+        item.weighted += row.position * impressions;
+        item.weight += impressions;
+      } else if (impressions > 0) item.missingPosition = true;
+    }
+    return searchSort([...counts.values()].map(({ weighted, weight, missingPosition, ...item }) => ({ ...item,
+      impressions:legacy ? null : item.impressions,
+      position:!legacy && !missingPosition && weight > 0 ? weighted / weight : null,
+    })));
   };
   const dates = selected.map((day) => day.day).sort();
   return { total:selected.length ? selected.reduce((sum, day) => sum + searchNumber(day.total), 0) : null,
     queries:aggregate('queries'), pages:aggregate('pages'), availableDays:new Set(dates).size, expectedDays:range.days,
     availableFrom:dates[0] || null, availableTo:dates.at(-1) || null, partial:new Set(dates).size < range.days,
+    metricsComplete:selected.length > 0 && selected.every((day) => day.metricsVersion === 2),
     preliminary:selected.some((day) => day.preliminary) };
 }
 export async function readSearchTraffic(period, env, store, { now = Date.now() } = {}) {
   const range = searchTrafficRange(period, now);
+  const previousRange = { startDate:addSearchDays(range.startDate, -range.days), endDate:addSearchDays(range.startDate, -1), days:range.days };
   const properties = searchProperties(env);
   const pairs = await Promise.all(Object.entries(properties).map(async ([source, settings]) => {
     if (!settings.property) return [source, { status:'not_connected' }];
     try {
-      const { days, state } = await store.read(source, settings.property, range);
-      return [source, { status:days.length ? 'ready' : settings.configured ? 'pending' : 'not_connected', connected:settings.configured,
-        ...aggregateSearchDays(days, range), lastSyncAt:state?.lastSuccessAt || null, syncError:state?.error || null }];
+      const { days, state } = await store.read(source, settings.property, { ...range, startDate:previousRange.startDate });
+      const current = aggregateSearchDays(days, range);
+      // Compare the published prefix with exactly the same days in the previous period.
+      // A missing tail is a provider delay; internal gaps or missing history prevent comparison.
+      const prefixDays = current.availableTo ? (Date.parse(current.availableTo) - Date.parse(range.startDate)) / SEARCH_DAY + 1 : 0;
+      const comparisonRange = { ...previousRange, endDate:addSearchDays(previousRange.startDate, Math.max(1, prefixDays) - 1), days:prefixDays };
+      const previous = aggregateSearchDays(days, comparisonRange);
+      const comparable = prefixDays > 0 && current.availableDays === prefixDays && !previous.partial && current.metricsComplete && previous.metricsComplete;
+      for (const kind of ['queries', 'pages']) {
+        const prior = new Map(previous[kind].map((row) => [row.value, row]));
+        current[kind] = current[kind].map((row) => {
+          const position = prior.get(row.value)?.position;
+          return { ...row, previousPosition:position ?? null, positionChange:comparable && row.position != null && position != null ? position - row.position : null };
+        });
+      }
+      return [source, { status:current.availableDays ? 'ready' : settings.configured ? 'pending' : 'not_connected', connected:settings.configured,
+        ...current, comparisonAvailable:comparable, comparisonDays:comparable ? prefixDays : 0, previousRange:comparisonRange, lastSyncAt:state?.lastSuccessAt || null, syncError:state?.error || null }];
     } catch { return [source, { status:'storage_unavailable' }]; }
   }));
   return { ...range, generatedAt:new Date(now).toISOString(), ...Object.fromEntries(pairs) };
@@ -388,9 +426,9 @@ export async function syncSearchTraffic(env, store, { now = Date.now(), fetcher 
     if (!settings.configured) return [source, { status:'not_connected' }];
     try {
       const { state } = await store.read(source, settings.property, searchTrafficRange('90', now));
-      const days = source === 'google' ? await fetchGoogleSearchDays(env, { now, fetcher, days:state?.lastSuccessAt ? Math.min(90, Math.max(14, Math.ceil((now - Date.parse(state.lastSuccessAt)) / SEARCH_DAY) + 14)) : 90 })
+      const days = source === 'google' ? await fetchGoogleSearchDays(env, { now, fetcher, days:state?.metricsVersion === 2 && state?.lastSuccessAt ? Math.min(180, Math.max(14, Math.ceil((now - Date.parse(state.lastSuccessAt)) / SEARCH_DAY) + 14)) : 180 })
         : await fetchYandexSearchDays(env, { fetcher });
-      await store.save(source, settings.property, days, { lastSuccessAt:new Date(now).toISOString(), error:null });
+      await store.save(source, settings.property, days, { lastSuccessAt:new Date(now).toISOString(), metricsVersion:2, error:null });
       return [source, { status:'ready', days:days.length }];
     } catch (failure) {
       const error = failure.message === 'access_denied' ? 'access_denied' : 'sync_failed';
