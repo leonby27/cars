@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarProfile, ChartLineUp, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
+import { analyticsNoCountHref } from "./analytics-links.js";
 import { analyticsUpdatesUrl } from "./analytics-updates.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
@@ -148,7 +149,7 @@ function LeadCar({ car }) {
   }
   const facts = [car.mileage ? `${formatNumber(car.mileage)} км` : "", formatUsd(car.estimatedTotalUsd)].filter(Boolean).join(" · ");
   return (
-    <a className="lead-car" href={carHref(car.id)} target="_blank" rel="noreferrer">
+    <a className="lead-car" href={analyticsNoCountHref(carHref(car.id))} target="_blank" rel="noreferrer">
       {car.image ? <img src={leadPhoto(car.image)} alt="" loading="lazy" width="88" height="66" /> : <span><CarProfile size={20} weight="duotone" /></span>}
       <div>
         <strong>{car.title}</strong>
@@ -409,7 +410,7 @@ function VisitRow({ visit, number, unread }) {
   return <tr>
     <td><span className={`analytics-visit-number${unread ? " is-unread" : ""}`}>{number}</span></td>
     <td className={sourceUnknown ? "analytics-visit-source-unknown" : undefined}>{visitSourceLabel(visit.source, visit.landingPath)}</td>
-    <td><a href={landingPath} target="_blank" rel="noreferrer" title={landingPath === "/" ? "Главная" : landingPath || "—"}>{landingPath === "/" ? "Главная" : landingPath || "—"}</a></td>
+    <td><a href={analyticsNoCountHref(landingPath)} target="_blank" rel="noreferrer" title={landingPath === "/" ? "Главная" : landingPath || "—"}>{landingPath === "/" ? "Главная" : landingPath || "—"}</a></td>
     <td>{formatNumber(visit.pageViews)}</td>
     <td>{formatVisitDate(visit.createdAt)}</td>
   </tr>;
@@ -493,7 +494,7 @@ function VehiclesSection({ data, updates, markViewed }) {
     </div></div>
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
       <tbody>{rows.length ? rows.slice(0, visible).map((item) => <tr key={item.id} className={mode === "favorites" && (item.gone || item.status === "unavailable") ? "analytics-row-warning" : undefined}>
-        <td>{mode === "models" ? item.title : <a href={carHref(item.listingId)}>{item.title}</a>}</td>
+        <td>{mode === "models" ? item.title : <a href={analyticsNoCountHref(carHref(item.listingId))}>{item.title}</a>}</td>
         {mode === "favorites" ? <><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></> : <><td>{formatNumber(item.viewers)}</td><td>{formatNumber(item.views)}</td>{mode === "cars" && <td>{formatNumber(item.asks)}</td>}<td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></>}
       </tr>) : <tr><td colSpan={columns.length}>{mode === "favorites" ? "Избранного пока нет." : "Событий по автомобилям пока нет."}</td></tr>}</tbody></table></div>
     {visible < rows.length && <button className="analytics-show-more" type="button" onClick={() => setVisible((count) => count + 20)}>Показать ещё</button>}
@@ -506,7 +507,7 @@ function SearchesSection({ data }) {
   return (
     <section className="analytics-panel">
       <div className="analytics-panel-heading"><div><h2>Что ищут</h2><p>Записывается готовый запрос, а не набор по буквам: строка попадает сюда, когда её перестали править{empty ? ` · без результата: ${empty}` : ""}</p></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr><th>Запрос</th><th>Искали</th><th>Людей</th><th>Нашлось</th><th>Последний раз</th></tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.query} className={Number(item.found) === 0 ? "analytics-row-warning" : undefined}><td><a href={`/?q=${encodeURIComponent(item.query)}`}>{item.query}</a></td><td>{formatNumber(item.asked)}</td><td>{formatNumber(item.people)}</td><td>{item.found === null || item.found === undefined ? "—" : formatNumber(item.found)}</td><td>{formatDate(item.lastAskedAt, true)}</td></tr>) : <tr><td colSpan="5">В строке поиска пока ничего не набирали.</td></tr>}</tbody></table></div>
+      <div className="analytics-table-wrap"><table><thead><tr><th>Запрос</th><th>Искали</th><th>Людей</th><th>Нашлось</th><th>Последний раз</th></tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.query} className={Number(item.found) === 0 ? "analytics-row-warning" : undefined}><td><a href={analyticsNoCountHref(`/?q=${encodeURIComponent(item.query)}`)}>{item.query}</a></td><td>{formatNumber(item.asked)}</td><td>{formatNumber(item.people)}</td><td>{item.found === null || item.found === undefined ? "—" : formatNumber(item.found)}</td><td>{formatDate(item.lastAskedAt, true)}</td></tr>) : <tr><td colSpan="5">В строке поиска пока ничего не набирали.</td></tr>}</tbody></table></div>
     </section>
   );
 }
@@ -551,10 +552,10 @@ function SearchTrafficTable({ title, rows, status, availableTo, source, pages = 
 
 function SearchLandingLink({ value }) {
   const path = String(value || '').trim();
-  if (path.startsWith('/')) return <a href={path} target="_blank" rel="noopener noreferrer">{path}</a>;
+  if (path.startsWith('/')) return <a href={analyticsNoCountHref(path)} target="_blank" rel="noopener noreferrer">{path}</a>;
   try {
     const url = new URL(path);
-    if (['http:', 'https:'].includes(url.protocol)) return <a href={url.href} target="_blank" rel="noopener noreferrer">{url.pathname}{url.search}</a>;
+    if (['http:', 'https:'].includes(url.protocol)) return <a href={analyticsNoCountHref(url.href)} target="_blank" rel="noopener noreferrer">{url.pathname}{url.search}</a>;
   } catch { /* Missing or invalid upstream URL is plain text. */ }
   return path || 'Страница не определена';
 }
@@ -626,7 +627,7 @@ function CustomersSection({ data }) {
         <div className="analytics-panel-heading"><div><h2>Последние действия</h2></div></div>
         <ol className="analytics-activity">{data.recent?.length ? data.recent.slice(0, 12).map((item, index) => {
           const href = item.path || (item.listingId ? carHref(item.listingId) : "");
-          return <li key={`${item.createdAt}-${index}`}><div><b>{eventLabels[item.eventName] || item.eventName}</b><span>{href ? <a href={href}>{item.listingTitle || href}</a> : item.listingTitle || "—"}</span></div><time>{formatDate(item.createdAt, true)}</time></li>;
+          return <li key={`${item.createdAt}-${index}`}><div><b>{eventLabels[item.eventName] || item.eventName}</b><span>{href ? <a href={analyticsNoCountHref(href)}>{item.listingTitle || href}</a> : item.listingTitle || "—"}</span></div><time>{formatDate(item.createdAt, true)}</time></li>;
         }) : <li>Событий пока нет.</li>}</ol>
       </section>
     </div>

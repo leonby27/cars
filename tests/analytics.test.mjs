@@ -4,7 +4,15 @@ import { readFile } from "node:fs/promises";
 import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { analyticsEntrySource, hasYandexClickId, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm, withoutYandexClickId } from "../src/analytics.js";
 import { formatVisitDate } from "../src/analytics-format.js";
+import { analyticsNoCountHref } from "../src/analytics-links.js";
 import { analyticsUpdatesUrl } from "../src/analytics-updates.js";
+
+test("ссылки из аналитики переносят запрет учёта даже в инкогнито", () => {
+  assert.equal(analyticsNoCountHref("/blog/test"), "/blog/test?nocount=1");
+  assert.equal(analyticsNoCountHref("/catalog?q=zeekr#cars"), "/catalog?q=zeekr&nocount=1#cars");
+  assert.equal(analyticsNoCountHref("https://abcars.by/models/lynk-co-900"), "https://abcars.by/models/lynk-co-900?nocount=1");
+  assert.equal(analyticsNoCountHref("tel:+375291234567"), "tel:+375291234567");
+});
 
 test("автоматически открытый обзор не гасит счётчик новых посещений", () => {
   assert.equal(analyticsUpdatesUrl(), "/api/analytics/updates");

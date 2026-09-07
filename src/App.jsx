@@ -1,3 +1,4 @@
+import { prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -2850,7 +2851,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
   // компьютере, и просить для неё широкий снимок значит платить весом впустую.
   const frameWidth = narrow ? IMAGE_WIDTH_CARD : IMAGE_WIDTH_CARD_WIDE;
   const [active, setActive] = useState(0);
-  const preloadStarted = useRef(false);
+  const wantedFrame = useRef(0);
   const frameRef = useRef(null);
   const mobileStripRef = useRef(null);
   const mobileStripStart = useRef(0);
@@ -2864,38 +2865,57 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
     return bindPhotoIntent(card, imageSource(cover, IMAGE_ORIGINAL));
   }, [cover]);
 
-  const preload = () => {
-    if (preloadStarted.current || images.length < 2) return;
-    preloadStarted.current = true;
-    images.slice(1).forEach((src) => {
-      const image = new Image();
-      image.fetchPriority = "low";
-      image.decoding = "async";
-      image.src = imageSource(src, frameWidth);
-    });
-  };
+  const previewKey = JSON.stringify(images.map(src => imageSource(src, frameWidth)));
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || !window.matchMedia("(hover: hover) and (pointer: fine)").matches || typeof IntersectionObserver === "undefined") return undefined;
+    const connection = navigator.connection;
+    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || "")) return undefined;
+    let pending;
+    const urls = JSON.parse(previewKey).slice(1);
+    const observer = new IntersectionObserver(([entry]) => {
+      pending?.abort();
+      if (!entry.isIntersecting) return;
+      pending = new AbortController();
+      for (const href of urls) prepareHoverPhoto(href, { signal: pending.signal });
+    }, { rootMargin: "300px 0px" });
+    observer.observe(frame);
+    return () => { observer.disconnect(); pending?.abort(); };
+  }, [previewKey]);
   // Карточку целиком перекрывает ссылка-подложка, поэтому до самого превью события
   // мыши не доходят: слушаем их на карточке, а кадр считаем по границам картинки.
   useEffect(() => {
     const frame = frameRef.current;
     const card = frame?.closest("[data-car-id]") || frame;
     if (!card || images.length < 2) return undefined;
+    let disposed = false;
+    const reset = () => { wantedFrame.current = 0; setActive(0); };
+    const urls = JSON.parse(previewKey);
     const selectByCursor = (event) => {
       const bounds = frame.getBoundingClientRect();
       const inside = event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
-      if (!inside) return setActive(0);
-      preload();
+      if (!inside) return reset();
       const progress = Math.min(0.9999, Math.max(0, (event.clientX - bounds.left) / bounds.width));
-      setActive(Math.floor(progress * images.length));
+      const index = Math.floor(progress * urls.length);
+      if (wantedFrame.current === index) return;
+      wantedFrame.current = index;
+      if (index === 0) return setActive(0);
+      prepareHoverPhoto(urls[index], { urgent: true }).then(ready => {
+        if (disposed || wantedFrame.current !== index) return;
+        // Пока выбранный снимок едет, оставляем предыдущий — без пустой рамки.
+        if (ready) setActive(index);
+        else wantedFrame.current = -1;
+      });
     };
-    const reset = () => setActive(0);
+    reset();
     card.addEventListener("mousemove", selectByCursor);
     card.addEventListener("mouseleave", reset);
     return () => {
+      disposed = true;
       card.removeEventListener("mousemove", selectByCursor);
       card.removeEventListener("mouseleave", reset);
     };
-  }, [car.id, images.length]);
+  }, [car.id, previewKey]);
 
   // Одну из двух половин рисуем, а не прячем стилями. Кадр под курсором на телефоне
   // скрыт (`display: none`), но браузер всё равно его качал: на главной это двадцать
