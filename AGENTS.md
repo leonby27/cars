@@ -55,6 +55,8 @@ Analytics CRM preference (owner decision, 2026-08-30): `/analytics` is an intern
 
 Analytics period preference (owner decision, 2026-09-07): an ordinary visit to `/analytics` always opens the «Обзор» section with the shared period on «Сегодня». The overview visits chart has its own 90/30/7-day dropdown, defaults to 90 days on the first visit, and remembers that chart choice in the browser without changing the period used by cards, tables, or other sections.
 
+Analytics chart selection preference (owner decision, 2026-09-07): highlight the days selected by the shared 7/30/90-day period in the visits chart without changing its independent display range. Highlight both connecting lines and points in white in the dark theme and dark in the light theme; Today/Yesterday highlight only the matching point. Keep dots circular at every chart aspect ratio, include a labelled visits scale on the left, and show the date and daily count on point hover or keyboard focus.
+
 Analytics unread-counter preference (owner decision, 2026-09-07): opening `/analytics` on the default «Обзор» section must not immediately mark its new visits as seen. Fetch and show the existing badge on initial load and refresh; clear/record a section as viewed only after the user explicitly clicks that navigation item.
 
 Analytics vehicle-table preference (owner decision, 2026-09-07): the «Авто», «Модели» and «Избранное» tables default to descending «Просмотр» order, with the most recently viewed or added row first. Explicit header sorting still overrides that order until the user changes the vehicle view.

@@ -1,4 +1,4 @@
-import { prepareHoverPhoto } from "./hover-photo-queue.js";
+import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -2871,16 +2871,11 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
     if (!frame || !window.matchMedia("(hover: hover) and (pointer: fine)").matches || typeof IntersectionObserver === "undefined") return undefined;
     const connection = navigator.connection;
     if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || "")) return undefined;
-    let pending;
-    const urls = JSON.parse(previewKey).slice(1);
-    const observer = new IntersectionObserver(([entry]) => {
-      pending?.abort();
-      if (!entry.isIntersecting) return;
-      pending = new AbortController();
-      for (const href of urls) prepareHoverPhoto(href, { signal: pending.signal });
-    }, { rootMargin: "300px 0px" });
-    observer.observe(frame);
-    return () => { observer.disconnect(); pending?.abort(); };
+    const inCatalog = Boolean(frame.closest("main.catalog"));
+    const ahead = inCatalog ? Math.min(1600, Math.max(600, window.innerHeight * 1.5)) : 300;
+    // В каталоге готовим и обложку следующей машины, ещё до её lazy-загрузки.
+    const urls = JSON.parse(previewKey).slice(inCatalog ? 0 : 1);
+    return observeHoverPhotos(frame, urls, { ahead });
   }, [previewKey]);
   // Карточку целиком перекрывает ссылка-подложка, поэтому до самого превью события
   // мыши не доходят: слушаем их на карточке, а кадр считаем по границам картинки.

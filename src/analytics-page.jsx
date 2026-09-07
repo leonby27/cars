@@ -1,3 +1,4 @@
+import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarProfile, ChartLineUp, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
@@ -287,14 +288,13 @@ function TrendPeriodSelect({ value, onChange }) {
   </div>;
 }
 
-function OverviewSection({ data, unreadVisits = 0 }) {
+function OverviewSection({ data, period, unreadVisits = 0 }) {
   const summary = data.summary || {};
   const [trendPeriod, setTrendPeriod] = usePersistedChoice("analytics:trend-period", trendPeriodIds, "90");
   const [trendData, setTrendData] = useState(null);
   const [trendLoading, setTrendLoading] = useState(true);
   const [trendError, setTrendError] = useState("");
   const daily = trendData?.period === trendPeriod ? trendData.daily || [] : [];
-  const maxDaily = Math.max(1, ...daily.map((item) => Number(item.visitors) || 0));
   const [trendOpen, setTrendOpen] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
@@ -310,10 +310,6 @@ function OverviewSection({ data, unreadVisits = 0 }) {
       .finally(() => { if (!controller.signal.aborted) setTrendLoading(false); });
     return () => controller.abort();
   }, [trendPeriod, data.generatedAt]);
-  const chart = useMemo(() => daily.map((item, index) => {
-    const x = daily.length > 1 ? 24 + index / (daily.length - 1) * 952 : 500;
-    return { ...item, x, visitorsY:196 - Number(item.visitors || 0) / maxDaily * 164 };
-  }), [daily, maxDaily]);
   // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
   // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
   const cards = [
@@ -345,14 +341,7 @@ function OverviewSection({ data, unreadVisits = 0 }) {
             <button className="analytics-trend-collapse" type="button" aria-label={trendOpen ? "Свернуть график посещений" : "Развернуть график посещений"} aria-expanded={trendOpen} onClick={() => setTrendOpen((open) => !open)}><b className="analytics-chevron" aria-hidden="true" /></button>
           </div>
         </div>
-        {trendOpen && <>{trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div className="analytics-line-chart" role="img" aria-label="График заходов по дням">
-          <svg viewBox="0 0 1000 220" preserveAspectRatio="none" aria-hidden="true">
-            {[32,87,142,196].map((y) => <line key={y} className="analytics-chart-grid" x1="24" x2="976" y1={y} y2={y} />)}
-            <polyline className="analytics-chart-line analytics-chart-visitors" points={chart.map((item) => `${item.x},${item.visitorsY}`).join(" ")} />
-            {chart.map((item) => <circle key={item.day} className="analytics-chart-dot analytics-chart-visitors" cx={item.x} cy={item.visitorsY} r="5" />)}
-          </svg>
-          <div className="analytics-chart-labels">{chart.map((item) => <span key={item.day} title={`${formatDate(item.day)}: ${item.visitors || 0} заходов`}>{formatDate(item.day)}</span>)}</div>
-        </div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
+        {trendOpen && <>{trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError ? <p className="analytics-empty">{trendError}</p> : daily.length ? <AnalyticsVisitsChart daily={daily} period={period} now={data.generatedAt} /> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
         </>}
       </section>
       <PromoSection summary={summary} />
@@ -730,7 +719,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
         </div>
 
         <div className="analytics-content">
-          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} unreadVisits={updates.overview} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} unreadVisits={updates.overview} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} updates={updates} markViewed={markViewed} /></div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHoverPhotoQueue } from "../src/hover-photo-queue.js";
+import { createHoverPhotoQueue, observeHoverPhotos } from "../src/hover-photo-queue.js";
 
 function setup(concurrency = 2) {
   const images = [];
@@ -67,4 +67,47 @@ test("кадр готов к переключению после декодир�
   const retry = request("b");
   await finish(2);
   assert.equal(await retry, true);
+});
+
+test("фон оставляет свободное место: выбранное фото начинает загружаться сразу", async () => {
+  const images = [];
+  const request = createHoverPhotoQueue({ concurrency: 4, reserveUrgent: 1, createImage: () => {
+    const image = { decode: async () => {} }; images.push(image); return image;
+  } });
+  const pending = ["a", "b", "c", "d"].map(href => request(href));
+  assert.equal(images.length, 3);
+  pending.push(request("selected", { urgent: true }));
+  assert.equal(images.length, 4);
+  assert.equal(images[3].src, "selected");
+  for (let i = 0; i < images.length; i++) await images[i].onload();
+  assert.deepEqual(await Promise.all(pending), [true,true,true,true,true]);
+});
+
+test("видимая карточка обгоняет ещё не дошедшие до экрана", async () => {
+  const { request, images, finish } = setup(1);
+  const pending = [request("current"), request("far"), request("visible")];
+  request("visible", { priority: 1 });
+  await finish(0);
+  assert.equal(images[1].src, "visible");
+  await finish(1); await finish(2);
+  await Promise.all(pending);
+});
+
+test("каталог заранее готовит обложку и кадры, повышает приоритет на экране и отменяет после ухода", () => {
+  const observers = [], calls = [];
+  class Observer {
+    constructor(callback, options) { this.callback = callback; this.options = options; observers.push(this); }
+    observe() {}
+    disconnect() { this.closed = true; }
+  }
+  const stop = observeHoverPhotos({}, ["cover", "second"], { ahead: 1200, Observer, prepare: (href, options) => calls.push({ href, ...options }) });
+  assert.equal(observers[0].options.rootMargin, "1200px 0px");
+  observers[0].callback([{ isIntersecting: true }]);
+  assert.deepEqual(calls.map(call => call.href), ["cover", "second"]);
+  observers[1].callback([{ isIntersecting: true }]);
+  assert.equal(calls[2].priority, 1);
+  observers[0].callback([{ isIntersecting: false }]);
+  assert.ok(calls.every(call => call.signal.aborted));
+  stop();
+  assert.ok(observers.every(observer => observer.closed));
 });
