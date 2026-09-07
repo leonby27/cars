@@ -1,3 +1,4 @@
+import { vehiclePhotoHref } from "./photo-source.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarProfile, ChartLineUp, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
@@ -49,15 +50,7 @@ const usePersistedChoice = (key, choices, fallback) => {
 };
 // Фотохранилище Che168 отдаёт снимок любой ширины: она стоит в адресе перед именем
 // файла. В списке заявок фото размером с ноготь, полноразмерный кадр здесь ни к чему.
-const leadPhoto = (source, width = 240) => {
-  if (!source) return "";
-  try {
-    const url = new URL(source);
-    if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return source;
-    url.pathname = url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`);
-    return url.href;
-  } catch { return source; }
-};
+const leadPhoto = (source, width = 240) => vehiclePhotoHref(source, width) || "";
 const eventLabels = {
   page_view:"Просмотр страницы",
   vehicle_view:"Просмотр автомобиля",

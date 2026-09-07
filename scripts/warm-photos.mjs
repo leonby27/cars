@@ -1,3 +1,5 @@
+import { photoWarmUrls, warmPhoto } from "./lib/photo-warm.mjs";
+
 // Прогревает свой кэш фотографий: заранее просит у сайта те снимки, которые
 // посетитель увидит на первом экране, чтобы наш сервер успел забрать их у
 // китайского хранилища до его прихода.
@@ -15,7 +17,11 @@
 // каталога — прогреть «первые страницы» и накрыть главную нельзя. Первый полный
 // проход после смены размеров качает у хранилища около 12 ГБ и идёт часов пять;
 // последующие почти целиком уходят в нашу же копию и стоят считанные минуты.
-// Ничего не пишет в базу и не меняет файлы: только запрашивает картинки.
+// Новые машины без ожидания ночи:
+// --recent-hours=48 --preview-count=5 --gallery-count=3 --concurrency=4
+// По умолчанию полный проход по-прежнему готовит лишь обложки; новые машины
+// получают также первые пять превью и три оригинала отдельной частой задачей.
+// Ничего не пишет в базу: только читает каталог и заполняет кэш запросами картинок.
 const arg = (name, fallback) => {
   const found = process.argv.find((value) => value.startsWith(`--${name}=`));
   return found ? found.slice(name.length + 3) : fallback;
@@ -23,7 +29,7 @@ const arg = (name, fallback) => {
 
 const site = String(arg("site", "https://abcars.by")).replace(/\/$/, "");
 const limit = Math.max(1, Number(arg("limit", 1500)) || 1500);
-const concurrency = Math.max(1, Number(arg("concurrency", 8)) || 8);
+const concurrency = Math.min(16, Math.max(1, Math.floor(Number(arg("concurrency", 8))) || 8));
 // Размеры, в которых сайт показывает первый снимок машины. Держим их в согласии с
 // IMAGE_WIDTH_* в src/App.jsx:
 //   original — большое фото в карточке машины и в быстром просмотре (исходник продавца,
@@ -38,7 +44,10 @@ const widths = String(arg("widths", "original,900,600"))
   .map((value) => (value === "original" ? value : Number(value)))
   .filter((value) => value === "original" || (Number.isFinite(value) && value > 0));
 
-const everything = process.argv.includes("--all");
+const recentHours = Math.min(168, Math.max(0, Math.floor(Number(arg("recent-hours", 0))) || 0));
+const previewCount = Math.min(5, Math.max(1, Math.floor(Number(arg("preview-count", 1))) || 1));
+const galleryCount = Math.min(5, Math.max(1, Math.floor(Number(arg("gallery-count", 1))) || 1));
+const everything = process.argv.includes("--all") || recentHours > 0;
 
 // Списки в том же порядке, в каком их видит посетитель: витрина главной,
 // первые страницы каталога и раздел «новинки».
@@ -54,46 +63,37 @@ if (!everything) {
 const headers = { accept: "application/json", "user-agent": "abcars-warm/1.0" };
 
 const listCars = async (url) => {
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`${url} — HTTP ${response.status}`);
   const data = await response.json();
   return data.items || data.cars || [];
 };
 
-// Из карточки берём только первый снимок: именно он стоит в списке.
-const photoPaths = (car) => {
-  const source = car.image || car.images?.[0];
-  if (!source) return [];
-  let path;
-  try {
-    const url = new URL(source);
-    if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return [];
-    path = url.pathname;
-  } catch {
-    return [];
-  }
-  return widths.map((width) => {
-    const resized =
-      width === "original"
-        ? path.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, "/")
-        : path.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`);
-    return `${site}/photo${resized}`;
-  });
-};
+const photoPaths = (car) => photoWarmUrls(car, { site, widths, previewCount, galleryCount });
+let listFailed = 0;
 
 const wanted = new Set();
 if (everything) {
-  // Первый снимок каждой машины в продаже — тот, что стоит в карточке списка.
+  // «Новая» определяется появлением у нас, а не датой объявления продавца.
+  // Перекрывающееся окно повторит запросы после сбоя. Только чтение базы.
   const { pool } = await import("../server/db.mjs");
-  const { rows } = await pool.query(`SELECT (SELECT m.url FROM listing_media m WHERE m.listing_id=l.id ORDER BY m.position LIMIT 1) AS image
-    FROM listings l WHERE l.status='active'`);
-  await pool.end();
-  for (const row of rows) for (const photo of photoPaths(row)) wanted.add(photo);
+  try {
+    const { rows } = await pool.query(`SELECT photos.images
+      FROM listings l
+      CROSS JOIN LATERAL (SELECT array_agg(url ORDER BY position) AS images FROM
+        (SELECT url, position FROM listing_media WHERE listing_id=l.id ORDER BY position LIMIT $1) m) photos
+      WHERE l.status='active' AND ($2::int = 0 OR l.first_seen_at >= now() - make_interval(hours => $2::int))
+      ORDER BY l.first_seen_at DESC`, [Math.max(previewCount, galleryCount), recentHours]);
+    for (const row of rows) for (const photo of photoPaths(row)) wanted.add(photo);
+  } finally {
+    await pool.end();
+  }
 } else {
   for (const url of listUrls) {
     try {
       for (const car of await listCars(url)) for (const photo of photoPaths(car)) wanted.add(photo);
     } catch (error) {
+      listFailed += 1;
       console.warn(`[warm] список пропущен: ${error.message}`);
     }
   }
@@ -111,23 +111,15 @@ const total = queue.length;
 let done = 0;
 const worker = async () => {
   for (;;) {
-    const url = queue.shift();
+    const url = queue[done];
     if (!url) return;
     done += 1;
     // Полный проход идёт часами: без отметок в журнале не видно, жив ли он.
     if (done % 5000 === 0) console.log(`[warm] ${done} из ${total}, добавлено ${miss}`);
     try {
-      // Полностью вычитываем ответ: пока тело не дочитано, nginx не положит
-      // кадр в кэш. HEAD тут не годится по той же причине.
-      const response = await fetch(url, { headers: { "user-agent": headers["user-agent"] } });
-      if (!response.ok) {
-        failed += 1;
-        await response.body?.cancel();
-        continue;
-      }
-      const body = await response.arrayBuffer();
-      bytes += body.byteLength;
-      if (response.headers.get("x-photo-cache") === "HIT") hit += 1;
+      const result = await warmPhoto(url);
+      bytes += result.bytes;
+      if (result.hit) hit += 1;
       else miss += 1;
     } catch {
       failed += 1;
@@ -141,3 +133,6 @@ const seconds = Math.round((Date.now() - started) / 1000);
 console.log(
   `[warm] готово за ${seconds} с: было в кэше ${hit}, добавлено ${miss}, не отдалось ${failed}, скачано ${(bytes / 1024 / 1024).toFixed(1)} МБ`,
 );
+
+// systemd должен видеть неполный прогрев как сбой, а не успешный запуск.
+if (failed || listFailed) process.exitCode = 1;

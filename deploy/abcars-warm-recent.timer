@@ -1,0 +1,11 @@
+[Unit]
+Description=Подготовка фотографий новых машин в течение дня
+
+[Timer]
+OnBootSec=5min
+# От конца предыдущего прохода: новые запуски не перекрывают друг друга.
+OnUnitInactiveSec=15min
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

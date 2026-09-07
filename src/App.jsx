@@ -1,5 +1,7 @@
+import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
@@ -345,52 +347,8 @@ const ownerOptions = [ANY_OWNERS, "1 владелец", "До 2 владельц
 // адреса повторяются — ответ отдаётся из кэша, а не собирается в базе заново.
 const CATALOG_SHUFFLE_SEEDS = 12;
 const randomShuffleSeed = () => `s${Math.floor(Math.random() * CATALOG_SHUFFLE_SEEDS)}`;
-const proxiedImageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
-// Фотохранилище Che168 умеет отдавать снимок любой ширины: она стоит в адресе перед
-// именем файла («1400x0_c42_...»). Оригинал на 1400 точек весит около 110 КБ, а в
-// карточке он показывается втрое мельче — на десятке карточек это лишние мегабайты,
-// из-за которых фотографии и не догружались. Просим ту ширину, в которой показываем:
-// 400 точек — это уже 12 КБ. Высоту хранилище считает само, поэтому ставим ноль.
-const resizedImageHref = (url, width) => {
-  if (!width || !/(^|\.)autoimg\.cn$/.test(url.hostname)) return null;
-  const path =
-    width === IMAGE_ORIGINAL
-      ? url.pathname.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, "/")
-      : url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`);
-  if (path === url.pathname) return null;
-  const resized = new URL(url.href);
-  resized.pathname = path;
-  return resized.href;
-};
-// Фотохранилище Che168 стоит в Китае и раздаётся через чужую сеть доставки. Кадр,
-// который у неё «горячий», приходит за 0,2 с, но любой снимок, которого там сейчас
-// нет, заставляет ждать 0,8–1,1 с — из-за этого фотографии и «не грузились при
-// первом заходе». Поэтому просим их не напрямую, а со своего адреса /photo/…:
-// наш сервер один раз забирает кадр у китайцев и дальше отдаёт его с диска всем
-// посетителям (0,08 с). Заодно снимки идут по уже открытому соединению с сайтом.
-// Настройка кэша — в snippets/abcars-photo-location.conf на сервере.
-const photoProxyHost = /(^|\.)autoimg\.cn$/;
-const canProxyPhotos = () => import.meta.env.BASE_URL === "/";
-const imageSource = (source, width) => {
-  if (!source) return source;
-  try {
-    const url = new URL(source);
-    // Static preview hosts do not have the image-proxy API; use the original
-    // allowlisted source there so catalog images remain visible.
-    if (proxiedImageHosts.has(url.hostname) && canProxyPhotos()) return `/api/image?src=${encodeURIComponent(url.href)}`;
-    const resized = resizedImageHref(url, width) || source;
-    if (photoProxyHost.test(url.hostname) && canProxyPhotos()) {
-      try {
-        return `/photo${new URL(resized).pathname}`;
-      } catch {
-        return resized;
-      }
-    }
-    return resized;
-  } catch {
-    return source;
-  }
-};
+const photoOptions = import.meta.env.BASE_URL === "/" ? undefined : { mirrorOrigin: "https://abcars.by" };
+const imageSource = (source, width) => vehiclePhotoHref(source, width, photoOptions);
 // Ширины под места, где показываем фото: с запасом для экранов с двойной плотностью.
 // Большое фото в карточке машины и в галерее просит настоящий оригинал — см.
 // IMAGE_ORIGINAL ниже.
@@ -406,7 +364,8 @@ const IMAGE_WIDTH_CARD = 600;
 // На телефоне остаётся 600: там карточка показана в 165 точек (две в ряд), 900 не
 // даст ничего видимого, зато утяжелит страницу вдвое на мобильном интернете.
 const IMAGE_WIDTH_CARD_WIDE = 900;
-const IMAGE_WIDTH_STRIP = 500;
+// Один адрес с плиткой и облегчённым кадром галереи: копия уже в кэше.
+const IMAGE_WIDTH_STRIP = IMAGE_WIDTH_CARD;
 const IMAGE_WIDTH_TILE = 600;
 const IMAGE_WIDTH_THUMB = 240;
 // Крупные места: фотография внутри статьи (780 точек) и большой снимок в карточке
@@ -443,15 +402,8 @@ const imageSourceSet = (source, width) => {
   const double = imageSource(source, Math.min(width * 2, IMAGE_WIDTH_DOUBLE_CAP));
   return single && double && double !== single ? `${single} 1x, ${double} 2x` : undefined;
 };
-// Страховка: если кадр не пришёл — уменьшенного нет в хранилище или наш кэш
-// почему-то не ответил, — берём оригинал прямо из хранилища, мимо своего адреса.
-// Тяжёлое фото лучше пустой рамки. Повторяем только один раз.
-const retryWithFullImage = (event, source) => {
-  const image = event.currentTarget;
-  if (!source || image.dataset.fullSize) return;
-  image.dataset.fullSize = "1";
-  image.src = source;
-};
+// Запасной размер тоже отдаёт наш сервер, включая статьи с srcset.
+const retryWithFullImage = (event, source) => retryVehiclePhoto(event.currentTarget, source, photoOptions);
 
 function normalizeImportedCar(car) {
   const description = car.description || "";
@@ -2904,11 +2856,21 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
   const mobileStripStart = useRef(0);
   const mobileStripMoved = useRef(false);
 
+  const cover = images[0];
+  useEffect(() => {
+    const frame = frameRef.current;
+    const card = frame?.closest("[data-car-id]") || frame;
+    if (!card || !cover) return undefined;
+    return bindPhotoIntent(card, imageSource(cover, IMAGE_ORIGINAL));
+  }, [cover]);
+
   const preload = () => {
     if (preloadStarted.current || images.length < 2) return;
     preloadStarted.current = true;
     images.slice(1).forEach((src) => {
       const image = new Image();
+      image.fetchPriority = "low";
+      image.decoding = "async";
       image.src = imageSource(src, frameWidth);
     });
   };
@@ -6157,7 +6119,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
               aria-label={`Перейти к фото ${index + 1}`}
               aria-current={activeIndex === index ? "true" : undefined}
             >
-              <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt="" loading={index > 8 ? "lazy" : "eager"} onError={(event) => retryWithFullImage(event, image)} />
+              <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt="" loading="lazy" fetchPriority="low" decoding="async" onError={(event) => retryWithFullImage(event, image)} />
             </button>
           ))}
         </aside>
@@ -6169,7 +6131,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
                 imageRefs.current[index] = node;
               }}
             >
-              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title}, фото ${index + 1}`} loading={index > initialIndex + 2 ? "lazy" : "eager"} onError={(event) => retryWithFullImage(event, image)} />
+              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title}, фото ${index + 1}`} loading={index === initialIndex ? "eager" : "lazy"} fetchPriority={index === initialIndex ? "high" : "low"} decoding="async" onError={(event) => retryWithFullImage(event, image)} />
               <figcaption>
                 {index + 1} из {images.length}
               </figcaption>
@@ -6436,40 +6398,17 @@ function VehicleGallery({ car }) {
   }, [active, images, ready]);
   // Страховка к onLoad: если главный снимок уже лежал в кэше, браузер успевает
   // отметить его загруженным до того, как разметка оживёт, и события мы не увидим.
-  // Тогда смотрим на признак «кадр готов» напрямую, а на совсем медленной сети
-  // сдаёмся через две секунды и всё равно готовим соседей.
+  // Соседи ждут готовности главного снимка или явного перелистывания: таймер
+  // через две секунды раньше добавлял нагрузку именно на медленной сети.
   useEffect(() => {
-    if (stripRef.current?.querySelector(".gallery-frame-full")?.complete) {
+    const image = stripRef.current?.querySelector(".gallery-frame-full");
+    if (image?.complete && image.naturalWidth > 0) {
       setReady(true);
-      return undefined;
     }
-    const timer = window.setTimeout(() => setReady(true), 2000);
-    return () => window.clearTimeout(timer);
   }, []);
   // Соседний кадр слева и справа держим готовым — это ровно то, что палец вытягивает
   // в поле зрения. Дальше не забегаем: у иных объявлений снимков по сотне, и каждый
   // лишний кадр — это 83 КБ мобильного трафика впустую.
-  // Курсор зашёл на полосу миниатюр — значит, человек собрался листать фотографии.
-  // Заранее качаем облегчённые копии всех кадров (по 13 КБ): после этого прыжок по
-  // любой миниатюре показывает снимок сразу, а не через ожидание сети. До того как
-  // курсор коснулся полосы, не тратим ни байта — большинство посетителей её не
-  // трогает. Больше сорока кадров не берём: у иных объявлений снимков под сотню.
-  const railWarmed = useRef(false);
-  const railKeeper = useRef([]);
-  const warmRail = () => {
-    if (railWarmed.current || images.length < 2) return;
-    railWarmed.current = true;
-    if (navigator.connection?.saveData) return;
-    for (const image of images.slice(0, 40)) {
-      const href = imageSource(image, IMAGE_WIDTH_CARD);
-      if (!href) continue;
-      const loader = new Image();
-      loader.decoding = "async";
-      loader.fetchPriority = "low";
-      loader.src = href;
-      railKeeper.current.push(loader);
-    }
-  };
   const near = ready ? 1 : 0;
   return (
     <>
@@ -6502,7 +6441,7 @@ function VehicleGallery({ car }) {
                     className="gallery-frame-full"
                     src={imageSource(image, IMAGE_ORIGINAL)}
                     alt={`${car.title}, фото ${index + 1}`}
-                    fetchPriority={index === 0 ? "high" : "low"}
+                    fetchPriority={index === active ? "high" : "low"}
                     draggable="false"
                     onLoad={index === 0 ? () => setReady(true) : undefined}
                     onError={(event) => {
@@ -6529,10 +6468,10 @@ function VehicleGallery({ car }) {
             </button>
           </div>
         )}
-        <div className="gallery-thumbs" ref={thumbsRef} onMouseEnter={warmRail}>
+        <div className="gallery-thumbs" ref={thumbsRef}>
           {images.map((image, index) => (
             <button key={`${image}-${index}`} className={active === index ? "active" : ""} onMouseEnter={() => selectImage(index)} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}>
-              <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, image)} />
+              <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt="" loading="lazy" fetchPriority="low" decoding="async" onError={(event) => retryWithFullImage(event, image)} />
             </button>
           ))}
         </div>
@@ -7496,6 +7435,7 @@ function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate, ord
   // тянется по ширине. Открыть предпросмотр по-прежнему можно только на десктопе.
   // true — карточка раскрыта модалкой, переходить на страницу не нужно.
   const openQuickView = (nextCar) => {
+    if (nextCar) preloadPhoto(imageSource(nextCar.images?.[0] || nextCar.image, IMAGE_ORIGINAL), true);
     if (!desktop || !enabled || !nextCar) return false;
     setListed(nextCar);
     // Модалка показывает ту же карточку машины, что и её страница, но адрес в браузере

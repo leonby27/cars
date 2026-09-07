@@ -1,0 +1,19 @@
+# Установить вместе с .timer, daemon-reload, enable --now abcars-warm-recent.timer.
+# Дополняет полный ночной прогрев, не заменяет его. База только читается.
+[Unit]
+Description=Подготовка первых фотографий недавно добавленных машин
+After=network-online.target nginx.service postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/npm run warm -- --recent-hours=48 --preview-count=5 --gallery-count=3 --concurrency=4
+TimeoutStartSec=7200
+Nice=15
+CPUWeight=20
+IOWeight=20
+MemoryHigh=500M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-warm-recent

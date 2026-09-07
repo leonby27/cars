@@ -18,13 +18,18 @@ export default defineConfig({
       // Фотографии машин сайт просит со своего адреса /photo/… — на боевом сервере
       // их отдаёт nginx, забирая кадр у китайского хранилища и складывая на диск
       // (snippets/abcars-photo-location.conf). Локально nginx нет, и без этой
-      // переадресации каталог остаётся без снимков. Кэша здесь тоже нет: каждый
-      // кадр идёт из Китая, поэтому локально фотографии появляются медленнее,
-      // чем на сайте.
+      // переадресации каталог остаётся без снимков. Берём ту же серверную копию,
+      // что и посетители сайта: прямой запрос в Китай обходил уже готовый кэш.
       "/photo": {
-        target: "https://erscglobal2.autoimg.cn",
+        target: "https://abcars.by",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/photo/, ""),
+        configure(proxy) {
+          proxy.on("proxyReq", (request) => {
+            request.removeHeader("cookie");
+            request.removeHeader("authorization");
+            request.removeHeader("referer");
+          });
+        },
       },
     },
     warmup: {

@@ -858,7 +858,7 @@ function blogPostImage(post) {
   // с которого материал начинается.
   const car = found?.cover || found?.duel?.find((entry) => entry.hero)?.hero || (post.kind === "article" ? found?.cars?.[0] : null) || null;
   const source = car?.images?.length ? car.images[0] : car?.image;
-  return /^https:\/\//.test(String(source || "")) ? source : undefined;
+  return /^https:\/\//.test(String(source || "")) ? new URL(photoHref(source, 1400), routeUrl("/")).href : undefined;
 }
 
 /**

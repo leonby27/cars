@@ -1,3 +1,5 @@
+import { vehiclePhotoHref as photoHref } from "../src/photo-source.js";
+export { photoHref };
 // Отрисовка страниц для поисковиков. Модуль общий для двух мест: сборка
 // (`scripts/generate-seo-pages.mjs`) кладёт этими функциями статические разделы, а сервер
 // (`server/car-page.mjs`) собирает ими страницу машины в момент запроса. Пока разметка
@@ -39,33 +41,6 @@ export const linkifyText = (text, hrefRoute) =>
     .map((part) => (typeof part === "string" ? escapeHtml(part) : `<a href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`))
     .join("");
 
-// Фотографии машин отдаём со своего адреса /photo/… — наш сервер держит копию
-// снимка у себя и отдаёт её вчетверо быстрее, чем китайское хранилище отвечает на
-// первый запрос. Подробности — в snippets/abcars-photo-location.conf на сервере
-// и в imageSource() в src/App.jsx. Если адрес не из хранилища Che168 — оставляем как есть.
-export const photoHref = (source, width = 0) => {
-  if (!source) return source;
-  try {
-    const url = new URL(source);
-    if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return source;
-    // Хранилище Che168 отдаёт снимок любой ширины: она стоит в адресе перед именем
-    // файла. Кадр на 1400 точек весит втрое больше нужного, поэтому там, где известна
-    // ширина показа, просим её (высоту хранилище считает само). Особый случай —
-    // "original": настоящий оригинал лежит по тому же адресу без части «1400x0_c42_»,
-    // он крупнее (до 2016 точек) и сжат вдвое слабее. Так же его просит и приложение
-    // (IMAGE_ORIGINAL в src/App.jsx) — адреса обязаны совпадать, иначе браузер
-    // скачает одну и ту же фотографию дважды.
-    const path =
-      width === "original"
-        ? url.pathname.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, "/")
-        : width
-          ? url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`)
-          : url.pathname;
-    return `/photo${path}`;
-  } catch {
-    return source;
-  }
-};
 // Ширина снимка в списках: столько же просит плитка каталога в приложении
 // (IMAGE_WIDTH_TILE в src/App.jsx). Совпадение важно не для вида, а для кэша
 // фотографий: два разных числа завели бы на диске две копии каждого снимка.
