@@ -53,17 +53,6 @@ const usePersistedChoice = (key, choices, fallback) => {
 // Фотохранилище Che168 отдаёт снимок любой ширины: она стоит в адресе перед именем
 // файла. В списке заявок фото размером с ноготь, полноразмерный кадр здесь ни к чему.
 const leadPhoto = (source, width = 240) => vehiclePhotoHref(source, width) || "";
-const eventLabels = {
-  page_view:"Просмотр страницы",
-  vehicle_view:"Просмотр автомобиля",
-  availability_click:"Клик «Уточнить актуальность»",
-  availability_request_click:"Кнопка «Уточнить актуальность» в заказе",
-  registration_completed:"Регистрация",
-  favorite_added:"Добавление в избранное",
-  search_saved:"Сохранение поиска",
-  custom_search_submitted:"Заявка на индивидуальный подбор",
-  search_query:"Запрос в поиске",
-};
 const leadKindLabels = {
   availability:"Запрос актуальности",
   order_started:"Автомобиль отложен",
@@ -294,22 +283,28 @@ function OverviewSection({ data, period, unreadVisits = 0 }) {
   const [trendData, setTrendData] = useState(null);
   const [trendLoading, setTrendLoading] = useState(true);
   const [trendError, setTrendError] = useState("");
-  const daily = trendData?.period === trendPeriod ? trendData.daily || [] : [];
-  const [trendOpen, setTrendOpen] = useState(true);
+  const trendCache = useRef(new Map());
+  const [showYandex, setShowYandex] = usePersistedChoice("analytics:trend-yandex", ["0", "1"], "0");
+  const [showGoogle, setShowGoogle] = usePersistedChoice("analytics:trend-google", ["0", "1"], "0");
+  const daily = trendData?.daily || [];
+  const enabledSources = [showYandex === "1" ? "yandex" : "", showGoogle === "1" ? "google" : ""].filter(Boolean);
   useEffect(() => {
     const controller = new AbortController();
-    setTrendLoading(true);
+    const cached = trendCache.current.get(trendPeriod);
+    if (cached) setTrendData(cached);
+    setTrendLoading(!cached && !trendData);
     setTrendError("");
     fetch(`/api/analytics/trend?period=${encodeURIComponent(trendPeriod)}`, { cache:"no-store", credentials:"same-origin", signal:controller.signal })
       .then(async (response) => {
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || "load_failed");
+        trendCache.current.set(trendPeriod, payload);
         setTrendData(payload);
       })
       .catch((error) => { if (error.name !== "AbortError") setTrendError("Не удалось загрузить график."); })
       .finally(() => { if (!controller.signal.aborted) setTrendLoading(false); });
     return () => controller.abort();
-  }, [trendPeriod, data.generatedAt]);
+  }, [trendPeriod]);
   // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
   // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
   const cards = [
@@ -319,7 +314,7 @@ function OverviewSection({ data, period, unreadVisits = 0 }) {
     // человеком не считается: его выжидает обходчик, чтобы сойти за посетителя.
     // Заход — не вкладка: человек, вернувшийся вечером, считается вторым заходом, а
     // три карточки, открытые в трёх вкладках подряд, остаются одним.
-    ["Заходы", summary.visits, `${formatNumber(summary.visitors)} уникальных${Number(summary.robot_visits) ? ` · ещё ${formatNumber(summary.robot_visits)} без действий` : ""}`],
+    ["Заходы", summary.visits, `${formatNumber(summary.visitors)} уник.${Number(summary.robot_visits) ? ` +${formatNumber(summary.robot_visits)} без действий` : ""}`],
     ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
     // Машины, добавленные в кабинет: человек нажал в карточке «Уточнить актуальность»,
     // вошёл в кабинет и там завёлся заказ. Считаем по самим заказам, а не по нажатию:
@@ -333,16 +328,16 @@ function OverviewSection({ data, period, unreadVisits = 0 }) {
   return (
     <>
       <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}</section>
-      <section className={`analytics-panel analytics-trend ${trendOpen ? "" : "is-collapsed"}`}>
+      <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
           <h2>График посещений</h2>
           <div className="analytics-trend-controls">
             <TrendPeriodSelect value={trendPeriod} onChange={setTrendPeriod} />
-            <button className="analytics-trend-collapse" type="button" aria-label={trendOpen ? "Свернуть график посещений" : "Развернуть график посещений"} aria-expanded={trendOpen} onClick={() => setTrendOpen((open) => !open)}><b className="analytics-chevron" aria-hidden="true" /></button>
+            <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
+            <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
           </div>
         </div>
-        {trendOpen && <>{trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError ? <p className="analytics-empty">{trendError}</p> : daily.length ? <AnalyticsVisitsChart daily={daily} period={period} now={data.generatedAt} /> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
-        </>}
+        {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
       </section>
       <PromoSection summary={summary} />
       <VisitsSection visits={data.visits || []} total={summary.visits} unread={unreadVisits} />
@@ -372,17 +367,25 @@ function PromoSection({ summary }) {
   );
 }
 
+const visitSourceKey = (value, landingPath = "") => {
+  if (hasYandexClickId(landingPath)) return "yandex";
+  const source = String(value || "").toLowerCase();
+  if (/(^|\.)google\./.test(source)) return "google";
+  if (/(^|\.)yandex\./.test(source)) return "yandex";
+  return "other";
+};
+
 const visitSourceLabel = (value, landingPath = "") => {
   // У старых заходов источник ещё не сохранялся, но ysclid в странице входа
   // позволяет восстановить переход из Яндекса и для уже накопленной истории.
-  if (hasYandexClickId(landingPath)) return "Яндекс";
+  const sourceKey = visitSourceKey(value, landingPath);
+  if (sourceKey === "yandex") return "Яндекс";
+  if (sourceKey === "google") return "Google";
   const source = String(value || "").toLowerCase();
   if (!source) return "Не определён";
   if (source === "direct") return "Прямой заход";
   if (source === "internal") return "Переход по сайту";
   if (source === "unknown") return "Неизвестный источник";
-  if (/(^|\.)google\./.test(source)) return "Google";
-  if (/(^|\.)yandex\./.test(source)) return "Яндекс";
   if (/(^|\.)bing\.com$/.test(source)) return "Bing";
   if (/(^|\.)duckduckgo\.com$/.test(source)) return "DuckDuckGo";
   if (/(^|\.)instagram\.com$/.test(source)) return "Instagram";
@@ -393,12 +396,20 @@ const visitSourceLabel = (value, landingPath = "") => {
   return source;
 };
 
+function VisitSource({ visit }) {
+  const sourceKey = visitSourceKey(visit.source, visit.landingPath);
+  return <span className="analytics-visit-source">
+    {sourceKey !== "other" && <i className={`analytics-source-logo is-${sourceKey}`} aria-hidden="true">{sourceKey === "google" ? "G" : "Я"}</i>}
+    <span>{visitSourceLabel(visit.source, visit.landingPath)}</span>
+  </span>;
+}
+
 function VisitRow({ visit, number, unread }) {
   const landingPath = withoutYandexClickId(visit.landingPath || "/");
   const sourceUnknown = !hasYandexClickId(visit.landingPath) && (!visit.source || visit.source === "unknown");
   return <tr>
     <td><span className={`analytics-visit-number${unread ? " is-unread" : ""}`}>{number}</span></td>
-    <td className={sourceUnknown ? "analytics-visit-source-unknown" : undefined}>{visitSourceLabel(visit.source, visit.landingPath)}</td>
+    <td className={sourceUnknown ? "analytics-visit-source-unknown" : undefined}><VisitSource visit={visit} /></td>
     <td><a href={analyticsNoCountHref(landingPath)} target="_blank" rel="noreferrer" title={landingPath === "/" ? "Главная" : landingPath || "—"}>{landingPath === "/" ? "Главная" : landingPath || "—"}</a></td>
     <td>{formatNumber(visit.pageViews)}</td>
     <td>{formatVisitDate(visit.createdAt)}</td>
@@ -406,15 +417,26 @@ function VisitRow({ visit, number, unread }) {
 }
 
 function VisitsSection({ visits, total, unread }) {
-  const [open, setOpen] = useState(true);
+  const [sourceFilter, setSourceFilter] = useState("all");
   // Свежие строки идут первыми, но номер — место захода во всей хронологии:
   // самый старый начинается с 1, каждый следующий получает номер больше.
   const newestNumber = Math.max(visits.length, Number(total) || 0);
+  const filteredVisits = visits
+    .map((visit, index) => ({ visit, index }))
+    .filter(({ visit }) => sourceFilter === "all" || visitSourceKey(visit.source, visit.landingPath) === sourceFilter);
   return (
-    <section className={`analytics-panel analytics-disclosure ${open ? "" : "is-collapsed"}`}>
-      <button className="analytics-collapse-trigger" type="button" aria-label={open ? "Свернуть заходы" : "Развернуть заходы"} aria-expanded={open} onClick={() => setOpen((value) => !value)}><span><h2>Заходы</h2></span><b className="analytics-chevron" aria-hidden="true" /></button>
-      {open && <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Страница входа</th><th>Просмотров</th><th>Дата</th></tr></thead>
-        <tbody>{visits.length ? visits.map((visit, index) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="5">За выбранный период заходов пока нет.</td></tr>}</tbody></table></div>}
+    <section className="analytics-panel analytics-visits-panel">
+      <div className="analytics-visits-heading">
+        <h2>Заходы</h2>
+        <div className="analytics-visits-toolbar">
+          <div className="analytics-range analytics-visits-filter" aria-label="Источник заходов">
+            {[["all", "Все"], ["yandex", "Яндекс"], ["google", "Google"]].map(([id, label]) => <button key={id} type="button" className={sourceFilter === id ? "active" : ""} onClick={() => setSourceFilter(id)}>{label}</button>)}
+          </div>
+          {sourceFilter !== "all" && <span className="analytics-visits-filter-count" title="Заходов по выбранному источнику">{formatNumber(filteredVisits.length)}</span>}
+        </div>
+      </div>
+      <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Страница входа</th><th>Просмотров</th><th>Дата</th></tr></thead>
+        <tbody>{filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="5">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</td></tr>}</tbody></table></div>
     </section>
   );
 }
@@ -484,7 +506,7 @@ function VehiclesSection({ data, updates, markViewed }) {
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
       <tbody>{rows.length ? rows.slice(0, visible).map((item) => <tr key={item.id} className={mode === "favorites" && (item.gone || item.status === "unavailable") ? "analytics-row-warning" : undefined}>
         <td>{mode === "models" ? item.title : <a href={analyticsNoCountHref(carHref(item.listingId))}>{item.title}</a>}</td>
-        {mode === "favorites" ? <><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></> : <><td>{formatNumber(item.viewers)}</td><td>{formatNumber(item.views)}</td>{mode === "cars" && <td>{formatNumber(item.asks)}</td>}<td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></>}
+        {mode === "favorites" ? <><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></> : <><td>{formatNumber(item.viewers)}</td><td>{formatNumber(item.views)}</td>{mode === "cars" && <td>{formatNumber(item.asks)}</td>}<td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></>}
       </tr>) : <tr><td colSpan={columns.length}>{mode === "favorites" ? "Избранного пока нет." : "Событий по автомобилям пока нет."}</td></tr>}</tbody></table></div>
     {visible < rows.length && <button className="analytics-show-more" type="button" onClick={() => setVisible((count) => count + 20)}>Показать ещё</button>}
   </section>;
@@ -549,23 +571,28 @@ function SearchLandingLink({ value }) {
   return path || 'Страница не определена';
 }
 
-function SearchTrafficSection({ period, active }) {
+function SearchTrafficSection({ period }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [revision, setRevision] = useState(0);
+  const reportCache = useRef(new Map());
   const [queryEngine, setQueryEngine] = useState('google');
   const [pageEngine, setPageEngine] = useState('all');
   useEffect(() => {
-    if (!active) return;
     const controller = new AbortController();
-    setLoading(true); setError(''); setReport(null);
+    const cached = reportCache.current.get(period);
+    if (cached) setReport(cached);
+    setLoading(!cached && !report);
+    setError('');
     (async () => {
       try {
         const response = await fetch(`/api/analytics/search-traffic?period=${encodeURIComponent(period)}`, { credentials:'same-origin', cache:'no-store', signal:controller.signal });
         if (!response.ok) throw new Error(response.status === 401 ? 'Время входа истекло. Обновите страницу и войдите снова.' : 'Не удалось загрузить сводку. Попробуйте ещё раз.');
         const result = await response.json();
-        if (!controller.signal.aborted) setReport(result);
+        if (!controller.signal.aborted) {
+          reportCache.current.set(period, result);
+          setReport(result);
+        }
       } catch (failure) {
         if (!controller.signal.aborted) setError(failure.message);
       } finally {
@@ -573,26 +600,13 @@ function SearchTrafficSection({ period, active }) {
       }
     })();
     return () => controller.abort();
-  }, [period, active, revision]);
+  }, [period]);
   const google = report?.google;
   const yandex = report?.yandex;
-  const metrika = report?.metrika;
-  const metrikaReady = metrika?.status === 'ready';
   const pages = [google, yandex].flatMap((source, index) => (source?.pages || []).map((row) => ({ ...row, engine:index === 0 ? 'google' : 'yandex' }))).sort((a, b) => b.count - a.count);
   const pageRows = pages.filter((row) => pageEngine === 'all' || row.engine === pageEngine);
-  return <div className="analytics-search-traffic">
-    <section className="analytics-panel">
-      <div className="analytics-panel-heading"><div><h2>Визиты из поисковых систем</h2><p>По данным Яндекс Метрики</p></div>
-        <button className="secondary" type="button" disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</button></div>
-      {loading && <p role="status">Загружаем сводку…</p>}
-      {error && <p role="alert">{error}</p>}
-      {report && <>
-        <section className="analytics-kpis" aria-label="Переходы из поиска">{[
-          ['Всего из поиска', metrikaReady ? metrika.visits : null], ['Google', metrikaReady ? metrika.google?.visits : null], ['Яндекс', metrikaReady ? metrika.yandex?.visits : null],
-        ].map(([label, value]) => <article key={label}><span>{label}</span><strong className={value == null ? 'analytics-no-data' : ''}>{value == null ? 'Нет данных' : formatNumber(value)}</strong></article>)}</section>
-        {!metrikaReady && <p className="analytics-search-status" role="status">{metrika?.status === 'error' ? 'Метрика временно не отдала данные.' : metrika?.status === 'pending' ? 'Данные Метрики за этот период ещё не готовы.' : 'Для оперативных визитов нужен доступ к API Метрики.'}</p>}
-      </>}
-    </section>
+  return <div className="analytics-search-traffic" aria-busy={loading}>
+    {!report && <section className="analytics-panel"><p className="analytics-empty" role={error ? "alert" : "status"}>{error || 'Загружаем запросы и позиции…'}</p></section>}
     {report && <>
       <div className="analytics-search-tables">
         <div className="analytics-range" aria-label="Поисковик для запросов">{[['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={queryEngine === key ? 'active' : ''} onClick={() => setQueryEngine(key)}>{label}</button>)}</div>
@@ -607,19 +621,10 @@ function SearchTrafficSection({ period, active }) {
 
 function CustomersSection({ data }) {
   return (
-    <div className="analytics-two-column">
-      <section className="analytics-panel">
-        <div className="analytics-panel-heading"><div><h2>Регистрации</h2></div></div>
-        <div className="analytics-table-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Дата</th></tr></thead><tbody>{data.registrations?.length ? data.registrations.map((item, index) => <tr key={`${item.phone}-${item.createdAt}-${index}`}><td>{item.name || "—"}</td><td>{item.phone ? <a href={`tel:${String(item.phone).replace(/[^+\d]/g, "")}`}>{item.phone}</a> : "—"}</td><td>{formatDate(item.createdAt, true)}</td></tr>) : <tr><td colSpan="3">Регистраций пока нет.</td></tr>}</tbody></table></div>
-      </section>
-      <section className="analytics-panel">
-        <div className="analytics-panel-heading"><div><h2>Последние действия</h2></div></div>
-        <ol className="analytics-activity">{data.recent?.length ? data.recent.slice(0, 12).map((item, index) => {
-          const href = item.path || (item.listingId ? carHref(item.listingId) : "");
-          return <li key={`${item.createdAt}-${index}`}><div><b>{eventLabels[item.eventName] || item.eventName}</b><span>{href ? <a href={analyticsNoCountHref(href)}>{item.listingTitle || href}</a> : item.listingTitle || "—"}</span></div><time>{formatDate(item.createdAt, true)}</time></li>;
-        }) : <li>Событий пока нет.</li>}</ol>
-      </section>
-    </div>
+    <section className="analytics-panel">
+      <div className="analytics-panel-heading"><div><h2>Регистрации</h2></div></div>
+      <div className="analytics-table-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Дата</th></tr></thead><tbody>{data.registrations?.length ? data.registrations.map((item, index) => <tr key={`${item.phone}-${item.createdAt}-${index}`}><td>{item.name || "—"}</td><td>{item.phone ? <a href={`tel:${String(item.phone).replace(/[^+\d]/g, "")}`}>{item.phone}</a> : "—"}</td><td>{formatDate(item.createdAt, true)}</td></tr>) : <tr><td colSpan="3">Регистраций пока нет.</td></tr>}</tbody></table></div>
+    </section>
   );
 }
 
@@ -634,7 +639,7 @@ const analyticsPeriods = [
 
 const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
-  { id:"search-traffic", label:"Поисковики", icon:MagnifyingGlass, ranged:true },
+  { id:"search-traffic", label:"Запросы и позиции", icon:MagnifyingGlass, ranged:true },
   { id:"vehicles", label:"Автомобили", icon:CarProfile, ranged:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:false },
   { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
@@ -723,7 +728,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} updates={updates} markViewed={markViewed} /></div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} active={section === "search-traffic"} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
         </div>
       </div>
@@ -744,6 +749,10 @@ export function AnalyticsPage() {
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadsError, setLeadsError] = useState("");
   const [leadsUnavailable, setLeadsUnavailable] = useState(false);
+  const dashboardCache = useRef(new Map());
+  const dashboardRequest = useRef(0);
+  const periodRef = useRef(period);
+  periodRef.current = period;
   const loadLeads = async () => {
     setLeadsLoading(true);
     setLeadsError("");
@@ -758,21 +767,36 @@ export function AnalyticsPage() {
       setLeadsError("Не удалось загрузить заявки. Попробуйте обновить список.");
     } finally { setLeadsLoading(false); }
   };
-  const load = async () => {
-    setLoading(true);
+  const load = async (requestedPeriod = period) => {
+    const targetPeriod = typeof requestedPeriod === "string" ? requestedPeriod : period;
+    const request = ++dashboardRequest.current;
+    const cached = dashboardCache.current.get(targetPeriod);
+    if (cached && periodRef.current === targetPeriod) setData(cached);
+    setLoading(!cached && !data);
     setError("");
     try {
-      const response = await fetch(`/api/analytics/dashboard?period=${encodeURIComponent(period)}`, { cache:"no-store", credentials:"same-origin" });
-      if (response.status === 401) { setAuthenticated(false); setData(null); return; }
+      const response = await fetch(`/api/analytics/dashboard?period=${encodeURIComponent(targetPeriod)}`, { cache:"no-store", credentials:"same-origin" });
+      if (response.status === 401) {
+        if (request === dashboardRequest.current) { setAuthenticated(false); setData(null); }
+        return;
+      }
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "load_failed");
-      setData(payload);
-      setAuthenticated(true);
+      dashboardCache.current.set(targetPeriod, payload);
+      if (request === dashboardRequest.current && periodRef.current === targetPeriod) {
+        setData(payload);
+        setAuthenticated(true);
+      }
     } catch (loadError) {
-      setError(loadError.message === "analytics_storage_unavailable" ? "Хранилище аналитики ещё не подключено." : "Не удалось загрузить аналитику. Попробуйте ещё раз.");
-    } finally { setLoading(false); }
+      if (request === dashboardRequest.current) setError(loadError.message === "analytics_storage_unavailable" ? "Хранилище аналитики ещё не подключено." : "Не удалось загрузить аналитику. Попробуйте ещё раз.");
+    } finally { if (request === dashboardRequest.current) setLoading(false); }
   };
   useEffect(() => { load(); }, [period]);
+  const selectPeriod = (nextPeriod) => {
+    const cached = dashboardCache.current.get(nextPeriod);
+    if (cached) setData(cached);
+    setPeriod(nextPeriod);
+  };
   // Заявки живут отдельно от счётчиков: они не зависят от выбранного периода, поэтому
   // переключение периода их не перезапрашивает.
   useEffect(() => { if (authenticated) loadLeads(); }, [authenticated]);
@@ -785,5 +809,5 @@ export function AnalyticsPage() {
   if (authenticated === false) return <Login onSuccess={load} />;
   if (error && !data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика недоступна</h1><p>{error}</p><button className="primary" type="button" onClick={load}>Повторить</button></section></main>;
   if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
-  return <Dashboard data={data} period={period} setPeriod={setPeriod} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} />;
+  return <Dashboard data={data} period={period} setPeriod={selectPeriod} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} />;
 }

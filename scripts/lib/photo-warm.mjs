@@ -1,5 +1,5 @@
 // План запросов совпадает с размерами App.jsx. Сначала обложки, потом галерея.
-export function photoWarmUrls(car, { site, widths = ["original", 900, 600], previewCount = 1, galleryCount = 1 }) {
+export function photoWarmUrls(car, { site, widths = ["original", 600], previewCount = 1, galleryCount = 1 }) {
   const sources = [...new Set([car.image, ...(car.images || [])].filter(Boolean))];
   const urls = new Set();
   for (const [index, source] of sources.slice(0, Math.max(previewCount, galleryCount)).entries()) {
@@ -11,7 +11,7 @@ export function photoWarmUrls(car, { site, widths = ["original", 900, 600], prev
       if (!/^\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(path)) continue;
     } catch { continue; }
     const sizes = index === 0 ? [...widths] : [];
-    if (index > 0 && index < previewCount) sizes.push(600, 900, 240);
+    if (index > 0 && index < previewCount) sizes.push(600, 240);
     if (index > 0 && index < galleryCount) sizes.push("original");
     if (index === 0 && previewCount > 1) sizes.push(240);
     for (const width of sizes) {

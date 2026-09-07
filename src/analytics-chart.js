@@ -4,17 +4,25 @@ export function visitsChart(daily, period, now = new Date()) {
   const end = dayNumber(today) - (period === "yesterday" ? 1 : 0);
   const single = period === "today" || period === "yesterday";
   const count = single ? 1 : Number(period) || 7;
-  const max = Math.max(1, ...daily.map(item => Number(item.visitors) || 0));
+  const max = Math.max(1, ...daily.flatMap(item => [item.visitors, item.yandex, item.google].map(value => Number(value) || 0)));
   const rough = max / 4;
   const magnitude = 10 ** Math.floor(Math.log10(rough));
   const step = Math.max(1, [1, 2, 5, 10].find(value => value * magnitude >= rough) * magnitude);
   const ceiling = Math.ceil(max / step) * step;
-  const points = daily.map((item, index) => ({
-    ...item, visitors: Number(item.visitors) || 0,
-    x: daily.length > 1 ? index / (daily.length - 1) * 100 : 50,
-    y: 90 - (Number(item.visitors) || 0) / ceiling * 80,
-    selected: dayNumber(item.day) >= end - count + 1 && dayNumber(item.day) <= end,
-  }));
+  const chartY = value => 90 - (Number(value) || 0) / ceiling * 80;
+  const points = daily.map((item, index) => {
+    const visitors = Number(item.visitors) || 0;
+    const yandex = Number(item.yandex) || 0;
+    const google = Number(item.google) || 0;
+    return {
+      ...item, visitors, yandex, google,
+      x: daily.length > 1 ? index / (daily.length - 1) * 100 : 50,
+      y:chartY(visitors),
+      yandexY:chartY(yandex),
+      googleY:chartY(google),
+      selected: dayNumber(item.day) >= end - count + 1 && dayNumber(item.day) <= end,
+    };
+  });
   const ticks = Array.from({ length: Math.round(ceiling / step) + 1 }, (_, i) => ({ value: i * step, y: 90 - i * step / ceiling * 80 }));
   return { points, ticks, single };
 }

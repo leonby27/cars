@@ -1,0 +1,14 @@
+[Unit]
+Description=Удаление фото через семь дней после снятия объявления
+After=postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/flock -n /srv/abcars/runtime/photo-store/cleanup.lock /usr/bin/node /opt/abcars-photo-store/scripts/cleanup-catalog-photos.mjs --apply
+Nice=15
+CPUWeight=20
+IOWeight=20
+MemoryHigh=300M
+TimeoutStartSec=30min

@@ -357,14 +357,7 @@ const imageSource = (source, width) => vehiclePhotoHref(source, width, photoOpti
 // 250: просить 800 значило качать снимок в четыре раза крупнее, чем он показан. На
 // главной это была ровно половина её веса — 68 фотографий вместо 1,4 МБ дают 0,4 МБ.
 const IMAGE_WIDTH_CARD = 600;
-// Кадр карточки на компьютере. Показан он в 308 точек (сетка из четырёх колонок при
-// ширине страницы 1280), то есть 600 — ровно двойная плотность, придираться к
-// разрешению не к чему. Но хранилище жмёт webp тем сильнее, чем меньше ширина: на
-// 600 выходит 0,09 байта на пиксель, на 900 — 0,07. Уменьшенный браузером кадр на
-// 900 чище, и это единственная причина ширины: не разрешение, а качество сжатия.
-// На телефоне остаётся 600: там карточка показана в 165 точек (две в ряд), 900 не
-// даст ничего видимого, зато утяжелит страницу вдвое на мобильном интернете.
-const IMAGE_WIDTH_CARD_WIDE = 900;
+// Превью каталога на всех экранах — 600px: один файл для телефона и компьютера.
 // Один адрес с плиткой и облегчённым кадром галереи: копия уже в кэше.
 const IMAGE_WIDTH_STRIP = IMAGE_WIDTH_CARD;
 const IMAGE_WIDTH_TILE = 600;
@@ -2847,9 +2840,8 @@ const useNarrowViewport = () => useMediaQuery(NARROW_VIEWPORT);
 function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, badge = null }) {
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
   const narrow = useNarrowViewport();
-  // Ширина кадра зависит от экрана: на телефоне карточка вдвое меньше, чем на
-  // компьютере, и просить для неё широкий снимок значит платить весом впустую.
-  const frameWidth = narrow ? IMAGE_WIDTH_CARD : IMAGE_WIDTH_CARD_WIDE;
+  // Один размер превью для телефона и компьютера, общий с серверной копией.
+  const frameWidth = IMAGE_WIDTH_CARD;
   const [active, setActive] = useState(0);
   const wantedFrame = useRef(0);
   const frameRef = useRef(null);
@@ -9193,7 +9185,7 @@ function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpe
       }}
     >
       <span className="blog-top-photo">
-        {image ? <img src={image} srcSet={imageSourceSet(source, IMAGE_WIDTH_CARD)} alt={title} loading="lazy" onError={(event) => retryWithFullImage(event, source)} /> : null}
+        {image ? <img src={image} alt={title} loading="lazy" onError={(event) => retryWithFullImage(event, source)} /> : null}
         {/* Номер только там, где список — это место в топе. В сравнении машины одной
             модели не ранжируются, и цифра на снимке вводила бы в заблуждение. */}
         {rank ? <span className="blog-top-rank">{rank}</span> : null}

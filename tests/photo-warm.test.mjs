@@ -9,24 +9,24 @@ import { photoHref } from "../server/seo-render.mjs";
 const site = "https://abcars.by";
 const images = Array.from({ length: 8 }, (_, i) => `https://erscglobal2.autoimg.cn/escimg/auto/g34/M02/1400x0_c42_car${i}.jpg.webp`);
 
-test("ночной проход сохраняет три размера только обложки", () => {
+test("ночной проход сохраняет два размера только обложки", () => {
   assert.deepEqual(photoWarmUrls({ image: images[0], images }, { site }),
-    ["original", 900, 600].map(width => site + photoHref(images[0], width)));
+    ["original", 600].map(width => site + photoHref(images[0], width)));
 });
 
 test("новая машина: пять превью и миниатюр, три оригинала, без дублей и дальнейших кадров", () => {
   const urls = photoWarmUrls({ image: images[0], images }, { site, previewCount: 5, galleryCount: 3 });
-  assert.equal(urls.length, 18);
-  assert.equal(new Set(urls).size, 18);
+  assert.equal(urls.length, 13);
+  assert.equal(new Set(urls).size, 13);
   for (let i = 0; i < 5; i++) {
-    for (const width of [600, 900, 240]) assert.ok(urls.includes(site + photoHref(images[i], width)));
+    for (const width of [600, 240]) assert.ok(urls.includes(site + photoHref(images[i], width)));
     assert.equal(urls.includes(site + photoHref(images[i], "original")), i < 3);
   }
   assert.ok(urls.every(url => !url.includes("car5")));
 });
 
 test("прогрев принимает карточку без image и не запрашивает сторонние адреса", () => {
-  assert.equal(photoWarmUrls({ images: [images[0]] }, { site }).length, 3);
+  assert.equal(photoWarmUrls({ images: [images[0]] }, { site }).length, 2);
   for (const image of [null, "garbage", "/local.webp", "https://autoimg.cn.evil.test/escimg/a.webp", "https://autoimg.cn/private.html"])
     assert.deepEqual(photoWarmUrls({ image }, { site }), []);
 });
@@ -78,10 +78,10 @@ test("полный запуск собирает списки, убирает д
       `--site=http://127.0.0.1:${server.address().port}`, "--limit=1", "--preview-count=5", "--gallery-count=3",
     ], { timeout: 10_000 });
     const result = await run();
-    assert.match(result.stdout, /снимков к проверке: 18/);
-    assert.equal(requested.length, 18);
-    assert.equal(new Set(requested).size, 18);
+    assert.match(result.stdout, /снимков к проверке: 13/);
+    assert.equal(requested.length, 13);
+    assert.equal(new Set(requested).size, 13);
     fail = true;
-    await assert.rejects(run(), error => error.code === 1 && /не отдалось 18/.test(error.stdout));
+    await assert.rejects(run(), error => error.code === 1 && /не отдалось 13/.test(error.stdout));
   } finally { await new Promise(resolve => server.close(resolve)); }
 });

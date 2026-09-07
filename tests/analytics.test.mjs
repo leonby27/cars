@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { analyticsEntrySource, hasYandexClickId, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm, withoutYandexClickId } from "../src/analytics.js";
 import { formatVisitDate } from "../src/analytics-format.js";
 import { analyticsNoCountHref } from "../src/analytics-links.js";
@@ -12,6 +12,38 @@ test("ссылки из аналитики переносят запрет уч�
   assert.equal(analyticsNoCountHref("/catalog?q=zeekr#cars"), "/catalog?q=zeekr&nocount=1#cars");
   assert.equal(analyticsNoCountHref("https://abcars.by/models/lynk-co-900"), "https://abcars.by/models/lynk-co-900?nocount=1");
   assert.equal(analyticsNoCountHref("tel:+375291234567"), "tel:+375291234567");
+});
+
+test("nocount исключает служебный переход, но не обычный трафик из ChatGPT", () => {
+  assert.equal(hasNoCountMarker("/models/byd-qin-l?utm_source=chatgpt.com"), false);
+  assert.equal(hasNoCountMarker("/models/byd-qin-l?utm_source=chatgpt.com&nocount=1"), true);
+  assert.equal(hasNoCountMarker("https://abcars.by/blog/test?NOCOUNT=1&utm_source=chatgpt.com"), true);
+
+  const ordinaryChatGptVisit = normalizeAnalyticsEvent({
+    eventId:"gpt-visit",
+    visitorId:"visitor-1",
+    sessionId:"session-1",
+    eventName:"page_view",
+    path:"/models/byd-qin-l?utm_source=chatgpt.com",
+  });
+  assert.equal(ordinaryChatGptVisit.eventName, "page_view");
+  assert.deepEqual(normalizeAnalyticsEvent({
+    eventId:"staff-visit",
+    visitorId:"visitor-2",
+    sessionId:"session-2",
+    eventName:"page_view",
+    path:"/models/byd-qin-l?utm_source=chatgpt.com&nocount=1",
+  }), { ignored:true });
+});
+
+test("таблица заходов показывает источники и фильтр Google/Яндекс", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  assert.match(source, /\[\["all", "Все"\], \["yandex", "Яндекс"\], \["google", "Google"\]\]/);
+  assert.match(source, /sourceFilter !== "all" && <span className="analytics-visits-filter-count"/);
+  assert.match(source, /analytics-source-logo is-\$\{sourceKey\}/);
+  assert.match(styles, /\.analytics-source-logo\.is-yandex/);
+  assert.match(styles, /\.analytics-source-logo\.is-google/);
 });
 
 test("автоматически открытый обзор не гасит счётчик новых посещений", () => {
@@ -26,22 +58,49 @@ test("таблицы автомобилей по умолчанию сортир
   assert.match(source, /setSort\(\{ column:"lastViewed", desc:true \}\)/);
 });
 
-test("обзор открывает график и сворачивает баннер при каждом входе", async () => {
+test("график и заходы постоянные, а баннер при каждом входе свёрнут", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
-  assert.match(source, /\[trendOpen, setTrendOpen\] = useState\(true\)/);
   assert.match(source, /\[open, setOpen\] = useState\(false\)/);
+  assert.doesNotMatch(source, /trendOpen|Свернуть график посещений|Свернуть заходы/);
   assert.doesNotMatch(source, /analytics:(?:trend|promo)-open/);
 });
 
-test("детализация заходов стоит после баннера и тоже открывается по нажатию", async () => {
+test("детализация заходов стоит после баннера и всегда открыта", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   assert.match(source, /<PromoSection summary=\{summary\} \/>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{unreadVisits\} \/>/);
-  assert.match(source, /function VisitsSection[\s\S]*?\[open, setOpen\] = useState\(true\)/);
+  assert.match(source, /function VisitsSection[\s\S]*?<section className="analytics-panel analytics-visits-panel">/);
   for (const heading of ["Номер", "Источник", "Страница входа", "Просмотров", "Дата"]) assert.match(source, new RegExp(`<th>${heading}<\\/th>`));
   assert.doesNotMatch(source, /<th>Источник входа<\/th>/);
   assert.doesNotMatch(source, /<th>Кол-во просмотров<\/th>/);
   assert.match(source, /newestNumber - index/);
   assert.match(source, /index < Number\(unread \|\| 0\)/);
+});
+
+test("источники графика выключены по умолчанию и запоминаются", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const chart = await readFile(new URL("../src/analytics-visits-chart.jsx", import.meta.url), "utf8");
+  assert.match(source, /analytics:trend-yandex", \["0", "1"\], "0"/);
+  assert.match(source, /analytics:trend-google", \["0", "1"\], "0"/);
+  assert.match(source, /type="checkbox" checked=\{showYandex === "1"\}/);
+  assert.match(source, /type="checkbox" checked=\{showGoogle === "1"\}/);
+  assert.match(chart, /analytics-chart-source is-\$\{source\.id\}/);
+});
+
+test("аналитика переключается без очистки уже показанных данных", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /setReport\(null\)/);
+  assert.match(source, /dashboardCache = useRef\(new Map\(\)\)/);
+  assert.match(source, /trendCache = useRef\(new Map\(\)\)/);
+  assert.match(source, /<SearchTrafficSection period=\{period\} \/>/);
+});
+
+test("названия и состав разделов аналитики соответствуют экрану", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(source, /label:"Запросы и позиции"/);
+  assert.doesNotMatch(source, />Визиты из поисковых систем</);
+  assert.doesNotMatch(source, />Последние действия</);
+  assert.match(source, /\$\{formatNumber\(summary\.visitors\)\} уник\./);
+  assert.match(source, /item\.lastViewedAt \? formatVisitDate\(item\.lastViewedAt\)/);
 });
 
 test("сегодняшние заходы показывают, сколько времени прошло", () => {
@@ -168,6 +227,9 @@ test("график обзора получает отдельный разреш
   assert.deepEqual(trend.daily, [{ day:"2026-09-07", visitors:3 }]);
   assert.equal(calls.length, 1);
   assert.match(calls[0].sql, /created_at >= \$1 AND created_at < \$2/);
+  assert.match(calls[0].sql, /nocount=1/, "старые служебные переходы должны исчезнуть из отчётов");
+  assert.match(calls[0].sql, /AS yandex/);
+  assert.match(calls[0].sql, /AS google/);
 });
 
 test("analytics tokens expire and reject tampering", () => {

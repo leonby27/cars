@@ -219,11 +219,7 @@ export async function handleAnalyticsRequest(request, env, url) {
     const token = cookieValue(request.headers.get("cookie") || "", COOKIE_NAME);
     if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
     const period = url.searchParams.get("period");
-    const [report, metrika] = await Promise.all([
-      readSearchTraffic(period, env, workerSearchStore(env.DB)),
-      fetchMetrikaSearchTraffic(env, period),
-    ]);
-    return json({ ...report, metrika });
+    return json(await readSearchTraffic(period, env, workerSearchStore(env.DB)));
   }
   if (!env.DB) return json({ error:"analytics_storage_unavailable" }, 503);
   await ensureSchema(env.DB);

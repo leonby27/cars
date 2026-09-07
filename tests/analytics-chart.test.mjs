@@ -30,3 +30,15 @@ test("шкала имеет целые отметки, включает ноль
     assert.ok(ticks.every(tick => Number.isInteger(tick.value)));
   }
 });
+
+test("линии Яндекса и Google используют общую шкалу посещений", () => {
+  const { points, ticks } = visitsChart([
+    { day:"2026-09-07", visitors:12, yandex:8, google:3 },
+    { day:"2026-09-08", visitors:20, yandex:11, google:6 },
+  ], "7", now);
+  assert.equal(points[0].yandex, 8);
+  assert.equal(points[0].google, 3);
+  assert.ok(points[0].yandexY > points[0].y);
+  assert.ok(points[0].googleY > points[0].yandexY);
+  assert.ok(ticks.at(-1).value >= 20);
+});

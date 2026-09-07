@@ -30,6 +30,17 @@ export const isInternalAnalyticsPath = (value = "") => {
   return clean === "/analytics" || clean.startsWith("/analytics/");
 };
 
+// `nocount=1` — только наша служебная метка. Она может остаться в старых событиях,
+// записанных до клиентского фильтра, поэтому проверяем её и при приёме, и во всех
+// отчётах. Одного `utm_source=chatgpt` недостаточно: настоящий переход из ChatGPT
+// должен продолжать считаться.
+export const hasNoCountMarker = (value = "") => {
+  try {
+    const url = new URL(String(value || ""), "https://abcars.invalid");
+    return [...url.searchParams].some(([key, item]) => key.toLowerCase() === "nocount" && item === "1");
+  } catch { return /(?:^|[?&])nocount=1(?:&|$)/i.test(String(value || "")); }
+};
+
 export const fromAnalyticsPage = (headers = {}) => {
   const referer = String(headers.referer || "");
   if (!referer) return false;
@@ -43,7 +54,7 @@ export function normalizeAnalyticsEvent(body = {}) {
   const visitorId = text(body.visitorId, 80);
   const sessionId = text(body.sessionId, 80);
   const path = text(body.path, 400) || "/";
-  if (isInternalAnalyticsPath(path)) return { ignored:true };
+  if (isInternalAnalyticsPath(path) || hasNoCountMarker(path)) return { ignored:true };
   if (!eventId || !visitorId || !sessionId) return { error:"invalid_event_identity" };
   const properties = body.properties && typeof body.properties === "object" && !Array.isArray(body.properties) ? body.properties : {};
   // Личные данные в события не принимаем вообще, даже если их пришлёт браузер: приём
@@ -289,7 +300,13 @@ export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
   const from = range.from.toISOString();
   const to = range.to.toISOString();
   const result = await db.query(`SELECT created_at::date::text AS day,
-      count(DISTINCT visitor_id)::int AS visitors
+      count(DISTINCT visitor_id)::int AS visitors,
+      count(DISTINCT visitor_id) FILTER (
+        WHERE path ~* '(^|[?&])ysclid=' OR lower(coalesce(properties->>'entrySource','')) ~ '(^|\\.)yandex\\.'
+      )::int AS yandex,
+      count(DISTINCT visitor_id) FILTER (
+        WHERE lower(coalesce(properties->>'entrySource','')) ~ '(^|\\.)google\\.'
+      )::int AS google
     FROM analytics_events
     WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
     GROUP BY created_at::date ORDER BY created_at::date`, [from, to]);
@@ -309,7 +326,7 @@ export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
 // непризнанным из-за случайной очерёдности двух запросов. Именно действием, а не
 // просто отметкой «живой»: одно лишь время на странице подделывает обходчик, который
 // ходит через домашние адреса и по адресу не отличается от людей (26.08.2026).
-const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%'";
+const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path !~* '(^|[?&])nocount=1(&|$)'";
 const humanVisitor = (compare = ">=") => `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at ${compare} $1 AND human_action AND ${PUBLIC_EVENT})`;
 // В разделе период ограничен с двух сторон, поэтому «живой посетитель» ищется
 // внутри тех же границ: иначе вчерашний день подхватывал бы сегодняшние отметки.
@@ -325,7 +342,7 @@ export async function getAnalyticsDashboard(rangeValue) {
   // вкладка, закрытая страница) и его может подделать кто угодно, а строка в таблице
   // появляется только от настоящего действия. Из событий берём лишь то, чего в базе нет:
   // посетителей, заходы и просмотры карточек.
-  const [summaryResult,visitsResult,actionsResult,dailyResult,vehiclesResult,favoritesResult,registrationsResult,recentResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
+  const [summaryResult,visitsResult,actionsResult,dailyResult,vehiclesResult,favoritesResult,registrationsResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS visitors,
       count(*) FILTER (WHERE event_name='page_view' AND ${HUMAN_VISITOR})::int AS page_views,
@@ -413,8 +430,6 @@ export async function getAnalyticsDashboard(rangeValue) {
     pool.query(`SELECT name, phone, created_at
       FROM customer_accounts WHERE created_at >= $1 AND created_at < $2 AND NOT staff
       ORDER BY created_at DESC LIMIT 100`, [from, to]),
-    pool.query(`SELECT event_name,listing_id,listing_title,path,created_at
-      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR} ORDER BY created_at DESC LIMIT 30`, [from, to]),
     // Регистрации считаем по аккаунтам, а не по событиям — тем же источником, из которого
     // берётся список ниже. Иначе счётчик и список расходятся: событий может не быть вовсе
     // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
@@ -518,7 +533,6 @@ export async function getAnalyticsDashboard(rangeValue) {
     // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
-    recent:recentResult.rows.map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),
     searches:searchesResult.rows.map((row) => ({ query:row.query, asked:row.asked, people:row.people, found:row.found, lastAskedAt:row.last_asked })),
     visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at })),
   };

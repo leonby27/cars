@@ -1,0 +1,11 @@
+[Unit]
+Description=Еженедельная очистка фотографий снятых машин
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00 UTC
+Persistent=true
+RandomizedDelaySec=15min
+Unit=abcars-photo-cleanup.service
+
+[Install]
+WantedBy=timers.target

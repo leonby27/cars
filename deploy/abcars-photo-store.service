@@ -1,0 +1,21 @@
+[Unit]
+Description=Обложки каталога и превью востребованных машин
+After=network-online.target nginx.service postgresql.service
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/node /opt/abcars-photo-store/scripts/store-catalog-photos.mjs
+Restart=on-failure
+RestartSec=300
+TimeoutStopSec=90
+Nice=15
+CPUWeight=20
+IOWeight=20
+MemoryHigh=300M
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

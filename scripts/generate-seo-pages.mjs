@@ -536,7 +536,7 @@ function blogDuelArticle(post) {
           const href = escapeHtml(hrefRoute(carRoute(car)));
           const title = escapeHtml(carTitle(car));
           const source = car.images?.length ? car.images[0] : car.image;
-          const photo = source ? `<img src="${escapeHtml(photoHref(source, 400))}" alt="${title}" loading="lazy" />` : "";
+          const photo = source ? `<img src="${escapeHtml(photoHref(source, 600))}" alt="${title}" loading="lazy" />` : "";
           const facts = [`≈ ${number(estimateLandedCost(car).totalUsd)} $ под ключ в Минске`, car.year ? `${car.year} год` : null, car.mileage ? `пробег ${number(car.mileage)} км` : null].filter(Boolean);
           return `<li><a href="${href}">${photo}${title}</a> — ${escapeHtml(facts.join(", "))}</li>`;
         })
@@ -723,7 +723,7 @@ function blogPostArticle(post) {
           const href = escapeHtml(hrefRoute(carRoute(car)));
           const title = escapeHtml(carTitle(car));
           const source = car.images?.length ? car.images[0] : car.image;
-          const photo = source ? `<img src="${escapeHtml(photoHref(source, 400))}" alt="${title}" loading="lazy" />` : "";
+          const photo = source ? `<img src="${escapeHtml(photoHref(source, 600))}" alt="${title}" loading="lazy" />` : "";
           // То же, что видит человек: главная цифра подборки, цена и причина.
           const figure = blogCarFigure(car, post);
           const reason = blogCarReason(car, top, post, (item) => (item ? estimateLandedCost(item).totalUsd : null));
