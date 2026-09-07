@@ -26,7 +26,28 @@ const storedId = (storage, key) => {
 // Referer намеренно не сохраняем: в нём могут оказаться поисковый запрос, рекламные
 // метки и другие лишние данные. Пустой Referer отличаем от старых событий, где
 // источник ещё вообще не записывался.
-export const analyticsEntrySource = (referrer = "", ownHostname = "") => {
+export const hasYandexClickId = (value = "") => {
+  try {
+    const url = new URL(String(value || ""), "https://abcars.invalid");
+    return [...url.searchParams.keys()].some((key) => key.toLowerCase() === "ysclid");
+  } catch { return /(?:^|[?&])ysclid(?:=|&|$)/i.test(String(value || "")); }
+};
+
+// В таблице нужен читаемый адрес страницы, а не служебный идентификатор клика.
+// Остальные параметры сохраняем: фильтры каталога и рекламные метки там полезны.
+export const withoutYandexClickId = (value = "/") => {
+  const original = String(value || "/");
+  try {
+    const url = new URL(original, "https://abcars.invalid");
+    for (const key of [...url.searchParams.keys()]) if (key.toLowerCase() === "ysclid") url.searchParams.delete(key);
+    return `${url.pathname}${url.search}${url.hash}` || "/";
+  } catch { return original; }
+};
+
+export const analyticsEntrySource = (referrer = "", ownHostname = "", landingPath = "") => {
+  // Яндекс добавляет ysclid к части органических переходов. Он надёжнее Referer,
+  // который браузер или настройка приватности могут вовсе не прислать.
+  if (hasYandexClickId(landingPath)) return "yandex.ru";
   if (!String(referrer || "").trim()) return "direct";
   try {
     const hostname = new URL(referrer).hostname.toLowerCase().replace(/^www\./, "");
@@ -174,7 +195,7 @@ export function trackEvent(eventName, details = {}) {
     listingTitle:details.listingTitle,
     properties:{
       ...(details.properties || {}),
-      entrySource:analyticsEntrySource(window.document?.referrer, window.location.hostname),
+      entrySource:analyticsEntrySource(window.document?.referrer, window.location.hostname, `${window.location.pathname}${window.location.search}`),
     },
     human:humanConfirmed,
     humanAction:humanActed,

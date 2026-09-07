@@ -74,6 +74,8 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-table-wrap { overflow-x:auto; }
 .analytics-visits-table { margin-top:12px; }
 .analytics-visits-table th:first-child, .analytics-visits-table td:first-child { width:72px; }
+.analytics-visits-table th:nth-child(3), .analytics-visits-table td:nth-child(3) { width:280px; max-width:280px; }
+.analytics-visits-table td:nth-child(3) a { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .analytics-visits-table th:nth-child(4), .analytics-visits-table td:nth-child(4),
 .analytics-visits-table th:last-child, .analytics-visits-table td:last-child { white-space:nowrap; }
 .analytics-visit-number { display:inline-grid; min-width:34px; height:24px; place-items:center; padding:0 7px; box-sizing:border-box; border-radius:999px; font-variant-numeric:tabular-nums; }

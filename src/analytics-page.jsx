@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarProfile, ChartLineUp, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
+import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
+import { formatVisitDate } from "./analytics-format.js";
 import { analyticsUpdatesUrl } from "./analytics-updates.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
@@ -387,7 +389,10 @@ function PromoSection({ summary }) {
   );
 }
 
-const visitSourceLabel = (value) => {
+const visitSourceLabel = (value, landingPath = "") => {
+  // У старых заходов источник ещё не сохранялся, но ysclid в странице входа
+  // позволяет восстановить переход из Яндекса и для уже накопленной истории.
+  if (hasYandexClickId(landingPath)) return "Яндекс";
   const source = String(value || "").toLowerCase();
   if (!source) return "Не определён";
   if (source === "direct") return "Прямой заход";
@@ -405,6 +410,18 @@ const visitSourceLabel = (value) => {
   return source;
 };
 
+function VisitRow({ visit, number, unread }) {
+  const landingPath = withoutYandexClickId(visit.landingPath || "/");
+  const sourceUnknown = !hasYandexClickId(visit.landingPath) && (!visit.source || visit.source === "unknown");
+  return <tr>
+    <td><span className={`analytics-visit-number${unread ? " is-unread" : ""}`}>{number}</span></td>
+    <td className={sourceUnknown ? "analytics-visit-source-unknown" : undefined}>{visitSourceLabel(visit.source, visit.landingPath)}</td>
+    <td><a href={landingPath} target="_blank" rel="noreferrer" title={landingPath === "/" ? "Главная" : landingPath || "—"}>{landingPath === "/" ? "Главная" : landingPath || "—"}</a></td>
+    <td>{formatNumber(visit.pageViews)}</td>
+    <td>{formatVisitDate(visit.createdAt)}</td>
+  </tr>;
+}
+
 function VisitsSection({ visits, total, unread }) {
   const [open, setOpen] = useState(true);
   // Свежие строки идут первыми, но номер — место захода во всей хронологии:
@@ -413,8 +430,8 @@ function VisitsSection({ visits, total, unread }) {
   return (
     <section className={`analytics-panel analytics-disclosure ${open ? "" : "is-collapsed"}`}>
       <button className="analytics-collapse-trigger" type="button" aria-label={open ? "Свернуть заходы" : "Развернуть заходы"} aria-expanded={open} onClick={() => setOpen((value) => !value)}><span><h2>Заходы</h2></span><b className="analytics-chevron" aria-hidden="true" /></button>
-      {open && <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник входа</th><th>Страница входа</th><th>Кол-во просмотров</th><th>Дата</th></tr></thead>
-        <tbody>{visits.length ? visits.map((visit, index) => <tr key={`${visit.createdAt}-${visit.landingPath}-${index}`}><td><span className={`analytics-visit-number${index < Number(unread || 0) ? " is-unread" : ""}`}>{newestNumber - index}</span></td><td className={!visit.source || visit.source === "unknown" ? "analytics-visit-source-unknown" : undefined}>{visitSourceLabel(visit.source)}</td><td><a href={visit.landingPath || "/"} target="_blank" rel="noreferrer">{visit.landingPath === "/" ? "Главная" : visit.landingPath || "—"}</a></td><td>{formatNumber(visit.pageViews)}</td><td>{formatDate(visit.createdAt, true)}</td></tr>) : <tr><td colSpan="5">За выбранный период заходов пока нет.</td></tr>}</tbody></table></div>}
+      {open && <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Страница входа</th><th>Просмотров</th><th>Дата</th></tr></thead>
+        <tbody>{visits.length ? visits.map((visit, index) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="5">За выбранный период заходов пока нет.</td></tr>}</tbody></table></div>}
     </section>
   );
 }

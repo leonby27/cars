@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
-import { analyticsEntrySource, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm } from "../src/analytics.js";
+import { analyticsEntrySource, hasYandexClickId, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm, withoutYandexClickId } from "../src/analytics.js";
+import { formatVisitDate } from "../src/analytics-format.js";
 import { analyticsUpdatesUrl } from "../src/analytics-updates.js";
 
 test("автоматически открытый обзор не гасит счётчик новых посещений", () => {
@@ -28,9 +29,24 @@ test("детализация заходов стоит после баннера
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   assert.match(source, /<PromoSection summary=\{summary\} \/>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{unreadVisits\} \/>/);
   assert.match(source, /function VisitsSection[\s\S]*?\[open, setOpen\] = useState\(true\)/);
-  for (const heading of ["Номер", "Источник входа", "Страница входа", "Кол-во просмотров", "Дата"]) assert.match(source, new RegExp(`<th>${heading}<\\/th>`));
+  for (const heading of ["Номер", "Источник", "Страница входа", "Просмотров", "Дата"]) assert.match(source, new RegExp(`<th>${heading}<\\/th>`));
+  assert.doesNotMatch(source, /<th>Источник входа<\/th>/);
+  assert.doesNotMatch(source, /<th>Кол-во просмотров<\/th>/);
   assert.match(source, /newestNumber - index/);
   assert.match(source, /index < Number\(unread \|\| 0\)/);
+});
+
+test("сегодняшние заходы показывают, сколько времени прошло", () => {
+  const now = "2026-09-07T15:00:00+03:00";
+  assert.equal(formatVisitDate("2026-09-07T14:59:40+03:00", now), "Только что");
+  assert.equal(formatVisitDate("2026-09-07T14:55:00+03:00", now), "5 минут назад");
+  assert.equal(formatVisitDate("2026-09-07T13:00:00+03:00", now), "2 часа назад");
+});
+
+test("страница входа остаётся в одну строку и обрезается многоточием", async () => {
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  assert.match(styles, /analytics-visits-table th:nth-child\(3\)[^}]*width:280px/);
+  assert.match(styles, /analytics-visits-table td:nth-child\(3\) a \{[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/);
 });
 
 test("все крупные блоки аналитики имеют один радиус", async () => {
@@ -66,6 +82,7 @@ test("analytics events are allowlisted and drop personal data", () => {
 
 test("источник захода хранится без полного адреса реферера", () => {
   assert.equal(analyticsEntrySource("", "abcars.by"), "direct");
+  assert.equal(analyticsEntrySource("", "abcars.by", "/blog/ev-quota-2027?ysclid=secret"), "yandex.ru");
   assert.equal(analyticsEntrySource("https://abcars.by/catalog?q=zeekr", "abcars.by"), "internal");
   assert.equal(analyticsEntrySource("https://www.google.com/search?q=электромобиль", "abcars.by"), "google.com");
   assert.equal(analyticsEntrySource("not a url", "abcars.by"), "unknown");
@@ -74,6 +91,14 @@ test("источник захода хранится без полного ад�
     properties:{ entrySource:" Google.COM ", referrer:"https://google.com/search?q=private" },
   });
   assert.deepEqual(event.properties, { entrySource:"google.com" });
+});
+
+test("ysclid определяет Яндекс и не показывается в странице входа", () => {
+  assert.equal(hasYandexClickId("/cars/58377594?ysclid=mtr7vm1tsa228069170"), true);
+  assert.equal(hasYandexClickId("/catalog?brand=Zeekr"), false);
+  assert.equal(withoutYandexClickId("/blog/ev-quota-2027?ysclid=secret"), "/blog/ev-quota-2027");
+  assert.equal(withoutYandexClickId("/catalog?brand=Zeekr&ysclid=secret&year=2025#cars"), "/catalog?brand=Zeekr&year=2025#cars");
+  assert.equal(withoutYandexClickId("/?YSCLID=secret"), "/");
 });
 
 test("внутренняя CRM нигде не считается страницей сайта", async () => {
