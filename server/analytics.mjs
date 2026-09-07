@@ -51,6 +51,9 @@ export function normalizeAnalyticsEvent(body = {}) {
   // телефонами. Имя и телефон берутся из таблицы аккаунтов, где они уже есть.
   const safeProperties = {};
   if (properties.source) safeProperties.source = text(properties.source, 40);
+  // Источник входа — только домен либо одна из служебных меток браузера. Полный
+  // адрес реферера не принимаем, чтобы не хранить поисковые запросы и параметры.
+  if (properties.entrySource) safeProperties.entrySource = text(properties.entrySource, 160).toLowerCase();
   // Был ли комментарий менеджеру — только «да» или «нет»: сам текст в события не берём.
   if (properties.withComment === "yes" || properties.withComment === "no") safeProperties.withComment = properties.withComment;
   // Строка поиска — единственный свободный текст, который мы принимаем от браузера.
@@ -322,7 +325,7 @@ export async function getAnalyticsDashboard(rangeValue) {
   // вкладка, закрытая страница) и его может подделать кто угодно, а строка в таблице
   // появляется только от настоящего действия. Из событий берём лишь то, чего в базе нет:
   // посетителей, заходы и просмотры карточек.
-  const [summaryResult,visitsResult,actionsResult,dailyResult,vehiclesResult,favoritesResult,registrationsResult,recentResult,accountsResult,searchesResult,actionsDailyResult] = await Promise.all([
+  const [summaryResult,visitsResult,actionsResult,dailyResult,vehiclesResult,favoritesResult,registrationsResult,recentResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS visitors,
       count(*) FILTER (WHERE event_name='page_view' AND ${HUMAN_VISITOR})::int AS page_views,
@@ -452,6 +455,28 @@ export async function getAnalyticsDashboard(rangeValue) {
           count(*) FILTER (WHERE calculation->>'requestType' = 'catalog_search')::int
           FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND ${notStaffContact("contact")} GROUP BY 1
       ) t GROUP BY day`, [from, to]),
+    // Та же граница в 30 минут, что у верхнего счётчика «Заходы». Для каждого
+    // захода показываем первый открытый адрес, источник и число просмотренных страниц.
+    pool.query(`WITH ordered AS (
+        SELECT visitor_id, created_at, path, event_name, properties,
+          lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_at
+        FROM analytics_events
+        WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
+      ), marked AS (
+        SELECT *, CASE WHEN previous_at IS NULL OR created_at - previous_at > interval '30 minutes' THEN 1 ELSE 0 END AS starts_visit
+        FROM ordered
+      ), numbered AS (
+        SELECT *, sum(starts_visit) OVER (PARTITION BY visitor_id ORDER BY created_at ROWS UNBOUNDED PRECEDING) AS visit_number
+        FROM marked
+      )
+      SELECT
+        (array_agg(path ORDER BY created_at))[1] AS landing_path,
+        (array_agg(nullif(properties->>'entrySource','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'entrySource','') IS NOT NULL))[1] AS entry_source,
+        count(*) FILTER (WHERE event_name='page_view')::int AS page_views,
+        min(created_at) AS created_at
+      FROM numbered
+      GROUP BY visitor_id, visit_number
+      ORDER BY min(created_at) DESC`, [from, to]),
   ]);
   const actionsByDay = new Map(actionsDailyResult.rows.map((row) => [row.day, row]));
   const registrationsByDay = new Map(accountsResult.rows.map((row) => [row.day, row.registrations]));
@@ -495,6 +520,7 @@ export async function getAnalyticsDashboard(rangeValue) {
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
     recent:recentResult.rows.map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),
     searches:searchesResult.rows.map((row) => ({ query:row.query, asked:row.asked, people:row.people, found:row.found, lastAskedAt:row.last_asked })),
+    visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at })),
   };
 }
 
@@ -535,9 +561,13 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
   const seenBySection = await readAnalyticsSeen(viewing);
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
   const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, customers] = await Promise.all([
-    // Ярлык «новое с прошлого раза» тоже считает только живых людей, иначе он
-    // зажигался бы от заходов роботов.
-    pool.query(`SELECT count(DISTINCT visitor_id)::int AS n FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.overview]),
+    // Ярлык и красные номера считают именно заходы по той же 30-минутной границе,
+    // что верхняя карточка. Иначе два новых захода одного человека давали бы одну
+    // плашку, а таблица и счётчик расходились бы.
+    pool.query(`WITH steps AS (
+        SELECT created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap
+        FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}
+      ) SELECT count(*) FILTER (WHERE gap IS NULL OR gap > interval '30 minutes')::int AS n FROM steps`, [since.overview]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicles]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicle_cars]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='favorite_added' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicle_favorites]),

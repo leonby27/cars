@@ -22,6 +22,20 @@ const storedId = (storage, key) => {
   } catch { return randomId(); }
 };
 
+// Для расшифровки заходов достаточно домена, с которого пришёл человек. Полный
+// Referer намеренно не сохраняем: в нём могут оказаться поисковый запрос, рекламные
+// метки и другие лишние данные. Пустой Referer отличаем от старых событий, где
+// источник ещё вообще не записывался.
+export const analyticsEntrySource = (referrer = "", ownHostname = "") => {
+  if (!String(referrer || "").trim()) return "direct";
+  try {
+    const hostname = new URL(referrer).hostname.toLowerCase().replace(/^www\./, "");
+    const own = String(ownHostname || "").toLowerCase().replace(/^www\./, "");
+    if (!hostname) return "unknown";
+    return hostname === own ? "internal" : hostname;
+  } catch { return "unknown"; }
+};
+
 // Свои проверки в аналитику не попадают: сайт, запущенный на компьютере, ходит в ту
 // же базу, что и боевой, и десяток открытий одной карточки при отладке выглядел бы
 // всплеском интереса живых людей.
@@ -158,7 +172,10 @@ export function trackEvent(eventName, details = {}) {
     path:`${window.location.pathname}${window.location.search}`,
     listingId:details.listingId,
     listingTitle:details.listingTitle,
-    properties:details.properties,
+    properties:{
+      ...(details.properties || {}),
+      entrySource:analyticsEntrySource(window.document?.referrer, window.location.hostname),
+    },
     human:humanConfirmed,
     humanAction:humanActed,
   };

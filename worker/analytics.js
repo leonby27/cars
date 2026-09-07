@@ -55,6 +55,7 @@ export function normalizeWorkerEvent(body = {}) {
   // и телефон здесь были бы вторым, подделываемым экземпляром персональных данных.
   const properties = {};
   if (source.source) properties.source = clean(source.source, 40);
+  if (source.entrySource) properties.entrySource = clean(source.entrySource, 160).toLowerCase();
   return {
     eventId,
     visitorId,
@@ -143,7 +144,7 @@ async function dashboard(db, days) {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
   // Список регистраций с контактами живёт только там, где есть таблица аккаунтов
   // (основной хостинг). Здесь остаётся счётчик регистраций без личных данных.
-  const [summary,daily,vehicles,recent] = await Promise.all([
+  const [summary,daily,vehicles,recent,visits] = await Promise.all([
     db.prepare(`SELECT count(DISTINCT visitor_id) AS visitors, count(DISTINCT session_id) AS sessions,
       sum(CASE WHEN event_name='page_view' THEN 1 ELSE 0 END) AS page_views,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS vehicle_views,
@@ -167,6 +168,26 @@ async function dashboard(db, days) {
       GROUP BY listing_id ORDER BY availability_clicks DESC, views DESC LIMIT 30`).bind(cutoff, cutoff).all(),
     db.prepare(`SELECT event_name,listing_id,listing_title,path,created_at
       FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT} AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT}) ORDER BY created_at DESC LIMIT 30`).bind(cutoff, cutoff).all(),
+    db.prepare(`WITH ordered AS (
+        SELECT visitor_id, created_at, path, event_name, properties,
+          lag(created_at) OVER (PARTITION BY visitor_id ORDER BY datetime(created_at)) AS previous_at
+        FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT}
+          AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})
+      ), marked AS (
+        SELECT *, CASE WHEN previous_at IS NULL OR datetime(created_at) > datetime(previous_at, '+30 minutes') THEN 1 ELSE 0 END AS starts_visit
+        FROM ordered
+      ), numbered AS (
+        SELECT *, sum(starts_visit) OVER (PARTITION BY visitor_id ORDER BY datetime(created_at) ROWS UNBOUNDED PRECEDING) AS visit_number
+        FROM marked
+      ), ranked AS (
+        SELECT *, row_number() OVER (PARTITION BY visitor_id, visit_number ORDER BY datetime(created_at)) AS visit_step
+        FROM numbered
+      )
+      SELECT max(CASE WHEN visit_step=1 THEN path END) AS landing_path,
+        max(CASE WHEN visit_step=1 THEN json_extract(properties, '$.entrySource') END) AS entry_source,
+        sum(CASE WHEN event_name='page_view' THEN 1 ELSE 0 END) AS page_views,
+        min(created_at) AS created_at
+      FROM ranked GROUP BY visitor_id, visit_number ORDER BY min(datetime(created_at)) DESC`).bind(cutoff, cutoff).all(),
   ]);
   const safeSummary = Object.fromEntries(Object.entries(summary || {}).map(([key,value]) => [key,Number(value) || 0]));
   return {
@@ -177,6 +198,7 @@ async function dashboard(db, days) {
     vehicles:(vehicles.results || []).map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, availabilityClicks:row.availability_clicks, favorites:row.favorites })),
     registrations:[],
     recent:(recent.results || []).map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),
+    visits:(visits.results || []).map((row) => ({ source:row.entry_source || "", landingPath:row.landing_path || "/", pageViews:Number(row.page_views) || 0, createdAt:row.created_at })),
   };
 }
 

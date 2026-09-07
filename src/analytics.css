@@ -1,3 +1,4 @@
+.analytics-page, .analytics-login { --analytics-block-radius:24px; }
 .analytics-page { width:min(1240px,calc(100% - 48px)); margin-inline:auto; min-height:680px; padding-block:20px 72px; font-size:14px; }
 .analytics-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:20px; }
 .analytics-heading > div:first-child > span, .analytics-login-card > span { color:var(--accent); font-weight:800; }
@@ -12,7 +13,7 @@
 .analytics-range button.active { background:var(--panel); color:var(--accent); box-shadow:0 1px 4px rgba(15,23,42,.08); font-weight:800; }
 .analytics-logout { min-width:112px; min-height:41px; height:41px; padding:0 18px; box-sizing:border-box; font-size:14px; }
 .analytics-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
-.analytics-kpis article, .analytics-panel, .analytics-login-card { border:0; border-radius:calc(20px * var(--corner-scale)); background:var(--panel); }
+.analytics-kpis article, .analytics-panel, .analytics-login-card { border:0; border-radius:var(--analytics-block-radius); background:var(--panel); }
 html[data-theme="light"] .analytics-kpis article,
 html[data-theme="light"] .analytics-panel,
 html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
@@ -22,10 +23,13 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-kpis p { margin:0; margin-top:auto; color:var(--muted); line-height:1.4; }
 /* Три цифры внутри обычной панели — тем же набором, что в блоке автооценки. */
 .analytics-figures { display:flex; gap:22px; margin:0; }
+.analytics-collapse-trigger + .analytics-figures { margin-top:16px; }
 .analytics-figures div { min-width:130px; }
 .analytics-figures dt, .analytics-figures small { color:var(--muted); }
 .analytics-figures dd { margin:3px 0; font-size:24px; font-weight:800; }
 .analytics-panel { margin-top:12px; padding:18px 20px; overflow:hidden; }
+/* У всех крупных блоков один фиксированный радиус. Он не зависит от высоты панели,
+   поэтому раскрытие содержимого не меняет форму углов. */
 .analytics-content .analytics-tabpanel > .analytics-panel:first-child,
 .analytics-search-traffic > .analytics-panel:first-child { margin-top:0; }
 .analytics-panel-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:16px; }
@@ -68,6 +72,13 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-legend i { width:14px; height:14px; border-radius:calc(4px * var(--corner-scale)); background:color-mix(in srgb,var(--accent) 26%,var(--panel)); }
 .analytics-legend span:last-child i { background:var(--accent); }
 .analytics-table-wrap { overflow-x:auto; }
+.analytics-visits-table { margin-top:12px; }
+.analytics-visits-table th:first-child, .analytics-visits-table td:first-child { width:72px; }
+.analytics-visits-table th:nth-child(4), .analytics-visits-table td:nth-child(4),
+.analytics-visits-table th:last-child, .analytics-visits-table td:last-child { white-space:nowrap; }
+.analytics-visit-number { display:inline-grid; min-width:34px; height:24px; place-items:center; padding:0 7px; box-sizing:border-box; border-radius:999px; font-variant-numeric:tabular-nums; }
+.analytics-visit-number.is-unread { background:var(--accent); color:#fff; font-weight:800; }
+.analytics-visit-source-unknown { color:var(--muted); }
 .analytics-panel table { width:100%; border-collapse:collapse; text-align:left; }
 .analytics-panel th, .analytics-panel td { padding:15px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
 .analytics-panel th { color:var(--muted); font-weight:700; }
@@ -102,7 +113,7 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-login-card input { width:100%; height:52px; padding:0 15px; border:1px solid var(--line-strong); border-radius:calc(12px * var(--corner-scale)); background:var(--panel); color:var(--ink); }
 .analytics-login-card input:focus { outline:3px solid var(--focus-ring); border-color:var(--focus-ring); }
 .analytics-error { padding:12px 14px; border-radius:calc(10px * var(--corner-scale)); background:var(--accent-soft); color:var(--accent-dark); }
-.analytics-reset-modal { width:min(520px,calc(100% - 32px)); padding:28px; border:1px solid var(--line); border-radius:calc(20px * var(--corner-scale)); background:var(--panel); box-shadow:0 24px 80px rgba(0,0,0,.22); }
+.analytics-reset-modal { width:min(520px,calc(100% - 32px)); padding:28px; border:1px solid var(--line); border-radius:var(--analytics-block-radius,24px); background:var(--panel); box-shadow:0 24px 80px rgba(0,0,0,.22); }
 .analytics-reset-modal h2 { margin:0 0 10px; font-size:24px; }
 .analytics-reset-modal p { margin:0 0 22px; color:var(--muted); line-height:1.55; }
 .analytics-reset-modal > div:last-child { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
@@ -116,7 +127,7 @@ html[data-theme="dark"] .analytics-kpis article, html[data-theme="dark"] .analyt
    содержимое. Так заявки и счётчики не смешиваются в одну длинную ленту. */
 .analytics-layout { display:grid; grid-template-columns:264px minmax(0,1fr); gap:20px; margin-top:22px; align-items:start; }
 .analytics-side-rail { position:sticky; top:82px; }
-.analytics-sidebar { padding:10px; border:0; border-radius:calc(16px * var(--corner-scale)); background:var(--panel); }
+.analytics-sidebar { padding:10px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); }
 html[data-theme="light"] .analytics-sidebar { border:1px solid var(--line); }
 .analytics-sidebar-user { display:grid; grid-template-columns:38px minmax(0,1fr); gap:10px; align-items:center; padding:6px 6px 13px; border-bottom:1px solid var(--line); }
 .analytics-sidebar-user > b { width:42px; height:42px; display:grid; place-items:center; border-radius:50%; background:var(--ink); color:var(--page); }
@@ -135,7 +146,7 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
    рядом с «Заявками» новостью не является, поэтому оно спокойного цвета. */
 .analytics-navigation button > b.analytics-badge-total { background:var(--line-strong); color:var(--muted); }
 .analytics-sidebar-reset { margin-top:12px; }
-.analytics-sidebar-danger { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:calc(10px * var(--corner-scale)); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }
+.analytics-sidebar-danger { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }
 html[data-theme="light"] .analytics-sidebar-danger { border:1px solid var(--line); }
 .analytics-sidebar-danger:hover { background:var(--accent-soft); color:var(--accent-dark); }
 .analytics-content { min-width:0; }
@@ -149,7 +160,7 @@ html[data-theme="light"] .analytics-sidebar-danger { border:1px solid var(--line
 .lead-search { min-width:min(280px,100%); height:44px; padding:0 14px; border:1px solid var(--line-strong); border-radius:calc(10px * var(--corner-scale)); background:var(--panel); color:var(--ink); }
 .lead-search:focus { outline:3px solid var(--focus-ring); border-color:var(--focus-ring); }
 .lead-list { display:grid; gap:14px; }
-.lead-card { padding:18px; border:1px solid var(--line); border-radius:calc(16px * var(--corner-scale)); background:var(--panel-soft); }
+.lead-card { padding:18px; border:1px solid var(--line); border-radius:var(--analytics-block-radius); background:var(--panel-soft); }
 .lead-card.tone-new { background:color-mix(in srgb,var(--accent) 5%,var(--panel)); }
 .lead-card.tone-hot { background:color-mix(in srgb,var(--green) 9%,var(--panel)); }
 .lead-card-head { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:14px; }

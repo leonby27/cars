@@ -55,6 +55,20 @@ Analytics CRM preference (owner decision, 2026-08-30): `/analytics` is an intern
 
 Analytics period preference (owner decision, 2026-09-07): an ordinary visit to `/analytics` always opens the «Обзор» section with the shared period on «Сегодня». The overview visits chart has its own 90/30/7-day dropdown, defaults to 90 days on the first visit, and remembers that chart choice in the browser without changing the period used by cards, tables, or other sections.
 
+Analytics unread-counter preference (owner decision, 2026-09-07): opening `/analytics` on the default «Обзор» section must not immediately mark its new visits as seen. Fetch and show the existing badge on initial load and refresh; clear/record a section as viewed only after the user explicitly clicks that navigation item.
+
+Analytics vehicle-table preference (owner decision, 2026-09-07): the «Авто», «Модели» and «Избранное» tables default to descending «Просмотр» order, with the most recently viewed or added row first. Explicit header sorting still overrides that order until the user changes the vehicle view.
+
+Analytics visit-details preference (owner decision, 2026-09-07): directly below «Баннер в статьях», the overview shows a collapsible «Заходы» table, open by default, with the visit number, entry source, entry page, page-view count and date. Keep newest visits at the top while numbering the oldest as 1 and incrementing chronologically. Show unread visit numbers in fixed-size red counter pills without layout shift, and render an unavailable source in muted text. Store only the referring domain (never the full referring URL) and keep the entry page clickable.
+
+Analytics disclosure-shape preference (owner decision, 2026-09-07): collapsible overview panels keep the same outer corner radius when opened or closed; expanding content must not visibly change the panel's corner shape.
+
+Analytics block-radius preference (owner decision, 2026-09-07): all major CRM blocks—KPI cards, content panels, sidebar surfaces and lead cards—share one fixed 24px outer radius. Controls and small chips retain their own component-specific radii.
+
+Analytics promo-spacing preference (owner decision, 2026-09-07): when «Баннер в статьях» is expanded, keep a clear 16px vertical gap between its heading row and the three metrics; the collapsed panel height stays unchanged.
+
+Analytics overview disclosure preference (owner decision, 2026-09-07): every entry to the overview starts with «График посещений» expanded and «Баннер в статьях» collapsed. Do not persist those two disclosure states between entries; manual toggles remain available for the current visit.
+
 Search analytics source preference (owner decision, 2026-09-07): the top search-traffic counters use Yandex Metrica organic visits for the total and Google/Yandex split so they are current and directly comparable to one behavioral report. Search Console and Yandex Webmaster remain the source for SEO clicks, queries, impressions, positions and landing pages; always show the latest published date because those sources lag and must not blank the Metrica visit counters.
 
 Analytics missing-data preference (owner decision, 2026-09-07): never turn a missing or not-yet-published external analytics metric into zero. Show «Нет данных» when the provider has not supplied a valid value; show `0` only after a successful report explicitly establishes zero for that period. This applies independently to Metrica visit counters and the delayed Search Console/Webmaster query reports.

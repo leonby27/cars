@@ -2,7 +2,49 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
-import { HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm } from "../src/analytics.js";
+import { analyticsEntrySource, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm } from "../src/analytics.js";
+import { analyticsUpdatesUrl } from "../src/analytics-updates.js";
+
+test("автоматически открытый обзор не гасит счётчик новых посещений", () => {
+  assert.equal(analyticsUpdatesUrl(), "/api/analytics/updates");
+  assert.equal(analyticsUpdatesUrl("overview"), "/api/analytics/updates?viewing=overview");
+  assert.equal(analyticsUpdatesUrl("vehicle_favorites"), "/api/analytics/updates?viewing=vehicle_favorites");
+});
+
+test("таблицы автомобилей по умолчанию сортируются по последнему просмотру", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(source, /useState\(\{ column:"lastViewed", desc:true \}\)/);
+  assert.match(source, /setSort\(\{ column:"lastViewed", desc:true \}\)/);
+});
+
+test("обзор открывает график и сворачивает баннер при каждом входе", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(source, /\[trendOpen, setTrendOpen\] = useState\(true\)/);
+  assert.match(source, /\[open, setOpen\] = useState\(false\)/);
+  assert.doesNotMatch(source, /analytics:(?:trend|promo)-open/);
+});
+
+test("детализация заходов стоит после баннера и тоже открывается по нажатию", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(source, /<PromoSection summary=\{summary\} \/>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{unreadVisits\} \/>/);
+  assert.match(source, /function VisitsSection[\s\S]*?\[open, setOpen\] = useState\(true\)/);
+  for (const heading of ["Номер", "Источник входа", "Страница входа", "Кол-во просмотров", "Дата"]) assert.match(source, new RegExp(`<th>${heading}<\\/th>`));
+  assert.match(source, /newestNumber - index/);
+  assert.match(source, /index < Number\(unread \|\| 0\)/);
+});
+
+test("все крупные блоки аналитики имеют один радиус", async () => {
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  assert.match(styles, /\.analytics-page, \.analytics-login \{ --analytics-block-radius:24px; \}/);
+  assert.match(styles, /\.analytics-kpis article, \.analytics-panel, \.analytics-login-card \{[^}]*border-radius:var\(--analytics-block-radius\)/);
+  assert.match(styles, /\.analytics-sidebar \{[^}]*border-radius:var\(--analytics-block-radius\)/);
+  assert.match(styles, /\.lead-card \{[^}]*border-radius:var\(--analytics-block-radius\)/);
+});
+
+test("у раскрытого баннера есть отступ между заголовком и показателями", async () => {
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  assert.match(styles, /\.analytics-collapse-trigger \+ \.analytics-figures \{ margin-top:16px; \}/);
+});
 
 test("analytics events are allowlisted and drop personal data", () => {
   const event = normalizeAnalyticsEvent({
@@ -20,6 +62,18 @@ test("analytics events are allowlisted and drop personal data", () => {
   for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted"]) {
     assert.equal(normalizeAnalyticsEvent({ eventId:`event-${eventName}`, visitorId:"visitor", sessionId:"session", eventName, path:"/" }).eventName, eventName);
   }
+});
+
+test("источник захода хранится без полного адреса реферера", () => {
+  assert.equal(analyticsEntrySource("", "abcars.by"), "direct");
+  assert.equal(analyticsEntrySource("https://abcars.by/catalog?q=zeekr", "abcars.by"), "internal");
+  assert.equal(analyticsEntrySource("https://www.google.com/search?q=электромобиль", "abcars.by"), "google.com");
+  assert.equal(analyticsEntrySource("not a url", "abcars.by"), "unknown");
+  const event = normalizeAnalyticsEvent({
+    eventId:"entry-1", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/catalog",
+    properties:{ entrySource:" Google.COM ", referrer:"https://google.com/search?q=private" },
+  });
+  assert.deepEqual(event.properties, { entrySource:"google.com" });
 });
 
 test("внутренняя CRM нигде не считается страницей сайта", async () => {

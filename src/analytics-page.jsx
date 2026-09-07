@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CarProfile, ChartLineUp, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
+import { analyticsUpdatesUrl } from "./analytics-updates.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
 // карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
@@ -31,15 +32,6 @@ const formatLeadDate = (value) => {
 const percent = (part, total) => total ? `${(Number(part || 0) / Number(total) * 100).toFixed(1).replace(".", ",")}%` : "0%";
 const average = (part, total) => total ? (Number(part || 0) / Number(total)).toFixed(1).replace(".", ",") : "0";
 const formatUsd = (value) => (Number(value) ? `$${new Intl.NumberFormat("ru-RU").format(Math.round(Number(value)))}` : "");
-const usePersistedBoolean = (key, fallback) => {
-  const [value, setValue] = useState(() => {
-    if (typeof window === "undefined") return fallback;
-    const stored = window.localStorage.getItem(key);
-    return stored === null ? fallback : stored === "true";
-  });
-  useEffect(() => { window.localStorage.setItem(key, String(value)); }, [key, value]);
-  return [value, setValue];
-};
 const usePersistedChoice = (key, choices, fallback) => {
   const [value, setValue] = useState(() => {
     if (typeof window === "undefined") return fallback;
@@ -299,7 +291,7 @@ function TrendPeriodSelect({ value, onChange }) {
   </div>;
 }
 
-function OverviewSection({ data }) {
+function OverviewSection({ data, unreadVisits = 0 }) {
   const summary = data.summary || {};
   const [trendPeriod, setTrendPeriod] = usePersistedChoice("analytics:trend-period", trendPeriodIds, "90");
   const [trendData, setTrendData] = useState(null);
@@ -307,7 +299,7 @@ function OverviewSection({ data }) {
   const [trendError, setTrendError] = useState("");
   const daily = trendData?.period === trendPeriod ? trendData.daily || [] : [];
   const maxDaily = Math.max(1, ...daily.map((item) => Number(item.visitors) || 0));
-  const [trendOpen, setTrendOpen] = usePersistedBoolean("analytics:trend-open", true);
+  const [trendOpen, setTrendOpen] = useState(true);
   useEffect(() => {
     const controller = new AbortController();
     setTrendLoading(true);
@@ -368,6 +360,7 @@ function OverviewSection({ data }) {
         </>}
       </section>
       <PromoSection summary={summary} />
+      <VisitsSection visits={data.visits || []} total={summary.visits} unread={unreadVisits} />
     </>
   );
 }
@@ -381,15 +374,47 @@ function OverviewSection({ data }) {
 function PromoSection({ summary }) {
   const shown = Number(summary.promo_shown) || 0;
   const clicks = Number(summary.promo_clicks) || 0;
-  const [open, setOpen] = usePersistedBoolean("analytics:promo-open", true);
+  const [open, setOpen] = useState(false);
   return (
-    <section className={`analytics-panel ${open ? "" : "is-collapsed"}`}>
+    <section className={`analytics-panel analytics-disclosure ${open ? "" : "is-collapsed"}`}>
       <button className="analytics-collapse-trigger" type="button" aria-label={open ? "Свернуть баннер в статьях" : "Развернуть баннер в статьях"} aria-expanded={open} onClick={() => setOpen((value) => !value)}><span><h2>Баннер в статьях</h2></span><b className="analytics-chevron" aria-hidden="true" /></button>
       {open && <dl className="analytics-figures">
         <div><dt>Показы</dt><dd>{formatNumber(shown)}</dd></div>
         <div><dt>Нажатия</dt><dd>{formatNumber(clicks)}</dd></div>
         <div><dt>Доля нажатий</dt><dd>{percent(clicks, shown)}</dd></div>
       </dl>}
+    </section>
+  );
+}
+
+const visitSourceLabel = (value) => {
+  const source = String(value || "").toLowerCase();
+  if (!source) return "Не определён";
+  if (source === "direct") return "Прямой заход";
+  if (source === "internal") return "Переход по сайту";
+  if (source === "unknown") return "Неизвестный источник";
+  if (/(^|\.)google\./.test(source)) return "Google";
+  if (/(^|\.)yandex\./.test(source)) return "Яндекс";
+  if (/(^|\.)bing\.com$/.test(source)) return "Bing";
+  if (/(^|\.)duckduckgo\.com$/.test(source)) return "DuckDuckGo";
+  if (/(^|\.)instagram\.com$/.test(source)) return "Instagram";
+  if (/(^|\.)facebook\.com$/.test(source)) return "Facebook";
+  if (source === "t.co" || /(^|\.)x\.com$/.test(source)) return "X (Twitter)";
+  if (/(^|\.)vk\.com$/.test(source)) return "ВКонтакте";
+  if (source === "t.me" || /(^|\.)telegram\.(me|org)$/.test(source)) return "Telegram";
+  return source;
+};
+
+function VisitsSection({ visits, total, unread }) {
+  const [open, setOpen] = useState(true);
+  // Свежие строки идут первыми, но номер — место захода во всей хронологии:
+  // самый старый начинается с 1, каждый следующий получает номер больше.
+  const newestNumber = Math.max(visits.length, Number(total) || 0);
+  return (
+    <section className={`analytics-panel analytics-disclosure ${open ? "" : "is-collapsed"}`}>
+      <button className="analytics-collapse-trigger" type="button" aria-label={open ? "Свернуть заходы" : "Развернуть заходы"} aria-expanded={open} onClick={() => setOpen((value) => !value)}><span><h2>Заходы</h2></span><b className="analytics-chevron" aria-hidden="true" /></button>
+      {open && <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник входа</th><th>Страница входа</th><th>Кол-во просмотров</th><th>Дата</th></tr></thead>
+        <tbody>{visits.length ? visits.map((visit, index) => <tr key={`${visit.createdAt}-${visit.landingPath}-${index}`}><td><span className={`analytics-visit-number${index < Number(unread || 0) ? " is-unread" : ""}`}>{newestNumber - index}</span></td><td className={!visit.source || visit.source === "unknown" ? "analytics-visit-source-unknown" : undefined}>{visitSourceLabel(visit.source)}</td><td><a href={visit.landingPath || "/"} target="_blank" rel="noreferrer">{visit.landingPath === "/" ? "Главная" : visit.landingPath || "—"}</a></td><td>{formatNumber(visit.pageViews)}</td><td>{formatDate(visit.createdAt, true)}</td></tr>) : <tr><td colSpan="5">За выбранный период заходов пока нет.</td></tr>}</tbody></table></div>}
     </section>
   );
 }
@@ -404,7 +429,8 @@ const modelTitle = (title) => String(title || "").replace(/\s+\d{4}\s*$/, "").tr
 
 function VehiclesSection({ data, updates, markViewed }) {
   const [mode, setMode] = useState("cars");
-  const [sort, setSort] = useState({ column:"views", desc:true });
+  // Во всех представлениях сначала показываем то, что смотрели последним.
+  const [sort, setSort] = useState({ column:"lastViewed", desc:true });
   const [visible, setVisible] = useState(20);
   const models = useMemo(() => Object.values((data.vehicles || []).reduce((grouped, item) => {
     const title = modelTitle(item.listingTitle);
@@ -444,7 +470,7 @@ function VehiclesSection({ data, updates, markViewed }) {
   }, [mode, sources.models, sources.cars, sources.favorites, columns, sort]);
   const setVehicleMode = (nextMode) => {
     setMode(nextMode); setVisible(20);
-    setSort({ column:nextMode === "favorites" ? "lastViewed" : "views", desc:true });
+    setSort({ column:"lastViewed", desc:true });
     if (nextMode === "cars" || nextMode === "favorites") markViewed(`vehicle_${nextMode}`);
   };
   const toggleSort = (column) => setSort((current) => current.column === column.id ? { column:column.id, desc:!current.desc } : { column:column.id, desc:!column.text });
@@ -621,16 +647,14 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
   // цифры на компьютере.
   const [updates, setUpdates] = useState({});
-  const sectionRef = useRef(section);
-  sectionRef.current = section;
-  const loadUpdates = useCallback(async (viewing = sectionRef.current) => {
+  const loadUpdates = useCallback(async (viewing = "") => {
     try {
-      const response = await fetch(`/api/analytics/updates?viewing=${encodeURIComponent(viewing)}`, { credentials:"same-origin" });
+      const response = await fetch(analyticsUpdatesUrl(viewing), { credentials:"same-origin" });
       if (response.ok) setUpdates(await response.json());
     } catch { /* счётчики — не повод ломать раздел */ }
   }, []);
-  // Открытый пункт считается просмотренным всё время, пока он открыт, — как
-  // непрочитанные сообщения в чате: смотришь на них, и они перестают гореть.
+  // Автоматически открытый «Обзор» ещё не означает, что пользователь успел
+  // заметить новое. Прочитанным раздел становится только после явного нажатия.
   const openSection = (id) => {
     setSection(id);
     // Цифру гасим сразу, не дожидаясь ответа сервера.
@@ -641,7 +665,8 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
     setUpdates((current) => ({ ...current, [id]:0 }));
     loadUpdates(id);
   };
-  // Считаем заново при каждом обновлении среза: и при заходе, и после кнопки «обновить».
+  // При входе и обновлении только получаем цифры, не отмечая открытый по умолчанию
+  // «Обзор» прочитанным.
   useEffect(() => { loadUpdates(); }, [data, leads, loadUpdates]);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -694,7 +719,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
         </div>
 
         <div className="analytics-content">
-          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} unreadVisits={updates.overview} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} updates={updates} markViewed={markViewed} /></div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
