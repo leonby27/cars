@@ -195,10 +195,13 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
 .analytics-search-traffic { display: grid; gap: 20px; min-width: 0; }
 .analytics-search-traffic .analytics-kpis { margin: 20px 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .analytics-search-traffic .analytics-kpis article { border:1px solid var(--line-strong) !important; }
+.analytics-search-traffic .analytics-kpis strong.analytics-no-data { font-size:18px; letter-spacing:0; }
 .analytics-search-status { margin:-8px 0 18px; color:var(--muted); }
 .analytics-search-traffic > .analytics-panel > .analytics-panel-heading > .secondary { padding-inline:24px; }
 .analytics-search-traffic .analytics-two-column { align-items: start; }
 .analytics-search-traffic td:first-child { overflow-wrap: anywhere; }
+.analytics-position-change.is-improved { color:var(--green); font-weight:750; }
+.analytics-position-change.is-worsened { color:var(--accent); font-weight:750; }
 .analytics-search-traffic > .analytics-range { justify-self: start; }
 .analytics-search-tables > .analytics-range { justify-self:start; }
 .analytics-show-more { display:block; margin:14px auto 0; padding:8px 14px; border:1px solid var(--line-strong); border-radius:calc(9px * var(--corner-scale)); background:transparent; color:var(--ink); font-weight:700; }

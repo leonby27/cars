@@ -279,6 +279,16 @@ const metrikaSettings = (env) => ({
   counter:String(env.YANDEX_METRIKA_COUNTER_ID || '111868764').trim(),
   token:String(env.YANDEX_METRIKA_TOKEN || '').trim(),
 });
+const metrikaNumber = (value) => {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, number) : null;
+};
+const unavailableMetrikaReport = (range, status = 'pending') => ({
+  status, period:range.period, from:range.startDate, to:range.endDate,
+  visits:null, users:null,
+  google:{ visits:null, users:null }, yandex:{ visits:null, users:null },
+});
 
 // Оперативные переходы берём из одного поведенческого источника — Метрики. Так
 // общий счётчик и разбивка Google/Яндекс означают визиты, а не смесь кликов двух
@@ -300,19 +310,29 @@ export async function fetchMetrikaSearchTraffic(env, period, { now = Date.now(),
   try {
     const result = await searchJson(fetcher, `https://api-metrika.yandex.net/stat/v1/data?${params}`, { headers:{ Authorization:`OAuth ${token}` } });
     if (!Array.isArray(result.data) || !Array.isArray(result.totals)) throw new Error('upstream_unavailable');
+    const visits = metrikaNumber(result.totals[0]);
+    const users = metrikaNumber(result.totals[1]);
+    if (visits == null || users == null) return unavailableMetrikaReport(range);
+    let complete = true;
     const engines = result.data.reduce((totals, row) => {
       const id = String(row.dimensions?.[0]?.id || '').toLowerCase();
       const engine = id === 'google' || id.startsWith('google_') ? 'google'
         : id === 'yandex' || id.startsWith('yandex_') ? 'yandex' : '';
       if (engine) {
-        totals[engine].visits += searchNumber(row.metrics?.[0]);
-        totals[engine].users += searchNumber(row.metrics?.[1]);
+        const engineVisits = metrikaNumber(row.metrics?.[0]);
+        const engineUsers = metrikaNumber(row.metrics?.[1]);
+        if (engineVisits == null || engineUsers == null) complete = false;
+        else {
+          totals[engine].visits += engineVisits;
+          totals[engine].users += engineUsers;
+        }
       }
       return totals;
     }, { google:{ visits:0, users:0 }, yandex:{ visits:0, users:0 } });
+    if (!complete) return unavailableMetrikaReport(range);
     return {
       status:'ready', period:range.period, from:range.startDate, to:range.endDate,
-      visits:searchNumber(result.totals[0]), users:searchNumber(result.totals[1]),
+      visits, users,
       google:engines.google,
       yandex:engines.yandex,
     };

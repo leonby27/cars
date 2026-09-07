@@ -487,7 +487,7 @@ function SearchTrafficTable({ title, rows, status, availableTo, source, pages = 
     { id:'count', label:'Клики', value:(row) => Number(row.count) || 0 },
     { id:'impressions', label:'Показы', value:(row) => Number(row.impressions) || 0 },
     { id:'position', label:'Средняя позиция', value:(row) => row.position == null ? -Infinity : Number(row.position) },
-    { id:'positionChange', label:'Изменение', value:(row) => row.positionChange == null ? -Infinity : Number(row.positionChange) },
+    { id:'positionChange', label:'Позиция', value:(row) => row.positionChange == null ? -Infinity : Number(row.positionChange) },
   ];
   const sortedRows = useMemo(() => (rows || []).filter((row) => !withClicks || Number(row.count) > 0).sort((left, right) => {
     const column = columns.find((item) => item.id === sort.id) || columns[0];
@@ -506,7 +506,7 @@ function SearchTrafficTable({ title, rows, status, availableTo, source, pages = 
           <td>{formatNumber(row.count)}</td>
           <td>{row.impressions == null ? '—' : formatNumber(row.impressions)}</td>
           <td>{row.position == null ? '—' : row.position.toLocaleString('ru-RU', { maximumFractionDigits:1 })}</td>
-          <td title={row.positionChange == null ? 'Недостаточно сопоставимых данных за оба периода' : `Ранее: ${row.previousPosition.toLocaleString('ru-RU', { maximumFractionDigits:1 })}`}>
+          <td className={`analytics-position-change${row.positionChange == null || Math.abs(row.positionChange) < 0.05 ? '' : row.positionChange > 0 ? ' is-improved' : ' is-worsened'}`} title={row.positionChange == null ? 'Недостаточно сопоставимых данных за оба периода' : `Ранее: ${row.previousPosition.toLocaleString('ru-RU', { maximumFractionDigits:1 })}`}>
             {row.positionChange == null ? '—' : Math.abs(row.positionChange) < 0.05 ? '0' : `${row.positionChange > 0 ? '↑' : '↓'} ${Math.abs(row.positionChange).toLocaleString('ru-RU', { maximumFractionDigits:1 })}`}
           </td>
         </tr>) : <tr><td colSpan={columns.length}>За этот период доступных данных пока нет.</td></tr>}</tbody></table></div>{visible < sortedRows.length && <button className="analytics-show-more" type="button" onClick={() => setVisible((count) => count + 20)}>Показать ещё</button>}</>}
@@ -514,11 +514,13 @@ function SearchTrafficTable({ title, rows, status, availableTo, source, pages = 
 }
 
 function SearchLandingLink({ value }) {
+  const path = String(value || '').trim();
+  if (path.startsWith('/')) return <a href={path} target="_blank" rel="noopener noreferrer">{path}</a>;
   try {
-    const url = new URL(value);
+    const url = new URL(path);
     if (['http:', 'https:'].includes(url.protocol)) return <a href={url.href} target="_blank" rel="noopener noreferrer">{url.pathname}{url.search}</a>;
   } catch { /* Missing or invalid upstream URL is plain text. */ }
-  return value || 'Страница не определена';
+  return path || 'Страница не определена';
 }
 
 function SearchTrafficSection({ period, active }) {
@@ -561,8 +563,8 @@ function SearchTrafficSection({ period, active }) {
       {report && <>
         <section className="analytics-kpis" aria-label="Переходы из поиска">{[
           ['Всего из поиска', metrikaReady ? metrika.visits : null], ['Google', metrikaReady ? metrika.google?.visits : null], ['Яндекс', metrikaReady ? metrika.yandex?.visits : null],
-        ].map(([label, value]) => <article key={label}><span>{label}</span><strong>{value == null ? '—' : formatNumber(value)}</strong></article>)}</section>
-        {!metrikaReady && <p className="analytics-search-status" role="status">{metrika?.status === 'error' ? 'Метрика временно не отдала данные.' : 'Для оперативных визитов нужен доступ к API Метрики.'}</p>}
+        ].map(([label, value]) => <article key={label}><span>{label}</span><strong className={value == null ? 'analytics-no-data' : ''}>{value == null ? 'Нет данных' : formatNumber(value)}</strong></article>)}</section>
+        {!metrikaReady && <p className="analytics-search-status" role="status">{metrika?.status === 'error' ? 'Метрика временно не отдала данные.' : metrika?.status === 'pending' ? 'Данные Метрики за этот период ещё не готовы.' : 'Для оперативных визитов нужен доступ к API Метрики.'}</p>}
       </>}
     </section>
     {report && <>

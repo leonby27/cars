@@ -62,6 +62,17 @@ test('Metrika provides one comparable visit total and Google/Yandex split', asyn
 test('Metrika is explicit when read access is missing', async () => {
   assert.deepEqual(await fetchMetrikaSearchTraffic({}, 'today', { now, fetcher:() => assert.fail('external request') }), { status:'not_connected' });
 });
+test('Metrika distinguishes unavailable metrics from a confirmed zero', async () => {
+  const settings = { YANDEX_METRIKA_TOKEN:'reader', YANDEX_METRIKA_COUNTER_ID:'111868764' };
+  const zeroGoogle = await fetchMetrikaSearchTraffic(settings, 'today', { now, fetcher:async () => json({
+    totals:[6, 5], data:[{ dimensions:[{ id:'yandex_search' }], metrics:[6, 5] }],
+  }) });
+  assert.equal(zeroGoogle.status, 'ready');
+  assert.equal(zeroGoogle.google.visits, 0);
+  const unavailable = await fetchMetrikaSearchTraffic(settings, 'today', { now, fetcher:async () => json({ totals:[null, null], data:[] }) });
+  assert.deepEqual(unavailable, { status:'pending', period:'today', from:'2026-09-08', to:'2026-09-08', visits:null, users:null,
+    google:{ visits:null, users:null }, yandex:{ visits:null, users:null } });
+});
 test('Google refreshes privately, gets separate totals/queries/pages, excludes CRM and fills published gaps', async () => {
   const result = await fetchGoogleSearchDays(env, { now, days:7, fetcher:async (url, options) => {
     if (String(url).includes('oauth2')) { assert.equal(options.body.get('refresh_token'), 'private-refresh'); return json({ access_token:'temporary' }); }
