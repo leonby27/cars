@@ -22,6 +22,7 @@
     "db:expire": "node scripts/db-expire.mjs",
     "db:estimates": "node scripts/backfill-estimates.mjs",
     "snapshot:prices": "node scripts/backfill-estimates.mjs && node scripts/snapshot-prices.mjs",
+    "snapshot:analytics": "node scripts/snapshot-production-analytics.mjs",
     "db:engine": "node scripts/backfill-engine.mjs",
     "db:bodies": "node scripts/fix-body-types.mjs",
     "db:models": "node scripts/fix-model-names.mjs",

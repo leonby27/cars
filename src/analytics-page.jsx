@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CarProfile, ChartLineUp, MagnifyingGlass, ShieldCheck, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
+import { CarProfile, ChartLineUp, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
 // карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
@@ -31,6 +31,15 @@ const formatLeadDate = (value) => {
 const percent = (part, total) => total ? `${(Number(part || 0) / Number(total) * 100).toFixed(1).replace(".", ",")}%` : "0%";
 const average = (part, total) => total ? (Number(part || 0) / Number(total)).toFixed(1).replace(".", ",") : "0";
 const formatUsd = (value) => (Number(value) ? `$${new Intl.NumberFormat("ru-RU").format(Math.round(Number(value)))}` : "");
+const usePersistedBoolean = (key, fallback) => {
+  const [value, setValue] = useState(() => {
+    if (typeof window === "undefined") return fallback;
+    const stored = window.localStorage.getItem(key);
+    return stored === null ? fallback : stored === "true";
+  });
+  useEffect(() => { window.localStorage.setItem(key, String(value)); }, [key, value]);
+  return [value, setValue];
+};
 // Фотохранилище Che168 отдаёт снимок любой ширины: она стоит в адресе перед именем
 // файла. В списке заявок фото размером с ноготь, полноразмерный кадр здесь ни к чему.
 const leadPhoto = (source, width = 240) => {
@@ -111,31 +120,6 @@ function Login({ onSuccess }) {
       </section>
     </main>
   );
-}
-
-function Viability({ summary }) {
-  const visitors = Number(summary.visitors) || 0;
-  const clicks = Number(summary.availability_clicks) || 0;
-  const leads = (Number(summary.registrations) || 0) + (Number(summary.custom_searches) || 0);
-  const clickRate = visitors ? clicks / visitors * 100 : 0;
-  const leadRate = visitors ? leads / visitors * 100 : 0;
-  let tone = "neutral";
-  let title = "Данных пока мало";
-  let text = `Нужно ещё ${Math.max(0, 100 - visitors)} уникальных посетителей, чтобы делать первый вывод без лишней уверенности.`;
-  if (visitors >= 100 && clickRate >= 8 && leadRate >= 3) {
-    tone = "positive";
-    title = "MVP показывает жизнеспособный спрос";
-    text = "И интерес к конкретным автомобилям, и переход к контакту выше стартовых ориентиров. Можно продолжать трафик и проверять качество лидов звонками.";
-  } else if (visitors >= 100 && (clickRate >= 4 || leadRate >= 1)) {
-    tone = "watch";
-    title = "Есть сигнал, но гипотезу рано подтверждать";
-    text = "Пользователи проявляют интерес, но одна из частей воронки проседает. Смотрите автомобили-лидеры и источник потери между просмотром и контактом.";
-  } else if (visitors >= 100) {
-    tone = "negative";
-    title = "Спрос пока не подтверждён";
-    text = "После достаточного объёма трафика намерение остаётся низким. Стоит проверить оффер, цены, качество аудитории и доверие к объявлению до масштабирования.";
-  }
-  return <section className={`analytics-viability ${tone}`}><div><span>Автооценка</span><h2>{title}</h2><p>{text}</p></div><dl><div><dt>Клик в интерес</dt><dd>{clickRate.toFixed(1).replace(".", ",")}%</dd><small>ориентир от 8%</small></div><div><dt>Конверсия в лид</dt><dd>{leadRate.toFixed(1).replace(".", ",")}%</dd><small>ориентир от 3%</small></div></dl></section>;
 }
 
 function ResetAnalyticsModal({ pending, error, onCancel, onConfirm }) {
@@ -263,6 +247,11 @@ function OverviewSection({ data }) {
   const summary = data.summary || {};
   const daily = data.daily || [];
   const maxDaily = Math.max(1, ...daily.map((item) => Number(item.visitors) || 0));
+  const [trendOpen, setTrendOpen] = usePersistedBoolean("analytics:trend-open", true);
+  const chart = useMemo(() => daily.map((item, index) => {
+    const x = daily.length > 1 ? 24 + index / (daily.length - 1) * 952 : 500;
+    return { ...item, x, visitorsY:196 - Number(item.visitors || 0) / maxDaily * 164 };
+  }), [daily, maxDaily]);
   // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
   // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
   const cards = [
@@ -272,8 +261,8 @@ function OverviewSection({ data }) {
     // человеком не считается: его выжидает обходчик, чтобы сойти за посетителя.
     // Заход — не вкладка: человек, вернувшийся вечером, считается вторым заходом, а
     // три карточки, открытые в трёх вкладках подряд, остаются одним.
-    ["Уникальные посетители", summary.visitors, `${formatNumber(summary.visits)} заходов${Number(summary.robot_visits) ? ` · ещё ${formatNumber(summary.robot_visits)} без действий` : ""}`],
-    ["Просмотры автомобилей", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
+    ["Заходы", summary.visits, `${formatNumber(summary.visitors)} уникальных${Number(summary.robot_visits) ? ` · ещё ${formatNumber(summary.robot_visits)} без действий` : ""}`],
+    ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
     // Машины, добавленные в кабинет: человек нажал в карточке «Уточнить актуальность»,
     // вошёл в кабинет и там завёлся заказ. Считаем по самим заказам, а не по нажатию:
     // нажатие бывает и у тех, кто ушёл на входе. Рядом мелким — заявки, оставленные
@@ -286,14 +275,19 @@ function OverviewSection({ data }) {
   return (
     <>
       <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}</section>
-      <Viability summary={summary} />
-      <section className="analytics-panel analytics-trend">
-        <div className="analytics-panel-heading"><div><h2>Динамика интереса</h2><p>Уникальные посетители и ключевые действия по дням</p></div></div>
-        {daily.length ? <div className="analytics-bars">{daily.map((item) => {
-          const actions = Number(item.availability_clicks || 0) + Number(item.availability_requests || 0) + Number(item.registrations || 0) + Number(item.custom_searches || 0);
-          return <div className="analytics-bar-column" key={item.day} title={`${formatDate(item.day)}: ${item.visitors || 0} посетителей, ${actions} целевых действий`}><div className="analytics-bar-track"><i style={{ height:`${Math.max(5, Number(item.visitors || 0) / maxDaily * 100)}%` }} /><b style={{ height:`${Math.min(100, actions / maxDaily * 100)}%` }} /></div><span>{formatDate(item.day)}</span></div>;
-        })}</div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
-        <div className="analytics-legend"><span><i />Посетители</span><span><i />Целевые действия</span></div>
+      <section className={`analytics-panel analytics-trend ${trendOpen ? "" : "is-collapsed"}`}>
+        <button className="analytics-collapse-trigger" type="button" aria-label={trendOpen ? "Свернуть график посещений" : "Развернуть график посещений"} aria-expanded={trendOpen} onClick={() => setTrendOpen((open) => !open)}>
+          <span><h2>График посещений</h2></span><b className="analytics-chevron" aria-hidden="true" />
+        </button>
+        {trendOpen && <>{daily.length ? <div className="analytics-line-chart" role="img" aria-label="График заходов по дням">
+          <svg viewBox="0 0 1000 220" preserveAspectRatio="none" aria-hidden="true">
+            {[32,87,142,196].map((y) => <line key={y} className="analytics-chart-grid" x1="24" x2="976" y1={y} y2={y} />)}
+            <polyline className="analytics-chart-line analytics-chart-visitors" points={chart.map((item) => `${item.x},${item.visitorsY}`).join(" ")} />
+            {chart.map((item) => <circle key={item.day} className="analytics-chart-dot analytics-chart-visitors" cx={item.x} cy={item.visitorsY} r="5" />)}
+          </svg>
+          <div className="analytics-chart-labels">{chart.map((item) => <span key={item.day} title={`${formatDate(item.day)}: ${item.visitors || 0} заходов`}>{formatDate(item.day)}</span>)}</div>
+        </div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
+        </>}
       </section>
       <PromoSection summary={summary} />
     </>
@@ -309,68 +303,83 @@ function OverviewSection({ data }) {
 function PromoSection({ summary }) {
   const shown = Number(summary.promo_shown) || 0;
   const clicks = Number(summary.promo_clicks) || 0;
-  const people = Number(summary.promo_click_people) || 0;
+  const [open, setOpen] = usePersistedBoolean("analytics:promo-open", true);
   return (
-    <section className="analytics-panel">
-      <div className="analytics-panel-heading"><div><h2>Баннер в статьях</h2><p>Врезка со ссылкой в каталог после первого абзаца материала журнала. Показ засчитывается, когда врезку довели до экрана</p></div></div>
-      <dl className="analytics-figures">
-        <div><dt>Показы</dt><dd>{formatNumber(shown)}</dd><small>дочитали до врезки</small></div>
-        <div><dt>Нажатия</dt><dd>{formatNumber(clicks)}</dd><small>{formatNumber(people)} человек</small></div>
-        <div><dt>Доля нажатий</dt><dd>{percent(clicks, shown)}</dd><small>от показов</small></div>
-      </dl>
-      {shown ? null : <p className="analytics-note">Показов ещё не было: либо до врезки не доходили, либо она только что появилась на сайте.</p>}
+    <section className={`analytics-panel ${open ? "" : "is-collapsed"}`}>
+      <button className="analytics-collapse-trigger" type="button" aria-label={open ? "Свернуть баннер в статьях" : "Развернуть баннер в статьях"} aria-expanded={open} onClick={() => setOpen((value) => !value)}><span><h2>Баннер в статьях</h2></span><b className="analytics-chevron" aria-hidden="true" /></button>
+      {open && <dl className="analytics-figures">
+        <div><dt>Показы</dt><dd>{formatNumber(shown)}</dd></div>
+        <div><dt>Нажатия</dt><dd>{formatNumber(clicks)}</dd></div>
+        <div><dt>Доля нажатий</dt><dd>{percent(clicks, shown)}</dd></div>
+      </dl>}
     </section>
   );
 }
 
-// Колонки таблицы «Интерес по автомобилям»: каждую можно поставить во главу сортировки.
-const vehicleColumns = [
-  { id:"title", label:"Автомобиль", text:true, value:(item) => item.listingTitle || listingNumber(item.listingId) || "" },
-  { id:"viewers", label:"Люди", value:(item) => Number(item.viewers) || 0 },
-  { id:"views", label:"Просмотры", value:(item) => Number(item.views) || 0 },
-  { id:"asks", label:"Уточнения", value:(item) => Number(item.availabilityClicks) || 0 },
-  { id:"checks", label:"Проверка", value:(item) => Number(item.availabilityRequests) || 0 },
-  { id:"favorites", label:"Избранное", value:(item) => Number(item.favorites) || 0 },
-  { id:"conversion", label:"Конверсия", value:(item) => (Number(item.views) ? (Number(item.availabilityClicks) || 0) / Number(item.views) : 0) },
-  { id:"lastViewed", label:"Последний просмотр", value:(item) => (item.lastViewedAt ? new Date(item.lastViewedAt).getTime() || 0 : 0) },
+const vehicleModes = [
+  { id:"models", label:"Модели" },
+  { id:"cars", label:"Авто" },
+  { id:"favorites", label:"Избранное" },
 ];
 
-function VehiclesSection({ data }) {
-  // По умолчанию сверху то, что смотрели последним: раздел открывают, чтобы увидеть
-  // свежий интерес, а рейтинг за весь период собирается кликом по нужному столбцу.
-  const [sort, setSort] = useState({ column:"lastViewed", desc:true });
-  const rows = useMemo(() => {
-    const column = vehicleColumns.find((item) => item.id === sort.column) || vehicleColumns[0];
-    const direction = sort.desc ? -1 : 1;
-    return [...(data.vehicles || [])].sort((left, right) => {
-      const a = column.value(left);
-      const b = column.value(right);
-      if (column.text) return String(a).localeCompare(String(b), "ru") * direction;
-      return (a === b ? 0 : a < b ? -1 : 1) * direction;
-    });
-  }, [data.vehicles, sort]);
-  // Первый клик по столбцу ставит осмысленный порядок: у чисел и дат — от большего,
-  // у названия — по алфавиту. Повторный клик переворачивает.
-  const toggle = (id) => setSort((current) => (current.column === id ? { column:id, desc:!current.desc } : { column:id, desc:id !== "title" }));
-  return (
-    <section className="analytics-panel">
-      <div className="analytics-panel-heading"><div><h2>Интерес по автомобилям</h2><p>Сверху то, что открывали последним. Нажатие на заголовок столбца меняет порядок. «Люди» — сколько разных посетителей открывали карточку; «просмотры» считают каждое открытие</p></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr>{vehicleColumns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggle(column.id)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : ""}</span></button></th>)}</tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId}><td><a href={carHref(item.listingId)}>{item.listingTitle || listingNumber(item.listingId)}</a></td><td>{formatNumber(item.viewers ?? 0)}</td><td>{formatNumber(item.views)}</td><td>{formatNumber(item.availabilityClicks)}</td><td>{formatNumber(item.availabilityRequests ?? 0)}</td><td>{formatNumber(item.favorites)}</td><td>{percent(item.availabilityClicks, item.views)}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></tr>) : <tr><td colSpan={vehicleColumns.length}>Событий по автомобилям пока нет.</td></tr>}</tbody></table></div>
-      <FavoritesPanel favorites={data.favorites} />
-    </section>
-  );
-}
+const modelTitle = (title) => String(title || "").replace(/\s+\d{4}\s*$/, "").trim() || title || "—";
 
-// Что лежит в избранном прямо сейчас, а не сколько раз нажимали сердечко: строка
-// исчезает, когда машину убрали из избранного, и не зависит от выбранного периода.
-function FavoritesPanel({ favorites }) {
-  const rows = favorites || [];
-  return (
-    <div className="analytics-subpanel">
-      <div className="analytics-panel-heading"><div><h2>Сейчас в избранном</h2><p>Машины, отложенные зарегистрированными посетителями. У гостя без входа в кабинет избранное остаётся в его браузере и сюда не попадает</p></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr><th>Автомобиль</th><th>Людей</th><th>Состояние</th><th>Отложили</th></tr></thead><tbody>{rows.length ? rows.map((item) => <tr key={item.listingId} className={item.gone || item.status === "unavailable" ? "analytics-row-warning" : undefined}><td><a href={carHref(item.listingId)}>{item.listingTitle}</a>{item.priceUsd ? <span className="analytics-note"> · {formatUsd(item.priceUsd)}</span> : null}</td><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{formatLeadDate(item.addedAt)}</td></tr>) : <tr><td colSpan="4">Избранного пока нет.</td></tr>}</tbody></table></div>
-    </div>
-  );
+function VehiclesSection({ data }) {
+  const [mode, setMode] = useState("models");
+  const [sort, setSort] = useState({ column:"views", desc:true });
+  const [visible, setVisible] = useState(20);
+  const models = useMemo(() => Object.values((data.vehicles || []).reduce((grouped, item) => {
+    const title = modelTitle(item.listingTitle);
+    const row = grouped[title] || { id:title, title, viewers:0, views:0, lastViewedAt:null };
+    row.viewers += Number(item.viewers) || 0;
+    row.views += Number(item.views) || 0;
+    if (!row.lastViewedAt || new Date(item.lastViewedAt).getTime() > new Date(row.lastViewedAt).getTime()) row.lastViewedAt = item.lastViewedAt;
+    grouped[title] = row;
+    return grouped;
+  }, {})), [data.vehicles]);
+  const sources = {
+    models,
+    cars:(data.vehicles || []).map((item) => ({ ...item, id:item.listingId, title:item.listingTitle || listingNumber(item.listingId), asks:item.availabilityClicks })),
+    favorites:(data.favorites || []).map((item) => ({ ...item, id:item.listingId, title:item.listingTitle || listingNumber(item.listingId), lastViewedAt:item.addedAt })),
+  };
+  const columns = mode === "favorites"
+    ? [
+      { id:"title", label:"Автомобиль", text:true, value:(item) => item.title || "" },
+      { id:"people", label:"Люди", value:(item) => Number(item.people) || 0 },
+      { id:"status", label:"Статус", text:true, value:(item) => item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже" },
+      { id:"lastViewed", label:"Просмотр", value:(item) => item.lastViewedAt ? new Date(item.lastViewedAt).getTime() || 0 : 0 },
+    ]
+    : [
+      { id:"title", label:mode === "models" ? "Модель" : "Автомобиль", text:true, value:(item) => item.title || "" },
+      { id:"viewers", label:"Люди", value:(item) => Number(item.viewers) || 0 },
+      { id:"views", label:"Просмотры", value:(item) => Number(item.views) || 0 },
+      ...(mode === "cars" ? [{ id:"asks", label:"Уточнения", value:(item) => Number(item.asks) || 0 }] : []),
+      { id:"lastViewed", label:"Просмотр", value:(item) => item.lastViewedAt ? new Date(item.lastViewedAt).getTime() || 0 : 0 },
+    ];
+  const rows = useMemo(() => {
+    const column = columns.find((item) => item.id === sort.column) || columns[0];
+    const direction = sort.desc ? -1 : 1;
+    return [...sources[mode]].sort((left, right) => {
+      const a = column.value(left); const b = column.value(right);
+      return (column.text ? String(a).localeCompare(String(b), "ru") : (a === b ? 0 : a < b ? -1 : 1)) * direction;
+    });
+  }, [mode, sources.models, sources.cars, sources.favorites, columns, sort]);
+  const setVehicleMode = (nextMode) => {
+    setMode(nextMode); setVisible(20);
+    setSort({ column:nextMode === "favorites" ? "lastViewed" : "views", desc:true });
+  };
+  const toggleSort = (column) => setSort((current) => current.column === column.id ? { column:column.id, desc:!current.desc } : { column:column.id, desc:!column.text });
+  return <section className="analytics-panel" aria-label="Автомобили">
+    <div className="analytics-panel-heading analytics-vehicles-heading"><div className="analytics-range" aria-label="Представление автомобилей">
+      {vehicleModes.map((item) => <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}</button>)}
+    </div></div>
+    <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
+      <tbody>{rows.length ? rows.slice(0, visible).map((item) => <tr key={item.id} className={mode === "favorites" && (item.gone || item.status === "unavailable") ? "analytics-row-warning" : undefined}>
+        <td>{mode === "models" ? item.title : <a href={carHref(item.listingId)}>{item.title}</a>}</td>
+        {mode === "favorites" ? <><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></> : <><td>{formatNumber(item.viewers)}</td><td>{formatNumber(item.views)}</td>{mode === "cars" && <td>{formatNumber(item.asks)}</td>}<td>{item.lastViewedAt ? formatLeadDate(item.lastViewedAt) : "—"}</td></>}
+      </tr>) : <tr><td colSpan={columns.length}>{mode === "favorites" ? "Избранного пока нет." : "Событий по автомобилям пока нет."}</td></tr>}</tbody></table></div>
+    {visible < rows.length && <button className="analytics-show-more" type="button" onClick={() => setVisible((count) => count + 20)}>Показать ещё</button>}
+  </section>;
 }
 
 function SearchesSection({ data }) {
@@ -385,12 +394,31 @@ function SearchesSection({ data }) {
 }
 
 
-function SearchTrafficTable({ title, rows, unit, status, pages = false }) {
+function SearchTrafficTable({ title, rows, status, pages = false }) {
+  const [withClicks, setWithClicks] = useState(false);
+  const [sort, setSort] = useState({ id:'count', desc:true });
+  const [visible, setVisible] = useState(20);
+  useEffect(() => { setVisible(20); }, [rows, withClicks, sort]);
+  const columns = [
+    { id:'value', label:pages ? 'Страница входа' : 'Поисковый запрос', value:(row) => String(row.value || '') },
+    ...(pages ? [{ id:'engine', label:'Поисковик', value:(row) => row.engine || '' }] : []),
+    { id:'count', label:'Клики', value:(row) => Number(row.count) || 0 },
+    { id:'impressions', label:'Показы', value:(row) => Number(row.impressions) || 0 },
+    { id:'position', label:'Средняя позиция', value:(row) => row.position == null ? -Infinity : Number(row.position) },
+    { id:'positionChange', label:'Изменение', value:(row) => row.positionChange == null ? -Infinity : Number(row.positionChange) },
+  ];
+  const sortedRows = useMemo(() => (rows || []).filter((row) => !withClicks || Number(row.count) > 0).sort((left, right) => {
+    const column = columns.find((item) => item.id === sort.id) || columns[0];
+    const a = column.value(left); const b = column.value(right);
+    const compared = typeof a === 'string' ? a.localeCompare(String(b), 'ru') : a - b;
+    return compared * (sort.desc ? -1 : 1);
+  }), [rows, withClicks, sort]);
+  const toggleSort = (id) => setSort((current) => current.id === id ? { id, desc:!current.desc } : { id, desc:id !== 'value' && id !== 'engine' });
   return <section className="analytics-panel">
-    <div className="analytics-panel-heading"><h2>{title}</h2></div>
+    <div className="analytics-panel-heading"><h2>{title}</h2><div className="analytics-range" aria-label={`Фильтр ${title}`}><button type="button" className={!withClicks ? 'active' : ''} onClick={() => setWithClicks(false)}>Все</button><button type="button" className={withClicks ? 'active' : ''} onClick={() => setWithClicks(true)}>С кликами</button></div></div>
     {status !== 'ready' ? <p role="status">{status === 'not_connected' ? 'Источник ещё не подключён.' : status === 'pending' ? 'За этот период данные ещё не накоплены.' : 'Хранилище отчётов пока недоступно.'}</p>
-      : <div className="analytics-table-wrap"><table><thead><tr><th>{pages ? 'Страница входа' : 'Поисковый запрос'}</th>{pages && <th>Поисковик</th>}<th>{unit}</th><th>Показы</th><th>Средняя позиция</th><th>Изменение</th></tr></thead>
-        <tbody>{rows?.length ? rows.map((row, index) => <tr key={`${row.engine}-${row.value}-${index}`}>
+      : <><div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id}><button type="button" className={`analytics-sort ${sort.id === column.id ? 'active' : ''}`} onClick={() => toggleSort(column.id)}>{column.label}<span aria-hidden="true">{sort.id === column.id ? (sort.desc ? '↓' : '↑') : '↕'}</span></button></th>)}</tr></thead>
+        <tbody>{sortedRows.length ? sortedRows.slice(0, visible).map((row, index) => <tr key={`${row.engine}-${row.value}-${index}`}>
           <td>{pages ? <SearchLandingLink value={row.value} /> : row.value || 'Запрос скрыт'}</td>
           {pages && <td>{row.engine === 'google' ? 'Google' : row.engine === 'yandex' ? 'Яндекс' : 'Другие'}</td>}
           <td>{formatNumber(row.count)}</td>
@@ -399,7 +427,7 @@ function SearchTrafficTable({ title, rows, unit, status, pages = false }) {
           <td title={row.positionChange == null ? 'Недостаточно сопоставимых данных за оба периода' : `Ранее: ${row.previousPosition.toLocaleString('ru-RU', { maximumFractionDigits:1 })}`}>
             {row.positionChange == null ? '—' : Math.abs(row.positionChange) < 0.05 ? '0' : `${row.positionChange > 0 ? '↑' : '↓'} ${Math.abs(row.positionChange).toLocaleString('ru-RU', { maximumFractionDigits:1 })}`}
           </td>
-        </tr>) : <tr><td colSpan={pages ? 6 : 5}>За этот период доступных данных пока нет.</td></tr>}</tbody></table></div>}
+        </tr>) : <tr><td colSpan={columns.length}>За этот период доступных данных пока нет.</td></tr>}</tbody></table></div>{visible < sortedRows.length && <button className="analytics-show-more" type="button" onClick={() => setVisible((count) => count + 20)}>Показать ещё</button>}</>}
   </section>;
 }
 
@@ -416,7 +444,8 @@ function SearchTrafficSection({ period, active }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
-  const [engine, setEngine] = useState('all');
+  const [queryEngine, setQueryEngine] = useState('google');
+  const [pageEngine, setPageEngine] = useState('all');
   useEffect(() => {
     if (!active) return;
     const controller = new AbortController();
@@ -439,37 +468,26 @@ function SearchTrafficSection({ period, active }) {
   const yandex = report?.yandex;
   const hasBoth = google?.total != null && yandex?.total != null;
   const pages = [google, yandex].flatMap((source, index) => (source?.pages || []).map((row) => ({ ...row, engine:index === 0 ? 'google' : 'yandex' }))).sort((a, b) => b.count - a.count);
-  const pageRows = pages.filter((row) => engine === 'all' || row.engine === engine);
-  const sourceNote = (source) => {
-    if (source?.status === 'not_connected') return 'Источник ещё не подключён';
-    if (source?.status === 'storage_unavailable') return 'Хранилище отчётов пока недоступно';
-    if (source?.total == null) return 'За этот период данные ещё не накоплены';
-    return `Данные за ${source.availableDays} из ${source.expectedDays} дней: ${source.availableFrom} — ${source.availableTo}`;
-  };
+  const pageRows = pages.filter((row) => pageEngine === 'all' || row.engine === pageEngine);
   return <div className="analytics-search-traffic">
     <section className="analytics-panel">
-      <div className="analytics-panel-heading"><div><h2>Переходы из поисковых систем</h2><p>Клики из Google Search Console и Яндекс Вебмастера. Статистика сохраняется у нас по дням.</p></div>
+      <div className="analytics-panel-heading"><div><h2>Переходы из поисковых систем</h2></div>
         <button className="secondary" type="button" disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</button></div>
       {loading && <p role="status">Загружаем сводку…</p>}
       {error && <p role="alert">{error}</p>}
       {report && <>
         <section className="analytics-kpis" aria-label="Переходы из поиска">{[
-          ['Всего из Google и Яндекса', hasBoth ? google.total + yandex.total : null, hasBoth ? (google.partial || yandex.partial ? 'За доступные дни обоих источников' : 'За выбранный период') : 'Нужны данные обоих источников'],
-          ['Google', google?.total, sourceNote(google)], ['Яндекс', yandex?.total, sourceNote(yandex)],
-        ].map(([label, value, note]) => <article key={label}><span>{label}</span><strong>{value == null ? '—' : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
-        {[[google, 'Google'], [yandex, 'Яндекс']].map(([source, label]) => <p key={label} className="analytics-note">{label}: {source?.lastSyncAt ? `загружено ${formatDate(source.lastSyncAt, true)}` : sourceNote(source)}{source?.syncError ? ' · обновление не удалось, показаны ранее сохранённые данные' : ''}{source?.connected === false && source?.status === 'ready' ? ' · подключение отключено, показан архив' : ''}{source?.comparisonAvailable ? ` · сравнение за ${source.comparisonDays} дн. с ${source.previousRange.startDate} — ${source.previousRange.endDate}` : ' · для сравнения пока недостаточно данных'}</p>)}
-        <p className="analytics-note">Последние дни поступают с задержкой и могут уточняться. Отсутствующие дни не считаются нулевыми. Период: {report.startDate} — {report.endDate}; Google считает дни по тихоокеанскому времени, Яндекс — по московскому.</p>
+          ['Всего из Google и Яндекса', hasBoth ? google.total + yandex.total : null], ['Google', google?.total], ['Яндекс', yandex?.total],
+        ].map(([label, value]) => <article key={label}><span>{label}</span><strong>{value == null ? '—' : formatNumber(value)}</strong></article>)}</section>
       </>}
     </section>
     {report && <>
       <div className="analytics-search-tables">
-        <SearchTrafficTable title="Запросы Google" rows={google?.queries?.slice(0, 1000)} unit="Клики" status={google?.status} />
-        <SearchTrafficTable title="Запросы Яндекса" rows={yandex?.queries?.slice(0, 1000)} unit="Клики" status={yandex?.status} />
+        <div className="analytics-range" aria-label="Поисковик для запросов">{[['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={queryEngine === key ? 'active' : ''} onClick={() => setQueryEngine(key)}>{label}</button>)}</div>
+        <SearchTrafficTable title={`Запросы ${queryEngine === 'google' ? 'Google' : 'Яндекса'}`} rows={report[queryEngine]?.queries?.slice(0, 1000)} status={report[queryEngine]?.status} />
       </div>
-      <p className="analytics-note">Позиция — среднее место в поиске за доступные дни с учётом числа показов; чем меньше число, тем лучше. ↑ — рост, ↓ — снижение относительно предыдущего периода такой же длины. Для сравнения берём одинаковое число доступных дней от начала каждого периода. При пропусках внутри периода сравнение не показывается. Прочерк означает, что данных недостаточно. Последние значения могут уточняться.</p>
-      <p className="analytics-note">Часть запросов поисковики скрывают, поэтому сумма строк может отличаться от общего числа переходов. В каждой таблице показано до 1000 наиболее частых строк; дневная история хранится полностью в пределах данных, доступных поисковикам.</p>
-      <div className="analytics-range" aria-label="Поисковик для страниц входа">{[['all', 'Все'], ['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={engine === key ? 'active' : ''} onClick={() => setEngine(key)}>{label}</button>)}</div>
-      <SearchTrafficTable title="Страницы входа из поиска" rows={pageRows.slice(0, 1000)} unit="Клики" status={engine === 'all' ? (google?.status === 'ready' || yandex?.status === 'ready' ? 'ready' : google?.status) : report[engine]?.status} pages />
+      <div className="analytics-range" aria-label="Поисковик для страниц входа">{[['all', 'Все'], ['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={pageEngine === key ? 'active' : ''} onClick={() => setPageEngine(key)}>{label}</button>)}</div>
+      <SearchTrafficTable title="Страницы входа из поиска" rows={pageRows.slice(0, 1000)} status={pageEngine === 'all' ? (google?.status === 'ready' || yandex?.status === 'ready' ? 'ready' : google?.status) : report[pageEngine]?.status} pages />
     </>}
   </div>;
 }
@@ -479,12 +497,15 @@ function CustomersSection({ data }) {
   return (
     <div className="analytics-two-column">
       <section className="analytics-panel">
-        <div className="analytics-panel-heading"><div><h2>Регистрации</h2><p>Контакты доступны только в этом защищённом разделе</p></div></div>
+        <div className="analytics-panel-heading"><div><h2>Регистрации</h2></div></div>
         <div className="analytics-table-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Дата</th></tr></thead><tbody>{data.registrations?.length ? data.registrations.map((item, index) => <tr key={`${item.phone}-${item.createdAt}-${index}`}><td>{item.name || "—"}</td><td>{item.phone ? <a href={`tel:${String(item.phone).replace(/[^+\d]/g, "")}`}>{item.phone}</a> : "—"}</td><td>{formatDate(item.createdAt, true)}</td></tr>) : <tr><td colSpan="3">Регистраций пока нет.</td></tr>}</tbody></table></div>
       </section>
       <section className="analytics-panel">
-        <div className="analytics-panel-heading"><div><h2>Последние действия</h2><p>Быстрый контекст для проверки воронки</p></div></div>
-        <ol className="analytics-activity">{data.recent?.length ? data.recent.slice(0, 12).map((item, index) => <li key={`${item.createdAt}-${index}`}><div><b>{eventLabels[item.eventName] || item.eventName}</b><span>{item.listingTitle || item.path}</span></div><time>{formatDate(item.createdAt, true)}</time></li>) : <li>Событий пока нет.</li>}</ol>
+        <div className="analytics-panel-heading"><div><h2>Последние действия</h2></div></div>
+        <ol className="analytics-activity">{data.recent?.length ? data.recent.slice(0, 12).map((item, index) => {
+          const href = item.path || (item.listingId ? carHref(item.listingId) : "");
+          return <li key={`${item.createdAt}-${index}`}><div><b>{eventLabels[item.eventName] || item.eventName}</b><span>{href ? <a href={href}>{item.listingTitle || href}</a> : item.listingTitle || "—"}</span></div><time>{formatDate(item.createdAt, true)}</time></li>;
+        }) : <li>Событий пока нет.</li>}</ol>
       </section>
     </div>
   );
@@ -501,9 +522,9 @@ const analyticsPeriods = [
 
 const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
-  { id:"leads", label:"Заявки", icon:Tray, ranged:false },
-  { id:"vehicles", label:"Автомобили", icon:CarProfile, ranged:true },
   { id:"search-traffic", label:"Поисковики", icon:ChartLineUp, ranged:true },
+  { id:"vehicles", label:"Автомобили", icon:CarProfile, ranged:true },
+  { id:"leads", label:"Заявки", icon:Tray, ranged:false },
   { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
 ];
@@ -552,7 +573,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   return (
     <main className="analytics-page">
       <header className="analytics-heading">
-        <div><span>Закрытый раздел</span><h1>Аналитика и заявки</h1><p>Срез обновлён {formatDate(data.generatedAt, true)}</p></div>
+        <div><h1>Аналитика и заявки</h1><p>Срез обновлён {formatDate(data.generatedAt, true)}</p></div>
         <div className="analytics-actions">
           {active.ranged && <div className="analytics-range" aria-label="Период аналитики">{analyticsPeriods.map(({ id, label }) => <button key={id} type="button" className={period === id ? "active" : ""} onClick={() => setPeriod(id)}>{label}</button>)}</div>}
           <button className="secondary analytics-logout" type="button" onClick={logout}><SignOut size={18} /> Выйти</button>
@@ -560,11 +581,8 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
       </header>
 
       <div className="analytics-layout">
+        <div className="analytics-side-rail">
         <aside className="analytics-sidebar">
-          <div className="analytics-sidebar-user">
-            <b><ShieldCheck size={20} weight="duotone" /></b>
-            <div><strong>Аналитика MVP</strong><span>Только для сотрудников</span></div>
-          </div>
           <nav className="analytics-navigation" aria-label="Разделы аналитики">
             {sections.map((item) => {
               const Icon = item.icon;
@@ -579,10 +597,11 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
               );
             })}
           </nav>
-          <div className="analytics-sidebar-footer">
-            <button className="analytics-sidebar-danger" type="button" onClick={() => { setResetError(""); setResetOpen(true); }}><Trash size={17} /> Обнулить аналитику</button>
-          </div>
         </aside>
+        <div className="analytics-sidebar-reset">
+          <button className="analytics-sidebar-danger" type="button" onClick={() => { setResetError(""); setResetOpen(true); }}><Trash size={17} /> Обнулить аналитику</button>
+        </div>
+        </div>
 
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} /></div>
@@ -599,7 +618,9 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
 }
 
 export function AnalyticsPage() {
-  const [period, setPeriod] = useState("today");
+  // Локальная аналитика начинается со снимка за 90 дней: это сразу даёт полезный
+  // контекст вместо пустой карточки «Сегодня».
+  const [period, setPeriod] = useState("90");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
   const [loading, setLoading] = useState(false);
