@@ -574,7 +574,7 @@ export async function readAnalyticsSeen(viewing = "") {
 export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.now() } = {}) {
   const seenBySection = await readAnalyticsSeen(viewing);
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
-  const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, customers] = await Promise.all([
+  const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, cabinetOrders, customers] = await Promise.all([
     // Ярлык и красные номера считают именно заходы по той же 30-минутной границе,
     // что верхняя карточка. Иначе два новых захода одного человека давали бы одну
     // плашку, а таблица и счётчик расходились бы.
@@ -588,6 +588,7 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
     pool.query(`SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")} AND btrim(coalesce(properties->>'query','')) <> ''`, [since.searches]),
     pool.query(`SELECT (SELECT count(*) FROM order_drafts WHERE created_at > $1 AND ${notStaffContact("contact")})::int
       + (SELECT count(*) FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")})::int AS n`, [since.leads]),
+    pool.query(`SELECT count(*)::int AS n FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")}`, [since.leads]),
     pool.query("SELECT count(*)::int AS n FROM customer_accounts WHERE created_at > $1 AND NOT staff", [since.customers]),
   ]);
   return {
@@ -597,6 +598,7 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
     vehicle_favorites:vehicleFavorites.rows[0].n,
     searches:searches.rows[0].n,
     leads:leads.rows[0].n,
+    cabinet_orders:cabinetOrders.rows[0].n,
     customers:customers.rows[0].n,
   };
 }

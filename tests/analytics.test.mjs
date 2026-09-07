@@ -67,7 +67,7 @@ test("график и заходы постоянные, а баннер при 
 
 test("детализация заходов стоит после баннера и всегда открыта", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
-  assert.match(source, /<PromoSection summary=\{summary\} \/>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{unreadVisits\} \/>/);
+  assert.match(source, /<PromoSection summary=\{summary\} \/>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{updates\.overview\} \/>/);
   assert.match(source, /function VisitsSection[\s\S]*?<section className="analytics-panel analytics-visits-panel">/);
   for (const heading of ["Номер", "Источник", "Страница входа", "Просмотров", "Дата"]) assert.match(source, new RegExp(`<th>${heading}<\\/th>`));
   assert.doesNotMatch(source, /<th>Источник входа<\/th>/);
@@ -127,6 +127,39 @@ test("все крупные блоки аналитики имеют один р
 test("у раскрытого баннера есть отступ между заголовком и показателями", async () => {
   const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
   assert.match(styles, /\.analytics-collapse-trigger \+ \.analytics-figures \{ margin-top:16px; \}/);
+});
+
+test("на мобильном контролы графика и заходов стоят отдельной строкой", async () => {
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  assert.match(styles, /\.analytics-trend-heading h2 \{ width:100%;[^}]*\}/);
+  assert.match(styles, /\.analytics-trend-controls \{ width:100%;[^}]*flex-wrap:nowrap;[^}]*gap:14px;[^}]*\}/);
+  assert.match(styles, /\.analytics-trend-period \{ margin-right:auto; \}/);
+  assert.match(styles, /\.analytics-visits-heading \{[^}]*flex-direction:column;[^}]*\}/);
+  assert.match(styles, /\.analytics-visits-toolbar \{ width:100%; \}/);
+  assert.match(styles, /\.analytics-visits-filter-count \{ margin-left:auto; \}/);
+});
+
+test("мобильная навигация использует два селекта и хранит служебные действия в меню", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  assert.match(source, /className="analytics-mobile-navigation"/);
+  assert.match(source, /className="analytics-mobile-section-trigger"[^>]*aria-haspopup="menu"/);
+  assert.match(source, /className="analytics-mobile-period-select"[\s\S]*?<select value=\{period\}/);
+  assert.match(source, /analytics-mobile-section-menu[\s\S]*?Обнулить аналитику[\s\S]*?Выйти/);
+  assert.match(styles, /\.analytics-actions, \.analytics-side-rail \{ display:none; \}/);
+  assert.match(styles, /\.analytics-mobile-navigation \{[^}]*display:flex;[^}]*justify-content:space-between/);
+});
+
+test("счётчики отделяют просмотренное от нового", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  assert.match(source, /function AnalyticsSplitCount[\s\S]*?previousAmount = amount - newAmount/);
+  assert.match(source, /analytics-split-count\$\{newAmount \? " has-fresh"/);
+  assert.match(source, /\["Заходы"[^\n]*updates\.overview\]/);
+  assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicles\]/);
+  assert.match(source, /\["Машины в кабинете"[^\n]*updates\.cabinet_orders\]/);
+  assert.match(source, /\["Регистрации"[^\n]*updates\.customers\]/);
+  assert.match(server, /cabinet_orders:cabinetOrders\.rows\[0\]\.n/);
 });
 
 test("analytics events are allowlisted and drop personal data", () => {

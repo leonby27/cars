@@ -277,7 +277,18 @@ function TrendPeriodSelect({ value, onChange }) {
   </div>;
 }
 
-function OverviewSection({ data, period, unreadVisits = 0 }) {
+function AnalyticsSplitCount({ total = 0, fresh = 0, className = "" }) {
+  const amount = Math.max(0, Number(total) || 0);
+  const newAmount = Math.min(amount, Math.max(0, Number(fresh) || 0));
+  if (!amount) return null;
+  const previousAmount = amount - newAmount;
+  return <span className={`analytics-split-count${newAmount ? " has-fresh" : ""}${className ? ` ${className}` : ""}`} title={newAmount ? `Было ${previousAmount}, новых ${newAmount}` : `Всего ${amount}`}>
+    <span>{formatNumber(newAmount ? previousAmount : amount)}</span>
+    {newAmount ? <><i aria-hidden="true">+</i><b>{newAmount > 99 ? "99+" : formatNumber(newAmount)}</b></> : null}
+  </span>;
+}
+
+function OverviewSection({ data, period, updates = {} }) {
   const summary = data.summary || {};
   const [trendPeriod, setTrendPeriod] = usePersistedChoice("analytics:trend-period", trendPeriodIds, "90");
   const [trendData, setTrendData] = useState(null);
@@ -314,20 +325,20 @@ function OverviewSection({ data, period, unreadVisits = 0 }) {
     // человеком не считается: его выжидает обходчик, чтобы сойти за посетителя.
     // Заход — не вкладка: человек, вернувшийся вечером, считается вторым заходом, а
     // три карточки, открытые в трёх вкладках подряд, остаются одним.
-    ["Заходы", summary.visits, `${formatNumber(summary.visitors)} уник.${Number(summary.robot_visits) ? ` +${formatNumber(summary.robot_visits)} без действий` : ""}`],
-    ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`],
+    ["Заходы", summary.visits, `${formatNumber(summary.visitors)} уник.${Number(summary.robot_visits) ? ` +${formatNumber(summary.robot_visits)} без действий` : ""}`, updates.overview],
+    ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, updates.vehicles],
     // Машины, добавленные в кабинет: человек нажал в карточке «Уточнить актуальность»,
     // вошёл в кабинет и там завёлся заказ. Считаем по самим заказам, а не по нажатию:
     // нажатие бывает и у тех, кто ушёл на входе. Рядом мелким — заявки, оставленные
     // формой, минуя кабинет. Кнопка «Уточнить актуальность» внутри самого заказа
     // отдельной цифрой больше не выводится (решение владельца 06.09.2026): пока
     // проверка объявлений приостановлена, эта цифра ничего не решала.
-    ["Машины в кабинете", summary.cabinet_orders, `${percent(summary.cabinet_orders, summary.vehicle_views)} от просмотров авто${summary.form_requests ? ` · ещё ${formatNumber(summary.form_requests)} заявок с форм` : ""}${summary.custom_searches ? ` · ${formatNumber(summary.custom_searches)} на подбор` : ""}`],
-    ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} добавлений в избранное`],
+    ["Машины в кабинете", summary.cabinet_orders, `${percent(summary.cabinet_orders, summary.vehicle_views)} от просмотров авто${summary.form_requests ? ` · ещё ${formatNumber(summary.form_requests)} заявок с форм` : ""}${summary.custom_searches ? ` · ${formatNumber(summary.custom_searches)} на подбор` : ""}`, updates.cabinet_orders],
+    ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} добавлений в избранное`, updates.customers],
   ];
   return (
     <>
-      <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}</section>
+      <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh]) => <article key={label}><span>{label}</span><strong>{Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className="analytics-kpi-split-count" /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
       <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
           <h2>График посещений</h2>
@@ -340,7 +351,7 @@ function OverviewSection({ data, period, unreadVisits = 0 }) {
         {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
       </section>
       <PromoSection summary={summary} />
-      <VisitsSection visits={data.visits || []} total={summary.visits} unread={unreadVisits} />
+      <VisitsSection visits={data.visits || []} total={summary.visits} unread={updates.overview} />
     </>
   );
 }
@@ -468,6 +479,10 @@ function VehiclesSection({ data, updates, markViewed }) {
     cars:(data.vehicles || []).map((item) => ({ ...item, id:item.listingId, title:item.listingTitle || listingNumber(item.listingId), asks:item.availabilityClicks })),
     favorites:(data.favorites || []).map((item) => ({ ...item, id:item.listingId, title:item.listingTitle || listingNumber(item.listingId), lastViewedAt:item.addedAt })),
   };
+  const modeTotals = {
+    cars:Number(data.summary?.vehicle_views) || 0,
+    favorites:Number(data.summary?.favorites) || 0,
+  };
   const columns = mode === "favorites"
     ? [
       { id:"title", label:"Автомобиль", text:true, value:(item) => item.title || "" },
@@ -500,7 +515,7 @@ function VehiclesSection({ data, updates, markViewed }) {
     <div className="analytics-panel-heading analytics-vehicles-heading"><div className="analytics-range" aria-label="Представление автомобилей">
       {vehicleModes.map((item) => {
         const fresh = item.id === "models" ? 0 : Number(updates[`vehicle_${item.id}`]) || 0;
-        return <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}{fresh ? <b className="analytics-tab-count" title={`Нового с прошлого просмотра: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}</button>;
+        return <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}<AnalyticsSplitCount total={modeTotals[item.id]} fresh={fresh} className="analytics-tab-count" /></button>;
       })}
     </div></div>
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
@@ -646,6 +661,73 @@ const sections = [
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
 ];
 
+function AnalyticsNavigationItems({ section, updates, totals, onChoose, mobile = false }) {
+  return sections.map((item) => {
+    const Icon = item.icon;
+    return (
+      <button key={item.id} type="button" role={mobile ? "menuitem" : undefined} className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => onChoose(item.id)}>
+        <Icon size={21} weight="duotone" />
+        <span>{item.label}</span>
+        <AnalyticsSplitCount total={totals[item.id]} fresh={updates[item.id]} />
+      </button>
+    );
+  });
+}
+
+function MobileAnalyticsNavigation({ active, section, period, setPeriod, updates, totals, onSection, onReset, logout }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const ActiveIcon = active.icon;
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeWithEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        requestAnimationFrame(() => triggerRef.current?.focus());
+      }
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [open]);
+  const chooseSection = (id) => {
+    onSection(id);
+    setOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+  const chooseAction = (action) => {
+    setOpen(false);
+    action();
+  };
+  return <div className="analytics-mobile-navigation">
+    <div className={`analytics-mobile-section-select${open ? " open" : ""}`} ref={rootRef}>
+      <button ref={triggerRef} className="analytics-mobile-section-trigger" type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <ActiveIcon size={20} weight="duotone" />
+        <span>{active.label}</span>
+        <b aria-hidden="true" />
+      </button>
+      {open && <div className="analytics-mobile-section-menu" role="menu" aria-label="Разделы аналитики">
+        <AnalyticsNavigationItems section={section} updates={updates} totals={totals} onChoose={chooseSection} mobile />
+        <div className="analytics-mobile-menu-divider" role="separator" />
+        <button className="analytics-mobile-menu-danger" type="button" role="menuitem" onClick={() => chooseAction(onReset)}><Trash size={19} /> <span>Обнулить аналитику</span></button>
+        <button type="button" role="menuitem" onClick={() => chooseAction(logout)}><SignOut size={19} /> <span>Выйти</span></button>
+      </div>}
+    </div>
+    {active.ranged && <label className="analytics-mobile-period-select">
+      <span className="visually-hidden">Период аналитики</span>
+      <select value={period} onChange={(event) => setPeriod(event.target.value)}>{analyticsPeriods.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}</select>
+      <b aria-hidden="true" />
+    </label>}
+  </div>;
+}
+
 function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads }) {
   const [section, setSection] = useState("overview");
   // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
@@ -677,6 +759,14 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState("");
   const active = sections.find((item) => item.id === section) || sections[0];
+  const sectionTotals = {
+    overview:Number(data.summary?.visits) || 0,
+    vehicles:Number(data.summary?.vehicle_views) || 0,
+    leads:leads.length,
+    searches:(data.searches || []).length,
+    customers:Number(data.summary?.registrations) || 0,
+  };
+  const openReset = () => { setResetError(""); setResetOpen(true); };
   const resetAnalytics = async () => {
     setResetting(true);
     setResetError("");
@@ -700,31 +790,22 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
         </div>
       </header>
 
+      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} updates={updates} totals={sectionTotals} onSection={openSection} onReset={openReset} logout={logout} />
+
       <div className="analytics-layout">
         <div className="analytics-side-rail">
         <aside className="analytics-sidebar">
           <nav className="analytics-navigation" aria-label="Разделы аналитики">
-            {sections.map((item) => {
-              const Icon = item.icon;
-              const fresh = Number(updates[item.id]) || 0;
-              return (
-                <button key={item.id} type="button" className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => openSection(item.id)}>
-                  <Icon size={21} weight="duotone" />
-                  <span>{item.label}</span>
-                  {fresh ? <b title={`Нового с прошлого захода: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b>
-                    : item.id === "leads" && leads.length ? <b className="analytics-badge-total" title="Всего заявок">{leads.length}</b> : null}
-                </button>
-              );
-            })}
+            <AnalyticsNavigationItems section={section} updates={updates} totals={sectionTotals} onChoose={openSection} />
           </nav>
         </aside>
         <div className="analytics-sidebar-reset">
-          <button className="analytics-sidebar-danger" type="button" onClick={() => { setResetError(""); setResetOpen(true); }}><Trash size={17} /> Обнулить аналитику</button>
+          <button className="analytics-sidebar-danger" type="button" onClick={openReset}><Trash size={17} /> Обнулить аналитику</button>
         </div>
         </div>
 
         <div className="analytics-content">
-          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} unreadVisits={updates.overview} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} updates={updates} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} updates={updates} markViewed={markViewed} /></div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
