@@ -1,0 +1,14 @@
+[Unit]
+Description=Collect daily Google and Yandex search reports
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/node scripts/sync-search-traffic.mjs
+TimeoutStartSec=1800
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-search-traffic

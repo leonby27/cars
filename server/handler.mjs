@@ -1,3 +1,4 @@
+import { getSearchTraffic } from './search-traffic.mjs';
 import { Readable } from "node:stream";
 import { gzip } from "node:zlib";
 import { promisify } from "node:util";
@@ -174,6 +175,10 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "POST" && url.pathname === "/api/analytics/logout") {
       return json(response, 200, { ok:true }, { "set-cookie":clearAnalyticsCookie(request) });
+    }
+    if (request.method === "GET" && url.pathname === "/api/analytics/search-traffic") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      return json(response, 200, await getSearchTraffic(url.searchParams.get("period")));
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/dashboard") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });

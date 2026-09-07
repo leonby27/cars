@@ -181,6 +181,11 @@ export async function handleAnalyticsRequest(request, env, url) {
   if (request.method === "POST" && url.pathname === "/api/analytics/logout") {
     return json({ ok:true }, 200, { "set-cookie":sessionCookie("", request, true) });
   }
+  if (request.method === "GET" && url.pathname === "/api/analytics/search-traffic") {
+    const token = cookieValue(request.headers.get("cookie") || "", COOKIE_NAME);
+    if (!(await validToken(token, secret))) return json({ error:"unauthorized" }, 401);
+    return json(await readSearchTraffic(url.searchParams.get("period"), env, workerSearchStore(env.DB)));
+  }
   if (!env.DB) return json({ error:"analytics_storage_unavailable" }, 503);
   await ensureSchema(env.DB);
   if (request.method === "POST" && url.pathname === "/api/analytics/events") {
@@ -229,4 +234,181 @@ export async function handleAnalyticsRequest(request, env, url) {
     return json({ ok:true, deleted:Number(result.meta?.changes) || 0 });
   }
   return json({ error:"not_found" }, 404);
+}
+
+// Search Console / Webmaster daily archive. The Node API imports these pure Web-API helpers.
+const SEARCH_DAY = 86400000;
+const SEARCH_INTERNAL = '^https?://[^/]+/analytics([/?#]|$)';
+const searchNumber = (value) => Math.max(0, Number(value) || 0);
+const searchDate = (time) => new Date(time + 10800000).toISOString().slice(0, 10);
+const addSearchDays = (date, days) => new Date(Date.parse(date + 'T00:00:00Z') + days * SEARCH_DAY).toISOString().slice(0, 10);
+export function searchTrafficRange(period, now = Date.now()) {
+  const endDate = searchDate(now - (period === 'yesterday' ? SEARCH_DAY : 0));
+  const days = ['today', 'yesterday'].includes(period) ? 1 : [7, 30, 90].includes(Number(period)) ? Number(period) : 30;
+  return { period:days === 1 ? period : String(days), startDate:addSearchDays(endDate, 1 - days), endDate, days };
+}
+export function searchProperties(env) {
+  return {
+    google:{ property:env.GOOGLE_SEARCH_CONSOLE_SITE || '', configured:Boolean(env.GOOGLE_SEARCH_CONSOLE_SITE && (env.GOOGLE_SEARCH_SERVICE_ACCOUNT_JSON || (env.GOOGLE_SEARCH_CLIENT_ID && env.GOOGLE_SEARCH_CLIENT_SECRET && env.GOOGLE_SEARCH_REFRESH_TOKEN))) },
+    yandex:{ property:env.YANDEX_WEBMASTER_HOST_ID || '', configured:Boolean(env.YANDEX_WEBMASTER_HOST_ID && env.YANDEX_WEBMASTER_TOKEN) },
+  };
+}
+async function searchJson(fetcher, url, options = {}) {
+  const response = await fetcher(url, { ...options, signal:AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error([401, 403].includes(response.status) ? 'access_denied' : 'upstream_unavailable');
+  return response.json();
+}
+const searchSort = (rows) => rows.sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+
+export async function fetchGoogleSearchDays(env, { now = Date.now(), days = 14, fetcher = fetch } = {}) {
+  let token;
+  if (env.GOOGLE_SEARCH_SERVICE_ACCOUNT_JSON) {
+    const account = JSON.parse(env.GOOGLE_SEARCH_SERVICE_ACCOUNT_JSON);
+    const encode = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const text = (value) => encode(new TextEncoder().encode(JSON.stringify(value)));
+    const issuedAt = Math.floor(now / 1000);
+    const unsigned = text({ alg:'RS256', typ:'JWT' }) + '.' + text({ iss:account.client_email,
+      scope:'https://www.googleapis.com/auth/webmasters.readonly', aud:'https://oauth2.googleapis.com/token', iat:issuedAt, exp:issuedAt + 3600 });
+    const pem = account.private_key.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
+    const key = await crypto.subtle.importKey('pkcs8', Uint8Array.from(atob(pem), (c) => c.charCodeAt(0)),
+      { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['sign']);
+    const signature = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned)));
+    token = await searchJson(fetcher, 'https://oauth2.googleapis.com/token', { method:'POST',
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body:new URLSearchParams({
+        grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion:unsigned + '.' + encode(signature),
+      }) });
+  } else {
+    token = await searchJson(fetcher, 'https://oauth2.googleapis.com/token', { method:'POST',
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body:new URLSearchParams({
+        client_id:env.GOOGLE_SEARCH_CLIENT_ID, client_secret:env.GOOGLE_SEARCH_CLIENT_SECRET,
+        refresh_token:env.GOOGLE_SEARCH_REFRESH_TOKEN, grant_type:'refresh_token',
+      }) });
+  }
+  if (!token.access_token) throw new Error('access_denied');
+  const endDate = searchDate(now);
+  const startDate = addSearchDays(endDate, 1 - days);
+  const get = async (dimensions) => {
+    const rows = []; let incomplete = null;
+    for (let startRow = 0; startRow < 250000; startRow += 25000) {
+      const result = await searchJson(fetcher, `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(env.GOOGLE_SEARCH_CONSOLE_SITE)}/searchAnalytics/query`, {
+        method:'POST', headers:{ Authorization:`Bearer ${token.access_token}`, 'Content-Type':'application/json' },
+        body:JSON.stringify({ startDate, endDate, dimensions, type:'web', dataState:'all', rowLimit:25000, startRow,
+          dimensionFilterGroups:[{ filters:[{ dimension:'page', operator:'excludingRegex', expression:SEARCH_INTERNAL }] }] }),
+      });
+      if (result.rows !== undefined && !Array.isArray(result.rows)) throw new Error('upstream_unavailable');
+      rows.push(...(result.rows || []));
+      incomplete ||= result.metadata?.first_incomplete_date || null;
+      if ((result.rows || []).length < 25000) return { rows, incomplete };
+    }
+    throw new Error('report_too_large'); // Never replace a good snapshot with a partial pagination result.
+  };
+  const results = await Promise.allSettled([get(['date']), get(['date', 'query']), get(['date', 'page'])]);
+  if (results.some((result) => result.status === 'rejected')) throw results.find((result) => result.status === 'rejected').reason;
+  const [totals, queries, pages] = results.map((result) => result.value);
+  const daily = new Map();
+  // A day with zero clicks is omitted by Google. Fill gaps only through an
+  // actually returned date; never invent zeros for the not-yet-published tail.
+  const latest = totals.rows.map((row) => row.keys[0]).sort().at(-1);
+  if (latest) for (let day = startDate; day <= latest; day = addSearchDays(day, 1)) {
+    daily.set(day, { day, total:0, queries:[], pages:[], preliminary:Boolean(totals.incomplete && day >= totals.incomplete) });
+  }
+  for (const row of totals.rows) daily.set(row.keys[0], { day:row.keys[0], total:searchNumber(row.clicks), queries:[], pages:[], preliminary:Boolean(totals.incomplete && row.keys[0] >= totals.incomplete) });
+  for (const [kind, report] of [['queries', queries], ['pages', pages]]) for (const row of report.rows) {
+    const day = daily.get(row.keys[0]);
+    if (day) day[kind].push({ value:row.keys[1], count:searchNumber(row.clicks) });
+  }
+  return [...daily.values()];
+}
+
+export async function fetchYandexSearchDays(env, { fetcher = fetch } = {}) {
+  const headers = { Authorization:`OAuth ${env.YANDEX_WEBMASTER_TOKEN}`, 'Content-Type':'application/json' };
+  const user = env.YANDEX_WEBMASTER_USER_ID || (await searchJson(fetcher, 'https://api.webmaster.yandex.net/v4/user', { headers })).user_id;
+  if (!user) throw new Error('access_denied');
+  const base = `https://api.webmaster.yandex.net/v4/user/${encodeURIComponent(user)}/hosts/${encodeURIComponent(env.YANDEX_WEBMASTER_HOST_ID)}`;
+  const get = async (type) => {
+    const rows = [];
+    for (let offset = 0; offset < 50000; offset += 500) {
+      const result = await searchJson(fetcher, base + '/query-analytics/list', { method:'POST', headers,
+        body:JSON.stringify({ offset, limit:500, device_type_indicator:'ALL', search_location:'WEB_LOCATION', text_indicator:type,
+          filters:{ text_filters:[{ text_indicator:'URL', operation:'TEXT_DOES_NOT_CONTAIN', value:'/analytics' }] } }),
+      });
+      if (!Array.isArray(result.text_indicator_to_statistics) || !Number.isFinite(result.count)) throw new Error('upstream_unavailable');
+      rows.push(...result.text_indicator_to_statistics);
+      if (rows.length >= result.count) return rows;
+      if (!result.text_indicator_to_statistics.length) throw new Error('upstream_unavailable');
+    }
+    throw new Error('report_too_large');
+  };
+  const results = await Promise.allSettled([get('QUERY'), get('URL')]);
+  if (results.some((result) => result.status === 'rejected')) throw results.find((result) => result.status === 'rejected').reason;
+  const daily = new Map();
+  for (const [index, kind] of [[1, 'pages'], [0, 'queries']]) for (const row of results[index].value) {
+    const value = row.text_indicator?.value;
+    if (!value || (kind === 'pages' && workerInternalAnalyticsPath(value))) continue;
+    for (const stat of row.statistics || []) {
+      if (stat.field !== 'CLICKS' || !/^\d{4}-\d{2}-\d{2}$/.test(stat.date)) continue;
+      if (!daily.has(stat.date)) daily.set(stat.date, { day:stat.date, total:0, queries:[], pages:[], preliminary:true });
+      const day = daily.get(stat.date);
+      day[kind].push({ value, count:searchNumber(stat.value) });
+      // Complete URL pagination gives page clicks including hidden queries.
+      if (kind === 'pages') day.total += searchNumber(stat.value);
+    }
+  }
+  return [...daily.values()];
+}
+
+export function aggregateSearchDays(days, range) {
+  const selected = days.filter((day) => day.day >= range.startDate && day.day <= range.endDate);
+  const aggregate = (kind) => {
+    const counts = new Map();
+    for (const day of selected) for (const row of day[kind] || []) counts.set(row.value, (counts.get(row.value) || 0) + searchNumber(row.count));
+    return searchSort([...counts].map(([value, count]) => ({ value, count })));
+  };
+  const dates = selected.map((day) => day.day).sort();
+  return { total:selected.length ? selected.reduce((sum, day) => sum + searchNumber(day.total), 0) : null,
+    queries:aggregate('queries'), pages:aggregate('pages'), availableDays:new Set(dates).size, expectedDays:range.days,
+    availableFrom:dates[0] || null, availableTo:dates.at(-1) || null, partial:new Set(dates).size < range.days,
+    preliminary:selected.some((day) => day.preliminary) };
+}
+export async function readSearchTraffic(period, env, store, { now = Date.now() } = {}) {
+  const range = searchTrafficRange(period, now);
+  const properties = searchProperties(env);
+  const pairs = await Promise.all(Object.entries(properties).map(async ([source, settings]) => {
+    if (!settings.property) return [source, { status:'not_connected' }];
+    try {
+      const { days, state } = await store.read(source, settings.property, range);
+      return [source, { status:days.length ? 'ready' : settings.configured ? 'pending' : 'not_connected', connected:settings.configured,
+        ...aggregateSearchDays(days, range), lastSyncAt:state?.lastSuccessAt || null, syncError:state?.error || null }];
+    } catch { return [source, { status:'storage_unavailable' }]; }
+  }));
+  return { ...range, generatedAt:new Date(now).toISOString(), ...Object.fromEntries(pairs) };
+}
+export async function syncSearchTraffic(env, store, { now = Date.now(), fetcher = fetch } = {}) {
+  const results = await Promise.all(Object.entries(searchProperties(env)).map(async ([source, settings]) => {
+    if (!settings.configured) return [source, { status:'not_connected' }];
+    try {
+      const { state } = await store.read(source, settings.property, searchTrafficRange('90', now));
+      const days = source === 'google' ? await fetchGoogleSearchDays(env, { now, fetcher, days:state?.lastSuccessAt ? Math.min(90, Math.max(14, Math.ceil((now - Date.parse(state.lastSuccessAt)) / SEARCH_DAY) + 14)) : 90 })
+        : await fetchYandexSearchDays(env, { fetcher });
+      await store.save(source, settings.property, days, { lastSuccessAt:new Date(now).toISOString(), error:null });
+      return [source, { status:'ready', days:days.length }];
+    } catch (failure) {
+      const error = failure.message === 'access_denied' ? 'access_denied' : 'sync_failed';
+      await store.fail(source, settings.property, error).catch(() => {});
+      return [source, { status:'error', error }];
+    }
+  }));
+  return Object.fromEntries(results);
+}
+
+// Sites uses the same archive shape; production runs the PostgreSQL adapter and timer.
+function workerSearchStore(db) {
+  return {
+    async read(source, property, range) {
+      if (!db) throw new Error('storage_unavailable');
+      const result = await db.prepare('SELECT payload FROM search_traffic_daily WHERE source=? AND property=? AND day>=? AND day<=?').bind(source, property, range.startDate, range.endDate).all();
+      const state = await db.prepare('SELECT payload FROM search_traffic_sync WHERE source=? AND property=?').bind(source, property).first();
+      return { days:(result.results || []).map((row) => JSON.parse(row.payload)), state:state ? JSON.parse(state.payload) : null };
+    },
+  };
 }

@@ -384,6 +384,91 @@ function SearchesSection({ data }) {
   );
 }
 
+
+function SearchTrafficTable({ title, rows, unit, status, pages = false }) {
+  return <section className="analytics-panel">
+    <div className="analytics-panel-heading"><h2>{title}</h2></div>
+    {status !== 'ready' ? <p role="status">{status === 'not_connected' ? 'Источник ещё не подключён.' : status === 'pending' ? 'За этот период данные ещё не накоплены.' : 'Хранилище отчётов пока недоступно.'}</p>
+      : <div className="analytics-table-wrap"><table><thead><tr><th>{pages ? 'Страница входа' : 'Поисковый запрос'}</th>{pages && <th>Поисковик</th>}<th>{unit}</th></tr></thead>
+        <tbody>{rows?.length ? rows.map((row, index) => <tr key={`${row.engine}-${row.value}-${index}`}>
+          <td>{pages ? <SearchLandingLink value={row.value} /> : row.value || 'Запрос скрыт'}</td>
+          {pages && <td>{row.engine === 'google' ? 'Google' : row.engine === 'yandex' ? 'Яндекс' : 'Другие'}</td>}
+          <td>{formatNumber(row.count)}</td>
+        </tr>) : <tr><td colSpan={pages ? 3 : 2}>За этот период доступных данных пока нет.</td></tr>}</tbody></table></div>}
+  </section>;
+}
+
+function SearchLandingLink({ value }) {
+  try {
+    const url = new URL(value);
+    if (['http:', 'https:'].includes(url.protocol)) return <a href={url.href} target="_blank" rel="noopener noreferrer">{url.pathname}{url.search}</a>;
+  } catch { /* Missing or invalid upstream URL is plain text. */ }
+  return value || 'Страница не определена';
+}
+
+function SearchTrafficSection({ period, active }) {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [revision, setRevision] = useState(0);
+  const [engine, setEngine] = useState('all');
+  useEffect(() => {
+    if (!active) return;
+    const controller = new AbortController();
+    setLoading(true); setError(''); setReport(null);
+    (async () => {
+      try {
+        const response = await fetch(`/api/analytics/search-traffic?period=${encodeURIComponent(period)}`, { credentials:'same-origin', cache:'no-store', signal:controller.signal });
+        if (!response.ok) throw new Error(response.status === 401 ? 'Время входа истекло. Обновите страницу и войдите снова.' : 'Не удалось загрузить сводку. Попробуйте ещё раз.');
+        const result = await response.json();
+        if (!controller.signal.aborted) setReport(result);
+      } catch (failure) {
+        if (!controller.signal.aborted) setError(failure.message);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [period, active, revision]);
+  const google = report?.google;
+  const yandex = report?.yandex;
+  const hasBoth = google?.total != null && yandex?.total != null;
+  const pages = [google, yandex].flatMap((source, index) => (source?.pages || []).map((row) => ({ ...row, engine:index === 0 ? 'google' : 'yandex' }))).sort((a, b) => b.count - a.count);
+  const pageRows = pages.filter((row) => engine === 'all' || row.engine === engine);
+  const sourceNote = (source) => {
+    if (source?.status === 'not_connected') return 'Источник ещё не подключён';
+    if (source?.status === 'storage_unavailable') return 'Хранилище отчётов пока недоступно';
+    if (source?.total == null) return 'За этот период данные ещё не накоплены';
+    return `Данные за ${source.availableDays} из ${source.expectedDays} дней: ${source.availableFrom} — ${source.availableTo}`;
+  };
+  return <div className="analytics-search-traffic">
+    <section className="analytics-panel">
+      <div className="analytics-panel-heading"><div><h2>Переходы из поисковых систем</h2><p>Клики из Google Search Console и Яндекс Вебмастера. Статистика сохраняется у нас по дням.</p></div>
+        <button className="secondary" type="button" disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</button></div>
+      {loading && <p role="status">Загружаем сводку…</p>}
+      {error && <p role="alert">{error}</p>}
+      {report && <>
+        <section className="analytics-kpis" aria-label="Переходы из поиска">{[
+          ['Всего из Google и Яндекса', hasBoth ? google.total + yandex.total : null, hasBoth ? (google.partial || yandex.partial ? 'За доступные дни обоих источников' : 'За выбранный период') : 'Нужны данные обоих источников'],
+          ['Google', google?.total, sourceNote(google)], ['Яндекс', yandex?.total, sourceNote(yandex)],
+        ].map(([label, value, note]) => <article key={label}><span>{label}</span><strong>{value == null ? '—' : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
+        {[[google, 'Google'], [yandex, 'Яндекс']].map(([source, label]) => <p key={label} className="analytics-note">{label}: {source?.lastSyncAt ? `загружено ${formatDate(source.lastSyncAt, true)}` : sourceNote(source)}{source?.syncError ? ' · обновление не удалось, показаны ранее сохранённые данные' : ''}{source?.connected === false && source?.status === 'ready' ? ' · подключение отключено, показан архив' : ''}</p>)}
+        <p className="analytics-note">Последние дни поступают с задержкой и могут уточняться. Отсутствующие дни не считаются нулевыми. Период: {report.startDate} — {report.endDate}; Google считает дни по тихоокеанскому времени, Яндекс — по московскому.</p>
+      </>}
+    </section>
+    {report && <>
+      <div className="analytics-two-column">
+        <SearchTrafficTable title="Запросы Google" rows={google?.queries?.slice(0, 1000)} unit="Клики" status={google?.status} />
+        <SearchTrafficTable title="Запросы Яндекса" rows={yandex?.queries?.slice(0, 1000)} unit="Клики" status={yandex?.status} />
+      </div>
+      <p className="analytics-note">Часть запросов поисковики скрывают, поэтому сумма строк может отличаться от общего числа переходов. В каждой таблице показано до 1000 наиболее частых строк; дневная история хранится полностью в пределах данных, доступных поисковикам.</p>
+      <div className="analytics-range" aria-label="Поисковик для страниц входа">{[['all', 'Все'], ['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={engine === key ? 'active' : ''} onClick={() => setEngine(key)}>{label}</button>)}</div>
+      <SearchTrafficTable title="Страницы входа из поиска" rows={pageRows.slice(0, 1000)} unit="Клики" status={engine === 'all' ? (google?.status === 'ready' || yandex?.status === 'ready' ? 'ready' : google?.status) : report[engine]?.status} pages />
+    </>}
+  </div>;
+}
+
+
 function CustomersSection({ data }) {
   return (
     <div className="analytics-two-column">
@@ -412,6 +497,7 @@ const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:false },
   { id:"vehicles", label:"Автомобили", icon:CarProfile, ranged:true },
+  { id:"search-traffic", label:"Поисковики", icon:ChartLineUp, ranged:true },
   { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
 ];
@@ -497,6 +583,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} active={section === "search-traffic"} /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
         </div>
       </div>

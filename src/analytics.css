@@ -165,3 +165,11 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
   .lead-toolbar .analytics-range button { flex:1; }
   .lead-search { width:100%; }
 }
+
+.analytics-search-traffic { display: grid; gap: 20px; min-width: 0; }
+.analytics-search-traffic .analytics-kpis { margin: 20px 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.analytics-search-traffic .analytics-two-column { align-items: start; }
+.analytics-search-traffic td:first-child { overflow-wrap: anywhere; }
+.analytics-search-traffic > .analytics-range { justify-self: start; }
+
+@media (max-width: 620px) { .analytics-search-traffic .analytics-kpis { grid-template-columns: 1fr; } }
