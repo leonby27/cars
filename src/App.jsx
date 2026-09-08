@@ -7105,7 +7105,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
   const [deliveryOpen, setDeliveryOpen] = useState(false);
-  const [availabilityCtaVisible, setAvailabilityCtaVisible] = useState(false);
+  // Повтор кнопки прячем, когда настоящая кнопка уже на экране или осталась выше:
+  // ниже неё повтор только мешает, а на прокрутке вверх он мигал на пустом месте.
+  const [floatingCtaHidden, setFloatingCtaHidden] = useState(true);
   const availabilityCtaRef = useRef(null);
   // По этой машине заказ уже создан — тогда кнопка не заводит второй, а ведёт в кабинет.
   const orderedListings = useOrderedListings();
@@ -7115,12 +7117,32 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   }, [car?.id]);
   useEffect(() => {
     const cta = availabilityCtaRef.current;
-    if (!cta || typeof IntersectionObserver === "undefined") return undefined;
-    const observer = new IntersectionObserver(([entry]) => {
-      setAvailabilityCtaVisible(entry.isIntersecting);
-    }, { threshold: 0.15 });
-    observer.observe(cta);
-    return () => observer.disconnect();
+    if (!cta) return undefined;
+    // В быстром просмотре содержимое прокручивается своим окном, а не страницей, —
+    // тогда и мерить надо по нему, иначе «ниже экрана» считалось бы по окну браузера.
+    const scroller = cta.closest(".quick-view-scroll");
+    const source = scroller || window;
+    // Считаем сами, а не наблюдателем за появлением: тот сообщает только о переходах
+    // через границу видимости, и при быстрой прокрутке кнопка успевала перескочить
+    // из «ниже экрана» в «выше экрана» без единого сообщения — повтор оставался в
+    // старом состоянии и мигал на пустом месте.
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const limit = scroller ? scroller.getBoundingClientRect().bottom : window.innerHeight;
+      setFloatingCtaHidden(cta.getBoundingClientRect().top < limit);
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    update();
+    source.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule, { passive: true });
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      source.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
   }, [car?.id]);
   const price = estimateLandedCost(car);
   const quotaPricing = useQuotaPricing();
@@ -7233,15 +7255,24 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           <aside className="source-card detail-source-card">
             <small>Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</small>
           </aside>
+          {/* Куда идти за объяснением сметы — в самом низу карточки, строками с
+              иконками. Раньше эти ссылки стояли внутри разбора цены и терялись в
+              нём; человек, который дочитал страницу, дальше либо считает другую
+              машину, либо разбирается с растаможкой. */}
+          <nav className="detail-tool-links" aria-label="Страницы расчётов">
+            <AppLink href="/customs" navigate={navigate}><Scales size={21} />Как считается растаможка</AppLink>
+            <AppLink href="/calculator" navigate={navigate}><Calculator size={21} />Посчитать другую машину</AppLink>
+            {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} />Остаток квоты</AppLink>}
+          </nav>
         </div>
         <div className="detail-sidebar">
-          {quickInfo.length > 0 && (
-            <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
-              <span className="vehicle-quick-info-label">Основная информация</span>
-              <p>{quickInfo.slice(0, 3).join(", ")}{quickInfo.length <= 3 ? "." : ""}</p>
-              {quickInfo.length > 3 && <p>{quickInfo.slice(3).join(", ")}.</p>}
-            </section>
-          )}
+          {/* Итоговая цена стоит над плашками и без своей плашки: это главный ответ
+              страницы, и прятать его внутрь разбора по этапам незачем. На телефоне
+              она и так стоит крупно под названием, поэтому там эта строка скрыта. */}
+          <div className={`price-total detail-sidebar-price${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
+            <TotalPrice car={car} price={price} currency={currency} />
+            {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
+          </div>
           {/* Цена среди таких же машин — своим блоком. Набор для сравнения приходит
               с машиной от сервера; цену берём ту же, что показана крупно ниже, —
               включая выбранный режим цен с квотой. */}
@@ -7254,11 +7285,15 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             formatMoney={(usd) => roughMoney(usd, currency)}
             loading={priceRatingPending}
           />
-          <aside className="order-card">
-            <div className={`price-total${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
-              <TotalPrice car={car} price={price} currency={currency} />
-              {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
-            </div>
+          {quickInfo.length > 0 && (
+            <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
+              <span className="vehicle-quick-info-label">Основная информация</span>
+              <p>{quickInfo.slice(0, 3).join(", ")}{quickInfo.length <= 3 ? "." : ""}</p>
+              {quickInfo.length > 3 && <p>{quickInfo.slice(3).join(", ")}.</p>}
+            </section>
+          )}
+          <aside className="order-card" aria-label="Из чего складывается цена">
+            <span className="order-card-label">Из чего складывается цена</span>
             <div className="price-breakdown">
               <div>
                 <PriceLabel label="Автомобиль в Китае" description={`${number(car.chinaPrice)} ¥ · данные источника`} />
@@ -7293,15 +7328,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             <div className="price-assumption">
               <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
             </div>
-            {/* Куда идти за объяснением сметы. Раньше из карточки на страницы расчётов
-                вела только ссылка в подвале: человек, который смотрит строку
-                «растаможка и сборы», упирался в цифру без продолжения, а страницы
-                расчётов не получали с сайта ни одной ссылки по делу. */}
-            <p className="order-tool-links">
-              <AppLink href="/customs" navigate={navigate}>Как считается растаможка</AppLink>
-              <AppLink href="/calculator" navigate={navigate}>Посчитать другую машину</AppLink>
-              {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}>Остаток квоты</AppLink>}
-            </p>
             <section className={`delivery-disclosure${deliveryOpen ? " open" : ""}`}>
               <button type="button" className="delivery-card-heading" aria-expanded={deliveryOpen} onClick={() => setDeliveryOpen((open) => !open)}>
                 <div className="delivery-card-icon">
@@ -7346,15 +7372,19 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           </aside>
           <BrandNotice car={car} />
           <ListingIdRow car={car} />
+          {/* Пока настоящая кнопка ниже сгиба, её повторяет эта: на телефоне она
+              висит поверх страницы, на широком экране прилипает к низу окна, пока
+              правая колонка на виду. Стоит внутри колонки, чтобы на широком экране
+              совпадать с ней по ширине без подгонки цифрами. */}
+          {floatingCta && (
+            <div className={`detail-floating-availability${floatingCtaHidden ? " is-hidden" : ""}`} aria-hidden={floatingCtaHidden}>
+              <button className={`primary${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={floatingCtaHidden ? -1 : 0}>
+                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
-      {floatingCta && (
-        <div className={`detail-floating-availability${availabilityCtaVisible ? " is-hidden" : ""}`} aria-hidden={availabilityCtaVisible}>
-          <button className={`primary${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={availabilityCtaVisible ? -1 : 0}>
-            {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
-          </button>
-        </div>
-      )}
     </>
   );
 }
@@ -7421,7 +7451,11 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
           </button>
         </header>
         <div className="quick-view-scroll">
-          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch onOpenOrder={onOpenOrder} priceRatingPending={priceRatingPending} />
+          {/* Повтор кнопки нужен и здесь: содержимое модалки прокручивается своим
+              окном, и настоящая кнопка так же уходит вниз. Копия прилипает к низу
+              прокрутки — модалка бывает только на широком экране, где повтор и
+              задуман прилипающим, а не висящим поверх страницы. */}
+          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} currencySwitch onOpenOrder={onOpenOrder} priceRatingPending={priceRatingPending} />
         </div>
       </section>
     </div>

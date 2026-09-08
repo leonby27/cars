@@ -2164,8 +2164,11 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   padding: 0;
   border: 0;
   border-radius: calc(13px * var(--corner-scale));
-  background: var(--header-control-bg);
-  color: var(--ink);
+  /* Кнопка «наверх» идёт наперекор теме, как подсказки: на тёмном сайте светлая, на
+     светлом тёмная. С обычным фоном панели она почти сливалась со страницей —
+     плавающая кнопка поверх содержимого должна читаться сразу. */
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
   pointer-events: none;
   opacity: 0;
@@ -2214,6 +2217,41 @@ body.header-menu-open .detail-floating-availability {
 .detail-gallery,
 .detail-content {
   grid-column: 1;
+}
+/* Повтор кнопки «Уточнить актуальность» на широком экране: прилипает к низу окна,
+   пока правая колонка на виду, и гаснет, когда настоящая кнопка доехала до экрана.
+   Стоит последней в колонке, поэтому по ширине совпадает с ней сама. */
+@media (min-width: 981px) {
+  .detail-floating-availability {
+    position: sticky;
+    z-index: 20;
+    bottom: 18px;
+    display: block;
+    margin-top: 12px;
+    padding: 8px;
+    border-radius: calc(14px * var(--corner-scale));
+    background: var(--panel-soft);
+    box-shadow: 0 12px 34px rgba(23, 25, 28, 0.18);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+  .detail-floating-availability .primary {
+    width: 100%;
+    min-height: 50px;
+    margin: 0;
+  }
+  .detail-floating-availability.is-hidden {
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+/* В быстром просмотре повтор кнопки прижат к самому низу окна модалки. Отрицательный
+   отступ съедает нижнее поле прокрутки (.quick-view-scroll, 28px): без него кнопка
+   вставала бы на его высоту выше и висела посреди разбора цены. */
+.quick-view-scroll .detail-floating-availability {
+  bottom: -28px;
+  padding: 10px 8px 12px;
+  border-radius: calc(14px * var(--corner-scale)) calc(14px * var(--corner-scale)) 0 0;
 }
 .detail-sidebar {
   grid-column: 2;
@@ -4850,13 +4888,20 @@ html[data-theme="dark"] #root .load-more {
   background: var(--panel);
   box-shadow: 0 10px 28px rgba(23, 25, 28, 0.05);
 }
-.vehicle-quick-info-label {
+.vehicle-quick-info-label,
+.order-card-label {
   display: block;
   margin-bottom: 7px;
   color: var(--muted);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
+}
+/* Итоговая цена — над плашками и без своей плашки. Селектор с двумя классами:
+   у .price-total свои отступы, и одиночный класс ему проиграл бы. */
+.detail-sidebar .detail-sidebar-price {
+  margin: 0 0 12px;
+  padding-inline: 2px;
 }
 .vehicle-quick-info p {
   margin: 0;
@@ -4877,17 +4922,19 @@ html[data-theme="dark"] #root .load-more {
    заметно темнее плашки — на тёмной теме еле различимая полоса читалась как пустое
    место. Текст под шкалой весь серый, обычными предложениями: цветом выделен один
    ответ, а не каждая строка. */
+/* Плашка ровно такая же, как у «Основной информации» рядом: на светлой теме белая,
+   с обводкой и тенью, на тёмной — фон панели без обводки. */
 .price-rating {
   --price-rating-color: var(--muted);
   margin: 0 0 12px;
   padding: 18px 20px;
+  border: 1px solid var(--line);
   border-radius: calc(16px * var(--corner-scale));
-  /* Без обводки: блок отделён фоном. На светлой теме плашка светлее подложки не
-     станет — там фон приглушённый, на тёмной хватает обычного фона панели. */
-  background: var(--panel-soft);
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgba(23, 25, 28, 0.05);
 }
 :root[data-theme="dark"] .price-rating {
-  background: var(--panel);
+  border-color: transparent;
 }
 .price-rating.is-low {
   --price-rating-color: var(--price-good);
@@ -4997,10 +5044,23 @@ html[data-theme="dark"] #root .load-more {
    фотографиям и без скругления — как продолжение галереи, а не отдельная карточка
    с отступами. Боковые поля страницы там 14 точек, на них и выходим наружу. */
 @media (max-width: 700px) {
+  /* Под названием машины цена уже стоит крупно — в колонке она была бы вторым
+     таким же числом. */
+  .detail-sidebar .detail-sidebar-price {
+    display: none;
+  }
   .price-rating {
     margin: -34px -14px 0;
     padding: 16px 14px 18px;
+    border: 0;
     border-radius: 0;
+    /* Во всю ширину на белой странице белая плашка была бы не видна — здесь фон
+       приглушённый, а на тёмной теме хватает обычного фона панели. */
+    background: var(--panel-soft);
+    box-shadow: none;
+  }
+  :root[data-theme="dark"] .price-rating {
+    background: var(--panel);
   }
   .price-rating .price-rating-track {
     margin-top: 15px;
@@ -5278,6 +5338,9 @@ html[data-theme="dark"] #root .load-more {
   .detail-main .detail-sidebar > .vehicle-quick-info {
     order: 5;
   }
+  /* Цена и блок подробностей идут одной парой: у обоих порядок 6, а кто из них
+     первый, решает разметка — там цена стоит выше. */
+  .detail-main .detail-sidebar > .detail-sidebar-price,
   .detail-main .detail-sidebar > .order-card {
     order: 6;
   }
@@ -6626,6 +6689,36 @@ footer {
 }
 .order-tool-links a:hover {
   border-bottom-color: var(--accent-dark);
+}
+/* Те же ссылки в самом низу карточки машины — строками с иконкой, как разделы
+   полных характеристик выше: там уже есть такой набор, и глазу не нужно учить
+   второй вид списка. */
+.detail-tool-links {
+  display: grid;
+}
+.detail-tool-links a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.detail-tool-links a:first-child {
+  border-top: 1px solid var(--line);
+}
+.detail-tool-links a > svg {
+  flex: none;
+  color: var(--accent);
+}
+.detail-tool-links a:hover {
+  color: var(--accent-dark);
+}
+.detail-tool-links a:hover > svg {
+  color: var(--accent-dark);
 }
 .order-facts {
   display: grid;
