@@ -15462,7 +15462,7 @@ html[data-theme="dark"] .article-figure {
   }
 }
 
-/* Рекламная врезка в разрыве текста статьи (см. ArticleAd в src/App.jsx).
+/* Рекламная врезка в разрыве текста статьи (см. ArticleCatalog в src/App.jsx).
    Отделена от текста подложкой, а не рамкой, и набрана рубленым шрифтом: рядом с
    засечными абзацами это сразу читается как плашка, а не как продолжение мысли.
    Подложка нейтральная, серая: красная плашка посреди статьи спорила бы с красными
@@ -15472,7 +15472,7 @@ html[data-theme="dark"] .article-figure {
    для этого не годился: в тёмной теме он почти совпадает с подложкой статьи, и плашка
    пропадала.
    Отступы сверху и снизу больше межабзацных — врезка должна вставать паузой. */
-.article-ad {
+.article-catalog {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -15488,7 +15488,7 @@ html[data-theme="dark"] .article-figure {
    совсем — рядом с ним плашка сливалась бы с текстом. */
 /* Селектор из двух классов не случайно: врезка стоит внутри вступления статьи, а там
    любой абзац красится правилами про засечный текст. Одного класса им не перебить. */
-.article-ad .article-ad-copy {
+.article-catalog .article-catalog-copy {
   /* Обычный текстовый абзац, а не колонка из кусков: логотип должен стоять в строке
      и переноситься вместе с ней. Строкой из flex-элементов фраза уезжала целиком
      под логотип, стоило ей не поместиться рядом с кнопкой. */
@@ -15503,20 +15503,20 @@ html[data-theme="dark"] .article-figure {
 /* Текст статьи в тёмной теме приглушён — заголовки набраны в полную силу. Строка
    врезки идёт за заголовком, поэтому приглушение с неё снимаем: она и так короткая,
    а вполсилы её просто не замечают. */
-html[data-theme="dark"] .article-ad .article-ad-copy {
+html[data-theme="dark"] .article-catalog .article-catalog-copy {
   opacity: 1;
   color: var(--ink);
 }
 /* Логотип вместо слова «abcars.by» в начале строки. Он чуть крупнее самих букв
    (решение владельца 06.09.2026): название сервиса в рекламной врезке и должно
    бросаться в глаза первым. Небольшой сдвиг вниз ставит его на базовую линию. */
-.article-ad-logo {
+.article-catalog-logo {
   --wordmark-height: 24px;
   vertical-align: -3px;
 }
 /* Кнопка и подпись под ней стоят колонкой у правого края врезки: подпись относится
    к кнопке («сколько машин и на какое число»), а не ко всей плашке. */
-.article-ad-action {
+.article-catalog-action {
   display: flex;
   flex: none;
   flex-direction: column;
@@ -15526,7 +15526,7 @@ html[data-theme="dark"] .article-ad .article-ad-copy {
 /* Дата актуализации каталога — мелкая и серая: это не обещание, а сноска к числу
    в кнопке. Своё правило цвета нужно потому, что внутри вступления статьи текст в
    тёмной теме приглушается, а серому приглушаться дальше некуда. */
-.article-ad .article-ad-updated {
+.article-catalog .article-catalog-updated {
   font-size: 14px;
   line-height: 18px;
   font-weight: 500;
@@ -15538,8 +15538,8 @@ html[data-theme="dark"] .article-ad .article-ad-copy {
    правило про строчные ссылки статьи красит любые ссылки внутри вступления в красный
    и подчёркивает их при наведении. Кнопке это не нужно — подчёркнутая надпись на
    жёлтой плашке выглядит поломкой, а не ссылкой. */
-.article-ad .article-ad-button,
-.article-ad .article-ad-button:hover {
+.article-catalog .article-catalog-button,
+.article-catalog .article-catalog-button:hover {
   flex: none;
   min-height: 46px;
   padding: 0 20px;
@@ -15550,27 +15550,27 @@ html[data-theme="dark"] .article-ad .article-ad-copy {
 @media (max-width: 720px) {
   /* На узком экране кнопка встаёт под текстом во всю ширину: рядом со строкой ей
      остаётся полтора слова, и она переносится некрасиво. */
-  .article-ad {
+  .article-catalog {
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
     padding: 20px;
   }
   /* На телефоне строка уменьшается так же, как заголовки разделов статьи. */
-  .article-ad .article-ad-copy {
+  .article-catalog .article-catalog-copy {
     font-size: 20px;
   }
-  .article-ad-logo {
+  .article-catalog-logo {
     --wordmark-height: 21px;
   }
-  .article-ad-action {
+  .article-catalog-action {
     align-items: stretch;
   }
-  .article-ad .article-ad-button {
+  .article-catalog .article-catalog-button {
     width: 100%;
   }
   /* На телефоне подпись стоит под кнопкой во всю ширину и по центру. */
-  .article-ad .article-ad-updated {
+  .article-catalog .article-catalog-updated {
     text-align: center;
   }
 }

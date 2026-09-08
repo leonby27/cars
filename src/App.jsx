@@ -9694,7 +9694,7 @@ function BlogCoverImage({ cover, place, eager = false }) {
 // картинкой: читатель уже понял, о чём материал, но ещё не ушёл в текст с головой.
 // Оформлена не как абзац статьи, а как плашка на своей подложке и рубленым шрифтом,
 // чтобы её не приняли за продолжение текста.
-function ArticleAd({ navigate }) {
+function ArticleCatalog({ navigate }) {
   const { total, updatedAt } = useCatalogFacts();
   const box = useRef(null);
   // Показом считаем не появление врезки в статье, а то, что её довели до экрана:
@@ -9722,21 +9722,21 @@ function ArticleAd({ navigate }) {
   // мелкая и серая: это не обещание, а доказательство, что цифра рядом свежая.
   const updated = updatedAt ? catalogUpdatedDate(updatedAt) : "";
   return (
-    <aside className="article-ad" ref={box}>
-      <p className="article-ad-copy">
+    <aside className="article-catalog" ref={box}>
+      <p className="article-catalog-copy">
         {/* Название пишем логотипом. Для читалок с экрана рядом лежит то же слово
             текстом: сами картинки логотипа спрятаны от них. */}
-        <span className="wordmark article-ad-logo">
+        <span className="wordmark article-catalog-logo">
           <SiteLogo />
           <span className="visually-hidden">abcars.by</span>
         </span>
         <span> — это маркетплейс б/у авто из Китая</span>
       </p>
-      <div className="article-ad-action">
-        <AppLink className="primary article-ad-button" href="/catalog" navigate={navigate} onClick={() => trackEvent("article_promo_click")}>
+      <div className="article-catalog-action">
+        <AppLink className="primary article-catalog-button" href="/catalog" navigate={navigate} onClick={() => trackEvent("article_promo_click")}>
           {listings ? `${listings} объявлений` : "Каталог"} <ArrowRight size={18} />
         </AppLink>
-        {updated ? <span className="article-ad-updated">Каталог обновлён {updated}</span> : null}
+        {updated ? <span className="article-catalog-updated">Каталог обновлён {updated}</span> : null}
       </div>
     </aside>
   );
@@ -9751,12 +9751,12 @@ function BlogIntro({ paragraphs, navigate }) {
       {list.map((paragraph, index) => (
         <Fragment key={paragraph}>
           <p>{renderInlineText(paragraph, navigate)}</p>
-          {index === 0 ? <ArticleAd navigate={navigate} /> : null}
+          {index === 0 ? <ArticleCatalog navigate={navigate} /> : null}
         </Fragment>
       ))}
       {/* Материал без текста вступления рекламу всё равно показывает: врезка
           привязана к месту в статье, а не к наличию абзаца. */}
-      {list.length === 0 ? <ArticleAd navigate={navigate} /> : null}
+      {list.length === 0 ? <ArticleCatalog navigate={navigate} /> : null}
     </div>
   );
 }
