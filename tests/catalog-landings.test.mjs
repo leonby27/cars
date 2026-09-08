@@ -71,12 +71,14 @@ test("страница раздела отдаётся с текстом, маш
   // Блок «другие разделы» группирует их по виду, поэтому нужен настоящий раздел.
   const others = [findCatalogLanding("/catalog/tesla"), findCatalogLanding("/catalog/electric")];
   const { html } = render().landingPage({ landing, cars, total: 5673, modelPages, others });
-  assert.match(html, /<title>BYD с пробегом из Китая — цены до Минска \| abcars\.by<\/title>/);
+  // Формулировку («с пробегом» или «б/у») выбирает набор, закреплённый за слагом марки,
+  // поэтому тест берёт её из самой записи: иначе он падал бы при каждой перестановке наборов.
+  assert.match(html, new RegExp(`<title>${landing.seoTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</title>`));
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog\/byd"/);
   // Длинная фраза раздела разложена на две половины и общую подпись под ними. Слова
   // со страницы не убраны: половины стоят через пробел, а на телефоне стили ставят
   // каждую своей строкой.
-  assert.match(html, /<h1><span>Автомобили BYD<\/span> <span>с пробегом из Китая<\/span><\/h1><p>Купить с доставкой в Беларусь<\/p>/);
+  assert.match(html, /<h1><span>Автомобили BYD<\/span> <span>(с пробегом|б\/у) из Китая<\/span><\/h1><p>Купить с доставкой в Беларусь<\/p>/);
   assert.match(html, /В наличии 5[^<]*673 автомобиля/);
   // Текст раздела лежит в самой странице, а не подгружается скриптом.
   assert.match(html, /собственный тип батареи Blade/);

@@ -48,7 +48,10 @@ const render = (options = {}) =>
 test("страница машины несёт свой заголовок, описание и адрес-первоисточник", () => {
   const { html } = render().carPage({ car });
   assert.match(html, /<title>BYD Han 2023, пробег 21[^<]*400 км, батарея 85,4 кВт·ч — [^<]+\$ до Минска \| abcars\.by<\/title>/);
-  assert.match(html, /<meta name="description" content="BYD Han 2023: пробег 21[^"]*400 км, электромобиль, ориентировочная цена до Минска — [^"]+\$\. Проверка перед покупкой\."/);
+  // Тема — в описании и в хлебных крошках, а не в названии машины: заголовок остаётся
+  // тем, что человек ищет («BYD Han 2023»), а слова «из Китая» идут второй строкой.
+  assert.match(html, /<meta name="description" content="BYD Han 2023 из Китая: пробег 21[^"]*400 км, электромобиль, ориентировочная цена до Минска — [^"]+\$\. Проверка перед покупкой\."/);
+  assert.match(html, /"name":"Автомобили из Китая"/);
   // Приставка источника из адреса убрана, косой черты на конце нет.
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/cars\/56135000"/);
   assert.match(html, /<meta property="og:url" content="https:\/\/abcars\.by\/cars\/56135000"/);

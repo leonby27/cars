@@ -419,7 +419,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   // дампе каталога, сервер — на записи из базы; данные приходят в одном виде.
 
   function carDescription(car, landed) {
-    return `${carTitle(car)}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}, ориентировочная цена до Минска — ${number(landed.totalUsd)} $. Проверка перед покупкой.`;
+    return `${carTitle(car)} из Китая: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}, ориентировочная цена до Минска — ${number(landed.totalUsd)} $. Проверка перед покупкой.`;
   }
 
   function carFacts(car, landed) {
@@ -514,7 +514,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const sectionBlock = sections.length
       ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({
@@ -528,7 +528,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         image: schemaPhoto,
         type: "product",
         indexable,
-        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [titleText, route]]), schema],
+        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [titleText, route]]), schema],
       }),
     };
   }
@@ -596,7 +596,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   const CATALOG_INDEX = {
     route: "/catalog/",
     title: "Автомобили с пробегом из Китая — каталог и цены | abcars.by",
-    description: "Каталог автомобилей с пробегом из Китая: бензиновые, электрические и гибридные, с характеристиками, пробегом и ориентировочной стоимостью доставки в Минск.",
+    description: "Каталог китайских авто б/у: бензиновые, электрические и гибридные машины с пробегом из Китая — характеристики, пробег и ориентировочная стоимость доставки в Минск.",
     h1: "Все авто с пробегом из Китая",
     lead: "Выберите автомобиль, изучите характеристики и получите предварительный расчёт стоимости до Минска.",
   };
@@ -758,7 +758,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         prev: page > 1 ? routeUrl(pageRoute(landing.path, page - 1)) : null,
         next: page < pages ? routeUrl(pageRoute(landing.path, page + 1)) : null,
         schemas: [
-          breadcrumbsSchema([["Главная", "/"], ["Автомобили", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]),
+          breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]),
           itemList,
           ...(questions.length ? [faqSchema(questions)] : []),
         ],

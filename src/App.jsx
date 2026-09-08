@@ -954,8 +954,8 @@ function ScrollToTopButton() {
 }
 
 const routeSeo = {
-  "/": ["Автомобили из Китая в Беларусь — abcars.by", "Автомобили с пробегом из Китая с проверкой, расчётом стоимости и доставкой в Минск и Беларусь."],
-  "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | abcars.by", "Каталог автомобилей с пробегом из Китая: бензиновые, электрические и гибридные, с характеристиками, пробегом и ориентировочной стоимостью доставки в Беларусь."],
+  "/": ["Автомобили из Китая в Беларусь — abcars.by", "Китайские авто б/у с проверкой, расчётом стоимости и доставкой в Минск и Беларусь: электромобили, гибриды и бензиновые машины с пробегом из Китая."],
+  "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | abcars.by", "Каталог китайских авто б/у: бензиновые, электрические и гибридные машины с пробегом из Китая — характеристики, пробег и ориентировочная стоимость доставки в Беларусь."],
   "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
   "/delivered": ["Доставленные автомобили из Китая — примеры и цены | abcars.by", "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска."],
   "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | abcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
@@ -1008,7 +1008,7 @@ function ClientSeo({ path, car, landing }) {
     // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
     const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
     const [title, description] = detailTitle
-      ? [carPageTitle(car), `${detailTitle}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены до Минска.`]
+      ? [carPageTitle(car), `${detailTitle} из Китая: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены с доставкой до Минска.`]
       : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | abcars.by", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена | abcars.by", "Запрошенная страница не найдена."];
     const canonicalRoot = document.querySelector('link[rel="canonical"]')?.href || `${window.location.origin}${import.meta.env.BASE_URL}`;
     const canonicalBase = new URL(canonicalRoot);
@@ -3145,7 +3145,7 @@ function SimilarCars({ car, cars, onOpenCar }) {
   return (
     <section className="similar-cars" aria-labelledby="similar-cars-title">
       <div className="similar-cars-heading">
-        <h2 id="similar-cars-title">Похожие автомобили</h2>
+        <h2 id="similar-cars-title">Похожие автомобили из Китая</h2>
         {sameModelReachable && (
           <div className="brand-type-switch similar-mode-switch" role="group" aria-label="Какие машины показывать">
             <button type="button" className={sameModelOnly ? "" : "active"} aria-pressed={!sameModelOnly} onClick={() => setSameModelOnly(false)}>
@@ -6260,7 +6260,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
                 imageRefs.current[index] = node;
               }}
             >
-              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title}, фото ${index + 1}`} loading={index === initialIndex ? "eager" : "lazy"} fetchPriority={index === initialIndex ? "high" : "low"} decoding="async" onError={(event) => retryWithFullImage(event, image)} />
+              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title} из Китая, фото ${index + 1}`} loading={index === initialIndex ? "eager" : "lazy"} fetchPriority={index === initialIndex ? "high" : "low"} decoding="async" onError={(event) => retryWithFullImage(event, image)} />
               <figcaption>
                 {index + 1} из {images.length}
               </figcaption>
@@ -6569,7 +6569,7 @@ function VehicleGallery({ car }) {
                   <img
                     className="gallery-frame-full"
                     src={imageSource(image, IMAGE_ORIGINAL)}
-                    alt={`${car.title}, фото ${index + 1}`}
+                    alt={`${car.title} из Китая, фото ${index + 1}`}
                     fetchPriority={index === active ? "high" : "low"}
                     draggable="false"
                     onLoad={index === 0 ? () => setReady(true) : undefined}

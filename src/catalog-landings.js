@@ -36,19 +36,52 @@ const DUTY_ICE_SHORT = "Пошлину на бензиновую машину с
 // Почти каждая пятая бензиновая машина в каталоге помечена продавцом как гибрид.
 const MILD_HYBRID = "Часть объявлений продавец называет гибридом, хотя это система на 48 вольт: небольшой стартер-генератор помогает мотору трогаться и экономит топливо, но сама машина на электричестве не едет. Таможня считает её обычной бензиновой, поэтому в каталоге она стоит здесь, а не в гибридах.";
 
-const brand = (slug, name, notes, options = {}) => ({
-  kind: "brand",
-  path: `/catalog/${slug}`,
-  slug,
-  brand: name,
-  name,
-  h1: `Автомобили ${name} с пробегом из Китая — доставка в Беларусь`,
-  seoTitle: `${name} с пробегом из Китая — цены до Минска | abcars.by`,
-  seoDescription: `Автомобили ${name} с пробегом из Китая: модели, годы, пробег, характеристики и ориентировочная стоимость доставки в Минск.`,
-  lead: `Объявления ${name} с китайского вторичного рынка — с переведёнными характеристиками и предварительным расчётом стоимости до Минска.`,
-  notes,
-  ...options,
-});
+// Одно и то же можно спросить по-разному: «BYD с пробегом из Китая» и «BYD б/у
+// из Китая» — это два разных запроса, и страница отвечает только на тот, чьими
+// словами она написана. Поэтому у марок три набора формулировок; какой достанется
+// марке, решает её слаг, а не случай: заголовок страницы обязан быть одним и тем же
+// между сборками, иначе поисковик каждый раз видит новую страницу.
+const brandWording = [
+  {
+    h1: (name) => `Автомобили ${name} с пробегом из Китая — доставка в Беларусь`,
+    seoTitle: (name) => `${name} с пробегом из Китая — цены до Минска | abcars.by`,
+    seoDescription: (name) => `Автомобили ${name} с пробегом из Китая: модели, годы, пробег, характеристики и ориентировочная стоимость доставки в Минск.`,
+    lead: (name) => `Объявления ${name} с китайского вторичного рынка — с переведёнными характеристиками и предварительным расчётом стоимости до Минска.`,
+  },
+  {
+    h1: (name) => `Автомобили ${name} б/у из Китая — доставка в Беларусь`,
+    seoTitle: (name) => `${name} б/у из Китая — купить с доставкой в Минск | abcars.by`,
+    seoDescription: (name) => `${name} б/у из Китая: модели, годы, пробег, характеристики и ориентировочная цена с доставкой в Минск и по Беларуси.`,
+    lead: (name) => `Объявления ${name} с китайского вторичного рынка — б/у машины с переведёнными характеристиками и предварительным расчётом цены до Минска.`,
+  },
+  {
+    h1: (name) => `${name} с пробегом из Китая — купить с доставкой в Беларусь`,
+    seoTitle: (name) => `${name} с пробегом из Китая — купить в Минске | abcars.by`,
+    seoDescription: (name) => `Как купить ${name} с пробегом из Китая: подбор и проверка объявления, характеристики, пробег и ориентировочная цена до Минска.`,
+    lead: (name) => `Объявления ${name} с китайского вторичного рынка: проверяем машину до оплаты и сразу показываем предварительную цену до Минска.`,
+  },
+];
+
+// Номер набора — по сумме кодов букв слага: одно и то же имя всегда даёт один и тот
+// же номер, а рядом стоящие марки получают разные формулировки.
+const brandWordingFor = (slug) => brandWording[[...String(slug)].reduce((sum, letter) => sum + letter.codePointAt(0), 0) % brandWording.length];
+
+const brand = (slug, name, notes, options = {}) => {
+  const wording = brandWordingFor(slug);
+  return {
+    kind: "brand",
+    path: `/catalog/${slug}`,
+    slug,
+    brand: name,
+    name,
+    h1: wording.h1(name),
+    seoTitle: wording.seoTitle(name),
+    seoDescription: wording.seoDescription(name),
+    lead: wording.lead(name),
+    notes,
+    ...options,
+  };
+};
 
 // `powertrain` — значение из базы («Электромобиль»), `filterLabel` — подпись, которой
 // тот же фильтр называется в адресе каталога («Электромобили»). Расхождение историческое:
@@ -163,14 +196,15 @@ export const landingHeading = (h1) => {
   const text = String(h1 ?? "").trim();
   const dash = text.split(" — ");
   const title = dash.length > 1 ? dash[0] : splitByDelivery(text);
-  const at = title.includes(FROM_CHINA_LONG) ? title.indexOf(FROM_CHINA_LONG) : title.indexOf(FROM_CHINA);
+  const at = FROM_CHINA_TAILS.reduce((found, tail) => (found >= 0 ? found : title.indexOf(tail)), -1);
   return at > 0
     ? { title: title.slice(0, at).trim(), tail: title.slice(at).trim(), subtitle: LANDING_SUBTITLE }
     : { title, tail: "", subtitle: LANDING_SUBTITLE };
 };
 
-const FROM_CHINA_LONG = "с пробегом из Китая";
-const FROM_CHINA = "из Китая";
+// Хвосты второй строки заголовка — от самого длинного к короткому: у раздела, который
+// говорит «б/у», перенос должен стоять там же, где у раздела со словами «с пробегом».
+const FROM_CHINA_TAILS = ["с пробегом из Китая", "б/у из Китая", "из Китая"];
 
 const splitByDelivery = (text) => {
   const at = text.indexOf(" с доставкой ");
@@ -453,7 +487,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   powertrain("electric", "Электромобиль", "Электромобили", {
     name: "Электромобили",
     h1: "Электромобили с пробегом из Китая — купить с доставкой в Беларусь",
-    seoTitle: "Электромобили с пробегом из Китая — купить в Минске | abcars.by",
+    seoTitle: "Китайские электромобили с пробегом — купить в Минске | abcars.by",
     seoDescription: "Электромобили с пробегом из Китая: запас хода, ёмкость батареи, пробег и ориентировочная стоимость доставки в Минск с учётом льготы на ввоз.",
     lead: "Электромобили китайского вторичного рынка с переведёнными характеристиками и расчётом стоимости до Минска.",
     notes: [
@@ -464,7 +498,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   powertrain("hybrid", "Гибрид", "Гибриды", {
     name: "Гибриды",
     h1: "Гибриды с пробегом из Китая — доставка в Беларусь",
-    seoTitle: "Гибриды с пробегом из Китая — цены до Минска | abcars.by",
+    seoTitle: "Китайские гибриды б/у — цены до Минска | abcars.by",
     seoDescription: "Гибридные автомобили с пробегом из Китая: запас хода на электричестве, объём двигателя, пробег и ориентировочная стоимость доставки в Минск.",
     lead: "Гибриды китайского вторичного рынка с переведёнными характеристиками и расчётом стоимости до Минска.",
     notes: [
@@ -488,7 +522,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   body("suv", "SUV / кроссовер", {
     name: "Кроссоверы и внедорожники",
     h1: "Кроссоверы с пробегом из Китая — купить с доставкой в Беларусь",
-    seoTitle: "Кроссоверы из Китая с пробегом — купить в Минске | abcars.by",
+    seoTitle: "Китайские кроссоверы с пробегом — купить в Минске | abcars.by",
     seoDescription: "Кроссоверы и внедорожники с пробегом из Китая: электрические и гибридные, характеристики, пробег и ориентировочная стоимость доставки в Минск.",
     lead: "Самый большой раздел каталога: электрические и гибридные кроссоверы китайского вторичного рынка.",
     notes: [
@@ -499,7 +533,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   body("sedan", "Седан", {
     name: "Седаны",
     h1: "Седаны с пробегом из Китая — доставка в Беларусь",
-    seoTitle: "Седаны с пробегом из Китая — цены до Минска | abcars.by",
+    seoTitle: "Китайские седаны б/у — цены до Минска | abcars.by",
     seoDescription: "Седаны с пробегом из Китая: электрические и гибридные, запас хода, пробег и ориентировочная стоимость доставки в Минск.",
     lead: "Электрические и гибридные седаны китайского вторичного рынка с расчётом стоимости до Минска.",
     notes: [
@@ -521,7 +555,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   body("minivan", "Минивэн", {
     name: "Минивэны",
     h1: "Минивэны с пробегом из Китая — купить с доставкой в Беларусь",
-    seoTitle: "Минивэны из Китая — купить с доставкой в Минск | abcars.by",
+    seoTitle: "Минивэны б/у из Китая — купить с доставкой в Минск | abcars.by",
     seoDescription: "Минивэны с пробегом из Китая: шести- и семиместные электрические и гибридные, характеристики и стоимость доставки в Минск.",
     lead: "Шести- и семиместные минивэны китайского вторичного рынка с расчётом стоимости до Минска.",
     notes: [
@@ -543,7 +577,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   body("wagon", "Универсал", {
     name: "Универсалы",
     h1: "Универсалы с пробегом из Китая — доставка в Беларусь",
-    seoTitle: "Универсалы из Китая — купить с доставкой в Минск | abcars.by",
+    seoTitle: "Универсалы б/у из Китая — купить в Минске | abcars.by",
     seoDescription: "Универсалы с пробегом из Китая: вместительный багажник, электрические и гибридные версии, стоимость доставки в Минск.",
     lead: "Универсалы китайского вторичного рынка — редкий кузов с самым вместительным багажником.",
     notes: [
@@ -555,7 +589,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   body("coupe", "Купе", {
     name: "Купе",
     h1: "Купе с пробегом из Китая — доставка в Беларусь",
-    seoTitle: "Купе с пробегом из Китая — цены до Минска | abcars.by",
+    seoTitle: "Купе б/у из Китая — цены с доставкой до Минска | abcars.by",
     seoDescription: "Двухдверные купе с пробегом из Китая: Mercedes-Benz, BMW, Audi — характеристики, пробег и ориентировочная цена до Минска.",
     lead: "Двухдверные машины, которых на местном рынке почти не найти.",
     notes: [
@@ -581,7 +615,7 @@ export const CATALOG_LANDINGS = Object.freeze([
     bodyType: "SUV / кроссовер",
     name: "Электрические кроссоверы",
     h1: "Электрические кроссоверы из Китая с доставкой в Беларусь",
-    seoTitle: "Электрические кроссоверы с пробегом из Китая — цены | abcars.by",
+    seoTitle: "Китайские электрокроссоверы с пробегом — цены | abcars.by",
     seoDescription: "Электрические кроссоверы с пробегом из Китая: запас хода, ёмкость батареи, пробег и ориентировочная стоимость доставки в Минск.",
     lead: "Самый большой раздел каталога: кроссовер на электротяге — то, что чаще всего ищут и чаще всего везут.",
     notes: [
@@ -595,7 +629,7 @@ export const CATALOG_LANDINGS = Object.freeze([
     bodyType: "SUV / кроссовер",
     name: "Гибридные кроссоверы",
     h1: "Гибридные кроссоверы из Китая с доставкой в Беларусь",
-    seoTitle: "Гибридные кроссоверы с пробегом из Китая — цены | abcars.by",
+    seoTitle: "Гибридные кроссоверы б/у из Китая — цены до Минска | abcars.by",
     seoDescription: "Гибридные кроссоверы с пробегом из Китая: запас хода на электричестве, объём двигателя, пробег и стоимость доставки в Минск.",
     lead: "Кроссоверы, которым не нужна зарядка: бензиновый двигатель работает вместе с электромотором или как генератор.",
     notes: [
@@ -609,7 +643,7 @@ export const CATALOG_LANDINGS = Object.freeze([
     bodyType: "Седан",
     name: "Электрические седаны",
     h1: "Электрические седаны из Китая с доставкой в Беларусь",
-    seoTitle: "Электрические седаны с пробегом из Китая — цены | abcars.by",
+    seoTitle: "Электрические седаны б/у из Китая — цены | abcars.by",
     seoDescription: "Электрические седаны с пробегом из Китая: запас хода, ёмкость батареи, пробег и ориентировочная стоимость доставки в Минск.",
     lead: "Седаны на электротяге: от компактных городских до представительных с запасом хода за шестьсот километров.",
     notes: [
@@ -747,7 +781,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   // ── Марка + кузов ───────────────────────────────────────────────────────────
   brandBody("li-auto-suv", "Li Auto", "SUV / кроссовер", {
     name: "Кроссоверы Li Auto",
-    h1: "Кроссоверы Li Auto из Китая с доставкой в Беларусь",
+    h1: "Кроссоверы Li Auto б/у из Китая с доставкой в Беларусь",
     seoTitle: "Кроссоверы Li Auto из Китая — купить в Минске | abcars.by",
     seoDescription: "Кроссоверы Li Auto с пробегом из Китая: L6, L7, L8, L9 — характеристики, пробег и ориентировочная цена до Минска.",
     lead: "Вся линейка L: от компактного L6 до шестиместного L9.",
@@ -780,8 +814,8 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("byd-suv", "BYD", "SUV / кроссовер", {
     name: "Кроссоверы BYD",
-    h1: "Кроссоверы BYD из Китая с доставкой в Беларусь",
-    seoTitle: "Кроссоверы BYD с пробегом из Китая — цены до Минска | abcars.by",
+    h1: "Кроссоверы BYD б/у из Китая с доставкой в Беларусь",
+    seoTitle: "Кроссоверы BYD б/у из Китая — цены до Минска | abcars.by",
     seoDescription: "Кроссоверы BYD с пробегом из Китая: Song, Tang, Yuan, Sealion — характеристики, пробег и цена до Минска.",
     lead: "Song, Tang, Yuan и Sealion — в электрических и гибридных версиях.",
     notes: [
@@ -813,7 +847,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("byd-hatchback", "BYD", "Хэтчбек", {
     name: "Хэтчбеки BYD",
-    h1: "Хэтчбеки BYD из Китая с доставкой в Беларусь",
+    h1: "Хэтчбеки BYD б/у из Китая с доставкой в Беларусь",
     seoTitle: "Хэтчбеки BYD из Китая — купить в Минске | abcars.by",
     seoDescription: "Хэтчбеки BYD Seagull и Dolphin с пробегом из Китая: батарея, запас хода, пробег и цена до Минска.",
     lead: "Seagull и Dolphin — самые доступные машины во всём каталоге.",
@@ -846,8 +880,8 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("bmw-sedan", "BMW", "Седан", {
     name: "Седаны BMW",
-    h1: "Седаны BMW из Китая с доставкой в Беларусь",
-    seoTitle: "Седаны BMW с пробегом из Китая — цены до Минска | abcars.by",
+    h1: "Седаны BMW б/у из Китая с доставкой в Беларусь",
+    seoTitle: "Седаны BMW б/у из Китая — цены до Минска | abcars.by",
     seoDescription: "Седаны BMW i3, i5, i7 и 5 серии с пробегом из Китая: характеристики, пробег и цена до Минска.",
     lead: "i3, i5, i7 и гибридная 5 серия китайской сборки.",
     notes: [
@@ -880,8 +914,8 @@ export const CATALOG_LANDINGS = Object.freeze([
 
   brandBody("mercedes-benz-sedan", "Mercedes-Benz", "Седан", {
     name: "Седаны Mercedes-Benz",
-    h1: "Седаны Mercedes-Benz из Китая с доставкой в Беларусь",
-    seoTitle: "Седаны Mercedes-Benz с пробегом из Китая — цены | abcars.by",
+    h1: "Седаны Mercedes-Benz б/у из Китая с доставкой в Беларусь",
+    seoTitle: "Седаны Mercedes-Benz б/у из Китая — цены | abcars.by",
     seoDescription: "Седаны Mercedes-Benz с пробегом из Китая: C-Class, E-Class, S-Class — версии, пробег и ориентировочная цена до Минска.",
     lead: "Самый большой раздел бензинового каталога: C-Class, E-Class, S-Class и Maybach.",
     notes: [
@@ -913,8 +947,8 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("volkswagen-suv", "Volkswagen", "SUV / кроссовер", {
     name: "Кроссоверы Volkswagen",
-    h1: "Кроссоверы Volkswagen из Китая с доставкой в Беларусь",
-    seoTitle: "Кроссоверы Volkswagen с пробегом из Китая — цены | abcars.by",
+    h1: "Кроссоверы Volkswagen б/у из Китая с доставкой в Беларусь",
+    seoTitle: "Кроссоверы Volkswagen б/у из Китая — цены | abcars.by",
     seoDescription: "Кроссоверы Volkswagen с пробегом из Китая: Tiguan L, Tayron, Tharu, Teramont, Talagon — характеристики, пробег и цена до Минска.",
     lead: "Tiguan L, Tayron, Tharu, Teramont, Talagon — половины этих названий в Европе нет.",
     notes: [
@@ -946,7 +980,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("volkswagen-liftback", "Volkswagen", "Лифтбек", {
     name: "Лифтбеки Volkswagen",
-    h1: "Лифтбеки Volkswagen из Китая с доставкой в Беларусь",
+    h1: "Лифтбеки Volkswagen б/у из Китая с доставкой в Беларусь",
     seoTitle: "Volkswagen Lamando и CC из Китая — купить с пробегом | abcars.by",
     seoDescription: "Volkswagen Lamando и CC с пробегом из Китая: посадка седана, большой проём багажника, пробег и цена до Минска.",
     lead: "Lamando и CC: снаружи купе-седан, багажник открывается вместе со стеклом.",
@@ -979,8 +1013,8 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("audi-suv", "Audi", "SUV / кроссовер", {
     name: "Кроссоверы Audi",
-    h1: "Кроссоверы Audi из Китая с доставкой в Беларусь",
-    seoTitle: "Кроссоверы Audi с пробегом из Китая — цены до Минска | abcars.by",
+    h1: "Кроссоверы Audi б/у из Китая с доставкой в Беларусь",
+    seoTitle: "Кроссоверы Audi б/у из Китая — цены до Минска | abcars.by",
     seoDescription: "Кроссоверы Audi с пробегом из Китая: Q2L, Q3, Q5L, Q7 — характеристики, объём двигателя, пробег и цена до Минска.",
     lead: "От компактного Q2L до большого Q7.",
     notes: [
@@ -1015,8 +1049,8 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("honda-suv", "Honda", "SUV / кроссовер", {
     name: "Кроссоверы Honda",
-    h1: "Кроссоверы Honda из Китая с доставкой в Беларусь",
-    seoTitle: "Кроссоверы Honda с пробегом из Китая — цены до Минска | abcars.by",
+    h1: "Кроссоверы Honda б/у из Китая с доставкой в Беларусь",
+    seoTitle: "Кроссоверы Honda б/у из Китая — цены до Минска | abcars.by",
     seoDescription: "Кроссоверы Honda с пробегом из Китая: CR-V, Breeze, XR-V, HR-V — мотор 1,5 турбо, пробег и цена до Минска.",
     notes: [
       "У Honda в Китае два завода-партнёра, поэтому почти у каждого кроссовера есть близнец под другим именем: XR-V и Vezel — одна машина, CR-V и Haoying (Breeze) — тоже, а крупные Avancier и UR-V различаются только отделкой. Выбирать стоит по цене и пробегу, а не по названию.",
@@ -1045,7 +1079,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("land-rover-suv", "Land Rover", "SUV / кроссовер", {
     name: "Кроссоверы Land Rover",
-    h1: "Кроссоверы и внедорожники Land Rover из Китая с доставкой в Беларусь",
+    h1: "Кроссоверы и внедорожники Land Rover б/у из Китая с доставкой в Беларусь",
     seoTitle: "Land Rover из Китая с пробегом — цены до Минска | abcars.by",
     seoDescription: "Land Rover с пробегом из Китая: Discovery Sport, Evoque, Defender, Range Rover Sport и Velar — объём мотора и цена до Минска.",
     notes: [
@@ -1075,7 +1109,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("honda-sedan", "Honda", "Седан", {
     name: "Седаны Honda",
-    h1: "Седаны Honda из Китая с доставкой в Беларусь",
+    h1: "Седаны Honda б/у из Китая с доставкой в Беларусь",
     seoTitle: "Седаны Honda из Китая — купить в Минске | abcars.by",
     seoDescription: "Седаны Honda с пробегом из Китая: Accord, Civic, Inspire, Integra — мотор 1,5 турбо, пробег и цена до Минска.",
     notes: [
@@ -1105,8 +1139,8 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("hongqi-sedan", "Hongqi", "Седан", {
     name: "Седаны Hongqi",
-    h1: "Седаны Hongqi из Китая с доставкой в Беларусь",
-    seoTitle: "Седаны Hongqi с пробегом из Китая — цены до Минска | abcars.by",
+    h1: "Седаны Hongqi б/у из Китая с доставкой в Беларусь",
+    seoTitle: "Седаны Hongqi б/у из Китая — цены до Минска | abcars.by",
     seoDescription: "Седаны Hongqi с пробегом из Китая: H5, флагманский H9, электрический E-QM5 — моторы 1,5–3,0 и цена до Минска.",
     notes: [
       "H5 — самая массовая машина марки: мотор 1,5 или 2,0, много оснащения за небольшие деньги. H9 — представительский седан с моторами до 3,0 литра, его оформление обходится в разы дороже.",
@@ -1135,7 +1169,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("hyundai-sedan", "Hyundai", "Седан", {
     name: "Седаны Hyundai",
-    h1: "Седаны Hyundai из Китая с доставкой в Беларусь",
+    h1: "Седаны Hyundai б/у из Китая с доставкой в Беларусь",
     seoTitle: "Седаны Hyundai из Китая — купить с пробегом | abcars.by",
     seoDescription: "Седаны Hyundai с пробегом из Китая: Elantra, Sonata, Verna — моторы 1,4–2,0, пробег и цена до Минска.",
     notes: [
@@ -1165,7 +1199,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("nissan-suv", "Nissan", "SUV / кроссовер", {
     name: "Кроссоверы Nissan",
-    h1: "Кроссоверы Nissan из Китая с доставкой в Беларусь",
+    h1: "Кроссоверы Nissan б/у из Китая с доставкой в Беларусь",
     seoTitle: "Кроссоверы Nissan из Китая — купить в Минске | abcars.by",
     seoDescription: "Кроссоверы Nissan с пробегом из Китая: X-Trail, Qashqai, Terra — моторы 1,3–2,5, пробег и цена до Минска.",
     notes: [
@@ -1195,7 +1229,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("lynk-co-sedan", "Lynk & Co", "Седан", {
     name: "Седаны Lynk & Co",
-    h1: "Седаны Lynk & Co из Китая с доставкой в Беларусь",
+    h1: "Седаны Lynk & Co б/у из Китая с доставкой в Беларусь",
     seoTitle: "Lynk & Co 03 из Китая — купить с пробегом | abcars.by",
     seoDescription: "Седаны Lynk & Co с пробегом из Китая: 03 с моторами 1,5 и 2,0 турбо, гибриды 07 и 10 EM-P — цена до Минска.",
     notes: [
@@ -1225,7 +1259,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("porsche-suv", "Porsche", "SUV / кроссовер", {
     name: "Кроссоверы Porsche",
-    h1: "Кроссоверы Porsche из Китая с доставкой в Беларусь",
+    h1: "Кроссоверы Porsche б/у из Китая с доставкой в Беларусь",
     seoTitle: "Porsche Macan и Cayenne из Китая — цены | abcars.by",
     seoDescription: "Кроссоверы Porsche с пробегом из Китая: Macan с мотором 2,0 и Cayenne с 3,0 — пробег и итоговая цена до Минска.",
     notes: [
@@ -1255,7 +1289,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("mazda-suv", "Mazda", "SUV / кроссовер", {
     name: "Кроссоверы Mazda",
-    h1: "Кроссоверы Mazda из Китая с доставкой в Беларусь",
+    h1: "Кроссоверы Mazda б/у из Китая с доставкой в Беларусь",
     seoTitle: "Кроссоверы Mazda из Китая — купить в Минске | abcars.by",
     seoDescription: "Кроссоверы Mazda с пробегом из Китая: CX-5, CX-4, CX-30, CX-50 Xingye — моторы 2,0–2,5 и цена до Минска.",
     notes: [
@@ -1285,8 +1319,8 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("ford-suv", "Ford", "SUV / кроссовер", {
     name: "Кроссоверы Ford",
-    h1: "Кроссоверы Ford из Китая с доставкой в Беларусь",
-    seoTitle: "Кроссоверы Ford с пробегом из Китая — цены | abcars.by",
+    h1: "Кроссоверы Ford б/у из Китая с доставкой в Беларусь",
+    seoTitle: "Кроссоверы Ford б/у из Китая — цены | abcars.by",
     seoDescription: "Кроссоверы Ford с пробегом из Китая: Explorer, Edge, Escape, Bronco, Territory — моторы 1,5–2,7 и цена до Минска.",
     notes: [
       "Explorer и Edge — крупные кроссоверы с моторами от 2,0 до 2,7 литра, Escape и Territory компактнее и дешевле, Bronco — рамный внедорожник с мотором 2,3.",
@@ -1315,7 +1349,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("mini-hatchback", "MINI", "Хэтчбек", {
     name: "Хэтчбеки MINI",
-    h1: "MINI из Китая с доставкой в Беларусь",
+    h1: "MINI б/у из Китая с доставкой в Беларусь",
     seoTitle: "MINI Cooper из Китая — купить с пробегом | abcars.by",
     seoDescription: "MINI Cooper, Clubman и John Cooper Works с пробегом из Китая: моторы 1,5 и 2,0, пробег и цена до Минска.",
     notes: [
@@ -1345,7 +1379,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("honda-hatchback", "Honda", "Хэтчбек", {
     name: "Хэтчбеки Honda",
-    h1: "Хэтчбеки Honda из Китая с доставкой в Беларусь",
+    h1: "Хэтчбеки Honda б/у из Китая с доставкой в Беларусь",
     seoTitle: "Хэтчбеки Honda из Китая — купить с пробегом | abcars.by",
     seoDescription: "Хэтчбеки Honda Fit, Civic и LIFE с пробегом из Китая: мотор 1,5, пробег и ориентировочная цена до Минска.",
     notes: [
@@ -1375,7 +1409,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("aion-suv", "AION", "SUV / кроссовер", {
     name: "Кроссоверы AION",
-    h1: "Электрические кроссоверы AION из Китая с доставкой в Беларусь",
+    h1: "Электрические кроссоверы AION б/у из Китая с доставкой в Беларусь",
     seoTitle: "Кроссоверы AION Y и V из Китая — цены | abcars.by",
     seoDescription: "Электрические кроссоверы AION Y и AION V с пробегом из Китая: батарея, запас хода, пробег и цена до Минска.",
     notes: [
@@ -1405,7 +1439,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("lexus-suv", "Lexus", "SUV / кроссовер", {
     name: "Кроссоверы Lexus",
-    h1: "Кроссоверы Lexus из Китая с доставкой в Беларусь",
+    h1: "Кроссоверы Lexus б/у из Китая с доставкой в Беларусь",
     seoTitle: "Кроссоверы Lexus RX и NX из Китая — цены | abcars.by",
     seoDescription: "Кроссоверы Lexus RX, NX и UX с пробегом из Китая: моторы 2,0–2,5, пробег и ориентировочная цена до Минска.",
     notes: [
@@ -1435,7 +1469,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("voyah-suv", "Voyah", "SUV / кроссовер", {
     name: "Кроссоверы Voyah",
-    h1: "Кроссоверы Voyah из Китая с доставкой в Беларусь",
+    h1: "Кроссоверы Voyah б/у из Китая с доставкой в Беларусь",
     seoTitle: "Кроссоверы Voyah из Китая — купить с пробегом | abcars.by",
     seoDescription: "Кроссоверы Voyah FREE и Courage с пробегом из Китая: гибрид с генератором и электрическая версия, цена до Минска.",
     notes: [
@@ -1465,7 +1499,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
   brandBody("denza-minivan", "Denza", "Минивэн", {
     name: "Минивэны Denza",
-    h1: "Минивэны Denza D9 из Китая с доставкой в Беларусь",
+    h1: "Минивэны Denza D9 б/у из Китая с доставкой в Беларусь",
     seoTitle: "Denza D9 из Китая — купить с пробегом | abcars.by",
     seoDescription: "Denza D9 с пробегом из Китая: семиместный минивэн, гибрид с розеткой и электрическая версия, цена до Минска.",
     notes: [
@@ -1498,7 +1532,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   priceBand("under-20000", 20000, {
     name: "Автомобили до 20 000 $",
     h1: "Автомобили из Китая до 20 000 $ с доставкой в Беларусь",
-    seoTitle: "Авто из Китая до 20 000 $ — купить в Минске | abcars.by",
+    seoTitle: "Китайские авто до 20 000 $ — купить в Минске | abcars.by",
     seoDescription: "Автомобили с пробегом из Китая дешевле 20 000 долларов: цена указана итоговой, с доставкой до Минска и оформлением.",
     lead: "Самый популярный бюджет: в эту сумму уже помещается средний кроссовер.",
     notes: [
@@ -1509,7 +1543,7 @@ export const CATALOG_LANDINGS = Object.freeze([
   priceBand("under-25000", 25000, {
     name: "Автомобили до 25 000 $",
     h1: "Автомобили из Китая до 25 000 $ с доставкой в Беларусь",
-    seoTitle: "Авто из Китая с пробегом до 25 000 $ | abcars.by",
+    seoTitle: "Авто б/у из Китая до 25 000 $ — цены до Минска | abcars.by",
     seoDescription: "Автомобили с пробегом из Китая дешевле 25 000 долларов: цена указана итоговой, с доставкой до Минска и оформлением.",
     lead: "В этот бюджет помещается почти любой средний кроссовер или седан.",
     notes: [
