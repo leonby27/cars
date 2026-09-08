@@ -49,9 +49,10 @@
   --warn-ink: #b45309;
   --warn-soft: #fff4e6;
   --green: #1b8551;
-  /* Цвета блока «Цена среди похожих»: дорожка шкалы и два её полюса. Дорожка заметно
-     темнее плашки, иначе шкала читается как пустое место. */
-  --price-rating-groove: #e2e5e9;
+  /* Цвета блока «Цена среди похожих»: неподсвеченные деления шкалы и два её полюса.
+     Деления заметно отличаются от плашки в обе стороны — и на светлой теме, и на
+     тёмной; пока они были близки к её фону, шкала читалась как пустое место. */
+  --price-rating-groove: #c6cdd5;
   --price-good: #157f3c;
   --price-bad: #cf2d24;
   --motion-fast: 140ms;
@@ -3258,7 +3259,7 @@ body.header-menu-open .detail-floating-availability {
   --model-chip-hover-bg: #30343c;
   --menu-popover-bg: #262a30;
   --green: #65d49a;
-  --price-rating-groove: #0e1013;
+  --price-rating-groove: #454c55;
   --price-good: #4ede93;
   --price-bad: #ff6f63;
   --page: #111315;
@@ -4992,21 +4993,14 @@ html[data-theme="dark"] #root .load-more {
     animation: none;
   }
 }
-/* На телефоне плашки нет: содержание лежит прямо на странице, как остальные
-   разделы карточки, и блок не отнимает высоту на рамку и отступы.
-
-   Вместе с плашкой меняется и цвет неподсвеченных делений: на ней канавка была
-   темнее фона, а на самой странице такая же тёмная полоса с фоном сливается —
-   поэтому здесь она наоборот светлее. */
+/* На телефоне блок отбивается фоном: плашка во всю ширину экрана, вплотную к
+   фотографиям и без скругления — как продолжение галереи, а не отдельная карточка
+   с отступами. Боковые поля страницы там 14 точек, на них и выходим наружу. */
 @media (max-width: 700px) {
   .price-rating {
-    --price-rating-groove: #d3d9e0;
-    padding: 0;
-    background: none;
-  }
-  :root[data-theme="dark"] .price-rating {
-    --price-rating-groove: #454c55;
-    background: none;
+    margin: -34px -14px 0;
+    padding: 16px 14px 18px;
+    border-radius: 0;
   }
   .price-rating .price-rating-track {
     margin-top: 15px;
@@ -5272,7 +5266,7 @@ html[data-theme="dark"] #root .load-more {
   .detail-gallery {
     order: 1;
   }
-  .detail-sidebar > .price-rating {
+  .detail-main .detail-sidebar > .price-rating {
     order: 2;
   }
   .detail-dates {
@@ -5281,10 +5275,10 @@ html[data-theme="dark"] #root .load-more {
   .detail-content {
     order: 4;
   }
-  .detail-sidebar > .vehicle-quick-info {
+  .detail-main .detail-sidebar > .vehicle-quick-info {
     order: 5;
   }
-  .detail-sidebar > .order-card {
+  .detail-main .detail-sidebar > .order-card {
     order: 6;
   }
   .order-card {
