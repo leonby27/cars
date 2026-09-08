@@ -625,7 +625,9 @@ test("подсказка у иконки называет систему, а и�
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   assert.match(source, /android:"Android"/);
   assert.match(source, /macos:"macOS"/);
-  assert.match(source, /const label = system \? `\$\{kind\} · \$\{system\}` : kind;/);
+  assert.match(source, /Система не записана/);
+  assert.match(source, /role="tooltip"/);
+  assert.match(source, /open && createPortal/);
   const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
   assert.match(styles, /\.analytics-visit-device \{[^}]*place-items:center[^}]*height:1lh/);
 });

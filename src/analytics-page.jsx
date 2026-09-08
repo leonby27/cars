@@ -1,6 +1,7 @@
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CarProfile, ChartLineUp, Desktop, DeviceMobile, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
@@ -427,15 +428,50 @@ const devicePlatformNames = {
 };
 
 function VisitDevice({ device, platform }) {
-  if (device !== "mobile" && device !== "desktop") return <span className="analytics-visit-device is-unknown" title="Тип устройства не записан">—</span>;
+  const anchor = useRef(null);
+  const tooltip = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState(null);
+  const known = device === "mobile" || device === "desktop";
   const mobile = device === "mobile";
   const kind = mobile ? "Телефон или планшет" : "Компьютер";
   const system = devicePlatformNames[platform] || "";
-  const label = system ? `${kind} · ${system}` : kind;
+  const label = known ? `${kind} · ${system || "Система не записана"}` : system || "Тип устройства не записан";
   const Glyph = mobile ? DeviceMobile : Desktop;
-  return <span className={`analytics-visit-device is-${device}`} role="img" aria-label={label} title={label}>
-    <Glyph size={18} aria-hidden="true" />
-  </span>;
+  useLayoutEffect(() => {
+    if (!open) return;
+    const rect = anchor.current.getBoundingClientRect();
+    const { width, height } = tooltip.current.getBoundingClientRect();
+    setPosition({
+      left:Math.max(10, Math.min(rect.left + (rect.width - width) / 2, window.innerWidth - width - 10)),
+      top:rect.top >= height + 18 ? rect.top - height - 8 : rect.bottom + 8,
+    });
+  }, [open, label]);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const outside = (event) => { if (!anchor.current?.contains(event.target)) close(); };
+    const escape = (event) => { if (event.key === "Escape") close(); };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+  return <>
+    <button ref={anchor} type="button" className={`analytics-visit-device is-${known ? device : "unknown"}`} aria-label={label}
+      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(true)}>
+      {known ? <Glyph size={18} aria-hidden="true" /> : "—"}
+    </button>
+    {open && createPortal(<span ref={tooltip} role="tooltip" className="detail-action-tooltip is-visible"
+      style={{ left:position?.left ?? 0, top:position?.top ?? 0, visibility:position ? "visible" : "hidden" }}>{label}</span>, document.body)}
+  </>;
 }
 
 function VisitRow({ visit, number, unread }) {

@@ -67,6 +67,8 @@ Analytics visit-details preference (owner decision, 2026-09-07): directly below 
 
 Analytics disclosure-shape preference (owner decision, 2026-09-07): collapsible overview panels keep the same outer corner radius when opened or closed; expanding content must not visibly change the panel's corner shape.
 
+Analytics device-tooltip preference (owner decision, 2026-09-08): the device icon in «Заходы» must show an immediate site tooltip with the recorded system (Android, iOS, macOS, Windows, etc.) on hover, keyboard focus or tap, rather than relying on the browser's native title. Explicitly say when the system was not recorded; never guess historical device data.
+
 Analytics block-radius preference (owner decision, 2026-09-07): all major CRM blocks—KPI cards, content panels, sidebar surfaces and lead cards—share one fixed 24px outer radius. Controls and small chips retain their own component-specific radii.
 
 Analytics promo-spacing preference (owner decision, 2026-09-07): when «Баннер в статьях» is expanded, keep a clear 16px vertical gap between its heading row and the three metrics; the collapsed panel height stays unchanged.

@@ -93,7 +93,8 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 /* Иконка устройства встаёт на ту же строку, что текст соседних столбцов: коробка
    ровно в одну строку высотой, иконка в ней по центру. Ширина фиксированная, поэтому
    узкий телефон и широкий монитор стоят на одной оси друг под другом. */
-.analytics-visit-device { display:grid; place-items:center; width:20px; height:20px; height:1lh; color:var(--muted); }
+.analytics-visit-device { display:grid; place-items:center; width:20px; height:20px; height:1lh; padding:0; border:0; border-radius:4px; background:transparent; color:var(--muted); font:inherit; cursor:help; }
+.analytics-visit-device:focus-visible { outline:2px solid var(--focus-ring); outline-offset:4px; }
 .analytics-visit-device.is-unknown { color:var(--muted-contrast,var(--muted)); }
 .analytics-visit-number { display:inline-grid; min-width:34px; height:24px; place-items:center; padding:0 7px; box-sizing:border-box; border-radius:999px; font-variant-numeric:tabular-nums; }
 .analytics-visit-number.is-unread { background:var(--accent); color:#fff; font-weight:800; }
