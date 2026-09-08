@@ -1,11 +1,14 @@
-// Обложки всего каталога и пять превью выбранных машин. Только SELECT в базе; прогресс и повторы — на диске.
+// Пять первых кадров каждой машины каталога. Только SELECT в базе; прогресс и повторы — на диске.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pool } from '../server/db.mjs';
 import { catalogPhotoPaths, storeCatalogPhoto, atomicPhotoState } from './lib/catalog-photo-store.mjs';
 const directory=process.env.PHOTO_STORE_DIR || '/srv/abcars-media';
 const stateDirectory=process.env.PHOTO_STORE_STATE_DIR || '/srv/abcars/runtime/photo-store';
-const concurrency=Math.min(8,Math.max(1,Number(process.env.PHOTO_STORE_CONCURRENCY)||4));
+// Потолок 16: хранилище отвечает на новый кадр около секунды, и вся скорость здесь —
+// в числе одновременных запросов. Служба идёт с низким приоритетом (Nice/IOWeight),
+// поэтому сайту эти потоки не мешают.
+const concurrency=Math.min(16,Math.max(1,Number(process.env.PHOTO_STORE_CONCURRENCY)||4));
 await fs.mkdir(directory,{recursive:true}); await fs.mkdir(stateDirectory,{recursive:true});
 const stateFile=path.join(stateDirectory,'progress.json');
 let state={ cursor:'', recentAt:new Date().toISOString(), recentId:'', retries:{}, checked:0, stored:0, bytes:0 };
@@ -16,7 +19,7 @@ const select=`SELECT l.id, l.first_seen_at::text AS seen_at,
  (SELECT array_agg(url ORDER BY position) FROM
  (SELECT url,position FROM listing_media WHERE listing_id=l.id ORDER BY position LIMIT 5) m) AS images
  FROM listings l WHERE l.status='active'`;
-async function storeCars(cars, previewCount = 1) {
+async function storeCars(cars, previewCount = 5) {
   const jobs=cars.flatMap(car=>catalogPhotoPaths(car, { previewCount }).map(href=>({id:car.id,href})));
   const failed=new Set(); let cursor=0, fatal;
   await Promise.all(Array.from({length:concurrency},async()=>{
@@ -33,8 +36,9 @@ async function storeCars(cars, previewCount = 1) {
     else if (previewCount >= (state.retries[car.id]?.previewCount || 1)) delete state.retries[car.id];
   }
 }
-// Не более 60 машин витрины и 100 востребованных за один час.
-// Очередь сохраняется на диске; пять машин между пакетами обложек.
+// Не более 60 машин витрины и 100 востребованных за один час. Кадры хранятся для всего
+// каталога, но эта очередь доводит до конца сначала те машины, которые сейчас смотрят:
+// полный проход занимает часы, и ждать его посетителю незачем.
 async function refreshPriority() {
   if (Date.now() - (state.priorityAt || 0) < 3600_000 || state.priorityIds?.length) return;
   const ids = new Set();
@@ -73,7 +77,7 @@ try {
     const retryIds=Object.entries(state.retries).filter(([,value])=>value.after<=Date.now()).slice(0,5).map(([id])=>id);
     if(retryIds.length){
       const retry=await pool.query(select+' AND l.id=ANY($1::text[])',[retryIds]);
-      for (const car of retry.rows) await storeCars([car], state.retries[car.id]?.previewCount || 1);
+      for (const car of retry.rows) await storeCars([car], state.retries[car.id]?.previewCount || 5);
       for(const id of retryIds)if(!retry.rows.some(car=>car.id===id))delete state.retries[id];
       await atomicPhotoState(stateFile,state);
     }

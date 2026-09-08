@@ -759,6 +759,13 @@ function renderInlineText(text, navigate) {
   return splitInlineLinks(text).map((part, index) =>
     typeof part === "string" ? (
       part
+    ) : part.external ? (
+      // Первоисточник: чужой сайт открываем в новой вкладке, статья остаётся на месте.
+      // `nofollow` — не передаём вес чужому сайту, `noreferrer` заодно скрывает,
+      // с какой страницы пришли.
+      <a key={`link-${index}`} href={part.href} target="_blank" rel="nofollow noreferrer">
+        {part.label}
+      </a>
     ) : (
       <AppLink key={`link-${index}`} href={part.href} navigate={navigate}>
         {part.label}
@@ -1347,8 +1354,10 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
             onClick={() => (user ? navigate("/searches") : navigate("/register", { replace:true, preserveScroll:true }))}
           >
             <BookmarkSimple size={21} weight={savedSearchesCount ? "fill" : "bold"} />
-            <span>Мои поиски</span>
             {savedSearchesCount > 0 && <b>{savedSearchesCount}</b>}
+            {/* Подпись у кнопки убрана ради компактной шапки — что это за значок,
+                говорит подсказка по наведению. */}
+            <ActionTooltip text="Мои поиски" />
           </button>
           <button
             className={`icon-label favorites-link${path === "/favorites" ? " selected" : ""}`}
@@ -1357,8 +1366,8 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
             onClick={() => (user ? navigate("/favorites") : navigate("/register", { replace:true, preserveScroll:true }))}
           >
             <Heart size={21} weight={favoritesCount ? "fill" : "bold"} />
-            <span>Избранное</span>
             {favoritesCount > 0 && <b>{favoritesCount}</b>}
+            <ActionTooltip text="Избранное" />
           </button>
           <button
             className={`icon-label account-link${path === "/account" || path === "/login" || path === "/register" ? " selected" : ""}`}
@@ -3056,62 +3065,112 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
 
 // Five rows of the four-column grid, matching the home page feed.
 const SIMILAR_CARS_BATCH = 20;
+// Сколько машин той же модели просим у сервера за один раз. Список в странице
+// (соседи по модели, встроенные сервером) даёт всего десяток, а первая порция
+// каталога подобрана «для разнообразия» — своей модели в ней почти нет, поэтому
+// в режиме «Эта модель» спрашиваем каталог отдельным запросом.
+const SAME_MODEL_PAGE = 40;
 
-// Другие машины той же модели. Раньше эти ссылки жили только в невидимой версии
-// страницы для поисковика («Другие BMW 5 Series в наличии») — единственный путь
-// робота из карточки в карточку. Теперь карточку собирает сервер из разметки самого
-// приложения, и блок стал видимым: посетителю выбор из той же модели полезен не
-// меньше, чем роботу. Данные кладёт сервер (соседи по модели, по цене), а после
-// загрузки каталога блок живёт из общего списка машин.
-function SameModelCars({ car, cars, onOpenCar }) {
-  const sameModelPricingOn = useQuotaPricing()?.on;
-  const sameModel = useMemo(
+// Машины той же модели: сначала те, что уже есть на руках (встроенные в страницу
+// соседи и загруженный каталог) — они показываются мгновенно, — а затем ответ
+// каталога, который их заменяет. Запрос уходит только когда переключатель стоит
+// на «Эта модель»: на обычном показе похожих он не нужен.
+function useSameModelCars(car, active) {
+  const [fetched, setFetched] = useState(null);
+  const [total, setTotal] = useState(null);
+  const [requested, setRequested] = useState(SAME_MODEL_PAGE);
+  useEffect(() => {
+    setFetched(null);
+    setTotal(null);
+    setRequested(SAME_MODEL_PAGE);
+  }, [car.id]);
+  useEffect(() => {
+    if (!active || !car.brand || !car.model) return undefined;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ brand: car.brand, model: car.model, sort: "price_asc", limit: String(requested + 1), offset: "0" });
+    fetch(`/api/cars?${query}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("same model catalog unavailable"))))
+      .then((catalog) => {
+        const items = (catalog.items || []).map(normalizeImportedCar).filter((item) => !sameListing(item.id, car.id));
+        setFetched(items.slice(0, requested));
+        // Сама машина тоже стоит в этом наборе, поэтому в счёте её не считаем.
+        setTotal(Math.max(0, (Number(catalog.total) || items.length) - 1));
+      })
+      // Каталога по адресу нет (статический показ) или запрос отменён — остаёмся
+      // с тем, что уже загружено: блок не пустеет.
+      .catch(() => {});
+    return () => controller.abort();
+  }, [active, car.id, car.brand, car.model, requested]);
+  const loadMore = () => setRequested((current) => current + SAME_MODEL_PAGE);
+  return { cars: fetched, total, loadMore };
+}
+
+// Похожие машины с переключателем: весь подбор или только та же модель. Раньше
+// машины той же модели стояли отдельным блоком над похожими; двух почти одинаковых
+// сеток подряд слишком много, поэтому теперь это два состояния одного блока.
+function SimilarCars({ car, cars, onOpenCar }) {
+  const similarPricingOn = useQuotaPricing()?.on;
+  const [sameModelOnly, setSameModelOnly] = useState(false);
+  const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars, similarPricingOn]);
+  const sameModelLoaded = useMemo(
     () =>
       cars
         .filter((candidate) => !sameListing(candidate.id, car.id) && String(candidate.brand) === String(car.brand) && String(candidate.model) === String(car.model))
-        .sort((left, right) => (Number(estimateLandedCost(left).totalUsd) || 0) - (Number(estimateLandedCost(right).totalUsd) || 0) || String(left.id).localeCompare(String(right.id)))
-        .slice(0, 8),
-    [car, cars, sameModelPricingOn],
+        .sort((left, right) => (Number(estimateLandedCost(left).totalUsd) || 0) - (Number(estimateLandedCost(right).totalUsd) || 0) || String(left.id).localeCompare(String(right.id))),
+    [car, cars, similarPricingOn],
   );
-  if (!sameModel.length) return null;
-  return (
-    <section className="similar-cars" aria-labelledby="same-model-title">
-      <div className="similar-cars-heading">
-        <h2 id="same-model-title">Другие {carTitle(car.brand, car.model)} в наличии</h2>
-      </div>
-      <div className="featured-grid">
-        {sameModel.map((candidate) => (
-          <FeaturedCard key={candidate.id} car={candidate} onClick={() => onOpenCar(candidate)} />
-        ))}
-      </div>
-    </section>
+  const sameModelFromCatalog = useSameModelCars(car, sameModelOnly);
+  // Порядок один и тот же в обоих случаях — по цене под ключ, той самой, что стоит
+  // на карточке: у сервера цена посчитана без выбранного режима цен с квотой.
+  const sameModel = useMemo(
+    () =>
+      (sameModelFromCatalog.cars || sameModelLoaded)
+        .slice()
+        .sort((left, right) => (Number(estimateLandedCost(left).totalUsd) || 0) - (Number(estimateLandedCost(right).totalUsd) || 0) || String(left.id).localeCompare(String(right.id))),
+    [sameModelFromCatalog.cars, sameModelLoaded, similarPricingOn],
   );
-}
-
-function SimilarCars({ car, cars, onOpenCar }) {
-  const similarPricingOn = useQuotaPricing()?.on;
-  const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars, similarPricingOn]);
+  const shown = sameModelOnly ? sameModel : similarCars;
   const [visibleCount, setVisibleCount] = useState(SIMILAR_CARS_BATCH);
 
-  useEffect(() => setVisibleCount(SIMILAR_CARS_BATCH), [car.id]);
+  useEffect(() => setVisibleCount(SIMILAR_CARS_BATCH), [car.id, sameModelOnly]);
 
-  if (!similarCars.length) return null;
+  // Переключателя нет, когда машина в каталоге одна такая: кнопка «Эта модель»
+  // открывала бы пустую сетку.
+  const sameModelReachable = Boolean(car.brand && car.model && (sameModelLoaded.length || sameModelFromCatalog.cars?.length));
+  if (!similarCars.length && !sameModelReachable) return null;
+  // Ещё не загруженные машины той же модели: кнопка «Подгрузить ещё» должна остаться
+  // и когда всё загруженное уже показано, а в каталоге таких машин больше.
+  const more = sameModelOnly ? Math.max(shown.length, Number(sameModelFromCatalog.total) || 0) : shown.length;
 
   return (
     <section className="similar-cars" aria-labelledby="similar-cars-title">
       <div className="similar-cars-heading">
         <h2 id="similar-cars-title">Похожие автомобили</h2>
+        {sameModelReachable && (
+          <div className="brand-type-switch similar-mode-switch" role="group" aria-label="Какие машины показывать">
+            <button type="button" className={sameModelOnly ? "" : "active"} aria-pressed={!sameModelOnly} onClick={() => setSameModelOnly(false)}>
+              Все
+            </button>
+            <button type="button" className={sameModelOnly ? "active" : ""} aria-pressed={sameModelOnly} onClick={() => setSameModelOnly(true)}>
+              Эта модель
+            </button>
+          </div>
+        )}
       </div>
       <div className="featured-grid">
-        {similarCars.slice(0, visibleCount).map((candidate) => (
+        {shown.slice(0, visibleCount).map((candidate) => (
           <FeaturedCard key={candidate.id} car={candidate} onClick={() => onOpenCar(candidate)} />
         ))}
       </div>
-      {visibleCount < similarCars.length && (
+      {visibleCount < more && (
         <button
           type="button"
           className="load-more featured-load-more"
-          onClick={() => setVisibleCount((current) => current + SIMILAR_CARS_BATCH)}
+          onClick={() => {
+            const next = visibleCount + SIMILAR_CARS_BATCH;
+            setVisibleCount(next);
+            if (sameModelOnly && next > shown.length) sameModelFromCatalog.loadMore();
+          }}
         >
           Подгрузить ещё
         </button>
@@ -3176,6 +3235,31 @@ const modelPageCatalogHref = (modelPage, filters = {}) => {
 // Частые вопросы в конце статьи — и в обзорах моделей, и на страницах расчётов.
 // Кроме самого блока отдаём разметку FAQPage: по ней вопросы попадают в выдачу
 // раскрывающимся списком.
+/**
+ * Первоисточники внизу материала: откуда взяты ставки, сроки и нормы. Показывается
+ * только там, где список заполнен, — выдумывать ссылки под каждый текст нельзя.
+ *
+ * Ссылки наружу: в новой вкладке (прочитанное не должно закрываться) и с
+ * `rel="nofollow"` — вес чужому сайту не передаём. Тот же блок собирает страницу
+ * для поисковика, `blogSources` в scripts/generate-seo-pages.mjs.
+ */
+function ArticleSources({ sources }) {
+  if (!sources?.length) return null;
+  return (
+    <section className="article-sources">
+      <h2>Источники</h2>
+      <ul>
+        {sources.map((source) => (
+          <li key={source.url}>
+            <a href={source.url} target="_blank" rel="nofollow noreferrer">{source.name}</a>
+            {source.note ? <span> — {source.note}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function ArticleFaq({ faq, title, navigate = null }) {
   if (!faq?.length) return null;
   const schema = {
@@ -6857,7 +6941,6 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         {car.model} {car.year}
       </div>
       <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} priceRatingPending={apiMode !== false && car.priceRating === undefined} />
-      <SameModelCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       <SimilarCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       {quickViewModal}
     </main>
@@ -7166,6 +7249,13 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // Блок «О модели» есть только у моделей с описанной страницей; у остальных машин
   // карточка выглядит как раньше.
   const modelPage = modelPageForCar(car);
+  // Разделы каталога, в которые попадает эта машина: марка, тип двигателя, кузов и их
+  // сочетания. Со страницы машины в каталог вела одна общая ссылка, поэтому марка,
+  // кузов и тип двигателя из карточки были недостижимы — а это постоянные страницы,
+  // которые и должны собирать поиск, в отличие от карточки, живущей до продажи.
+  // Раздел, на котором посетитель уже стоит, из списка убираем: в быстром просмотре
+  // из каталога марки первой плашкой была бы ссылка на эту же страницу.
+  const sections = landingsForCar(car).filter((landing) => landing.path !== currentAppPath());
   // Цвет заполнен не у всех источников — без значения строка не показывается.
   const specs = [
     [CalendarBlank, "Год", car.year],
@@ -7259,10 +7349,20 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               иконками. Раньше эти ссылки стояли внутри разбора цены и терялись в
               нём; человек, который дочитал страницу, дальше либо считает другую
               машину, либо разбирается с растаможкой. */}
+          {sections.length > 0 && (
+            <nav className="detail-section-links" aria-label="Разделы каталога">
+              <b>Смотреть в каталоге</b>
+              <div>
+                {sections.map((landing) => (
+                  <AppLink key={landing.path} href={landing.path} navigate={navigate}>{landing.name}</AppLink>
+                ))}
+              </div>
+            </nav>
+          )}
           <nav className="detail-tool-links" aria-label="Страницы расчётов">
-            <AppLink href="/customs" navigate={navigate}><Scales size={21} />Как считается растаможка</AppLink>
-            <AppLink href="/calculator" navigate={navigate}><Calculator size={21} />Посчитать другую машину</AppLink>
-            {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} />Остаток квоты</AppLink>}
+            <AppLink href="/customs" navigate={navigate}><Scales size={21} /><span>Как считается растаможка</span><CaretRight size={17} weight="bold" /></AppLink>
+            <AppLink href="/calculator" navigate={navigate}><Calculator size={21} /><span>Посчитать другую машину</span><CaretRight size={17} weight="bold" /></AppLink>
+            {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
           </nav>
         </div>
         <div className="detail-sidebar">
@@ -7272,6 +7372,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           <div className={`price-total detail-sidebar-price${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
             <TotalPrice car={car} price={price} currency={currency} />
             {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
+            {/* Что это за число: цена не за машину в Китае, а итог с доставкой и
+                растаможкой. Мелкой строкой под ценой — крупное число остаётся главным. */}
+            <span className="detail-sidebar-price-note">Цена под ключ до Минска</span>
           </div>
           {/* Цена среди таких же машин — своим блоком. Набор для сравнения приходит
               с машиной от сервера; цену берём ту же, что показана крупно ниже, —
@@ -9871,6 +9974,7 @@ function BlogReportPage({ post, navigate }) {
         ))}
       </div>
       <ArticleFaq faq={text?.faq} title="Частые вопросы" navigate={navigate} />
+      <ArticleSources sources={text?.sources} />
       {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
     </BlogArticleShell>
   );
@@ -9941,21 +10045,7 @@ function BlogArticlePage({ post, navigate, favorites, toggleFavorite }) {
         })}
       </div>
       <ArticleFaq faq={text?.faq} title="Частые вопросы" navigate={navigate} />
-      {text?.sources?.length ? (
-        <section className="article-sources">
-          <h2>Источники</h2>
-          <ul>
-            {text.sources.map((source) => (
-              <li key={source.url}>
-                {/* Ссылки наружу — только на первоисточники и в новой вкладке:
-                    прочитанное не должно закрываться. */}
-                <a href={source.url} target="_blank" rel="noreferrer">{source.name}</a>
-                {source.note ? <span> — {source.note}</span> : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      <ArticleSources sources={text?.sources} />
       {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
     </BlogArticleShell>
   );
@@ -10018,6 +10108,7 @@ function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
         })}
       </div>
       <ArticleFaq faq={text?.faq} title="Частые вопросы" navigate={navigate} />
+      <ArticleSources sources={text?.sources} />
       {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
     </BlogArticleShell>
   );
@@ -10063,6 +10154,7 @@ function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
         <BlogDuelSideCars key={entry.side.name} entry={entry} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpen={openQuickView} />
       ))}
       <ArticleFaq faq={text?.faq} title="Частые вопросы" navigate={navigate} />
+      <ArticleSources sources={text?.sources} />
       {text?.disclaimer ? <p className="blog-disclaimer">{text.disclaimer}</p> : null}
     </BlogArticleShell>
   );

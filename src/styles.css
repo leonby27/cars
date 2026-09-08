@@ -4903,6 +4903,23 @@ html[data-theme="dark"] #root .load-more {
   margin: 0 0 12px;
   padding-inline: 2px;
 }
+/* Подпись под итоговой ценой: что это цена под ключ, а не цена в Китае. */
+.detail-sidebar-price-note {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+/* Когда рядом с ценой стоит переключатель валюты, строка становится флексом —
+   подпись переносим под неё целой строкой, а не третьей клеткой в ряд. */
+.detail-sidebar-price.price-total-with-currency {
+  flex-wrap: wrap;
+}
+.detail-sidebar-price.price-total-with-currency .detail-sidebar-price-note {
+  flex: 0 0 100%;
+}
 .vehicle-quick-info p {
   margin: 0;
   color: var(--ink);
@@ -6690,36 +6707,77 @@ footer {
 .order-tool-links a:hover {
   border-bottom-color: var(--accent-dark);
 }
-/* Те же ссылки в самом низу карточки машины — строками с иконкой, как разделы
-   полных характеристик выше: там уже есть такой набор, и глазу не нужно учить
-   второй вид списка. */
+/* Те же ссылки в самом низу карточки машины — отдельными плашками: фон, скругление
+   и стрелка справа, чтобы строка читалась как кнопка, а не как подпись. Обводки нет,
+   отделяет фон. */
+/* Разделы каталога, в которые попадает машина, — плашками над ссылками на расчёты.
+   Тот же вид, что у плашек в тексте раздела каталога и на странице обзора, но фон
+   берём как у соседних строк карточки (`--surface`): подложка колонки здесь тёмнее
+   плашек из `--panel`, и на ней они бы пропали. */
+.detail-section-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.detail-section-links b {
+  font-size: 16px;
+}
+.detail-section-links > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.detail-section-links a {
+  padding: 8px 14px;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+  text-decoration: none;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.detail-section-links a:hover {
+  background: var(--model-chip-hover-bg);
+}
 .detail-tool-links {
   display: grid;
+  gap: 8px;
 }
 .detail-tool-links a {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 2px;
-  border-bottom: 1px solid var(--line);
+  gap: 13px;
+  padding: 15px 17px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
   color: var(--ink);
   font-size: 16px;
   font-weight: 600;
   text-decoration: none;
+  transition: background var(--motion-fast) var(--motion-ease);
 }
-.detail-tool-links a:first-child {
-  border-top: 1px solid var(--line);
-}
-.detail-tool-links a > svg {
+.detail-tool-links a > svg:first-child {
   flex: none;
   color: var(--accent);
 }
+/* Стрелка прижата к правому краю и приглушена: она подсказывает переход, а не
+   спорит с названием. */
+.detail-tool-links a > svg:last-child {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+}
 .detail-tool-links a:hover {
-  color: var(--accent-dark);
+  background: var(--model-chip-hover-bg);
 }
-.detail-tool-links a:hover > svg {
-  color: var(--accent-dark);
+.detail-tool-links a:hover > svg:last-child {
+  color: var(--ink);
 }
+.detail-tool-links a:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
 .order-facts {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -7279,15 +7337,26 @@ html[data-theme="dark"] #root .spec-search,
 }
 .similar-cars-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 20px 14px;
   margin-bottom: 22px;
 }
 .similar-cars-heading h2 {
   margin: 0;
   font-size: 28px;
   letter-spacing: -0.8px;
+}
+/* Переключатель «Все / Эта модель» рядом с заголовком: тот же вид, что у выбора
+   типа машин на главной, но без бегающей плашки — здесь всего две кнопки. */
+.similar-mode-switch {
+  flex: 0 0 auto;
+  height: 40px;
+}
+.similar-mode-switch button {
+  height: 32px;
+  font-size: 15px;
 }
 @media (max-width: 980px) {
   .detail-gallery,
@@ -7342,6 +7411,17 @@ html[data-theme="dark"] #root .spec-search,
   }
   .similar-cars-heading h2 {
     font-size: 23px;
+  }
+  /* Общее правило прячет пилюлю-переключатель на телефоне (там четыре кнопки не
+     влезали) — у наших двух кнопок с этим всё в порядке. */
+  .similar-cars-heading .similar-mode-switch {
+    display: flex;
+    height: 36px;
+  }
+  .similar-mode-switch button {
+    height: 28px;
+    padding: 0 11px;
+    font-size: 14px;
   }
 }
 
@@ -11551,6 +11631,18 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 .header-actions :where(.account-link, .favorites-link, .searches-link):focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
+}
+/* У «Моих поисков» и «Избранного» подписи в шапке нет — только значок, а слово
+   показывает подсказка по наведению. Поэтому кнопка квадратная, значок по центру,
+   а кружок счётчика сдвигается вслед за ним. */
+.header-actions .favorites-link,
+.header-actions .searches-link {
+  width: 48px;
+  padding: 0;
+  justify-content: center;
+}
+.header-actions :where(.favorites-link, .searches-link) > b {
+  left: 7px;
 }
 /* Пункт «Мои поиски» в выпадающем меню — только для узких экранов:
    на широких та же кнопка стоит в шапке рядом с избранным. */

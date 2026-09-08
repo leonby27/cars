@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { EXCLUDED_BRANDS, IMPORT_BRANDS, MAINSTREAM_IMPORT_BRANDS } from "../config/import-policy.mjs";
 import { visibleLandings } from "../server/catalog-page.mjs";
-import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
 
 const shell = `<!doctype html>
@@ -230,6 +230,20 @@ test("подписи «не выбрано» перечислены все", () 
   for (const label of labels) {
     assert.equal(catalogLandingForParams(`brand=BYD&mileage=${encodeURIComponent(label)}`), findCatalogLanding("/catalog/byd"), `подпись «${label}» не считается пустой`);
   }
+});
+
+test("карточка машины в приложении ведёт в свои разделы каталога", () => {
+  // Разметку карточки собирает сервер из того же кода приложения, поэтому текст для
+  // поисковика с этими ссылками до посетителя не доходит: страница машины отдаётся
+  // сразу нарисованной, и ссылки должны быть в самом приложении. До 08.09.2026 их
+  // там не было — из 48 тысяч карточек в каталог вела одна общая ссылка.
+  const code = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(code, /className="detail-section-links"/, "в карточке машины нет блока со ссылками на разделы");
+  const block = code.slice(code.indexOf("const sections = landingsForCar(car)"), code.indexOf('className="detail-tool-links"'));
+  assert.ok(block.includes("detail-section-links"), "блок ссылок на разделы собирается не из landingsForCar");
+  // У обычной машины разделов пять: марка, тип двигателя, кузов и два сочетания.
+  const forCar = landingsForCar({ brand: "BYD", type: "Электромобиль", bodyType: "SUV / кроссовер" });
+  assert.deepEqual(forCar.map((item) => item.path), ["/catalog/byd", "/catalog/electric", "/catalog/suv", "/catalog/electric-suv", "/catalog/byd-suv"]);
 });
 
 test("ссылки между разделами идут по смыслу, а не одним блоком на всех страницах", () => {

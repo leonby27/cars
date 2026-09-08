@@ -561,7 +561,7 @@ function blogDuelArticle(post) {
       if (car) photoCars.push(car);
     }
   }
-  return `${date}${hero}${intro}${table}${blogArticleBody(post, photoCars)}${offers}${faq}${blogCatalogWays(post)}${blogModelWays(post)}${rest}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+  return `${date}${hero}${intro}${table}${blogArticleBody(post, photoCars)}${offers}${faq}${blogSources(post)}${blogCatalogWays(post)}${blogModelWays(post)}${rest}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
 }
 
 // ── Куда журнал ведёт дальше ──────────────────────────────────────────────────
@@ -664,7 +664,7 @@ function blogReportArticle(post) {
     <section><h2>Подорожало за неделю</h2>${movers(report.dearer)}</section>
     <section><h2>Квота, наличие и курс</h2>${facts}</section>
     <section><h2>Впервые в каталоге</h2>${newcomers}</section>
-    ${blogArticleBody(post, [], new Set())}${faq}${blogCatalogWays(post)}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+    ${blogArticleBody(post, [], new Set())}${faq}${blogSources(post)}${blogCatalogWays(post)}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
 }
 
 /**
@@ -683,14 +683,23 @@ function blogArticleArticle(post) {
   const faq = post.faq?.length
     ? `<section><h2>Частые вопросы</h2>${post.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${linkifyText(item.a, hrefRoute)}</p>`).join("")}</section>`
     : "";
-  // Источники — обычные ссылки наружу: на первоисточники вес отдавать не жалко,
-  // а без них текст про пошлины ничем не отличается от пересказа слухов.
-  const sources = post.sources?.length
-    ? `<section><h2>Источники</h2><ul>${post.sources
-        .map((source) => `<li><a href="${escapeHtml(source.url)}" rel="noopener">${escapeHtml(source.name)}</a>${source.note ? ` — ${escapeHtml(source.note)}` : ""}</li>`)
-        .join("")}</ul></section>`
-    : "";
-  return `${date}${cover}${intro}${blogArticleBody(post, photos, new Set([photos[0]?.id]))}${faq}${sources}${blogCatalogWays(post)}${blogModelWays(post)}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+  return `${date}${cover}${intro}${blogArticleBody(post, photos, new Set([photos[0]?.id]))}${faq}${blogSources(post)}${blogCatalogWays(post)}${blogModelWays(post)}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+}
+
+/**
+ * Список первоисточников внизу материала: откуда взяты ставки, сроки и нормы.
+ *
+ * Ссылки наружу отдаём с `rel="nofollow"` — вес чужому сайту не передаём (решение
+ * Сергея 08.09.2026), а `noreferrer` не сообщает чужому сайту, с какой страницы
+ * пришли. Блок общий для всех четырёх видов материалов: без него текст про пошлины
+ * ничем не отличается от пересказа слухов.
+ */
+function blogSources(post) {
+  if (!post.sources?.length) return "";
+  const items = post.sources
+    .map((source) => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="nofollow noreferrer">${escapeHtml(source.name)}</a>${source.note ? ` — ${escapeHtml(source.note)}` : ""}</li>`)
+    .join("");
+  return `<section><h2>Источники</h2><ul>${items}</ul></section>`;
 }
 
 function blogPostArticle(post) {
@@ -743,7 +752,7 @@ function blogPostArticle(post) {
   const rest = related.length
     ? `<section><h2>Похожие статьи</h2><ul>${related.map((item) => `<li><a href="${hrefRoute(`${item.path}/`)}">${escapeHtml(item.name)}</a> — ${escapeHtml(item.teaser || item.lead)}</li>`).join("")}</ul></section>`
     : "";
-  return `${date}${cover}${intro}${numbers}${offers}${blogArticleBody(post, found?.cars || [], new Set([found?.cover?.id, ...top.map((car) => car.id)]))}${faq}${blogCatalogWays(post)}${blogModelWays(post)}${rest}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
+  return `${date}${cover}${intro}${numbers}${offers}${blogArticleBody(post, found?.cars || [], new Set([found?.cover?.id, ...top.map((car) => car.id)]))}${faq}${blogSources(post)}${blogCatalogWays(post)}${blogModelWays(post)}${rest}${post.disclaimer ? `<p>${escapeHtml(post.disclaimer)}</p>` : ""}`;
 }
 
 function blogIndexArticle() {

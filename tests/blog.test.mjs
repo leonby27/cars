@@ -5,7 +5,8 @@ import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIG
 import { BLOG_TEXTS, BLOG_TEXTS_RAW } from "../src/blog-texts.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "../src/blog-report.js";
 import { BLOG_FIGURES, blogFigureHtml } from "../src/blog-figures.js";
-import { plainInlineText } from "../src/inline-links.js";
+import { plainInlineText, splitInlineLinks } from "../src/inline-links.js";
+import { linkifyText } from "../server/seo-render.mjs";
 import { catalogLandingForParams } from "../src/catalog-landings.js";
 
 // Журнал открыт посетителям 27.08.2026. Проверка осталась, только с обратным знаком:
@@ -443,4 +444,18 @@ test("у материалов расписания нет пометки «че�
   // а накопленных срезов цен. Пометка у него снимается вместе с настоящими цифрами.
   const stuck = blogAllPosts().filter((post) => post.draft && post.slug !== "market-report-sample");
   assert.deepEqual(stuck.map((post) => post.slug), [], "эти материалы не выйдут по расписанию: снята не пометка, а дата");
+});
+
+// Ссылка на первоисточник внутри абзаца: адрес чужого сайта не переписывается под наш
+// корень (иначе получилось бы «/https://…»), уходит с `nofollow` и открывается в новой
+// вкладке. Заодно проверяем, что чужая схема адреса ссылкой не становится.
+test("ссылка на первоисточник в абзаце уходит с nofollow", () => {
+  const hrefRoute = (path) => `/base${path}`;
+  const html = linkifyText("Ставка стоит в [решении ЕЭК](https://docs.eaeunion.org/docs/ru-ru/1), а посчитать можно в [калькуляторе](/calculator).", hrefRoute);
+  assert.match(html, /<a href="https:\/\/docs\.eaeunion\.org\/docs\/ru-ru\/1" target="_blank" rel="nofollow noreferrer">решении ЕЭК<\/a>/);
+  // Своя ссылка остаётся своей: тот же корень, без nofollow.
+  assert.match(html, /<a href="\/base\/calculator">калькуляторе<\/a>/);
+  // Небезопасная схема не разбирается как ссылка — остаётся текстом.
+  assert.equal(splitInlineLinks("[тык](javascript:alert(1))").length, 1);
+  assert.equal(splitInlineLinks("[тык](http://example.by)").length, 1);
 });

@@ -38,7 +38,13 @@ export const escapeXml = (value) => escapeHtml(value).replace(/'/g, "&apos;");
 // разбор ссылок общий с приложением, см. src/inline-links.js.
 export const linkifyText = (text, hrefRoute) =>
   splitInlineLinks(text)
-    .map((part) => (typeof part === "string" ? escapeHtml(part) : `<a href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`))
+    .map((part) => {
+      if (typeof part === "string") return escapeHtml(part);
+      // Ссылка на первоисточник ведёт на чужой сайт: адрес не переписываем под свой
+      // корень и отдаём с `nofollow` — вес чужому сайту не передаём.
+      if (part.external) return `<a href="${escapeHtml(part.href)}" target="_blank" rel="nofollow noreferrer">${escapeHtml(part.label)}</a>`;
+      return `<a href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`;
+    })
     .join("");
 
 // Ширина снимка в списках: столько же просит плитка каталога в приложении

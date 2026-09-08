@@ -6,6 +6,7 @@
 // именно, написано рядом.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { blogAllPosts, blogPostHidden } from "../src/blog-posts.js";
 import { BLOG_TEXTS } from "../src/blog-texts.js";
 import { BLOG_FIGURES } from "../src/blog-figures.js";
@@ -98,13 +99,41 @@ test("у статьи есть вступление, разделы, вопро�
   }
 });
 
-// Ссылок наружу не больше трёх: страница делит вес между всеми ссылками, и десяток
-// внешних на статью — это уже раздача, а не подтверждение фактов.
+// Ссылок наружу не больше трёх: десяток внешних на статью — это уже раздача, а не
+// подтверждение фактов. Вес по ним не уходит (все они с `nofollow`, см. проверку
+// ниже), но читателю нужен короткий список первоисточников, а не библиография.
 test("внешних ссылок не больше трёх на материал", () => {
   for (const post of posts) {
     const sources = textOf(post)?.sources || [];
     assert.ok(sources.length <= 3, `в материале ${post.slug} внешних ссылок ${sources.length}`);
   }
+});
+
+// Источник без названия или с адресом по http — это сломанная строка в блоке
+// «Источники»: читатель видит пустую ссылку, а браузер ругается на незащищённый адрес.
+test("у каждого источника есть название и адрес по https", () => {
+  for (const post of posts) {
+    for (const source of textOf(post)?.sources || []) {
+      assert.ok(source.name?.trim(), `в материале ${post.slug} источник без названия`);
+      assert.match(String(source.url || ""), /^https:\/\/[a-z0-9.-]+\//i, `в материале ${post.slug} адрес источника не по https: ${source.url}`);
+    }
+  }
+});
+
+// Ссылки на первоисточники не передают вес чужому сайту — решение Сергея 08.09.2026.
+// Проверяем оба места, где собирается блок «Источники»: приложение и страница для
+// поисковика. Забыть `nofollow` в одном из них — обычная оплошность, а увидеть её
+// в готовой странице нельзя без запроса к серверу.
+test("ссылки на источники отдаются с nofollow", () => {
+  const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const generator = readFileSync(new URL("../scripts/generate-seo-pages.mjs", import.meta.url), "utf8");
+  const appBlock = app.slice(app.indexOf("function ArticleSources("), app.indexOf("function ArticleFaq("));
+  assert.match(appBlock, /rel="nofollow noreferrer"/, "в приложении блок источников без nofollow");
+  const seoBlock = generator.slice(generator.indexOf("function blogSources("), generator.indexOf("function blogPostArticle("));
+  assert.match(seoBlock, /rel="nofollow noreferrer"/, "в странице для поисковика блок источников без nofollow");
+  // Блок обязан стоять во всех четырёх видах материалов, а не только в статье.
+  assert.equal(app.split("<ArticleSources sources={text?.sources} />").length - 1, 4, "блок источников не во всех видах материалов");
+  assert.equal(generator.split("${blogSources(post)}").length - 1, 4, "блок источников для поисковика не во всех видах материалов");
 });
 
 // Заголовок материала, дословно совпадающий с заголовком раздела каталога или обзора
