@@ -2,7 +2,7 @@ import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CarProfile, ChartLineUp, Desktop, DeviceMobile, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
+import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
@@ -699,6 +699,23 @@ function CustomersSection({ data }) {
   );
 }
 
+function ContactInterestSection({ data }) {
+  const summary = data.summary || {};
+  const cards = [
+    ["Просмотр телефона", summary.contact_phone_views, "Номер раскрыли"],
+    ["Клик по TG", summary.contact_telegram_clicks, "Нажали Telegram"],
+    ["Клик по Viber", summary.contact_viber_clicks, "Нажали Viber"],
+    ["Клик по Instagram", summary.contact_instagram_clicks, "Нажали Instagram"],
+    ["Открытие страницы «Контакты»", summary.contact_page_views, "Из любого раздела сайта"],
+    ["Открытие страницы «О сервисе»", summary.about_page_views, "Из любого раздела сайта"],
+  ];
+  return (
+    <section className="analytics-kpis analytics-contact-kpis" aria-label="Интерес к контактам">
+      {cards.map(([label, value, note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}
+    </section>
+  );
+}
+
 // «Сегодня» и «вчера» — это календарные сутки по Минску, остальное — скользящее окно.
 const analyticsPeriods = [
   { id:"today", label:"Сегодня" },
@@ -715,6 +732,7 @@ const sections = [
   { id:"leads", label:"Заявки", icon:Tray, ranged:false },
   { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
+  { id:"contact_interest", label:"Интерес к контактам", icon:ChatCircleText, ranged:true },
 ];
 
 function AnalyticsNavigationItems({ section, updates, onChoose, mobile = false }) {
@@ -899,6 +917,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "contact_interest"}><ContactInterestSection data={data} /></div>
         </div>
       </div>
       {resetOpen && <ResetAnalyticsModal pending={resetting} error={resetError} onCancel={() => setResetOpen(false)} onConfirm={resetAnalytics} />}

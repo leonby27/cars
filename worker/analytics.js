@@ -1,4 +1,4 @@
-const EVENTS = new Set(["page_view", "vehicle_view", "availability_click", "registration_completed", "favorite_added", "custom_search_submitted"]);
+const EVENTS = new Set(["page_view", "vehicle_view", "availability_click", "availability_request_click", "registration_completed", "favorite_added", "search_saved", "custom_search_submitted", "search_query", "article_promo_shown", "article_promo_click", "contact_phone_reveal", "contact_telegram_click", "contact_viber_click", "contact_instagram_click"]);
 const COOKIE_NAME = "abcars_analytics";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 const encoder = new TextEncoder();
@@ -16,7 +16,7 @@ const workerFromAnalyticsPage = (request) => {
   if (!referer) return false;
   try { return workerInternalAnalyticsPath(new URL(referer).pathname); } catch { return false; }
 };
-const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%'";
+const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND instr(lower(path), '?nocount=1') = 0 AND instr(lower(path), '&nocount=1') = 0";
 
 const json = (payload, status = 200, headers = {}) => Response.json(payload, { status, headers:{ "cache-control":"no-store", ...headers } });
 const base64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -48,7 +48,7 @@ export function normalizeWorkerEvent(body = {}) {
   const visitorId = clean(body.visitorId, 80);
   const sessionId = clean(body.sessionId, 80);
   const path = clean(body.path, 400) || "/";
-  if (workerInternalAnalyticsPath(path)) return { ignored:true };
+  if (workerInternalAnalyticsPath(path) || /(?:^|[?&])nocount=1(?:&|$)/i.test(path)) return { ignored:true };
   if (!eventId || !visitorId || !sessionId) return { error:"invalid_event_identity" };
   const source = body.properties && typeof body.properties === "object" && !Array.isArray(body.properties) ? body.properties : {};
   // Личные данные в события не принимаем: приём событий открыт без пароля, поэтому имя
@@ -151,7 +151,13 @@ async function dashboard(db, days) {
       sum(CASE WHEN event_name='availability_click' THEN 1 ELSE 0 END) AS availability_clicks,
       sum(CASE WHEN event_name='registration_completed' THEN 1 ELSE 0 END) AS registrations,
       sum(CASE WHEN event_name='custom_search_submitted' THEN 1 ELSE 0 END) AS custom_searches,
-      sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites
+      sum(CASE WHEN event_name='favorite_added' THEN 1 ELSE 0 END) AS favorites,
+      sum(CASE WHEN event_name='contact_phone_reveal' THEN 1 ELSE 0 END) AS contact_phone_views,
+      sum(CASE WHEN event_name='contact_telegram_click' THEN 1 ELSE 0 END) AS contact_telegram_clicks,
+      sum(CASE WHEN event_name='contact_viber_click' THEN 1 ELSE 0 END) AS contact_viber_clicks,
+      sum(CASE WHEN event_name='contact_instagram_click' THEN 1 ELSE 0 END) AS contact_instagram_clicks,
+      sum(CASE WHEN event_name='page_view' AND (path='/contacts' OR path='/contacts/' OR path LIKE '/contacts?%' OR path LIKE '/contacts/?%') THEN 1 ELSE 0 END) AS contact_page_views,
+      sum(CASE WHEN event_name='page_view' AND (path='/how-it-works' OR path='/how-it-works/' OR path LIKE '/how-it-works?%' OR path LIKE '/how-it-works/?%') THEN 1 ELSE 0 END) AS about_page_views
       FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT} AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})`).bind(cutoff, cutoff).first(),
     db.prepare(`SELECT date(created_at) AS day, count(DISTINCT visitor_id) AS visitors,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS vehicle_views,

@@ -3698,6 +3698,9 @@ html[data-theme="dark"] #root .load-more {
   box-shadow: 0 4px 12px rgba(20, 24, 32, 0.1);
   transform: translateY(-1px);
 }
+.lead-modal.social-unavailable-modal {
+  padding: 34px 32px 30px;
+}
 .footer-column {
   display: flex;
   align-items: flex-start;
@@ -10133,6 +10136,9 @@ html[data-theme="dark"] #root .spec-search,
 .lead-modal.availability-paused-modal {
   width: min(540px, 100%);
 }
+.lead-modal.availability-paused-modal.social-unavailable-modal {
+  width: min(440px, 100%);
+}
 .availability-paused-icon {
   width: 60px;
   height: 60px;
@@ -11574,10 +11580,45 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 .header-menu-settings {
   display: none;
 }
+.header-menu-theme {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  height: 44px;
+  padding: 4px;
+  border: 0;
+  border-radius: calc(11px * var(--corner-scale));
+  background: var(--panel-soft);
+  margin-top: 8px;
+}
+.header-menu-theme button {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: calc(9px * var(--corner-scale));
+  background: transparent;
+  color: var(--muted);
+}
+.header-menu-theme button:hover {
+  color: var(--ink);
+}
+.header-menu-theme button.active {
+  background: var(--panel);
+  color: var(--accent-dark);
+}
+.header-menu-theme button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -1px;
+}
 .header-actions {
   align-items: center;
   gap: 10px;
   margin-left: auto;
+}
+.header-left-controls {
+  margin-left: 0;
 }
 .header-actions .currency-switch,
 .header-actions .theme-toggle {
@@ -11631,6 +11672,75 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 .header-actions :where(.account-link, .favorites-link, .searches-link):focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
+}
+.header-contact-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.header-social-link {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  transition: filter var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease);
+}
+.header-social-link.is-telegram {
+  background: linear-gradient(#2aabee, #229ed9);
+}
+.header-social-link.is-viber {
+  background: #7360f2;
+}
+.header-social-link.is-instagram {
+  background:
+    radial-gradient(circle at 30% 105%, #feda75 0 18%, #fa7e1e 32%, #d62976 52%, #962fbf 72%, #4f5bd5 100%);
+}
+.header-social-link:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.header-social-link:active {
+  transform: scale(0.96);
+}
+.header-social-link:focus-visible,
+.header-actions .header-phone-reveal:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.header-actions .header-phone-reveal {
+  min-width: 164px;
+  height: 48px;
+  padding: 0 16px;
+  border: 2px dashed var(--line-strong);
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--header-control-bg);
+  color: var(--ink);
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 800;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease);
+}
+.header-actions .header-phone-reveal:hover {
+  background: var(--panel-soft);
+  color: var(--accent-dark);
+}
+.header-actions .header-phone-reveal:active {
+  transform: scale(0.98);
+}
+.header-actions .header-phone-reveal.is-revealed {
+  min-width: 174px;
+  color: var(--accent-dark);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 980px) {
+  .header-contact-actions {
+    display: none;
+  }
 }
 /* У «Моих поисков» и «Избранного» подписи в шапке нет — только значок, а слово
    показывает подсказка по наведению. Поэтому кнопка квадратная, значок по центру,
@@ -11750,12 +11860,11 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .header-actions {
     gap: 6px;
   }
-  .header-actions > .currency-switch {
+  .header-contact-actions {
     display: none;
   }
-  .header-menu-settings {
-    display: block;
-    margin-top: 8px;
+  .header-actions > .currency-switch {
+    display: none;
   }
   .header-menu-currency {
     width: 100%;
@@ -11783,13 +11892,18 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     background: var(--panel);
     color: var(--accent-dark);
   }
+  .header-menu-settings {
+    display: block;
+    margin-top: 4px;
+  }
   .header-actions .theme-toggle {
     width: 40px;
     height: 40px;
     flex-basis: 40px;
     border-radius: calc(12px * var(--corner-scale));
   }
-  :root[data-theme="dark"] .header-menu-currency button.active {
+  :root[data-theme="dark"] .header-menu-currency button.active,
+  :root[data-theme="dark"] .header-menu-theme button.active {
     background: #383d45;
     color: #ff7a81;
   }
@@ -12095,6 +12209,11 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
   visibility: visible;
   opacity: 1;
   transform: translateY(0);
+}
+.detail-action-tooltip.phone-unavailable-tooltip {
+  width: min(290px, calc(100vw - 20px));
+  max-width: none;
+  text-align: center;
 }
 /* Свитчер «Быстрый просмотр» рядом с выдачей: на главной — у заголовка каталога,
    в каталоге — у счётчика найденного. */
@@ -14049,6 +14168,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
     .maintenance-icon,
     .modal-close,
     .footer-socials a,
+    .header-social-link,
     .gallery-controls button,
     .price-info,
     .gallery-modal > header button,

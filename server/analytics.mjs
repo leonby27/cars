@@ -15,6 +15,10 @@ export const ANALYTICS_EVENTS = new Set([
   // Рекламная врезка в статьях журнала: попала на экран и по ней нажали.
   "article_promo_shown",
   "article_promo_click",
+  "contact_phone_reveal",
+  "contact_telegram_click",
+  "contact_viber_click",
+  "contact_instagram_click",
 ]);
 
 const COOKIE_NAME = "abcars_analytics";
@@ -407,6 +411,12 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(*) FILTER (WHERE event_name='article_promo_shown' AND ${HUMAN_VISITOR})::int AS promo_shown,
       count(*) FILTER (WHERE event_name='article_promo_click' AND ${HUMAN_VISITOR})::int AS promo_clicks,
       count(DISTINCT visitor_id) FILTER (WHERE event_name='article_promo_click' AND ${HUMAN_VISITOR})::int AS promo_click_people,
+      count(*) FILTER (WHERE event_name='contact_phone_reveal' AND ${HUMAN_VISITOR})::int AS contact_phone_views,
+      count(*) FILTER (WHERE event_name='contact_telegram_click' AND ${HUMAN_VISITOR})::int AS contact_telegram_clicks,
+      count(*) FILTER (WHERE event_name='contact_viber_click' AND ${HUMAN_VISITOR})::int AS contact_viber_clicks,
+      count(*) FILTER (WHERE event_name='contact_instagram_click' AND ${HUMAN_VISITOR})::int AS contact_instagram_clicks,
+      count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts', '/contacts/') AND ${HUMAN_VISITOR})::int AS contact_page_views,
+      count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/how-it-works', '/how-it-works/') AND ${HUMAN_VISITOR})::int AS about_page_views,
       count(DISTINCT visitor_id) FILTER (WHERE NOT (${HUMAN_VISITOR}))::int AS robot_visits
       FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}`, [from, to]),
     // «Заход» считаем по паузе, а не по вкладке: страница помнит номер захода, пока
@@ -601,7 +611,7 @@ export async function getAnalyticsDashboard(rangeValue) {
 // телефона должно гаснуть и на компьютере. Дата, которой в базе нет (или она
 // испорчена), считается «только что»: показывать всю историю как новинку хуже,
 // чем не показать ничего.
-export const ANALYTICS_SECTIONS = ["overview", "leads", "vehicles", "vehicle_cars", "vehicle_favorites", "searches", "customers"];
+export const ANALYTICS_SECTIONS = ["overview", "leads", "vehicles", "vehicle_cars", "vehicle_favorites", "searches", "customers", "contact_interest"];
 
 export const seenMoment = (value, now = Date.now()) => {
   const moment = new Date(String(value || ""));
@@ -631,7 +641,7 @@ export async function readAnalyticsSeen(viewing = "") {
 export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.now() } = {}) {
   const seenBySection = await readAnalyticsSeen(viewing);
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
-  const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, cabinetOrders, customers] = await Promise.all([
+  const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, cabinetOrders, customers, contactInterest] = await Promise.all([
     // Ярлык и красные номера считают именно заходы по той же 30-минутной границе,
     // что верхняя карточка. Иначе два новых захода одного человека давали бы одну
     // плашку, а таблица и счётчик расходились бы.
@@ -647,6 +657,10 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
       + (SELECT count(*) FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")})::int AS n`, [since.leads]),
     pool.query(`SELECT count(*)::int AS n FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")}`, [since.leads]),
     pool.query("SELECT count(*)::int AS n FROM customer_accounts WHERE created_at > $1 AND NOT staff", [since.customers]),
+    pool.query(`SELECT count(*)::int AS n FROM analytics_events
+      WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}
+        AND (event_name IN ('contact_phone_reveal','contact_telegram_click','contact_viber_click','contact_instagram_click')
+          OR (event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts','/contacts/','/how-it-works','/how-it-works/')))`, [since.contact_interest]),
   ]);
   return {
     overview:overview.rows[0].n,
@@ -657,6 +671,7 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
     leads:leads.rows[0].n,
     cabinet_orders:cabinetOrders.rows[0].n,
     customers:customers.rows[0].n,
+    contact_interest:contactInterest.rows[0].n,
   };
 }
 

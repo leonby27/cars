@@ -179,7 +179,7 @@ test("analytics events are allowlisted and drop personal data", () => {
   // прислали: контакты берутся только из таблицы аккаунтов.
   assert.deepEqual(event.properties, { source:"server" });
   assert.equal(normalizeAnalyticsEvent({ eventName:"arbitrary" }).error, "invalid_event");
-  for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted"]) {
+  for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted","contact_phone_reveal","contact_telegram_click","contact_viber_click","contact_instagram_click"]) {
     assert.equal(normalizeAnalyticsEvent({ eventId:`event-${eventName}`, visitorId:"visitor", sessionId:"session", eventName, path:"/" }).eventName, eventName);
   }
 });
@@ -380,7 +380,21 @@ test("момент последнего захода приводится к р�
   }
   // Дальше месяца назад не заглядываем: цифра на ярлыке должна оставаться понятной.
   assert.equal(seenMoment("2020-01-01T00:00:00Z", now), new Date(now - 30 * 86_400_000).toISOString());
-  assert.deepEqual(ANALYTICS_SECTIONS, ["overview", "leads", "vehicles", "vehicle_cars", "vehicle_favorites", "searches", "customers"]);
+  assert.deepEqual(ANALYTICS_SECTIONS, ["overview", "leads", "vehicles", "vehicle_cars", "vehicle_favorites", "searches", "customers", "contact_interest"]);
+});
+
+test("интерес к контактам собран в отдельном разделе из шести показателей", async () => {
+  const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  assert.match(page, /label:"Клиенты"[\s\S]{0,120}label:"Интерес к контактам"/);
+  for (const label of ["Просмотр телефона", "Клик по TG", "Клик по Viber", "Клик по Instagram", "Открытие страницы «Контакты»", "Открытие страницы «О сервисе»"]) {
+    assert.match(page, new RegExp(label));
+  }
+  assert.match(app, /trackEvent\("contact_phone_reveal"\)/);
+  assert.match(app, /trackEvent\(`contact_\$\{network\}_click`\)/);
+  assert.match(server, /split_part\(path, '\?', 1\) IN \('\/contacts', '\/contacts\/'\)/);
+  assert.match(server, /split_part\(path, '\?', 1\) IN \('\/how-it-works', '\/how-it-works\/'\)/);
 });
 
 // Приём событий открыт без пароля, поэтому записываем только то, что прислала

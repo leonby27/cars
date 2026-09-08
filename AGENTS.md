@@ -89,6 +89,8 @@ Analytics chart-source preference (owner decision, 2026-09-07): the overview vis
 
 Analytics copy/table preference (owner decision, 2026-09-07): abbreviate the overview visit note as «36 уник. +4 без действий». In all vehicle views, today's «Просмотр» values use relative time such as «4 минуты назад» or «2 часа назад». The «Клиенты» section contains registrations only; do not restore the former «Последние действия» block.
 
+Analytics contact-interest preference (owner decision, 2026-09-08): place «Интерес к контактам» immediately after «Клиенты» and show six KPI blocks for phone reveals, Telegram clicks, Viber clicks, Instagram clicks, visits to «Контакты», and visits to «О сервисе». Page counts include navigation from anywhere, while the shared analytics exclusions keep local checks, staff accounts, `nocount=1` visits and robots out.
+
 Search traffic archive preference (owner decision, 2026-09-07): internal analytics stores daily Google Search Console and Yandex Webmaster snapshots on our side and sums them for the existing period buttons. Keep old days after they leave the provider's reporting window; replace repeated daily snapshots instead of adding them twice. Keep Google/Yandex clicks in their query and landing-page reports; the top operational counters are governed by the Metrica source preference above. Query/page rows also show impressions, impression-weighted average position, and change against the same published days of the previous period; never treat missing positions or archive gaps as zero. Missing historical days must be visibly distinguished from zero traffic. The production collector uses `deploy/abcars-search-traffic.timer`; install and enable it when this feature is deployed, alongside the archive migration and read-only provider credentials.
 
 Search position presentation preference (owner decision, 2026-09-07): label the query-table change column «Позиция». A positive position change means the result moved upward and is green; a negative change means it moved downward and is red. Keep unavailable comparisons neutral rather than implying zero movement.
@@ -159,7 +161,7 @@ Header appearance preference: keep the header container borderless and use the s
 
 Mobile header-control preference: place the favorites and account icon buttons on the same soft gray filled blocks as the burger-menu and theme controls, with matching compact dimensions and corner radii.
 
-Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; align it to the viewport's left safe inset and cap its width against both safe insets so it never creates horizontal page overflow on narrow devices. Place the currency switch inside the burger menu on mobile, but keep the theme toggle visible in its original header position.
+Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; align it to the viewport's left safe inset and cap its width against both safe insets so it never creates horizontal page overflow on narrow devices. Place the currency switch inside the burger menu on mobile. Keep the theme selector inside the header menu on every screen as a three-position icon switch matching the currency control: system, light and dark.
 
 Header menu-surface preference: in the dark theme, render the opened burger-menu popover slightly lighter than the standard dark card surface so the floating menu remains clearly visible against the page; use a dedicated surface token rather than changing every panel.
 
@@ -172,6 +174,8 @@ Dark card-border preference: keep featured vehicle cards, catalog information si
 Logo preference: render the customer-facing `abcars.by` logo from the supplied SVG artwork, not from live type — `public/logo-light.svg` and `public/logo-dark.svg` (a red badge plus the wordmark). Ship both variants in the markup and let CSS reveal the one matching `data-theme`, since the theme is resolved before first paint. Size every placement through the `--wordmark-height` custom property so the artwork keeps its own proportions.
 
 Theme preference: support both light and dark themes with a compact theme toggle in the main header. Remember the explicit device-local choice, otherwise follow the operating-system preference. Preserve the red brand accent and yellow primary CTAs in both themes.
+
+Header contact preference (owner decision, 2026-09-08): on desktop, keep the `+375 показать номер` reveal button to the left of adjacent «Мои поиски» and «Избранное» icons. The phone button toggles between its prompt and the masked preview `+375 29 508-56-1*`; do not infer or expose the final digit. Place the coloured circular Telegram, Viber and Instagram buttons as separate, slightly larger controls in the footer, replacing its old monochrome social buttons. Until real order channels are enabled, clicking any social button opens the shared «Временно не принимаем заказы» modal.
 
 Company-presence preference: the prototype should feel like a real Minsk-based company, with a substantial footer, office/contact page, legal entity details, social links, and policy pages. Keep temporary company details centralized in `src/company-data.js` so they can be replaced before publication.
 

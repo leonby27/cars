@@ -3,7 +3,7 @@ import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -1067,6 +1067,24 @@ function CurrencySwitch({ currency, setCurrency, className = "" }) {
   );
 }
 
+function ThemeSwitch({ mode, setMode }) {
+  const choices = [
+    ["system", Desktop, "Системная тема"],
+    ["light", Sun, "Светлая тема"],
+    ["dark", Moon, "Тёмная тема"],
+  ];
+  return (
+    <div className="theme-switch header-menu-theme" role="group" aria-label="Оформление сайта">
+      {choices.map(([value, Glyph, label]) => (
+        <button key={value} type="button" className={mode === value ? "active" : ""} aria-label={label} aria-pressed={mode === value} onClick={() => setMode(value)}>
+          <Glyph size={19} weight="bold" />
+          <ActionTooltip text={label} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Клик по логотипу на главной не меняет ни адрес, ни содержимое, поэтому подтверждаем
 // его короткой анимацией: страница проявляется заново, логотип чуть подаётся под палец.
 // Класс висит на <html> и снимается по таймеру, чтобы пережить перерисовку при переходе
@@ -1230,7 +1248,7 @@ function EvQuotaButton({ quotas }) {
         onClick={() => setOpen((value) => !value)}
       >
         <Lightning size={20} weight="bold" />
-        <span>Осталось квот</span>
+        <span>Квоты</span>
         <strong>{number(remaining)}</strong>
         {/* Слово «квота» само себя не объясняет, поэтому по наведению — короткий
             рассказ о том, что это и зачем на него смотреть. Пока карточка открыта,
@@ -1250,15 +1268,21 @@ function EvQuotaButton({ quotas }) {
   );
 }
 
-function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, setCurrency, user, theme, toggleTheme }) {
+function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, setCurrency, user, themeMode, setThemeMode }) {
   const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [phoneRevealed, setPhoneRevealed] = useState(false);
   const menuRef = useRef(null);
   // Остаток квоты считается по вшитым в сборку сводкам — за сессию он не меняется.
   const quotas = useMemo(() => ({
     personal: evQuotaState({ audience: "personal" }),
     business: evQuotaState({ audience: "business" }),
   }), []);
+
+  const togglePhone = () => {
+    if (!phoneRevealed) trackEvent("contact_phone_reveal");
+    setPhoneRevealed(!phoneRevealed);
+  };
 
   useEffect(() => {
     setMenuOpen(false);
@@ -1323,11 +1347,10 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
                   Мои поиски{savedSearchesCount > 0 ? ` · ${savedSearchesCount}` : ""}
                 </AppLink>
               </nav>
+              <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
               <div className="header-menu-settings">
-                {/* На телефоне четвёртая кнопка в шапку не влезает, поэтому остаток
-                    квоты живёт здесь же, где валюта и «Мои поиски». Валюта стоит
-                    первой: карточка квоты длинная, и переключатель под ней
-                    оказывался за пределами экрана. */}
+                {/* На телефоне валюте и карточке квоты не хватает места в шапке,
+                    поэтому они находятся в меню. */}
                 <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
                 <div className="header-menu-quota">
                   <EvQuotaPanel quotas={quotas} />
@@ -1335,18 +1358,22 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
               </div>
           </div>
         </div>
-        <div className="header-actions">
+        <div className="header-actions header-left-controls">
           <EvQuotaButton quotas={quotas} />
           <CurrencySwitch currency={currency} setCurrency={setCurrency} />
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
-            title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-          >
-            {theme === "dark" ? <Sun size={20} weight="bold" /> : <Moon size={20} weight="bold" />}
-          </button>
+        </div>
+        <div className="header-actions">
+          <div className="header-contact-actions" aria-label="Связаться с нами">
+            <button
+              type="button"
+              className={`header-phone-reveal${phoneRevealed ? " is-revealed" : ""}`}
+              aria-expanded={phoneRevealed}
+              onClick={togglePhone}
+            >
+              {phoneRevealed ? COMPANY.phonePreview : "+375 показать номер"}
+              {phoneRevealed && <ActionTooltip className="phone-unavailable-tooltip" text="Временно не принимаем заказы. Совсем скоро вновь будем доступны, не теряйте нас! 🙏" showOnMount />}
+            </button>
+          </div>
           <button
             className={`icon-label searches-link${path === "/searches" ? " selected" : ""}`}
             aria-label="Мои поиски"
@@ -6957,7 +6984,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
 // Саму подсказку выносим в конец страницы: внутри карусели и других блоков, у
 // которых есть свой сдвиг или обрезка по краям, координаты окна считались бы от
 // этого блока, и подсказка уезжала за экран.
-function ActionTooltip({ text, className = "", tapToOpen = false }) {
+function ActionTooltip({ text, className = "", tapToOpen = false, showOnMount = false }) {
   // Подсказка рисуется порталом в body, а портал существует только в браузере:
   // сервер, собирая готовую разметку главной, на нём бы упал. Поэтому до оживления
   // страницы подсказки нет вовсе — она и так невидима, пока к кнопке не подвели
@@ -7004,6 +7031,14 @@ function ActionTooltip({ text, className = "", tapToOpen = false }) {
       button.removeEventListener("blur", hide);
     };
   }, [place]);
+  // Некоторые подсказки появляются после уже совершённого клика: их якорь
+  // монтируется внутри сфокусированной кнопки, поэтому нового события focus не
+  // будет. В этом случае показываем подсказку сразу после её появления в DOM.
+  useEffect(() => {
+    if (!mounted || !showOnMount) return;
+    place();
+    setVisible(true);
+  }, [mounted, showOnMount, place]);
   // На телефоне наведения нет, поэтому подсказку у стрелки цены открывает касание.
   // Повторное касание по той же стрелке подсказку убирает.
   // Событие дальше не пускаем: иначе вместе с подсказкой откроется и сама карточка.
@@ -10160,16 +10195,47 @@ function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
   );
 }
 
-function SiteFooter({ navigate }) {
+function SocialUnavailableModal({ onClose }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
   return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="social-unavailable-title" aria-describedby="social-unavailable-description">
+        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
+        <div className="order-removal-icon availability-paused-icon"><ChatCircleText size={32} weight="duotone" /></div>
+        <h2 id="social-unavailable-title">Временно не принимаем заказы</h2>
+        <p id="social-unavailable-description">Сейчас мы временно не принимаем новые заказы через соцсети. Совсем скоро вновь будем доступны — не теряйте нас! 🙏</p>
+        <div className="order-removal-actions availability-paused-actions">
+          <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SiteFooter({ navigate }) {
+  const [socialUnavailableOpen, setSocialUnavailableOpen] = useState(false);
+  const openSocialUnavailable = (network) => {
+    trackEvent(`contact_${network}_click`);
+    setSocialUnavailableOpen(true);
+  };
+  return (
+    <>
     <footer className="site-footer">
       <div className="page-width footer-main">
         <div className="footer-brand">
           <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="abcars.by — на главную"><SiteLogo /></AppLink>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
           <div className="footer-socials">
-            <a className="telegram-social-link" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" aria-label="Telegram"><TelegramLogo size={27} weight="fill" /></a>
-            <a className="viber-social-link" href={COMPANY.viberUrl} aria-label="Viber"><ViberLogo size={25} /></a>
+            <button type="button" className="header-social-link is-telegram" aria-label="Telegram" onClick={() => openSocialUnavailable("telegram")}><TelegramOfficialLogo size={36} weight="fill" /></button>
+            <button type="button" className="header-social-link is-viber" aria-label="Viber" onClick={() => openSocialUnavailable("viber")}><ViberLogo size={24} /></button>
+            <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
           </div>
         </div>
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
@@ -10178,7 +10244,6 @@ function SiteFooter({ navigate }) {
           <b>Связаться</b>
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
           <a className="footer-contact-line" href={`mailto:${COMPANY.email}`}><EnvelopeSimple size={18} weight="duotone" /><span>{COMPANY.email}</span></a>
-          <a className="footer-contact-line" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer"><TelegramLogo size={18} weight="fill" /><span>{COMPANY.telegram}</span></a>
           <span className="footer-contact-address">{COMPANY.address}</span>
         </div>
       </div>
@@ -10187,6 +10252,8 @@ function SiteFooter({ navigate }) {
         <div><AppLink href="/privacy" navigate={navigate}>Политика конфиденциальности</AppLink><AppLink href="/terms" navigate={navigate}>Условия использования</AppLink></div>
       </div>
     </footer>
+    {socialUnavailableOpen && <SocialUnavailableModal onClose={() => setSocialUnavailableOpen(false)} />}
+    </>
   );
 }
 
@@ -12042,19 +12109,15 @@ export function App() {
           currency={currency}
           setCurrency={setCurrency}
           user={user}
-          theme={theme}
-          toggleTheme={() => {
-            const nextTheme = theme === "dark" ? "light" : "dark";
-            // Если выбранное совпало с системным оформлением, запоминаем не саму тему,
-            // а «как в системе»: тогда сайт снова следует за настройками устройства,
-            // и вернуться к ним можно тем же переключателем, без скрытых настроек.
-            if (nextTheme === systemTheme) {
+          themeMode={themeMode}
+          setThemeMode={(nextThemeMode) => {
+            if (nextThemeMode === "system") {
               window.localStorage.removeItem("abcars-theme");
               setThemeMode("system");
               return;
             }
-            window.localStorage.setItem("abcars-theme", nextTheme);
-            setThemeMode(nextTheme);
+            window.localStorage.setItem("abcars-theme", nextThemeMode);
+            setThemeMode(nextThemeMode);
           }}
         />
         {page}

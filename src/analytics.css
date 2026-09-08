@@ -13,6 +13,7 @@
 .analytics-range button.active { background:var(--panel); color:var(--accent); box-shadow:0 1px 4px rgba(15,23,42,.08); font-weight:800; }
 .analytics-logout { min-width:112px; min-height:41px; height:41px; padding:0 18px; box-sizing:border-box; font-size:14px; }
 .analytics-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.analytics-contact-kpis { grid-template-columns:repeat(3,1fr); }
 .analytics-kpis article, .analytics-panel, .analytics-login-card { border:0; border-radius:var(--analytics-block-radius); background:var(--panel); }
 html[data-theme="light"] .analytics-kpis article,
 html[data-theme="light"] .analytics-panel,
