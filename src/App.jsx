@@ -7210,8 +7210,11 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             характеристиками встаёт шкала «Цена среди похожих». */}
         <div className="detail-gallery">
           <VehicleGallery car={car} />
-          {datesLine && <p className="detail-dates">{datesLine}</p>}
         </div>
+        {/* Когда добавлено и обновлено — строка только для телефона (на широком
+            экране скрыта стилями). Стоит отдельным блоком сетки, чтобы на узком
+            экране встать после шкалы цены, а не между фотографиями и ней. */}
+        {datesLine && <p className="detail-dates">{datesLine}</p>}
         <div className="detail-content">
           <section className="detail-facts-section">
             <h2>Характеристики</h2>

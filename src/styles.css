@@ -4699,14 +4699,15 @@ html[data-theme="dark"] #root .load-more {
   .detail-title p {
     display: none;
   }
-  /* Строка идёт отдельной ячейкой сетки с шагом 30px — сверху его подбираем,
-     чтобы даты стояли под фотографиями, а не висели ровно между блоками. */
+  /* Даты идут следующим абзацем после текста шкалы цены — тем же шрифтом и вплотную
+     к нему, а не через весь шаг сетки в 30px. */
   .detail-dates {
     display: block;
-    margin: -18px 0 0;
+    margin: -19px 0 0;
     color: var(--muted);
-    font-size: 16px;
-    line-height: 1.4;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
   }
   .detail-kicker > span:last-child {
     display: none;
@@ -4991,6 +4992,29 @@ html[data-theme="dark"] #root .load-more {
     animation: none;
   }
 }
+/* На телефоне плашки нет: содержание лежит прямо на странице, как остальные
+   разделы карточки, и блок не отнимает высоту на рамку и отступы.
+
+   Вместе с плашкой меняется и цвет неподсвеченных делений: на ней канавка была
+   темнее фона, а на самой странице такая же тёмная полоса с фоном сливается —
+   поэтому здесь она наоборот светлее. */
+@media (max-width: 700px) {
+  .price-rating {
+    --price-rating-groove: #d3d9e0;
+    padding: 0;
+    background: none;
+  }
+  :root[data-theme="dark"] .price-rating {
+    --price-rating-groove: #454c55;
+    background: none;
+  }
+  .price-rating .price-rating-track {
+    margin-top: 15px;
+  }
+  .price-rating p.price-rating-note {
+    margin-top: 13px;
+  }
+}
 .price-card-header {
   display: flex;
   align-items: center;
@@ -5234,20 +5258,28 @@ html[data-theme="dark"] #root .load-more {
     grid-column: 1;
     grid-row: auto;
   }
+  /* Отбивку между плашками теперь задаёт шаг сетки, а не их собственные нижние
+     отступы: пока стояли и то и другое, промежутки складывались. */
+  .detail-sidebar > * {
+    margin-bottom: 0;
+  }
   .detail-gallery {
     order: 1;
   }
   .detail-sidebar > .price-rating {
     order: 2;
   }
-  .detail-content {
+  .detail-dates {
     order: 3;
   }
-  .detail-sidebar > .vehicle-quick-info {
+  .detail-content {
     order: 4;
   }
-  .detail-sidebar > .order-card {
+  .detail-sidebar > .vehicle-quick-info {
     order: 5;
+  }
+  .detail-sidebar > .order-card {
+    order: 6;
   }
   .order-card {
     display: block;
