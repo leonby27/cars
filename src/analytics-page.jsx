@@ -5,7 +5,7 @@ import { CarProfile, ChartLineUp, Desktop, DeviceMobile, MagnifyingGlass, SignOu
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
-import { analyticsUpdatesUrl } from "./analytics-updates.js";
+import { analyticsUpdatesUrl, watchAnalyticsExit } from "./analytics-updates.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
 // карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
@@ -788,14 +788,19 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
   // цифры на компьютере.
   const [updates, setUpdates] = useState({});
+  const viewedSections = useRef(new Set());
+  useEffect(() => watchAnalyticsExit(() => viewedSections.current), []);
   const loadUpdates = useCallback(async (viewing = "") => {
     try {
       const response = await fetch(analyticsUpdatesUrl(viewing), { credentials:"same-origin" });
-      if (response.ok) setUpdates(await response.json());
+      if (response.ok) {
+        setUpdates(await response.json());
+        viewedSections.current.add(viewing || "overview");
+      }
     } catch { /* счётчики — не повод ломать раздел */ }
   }, []);
   // Автоматически открытый «Обзор» ещё не означает, что пользователь успел
-  // заметить новое. Прочитанным раздел становится только после явного нажатия.
+  // заметить новое. Сохраняем его при закрытии страницы или явном нажатии.
   const openSection = (id) => {
     setSection(id);
     // Цифру гасим сразу, не дожидаясь ответа сервера.
