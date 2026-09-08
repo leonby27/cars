@@ -85,10 +85,16 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-visits-filter button { min-height:26px; padding:4px 9px; }
 .analytics-visits-filter-count { min-width:20px; color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums; }
 .analytics-visits-table th:first-child, .analytics-visits-table td:first-child { width:72px; }
-.analytics-visits-table th:nth-child(3), .analytics-visits-table td:nth-child(3) { width:280px; max-width:280px; }
-.analytics-visits-table td:nth-child(3) a { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.analytics-visits-table th:nth-child(4), .analytics-visits-table td:nth-child(4),
+.analytics-visits-table th:nth-child(3), .analytics-visits-table td:nth-child(3) { width:52px; }
+.analytics-visits-table th:nth-child(4), .analytics-visits-table td:nth-child(4) { width:280px; max-width:280px; }
+.analytics-visits-table td:nth-child(4) a { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.analytics-visits-table th:nth-child(5), .analytics-visits-table td:nth-child(5),
 .analytics-visits-table th:last-child, .analytics-visits-table td:last-child { white-space:nowrap; }
+/* Иконка устройства встаёт на ту же строку, что текст соседних столбцов: коробка
+   ровно в одну строку высотой, иконка в ней по центру. Ширина фиксированная, поэтому
+   узкий телефон и широкий монитор стоят на одной оси друг под другом. */
+.analytics-visit-device { display:grid; place-items:center; width:20px; height:20px; height:1lh; color:var(--muted); }
+.analytics-visit-device.is-unknown { color:var(--muted-contrast,var(--muted)); }
 .analytics-visit-number { display:inline-grid; min-width:34px; height:24px; place-items:center; padding:0 7px; box-sizing:border-box; border-radius:999px; font-variant-numeric:tabular-nums; }
 .analytics-visit-number.is-unread { background:var(--accent); color:#fff; font-weight:800; }
 .analytics-visit-source { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
@@ -159,7 +165,7 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
 .analytics-kpi-split-count { margin-left:0; gap:8px; color:var(--ink); font-size:inherit; }
 .analytics-kpi-split-count > span { color:var(--ink); }
 .analytics-kpi-split-count > i { color:var(--accent); font-size:18px; }
-.analytics-kpi-split-count > b { min-width:32px; height:30px; padding-inline:8px; font-size:16px; }
+.analytics-kpi-split-count > b { min-width:27px; height:24px; padding-inline:6px; font-size:17px; }
 .analytics-sidebar-reset { margin-top:12px; }
 .analytics-sidebar-danger { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }
 html[data-theme="light"] .analytics-sidebar-danger { border:1px solid var(--line); }
@@ -249,7 +255,7 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
   html[data-theme="dark"] .analytics-mobile-period-menu { background:var(--menu-surface,var(--panel)); }
   .analytics-mobile-period-menu button { min-height:38px; padding:7px 10px; border:0; border-radius:calc(8px * var(--corner-scale)); background:transparent; color:var(--muted); font:inherit; font-size:14px; font-weight:750; text-align:left; cursor:pointer; }
   .analytics-mobile-period-menu button:hover, .analytics-mobile-period-menu button.selected { background:var(--surface); color:var(--accent); }
-  .analytics-kpi-split-count > b { min-width:30px; height:28px; font-size:15px; }
+  .analytics-kpi-split-count > b { min-width:25px; height:22px; font-size:16px; }
 }
 
 @keyframes analytics-mobile-menu-in { from { opacity:0; transform:translateY(-4px) scale(.985); } to { opacity:1; transform:none; } }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getPriceChange, formatChangeDate } from "../src/price-change.js";
+import { getPriceChange, formatChangeDate, formatChangePercent } from "../src/price-change.js";
 
 const car = {
   source: "Che168",
@@ -33,4 +33,16 @@ test("exchange-rate noise and old changes are not shown", () => {
 test("the tooltip date is written the Russian way", () => {
   assert.equal(formatChangeDate("2026-08-24T09:00:00Z"), "24 августа");
   assert.equal(formatChangeDate("nonsense"), null);
+});
+
+test("the tooltip shows how far the price moved, in percent", () => {
+  const cheaper = getPriceChange({ ...car, previousPriceUsd: 28900, priceChangedAt: changedAt }, now);
+  assert.ok(cheaper.currentTotalUsd > 0);
+  assert.ok(cheaper.currentTotalUsd < cheaper.previousTotalUsd);
+  const drop = formatChangePercent(cheaper.previousTotalUsd, cheaper.currentTotalUsd);
+  assert.match(drop, /^−\d+(,\d)?%$/);
+  assert.equal(formatChangePercent(1000, 1200), "+20%");
+  assert.equal(formatChangePercent(1000, 996), "−0,4%");
+  assert.equal(formatChangePercent(0, 1200), null);
+  assert.equal(formatChangePercent(1000, null), null);
 });

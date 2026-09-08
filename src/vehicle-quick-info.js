@@ -1,3 +1,5 @@
+import { engineVolume } from "./engine-spec.js";
+
 const clean = (value) => String(value ?? "").trim();
 const lower = (value) => clean(value).toLocaleLowerCase("ru-RU");
 const positiveNumber = (value) => {
@@ -6,14 +8,19 @@ const positiveNumber = (value) => {
 };
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value);
 
-const powertrainLabel = (value) => {
-  const normalized = lower(value);
+// Объём мотора идёт в той же фразе, что топливо: «бензин 2.0 л», «гибрид 1.5 л».
+// Только там, где мотор есть и объём указан: у электромобиля объёма нет вообще,
+// а у гибрида с генератором источник его часто не пишет — тогда остаётся одно слово.
+const powertrainLabel = (car) => {
+  const normalized = lower(car?.type);
   if (!normalized || normalized.startsWith("не указан")) return null;
   if (normalized === "электромобиль") return "электро";
-  if (normalized === "гибрид") return "гибрид";
+  const hasEngine = normalized === "гибрид" || normalized === "двс";
   // «ДВС» — как тип записан в базе; покупателю показываем привычное слово.
-  if (normalized === "двс") return "бензин";
-  return normalized;
+  const label = normalized === "двс" ? "бензин" : normalized;
+  if (!hasEngine) return label;
+  const volume = engineVolume(car);
+  return volume === null ? label : `${label} ${volume.toFixed(1)} л`;
 };
 
 const driveLabel = (value) => {
@@ -32,7 +39,7 @@ export function buildVehicleQuickInfo(car = {}) {
   return [
     positiveNumber(car.year) ? `${Number(car.year)} г.` : null,
     mileage ? `пробег ${formatNumber(mileage)} км` : null,
-    powertrainLabel(car.type),
+    powertrainLabel(car),
     electricRange ? `запас хода ${formatNumber(electricRange)} км` : null,
     combinedRange && combinedRange !== electricRange ? `${formatNumber(combinedRange)} км` : null,
     driveLabel(car.drive),

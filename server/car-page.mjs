@@ -10,6 +10,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { getCar, listCars } from "./repository.mjs";
+import { priceRating } from "./price-rating.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer, carRoute, listingNumber } from "./seo-render.mjs";
 // Обзоры моделей весят больше мегабайта, поэтому этот модуль сам подключается только
@@ -90,6 +91,10 @@ export async function renderCarPage(id) {
   // из неё уже не получится, а 200 держал бы её в индексе поисковика как живую.
   if (!car || car.available === false) return { status: 404, html: renderer.carGonePage() };
   const related = await relatedCars(car);
+  // Шкала «цена среди похожих» приезжает вместе с машиной: так один и тот же объект
+  // уходит и в готовую разметку, и в данные для оживления, — сверка их не разойдётся.
+  const rating = await priceRating(car);
+  if (rating) car.priceRating = rating;
   // Разметка приложения собирается из сырых записей — тех же, что отдаёт /api/cars:
   // приложение нормализует их само, и браузер при оживлении повторит это с теми же
   // данными (renderHtml встраивает их в страницу). Адрес в метке — тот, по которому

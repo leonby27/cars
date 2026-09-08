@@ -24,3 +24,27 @@ test("omits unavailable quick facts instead of inventing values", () => {
     "2024 г., гибрид, запас хода 220 км, передний привод",
   );
 });
+
+test("объём мотора идёт рядом с топливом у бензиновых и гибридов", () => {
+  assert.equal(
+    buildVehicleQuickInfo({ year:2023, mileage:62300, type:"ДВС", engine:"2.0T 184HP L4", drive:"Полный" }).join(", "),
+    "2023 г., пробег 62 300 км, бензин 2.0 л, полный привод",
+  );
+  assert.equal(
+    buildVehicleQuickInfo({ year:2024, type:"Гибрид", engine:"1.5T 144HP L3", drive:"Передний" }).join(", "),
+    "2024 г., гибрид 1.5 л, передний привод",
+  );
+});
+
+test("без объёма остаётся одно слово, у электромобиля объёма не бывает", () => {
+  // Гибрид с генератором: источник пишет в строке мотора мощность, объёма там нет.
+  assert.equal(
+    buildVehicleQuickInfo({ year:2025, type:"Гибрид", engine:"Range Extender 160 Horsepower" }).join(", "),
+    "2025 г., гибрид",
+  );
+  assert.equal(buildVehicleQuickInfo({ type:"ДВС" }).join(", "), "бензин");
+  assert.equal(
+    buildVehicleQuickInfo({ year:2025, type:"Электромобиль", engine:"2.0T 184HP L4", battery:94.5 }).join(", "),
+    "2025 г., электро, батарея 94,5 кВт·ч",
+  );
+});

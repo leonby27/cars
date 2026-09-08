@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionAccount, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelSummary } from "./repository.mjs";
+import { priceRating } from "./price-rating.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
 import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, isDatacenterAddress, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
@@ -149,7 +150,7 @@ export async function handleApiRequest(request, response) {
       // Свой человек, вошедший в кабинет служебным аккаунтом, статистику не наполняет:
       // метку «не считать» браузер помнит не везде, а вход — надёжный признак своего.
       if (await isStaffVisit(request)) return json(response, 202, { ok:true, recorded:false });
-      const result = await recordAnalyticsEvent(body);
+      const result = await recordAnalyticsEvent(body, { headers:request.headers });
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
     // Страница сообщает, что за заходом стоит живой человек: он подвигал мышью,
@@ -454,7 +455,11 @@ export async function handleApiRequest(request, response) {
       // из списка машину, за которой пришло «объявления нет».
       // Ненайденную карточку не кэшируем: объявление может появиться следующим импортом.
       if (car && car.available === false) return json(response, 404, { error:"listing_unavailable" });
-      return car ? json(response, 200, car, catalogCache) : json(response, 404, { error:"car_not_found" });
+      // Положение цены среди таких же машин считаем здесь же: карточке нужен готовый
+      // ответ, а не ещё один запрос с её стороны.
+      return car
+        ? json(response, 200, { ...car, priceRating:await priceRating(car) }, catalogCache)
+        : json(response, 404, { error:"car_not_found" });
     }
     if (request.method === "POST" && url.pathname === "/api/order-drafts") {
       // Каждая заявка ставит краулеру задачу с высоким приоритетом, поэтому поток

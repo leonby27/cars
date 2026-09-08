@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ANALYTICS_SECTIONS, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, confirmHumanVisit, deviceKindFromHeaders, devicePlatformFromHeaders, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { analyticsEntrySource, hasYandexClickId, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm, withoutYandexClickId } from "../src/analytics.js";
 import { formatVisitDate } from "../src/analytics-format.js";
 import { analyticsNoCountHref } from "../src/analytics-links.js";
@@ -112,8 +112,8 @@ test("сегодняшние заходы показывают, сколько �
 
 test("страница входа остаётся в одну строку и обрезается многоточием", async () => {
   const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
-  assert.match(styles, /analytics-visits-table th:nth-child\(3\)[^}]*width:280px/);
-  assert.match(styles, /analytics-visits-table td:nth-child\(3\) a \{[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/);
+  assert.match(styles, /analytics-visits-table th:nth-child\(4\)[^}]*width:280px/);
+  assert.match(styles, /analytics-visits-table td:nth-child\(4\) a \{[^}]*text-overflow:ellipsis[^}]*white-space:nowrap/);
 });
 
 test("все крупные блоки аналитики имеют один радиус", async () => {
@@ -563,4 +563,80 @@ test("отметка живого посетителя повторяется, �
     globalThis.window = previousWindow;
     globalThis.fetch = previousFetch;
   }
+});
+
+test("тип устройства берётся из заголовков запроса, а не из тела события", () => {
+  assert.equal(deviceKindFromHeaders({ "sec-ch-ua-mobile":"?1", "user-agent":"Mozilla/5.0 (Windows NT 10.0)" }), "mobile");
+  assert.equal(deviceKindFromHeaders({ "sec-ch-ua-mobile":"?0", "user-agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)" }), "desktop");
+  assert.equal(deviceKindFromHeaders({ "user-agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" }), "mobile");
+  assert.equal(deviceKindFromHeaders({ "user-agent":"Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36" }), "mobile");
+  assert.equal(deviceKindFromHeaders({ "user-agent":"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1" }), "mobile");
+  assert.equal(deviceKindFromHeaders({ "user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36" }), "desktop");
+  assert.equal(deviceKindFromHeaders({ "user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15" }), "desktop");
+  assert.equal(deviceKindFromHeaders({}), "");
+});
+
+test("подделать тип устройства через тело события нельзя", () => {
+  const body = {
+    eventId:"e1", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/catalog",
+    properties:{ device:"mobile" },
+  };
+  assert.equal(normalizeAnalyticsEvent(body).properties.device, undefined);
+  assert.equal(normalizeAnalyticsEvent(body, { device:"desktop" }).properties.device, "desktop");
+  assert.equal(normalizeAnalyticsEvent(body, { device:"телефон" }).properties.device, undefined);
+});
+
+test("запись события кладёт тип устройства в свойства", async () => {
+  const calls = [];
+  const db = { query:async (sql, params) => { calls.push({ sql, params }); return { rowCount:1 }; } };
+  await recordAnalyticsEvent(
+    { eventId:"e2", visitorId:"v2", sessionId:"s2", eventName:"page_view", path:"/" },
+    { db, headers:{ "user-agent":"Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/126 Mobile Safari/537.36" } },
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(JSON.parse(calls[0].params[7]).device, "mobile");
+  assert.equal(JSON.parse(calls[0].params[7]).platform, "android");
+});
+
+test("система устройства узнаётся по заголовку, иначе по подписи браузера", () => {
+  assert.equal(devicePlatformFromHeaders({ "sec-ch-ua-platform":'"macOS"' }), "macos");
+  assert.equal(devicePlatformFromHeaders({ "sec-ch-ua-platform":'"Android"', "user-agent":"Mozilla/5.0 (Windows NT 10.0)" }), "android");
+  assert.equal(devicePlatformFromHeaders({ "user-agent":"Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36" }), "android");
+  assert.equal(devicePlatformFromHeaders({ "user-agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" }), "ios");
+  assert.equal(devicePlatformFromHeaders({ "user-agent":"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1" }), "ios");
+  assert.equal(devicePlatformFromHeaders({ "user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36" }), "macos");
+  assert.equal(devicePlatformFromHeaders({ "user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36" }), "windows");
+  assert.equal(devicePlatformFromHeaders({ "user-agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36" }), "linux");
+  assert.equal(devicePlatformFromHeaders({ "user-agent":"Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 Chrome/126 Safari/537.36" }), "chromeos");
+  assert.equal(devicePlatformFromHeaders({}), "");
+});
+
+test("подделать систему через тело события нельзя", () => {
+  const body = {
+    eventId:"e3", visitorId:"v3", sessionId:"s3", eventName:"page_view", path:"/",
+    properties:{ platform:"android" },
+  };
+  assert.equal(normalizeAnalyticsEvent(body).properties.platform, undefined);
+  assert.equal(normalizeAnalyticsEvent(body, { platform:"macos" }).properties.platform, "macos");
+  assert.equal(normalizeAnalyticsEvent(body, { platform:"symbian" }).properties.platform, undefined);
+});
+
+test("подсказка у иконки называет систему, а иконка стоит на строке текста", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(source, /android:"Android"/);
+  assert.match(source, /macos:"macOS"/);
+  assert.match(source, /const label = system \? `\$\{kind\} · \$\{system\}` : kind;/);
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  assert.match(styles, /\.analytics-visit-device \{[^}]*place-items:center[^}]*height:1lh/);
+});
+
+test("в таблице заходов есть колонка типа устройства после источника", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(source, /<th>Источник<\/th><th>Тип<\/th><th>Страница входа<\/th>/);
+  assert.match(source, /<td><VisitDevice device=\{visit\.device\} platform=\{visit\.platform\} \/><\/td>/);
+  assert.match(source, /colSpan="6"/);
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  assert.match(server, /properties->>'device'/);
+  assert.match(server, /device:row\.device \|\| "", platform:row\.platform \|\| ""/);
+  assert.match(server, /properties->>'platform'/);
 });

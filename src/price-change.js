@@ -29,9 +29,23 @@ export function getPriceChange(car, now = Date.now()) {
   if (Math.abs(currentUsd - previousUsd) < MIN_STEP_USD) return null;
   const previous = estimateLandedCost({ ...car, usdPrice: previousUsd, chinaPrice: Math.round((previousUsd * USD_TO_CNY) / 100) * 100 });
   if (!Number.isFinite(previous?.totalUsd)) return null;
+  const current = estimateLandedCost(car);
   return {
     direction: currentUsd > previousUsd ? "up" : "down",
     previousTotalUsd: previous.totalUsd,
+    // Разницу считаем по цене «под ключ», а не по цене в Китае: в подсказке стоит
+    // та же сумма, что и на карточке, поэтому и вычитать надо её.
+    currentTotalUsd: Number.isFinite(current?.totalUsd) ? current.totalUsd : null,
     changedAt,
   };
+}
+
+// Насколько цена изменилась в процентах от прежней. Мелкую переоценку показываем
+// с десятой долей: округление до целых превращало «+0,4%» в «0%».
+export function formatChangePercent(previousTotalUsd, currentTotalUsd) {
+  if (!previousTotalUsd || !Number.isFinite(currentTotalUsd)) return null;
+  const share = ((currentTotalUsd - previousTotalUsd) / previousTotalUsd) * 100;
+  const size = Math.abs(share);
+  const rounded = size < 10 ? Math.round(size * 10) / 10 : Math.round(size);
+  return `${share < 0 ? "−" : "+"}${String(rounded).replace(".", ",")}%`;
 }

@@ -21,7 +21,7 @@ import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
 import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
 import { formatListingAge, getListingAddedAt, getSourceListedAt, isNewListing } from "./listing-age.js";
-import { formatChangeDate, getPriceChange } from "./price-change.js";
+import { formatChangeDate, formatChangePercent, getPriceChange } from "./price-change.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar, modelPageRedirect } from "./model-pages.js";
 import { carTitle, carTitleDetails } from "./car-title.js";
@@ -29,6 +29,7 @@ import { chineseModelName } from "../config/model-names-by.mjs";
 import { splitInlineLinks, plainInlineText } from "./inline-links.js";
 import { loadModelText, loadedModelText } from "./model-text-load.js";
 import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
+import { PriceRatingScale } from "./price-rating-scale.jsx";
 import { brandNotice } from "./brand-notice.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
@@ -99,6 +100,13 @@ const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORD
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? Math.round(usd * PRICING.usdByn) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
+// Суммы в блоке «Цена среди похожих» — крупным шагом (сотня рублей, полсотни
+// долларов): это оценка, а не смета, и точность до рубля обещала бы больше, чем
+// расчёт может дать.
+const roughMoney = (usd, currency) => {
+  const step = currency === "BYN" ? 100 / PRICING.usdByn : 50;
+  return money(Math.round(usd / step) * step, currency);
+};
 
 const ANY_YEAR_MIN = "Год от";
 const ANY_YEAR_MAX = "До";
@@ -435,14 +443,16 @@ const startOfDayMs = (value) => new Date(value.getFullYear(), value.getMonth(), 
 
 // «сегодня» / «вчера» / «5 дней назад», а для давних дат — число и месяц:
 // «143 дня назад» посетителю ничего не говорит, «18 августа» — говорит.
-function formatDayAgo(value) {
+// До какого возраста считать «давним», решает место: в датах карточки это месяц,
+// в подсказке у стрелки цены — неделя.
+function formatDayAgo(value, recentDays = 30) {
   const at = new Date(value || "");
   if (!Number.isFinite(at.getTime())) return null;
   const now = new Date();
   const days = Math.round((startOfDayMs(now) - startOfDayMs(at)) / 86400000);
   if (days <= 0) return "сегодня";
   if (days === 1) return "вчера";
-  if (days <= 30) return `${days} ${pluralRu(days, "день", "дня", "дней")} назад`;
+  if (days <= recentDays) return `${days} ${pluralRu(days, "день", "дня", "дней")} назад`;
   const date = formatChangeDate(at);
   return at.getFullYear() === now.getFullYear() ? date : `${date} ${at.getFullYear()}`;
 }
@@ -777,19 +787,30 @@ function NewListingBadge({ car, className }) {
   );
 }
 
-// Стрелка изменения цены: вверх красная, вниз зелёная. По наведению — цена до
-// переоценки и её дата. Старая цена пересчитывается тем же расчётом, что и
-// текущая, поэтому в подсказке она в выбранной валюте.
+// Стрелка изменения цены: вверх красная, вниз зелёная. По наведению — дата
+// переоценки, прежняя цена и разница в процентах и деньгах. Старая цена
+// пересчитывается тем же расчётом, что и текущая, поэтому в подсказке обе суммы
+// в выбранной валюте и с учётом переключателя квот.
 function PriceChangeMark({ car }) {
   const currency = useCurrency();
   const change = getPriceChange(car);
   if (!change) return null;
-  const date = formatChangeDate(change.changedAt);
-  const hint = `Было ${money(change.previousTotalUsd, currency)}${date ? ` · ${date}` : ""}`;
+  // Свежую переоценку понятнее считать днями («3 дня назад»), а всё, что старше
+  // недели, — датой: «9 дней назад» уже приходится переводить в число самому.
+  const date = formatDayAgo(change.changedAt, 6);
+  const was = money(change.previousTotalUsd, currency);
+  const percent = formatChangePercent(change.previousTotalUsd, change.currentTotalUsd);
+  const gap = Number.isFinite(change.currentTotalUsd) ? Math.abs(change.currentTotalUsd - change.previousTotalUsd) : null;
+  // Сначала деньги, процент — в скобках; знак у обоих один: «−20 500 BYN (−6%)».
+  const sign = change.direction === "up" ? "+" : "−";
+  const shift = percent && gap ? `${sign}${money(gap, currency)} (${percent})` : percent;
+  // Вторая строка подсказки — одной фразой: «2 дня назад было 116 093 BYN».
+  const before = date ? `${date} было ${was}` : `Было ${was}`;
+  const hint = ["Цена изменилась", shift, before].filter(Boolean).join(" · ");
   const tooltip = (
     <>
-      <b>Было {money(change.previousTotalUsd, currency)}</b>
-      {date && <i>{date}</i>}
+      {shift && <b className={`price-change-shift price-change-${change.direction}`}>{shift}</b>}
+      <i>{before.charAt(0).toUpperCase() + before.slice(1)}</i>
     </>
   );
   return (
@@ -2843,6 +2864,9 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
   // Один размер превью для телефона и компьютера, общий с серверной копией.
   const frameWidth = IMAGE_WIDTH_CARD;
   const [active, setActive] = useState(0);
+  // Отрезок кадра, который сейчас едет: пока снимка нет, он наливается прогрессом.
+  const [pending, setPending] = useState(-1);
+  const pendingTimer = useRef(0);
   const wantedFrame = useRef(0);
   const frameRef = useRef(null);
   const mobileStripRef = useRef(null);
@@ -2876,7 +2900,8 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
     const card = frame?.closest("[data-car-id]") || frame;
     if (!card || images.length < 2) return undefined;
     let disposed = false;
-    const reset = () => { wantedFrame.current = 0; setActive(0); };
+    const stopWaiting = () => { clearTimeout(pendingTimer.current); setPending(-1); };
+    const reset = () => { wantedFrame.current = 0; stopWaiting(); setActive(0); };
     const urls = JSON.parse(previewKey);
     const selectByCursor = (event) => {
       const bounds = frame.getBoundingClientRect();
@@ -2886,9 +2911,16 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
       const index = Math.floor(progress * urls.length);
       if (wantedFrame.current === index) return;
       wantedFrame.current = index;
+      stopWaiting();
       if (index === 0) return setActive(0);
+      // Снимок из кэша встаёт мгновенно, поэтому полоску ожидания включаем с
+      // задержкой: иначе она мигала бы под курсором на каждом готовом кадре.
+      pendingTimer.current = setTimeout(() => {
+        if (!disposed && wantedFrame.current === index) setPending(index);
+      }, 120);
       prepareHoverPhoto(urls[index], { urgent: true }).then(ready => {
         if (disposed || wantedFrame.current !== index) return;
+        stopWaiting();
         // Пока выбранный снимок едет, оставляем предыдущий — без пустой рамки.
         if (ready) setActive(index);
         else wantedFrame.current = -1;
@@ -2899,6 +2931,7 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
     card.addEventListener("mouseleave", reset);
     return () => {
       disposed = true;
+      clearTimeout(pendingTimer.current);
       card.removeEventListener("mousemove", selectByCursor);
       card.removeEventListener("mouseleave", reset);
     };
@@ -2956,9 +2989,14 @@ function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, 
       )}
       {images.length > 1 && (
         <div className="hover-image-segments" aria-hidden="true">
-          {images.map((image, index) => (
-            <i key={`${image}-${index}`} className={index === active ? "active" : ""} />
-          ))}
+          {images.map((image, index) => {
+            const waiting = index === pending && index !== active;
+            return (
+              <i key={`${image}-${index}`} className={waiting ? "loading" : index === active ? "active" : ""}>
+                {waiting && <b />}
+              </i>
+            );
+          })}
         </div>
       )}
       <span className="hover-image-count">
@@ -6818,7 +6856,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         <CaretRight size={13} />
         {car.model} {car.year}
       </div>
-      <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} />
+      <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} priceRatingPending={apiMode !== false && car.priceRating === undefined} />
       <SameModelCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       <SimilarCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       {quickViewModal}
@@ -7063,7 +7101,7 @@ function ChineseNameMark({ car }) {
   );
 }
 
-function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false, onOpenOrder = null }) {
+function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false, onOpenOrder = null, priceRatingPending = false }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
   const [deliveryOpen, setDeliveryOpen] = useState(false);
@@ -7085,6 +7123,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
     return () => observer.disconnect();
   }, [car?.id]);
   const price = estimateLandedCost(car);
+  const quotaPricing = useQuotaPricing();
   const timing = estimateDeliveryDays(car.city);
   // Кнопка заводит заказ: машину запоминаем, кабинет создаёт заказ сам.
   // Неавторизованных на /account встречает окно входа, ожидание переживает его.
@@ -7166,9 +7205,14 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
         </div>
       </div>
       <div className="detail-main">
-        <div className="detail-content">
+        {/* Фотографии отдельным блоком от остального содержания: на узком экране
+            правая колонка перестаёт быть колонкой, и между галереей и
+            характеристиками встаёт шкала «Цена среди похожих». */}
+        <div className="detail-gallery">
           <VehicleGallery car={car} />
           {datesLine && <p className="detail-dates">{datesLine}</p>}
+        </div>
+        <div className="detail-content">
           <section className="detail-facts-section">
             <h2>Характеристики</h2>
             <FactList items={specs} />
@@ -7195,6 +7239,18 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               {quickInfo.length > 3 && <p>{quickInfo.slice(3).join(", ")}.</p>}
             </section>
           )}
+          {/* Цена среди таких же машин — своим блоком. Набор для сравнения приходит
+              с машиной от сервера; цену берём ту же, что показана крупно ниже, —
+              включая выбранный режим цен с квотой. */}
+          <PriceRatingScale
+            rating={car.priceRating}
+            priceUsd={price.totalUsd}
+            mileage={car.mileage}
+            battery={car.battery}
+            quotaPricingOn={quotaPricing?.on !== false}
+            formatMoney={(usd) => roughMoney(usd, currency)}
+            loading={priceRatingPending}
+          />
           <aside className="order-card">
             <div className={`price-total${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
               <TotalPrice car={car} price={price} currency={currency} />
@@ -7313,7 +7369,11 @@ function useQuickViewCar(listed, apiMode) {
   const [detail, setDetail] = useState(null);
   const [failedId, setFailedId] = useState(null);
   const detailed = detail?.id === id ? detail.car : null;
-  const needsDetail = Boolean(id) && !detailed && failedId !== id && Boolean(listed?._summary);
+  // Из API карточка приезжает целиком, но без сравнения цены с похожими машинами:
+  // его считает ответ одной машины, а не список. Ради шкалы «цена среди похожих»
+  // карточку в быстром просмотре дозапрашиваем и здесь — один раз на открытие.
+  const needsDetail = Boolean(id) && !detailed && failedId !== id
+    && (Boolean(listed?._summary) || (apiMode && listed?.priceRating === undefined));
   useEffect(() => {
     if (!needsDetail) return undefined;
     const controller = new AbortController();
@@ -7330,7 +7390,7 @@ function useQuickViewCar(listed, apiMode) {
   return detailed || listed;
 }
 
-function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpenFull, onClose, onOpenOrder = null }) {
+function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpenFull, onClose, onOpenOrder = null, priceRatingPending = false }) {
   const closeRef = useRef(null);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -7358,7 +7418,7 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
           </button>
         </header>
         <div className="quick-view-scroll">
-          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch onOpenOrder={onOpenOrder} />
+          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} floatingCta={false} currencySwitch onOpenOrder={onOpenOrder} priceRatingPending={priceRatingPending} />
         </div>
       </section>
     </div>
@@ -7456,7 +7516,9 @@ function useVehicleQuickView({ apiMode, favorites, toggleFavorite, navigate, ord
     openQuickView,
     // Свитчер нужен только там, где быстрый просмотр вообще работает.
     quickViewToggle: desktop ? <QuickViewToggle checked={enabled} onChange={changeEnabled} /> : null,
-    quickViewModal: car ? <VehicleQuickViewModal car={car} navigate={navigateFromQuickView} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpenFull={openFullView} onClose={close} onOpenOrder={orderOnScreen ? close : null} /> : null,
+    // Сравнение цены приезжает отдельным запросом карточки: пока его нет, блок
+    // стоит заготовкой и ничего под собой не сдвигает.
+    quickViewModal: car ? <VehicleQuickViewModal car={car} navigate={navigateFromQuickView} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpenFull={openFullView} onClose={close} onOpenOrder={orderOnScreen ? close : null} priceRatingPending={Boolean(apiMode) && car.priceRating === undefined} /> : null,
   };
 }
 

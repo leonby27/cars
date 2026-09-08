@@ -1,7 +1,7 @@
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CarProfile, ChartLineUp, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
+import { CarProfile, ChartLineUp, Desktop, DeviceMobile, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
@@ -415,12 +415,36 @@ function VisitSource({ visit }) {
   </span>;
 }
 
+// С чего зашли: телефон или компьютер, а в подсказке — сама система. У заходов,
+// записанных до появления этой колонки, признака нет — в таблице у них прочерк.
+const devicePlatformNames = {
+  android:"Android",
+  ios:"iOS",
+  windows:"Windows",
+  macos:"macOS",
+  chromeos:"ChromeOS",
+  linux:"Linux",
+};
+
+function VisitDevice({ device, platform }) {
+  if (device !== "mobile" && device !== "desktop") return <span className="analytics-visit-device is-unknown" title="Тип устройства не записан">—</span>;
+  const mobile = device === "mobile";
+  const kind = mobile ? "Телефон или планшет" : "Компьютер";
+  const system = devicePlatformNames[platform] || "";
+  const label = system ? `${kind} · ${system}` : kind;
+  const Glyph = mobile ? DeviceMobile : Desktop;
+  return <span className={`analytics-visit-device is-${device}`} role="img" aria-label={label} title={label}>
+    <Glyph size={18} aria-hidden="true" />
+  </span>;
+}
+
 function VisitRow({ visit, number, unread }) {
   const landingPath = withoutYandexClickId(visit.landingPath || "/");
   const sourceUnknown = !hasYandexClickId(visit.landingPath) && (!visit.source || visit.source === "unknown");
   return <tr>
     <td><span className={`analytics-visit-number${unread ? " is-unread" : ""}`}>{number}</span></td>
     <td className={sourceUnknown ? "analytics-visit-source-unknown" : undefined}><VisitSource visit={visit} /></td>
+    <td><VisitDevice device={visit.device} platform={visit.platform} /></td>
     <td><a href={analyticsNoCountHref(landingPath)} target="_blank" rel="noreferrer" title={landingPath === "/" ? "Главная" : landingPath || "—"}>{landingPath === "/" ? "Главная" : landingPath || "—"}</a></td>
     <td>{formatNumber(visit.pageViews)}</td>
     <td>{formatVisitDate(visit.createdAt)}</td>
@@ -446,8 +470,8 @@ function VisitsSection({ visits, total, unread }) {
           {sourceFilter !== "all" && <span className="analytics-visits-filter-count" title="Заходов по выбранному источнику">{formatNumber(filteredVisits.length)}</span>}
         </div>
       </div>
-      <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Страница входа</th><th>Просмотров</th><th>Дата</th></tr></thead>
-        <tbody>{filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="5">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</td></tr>}</tbody></table></div>
+      <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Просмотров</th><th>Дата</th></tr></thead>
+        <tbody>{filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="6">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</td></tr>}</tbody></table></div>
     </section>
   );
 }

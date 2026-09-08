@@ -47,7 +47,55 @@ export const fromAnalyticsPage = (headers = {}) => {
   try { return isInternalAnalyticsPath(new URL(referer).pathname); } catch { return false; }
 };
 
-export function normalizeAnalyticsEvent(body = {}) {
+// Телефон или компьютер. Признак берём из заголовков самого запроса, а не из того,
+// что прислала страница: приём событий открыт без пароля, и присланному в теле верить
+// нельзя. Сначала спрашиваем браузер напрямую (Chrome и Edge отвечают «я мобильный»
+// заголовком sec-ch-ua-mobile), иначе смотрим подпись браузера. Планшет считаем
+// мобильным: отдельная третья иконка в таблице заходов ничего бы не решала.
+const MOBILE_AGENT = /android|iphone|ipad|ipod|iemobile|opera mini|opera mobi|windows phone|blackberry|bb10|webos|kindle|silk|mobile safari|\bmobile\b/i;
+export const deviceKindFromHeaders = (headers = {}) => {
+  const hint = String(headers["sec-ch-ua-mobile"] || "").trim();
+  if (hint === "?1") return "mobile";
+  if (hint === "?0") return "desktop";
+  const agent = String(headers["user-agent"] || "");
+  if (!agent) return "";
+  return MOBILE_AGENT.test(agent) ? "mobile" : "desktop";
+};
+
+// Система устройства — для подсказки в таблице заходов: Android, iOS, Windows, macOS.
+// Источник тот же и по той же причине: заголовок запроса, а не тело события. Chrome и
+// Edge называют систему сами (sec-ch-ua-platform), Safari — нет, поэтому есть разбор
+// подписи браузера. Порядок проверок важен: у планшета на Android в подписи стоит и
+// «Android», и «Linux», а у iPad — «Mac OS X».
+const PLATFORM_HINTS = new Map([
+  ["android", "android"],
+  ["ios", "ios"],
+  ["windows", "windows"],
+  ["macos", "macos"],
+  ["mac os x", "macos"],
+  ["chrome os", "chromeos"],
+  ["chromium os", "chromeos"],
+  ["linux", "linux"],
+]);
+const AGENT_PLATFORMS = [
+  [/android/i, "android"],
+  [/iphone|ipad|ipod|\bios\b/i, "ios"],
+  [/windows/i, "windows"],
+  [/cros/i, "chromeos"],
+  [/mac os x|macintosh/i, "macos"],
+  [/linux|x11|ubuntu|fedora/i, "linux"],
+];
+export const devicePlatformFromHeaders = (headers = {}) => {
+  // Заголовок приходит в кавычках: sec-ch-ua-platform: "macOS".
+  const hint = String(headers["sec-ch-ua-platform"] || "").trim().replace(/^"|"$/g, "").toLowerCase();
+  if (PLATFORM_HINTS.has(hint)) return PLATFORM_HINTS.get(hint);
+  const agent = String(headers["user-agent"] || "");
+  if (!agent) return "";
+  return AGENT_PLATFORMS.find(([pattern]) => pattern.test(agent))?.[1] || "";
+};
+export const DEVICE_PLATFORMS = new Set(["android", "ios", "windows", "macos", "chromeos", "linux"]);
+
+export function normalizeAnalyticsEvent(body = {}, { device = "", platform = "" } = {}) {
   const eventName = text(body.eventName, 64);
   if (!ANALYTICS_EVENTS.has(eventName)) return { error:"invalid_event" };
   const eventId = text(body.eventId, 80);
@@ -72,6 +120,10 @@ export function normalizeAnalyticsEvent(body = {}) {
   // и числа найденных машин, из свойств не берём.
   if (properties.query) safeProperties.query = text(properties.query, 120);
   if (Number.isFinite(Number(properties.found))) safeProperties.found = Math.max(0, Math.min(1_000_000, Math.round(Number(properties.found))));
+  // Тип устройства и систему ставим сами, из заголовков запроса; из тела события они
+  // не берутся — приём событий открыт без пароля, и присланному в теле верить нельзя.
+  if (device === "mobile" || device === "desktop") safeProperties.device = device;
+  if (DEVICE_PLATFORMS.has(platform)) safeProperties.platform = platform;
   return {
     eventId,
     visitorId,
@@ -182,8 +234,11 @@ export async function isDatacenterAddress(address, { db = pool, now = Date.now()
   }
 }
 
-export async function recordAnalyticsEvent(body, { db = pool } = {}) {
-  const event = normalizeAnalyticsEvent(body);
+export async function recordAnalyticsEvent(body, { db = pool, headers = null } = {}) {
+  const event = normalizeAnalyticsEvent(body, {
+    device:headers ? deviceKindFromHeaders(headers) : "",
+    platform:headers ? devicePlatformFromHeaders(headers) : "",
+  });
   if (event.ignored) return { ok:true, recorded:false };
   if (event.error) return event;
   const result = await db.query(INSERT_EVENT_SQL,
@@ -487,6 +542,8 @@ export async function getAnalyticsDashboard(rangeValue) {
       SELECT
         (array_agg(path ORDER BY created_at))[1] AS landing_path,
         (array_agg(nullif(properties->>'entrySource','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'entrySource','') IS NOT NULL))[1] AS entry_source,
+        (array_agg(nullif(properties->>'device','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'device','') IS NOT NULL))[1] AS device,
+        (array_agg(nullif(properties->>'platform','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'platform','') IS NOT NULL))[1] AS platform,
         count(*) FILTER (WHERE event_name='page_view')::int AS page_views,
         min(created_at) AS created_at
       FROM numbered
@@ -534,7 +591,7 @@ export async function getAnalyticsDashboard(rangeValue) {
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
     searches:searchesResult.rows.map((row) => ({ query:row.query, asked:row.asked, people:row.people, found:row.found, lastAskedAt:row.last_asked })),
-    visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at })),
+    visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", device:row.device || "", platform:row.platform || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at })),
   };
 }
 
