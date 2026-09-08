@@ -102,8 +102,13 @@ const withRoot = `${before}<div id="root" data-prerender="/">${body}</div>${seoB
 // /login и т.п.). Там разметка главной — чужая: до загрузки приложения показываем
 // только шапку, как делала прежняя заглушка, а не всю главную со скелетами.
 // Приложение, стартуя с нуля, снимает пометку (main.jsx).
+// Косую черту в выражении отбираем набором `[/]`, а не escape-последовательностью:
+// строка собирается шаблоном, и `\/` в нём превращается в простую косую черту ещё до
+// записи в файл. Из-за этого в готовой странице выражение выглядело как `//+$/` —
+// остаток строки становился комментарием, скрипт обрывался с ошибкой и пометку не
+// ставил (замечено 08.09.2026: ошибка в консоли на каждой загрузке главной).
 const foreignGuard =
-  `<script>if(location.pathname.replace(/\/+$/,"")!=="")document.documentElement.classList.add("foreign-boot");</script>` +
+  `<script>if(location.pathname.replace(/[/]+$/,"")!=="")document.documentElement.classList.add("foreign-boot");</script>` +
   `<style>html.foreign-boot #root .app-content > :not(header){display:none}</style>`;
 const replaced = withRoot.replace("</head>", `${hoisted.join("")}${foreignGuard}</head>`);
 writeFileSync(indexPath, replaced);
