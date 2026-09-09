@@ -1,3 +1,4 @@
+import { Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -38,7 +39,7 @@ import { LEGAL_DOCUMENTS } from "./legal-documents.js";
 import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
 import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
-import { BLOG_ENABLED } from "./feature-flags.js";
+import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
@@ -986,6 +987,7 @@ if (BLOG_ENABLED) {
   // содержимое рисовалось целиком — и та же ошибка ждала бы статью в день выпуска.
   for (const post of blogAllPosts()) routeSeo[post.path] = [post.seoTitle, post.seoDescription];
 }
+
 
 const privateRouteSeo = {
   "/favorites": ["Избранные автомобили | abcars.by", "Сохранённые автомобили в вашем личном кабинете abcars.by."],
@@ -4455,7 +4457,7 @@ function HomeConversionSections({ navigate }) {
           <span className="home-section-kicker">Коротко о главном</span>
           <h2 id="home-faq-title">Что важно знать до заказа авто из Китая</h2>
           <p>Подбор и доставка автомобиля из Китая проходят в несколько этапов. Заранее объясняем цену, проверку, сроки и ответственность.</p>
-          <button type="button" className="primary home-faq-link" onClick={() => navigate("/faq")}>Все вопросы и ответы <ArrowRight size={18} weight="bold" /></button>
+          <button type="button" className="primary home-faq-link" onClick={() => window.location.assign("/how-it-works#faq")}>Все вопросы и ответы <ArrowRight size={18} weight="bold" /></button>
         </div>
         <HomeFaqList items={HOME_FAQ} />
       </section>
@@ -8056,6 +8058,7 @@ const purchaseStepIcons = [MagnifyingGlass, ChatCircleText, ShieldCheck, ListChe
 const purchaseSteps = PURCHASE_STEPS.map((step, index) => ({ ...step, icon: purchaseStepIcons[index] }));
 
 function HowItWorksPage({ navigate }) {
+  const { total } = useCatalogFacts();
   const principleIcons = [ListChecks, ShieldCheck, Lightning];
   return (
     <main className="info-page">
@@ -8103,23 +8106,48 @@ function HowItWorksPage({ navigate }) {
       </section>
       <section className="info-section page-width" id="steps">
         <div className="info-section-heading">
-          <span>Пять этапов</span>
-          <h2>Что происходит после выбора автомобиля</h2>
-          <p>На каждом шаге вы понимаете, что уже подтверждено, что проверяется и за что платите.</p>
+          <h2>Как купить автомобиль</h2>
         </div>
-        <div className="process-list">
-          {purchaseSteps.map(({ icon: Icon, title, text }, index) => (
-            <article key={title}>
-              <div className="process-number">{String(index + 1).padStart(2, "0")}</div>
-              <div className="process-icon">
-                <Icon size={24} weight="duotone" />
-              </div>
-              <div>
+        <ol className="purchase-timeline">
+          {purchaseSteps.map(({ title, text }, index) => (
+            <li className="purchase-timeline-step" key={title}>
+              <span className="purchase-timeline-number" aria-hidden="true">{index + 1}</span>
+              <article className="purchase-timeline-card">
                 <h3>{title}</h3>
                 <p>{text}</p>
-              </div>
-            </article>
+                {index === 0 ? (
+                  <div className="purchase-timeline-illustration purchase-timeline-screenshot">
+                    <img className="purchase-catalog-light" src="/illustrations/purchase-catalog-light.png" width="3456" height="1726" alt="Выбор автомобиля в каталоге: фильтры и объявления Zeekr" loading="lazy" decoding="async" />
+                    <img className="purchase-catalog-dark" src="/illustrations/purchase-catalog-dark.png" width="3456" height="1726" alt="Выбор автомобиля в каталоге: фильтры и объявления Zeekr" loading="lazy" decoding="async" />
+                  </div>
+                ) : index === 1 ? (
+                  <div className="purchase-timeline-illustration purchase-verification-art">
+                    <img className="purchase-verification-light" src="/illustrations/purchase-verification-light.png" width="1774" height="887" alt="Часы и чеклист: два пункта подтверждены, третий в ожидании" loading="lazy" decoding="async" />
+                    <img className="purchase-verification-dark" src="/illustrations/purchase-verification-dark.png" width="1774" height="887" alt="Часы и чеклист: два пункта подтверждены, третий в ожидании" loading="lazy" decoding="async" />
+                  </div>
+                ) : index === 2 ? (
+                  <div className="purchase-timeline-illustration purchase-inspection-art">
+                    <img src="/illustrations/purchase-inspection.png" width="1280" height="960" alt="Проверка автомобиля диагностическим сканером" loading="lazy" decoding="async" />
+                  </div>
+                ) : index === 3 ? (
+                  <div className="purchase-timeline-illustration purchase-inspection-art">
+                    <img src="/illustrations/purchase-estimate.png" width="1219" height="450" alt="Расчёт сметы на калькуляторе и проверка документов" loading="lazy" decoding="async" />
+                  </div>
+                ) : (
+                  <div className="purchase-timeline-illustration purchase-inspection-art">
+                    <img src="/illustrations/purchase-delivery.png" width="1595" height="986" alt="Автомобили на автовозе перед доставкой" loading="lazy" decoding="async" />
+                  </div>
+                )}
+              </article>
+            </li>
           ))}
+        </ol>
+        <div className="purchase-timeline-cta">
+          <button className="primary" onClick={() => navigate("/catalog")}>
+            <CarProfile size={20} aria-hidden="true" />
+            {total > 0 ? `Выбрать авто из ${number(total)} ${total % 10 === 1 && total % 100 !== 11 ? "предложения" : "предложений"}` : "Выбрать авто"}
+            <ArrowRight size={18} />
+          </button>
         </div>
       </section>
       <section className="decision-section">
@@ -8192,6 +8220,8 @@ function HowItWorksPage({ navigate }) {
           ))}
         </div>
       </section>
+      {REVIEWS_ENABLED && <ReviewsSection navigate={navigate} />}
+      <FaqSection navigate={navigate} />
       <InfoCta navigate={navigate} title="Начните с подходящего автомобиля" text="В каталоге уже собраны объявления и предварительные расчёты до Минска." />
     </main>
   );
@@ -8299,7 +8329,7 @@ function PaymentAndContractPage({ navigate }) {
         <div className="page-width purchase-notice">
           <Info size={24} weight="duotone" />
           <div><h2>Предварительный расчёт на сайте — не счёт на оплату</h2><p>Финальная смета формируется после подтверждения объявления, комплектации, маршрута и курса. Любое изменение согласуется до платежа.</p></div>
-          <button className="secondary" onClick={() => navigate("/faq")}>Частые вопросы <ArrowRight size={17} /></button>
+          <button className="secondary" onClick={() => window.location.assign("/how-it-works#faq")}>Частые вопросы <ArrowRight size={17} /></button>
         </div>
       </section>
       <InfoCta navigate={navigate} title="Начните с предварительного расчёта" text="Выберите автомобиль — покажем структуру цены и объясним каждый платёж до договора." />
@@ -8347,23 +8377,27 @@ function GuaranteesPage({ navigate }) {
   );
 }
 
-function FaqPage({ navigate }) {
+function ServiceFaqRedirect() {
+  useEffect(() => { window.location.replace("/how-it-works#faq"); }, []);
+  return null;
+}
+
+function FaqSection({ navigate }) {
   const [openItem, setOpenItem] = useState("0-0");
+  useEffect(() => {
+    if (window.location.hash === "#faq") document.getElementById("faq")?.scrollIntoView();
+  }, []);
   return (
-    <main className="faq-page page-width">
+    <section className="service-faq info-section page-width" id="faq" aria-labelledby="service-faq-title">
       <section className="faq-hero">
         <div>
-          <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
-          <span className="info-eyebrow">Вопросы и ответы</span>
-          <h1>Коротко о важном до заказа</h1>
-          <p>Собрали ответы о проверке, цене, оплате, доставке и ответственности.</p>
+          <h2 id="service-faq-title">Вопросы и ответы</h2>
         </div>
-        <aside><ChatCircleText size={28} weight="duotone" /><b>Не нашли ответ?</b><p>Напишите нам — разберём вашу ситуацию без обязательства оформлять заказ.</p><button className="secondary" onClick={() => navigate("/contacts")}>Связаться с нами</button></aside>
       </section>
       <section className="faq-groups">
         {FAQ_GROUPS.map((group, groupIndex) => (
           <div className="faq-group" key={group.title}>
-            <h2>{group.title}</h2>
+            <h3>{group.title}</h3>
             <div>
               {group.items.map((item, itemIndex) => {
                 const itemKey = `${groupIndex}-${itemIndex}`;
@@ -8374,7 +8408,91 @@ function FaqPage({ navigate }) {
           </div>
         ))}
       </section>
-    </main>
+    </section>
+  );
+}
+
+function ReviewsRedirect() {
+  useEffect(() => {
+    window.location.replace("/how-it-works#reviews");
+  }, []);
+  return null;
+}
+
+function ReviewsSection({ navigate }) {
+  const sliderRef = useRef(null);
+  const [canPrevious, setCanPrevious] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+  const updateControls = useCallback(() => {
+    const element = sliderRef.current;
+    if (!element) return;
+    setCanPrevious(element.scrollLeft > 1);
+    setCanNext(element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
+  }, []);
+  useEffect(() => {
+    const element = sliderRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(updateControls);
+    observer.observe(element);
+    updateControls();
+    if (window.location.hash === "#reviews") element.closest("section")?.scrollIntoView();
+    return () => observer.disconnect();
+  }, [updateControls]);
+  const slide = (direction) => {
+    const element = sliderRef.current;
+    if (!element) return;
+    const card = element.querySelector(".review-item");
+    const step = card ? card.getBoundingClientRect().width + parseFloat(getComputedStyle(element).columnGap) : element.clientWidth;
+    element.scrollBy({ left: direction * step, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
+  return (
+<section className="reviews-section info-section page-width" id="reviews" aria-labelledby="reviews-heading">
+        <div className="reviews-heading">
+          <h2 id="reviews-heading">Отзывы</h2>
+          <div className="reviews-controls">
+            <button type="button" aria-label="Предыдущие отзывы" aria-controls="reviews-slider" disabled={!canPrevious} onClick={() => slide(-1)}><ArrowLeft size={20} /></button>
+            <button type="button" aria-label="Следующие отзывы" aria-controls="reviews-slider" disabled={!canNext} onClick={() => slide(1)}><ArrowRight size={20} /></button>
+          </div>
+        </div>
+        <div className="reviews-photo-grid" id="reviews-slider" ref={sliderRef} onScroll={updateControls} role="region" aria-label="Отзывы клиентов">
+          {[
+            { number: 4, model: "BYD Han L", brand: "BYD", catalogModel: "Han L", year: 2025, mileage: "42.000", name: "Андрей", text: "Помогли выбрать автомобиль и сопровождали на каждом этапе. Все вопросы решались быстро, покупкой доволен.", extension: "png", width: 941, height: 1672 },
+            { number: 1, model: "Geely Monjaro", brand: "Geely", catalogModel: "Monjaro", year: 2026, mileage: "12.000", name: "Александр", text: "Помогли подобрать автомобиль под мой бюджет и подробно объяснили все этапы покупки. Машину уже получил, всё понравилось." },
+            { number: 5, model: "Li L6", brand: "Li Auto", catalogModel: "L6", year: 2025, mileage: "19.000", name: "Александр", text: "Искал комфортный автомобиль для семьи. Помогли с выбором и подробно объяснили процесс покупки. Всё время были на связи, машиной доволен.", extension: "png", width: 941, height: 1672 },
+            { number: 6, model: "BYD Seal 06GT", brand: "BYD", catalogModel: "Seal 06GT", year: 2025, mileage: "27.100", name: "Максим", text: "Хотел попробовать электромобиль. Помогли разобраться в вариантах и выбрать подходящий. На вопросы отвечали быстро, от машины отличные впечатления.", extension: "png", width: 941, height: 1672 },
+            { number: 2, model: "BYD Song Plus", brand: "BYD", catalogModel: "Song PLUS", year: 2024, mileage: "37.000", name: "Дмитрий", text: "Всегда были на связи и отвечали на вопросы. Удобно, что заранее понятны стоимость и порядок действий. Спасибо за помощь!" },
+            { number: 7, model: "Geely EX2", brand: "Geely", catalogModel: "EX2", year: 2025, mileage: "22.700", name: "Елена", text: "Выбирала небольшой автомобиль для города. Помогли сравнить варианты и объяснили все этапы покупки. Машина удобная, езжу с удовольствием.", extension: "png", width: 941, height: 1672 },
+            { number: 3, model: "Geely Monjaro", brand: "Geely", catalogModel: "Monjaro", year: 2026, mileage: "10.000", name: "Сергей", text: "От выбора автомобиля до получения всё прошло спокойно. Делились новостями о доставке и помогли разобраться с документами." },
+            { number: 8, model: "Xiaomi YU7", brand: "Xiaomi", catalogModel: "YU7", year: 2025, mileage: "8.100", name: "Павел", text: "Давно присматривался к Xiaomi. Помогли подобрать вариант с небольшим пробегом и разобраться с покупкой. Всё прошло спокойно, автомобилем доволен.", extension: "png", width: 941, height: 1672 },
+            { number: 9, model: "Zeekr 001", brand: "Zeekr", catalogModel: "001", year: 2024, mileage: "48.000", name: "Игорь", text: "Давно хотел Zeekr 001. Помогли выбрать автомобиль и разобраться с оформлением. На всех этапах были на связи, покупкой остался доволен.", extension: "png", width: 941, height: 1672 },
+            { number: 10, model: "BYD Yuan UP", brand: "BYD", catalogModel: "Yuan UP", year: 2024, mileage: "16.000", name: "Никита", text: "Искал компактный электромобиль на каждый день. Помогли подобрать вариант и объяснили порядок покупки. Всё прошло понятно и спокойно, машиной доволен.", extension: "jpg", width: 941, height: 1672 },
+          ].map(({ number, model, brand, catalogModel, year, mileage, name, text, extension = "jpg", width = 941, height = 1672 }) => (
+            <article className="review-item" key={number}>
+              <div className="review-card">
+              <img src={`/reviews/${number}.${extension}`} alt={`Фото с автомобилем — ${number}`} width={width} height={height} loading="lazy" decoding="async" />
+              <div className="review-card-copy">
+                <div className="review-card-stars" role="img" aria-label="5 из 5 звёзд">
+                  {[1, 2, 3, 4, 5].map((star) => <Star key={star} size={16} weight="fill" aria-hidden="true" />)}
+                </div>
+                <h2>{name}</h2>
+                <p>{text}</p>
+              </div>
+              </div>
+              <div className="review-car-details">
+                <h3>{model} {year}</h3>
+                <p>Пробег {mileage} км</p>
+                <AppLink
+                  href={`${brandLandingPath(brand)}?${new URLSearchParams({ model: catalogModel, yearFrom: String(year), yearTo: String(year) })}`}
+                  navigate={navigate}
+                  className="review-car-cta"
+                >
+                  Хочу такое же авто
+                </AppLink>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
   );
 }
 
@@ -10245,7 +10363,7 @@ function SiteFooter({ navigate }) {
             <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
           </div>
         </div>
-        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<AppLink href="/faq" navigate={navigate}>Вопросы и ответы</AppLink></div>
+        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<a href={"/how-it-works#faq"}>Вопросы и ответы</a></div>
         <div className="footer-column footer-tools"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
         <div className="footer-column footer-contacts">
           <b>Связаться</b>
@@ -12031,7 +12149,9 @@ export function App() {
     ) : contentPath === "/guarantees" ? (
       <GuaranteesPage navigate={navigate} />
     ) : contentPath === "/faq" ? (
-      <FaqPage navigate={navigate} />
+      <ServiceFaqRedirect />
+    ) : REVIEWS_ENABLED && contentPath === "/reviews" ? (
+      <ReviewsRedirect />
     ) : contentPath === "/contacts" ? (
       <ContactsPage navigate={navigate} theme={theme} />
     ) : contentPath === "/privacy" ? (

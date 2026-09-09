@@ -392,5 +392,30 @@ Photo cleanup (owner decision, 2026-09-07): run weekly on Sundays, with a seven-
 
 Price comparison accuracy (owner correction, 2026-09-09): prefer five other listings of the same model and exact catalog year. When fewer exist, include the nearest other years, expanding until at least five peers are available; do not hide the scale merely because same-year peers are scarce. Show the actual comparison year/range in the visible price sentence and note that mixed-year comparisons have no age adjustment. The five-peer minimum across the model still applies.
 
+Reviews photo-grid preference (owner decision, 2026-09-09): show the supplied photos near the bottom of `/how-it-works`, before its closing catalog CTA in a single horizontal slider with four cards visible on desktop, arrow-only navigation, no horizontal scrollbar or touch scrolling, and inverse arrow buttons (dark in light theme, light in dark theme), preserving their full proportions.
+
+Reviews card preference (owner decision, 2026-09-09): overlay a white block on the bottom of each photo, inset 12px from the left, right and bottom edges, with a 16px reviewer name and 13px review text at weight 500 (explicit owner exception to the body-text minimum). Current sample names and reviews are temporary and must be replaced with the owner’s supplied reviews before publication.
+
+Reviews rating preference (owner decision, 2026-09-09): show five filled warm golden-orange (#F5B519) stars above the reviewer name in each review card.
+
+Reviews outer-card preference (owner decision, 2026-09-09): wrap each photo and the vehicle details beneath it in one rounded surface with 8px internal padding. Give the vehicle details an additional 8px inset on the left and bottom.
+
+Reviews placement (owner decision, 2026-09-09): reviews live as a section within «О сервисе», not a separate page or header link. Preserve the local-only flag while review text is temporary.
+
+FAQ placement (owner decision, 2026-09-09): place the full questions-and-answers section on «О сервисе» directly after reviews. Point FAQ links to `/how-it-works#faq` and redirect the old client route there.
+
+Service reviews/FAQ headings (owner decision, 2026-09-09): match «Отзывы» and «Вопросы и ответы» to the typography of «Чего мы не обещаем». Omit the FAQ introduction sentence and keep the gap after reviews compact.
+
 Legal-document preference (owner decision, 2026-09-09): privacy policy and terms are ordinary static PDF files opened by native links in a new tab for viewing, without a download attribute. Apply this to footer, registration and all consent forms. Keep legacy /privacy and /terms addresses pointing to the corresponding PDFs.
+
+Purchase-step layout (owner decision, 2026-09-09): title the section «Как купить автомобиль». Stack cards vertically with numbers in yellow circles to the left, connected by a yellow dashed line. Each card contains its heading, description and an empty reserved illustration area beneath. This replaces the compact icon-row layout.
+
+Purchase timeline refinement (owner decision, 2026-09-09): keep number badges strictly circular; use a yellow connector at 50% opacity with 6px dashes and 10px gaps. Limit each content card to 560px wide.
+
 Legal-copy preference (owner decision, 2026-09-09): use universal wording referring to the abcars.by administration; omit company requisites, street addresses and direct email/phone values from both PDFs. Refer readers to the site Contacts section. Keep internal readiness notes outside the public documents; do not imply this removes statutory disclosure duties.
+
+Purchase timeline finish (owner decision, 2026-09-09): slightly smaller circular number badges with a page-coloured separating ring; rounded dash ends at 50% opacity; transparent content cards with the same thin neutral outline as the proof strip above.
+
+Purchase steps alignment (owner decision, 2026-09-09): center the section heading and the whole timeline column on the page. Omit the «Пять этапов» eyebrow and the introductory sentence beneath the heading.
+
+Purchase card spacing (owner decision, 2026-09-09): use 32px corner radius and 34px internal padding for step cards on desktop, 28px radius and 24px padding on mobile.
