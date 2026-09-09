@@ -1674,11 +1674,10 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
   );
 }
 
-function HomeFaqItem({ item, initiallyOpen = false, navigate = null }) {
-  const [open, setOpen] = useState(initiallyOpen);
+function HomeFaqItem({ item, open, onToggle, navigate = null }) {
   return (
     <article className={`home-faq-item${open ? " open" : ""}`}>
-      <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      <button type="button" aria-expanded={open} onClick={onToggle}>
         <span>{item.question}</span>
         <CaretDown size={20} weight="bold" aria-hidden="true" />
       </button>
@@ -1686,6 +1685,23 @@ function HomeFaqItem({ item, initiallyOpen = false, navigate = null }) {
         <div><p>{navigate ? renderInlineText(item.answer, navigate) : item.answer}</p></div>
       </div>
     </article>
+  );
+}
+
+function HomeFaqList({ items, navigate = null, className = "home-faq-list" }) {
+  const [openIndex, setOpenIndex] = useState(0);
+  return (
+    <div className={className}>
+      {items.map((item, index) => (
+        <HomeFaqItem
+          key={item.question}
+          item={item}
+          open={openIndex === index}
+          onToggle={() => setOpenIndex((current) => current === index ? null : index)}
+          navigate={navigate}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -3304,11 +3320,11 @@ function ArticleFaq({ faq, title, navigate = null }) {
   return (
     <section className="model-page-faq page-width" aria-labelledby="model-page-faq-title">
       <h2 id="model-page-faq-title">{title}</h2>
-      <div className="model-page-faq-list">
-        {faq.map((item, index) => (
-          <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} navigate={navigate} />
-        ))}
-      </div>
+      <HomeFaqList
+        className="model-page-faq-list"
+        items={faq.map((item) => ({ question: item.q, answer: item.a }))}
+        navigate={navigate}
+      />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
     </section>
   );
@@ -4441,11 +4457,7 @@ function HomeConversionSections({ navigate }) {
           <p>Подбор и доставка автомобиля из Китая проходят в несколько этапов. Заранее объясняем цену, проверку, сроки и ответственность.</p>
           <button type="button" className="primary home-faq-link" onClick={() => navigate("/faq")}>Все вопросы и ответы <ArrowRight size={18} weight="bold" /></button>
         </div>
-        <div className="home-faq-list">
-          {HOME_FAQ.map((item, index) => (
-            <HomeFaqItem key={item.question} item={item} initiallyOpen={index === 0} />
-          ))}
-        </div>
+        <HomeFaqList items={HOME_FAQ} />
       </section>
     </div>
   );
@@ -6163,11 +6175,11 @@ function CatalogLandingFaq({ landing, total, navigate }) {
   return (
     <div className="catalog-landing-faq">
       <h3>{landingFaqTitle(landing)}</h3>
-      <div className="catalog-landing-faq-list">
-        {faq.map((item, index) => (
-          <HomeFaqItem key={item.q} item={{ question: item.q, answer: item.a }} initiallyOpen={index === 0} navigate={navigate} />
-        ))}
-      </div>
+      <HomeFaqList
+        className="catalog-landing-faq-list"
+        items={faq.map((item) => ({ question: item.q, answer: item.a }))}
+        navigate={navigate}
+      />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
     </div>
   );
@@ -7601,10 +7613,10 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
   );
 }
 
-// Быстрый просмотр включён по умолчанию, но это дополнение к странице
-// автомобиля: свитчер рядом с выдачей возвращает обычный переход по клику.
+// Быстрый просмотр выключен по умолчанию; свитчер рядом с выдачей
+// включает его и сохраняет выбор пользователя.
 const quickViewKey = "abcars-quick-view";
-const readQuickViewEnabled = () => window.localStorage.getItem(quickViewKey) !== "off";
+const readQuickViewEnabled = () => window.localStorage.getItem(quickViewKey) === "on";
 
 function QuickViewToggle({ checked, onChange }) {
   return (

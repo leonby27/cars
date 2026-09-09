@@ -7,7 +7,7 @@
 //    зависят от квоты и от того, старше ли машина пяти лет, у машины с мотором — от
 //    объёма и возраста. Человек платит итог, значит и сравнивать надо итог.
 //
-// 2. Сравниваем только с той же моделью того же года. Цена падает с возрастом, и в
+// 2. Сначала сравниваем с той же моделью того же года. Цена падает с возрастом, и в
 //    общем наборе любая машина 2021 года оказалась бы «дешёвой», а любая 2024-го —
 //    «дорогой», ничего этим не сказав.
 //
@@ -187,9 +187,9 @@ export function expectedPrice(medianUsd, medianMileage, mileage, slope) {
  *   4. такая же батарея
  *   5. похожий пробег
  *   6. просто тот же год
- *   7. соседние годы
+ *   7. ближайшие годы, расширяя диапазон до пяти объявлений
  *
- * Всё это внутри той же модели и того же года (кроме последней ступени). Условие,
+ * Всё это внутри той же модели; последняя ступень допускает другие годы. Условие,
  * которого у машины нет — например батарея у машины с мотором, — просто не работает
  * и набор не сужает.
  *
@@ -237,10 +237,19 @@ export function chooseComparables(car, rows) {
       yearTo:year,
     };
   }
+  // При нехватке ровесников добавляем ближайшие годы. Фактический диапазон
+  // передаём в карточку: сравнение без поправки на возраст приблизительное.
   if (year) {
-    const nearYears = others.filter((item) => Math.abs((item.year || 0) - year) <= 1);
-    if (nearYears.length >= PRICE_RATING_MIN_CARS) {
-      return { items:nearYears, sameYear:false, sameTrim:false, sameBattery:false, sameMileage:false, yearFrom:year - 1, yearTo:year + 1 };
+    const dated = others.filter((item) => Number.isInteger(item.year) && item.year > 0);
+    const distances = [...new Set(dated.map((item) => Math.abs(item.year - year)))].sort((a, b) => a - b);
+    for (const distance of distances) {
+      const items = dated.filter((item) => Math.abs(item.year - year) <= distance);
+      if (items.length < PRICE_RATING_MIN_CARS) continue;
+      return {
+        items, sameYear:false, sameTrim:false, sameBattery:false, sameMileage:false,
+        yearFrom:Math.min(...items.map((item) => item.year)),
+        yearTo:Math.max(...items.map((item) => item.year)),
+      };
     }
   }
   return null;

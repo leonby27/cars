@@ -95,7 +95,7 @@ test("условия снимаются по одному, от самого т�
   const byYear = chooseComparables(car(), yearOnly);
   assert.deepEqual([byYear.sameTrim, byYear.sameMileage, byYear.sameYear], [false, false, true]);
 
-  // Не хватает и года — берём соседние.
+  // Не хватает ровесников — добавляем ближайшие годы.
   const nearYears = [
     peer("a", 30_000, { year:2019, trim:"x" }),
     peer("b", 31_000, { year:2019, trim:"x" }),
@@ -107,6 +107,15 @@ test("условия снимаются по одному, от самого т�
   assert.equal(byYears.sameYear, false);
   assert.equal(byYears.yearFrom, 2019);
   assert.equal(byYears.yearTo, 2021);
+  assert.equal(priceRatingFrom(car(), [...five().slice(0, 4), ...nearYears]).count, 9);
+  const wider = chooseComparables(car(), [...five({ year:2022 }), peer("far", 20_000, { year:2025 })]);
+  assert.equal(wider.items.length, 5);
+  assert.equal(wider.yearFrom, 2022);
+  assert.equal(wider.yearTo, 2022);
+  assert.equal(chooseComparables(car({ year:null }), five()), null);
+  const exact = chooseComparables(car(), [...five(), ...nearYears]);
+  assert.equal(exact.items.length, 5);
+  assert.ok(exact.items.every((item) => item.year === 2020));
 });
 
 test("батарея сужает набор у электромобиля и не мешает бензиновому", () => {
@@ -228,7 +237,7 @@ test("первая строка называет планку и разницу,
   const shifted = { medianUsd:30_000, expectedUsd:26_000, mileageAdjusted:true };
   assert.equal(
     plain(priceRatingPriceNote(rating, shifted, 24_000, money).text),
-    "С таким пробегом такие машины стоят около 26 000 $ — эта на 2 000 $ дешевле.",
+    "Такие машины с таким пробегом стоят около 26 000 $ — эта на 2 000 $ дешевле.",
   );
   // Сравнение идёт с планкой, а не с типичной ценой: та же цена рядом со сдвинутой
   // планкой — уже «почти столько же», а не «намного дешевле».
@@ -345,4 +354,21 @@ test("режим цен с квотой считается заранее для
   const rating = priceRatingFrom(electric, rows);
   assert.ok(rating.quotaOff.medianUsd > rating.quotaOn.medianUsd);
   assert.equal(rating.quotaOn.medianUsd, 30_500);
+});
+
+
+test("год сравнения виден в тексте цены, включая поправку на пробег", () => {
+  const rating = { count:5, sameYear:true, yearFrom:2023, yearTo:2023 };
+  const mode = { expectedUsd:30_000, mileageAdjusted:false };
+  assert.equal(plain(priceRatingPriceNote(rating, mode, 27_000, money).text),
+    "Такие машины 2023 года стоят в среднем 30 000 $ — эта на 3 000 $ дешевле.");
+  assert.equal(plain(priceRatingPriceNote(rating, { ...mode, mileageAdjusted:true }, 27_000, money).text),
+    "Такие машины 2023 года с таким пробегом стоят около 30 000 $ — эта на 3 000 $ дешевле.");
+});
+
+
+test("сравнение разных лет называет диапазон и оговорку", () => {
+  const rating = { sameYear:false, yearFrom:2022, yearTo:2024 };
+  assert.equal(plain(priceRatingPriceNote(rating, { expectedUsd:30_000 }, 27_000, money).text),
+    "Такие машины 2022–2024 годов стоят в среднем 30 000 $ — эта на 3 000 $ дешевле. Сравнение приблизительное: без поправки на год.");
 });

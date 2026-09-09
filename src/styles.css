@@ -1429,6 +1429,9 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   background: var(--panel);
   box-shadow: none;
 }
+.catalog-landing-faq .home-faq-item p {
+  margin: 0 46px 24px 20px;
+}
 html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   background: var(--surface);
 }

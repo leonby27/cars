@@ -113,12 +113,18 @@ export const priceRatingPriceNote = (rating, mode, priceUsd, formatMoney) => {
   if (!bar || !price) return null;
   const money = (usd) => (formatMoney ? formatMoney(usd) : roughUsd(usd));
   const verdict = priceRatingVerdict(price, bar);
+  const year = Number(rating?.yearFrom);
+  const lastYear = Number(rating?.yearTo);
+  const years = year > 0 && lastYear > 0
+    ? (year === lastYear ? `${year} года` : `${year}–${lastYear} годов`) : "";
+  const cars = `Такие машины${years ? ` ${years}` : ""}`;
+  const caveat = rating?.sameYear === false ? " Сравнение приблизительное: без поправки на год." : "";
   const head = mode.mileageAdjusted
-    ? `С таким пробегом такие машины стоят около ${money(bar)}`
-    : `Такие машины стоят в среднем ${money(bar)}`;
-  if (verdict.tone === "mid") return { text:`${head} — эта почти столько же.`, tone:"mid" };
+    ? `${cars} с таким пробегом стоят около ${money(bar)}`
+    : `${cars} стоят в среднем ${money(bar)}`;
+  if (verdict.tone === "mid") return { text:`${head} — эта почти столько же.${caveat}`, tone:"mid" };
   const gap = money(Math.abs(price - bar));
-  return { text:`${head} — эта на ${gap} ${price < bar ? "дешевле" : "дороже"}.`, tone:verdict.tone };
+  return { text:`${head} — эта на ${gap} ${price < bar ? "дешевле" : "дороже"}.${caveat}`, tone:verdict.tone };
 };
 
 /**
