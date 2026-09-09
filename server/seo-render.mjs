@@ -163,7 +163,6 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       // страницы журнала не имели в готовой разметке ни одной входящей ссылки: в
       // приложении ссылка есть, но её рисует скрипт, а Яндекс ходит по разметке.
       ...(BLOG_ENABLED ? [[`${BLOG_INDEX.path}/`, BLOG_INDEX.name]] : []),
-      ["/delivered/", "Доставленные автомобили"],
       ["/payment-and-contract/", "Оплата и договор"],
       ["/guarantees/", "Гарантии"],
       ["/faq/", "Вопросы и ответы"],

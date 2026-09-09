@@ -1,3 +1,4 @@
+import { repairVerifiedDrive, driveConflicts } from "../../src/vehicle-spec-integrity.js";
 import { canonicalImportBrand, canonicalImportModel } from "../../config/import-policy.mjs";
 import { normalizeDrive } from "./guazi-parser.mjs";
 
@@ -301,7 +302,7 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
   const bodyStructure = detail.structure || structureFromSpecs;
   const technicalSpecs = normalizeChe168TechnicalSpecs(payload.specGroups);
 
-  return {
+  const car = repairVerifiedDrive({
     id: `che168-${detail.infoid}`,
     externalId: String(detail.infoid),
     source: "Che168",
@@ -363,5 +364,6 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     sourceId: `CH-${detail.infoid}`,
     originalLanguage: "en",
     priceHistory: [{ at:importedAt, priceCny:chinaPrice }],
-  };
+  });
+  return { ...car, specWarnings: driveConflicts(car) };
 }

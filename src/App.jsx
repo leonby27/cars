@@ -1,3 +1,5 @@
+import { readCatalogFallback } from "./catalog-fallback.js";
+import { isAuthEntryPath, resolveAuthRoute } from "./auth-route.js";
 import { usePurchaseMotion } from "./use-purchase-motion.js";
 import { Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
@@ -45,7 +47,6 @@ import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
-import { DELIVERY_CASES, DELIVERY_STATS } from "./delivery-cases.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
@@ -673,7 +674,7 @@ function useRoute() {
     const targetUrl = `${basePath}${target.pathname}${target.search}${target.hash}`;
     dropScrollSave();
     if (replace) {
-      const currentIsAuthRoute = currentPath === "/login" || currentPath === "/register";
+      const currentIsAuthRoute = isAuthEntryPath(currentPath);
       replaceHistoryEntry(
         {
           ...window.history.state,
@@ -960,7 +961,6 @@ const routeSeo = {
   "/": ["Автомобили из Китая в Беларусь — abcars.by", "Китайские авто б/у с проверкой, расчётом стоимости и доставкой в Минск и Беларусь: электромобили, гибриды и бензиновые машины с пробегом из Китая."],
   "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | abcars.by", "Каталог китайских авто б/у: бензиновые, электрические и гибридные машины с пробегом из Китая — характеристики, пробег и ориентировочная стоимость доставки в Беларусь."],
   "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
-  "/delivered": ["Доставленные автомобили из Китая — примеры и цены | abcars.by", "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска."],
   "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | abcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
   "/guarantees": ["Гарантии при покупке автомобиля из Китая | abcars.by", "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает abcars.by и какие риски обсуждаются до договора."],
   "/faq": ["Вопросы о покупке и доставке авто из Китая | abcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
@@ -5608,6 +5608,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     ...(restoredCatalog?.filters || {}),
   }));
   const [remoteCars, setRemoteCars] = useState([]);
+  const [remoteReceived, setRemoteReceived] = useState(false);
   const [remoteTotal, setRemoteTotal] = useState(0);
   // «Есть ли ещё» решает сервер, а не сравнение загруженного с общим числом: у API
   // есть потолок глубины листания, и без его признака бесконечная прокрутка молотила
@@ -5624,6 +5625,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // показать человеку на этой странице совсем не те машины, за которыми он пришёл.
   const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : params.get("page") ? "price_asc" : "default";
   const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : urlSort));
+  const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
   // mix in place while paging and when a visitor comes back from a vehicle page.
   const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || randomShuffleSeed());
@@ -5851,6 +5853,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("catalog unavailable"))))
       .then((catalog) => {
         setRemoteCars(restoreRemoteOrder(catalog.items.map(normalizeImportedCar)));
+        setRemoteReceived(true);
         setRemoteTotal(catalog.total);
         setRemoteHasMore(Boolean(catalog.hasMore));
       })
@@ -5954,6 +5957,17 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     } else saveSearch({ ...filters, sort });
     setBaseSearchKey(currentSearchKey);
   };
+  // Keep the HTML's links and pagination while loading, including when the API
+  // fails. A successful empty response is authoritative; changed filters must
+  // never receive the original page's unfiltered offers.
+  const fallbackHtml = readCatalogFallback(window.location.href);
+  if (useApi && !remoteReceived && !remoteCars.length && (remoteLoading || remoteError) && fallbackHtml
+      && savedSearchKey({ ...filters, sort }) === fallbackFilters.current) {
+    return <main className="page-width seo-prerender" data-catalog-fallback="true">
+      {remoteError && <p role="status">Не удалось обновить каталог. Показаны предложения на момент загрузки страницы. <a href={window.location.href}>Попробовать снова</a></p>}
+      <div dangerouslySetInnerHTML={{ __html: fallbackHtml }} />
+    </main>;
+  }
   return (
     <main className="catalog page-width">
       <div className="breadcrumbs">
@@ -8232,64 +8246,6 @@ function HowItWorksPage({ navigate }) {
       {REVIEWS_ENABLED && <ReviewsSection navigate={navigate} />}
       <FaqSection navigate={navigate} />
       <InfoCta navigate={navigate} title="Начните с подходящего автомобиля" text="В каталоге уже собраны объявления и предварительные расчёты до Минска." />
-    </main>
-  );
-}
-
-function DeliveredCarsPage({ navigate }) {
-  return (
-    <main className="delivered-page">
-      <section className="delivered-hero page-width">
-        <div>
-          <button className="back-mobile" onClick={() => navigate("/")}><ArrowLeft size={18} />На главную</button>
-          <span className="info-eyebrow">Доставленные автомобили</span>
-          <h1>Истории, в которых виден весь путь автомобиля</h1>
-          <p>Показываем не только результат, но и сроки, маршрут, итоговую стоимость и решения, принятые после проверки.</p>
-          <button className="primary" onClick={() => navigate("/catalog")}>Подобрать автомобиль <ArrowRight size={18} /></button>
-        </div>
-        <aside className="delivered-summary" aria-label="Результаты работы компании">
-          {DELIVERY_STATS.map((item) => <div key={item.label}><b>{item.value}</b><span>{item.label}</span></div>)}
-        </aside>
-      </section>
-
-      <section className="delivery-cases page-width">
-        <div className="delivery-cases-heading">
-          <span className="info-eyebrow">Последние выдачи</span>
-          <h2>От выбора объявления до ключей</h2>
-          <p>Каждый кейс показывает, что было важно клиенту и как выглядел результат.</p>
-        </div>
-        <div className="delivery-case-list">
-          {DELIVERY_CASES.map((item, index) => (
-            <article className="delivery-case" key={item.id}>
-              <div className="delivery-case-image">
-                <Illustration src={`cars/${item.image}`} alt={item.vehicle} />
-                <span>{item.delivered}</span>
-              </div>
-              <div className="delivery-case-content">
-                <span className="delivery-case-number">Кейс {String(index + 1).padStart(2, "0")}</span>
-                <h3>{item.vehicle}</h3>
-                <p>{item.summary}</p>
-                <div className="delivery-case-facts">
-                  <div><MapPin size={19} weight="duotone" /><span>Маршрут<b>{item.route}</b></span></div>
-                  <div><Clock size={19} weight="duotone" /><span>До выдачи<b>{item.duration} дня</b></span></div>
-                  <div><Gauge size={19} weight="duotone" /><span>Пробег<b>{item.mileage}</b></span></div>
-                  <div><CurrencyCny size={19} weight="duotone" /><span>Итого до Минска<b>{item.total}</b></span></div>
-                </div>
-                <blockquote>«{item.quote}»<footer>{item.client}</footer></blockquote>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="case-proof-section">
-        <div className="page-width case-proof-grid">
-          <div><CheckCircle size={23} weight="fill" /><span><b>Смета до договора</b><small>Расходы разбиты по этапам</small></span></div>
-          <div><ShieldCheck size={23} weight="fill" /><span><b>Проверка до оплаты</b><small>Состояние, история и батарея</small></span></div>
-          <div><CarProfile size={23} weight="fill" /><span><b>Выдача в Минске</b><small>Документы и сопровождение</small></span></div>
-        </div>
-      </section>
-      <InfoCta navigate={navigate} title="Подберём автомобиль под ваш запрос" text="Начните с каталога или свяжитесь с нами — обсудим бюджет, кузов и желаемые сроки." />
     </main>
   );
 }
@@ -11469,16 +11425,11 @@ const bootRelatedSync = () => (Array.isArray(window.__boot?.relatedValue) ? wind
 
 export function App() {
   const { path, navigate, backToCatalog } = useRoute();
-  const authRoute = path === "/login" || path === "/register";
-  const storedAuthBackground = window.history.state?.fromPath;
-  const authBackgroundPath =
-    typeof storedAuthBackground === "string" &&
-    storedAuthBackground.startsWith("/") &&
-    !["/login", "/register", "/account", "/favorites", "/searches"].includes(storedAuthBackground) &&
-    !storedAuthBackground.startsWith("/orders/")
-      ? storedAuthBackground
-      : "/";
-  const dataPath = authRoute ? authBackgroundPath : path;
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const { authRoute, authBackgroundPath, authModalOpen, contentPath } = resolveAuthRoute(path, window.history.state?.fromPath, user, authLoading);
+  // Фон модального окна и загрузка его автомобиля используют один адрес.
+  const dataPath = contentPath;
   const detailId = dataPath.startsWith("/cars/") ? dataPath.split("/")[2] : null;
   const orderId = dataPath.startsWith("/orders/draft/") ? dataPath.split("/")[3] : null;
   const targetId = detailId || orderId;
@@ -11572,8 +11523,6 @@ export function App() {
     setLoading(true);
     setLoadAttempt((value) => value + 1);
   }, []);
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
   const [authPending, setAuthPending] = useState(false);
   const [authBackend, setAuthBackend] = useState("server");
   // Заказы посетителя нужны не только в кабинете: на карточке уже заказанной машины
@@ -12129,8 +12078,6 @@ export function App() {
       setAuthPending(false);
     }
   };
-  const authModalOpen = !authLoading && !user && (authRoute || path === "/account" || path === "/favorites" || path === "/searches");
-  const contentPath = authRoute || authModalOpen ? authBackgroundPath : path;
   // Ключ каталога. Обычно он равен адресу — так каждый раздел создаётся заново
   // и читает свой фильтр. Но когда на раздел увёл фильтр самого каталога, ключ
   // оставляем прежним: выдача уже та, что нужна, и пересоздание только мигало бы
@@ -12151,8 +12098,6 @@ export function App() {
   const staticPage =
     contentPath === "/how-it-works" ? (
       <HowItWorksPage navigate={navigate} />
-    ) : contentPath === "/delivered" ? (
-      <DeliveredCarsPage navigate={navigate} />
     ) : contentPath === "/payment-and-contract" ? (
       <PaymentAndContractPage navigate={navigate} />
     ) : contentPath === "/guarantees" ? (
@@ -12191,7 +12136,7 @@ export function App() {
       staticPage
     ) : !showAccountFromAuthRoute && contentPath === "/" && !loadError ? (
       <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} catalogUpdatedAt={catalogUpdatedAt} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} />
-    ) : !showAccountFromAuthRoute && isCatalogPath(contentPath) && !loadError ? (
+    ) : !showAccountFromAuthRoute && isCatalogPath(contentPath) ? (
       // Catalog issues its own filtered query, so it starts at mount rather than queueing
       // behind the boot request it never reads.
       // Страница марки, типа двигателя или кузова — тот же каталог с выставленным

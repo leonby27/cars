@@ -108,7 +108,12 @@ test("личные разделы и служебные заготовки за�
   const rules = await robots({ SEO_ALLOW_INDEXING: "1" });
   for (const url of [
     "/api",
-    "/api/cars",
+    "/api/auth/me",
+    "/api/account/favorites",
+    "/api/analytics",
+    "/api/cars-private",
+    "/api/catalog/meta-private",
+    "/data/catalog.json",
     "/account",
     "/account/",
     "/favorites",
@@ -169,4 +174,12 @@ test("поисковики открыты, а сборщики данных дл
   }
   // Личные разделы закрыты по-прежнему для всех, включая поисковиков.
   assert.equal(allowed(rules, "/account", "Googlebot"), false);
+});
+
+ test("public catalog rendering resources are crawlable for search, not bulk bots", async () => {
+  const rules = await robots({ SEO_ALLOW_INDEXING: "1" });
+  for (const url of ["/api/cars", "/api/cars?limit=99&offset=99", "/api/cars/58806987", "/api/cars/summary?brand=BYD", "/api/catalog/meta", "/api/catalog/meta?brand=BYD", "/api/model-facts?model=Han"]) {
+    for (const agent of ["Googlebot", "Google-InspectionTool", "YandexBot", "Bingbot"]) assert.equal(allowed(rules, url, agent), true, `${agent}: ${url}`);
+    assert.equal(allowed(rules, url, "GPTBot"), false);
+  }
 });

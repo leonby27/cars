@@ -18,7 +18,6 @@ import { estimateLandedCost } from "../src/pricing.js";
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "../src/purchase-info.js";
-import { DELIVERY_CASES, DELIVERY_STATS } from "../src/delivery-cases.js";
 import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
 import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
@@ -120,7 +119,6 @@ const publicPages = [
   // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
   // подход и «чего мы не обещаем» — перенесены вниз `/how-it-works`, а сам адрес
   // перебрасывается туда навсегда (правило в vercel.json).
-  { route: "/delivered/", title: "Доставленные автомобили из Китая — примеры и цены | abcars.by", description: "Примеры автомобилей, доставленных из Китая в Беларусь: маршрут, сроки, пробег и итоговая стоимость до Минска.", h1: "Доставленные автомобили из Китая", lead: "Истории доставки с маршрутом, сроками, итоговой стоимостью и решениями, принятыми после проверки автомобиля." },
   { route: "/payment-and-contract/", title: "Оплата и договор при покупке авто из Китая | abcars.by", description: "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы.", h1: "Оплата и договор", lead: "До оплаты фиксируем выбранный автомобиль, состав услуг, порядок расчётов и ответственность сторон." },
   { route: "/guarantees/", title: "Гарантии при покупке автомобиля из Китая | abcars.by", description: "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает abcars.by и какие риски обсуждаются до договора.", h1: "Гарантии и ответственность", lead: "Фиксируем проверку, документы, платежи и сопровождение доставки, не подменяя факты обещаниями." },
   { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы о проверке, цене, договоре, оплате, доставке и ответственности." },
@@ -206,11 +204,6 @@ const PATHWAYS = {
     heading: "Что именно мы проверяем",
     intro: "Проверка одна для всех машин, но смотреть приходится на разное: в электромобиле — батарея и её остаточная ёмкость, в гибриде — обе системы сразу, в бензиновой машине — двигатель, коробка и история обслуживания.",
     links: ["electric", "hybrid", "petrol", "electric-suv", "petrol-suv", "/models", "/catalog"],
-  },
-  "/delivered/": {
-    heading: "Где выбрать такую же",
-    intro: "Доставленные автомобили — это те же объявления из каталога, только уже приехавшие. Вот откуда их выбирают.",
-    links: ["suv", "sedan", "electric", "hybrid", "petrol", "/catalog"],
   },
   "/contacts/": {
     heading: "Пока мы отвечаем — посмотрите каталог",
@@ -357,13 +350,6 @@ function infoArticle(route) {
   }
   if (route === "/guarantees/") {
     return `<section><h2>Кто за что отвечает</h2>${list(RESPONSIBILITY_ITEMS.map((item) => [`${item.title} — ${item.owner}`, item.result]))}</section>`;
-  }
-  if (route === "/delivered/") {
-    // Имена и отзывы клиентов в разметку не выносим: в данных они помечены как
-    // демонстрационные, а тащить непроверенные отзывы в поисковую выдачу нельзя.
-    return `<section><h2>Коротко о доставках</h2>${list(DELIVERY_STATS.map((stat) => [stat.value, stat.label]))}</section><section><h2>Примеры доставленных автомобилей</h2>${DELIVERY_CASES.map(
-      (item) => `<h3>${escapeHtml(item.vehicle)}</h3><p>${escapeHtml(item.summary)}</p><p><strong>Маршрут:</strong> ${escapeHtml(item.route)}. <strong>Срок:</strong> ${escapeHtml(item.duration)} дней. <strong>Пробег:</strong> ${escapeHtml(item.mileage)}. <strong>Итого:</strong> ${escapeHtml(item.total)}. <strong>Доставлен:</strong> ${escapeHtml(item.delivered)}.</p>`,
-    ).join("")}</section>`;
   }
   if (route === "/contacts/") {
     const rows = [
@@ -1254,6 +1240,14 @@ const robots = allowIndexing
       "User-agent: *",
       "Allow: /",
       "Disallow: /api",
+      // Public rendering resources; account/admin endpoints stay disallowed.
+      "Allow: /api/cars$",
+      "Allow: /api/cars?",
+      "Allow: /api/cars/",
+      "Allow: /api/catalog/meta$",
+      "Allow: /api/catalog/meta?",
+      "Allow: /api/model-facts$",
+      "Allow: /api/model-facts?",
       "Disallow: /data",
       "Disallow: /account",
       "Disallow: /favorites",

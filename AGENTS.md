@@ -159,7 +159,7 @@ Popular-brand count preference: show the current listing count immediately to th
 
 Product brand preference: use `abcars.by` as the customer-facing product name and keep brand-aligned demo contact handles on the `abcars.by` identity.
 
-Header-navigation preference: do not show the “Доставленные авто” link in the main header navigation; keep delivered cases accessible elsewhere in the site.
+Delivered-page removal (owner decision, 2026-09-09): remove `/delivered`, its demo stories, all incoming links and sitemap entries. Old direct addresses must return the normal not-found page. This supersedes earlier instructions to keep delivery cases available.
 
 Header appearance preference: keep the header container borderless and use the same solid background token as the page (`var(--page)`) in both themes so scrolling content does not show through. Do not use backdrop blur. Use a larger wordmark and keep primary navigation inside a burger menu instead of inline links. Avoid outlined controls in the header; prefer clean surfaces and filled soft backgrounds only for individual controls where separation is needed. Keep the burger-menu button on the same soft filled background as the other header controls in both themes.
 
@@ -213,7 +213,6 @@ Service-navigation preference: label the `/how-it-works` page “О сервис
 
 Footer social-icon preference: place slightly enlarged, monochrome social icons in consistent white circular buttons without outlines.
 
-Delivered-case preference: use structured delivery stories as trust proof, including route, duration, mileage, final landed cost, decision context, and a customer quote. Keep all temporary case data centralized in `src/delivery-cases.js` for replacement with verified cases.
 
 Commercial-information preference: explain payment stages, contract timing, responsibility boundaries, guarantees, and common questions in dedicated pages linked from the footer. Keep temporary commercial terms and FAQ content centralized in `src/purchase-info.js` and review them with legal and operations before publication.
 

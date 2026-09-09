@@ -1,3 +1,4 @@
+import { repairVerifiedDrive, driveConflicts } from "../src/vehicle-spec-integrity.js";
 import crypto from "node:crypto";
 import { canonicalImportName, uniquePhotos } from "../config/import-policy.mjs";
 import { pool, withTransaction } from "./db.mjs";
@@ -11,6 +12,7 @@ const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).sli
 const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({ price:car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images })).digest("hex");
 
 export function normalizeCar(car) {
+  car = repairVerifiedDrive(car);
   const electricRange = car.electricRange ?? (Number(car.description?.match(/纯电续航\s*(\d+)/)?.[1]) || null);
   const combinedRange = car.combinedRange ?? (Number(car.description?.match(/综合续航\s*(\d+)/)?.[1]) || null);
   // Марка и модель приводятся вместе: часть машин при переименовании на беларуское имя
@@ -19,7 +21,7 @@ export function normalizeCar(car) {
   // Повторы фотографий убираем здесь, потому что через эту воронку проходит и
   // запись при импорте, и каждое чтение из базы: чинится и то, что уже лежит.
   const photos = car.images ? uniquePhotos(car.images) : null;
-  return { ...car, ...(photos?.length ? { images: photos, image: photos[0] } : {}), brand, model, title:carTitle(brand, model, car.year), bodyType:normalizeBodyType({ ...car, brand, model }), drive:normalizeDrive(car.drive), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
+  return { ...car, specWarnings: driveConflicts(car), ...(photos?.length ? { images: photos, image: photos[0] } : {}), brand, model, title:carTitle(brand, model, car.year), bodyType:normalizeBodyType({ ...car, brand, model }), drive:normalizeDrive(car.drive), appearanceScore:normalizeScore(car.appearanceScore), electricRange, combinedRange, range:car.range || electricRange || combinedRange };
 }
 
 // Характеристики машины одним объектом: их пишет и обычная запись машины, и

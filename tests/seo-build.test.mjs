@@ -91,6 +91,14 @@ const sitemapToken = "testtoken";
 const sitemapIndex = `sitemap-${sitemapToken}.xml`;
 const sitemapCars = `sitemap-${sitemapToken}-cars.xml`;
 
+test("удалённая страница доставок отсутствует вместе со ссылками и картой сайта", async () => {
+  const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
+  await missing("delivered/index.html");
+  for (const file of ["index.html", "how-it-works/index.html", "contacts/index.html", `sitemap-${sitemapToken}-pages.xml`]) {
+    assert.doesNotMatch(await read(file), /\/delivered(?:[\/"<?#]|$)/, file);
+  }
+});
+
 test("preview build ships public pages as noindex and no vehicle pages", async () => {
   const { read, missing } = await build();
   const [home, robots, sitemap] = await Promise.all([read("index.html"), read("robots.txt"), read(sitemapIndex)]);
@@ -253,7 +261,7 @@ test("на страницы-инструменты ведёт подвал ка�
   // есть, но его рисует скрипт, и в разметке страницы ссылок не остаётся. Тогда вес с
   // остального сайта на них не приходит вовсе.
   const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
-  for (const file of ["index.html", "faq/index.html", "delivered/index.html"]) {
+  for (const file of ["index.html", "faq/index.html", "contacts/index.html"]) {
     const html = await read(file);
     for (const path of ["/ev-quota", "/customs", "/delivery-cost", "/calculator", "/contacts", "/catalog"]) {
       assert.match(html, new RegExp(`href="${path}"`), `${file}: нет ссылки на ${path}`);
@@ -299,16 +307,13 @@ test("тексты информационных страниц лежат в с�
     const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
     return body.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
   };
-  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 250], ["delivered/index.html", 150], ["payment-and-contract/index.html", 120], ["guarantees/index.html", 110], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
+  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 250], ["payment-and-contract/index.html", 120], ["guarantees/index.html", 110], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
     const count = await words(file);
     assert.ok(count >= least, `${file}: слов ${count}, ожидалось не меньше ${least}`);
   }
   // Вопросы попадают в разметку — по ней они показываются в выдаче списком.
   assert.match(await read("faq/index.html"), /"@type":"FAQPage"/);
-  // Отзывы и имена клиентов в разметку не тащим: в данных они помечены как
-  // демонстрационные.
-  const delivered = await read("delivered/index.html");
-  assert.doesNotMatch(delivered, /Алексей, Минск/);
+
 });
 
 test("на главной есть ссылки на все разделы каталога и на обзоры моделей", async () => {
@@ -343,7 +348,6 @@ test("с информационных страниц и расчётов вед�
     ["how-it-works/index.html", "С чего начать выбор"],
     ["guarantees/index.html", "Что именно мы проверяем"],
     ["payment-and-contract/index.html", "Сколько это выходит в деньгах"],
-    ["delivered/index.html", "Где выбрать такую же"],
     ["contacts/index.html", "Пока мы отвечаем"],
   ];
   for (const [file, heading] of pages) {

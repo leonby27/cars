@@ -1,4 +1,5 @@
 import React from "react";
+import { captureCatalogFallback } from "./catalog-fallback.js";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { App } from "./App.jsx";
 import { installRussianTypography } from "./typography.js";
@@ -10,6 +11,7 @@ import "./order-contact.css";
 import "./analytics.css";
 
 const root = document.getElementById("root");
+captureCatalogFallback(document, window.location);
 
 // Обзор модели, открытый по прямой ссылке: его текст лежит отдельным файлом, и
 // приложение ждёт этот файл, прежде чем занять собой страницу. Иначе посетитель
