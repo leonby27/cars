@@ -1,3 +1,4 @@
+import { usePurchaseMotion } from "./use-purchase-motion.js";
 import { Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
@@ -8058,6 +8059,8 @@ const purchaseStepIcons = [MagnifyingGlass, ChatCircleText, ShieldCheck, ListChe
 const purchaseSteps = PURCHASE_STEPS.map((step, index) => ({ ...step, icon: purchaseStepIcons[index] }));
 
 function HowItWorksPage({ navigate }) {
+  const purchaseTimelineRef = usePurchaseMotion();
+  const [stepsExpanded, setStepsExpanded] = useState(false);
   const { total } = useCatalogFacts();
   const principleIcons = [ListChecks, ShieldCheck, Lightning];
   return (
@@ -8108,12 +8111,14 @@ function HowItWorksPage({ navigate }) {
         <div className="info-section-heading">
           <h2>Как купить автомобиль</h2>
         </div>
-        <ol className="purchase-timeline">
+        <ol className="purchase-timeline purchase-deck" id="purchase-deck" data-expanded={stepsExpanded} ref={purchaseTimelineRef}>
           {purchaseSteps.map(({ title, text }, index) => (
-            <li className="purchase-timeline-step" key={title}>
-              <span className="purchase-timeline-number" aria-hidden="true">{index + 1}</span>
+            <li className="purchase-timeline-step" key={title} aria-hidden={!stepsExpanded && index > 0}>
               <article className="purchase-timeline-card">
-                <h3>{title}</h3>
+                <div className="purchase-step-heading">
+                  <span className="purchase-timeline-number" aria-hidden="true">{index + 1}</span>
+                  <h3>{title}</h3>
+                </div>
                 <p>{text}</p>
                 {index === 0 ? (
                   <div className="purchase-timeline-illustration purchase-timeline-screenshot">
@@ -8142,12 +8147,15 @@ function HowItWorksPage({ navigate }) {
             </li>
           ))}
         </ol>
+        {stepsExpanded && <div className="purchase-deck-close-wrap"><button type="button" className="purchase-deck-close" aria-expanded={true} aria-controls="purchase-deck" onClick={() => { setStepsExpanded(false); document.getElementById("steps")?.scrollIntoView({ behavior: "instant" }); }}>Свернуть этапы <ArrowUp size={18} /></button></div>}
         <div className="purchase-timeline-cta">
-          <button className="primary" onClick={() => navigate("/catalog")}>
+          {stepsExpanded ? <button className="primary" onClick={() => navigate("/catalog")}>
             <CarProfile size={20} aria-hidden="true" />
             {total > 0 ? `Выбрать авто из ${number(total)} ${total % 10 === 1 && total % 100 !== 11 ? "предложения" : "предложений"}` : "Выбрать авто"}
             <ArrowRight size={18} />
-          </button>
+          </button> : <button className="primary purchase-deck-expand" type="button" aria-expanded={false} aria-controls="purchase-deck" onClick={() => setStepsExpanded(true)}>
+            Показать все 5 этапов <ArrowDown size={18} aria-hidden="true" />
+          </button>}
         </div>
       </section>
       <section className="decision-section">

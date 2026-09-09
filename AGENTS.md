@@ -419,3 +419,5 @@ Purchase timeline finish (owner decision, 2026-09-09): slightly smaller circular
 Purchase steps alignment (owner decision, 2026-09-09): center the section heading and the whole timeline column on the page. Omit the «Пять этапов» eyebrow and the introductory sentence beneath the heading.
 
 Purchase card spacing (owner decision, 2026-09-09): use 32px corner radius and 34px internal padding for step cards on desktop, 28px radius and 24px padding on mobile.
+
+Purchase number placement (owner decision, 2026-09-09): place yellow number circles inside each step card next to its heading; remove the external number column and connecting lines. Center the 560px deck and its buttons on the page.
