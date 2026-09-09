@@ -33,20 +33,42 @@ const mockImage = (src, srcset) => {
   };
 };
 
-test("при ошибке миниатюры берётся оригинал через нас, srcset больше не мешает", () => {
+test("миниатюра пробует размер объявления, затем оригинал, без циклов", () => {
   const image = mockImage(vehiclePhotoHref(source, 600), `${vehiclePhotoHref(source, 1400)} 2x`);
   retryVehiclePhoto(image, source);
-  assert.equal(image.attrs.src, vehiclePhotoHref(source, "original"));
+  assert.equal(image.attrs.src, vehiclePhotoHref(source));
   assert.equal(image.attrs.srcset, undefined);
   assert.equal(image.attrs.sizes, undefined);
   retryVehiclePhoto(image, source);
   assert.equal(image.attrs.src, vehiclePhotoHref(source, "original"));
+  retryVehiclePhoto(image, source);
+  assert.equal(image.attrs.src, vehiclePhotoHref(source, "original"));
 });
 
-test("если не загрузился оригинал, один раз пробуем размер источника через сервер", () => {
+test("ошибка оригинала переключает на размер объявления, затем сохранённое превью", () => {
   const image = mockImage(vehiclePhotoHref(source, "original"));
   retryVehiclePhoto(image, source);
   assert.equal(image.attrs.src, vehiclePhotoHref(source));
+  retryVehiclePhoto(image, source);
+  assert.equal(image.attrs.src, vehiclePhotoHref(source, 600));
+  retryVehiclePhoto(image, source);
+  assert.equal(image.attrs.src, vehiclePhotoHref(source, 600));
+});
+
+test("новый снимок сбрасывает попытки; адреса внешнего превью сохраняют сервер", () => {
+  const options = { mirrorOrigin:"https://abcars.by" };
+  const image = mockImage(vehiclePhotoHref(source, 600, options));
+  retryVehiclePhoto(image, source, options);
+  assert.equal(image.attrs.src, vehiclePhotoHref(source, 0, options));
+  const next = source.replace("car.jpg", "next.jpg");
+  image.src = vehiclePhotoHref(next, 600, options);
+  retryVehiclePhoto(image, next, options);
+  assert.equal(image.attrs.src, vehiclePhotoHref(next, 0, options));
+});
+
+test("у Guazi нет других размеров: ошибка не запускает цикл", () => {
+  const source = "https://image-public.guazistatic.com/a.jpg";
+  const image = mockImage(vehiclePhotoHref(source));
   retryVehiclePhoto(image, source);
   assert.equal(image.attrs.src, vehiclePhotoHref(source));
 });

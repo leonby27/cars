@@ -19,14 +19,29 @@ export function vehiclePhotoHref(source, width = 0, { mirrorOrigin = "" } = {}) 
   } catch { return source; }
 }
 
-// Один запасной вариант, тоже через нас. Сбрасываем srcset: иначе браузер
-// продолжает выбирать сломанный вариант, игнорируя заменённый src.
+// Сначала размер из объявления: он уже существует у источника, в отличие от
+// произвольной миниатюры. Затем оригинал и сохранённое превью. Каждый адрес
+// пробуем один раз; сбрасываем srcset, чтобы браузер не выбрал сломанную версию.
 export function retryVehiclePhoto(image, source, options) {
-  if (!source || image.dataset.fullSize === source) return;
-  const original = vehiclePhotoHref(source, "original", options);
-  const fallback = original === image.getAttribute("src") ? vehiclePhotoHref(source, 0, options) : original;
-  image.dataset.fullSize = source;
-  if (fallback === image.getAttribute("src") && !image.getAttribute("srcset")) return;
+  if (!source) return;
+  const key = JSON.stringify([source, options?.mirrorOrigin || ""]);
+  if (image.dataset.photoRetrySource !== key) {
+    image.dataset.photoRetrySource = key;
+    image.dataset.photoRetryTried = "[]";
+  }
+  const tried = new Set(JSON.parse(image.dataset.photoRetryTried || "[]"));
+  tried.add(image.getAttribute("src"));
+  if (image.currentSrc) tried.add(image.currentSrc);
+  const candidates = [...new Set([
+    vehiclePhotoHref(source, 0, options),
+    vehiclePhotoHref(source, "original", options),
+    vehiclePhotoHref(source, 600, options),
+  ])];
+  const fallback = candidates.find((href) => href && !tried.has(href));
+  image.dataset.photoRetryTried = JSON.stringify([...tried]);
+  if (!fallback) return;
+  tried.add(fallback);
+  image.dataset.photoRetryTried = JSON.stringify([...tried]);
   image.removeAttribute("srcset");
   image.removeAttribute("sizes");
   image.src = fallback;
