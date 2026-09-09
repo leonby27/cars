@@ -34,7 +34,7 @@ import { brandNotice } from "./brand-notice.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
-import { LEGAL_COPY } from "./legal-copy.js";
+import { LEGAL_DOCUMENTS } from "./legal-documents.js";
 import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
 import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
@@ -6810,7 +6810,7 @@ function ConsentField({ checked, onChange, error }) {
       <label className="consent-field" htmlFor={consentId}>
         <input id={consentId} type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} aria-describedby={error ? errorId : undefined} />
         <span>
-          Я соглашаюсь на обработку персональных данных и принимаю <a href={`${import.meta.env.BASE_URL}privacy`}>политику конфиденциальности</a> и <a href={`${import.meta.env.BASE_URL}terms`}>условия использования</a>.
+          Я соглашаюсь на обработку персональных данных и принимаю <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политику конфиденциальности</a> и <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условия использования</a>.
         </span>
       </label>
       {error && <small className="consent-error" id={errorId}>{error}</small>}
@@ -8820,18 +8820,12 @@ function LandedCostCalculator() {
   );
 }
 
-function LegalPage({ navigate, kind }) {
-  const content = LEGAL_COPY[kind];
+function LegalPage({ kind }) {
+  useEffect(() => { window.location.replace(LEGAL_DOCUMENTS[kind]); }, [kind]);
   return (
     <main className="legal-page page-width">
-      <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
-      <span className="info-eyebrow">{content.eyebrow}</span>
-      <h1>{content.title}</h1>
-      <p className="legal-intro">{content.intro}</p>
-      <div className="legal-sections">
-        {content.sections.map(([title, text]) => <section key={title}><h2>{title}</h2><p>{text}</p></section>)}
-      </div>
-      <p className="legal-updated">Редакция от {content.updated}</p>
+      <h1>{kind === "privacy" ? "Политика конфиденциальности" : "Условия использования сайта"}</h1>
+      <p><a href={LEGAL_DOCUMENTS[kind]} target="_blank" rel="noopener noreferrer">Открыть документ PDF</a></p>
     </main>
   );
 }
@@ -10262,7 +10256,7 @@ function SiteFooter({ navigate }) {
       </div>
       <div className="page-width footer-bottom">
         <span>© 2026 {COMPANY.legalName}</span>
-        <div><AppLink href="/privacy" navigate={navigate}>Политика конфиденциальности</AppLink><AppLink href="/terms" navigate={navigate}>Условия использования</AppLink></div>
+        <div><a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a><a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">Условия использования</a></div>
       </div>
     </footer>
     {socialUnavailableOpen && <SocialUnavailableModal onClose={() => setSocialUnavailableOpen(false)} />}
@@ -10686,7 +10680,7 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
         <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
           <div className="auth-registration-reveal-inner">
             <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Повторите пароль" : "Ещё раз"} required={registering} disabled={!registering} />
-            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <button type="button" onClick={() => navigate("/terms")}>условиями</button> и <button type="button" onClick={() => navigate("/privacy")}>политикой</button></span></label>
+            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
           </div>
         </div>
         {error && <div className="auth-error" role="alert">{error}</div>}

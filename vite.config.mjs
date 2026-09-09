@@ -38,6 +38,11 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    {
+      name: "legal-pdf-viewer",
+      configureServer(server) { server.middlewares.use(legalPdfResponse); },
+      configurePreviewServer(server) { server.middlewares.use(legalPdfResponse); },
+    },
     // Из браузерной сборки убираем поля обзоров, которые читает только сервер:
     // подробности в scripts/vite-trim-model-pages.mjs.
     trimModelPages(),
@@ -61,3 +66,21 @@ export default defineConfig({
     },
   ],
 });
+
+// Match production PDF viewing behavior in development and preview.
+function legalPdfResponse(request, response, next) {
+  const pathname = new URL(request.url, "http://localhost").pathname;
+  const legacy = { "/privacy": "/documents/privacy-policy.pdf", "/terms": "/documents/terms-of-use.pdf" };
+  const destination = legacy[pathname.replace(/\/+$/, "")];
+  if (destination) {
+    response.writeHead(302, { Location: destination });
+    response.end();
+    return;
+  }
+  if (/^\/documents\/[^/]+\.pdf$/.test(pathname)) {
+    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader("Content-Disposition", "inline");
+    response.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+  }
+  next();
+}

@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { X } from "./icons.jsx";
+import { LEGAL_DOCUMENTS } from "./legal-documents.js";
 
 const contactOptions = [
   ["phone", "Телефон"],
@@ -86,7 +87,7 @@ export function OrderContactModal({ order, user, saving, onSubmit, onClose }) {
           </fieldset>
           <label className="order-contact-consent">
             <input type="checkbox" checked={values.consent} onChange={(event) => { setError(""); setValues((current) => ({ ...current, consent:event.target.checked })); }} />
-            <span>Согласен на обработку данных, с <a href="/privacy">политикой</a> и <a href="/terms">условиями</a>.</span>
+            <span>Согласен на обработку данных, с <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a> и <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a>.</span>
           </label>
           {error ? <div className="order-contact-error" role="alert">{error}</div> : null}
           <button className="primary order-contact-submit" type="submit" disabled={saving}>{saving ? "Отправляем…" : "Отправить запрос"}</button>

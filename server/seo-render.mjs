@@ -1,3 +1,4 @@
+import { LEGAL_DOCUMENTS } from "../src/legal-documents.js";
 import { vehiclePhotoHref as photoHref } from "../src/photo-source.js";
 export { photoHref };
 // Отрисовка страниц для поисковиков. Модуль общий для двух мест: сборка
@@ -168,11 +169,11 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       ["/faq/", "Вопросы и ответы"],
       ...TOOL_PAGES.map((tool) => [`${tool.path}/`, tool.name]),
       ["/contacts/", "Контакты"],
-      ["/privacy/", "Политика конфиденциальности"],
-      ["/terms/", "Условия использования"],
+      [LEGAL_DOCUMENTS.privacy, "Политика конфиденциальности"],
+      [LEGAL_DOCUMENTS.terms, "Условия использования"],
     ];
     return `<footer class="site-footer"><nav class="page-width" aria-label="Информация для покупателя">
-    ${links.map(([route, name]) => `<a href="${hrefRoute(route)}">${escapeHtml(name)}</a>`).join("\n    ")}
+    ${links.map(([route, name]) => `<a href="${hrefRoute(route)}"${route.endsWith(".pdf") ? ' target="_blank" rel="noopener noreferrer"' : ""}>${escapeHtml(name)}</a>`).join("\n    ")}
   </nav></footer>`;
   }
 

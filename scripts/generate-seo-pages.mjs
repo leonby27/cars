@@ -19,7 +19,7 @@ import { estimateLandedCost } from "../src/pricing.js";
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "../src/purchase-info.js";
 import { DELIVERY_CASES, DELIVERY_STATS } from "../src/delivery-cases.js";
-import { LEGAL_COPY } from "../src/legal-copy.js";
+import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
 import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
 // Журнал: подборки. Раздел собирается только при включённом выключателе — пока он
@@ -382,7 +382,7 @@ function infoArticle(route) {
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {
-    return `<p>${escapeHtml(legal.intro)}</p>${legal.sections.map(([title, text]) => `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p></section>`).join("")}<p>Редакция от ${escapeHtml(legal.updated)}.</p>`;
+    return `${LEGAL_DRAFT ? `<p>${escapeHtml(LEGAL_DRAFT_NOTE)}</p>` : ""}<p>${escapeHtml(legal.intro)}</p>${legal.sections.map(([title, text]) => `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p></section>`).join("")}<p>Редакция от ${escapeHtml(legal.updated)}.</p>`;
   }
   return "";
 }

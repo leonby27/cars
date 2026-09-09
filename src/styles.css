@@ -9644,7 +9644,7 @@ html[data-theme="dark"] #root .spec-search,
   line-height: 1.4;
   white-space: nowrap;
 }
-.auth-modal .auth-consent button {
+.auth-modal .auth-consent a {
   color: inherit;
   font-weight: inherit;
   text-decoration: underline;
@@ -9752,7 +9752,7 @@ html[data-theme="dark"] #root .spec-search,
   margin: 1px 0 0;
   accent-color: var(--accent);
 }
-.auth-consent button,
+.auth-consent a,
 .auth-help button {
   padding: 0;
   border: 0;
