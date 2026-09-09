@@ -16652,3 +16652,15 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
   background: #f2f3f5;
   color: #17191c;
 }
+
+.decision-card-illustrated {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 124px;
+  column-gap: 16px;
+  align-items: center;
+}
+.decision-card-illustrated h3 { grid-column: 1 / -1; }
+.decision-checklist-art { display: block; width: 100%; height: auto; }
+@media (max-width: 480px) {
+  .decision-card-illustrated { grid-template-columns: minmax(0, 1fr) 80px; column-gap: 10px; }
+}

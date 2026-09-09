@@ -8165,7 +8165,7 @@ function HowItWorksPage({ navigate }) {
             <h2>Вы принимаете решение на основе полной картины</h2>
             <p>Если автомобиль не проходит проверку или итоговые условия меняются, мы не подталкиваем к сделке — помогаем найти другой вариант.</p>
           </div>
-          <div className="decision-card">
+          <div className="decision-card decision-card-illustrated">
             <h3>До оплаты автомобиля вы получите</h3>
             <ul>
               <li>
@@ -8185,6 +8185,7 @@ function HowItWorksPage({ navigate }) {
                 Понятный план доставки
               </li>
             </ul>
+            <img className="decision-checklist-art" src="/illustrations/decision-checklist.png" alt="" loading="lazy" decoding="async" />
           </div>
         </div>
       </section>
