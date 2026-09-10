@@ -381,7 +381,7 @@ Advanced spec filters (owner request, 2026-08-20): the expanded filter row offer
 
 Torque filter removed (owner request, 2026-08-24): the "Крутящий момент" dropdown is gone from the filter panel and from every place the front end built it — state, chips of saved searches, `?torque=` in catalog links, `torqueMin` in API queries. The value itself stays: `specifications.torqueNm` keeps being imported and backfilled, the car page still shows it among the specs, and the server still understands `torqueMin` (`buildCarFilters`) plus `torque` as an optional saved-search key, so old links and stored searches are accepted rather than rejected — they simply no longer narrow the results.
 
-Vehicle color display (owner request, 2026-08-20): the car page shows the body color twice — as a "Цвет" row in the icon fact list and as a synthetic "Цвет кузова" first row inside «Полные данные» (the source spec table describes the model, not the specific car, so the color is mixed in from the listing and is findable via the built-in spec search). Exact per-car translation lives in `translateColor` (`src/colors.js`) and does not merge Silver with Dark Gray, unlike the filter labels.
+Vehicle color display (owner request, 2026-08-20): the car page shows body color as a synthetic "Цвет кузова" first row inside «Полные данные»; color is also shown in the main fact tiles by the owner’s latest decision on 2026-09-10 (the source spec table describes the model, not the specific car, so the color is mixed in from the listing and is findable via the built-in spec search). Exact per-car translation lives in `translateColor` (`src/colors.js`) and does not merge Silver with Dark Gray, unlike the filter labels.
 
 Photo storage (owner decision, 2026-09-08): permanently copy the first five 600px previews of every active listing into `/srv/abcars-media`, served by nginx before the origin cache — the catalog card swaps those five frames under the cursor, so partial coverage leaves hover waiting on the origin. The hourly priority queue (home showcase up to 60, up to 100 most-viewed vehicles over the past seven days) only decides what the worker copies first, not what it copies. The read-only database worker `abcars-photo-store.service` prioritizes newly imported listings, resumes its full-catalog pass, and retries failures. It replaces both older warm timers. Runtime lives in `/opt/abcars-photo-store`; after deploying changes to its code or nginx snippets, run `bash /srv/abcars/deploy/install-photo-store.sh`. Temporary cache is 8 GB; permanent copying stops below 5 GB free. Full coverage is about 343 000 files and 9 GB; the origin needs roughly a second per new frame, so `PHOTO_STORE_CONCURRENCY` (cap 16) sets the pace. Never claim full coverage merely because the worker started; verify its progress and failed retries.
 
@@ -394,6 +394,8 @@ Price comparison accuracy (owner correction, 2026-09-09): prefer five other list
 Reviews photo-grid preference (owner decision, 2026-09-09): show the supplied photos near the bottom of `/how-it-works`, before its closing catalog CTA in a single horizontal slider with four cards visible on desktop, arrow-only navigation, no horizontal scrollbar or touch scrolling, and inverse arrow buttons (dark in light theme, light in dark theme), preserving their full proportions.
 
 Reviews card preference (owner decision, 2026-09-09): overlay a white block on the bottom of each photo, inset 12px from the left, right and bottom edges, with a 16px reviewer name and 13px review text at weight 500 (explicit owner exception to the body-text minimum). The owner confirmed on 2026-09-10 that the names match and the reviewers approved the existing texts; these reviews are approved for publication.
+
+Reviews dark-theme preference (owner decision, 2026-09-10): match review overlay backgrounds to the page background (`--page`), with light names and muted light review text in the dark theme; retain white overlays in the light theme and golden stars in both.
 
 Reviews rating preference (owner decision, 2026-09-09): show five filled warm golden-orange (#F5B519) stars above the reviewer name in each review card.
 
@@ -420,3 +422,25 @@ Purchase steps alignment (owner decision, 2026-09-09): center the section headin
 Purchase card spacing (owner decision, 2026-09-09): use 32px corner radius and 34px internal padding for step cards on desktop, 28px radius and 24px padding on mobile.
 
 Purchase number placement (owner decision, 2026-09-09): place yellow number circles inside each step card next to its heading; remove the external number column and connecting lines. Center the 560px deck and its buttons on the page.
+
+Home trust-card placement (owner decision, 2026-09-10): place the three cards «Сопровождаем до выдачи», «Проверяем до оплаты», and «Показываем обе цены» directly after the home catalog section, including its load-more button.
+
+Home filter navigation (owner decision, 2026-09-10): remove the powertrain tabs/mobile select and «Все предложения» link above the home brand grid. Keep all-powertrain brand counts and «Показать все марки». The filter icon in the home search opens `/catalog` instead of expanding inline quick filters.
+
+Home popular-brand rows (owner decision, 2026-09-10): show five rows instead of six in the collapsed home brand grid. Honda, Leapmotor, Lynk & Co, and XPeng appear only after expanding the full list, never as collapsed fallback items.
+
+Home search-to-brands spacing (owner decision, 2026-09-10): halve the gap between the search field and brand grid: desktop spacing contributions total 23px instead of 46px, mobile 6px instead of 12px.
+
+Home trust-to-process spacing (owner correction, 2026-09-10): match the gap above «Понятный путь к автомобилю из Китая» to the gap below it before the FAQ: 92px desktop, 62px mobile.
+
+Home outer spacing (owner decision, 2026-09-10): halve the space above the catalog-update badge (hero top padding 42px desktop, 13px mobile) and between «Показать все марки» and the home catalog (combined spacing 55px desktop, 42px mobile). Preserve search-results and lower catalog spacing.
+
+Main vehicle facts (owner decision, 2026-09-10): show year, mileage, powertrain, drive, battery, body type, color and 0–100 km/h acceleration as eight filled tiles in four columns and two rows on desktop, and two columns and four rows on mobile, including quick view. Allow long labels and values to wrap without clipping or horizontal overflow. Omit the visible «Характеристики» heading and align each value under its label, not under its icon; align text consistently across tiles. Use a contrasting theme-aware background with no outlines or separators. Color also remains in full technical specs. Read acceleration from the normalized car.acceleration field in seconds and show an honest missing-value label when unavailable.
+
+Currency control placement (owner decision, 2026-09-10): remove currency switching from both the global header and its mobile menu. Place the existing USD/BYN control beside the main vehicle price on full car pages, matching quick view. On mobile place it beside the price under the title, wrapping when needed. Keep the shared saved currency preference.
+
+Vehicle price caption spacing (owner correction, 2026-09-10): keep «Цена под ключ до Минска» close beneath the amount with its 3px margin; the currency-control flex layout must add no vertical row gap.
+
+Petrol vehicle fact tile (owner decision, 2026-09-10): show «Масса» instead of «Батарея» for petrol cars (normalized type «ДВС», displayed «Бензин»). Use the listing’s curbWeight in kilograms, or «Не указана» if unavailable. Electric and hybrid cars retain the battery tile.
+
+Vehicle fact tile density (owner decision, 2026-09-10): use a 2px gap between labels and values, 14px top padding on desktop (12px mobile), and 12px bottom padding; remove the former 96px minimum height so compact content does not leave extra space underneath. Preserve side padding and value-to-label alignment.

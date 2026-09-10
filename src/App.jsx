@@ -1,5 +1,5 @@
 import { readCatalogFallback } from "./catalog-fallback.js";
-import { isAuthEntryPath, resolveAuthRoute } from "./auth-route.js";
+import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute } from "./auth-route.js";
 import { usePurchaseMotion } from "./use-purchase-motion.js";
 import { Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
@@ -518,7 +518,7 @@ const matchingCatalogReturn = () => {
   return stored && stored.path === currentAppPath() && stored.search === window.location.search ? stored : null;
 };
 
-function useRoute() {
+function useRoute(user) {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const appPath = (pathname) => {
     const unbased = basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) || "/" : pathname;
@@ -670,7 +670,7 @@ function useRoute() {
     }
     const currentPath = appPath(window.location.pathname);
     const targetPath = appPath(target.pathname);
-    const keepScrollPosition = preserveScroll || targetPath === "/login" || targetPath === "/register";
+    const keepScrollPosition = preserveScroll || preservesAuthScroll(targetPath, user);
     const targetUrl = `${basePath}${target.pathname}${target.search}${target.hash}`;
     dropScrollSave();
     if (replace) {
@@ -695,7 +695,7 @@ function useRoute() {
       pushHistoryEntry(
         {
           fromPath: currentPath,
-          scrollY: Number(catalogState?.scrollY) || 0,
+          scrollY: catalogState ? Number(catalogState.scrollY) || 0 : keepScrollPosition ? window.scrollY : 0,
           ...(catalogState
             ? { catalog: catalogState.catalog, scrollAnchor: catalogState.scrollAnchor || null, scrollAnchorOffset: Number(catalogState.scrollAnchorOffset) || 0 }
             : {}),
@@ -1272,7 +1272,7 @@ function EvQuotaButton({ quotas }) {
   );
 }
 
-function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, setCurrency, user, themeMode, setThemeMode }) {
+function Header({ navigate, favoritesCount, savedSearchesCount, path, user, themeMode, setThemeMode }) {
   const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
   const [menuOpen, setMenuOpen] = useState(false);
   const [phoneRevealed, setPhoneRevealed] = useState(false);
@@ -1353,9 +1353,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
               </nav>
               <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
               <div className="header-menu-settings">
-                {/* На телефоне валюте и карточке квоты не хватает места в шапке,
-                    поэтому они находятся в меню. */}
-                <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />
+                {/* На телефоне карточка квоты находится в меню. */}
                 <div className="header-menu-quota">
                   <EvQuotaPanel quotas={quotas} />
                 </div>
@@ -1364,7 +1362,6 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, currency, 
         </div>
         <div className="header-actions header-left-controls">
           <EvQuotaButton quotas={quotas} />
-          <CurrencySwitch currency={currency} setCurrency={setCurrency} />
         </div>
         <div className="header-actions">
           <div className="header-contact-actions" aria-label="Связаться с нами">
@@ -2819,7 +2816,7 @@ const HERO_SORT_OPTIONS = [
   { value: "year_asc", label: "Старые по году" },
 ];
 
-function HeroSearch({ value, onChange, filtersOpen = false, onToggleFilters = null }) {
+function HeroSearch({ value, onChange, navigate }) {
   const fieldRef = useRef(null);
   // На телефоне прокрутка выдачи пальцем прячет экранную клавиатуру: снимаем
   // фокус со строки поиска. Слушаем именно касание, а не scroll — браузер сам
@@ -2878,10 +2875,10 @@ function HeroSearch({ value, onChange, filtersOpen = false, onToggleFilters = nu
           <button type="button" className="hero-search-clear" aria-label="Очистить поиск" onClick={() => onChange("")}>
             <X size={18} weight="bold" />
           </button>
-        ) : Boolean(onToggleFilters) && (
-          <button type="button" className="hero-search-filters" aria-label={filtersOpen ? "Скрыть фильтры" : "Показать фильтры"} aria-expanded={filtersOpen} onClick={onToggleFilters}>
+        ) : (
+          <AppLink href="/catalog" navigate={navigate} className="hero-search-filters" aria-label="Открыть фильтры в каталоге">
             <SlidersHorizontal size={21} weight="bold" />
-          </button>
+          </AppLink>
         )}
       </div>
     </div>
@@ -4117,6 +4114,8 @@ const showcaseDemotedBrands = new Set(["Buick", "Changan", "Chery", "Ford", "Hyu
 // это лицо каталога, и терять их из-за того, что у Volkswagen объявлений втрое
 // больше, нельзя. Марку без машин правило всё равно не покажет — она отсеивается
 // раньше, вместе с остальными пустыми.
+const showcaseExpandedOnlyBrands = new Set(["Honda", "Leapmotor", "Lynk & Co", "XPeng"]);
+
 const showcasePinnedBrands = new Set(["Avatr", "Deepal", "Voyah", "Xiaomi", "Zeekr"]);
 
 // Marks whose own colours are part of the brand. The dark theme inverts logos so
@@ -4144,10 +4143,9 @@ function BrandMark({ brand }) {
   );
 }
 
-// Главная показывает шесть строк марок, остальное открывает кнопка. Строк всегда
-// шесть, а колонок на узких экранах меньше, поэтому и марок туда влезает меньше:
-// иначе те же шесть строк на телефоне превращаются в двенадцать.
-const BRAND_SHOWCASE_ROWS = 6;
+// Главная показывает пять строк марок; остальное открывает кнопка.
+// На узких экранах колонок меньше, но число строк остаётся тем же.
+const BRAND_SHOWCASE_ROWS = 5;
 // На кнопке «Все» блок называет себя целиком, поэтому подпись у неё длиннее.
 const brandSwitchLabel = (item) => (item === "Все" ? "Все марки авто" : item);
 const BRAND_SWITCH_OPTIONS = POWERTRAIN_TABS.map(brandSwitchLabel);
@@ -4189,7 +4187,6 @@ function PopularBrands({ navigate, cars, apiMode }) {
   // Сервер отдаёт разметку в четыре колонки, поэтому и здесь начинаем с четырёх:
   // мерить ширину окна можно только после того, как страница появилась в браузере.
   const [columns, setColumns] = useState(4);
-  const [type, setType] = useState("Все");
   const [expanded, setExpanded] = useState(false);
   // Начинаем без счётчиков даже когда мета уже пришла: серверная разметка главной
   // собрана без них, и первый браузерный кадр обязан совпасть с ней. Настоящие
@@ -4198,82 +4195,42 @@ function PopularBrands({ navigate, cars, apiMode }) {
   useLayoutEffect(() => {
     setRemoteBrands((current) => (Object.keys(current).length ? current : initialBrandCounts()));
   }, []);
-  const selectedType = typeValue(type);
-
-  const switchRef = useRef(null);
-  // Белая плашка выбранного типа — отдельный слой: она переезжает к нажатой кнопке,
-  // а не появляется на ней заново. Размер и место берём с самой кнопки, поэтому
-  // подписи можно менять свободно.
-  const [pill, setPill] = useState(null);
-
-  // useLayoutEffect, а не useEffect: замер до первой отрисовки, иначе на телефоне
-  // сначала мелькает список на четыре колонки и только потом сжимается до двух.
   useLayoutEffect(() => {
-    const measure = () => {
-      setColumns(brandShowcaseColumns());
-      const active = switchRef.current?.querySelector("button.active");
-      if (!active) return;
-      // Плашку переставляем, только если она действительно съехала. Иначе каждое
-      // изменение размера окна пересобирало весь блок марок заново, а при зуме на
-      // трекпаде такие изменения идут подряд десятками — браузер не успевал
-      // дорисовать страницу между ними.
-      const next = { left: active.offsetLeft, width: active.offsetWidth };
-      setPill((current) => (current && current.left === next.left && current.width === next.width ? current : next));
-    };
+    const measure = () => setColumns(brandShowcaseColumns());
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [type]);
+  }, []);
 
   const localBrands = useMemo(() => {
     const counts = new Map();
     cars.forEach((car) => {
-      if (selectedType !== "Все" && car.type !== selectedType) return;
       counts.set(car.brand, (counts.get(car.brand) || 0) + 1);
     });
     return [...counts].map(([brand, count]) => ({ brand, count }));
-  }, [cars, selectedType]);
+  }, [cars]);
 
-  // Раньше марки под новый тип двигателя запрашивались только по нажатию на вкладку,
-  // и первое переключение в сессии ждало ответ сервера — вкладка на вид зависала.
-  // Теперь, как только известно, что каталог отвечает, одним заходом спрашиваем марки
-  // сразу под все четыре вкладки (справочник помнит такой же запрос, ушедший из
-  // index.html, и не дублирует его). К моменту, когда посетитель нажмёт на вкладку,
-  // ответ обычно уже лежит наготове, и список меняется сразу.
-  const brandsPrefetched = useRef(false);
+  // The home page shows counts across all powertrains; detailed filters live in the catalog.
   useEffect(() => {
     if (apiMode === false) {
       setRemoteBrands({});
-      return undefined;
+      return;
     }
-    if (apiMode !== true || brandsPrefetched.current) return undefined;
-    brandsPrefetched.current = true;
+    if (apiMode !== true) return;
     let cancelled = false;
-    POWERTRAIN_TABS.forEach((item) => {
-      const value = typeValue(item);
-      const query = value === "Все" ? "" : new URLSearchParams({ type: value }).toString();
-      requestCatalogMeta(query)
-        .then((payload) => {
-          if (cancelled) return;
-          const brands = payload.brands || [];
-          setRemoteBrands((known) => ({ ...known, [value]: brands }));
-          storeBrandCounts(value, brands);
-        })
-        .catch(() => {});
-    });
+    requestCatalogMeta("").then((payload) => {
+      if (cancelled) return;
+      const brands = payload.brands || [];
+      setRemoteBrands({ "Все": brands });
+      storeBrandCounts("Все", brands);
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [apiMode]);
-
-  // Ответ по новому типу приходит не мгновенно, а стартовая выборка знает лишь горстку
-  // марок: если показать её, список на миг сжимается и мигает. Поэтому до ответа
-  // оставляем на экране прежний набор — он сменится один раз, уже на верный.
-  const remoteForType = apiMode === false ? localBrands : remoteBrands[selectedType];
-  const lastAnswer = useRef(null);
-  useEffect(() => { if (remoteForType) lastAnswer.current = remoteForType; }, [remoteForType]);
+  const remoteForType = apiMode === false ? localBrands : remoteBrands["Все"];
   // Пока каталог не ответил, числа по стартовой выборке не показываем: в ней шестьдесят
   // карточек на весь каталог, и марка выглядела бы как «одна машина в наличии». Лучше
   // назвать марки без чисел, чем назвать неверные.
-  const availableBrands = remoteForType || lastAnswer.current || (apiMode === false ? localBrands : []);
+  const availableBrands = remoteForType || (apiMode === false ? localBrands : []);
   const brandCounts = new Map(availableBrands.map((item) => [item.brand, Number(item.count) || 0]));
   // Before the catalog answers there are no counts at all, and rendering every brand as "0"
   // reads as an empty catalog rather than a pending one.
@@ -4294,7 +4251,7 @@ function PopularBrands({ navigate, cars, apiMode }) {
   // по алфавиту: список ищут глазами по имени, а не читают как рейтинг. Марки без машин
   // сюда не попадают даже когда свободные строки есть: «Acura 0» в популярных — это
   // тупик, а не предложение. В полном списке они остаются.
-  const ranked = countsKnown ? brands.filter((item) => item.count > 0) : brands;
+  const ranked = brands.filter((item) => !showcaseExpandedOnlyBrands.has(item.brand) && (!countsKnown || item.count > 0));
   const byName = (a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" });
   const byCount = (a, b) => b.count - a.count || byName(a, b);
   // Закреплённые марки занимают свои места первыми, дальше идут остальные по числу
@@ -4307,40 +4264,19 @@ function PopularBrands({ navigate, cars, apiMode }) {
     const demoted = ranked.filter((item) => showcaseDemotedBrands.has(item.brand)).sort(byCount);
     return [...pinned, ...usual, ...demoted].slice(0, limit);
   };
-  const shown = expanded || brands.length <= limit ? brands : pickShowcase().sort(byName);
-  const typeQuery = selectedType === "Все" ? "" : `type=${encodeURIComponent(type)}`;
+  const collapsed = pickShowcase().sort(byName);
+  const shown = expanded ? brands : collapsed;
 
   return (
     <section className="popular-brands page-width" aria-labelledby="popular-brands-title">
-      <div className="popular-brands-heading">
-        {/* Заголовок остаётся в разметке для поисковика и для чтения с экрана: на экране
-            блок называет себя первой кнопкой переключателя. */}
-        <h2 className="visually-hidden" id="popular-brands-title">Популярные марки</h2>
-        {/* На телефоне четыре кнопки в строку не встают — там тот же выбор сделан
-            обычным списком, как в фильтрах. Что показать, решает ширина экрана. */}
-        <div className={`brand-type-switch${pill ? " brand-type-switch--measured" : ""}`} role="group" aria-label="Тип двигателя" ref={switchRef}>
-          {pill && <span className="brand-type-switch-pill" aria-hidden="true" style={{ transform: `translateX(${pill.left}px)`, width: `${pill.width}px` }} />}
-          {POWERTRAIN_TABS.map((item) => (
-            <button type="button" key={item} className={type === item ? "active" : ""} aria-pressed={type === item} onClick={() => setType(item)}>
-              {brandSwitchLabel(item)}
-            </button>
-          ))}
-        </div>
-        <SelectField className="brand-type-select" label="Тип двигателя" value={brandSwitchLabel(type)} options={BRAND_SWITCH_OPTIONS} onChange={(label) => setType(brandSwitchType(label))} />
-        <AppLink className="popular-brands-all" href={selectedType === "Все" ? "/catalog" : powertrainLandingPath(type)} navigate={navigate}>
-          Все предложения <CaretRight size={20} weight="bold" />
-        </AppLink>
-      </div>
+      <h2 className="visually-hidden" id="popular-brands-title">Популярные марки</h2>
       <div className="popular-brands-grid">
         {shown.map(({ brand, count }) => {
           // Ссылка ведёт на страницу марки, если она у нас есть: адрес с параметром
           // (`/catalog?brand=BYD`) для поисковика указывает на общий каталог, то есть
-          // отдельной страницы под марку по такой ссылке не существует. Выбранный тип
-          // двигателя добавляем параметром — он сужает и саму страницу марки.
+          // отдельной страницы под марку по такой ссылке не существует.
           const landing = brandLandingPath(brand);
-          const href = landing
-            ? `${landing}${typeQuery ? `?${typeQuery}` : ""}`
-            : `/catalog?brand=${encodeURIComponent(brand)}${typeQuery ? `&${typeQuery}` : ""}`;
+          const href = landing || `/catalog?brand=${encodeURIComponent(brand)}`;
           // Подпись обязана начинаться с того, что написано на плитке: голосовое
           // управление ищет ссылку по видимому тексту («нажать Audi»), а проверка
           // доступности требует, чтобы видимый текст входил в подпись с начала.
@@ -4357,7 +4293,7 @@ function PopularBrands({ navigate, cars, apiMode }) {
       {/* У типа двигателя, до которого импорт ещё не дошёл, марок нет вовсе — пустая
           сетка выглядела бы поломкой. */}
       {!shown.length && <p className="popular-brands-empty">Машин с таким двигателем в каталоге пока нет.</p>}
-      {brands.length > limit && (
+      {brands.length > collapsed.length && (
         <div className="popular-brands-more">
           <button type="button" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded}>
             {expanded ? "Свернуть список" : "Показать все марки"}
@@ -4589,7 +4525,6 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   } : null));
   // Блок фильтров под поиском по умолчанию свёрнут на всех экранах
   // и открывается иконкой в строке поиска.
-  const [quickFiltersOpen, setQuickFiltersOpen] = useState(false);
   const [heroSort, setHeroSort] = useState(restoredHero?.sort || "default");
   // «По умолчанию» в выдаче поиска — тот же замес, что и в каталоге: сервер
   // раскладывает строки по зерну, а клиент разносит похожие карточки. Без этого
@@ -4811,45 +4746,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
           <li><CheckCircle size={21} weight="fill" />Полное сопровождение</li>
         </ul>
-        <HeroSearch value={heroQuery} onChange={setHeroQuery} filtersOpen={quickFiltersOpen} onToggleFilters={() => setQuickFiltersOpen((open) => !open)} />
-        {!searching && (
-          <div className={quickFiltersOpen ? "hero-quick-search open" : "hero-quick-search"}>
-            <QuickSearch navigate={navigate} cars={cars} apiMode={apiMode} totalCount={catalogTotal} />
-          </div>
-        )}
+        <HeroSearch value={heroQuery} onChange={setHeroQuery} navigate={navigate} />
       </section>
       {!searching && <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />}
-      {!searching && (
-      <section className="trust-strip page-width">
-        <div>
-          <span>
-            <CarProfile size={22} weight="duotone" />
-          </span>
-          <p>
-            <b>Сопровождаем до выдачи</b>
-            <small>От подбора до получения в Минске</small>
-          </p>
-        </div>
-        <div>
-          <span>
-            <ShieldCheck size={22} weight="duotone" />
-          </span>
-          <p>
-            <b>Проверяем до оплаты</b>
-            <small>История, батарея и документы</small>
-          </p>
-        </div>
-        <div>
-          <span>
-            <CurrencyCny size={22} weight="duotone" />
-          </span>
-          <p>
-            <b>Показываем обе цены</b>
-            <small>В Китае и ориентир до Минска</small>
-          </p>
-        </div>
-      </section>
-      )}
       <section className={searching ? "featured featured--search page-width" : "featured page-width"}>
         {/* Во время поиска заголовок не показываем: выдача начинается сразу со
             строки с числом результатов, переключатель быстрого просмотра — там же. */}
@@ -4948,6 +4847,37 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           )
         )}
       </section>
+      {!searching && (
+      <section className="trust-strip page-width">
+        <div>
+          <span>
+            <CarProfile size={22} weight="duotone" />
+          </span>
+          <p>
+            <b>Сопровождаем до выдачи</b>
+            <small>От подбора до получения в Минске</small>
+          </p>
+        </div>
+        <div>
+          <span>
+            <ShieldCheck size={22} weight="duotone" />
+          </span>
+          <p>
+            <b>Проверяем до оплаты</b>
+            <small>История, батарея и документы</small>
+          </p>
+        </div>
+        <div>
+          <span>
+            <CurrencyCny size={22} weight="duotone" />
+          </span>
+          <p>
+            <b>Показываем обе цены</b>
+            <small>В Китае и ориентир до Минска</small>
+          </p>
+        </div>
+      </section>
+      )}
       <HomeConversionSections navigate={navigate} />
       {/* Журнал: четыре свежих материала. Пока раздел не готов, выключатель
           BLOG_ENABLED убирает блок целиком — на его месте ничего не остаётся. */}
@@ -6671,9 +6601,9 @@ function VehicleGallery({ car }) {
   );
 }
 
-function FactList({ items }) {
+function FactList({ items, tiles = false }) {
   return (
-    <div className="fact-list">
+    <div className={tiles ? "fact-list fact-list--tiles" : "fact-list"}>
       {items.map(([Icon, label, value]) => (
         <div className="fact-row" key={label}>
           <Icon size={21} weight="duotone" aria-hidden="true" />
@@ -7249,7 +7179,7 @@ function ChineseNameMark({ car }) {
   );
 }
 
-function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, currencySwitch = false, onOpenOrder = null, priceRatingPending = false }) {
+function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
   const [deliveryOpen, setDeliveryOpen] = useState(false);
@@ -7321,16 +7251,19 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // Раздел, на котором посетитель уже стоит, из списка убираем: в быстром просмотре
   // из каталога марки первой плашкой была бы ссылка на эту же страницу.
   const sections = landingsForCar(car).filter((landing) => landing.path !== currentAppPath());
-  // Цвет заполнен не у всех источников — без значения строка не показывается.
+  // Все восемь плашек сохраняют место, даже если источник не указал значение.
   const specs = [
     [CalendarBlank, "Год", car.year],
     [Gauge, "Пробег", `${number(car.mileage)} км`],
     [Lightning, "Тип", powertrainName(car.type)],
     [CarProfile, "Привод", car.drive],
-    [BatteryHigh, "Батарея", car.battery ? `${car.battery} кВт·ч` : "Не указана"],
-    [Palette, "Цвет", translateColor(car.bodyColor)],
+    powertrainName(car.type) === "Бензин"
+      ? [Scales, "Масса", Number.isFinite(Number(car.curbWeight)) && Number(car.curbWeight) > 0 ? `${number(Number(car.curbWeight))} кг` : "Не указана"]
+      : [BatteryHigh, "Батарея", car.battery ? `${car.battery} кВт·ч` : "Не указана"],
     [CarProfile, "Кузов", car.bodyType],
-  ].filter(([, , value]) => value);
+    [Palette, "Цвет", translateColor(car.bodyColor)],
+    [Timer, "0–100 км/ч", Number.isFinite(Number(car.acceleration)) && Number(car.acceleration) > 0 ? `${Number(car.acceleration).toLocaleString("ru-RU")} с` : "Не указан"],
+  ].map(([icon, label, value]) => [icon, label, value || "Не указано"]);
   // Блок отчёта продавца заполнен только у Guazi; у Che168 все поля пусты, а тип
   // батареи и так виден в «Полных характеристиках». Пустые строки не показываем,
   // а без единой строки исчезает и весь блок — вместе с дисклеймером-заглушкой.
@@ -7368,7 +7301,10 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </AppLink>
             )}
           </div>
-          <TotalPrice car={car} price={price} currency={currency} className="detail-mobile-price" />
+          <div className="detail-mobile-price-row">
+            <TotalPrice car={car} price={price} currency={currency} className="detail-mobile-price" />
+            {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
+          </div>
           {/* Тип, привод и пробег из подзаголовка убраны: они и так стоят
               строкой ниже, в «Характеристиках». Остались только даты. */}
           {datesLine && <p>{datesLine}</p>}
@@ -7393,9 +7329,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             экране встать после шкалы цены, а не между фотографиями и ней. */}
         {datesLine && <p className="detail-dates">{datesLine}</p>}
         <div className="detail-content">
-          <section className="detail-facts-section">
-            <h2>Характеристики</h2>
-            <FactList items={specs} />
+          <section className="detail-facts-section" aria-label="Основные характеристики">
+            <FactList items={specs} tiles />
           </section>
           {conditionFacts.length > 0 && (
             <section className="detail-facts-section condition-card">
@@ -7434,9 +7369,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           {/* Итоговая цена стоит над плашками и без своей плашки: это главный ответ
               страницы, и прятать его внутрь разбора по этапам незачем. На телефоне
               она и так стоит крупно под названием, поэтому там эта строка скрыта. */}
-          <div className={`price-total detail-sidebar-price${currencySwitch && setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
+          <div className={`price-total detail-sidebar-price${setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
             <TotalPrice car={car} price={price} currency={currency} />
-            {currencySwitch && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
+            {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
             {/* Что это за число: цена не за машину в Китае, а итог с доставкой и
                 растаможкой. Мелкой строкой под ценой — крупное число остаётся главным. */}
             <span className="detail-sidebar-price-note">Цена под ключ до Минска</span>
@@ -7623,7 +7558,7 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
               окном, и настоящая кнопка так же уходит вниз. Копия прилипает к низу
               прокрутки — модалка бывает только на широком экране, где повтор и
               задуман прилипающим, а не висящим поверх страницы. */}
-          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} currencySwitch onOpenOrder={onOpenOrder} priceRatingPending={priceRatingPending} />
+          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} onOpenOrder={onOpenOrder} priceRatingPending={priceRatingPending} />
         </div>
       </section>
     </div>
@@ -11424,8 +11359,8 @@ const bootCarSync = (id) => (id && window.__boot?.carValue && sameListing(window
 const bootRelatedSync = () => (Array.isArray(window.__boot?.relatedValue) ? window.__boot.relatedValue : []);
 
 export function App() {
-  const { path, navigate, backToCatalog } = useRoute();
   const [user, setUser] = useState(null);
+  const { path, navigate, backToCatalog } = useRoute(user);
   const [authLoading, setAuthLoading] = useState(true);
   const { authRoute, authBackgroundPath, authModalOpen, contentPath } = resolveAuthRoute(path, window.history.state?.fromPath, user, authLoading);
   // Фон модального окна и загрузка его автомобиля используют один адрес.
@@ -12187,8 +12122,6 @@ export function App() {
           favoritesCount={favorites.size}
           savedSearchesCount={savedSearches.length}
           path={path}
-          currency={currency}
-          setCurrency={setCurrency}
           user={user}
           themeMode={themeMode}
           setThemeMode={(nextThemeMode) => {

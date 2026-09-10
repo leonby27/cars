@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isAuthEntryPath, resolveAuthRoute } from "../src/auth-route.js";
+import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute } from "../src/auth-route.js";
 
 test("guest account entry keeps the vehicle behind sign-in", () => {
   for (const path of ["/account", "/favorites", "/searches", "/login", "/register"]) {
@@ -20,4 +20,19 @@ test("direct sign-in uses home and session loading does not open the modal", () 
     assert.equal(resolveAuthRoute("/login", from, null, false).contentPath, "/");
   }
   assert.equal(resolveAuthRoute("/account", "/cars/123", null, true).authModalOpen, false);
+});
+
+
+test("guest protected destinations preserve the page scroll behind sign-in", () => {
+  for (const path of ["/account", "/favorites", "/searches"]) {
+    assert.equal(preservesAuthScroll(path, null), true);
+    assert.equal(preservesAuthScroll(path, { id: 1 }), false);
+  }
+});
+
+test("sign-in tabs preserve scroll while ordinary page navigation resets it", () => {
+  for (const user of [null, { id: 1 }]) {
+    for (const path of ["/login", "/register"]) assert.equal(preservesAuthScroll(path, user), true);
+    for (const path of ["/", "/cars/12345", "/catalog"]) assert.equal(preservesAuthScroll(path, user), false);
+  }
 });

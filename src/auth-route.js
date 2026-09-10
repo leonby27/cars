@@ -3,6 +3,9 @@ const protectedPaths = new Set(["/account", "/favorites", "/searches"]);
 
 export const isAuthEntryPath = (path) => authPaths.has(path) || protectedPaths.has(path);
 
+// Opening sign-in over the current page must keep its scroll position.
+export const preservesAuthScroll = (path, user) => authPaths.has(path) || (!user && protectedPaths.has(path));
+
 export function resolveAuthRoute(path, fromPath, user, authLoading) {
   const authRoute = authPaths.has(path);
   const authBackgroundPath = typeof fromPath === "string" && fromPath.startsWith("/") && !fromPath.startsWith("//") && !isAuthEntryPath(fromPath) && !fromPath.startsWith("/orders/")
