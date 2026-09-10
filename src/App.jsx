@@ -1484,6 +1484,9 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
   // В режиме мультивыбора value — массив, а первая опция играет роль «сбросить всё».
   const allOption = multiple ? options[0] : null;
   const selectedValues = multiple ? (Array.isArray(value) ? value : value && value !== allOption ? [value] : []) : [];
+  // В фильтрах первая опция означает «не выбрано». Отдельный класс даёт
+  // постоянный визуальный сигнал активного фильтра, даже когда список закрыт.
+  const hasSelection = multiple ? selectedValues.length > 0 : options.length > 0 && value !== options[0];
   const isChosen = (item) => (multiple ? (item === allOption ? !selectedValues.length : selectedValues.includes(item)) : item === value);
   const chosenInOrder = multiple ? options.filter((item) => item !== allOption && selectedValues.includes(item)) : [];
   const highlighted = multiple ? chosenInOrder[0] || allOption : value;
@@ -1612,7 +1615,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     : formatOption(value);
 
   return (
-    <div className={`select-field custom-select${className ? ` ${className}` : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
+    <div className={`select-field custom-select${className ? ` ${className}` : ""}${hasSelection ? " has-selection" : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
       <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}`} aria-label={`${label}: ${triggerText}`} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
         {Icon && <Icon className="select-trigger-icon" size={20} weight="duotone" aria-hidden="true" />}
         <b>{triggerText}</b>

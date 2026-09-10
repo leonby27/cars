@@ -254,6 +254,8 @@ Catalog custom-search preference: when catalog filters return no cars and when a
 
 Search filter preference: use one shared `VehicleSearch` component for the home page and catalog so their markup, styling, controls, and behavior remain identical. Only the home-page instance may have a maximum-width constraint; the catalog instance fills its available width. On desktop, keep the “Все / Электромобили / Гибриды” tabs plus brand, model, year, price, and mileage in the primary area, with body type and optional advanced fields in the collapsible section below. On mobile, keep only brand and model in the primary area and move year, price, mileage, body type, and available advanced fields into a bottom action sheet opened by “Ещё фильтры”. In the lower desktop action row, align the “Ещё фильтры” control left and the primary CTA right; use the red accent color.
 
+Selected-filter icon preference (owner decision, 2026-09-10): whenever an icon-led search filter has a non-default value selected, keep its leading icon red while the select is closed or open. Leave icons of filters that still show their default “all/any” value neutral, so active filters are immediately distinguishable.
+
 Mobile search action-layout preference: keep “Ещё фильтры” hug-content at the left instead of stretching it across the panel. When “Сбросить” is visible, align it to the far right of the same row at the same 40px control height. Keep the yellow search CTA on its own full-width row below with a 14px vertical gap.
 
 Mobile filter-sheet close-control preference: in the dark theme, keep the square close-button surface visibly lighter than the action-sheet background, with a slightly brighter hover state; preserve the current size and radius.

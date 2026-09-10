@@ -5813,6 +5813,9 @@ html[data-theme="dark"] #root .load-more {
 .select-trigger:hover .select-trigger-icon {
   color: inherit;
 }
+.custom-select.has-selection .select-trigger-icon {
+  color: var(--accent-dark);
+}
 .custom-select.disabled {
   background: var(--filter-field-disabled-bg);
   color: #9a9fa6;
