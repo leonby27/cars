@@ -393,13 +393,13 @@ Price comparison accuracy (owner correction, 2026-09-09): prefer five other list
 
 Reviews photo-grid preference (owner decision, 2026-09-09): show the supplied photos near the bottom of `/how-it-works`, before its closing catalog CTA in a single horizontal slider with four cards visible on desktop, arrow-only navigation, no horizontal scrollbar or touch scrolling, and inverse arrow buttons (dark in light theme, light in dark theme), preserving their full proportions.
 
-Reviews card preference (owner decision, 2026-09-09): overlay a white block on the bottom of each photo, inset 12px from the left, right and bottom edges, with a 16px reviewer name and 13px review text at weight 500 (explicit owner exception to the body-text minimum). Current sample names and reviews are temporary and must be replaced with the owner’s supplied reviews before publication.
+Reviews card preference (owner decision, 2026-09-09): overlay a white block on the bottom of each photo, inset 12px from the left, right and bottom edges, with a 16px reviewer name and 13px review text at weight 500 (explicit owner exception to the body-text minimum). The owner confirmed on 2026-09-10 that the names match and the reviewers approved the existing texts; these reviews are approved for publication.
 
 Reviews rating preference (owner decision, 2026-09-09): show five filled warm golden-orange (#F5B519) stars above the reviewer name in each review card.
 
 Reviews outer-card preference (owner decision, 2026-09-09): wrap each photo and the vehicle details beneath it in one rounded surface with 8px internal padding. Give the vehicle details an additional 8px inset on the left and bottom.
 
-Reviews placement (owner decision, 2026-09-09): reviews live as a section within «О сервисе», not a separate page or header link. Preserve the local-only flag while review text is temporary.
+Reviews placement (owner decision, 2026-09-09): reviews live as a section within «О сервисе», not a separate page or header link. Reviews are enabled in production following owner approval on 2026-09-10.
 
 FAQ placement (owner decision, 2026-09-09): place the full questions-and-answers section on «О сервисе» directly after reviews. Point FAQ links to `/how-it-works#faq` and redirect the old client route there.
 
