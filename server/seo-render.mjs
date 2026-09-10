@@ -43,8 +43,8 @@ export const linkifyText = (text, hrefRoute) =>
       if (typeof part === "string") return escapeHtml(part);
       // Ссылка на первоисточник ведёт на чужой сайт: адрес не переписываем под свой
       // корень и отдаём с `nofollow` — вес чужому сайту не передаём.
-      if (part.external) return `<a href="${escapeHtml(part.href)}" target="_blank" rel="nofollow noreferrer">${escapeHtml(part.label)}</a>`;
-      return `<a href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`;
+      if (part.external) return `<a class="article-inline-link" href="${escapeHtml(part.href)}" target="_blank" rel="nofollow noreferrer">${escapeHtml(part.label)}</a>`;
+      return `<a class="article-inline-link" href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`;
     })
     .join("");
 
@@ -595,9 +595,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
 
   const CATALOG_INDEX = {
     route: "/catalog/",
-    title: "Автомобили с пробегом из Китая — каталог и цены | abcars.by",
-    description: "Каталог китайских авто б/у: бензиновые, электрические и гибридные машины с пробегом из Китая — характеристики, пробег и ориентировочная стоимость доставки в Минск.",
-    h1: "Все авто с пробегом из Китая",
+    title: "Купить б/у авто из Китая — каталог и цены | abcars.by",
+    description: "Каталог б/у авто из Китая: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь.",
+    h1: "Б/у авто из Китая",
     lead: "Выберите автомобиль, изучите характеристики и получите предварительный расчёт стоимости до Минска.",
   };
 

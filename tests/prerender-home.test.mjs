@@ -7,10 +7,8 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 // Последний шаг сборки кладёт в главную готовую разметку приложения вместо заглушки.
-// 28.08.2026 он заодно выбросил текст для поисковика, лежавший в том же #root, и на
-// главной не осталось ни одной ссылки на машину и ни одной на обзор модели — заметили
-// это только 30.08. Тест закрепляет починку: разметка приложения на месте, а текст
-// для поисковика переехал за пределы #root, где React его не трогает.
+// Прежний отдельный SEO-блок давал второй H1 и исчезал после загрузки приложения.
+// Тест закрепляет единый вариант страницы для посетителя и поисковика.
 
 const run = promisify(execFile);
 const script = new URL("../scripts/prerender-home.mjs", import.meta.url).pathname;
@@ -40,20 +38,15 @@ async function prerender() {
   return readFile(path.join(clientDir, "index.html"), "utf8");
 }
 
-test("готовая главная сохраняет текст для поисковика за пределами #root", async () => {
+test("готовая главная содержит одну разметку без отдельного SEO-блока", async () => {
   const html = await prerender();
   // Разметка приложения на месте и помечена как готовая к оживлению.
   assert.match(html, /<div id="root" data-prerender="\/">/);
   assert.match(html, /class="app-content"/);
-  // Ссылки на машины и обзоры не потерялись.
-  assert.match(html, /href="\/cars\/59034691"/);
-  assert.match(html, /href="\/models\/byd-han"/);
-  // И лежат они снаружи #root: React сверяет только его содержимое, и чужая
-  // разметка внутри заставила бы его перерисовать страницу целиком.
-  const rootAt = html.indexOf('<div id="root"');
-  const seoAt = html.indexOf('<div class="seo-body">');
-  assert.ok(seoAt > rootAt, "текст для поисковика должен идти после начала #root");
-  assert.doesNotMatch(html.slice(rootAt, seoAt), /class="seo-body"/);
+  assert.doesNotMatch(html, /class="seo-body"/);
+  assert.equal([...html.matchAll(/<h1\b/g)].length, 1);
+  assert.doesNotMatch(html, /href="\/cars\/59034691"/);
+  assert.doesNotMatch(html, /href="\/models\/byd-han"/);
   // Подсказки-предзагрузки переехали в шапку — иначе оживление провалится.
   assert.match(html.slice(0, html.indexOf("</head>")), /rel="preload"/);
 });

@@ -1,5 +1,7 @@
 # Prototype Instructions
 
+Homepage SEO ownership (owner decision, 2026-09-10): the home page targets «б/у авто из Китая с доставкой в Беларусь» and must ship one shared H1/content version for visitors and search engines. Never restore the separate hidden/removed SEO body. The general catalog owns the transactional cluster «купить б/у авто из Китая — каталог и цены»; catalog landings, model reviews and calculator pages retain their narrower intents. A small number of natural contextual links from relevant information pages may point home, but do not repeat an exact-match home anchor across vehicle or model pages.
+
 Quick-view default preference (owner decision, 2026-09-09): keep «Быстрый просмотр» off by default. Enable it only when the visitor explicitly switches it on; preserve their saved choice.
 
 Talking to the user: he is not a programmer. He sets the goals and makes the product calls, but
@@ -28,6 +30,8 @@ Vehicle estimate density preference: in the detail sidebar, lead the estimate wi
 Russian typography preference: prevent short Russian prepositions and conjunctions from hanging at the ends of lines throughout the rendered interface, including dynamic content. Keep the shared typography processor enabled instead of relying only on manually inserted non-breaking spaces.
 
 Brand color preference: use red `#EE1C25` for brand accents, links, icons, and active states instead of orange. Use yellow `#F4D90E` with dark text for all regular primary CTA buttons. Preserve red for destructive actions where it communicates danger.
+
+Inline prose link styling (owner decision, 2026-09-10): every contextual link rendered inside article copy, explanatory prose or FAQ answers must use the shared article-link treatment — brand red in both unvisited and visited states, no resting underline, underline on hover. Apply the shared inline-link class/helper instead of adding one-off page selectors, so new embedded links inherit the house style automatically.
 
 Outline color preference: never use red for borders, outlines, focus rings, or selection rings anywhere in the product. Keep red for text, icons, fills, and semantic danger accents only; use the shared neutral `--focus-ring` token for accessible focus indication.
 

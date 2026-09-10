@@ -113,7 +113,7 @@ const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id
 // одной ссылки на машину. Готовый файл вдобавок перекрыл бы правило переадресации, и
 // адрес с фильтрами (`/catalog?brand=BYD`) не дошёл бы до переброса на свой раздел.
 const publicPages = [
-  { route: "/", title: "Автомобили из Китая в Беларусь — abcars.by", description: "Китайские авто б/у с проверкой, расчётом стоимости и доставкой в Минск и Беларусь: электромобили, гибриды и бензиновые машины с пробегом из Китая.", h1: "Автомобили с пробегом из Китая с доставкой в Беларусь", lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },
+  { route: "/", title: "Б/у авто из Китая в Беларусь — доставка и проверка | abcars.by", description: "Б/у авто из Китая с проверкой и доставкой в Беларусь. Каталог актуальных объявлений, цена в Китае и предварительный расчёт стоимости до Минска.", h1: "Б/у авто из Китая с доставкой в Беларусь", lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },
   { route: "/how-it-works/", title: "О сервисе покупки автомобилей из Китая | abcars.by", description: "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске.", h1: "О сервисе abcars.by", lead: "Сначала подтверждаем наличие, состояние и полную смету. После согласования заключаем договор, выкупаем автомобиль и доставляем его в Минск." },
   // Страницы `/about` больше нет: у неё был тот же заголовок «О сервисе abcars.by», что
   // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
@@ -334,8 +334,8 @@ function infoArticle(route) {
     // Главная — самая массовая страница по запросам и была самой пустой: 44 слова.
     return `<section><h2>Как проходит покупка</h2>${HOME_ORDER_STEPS.map(
       (step) => `<h3>${escapeHtml(step.number)}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.description)}</p>`,
-    ).join("")}</section><section><h2>Частые вопросы</h2>${HOME_FAQ.map(
-      (item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`,
+    ).join("")}</section><section><h2>Частые вопросы о покупке и доставке б/у авто из Китая</h2>${HOME_FAQ.map(
+      (item) => `<h3>${escapeHtml(item.question)}</h3><p>${linkifyText(item.answer, hrefRoute)}</p>`,
     ).join("")}<p><a href="${hrefRoute("/faq/")}">Все вопросы и ответы</a></p></section>`;
   }
   if (route === "/faq/") {
@@ -359,10 +359,10 @@ function infoArticle(route) {
       ["Электронная почта", COMPANY.email],
       ["Telegram", COMPANY.telegram],
     ].filter(([, value]) => value);
-    return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства оформлять заказ.</p></section>`;
+    return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства оформлять заказ.</p><p>До обращения можно посмотреть <a href="${hrefRoute("/")}">автомобили из Китая с расчётом до Минска</a>.</p></section>`;
   }
   if (route === "/how-it-works/") {
-    return `<section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p>${PURCHASE_STEPS.map(
+    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p>${PURCHASE_STEPS.map(
       (step, index) => `<h3>${index + 1}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.text)}</p>`,
     ).join("")}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[1].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[1].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Прозрачность на каждом шаге</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Чего мы не обещаем</h2>${list(ABOUT_LIMITS.map((item) => [item.title, item.text]))}</section>`;
   }
@@ -916,7 +916,10 @@ for (const page of publicPages) {
       publisher: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
     });
   }
-  if (page.route === "/") schemas.unshift(renderer.organizationSchema(), renderer.webSiteSchema());
+  if (page.route === "/") {
+    schemas.unshift(renderer.organizationSchema(), renderer.webSiteSchema());
+    schemas.push(renderer.faqSchema(HOME_FAQ.map((item) => ({ q: item.question, a: item.answer }))));
+  }
   // Вопросы со страницы «Вопросы и ответы» — по этой разметке они попадают
   // в выдачу раскрывающимся списком. На страницах моделей это уже работает.
   if (page.route === "/faq/") schemas.push(renderer.faqSchema(FAQ_GROUPS.flatMap((group) => group.items.map((item) => ({ q: item.question, a: item.answer })))));

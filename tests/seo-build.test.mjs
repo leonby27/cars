@@ -102,7 +102,7 @@ test("удалённая страница доставок отсутствуе�
 test("preview build ships public pages as noindex and no vehicle pages", async () => {
   const { read, missing } = await build();
   const [home, robots, sitemap] = await Promise.all([read("index.html"), read("robots.txt"), read(sitemapIndex)]);
-  assert.match(home, /<h1>Автомобили с пробегом из Китая/);
+  assert.match(home, /<h1>Б\/у авто из Китая с доставкой в Беларусь<\/h1>/);
   assert.match(home, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   // Общая страница каталога файлом не собирается: её отдаёт сервер, а готовый файл
   // перекрыл бы и переброс адресов с фильтрами на разделы. В карте сайта она есть.
@@ -284,7 +284,7 @@ test("страницы «О нас» больше нет, а её содержи
   assert.match(service, /Факты отдельно от оценки/);
 });
 
-test("на главной есть разметка сайта и поиска по нему", async () => {
+test("на главной есть разметка сайта, поиска и видимых частых вопросов", async () => {
   // По этой разметке Google иногда показывает строку поиска прямо в выдаче.
   // Адрес поиска обязан работать: каталог разбирает `?q=` тем же разбором,
   // что и поиск на главной.
@@ -294,6 +294,12 @@ test("на главной есть разметка сайта и поиска �
   assert.match(home, /"@type":"SearchAction"/);
   assert.match(home, /"urlTemplate":"https:\/\/abcars\.by\/catalog\?q=\{search_term_string\}"/);
   assert.match(home, /"query-input":"required name=search_term_string"/);
+  assert.match(home, /"@type":"FAQPage"/);
+  assert.match(home, /Как купить б\/у автомобиль из Китая с доставкой в Беларусь\?/);
+  for (const path of ["/catalog", "/how-it-works", "/calculator", "/delivery-cost", "/guarantees", "/customs"]) {
+    assert.match(home, new RegExp(`<a class="article-inline-link" href="${path}">`), `в FAQ главной нет фирменной текстовой ссылки на ${path}`);
+  }
+  assert.doesNotMatch(home, /\[каталога б\/у автомобилей из Китая\]\(\/catalog\)/);
   // Только на главной: на остальных страницах эта разметка не нужна.
   assert.doesNotMatch(await read("faq/index.html"), /"@type":"SearchAction"/);
 });
@@ -358,6 +364,12 @@ test("с информационных страниц и расчётов вед�
     assert.ok(sections.size >= 4, `${file}: ссылок на разделы каталога ${sections.size}, ожидалось не меньше четырёх`);
     for (const path of sections) assert.ok(CATALOG_LANDINGS.some((landing) => landing.path === path), `${file}: ссылка на несуществующий раздел ${path}`);
   }
+});
+
+test("с разных информационных страниц ведут контекстные ссылки на главную", async () => {
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
+  assert.match(await read("how-it-works/index.html"), /<a href="\/">б\/у авто из Китая с доставкой в Беларусь<\/a>/);
+  assert.match(await read("contacts/index.html"), /<a href="\/">автомобили из Китая с расчётом до Минска<\/a>/);
 });
 
 test("на каждой странице ровно один заголовок первого уровня", async () => {

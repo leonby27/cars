@@ -179,7 +179,7 @@ test("analytics events are allowlisted and drop personal data", () => {
   // прислали: контакты берутся только из таблицы аккаунтов.
   assert.deepEqual(event.properties, { source:"server" });
   assert.equal(normalizeAnalyticsEvent({ eventName:"arbitrary" }).error, "invalid_event");
-  for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted","contact_phone_reveal","contact_telegram_click","contact_viber_click","contact_instagram_click"]) {
+  for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted","contact_phone_reveal","contact_telegram_click","contact_viber_click","contact_instagram_click","app_download_qr_click","app_download_app_store_click","app_download_google_play_click","app_download_qr_modal_open","app_download_qr_deeplink_modal_open","app_download_app_store_modal_open","app_download_google_play_modal_open","newsletter_subscribe_click","newsletter_subscribe_modal_open"]) {
     assert.equal(normalizeAnalyticsEvent({ eventId:`event-${eventName}`, visitorId:"visitor", sessionId:"session", eventName, path:"/" }).eventName, eventName);
   }
 });
@@ -383,12 +383,12 @@ test("момент последнего захода приводится к р�
   assert.deepEqual(ANALYTICS_SECTIONS, ["overview", "leads", "vehicles", "vehicle_cars", "vehicle_favorites", "searches", "customers", "contact_interest"]);
 });
 
-test("интерес к контактам собран в отдельном разделе из шести показателей", async () => {
+test("интерес к контактам собран в отдельном разделе с контактами, приложением и подпиской", async () => {
   const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
   assert.match(page, /label:"Клиенты"[\s\S]{0,120}label:"Интерес к контактам"/);
-  for (const label of ["Просмотр телефона", "Клик по TG", "Клик по Viber", "Клик по Instagram", "Открытие страницы «Контакты»", "Открытие страницы «О сервисе»"]) {
+  for (const label of ["Просмотр телефона", "Клик по TG", "Клик по Viber", "Клик по Instagram", "Интерес к приложению — QR", "Интерес к App Store", "Интерес к Google Play", "Интерес к подписке", "Открытие страницы «Контакты»", "Открытие страницы «О сервисе»"]) {
     assert.match(page, new RegExp(label));
   }
   assert.match(app, /trackEvent\("contact_phone_reveal"\)/);

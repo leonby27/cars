@@ -7,7 +7,7 @@ import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, Desktop, DeviceMobile, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -767,11 +767,11 @@ function renderInlineText(text, navigate) {
       // Первоисточник: чужой сайт открываем в новой вкладке, статья остаётся на месте.
       // `nofollow` — не передаём вес чужому сайту, `noreferrer` заодно скрывает,
       // с какой страницы пришли.
-      <a key={`link-${index}`} href={part.href} target="_blank" rel="nofollow noreferrer">
+      <a className="article-inline-link" key={`link-${index}`} href={part.href} target="_blank" rel="nofollow noreferrer">
         {part.label}
       </a>
     ) : (
-      <AppLink key={`link-${index}`} href={part.href} navigate={navigate}>
+      <AppLink className="article-inline-link" key={`link-${index}`} href={part.href} navigate={navigate}>
         {part.label}
       </AppLink>
     ),
@@ -958,8 +958,8 @@ function ScrollToTopButton() {
 }
 
 const routeSeo = {
-  "/": ["Автомобили из Китая в Беларусь — abcars.by", "Китайские авто б/у с проверкой, расчётом стоимости и доставкой в Минск и Беларусь: электромобили, гибриды и бензиновые машины с пробегом из Китая."],
-  "/catalog": ["Автомобили с пробегом из Китая — каталог и цены | abcars.by", "Каталог китайских авто б/у: бензиновые, электрические и гибридные машины с пробегом из Китая — характеристики, пробег и ориентировочная стоимость доставки в Беларусь."],
+  "/": ["Б/у авто из Китая в Беларусь — доставка и проверка | abcars.by", "Б/у авто из Китая с проверкой и доставкой в Беларусь. Каталог актуальных объявлений, цена в Китае и предварительный расчёт стоимости до Минска."],
+  "/catalog": ["Купить б/у авто из Китая — каталог и цены | abcars.by", "Каталог б/у авто из Китая: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь."],
   "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
   "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | abcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
   "/guarantees": ["Гарантии при покупке автомобиля из Китая | abcars.by", "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает abcars.by и какие риски обсуждаются до договора."],
@@ -4401,11 +4401,11 @@ function HomeConversionSections({ navigate }) {
       <section className="home-faq" aria-labelledby="home-faq-title">
         <div className="home-faq-intro">
           <span className="home-section-kicker">Коротко о главном</span>
-          <h2 id="home-faq-title">Что важно знать до заказа авто из Китая</h2>
-          <p>Подбор и доставка автомобиля из Китая проходят в несколько этапов. Заранее объясняем цену, проверку, сроки и ответственность.</p>
+          <h2 id="home-faq-title">Частые вопросы о покупке и доставке б/у авто из Китая</h2>
+          <p>Коротко объясняем, как выбрать и проверить автомобиль, из чего складывается цена до Минска и как проходит доставка в Беларусь.</p>
           <button type="button" className="primary home-faq-link" onClick={() => window.location.assign("/how-it-works#faq")}>Все вопросы и ответы <ArrowRight size={18} weight="bold" /></button>
         </div>
-        <HomeFaqList items={HOME_FAQ} />
+        <HomeFaqList items={HOME_FAQ} navigate={navigate} />
       </section>
     </div>
   );
@@ -4749,7 +4749,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             после оживления: заголовок — главный элемент страницы для PageSpeed, и
             любая замена его текста после первого кадра считается новой отрисовкой
             и сдвигом строк — метрика готовности уезжала с 0,2 с обратно на 3+ с. */}
-        <h1>Доставим б/у авто из Китая в Беларусь</h1>
+        <h1>Б/у авто из Китая с доставкой в Беларусь</h1>
         <ul className="hero-benefits" aria-label="Преимущества заказа">
           <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
           <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
@@ -5642,7 +5642,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const landingPath = landing?.path || "/catalog";
   // Заголовок раздела и обычного каталога режется на крупную часть и мелкую подпись
   // одним правилом (src/catalog-landings.js) — тем же, что и в серверной версии страницы.
-  const heading = landingHeading(landing ? landing.h1 : "Все авто с пробегом из Китая");
+  const heading = landingHeading(landing ? landing.h1 : "Б/у авто из Китая");
   useEffect(() => {
     // Раздел, который описывает выбранное точнее всего и при этом остаётся правдой:
     // на странице BYD можно выбрать модель или год, а выбрать к седанам ещё и
@@ -8030,7 +8030,10 @@ function HowItWorksPage({ navigate }) {
           </button>
           <span className="info-eyebrow">О сервисе</span>
           <h1>Покупка авто из Китая — всё под контролем</h1>
-          <p>Сначала проверка автомобиля и понятная смета. Только потом — решение о покупке, договор и оплата.</p>
+          <p>
+            Сначала проверка автомобиля и понятная смета. Только потом — решение о покупке, договор и оплата. Актуальные{" "}
+            <AppLink className="info-context-link" href="/" navigate={navigate}>б/у авто из Китая с доставкой в Беларусь</AppLink> собраны на главной.
+          </p>
           <div className="info-actions">
             <button className="primary" onClick={() => navigate("/catalog")}>
               Выбрать автомобиль <ArrowRight size={18} />
@@ -8418,6 +8421,9 @@ function ContactsPage({ navigate, theme }) {
           <h1>Расскажем о процессе и ответим на ваши вопросы</h1>
           <p className="contact-office-summary">
             <span>Среднее время ответа — 10 минут</span>
+          </p>
+          <p className="contact-home-link">
+            До обращения можно посмотреть <AppLink href="/" navigate={navigate}>автомобили из Китая с расчётом до Минска</AppLink>.
           </p>
           <div className="info-actions">
             <a className="primary contact-telegram-cta" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer">
@@ -10252,11 +10258,95 @@ function SocialUnavailableModal({ onClose }) {
   );
 }
 
+function AppUnavailableModal({ onClose }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="app-unavailable-title" aria-describedby="app-unavailable-description">
+        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
+        <div className="order-removal-icon availability-paused-icon"><DeviceMobile size={32} weight="duotone" /></div>
+        <h2 id="app-unavailable-title">Приложение уже в работе</h2>
+        <p id="app-unavailable-description">Мы активно работаем над приложением. Совсем скоро оно появится в App Store и Google Play.</p>
+        <div className="order-removal-actions availability-paused-actions">
+          <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function NewsletterUnavailableModal({ onClose }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="newsletter-unavailable-title" aria-describedby="newsletter-unavailable-description">
+        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
+        <div className="order-removal-icon availability-paused-icon"><EnvelopeSimple size={32} weight="duotone" /></div>
+        <h2 id="newsletter-unavailable-title">Рассылка скоро появится</h2>
+        <p id="newsletter-unavailable-description">Мы готовим полезные обновления и аналитику рынка автомобилей Китая. Подписка станет доступна совсем скоро.</p>
+        <div className="order-removal-actions availability-paused-actions">
+          <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function FooterAppDownload({ onOpen }) {
+  return (
+    <div className="footer-app-download">
+      <span className="footer-app-download-title">Скачайте наше мобильное приложение</span>
+      <div className="footer-app-download-controls">
+        <button type="button" className="footer-app-qr" onClick={() => onOpen("qr")} aria-label="Скачать приложение по QR-коду">
+          <img src={appHref("/app-download/qr.svg")} alt="" aria-hidden="true" />
+        </button>
+        <div className="footer-app-stores">
+          <button type="button" onClick={() => onOpen("app_store")} aria-label="Скачать в App Store"><img className="footer-app-store-apple" src={appHref("/app-download/apple.svg")} alt="" aria-hidden="true" /></button>
+          <button type="button" onClick={() => onOpen("google_play")} aria-label="Скачать в Google Play"><img src={appHref("/app-download/google-play.svg")} alt="" aria-hidden="true" /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SiteFooter({ navigate }) {
   const [socialUnavailableOpen, setSocialUnavailableOpen] = useState(false);
+  const [appUnavailableOpen, setAppUnavailableOpen] = useState(false);
+  const [newsletterUnavailableOpen, setNewsletterUnavailableOpen] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("app") === "download") {
+      trackEvent("app_download_qr_deeplink_modal_open");
+      setAppUnavailableOpen(true);
+    }
+  }, []);
   const openSocialUnavailable = (network) => {
     trackEvent(`contact_${network}_click`);
     setSocialUnavailableOpen(true);
+  };
+  const openAppUnavailable = (source) => {
+    trackEvent(`app_download_${source}_click`);
+    trackEvent(`app_download_${source}_modal_open`);
+    setAppUnavailableOpen(true);
+  };
+  const openNewsletterUnavailable = (event) => {
+    event.preventDefault();
+    trackEvent("newsletter_subscribe_click");
+    trackEvent("newsletter_subscribe_modal_open", { properties:{ source:"footer_form" } });
+    setNewsletterUnavailableOpen(true);
   };
   return (
     <>
@@ -10265,18 +10355,29 @@ function SiteFooter({ navigate }) {
         <div className="footer-brand">
           <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="abcars.by — на главную"><SiteLogo /></AppLink>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
-          <div className="footer-socials">
-            <button type="button" className="header-social-link is-telegram" aria-label="Telegram" onClick={() => openSocialUnavailable("telegram")}><TelegramOfficialLogo size={36} weight="fill" /></button>
-            <button type="button" className="header-social-link is-viber" aria-label="Viber" onClick={() => openSocialUnavailable("viber")}><ViberLogo size={24} /></button>
-            <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
-          </div>
+          <FooterAppDownload onOpen={openAppUnavailable} />
         </div>
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<a href={"/how-it-works#faq"}>Вопросы и ответы</a></div>
         <div className="footer-column footer-tools"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
         <div className="footer-column footer-contacts">
           <b>Связаться</b>
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
+          <div className="footer-socials">
+            <button type="button" className="header-social-link is-telegram" aria-label="Telegram" onClick={() => openSocialUnavailable("telegram")}><TelegramOfficialLogo size={36} weight="fill" /></button>
+            <button type="button" className="header-social-link is-viber" aria-label="Viber" onClick={() => openSocialUnavailable("viber")}><ViberLogo size={24} /></button>
+            <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
+          </div>
         </div>
+        <form className="footer-newsletter" onSubmit={openNewsletterUnavailable}>
+          <span className="footer-newsletter-title">
+            <EnvelopeSimple size={30} weight="bold" aria-hidden="true" />
+            <strong>Подпишитесь на обновления и аналитику рынка авто в Китае</strong>
+          </span>
+          <div className="footer-newsletter-form">
+            <input id="footer-newsletter-email" type="email" inputMode="email" autoComplete="email" placeholder="Введите Email" aria-label="Электронная почта" required />
+            <button type="submit">Подписаться</button>
+          </div>
+        </form>
       </div>
       <div className="page-width footer-bottom">
         <span>© 2026 {COMPANY.legalName}</span>
@@ -10284,6 +10385,8 @@ function SiteFooter({ navigate }) {
       </div>
     </footer>
     {socialUnavailableOpen && <SocialUnavailableModal onClose={() => setSocialUnavailableOpen(false)} />}
+    {appUnavailableOpen && <AppUnavailableModal onClose={() => setAppUnavailableOpen(false)} />}
+    {newsletterUnavailableOpen && <NewsletterUnavailableModal onClose={() => setNewsletterUnavailableOpen(false)} />}
     </>
   );
 }
