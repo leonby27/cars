@@ -706,6 +706,7 @@ function ContactInterestSection({ data }) {
     ["Клик по TG", summary.contact_telegram_clicks, "Нажали Telegram"],
     ["Клик по Viber", summary.contact_viber_clicks, "Нажали Viber"],
     ["Клик по Instagram", summary.contact_instagram_clicks, "Нажали Instagram"],
+    ["Клик по Threads", summary.contact_threads_clicks, "Нажали Threads"],
     ["Интерес к приложению — QR", summary.app_download_qr_modal_opens, "Открыли QR или перешли по нему"],
     ["Интерес к App Store", summary.app_download_app_store_modal_opens, "Нажали кнопку App Store"],
     ["Интерес к Google Play", summary.app_download_google_play_modal_opens, "Нажали кнопку Google Play"],

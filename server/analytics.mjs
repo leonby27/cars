@@ -19,6 +19,7 @@ export const ANALYTICS_EVENTS = new Set([
   "contact_telegram_click",
   "contact_viber_click",
   "contact_instagram_click",
+  "contact_threads_click",
   "app_download_qr_click",
   "app_download_app_store_click",
   "app_download_google_play_click",
@@ -424,6 +425,7 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(*) FILTER (WHERE event_name='contact_telegram_click' AND ${HUMAN_VISITOR})::int AS contact_telegram_clicks,
       count(*) FILTER (WHERE event_name='contact_viber_click' AND ${HUMAN_VISITOR})::int AS contact_viber_clicks,
       count(*) FILTER (WHERE event_name='contact_instagram_click' AND ${HUMAN_VISITOR})::int AS contact_instagram_clicks,
+      count(*) FILTER (WHERE event_name='contact_threads_click' AND ${HUMAN_VISITOR})::int AS contact_threads_clicks,
       count(*) FILTER (WHERE event_name IN ('app_download_qr_modal_open','app_download_qr_deeplink_modal_open') AND ${HUMAN_VISITOR})::int AS app_download_qr_modal_opens,
       count(*) FILTER (WHERE event_name='app_download_app_store_modal_open' AND ${HUMAN_VISITOR})::int AS app_download_app_store_modal_opens,
       count(*) FILTER (WHERE event_name='app_download_google_play_modal_open' AND ${HUMAN_VISITOR})::int AS app_download_google_play_modal_opens,
@@ -672,7 +674,7 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
     pool.query("SELECT count(*)::int AS n FROM customer_accounts WHERE created_at > $1 AND NOT staff", [since.customers]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events
       WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}
-        AND (event_name IN ('contact_phone_reveal','contact_telegram_click','contact_viber_click','contact_instagram_click','app_download_qr_modal_open','app_download_qr_deeplink_modal_open','app_download_app_store_modal_open','app_download_google_play_modal_open','newsletter_subscribe_modal_open')
+        AND (event_name IN ('contact_phone_reveal','contact_telegram_click','contact_viber_click','contact_instagram_click','contact_threads_click','app_download_qr_modal_open','app_download_qr_deeplink_modal_open','app_download_app_store_modal_open','app_download_google_play_modal_open','newsletter_subscribe_modal_open')
           OR (event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts','/contacts/','/how-it-works','/how-it-works/')))`, [since.contact_interest]),
   ]);
   return {

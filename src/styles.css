@@ -4627,7 +4627,7 @@ html[data-theme="dark"] #root .load-more {
     margin-bottom: 2px;
     gap: 4px;
     padding: 8px;
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.25;
   }
   .brand-link .brand-count {
@@ -11666,8 +11666,8 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   border-radius: calc(18px * var(--corner-scale));
   background: var(--menu-popover-bg);
   box-shadow: 0 18px 50px rgba(23, 25, 28, 0.16);
-  /* На телефоне внутри меню стоит карточка квоты — вместе с пунктами оно выше
-     экрана, поэтому прокрутка своя. */
+  /* На невысоком экране меню остаётся внутри видимой области и прокручивается
+     отдельно от страницы. */
   max-height: calc(100vh - 106px);
   max-height: calc(100dvh - 106px);
   overflow-y: auto;
@@ -11830,6 +11830,22 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   background:
     radial-gradient(circle at 30% 105%, #feda75 0 18%, #fa7e1e 32%, #d62976 52%, #962fbf 72%, #4f5bd5 100%);
 }
+/* Threads использует свой чёрно-белый знак: круг инвертируется вместе с темой,
+   а сам символ остаётся контрастным без обводки. */
+.header-social-link.is-threads {
+  background: #17191c;
+  color: #fff;
+}
+.header-social-link.is-threads svg {
+  color: #fff;
+}
+:root[data-theme="dark"] .header-social-link.is-threads {
+  background: #fff;
+  color: #17191c;
+}
+:root[data-theme="dark"] .header-social-link.is-threads svg {
+  color: #17191c;
+}
 .header-social-link:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
@@ -11971,6 +11987,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     max-height: calc(100dvh - 90px);
   }
   .header-inner {
+    width: min(1320px, calc(100% - 28px));
     gap: 8px;
   }
   .wordmark {
@@ -12005,8 +12022,8 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   }
   .header-menu-currency {
     width: 100%;
-    height: 40px;
-    margin-bottom: 4px;
+    height: 44px;
+    margin: 0;
     grid-template-columns: 1fr 1fr;
     padding: 4px;
     border: 0;
@@ -12014,7 +12031,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     background: var(--panel-soft);
   }
   .header-menu-currency button {
-    height: 32px;
+    height: 36px;
     min-width: 0;
     padding: 0 4px;
     border: 0;
@@ -12023,7 +12040,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     color: var(--muted);
     font-size: 14px;
     font-weight: 800;
-    line-height: 32px;
+    line-height: 36px;
   }
   .header-menu-currency button.active {
     background: var(--panel);
@@ -12031,7 +12048,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   }
   .header-menu-settings {
     display: block;
-    margin-top: 4px;
+    margin: 0 0 8px;
   }
   .header-actions .theme-toggle {
     width: 40px;
@@ -12043,6 +12060,11 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   :root[data-theme="dark"] .header-menu-theme button.active {
     background: #383d45;
     color: #ff7a81;
+  }
+  /* Общий тёмный стиль валюты выше по файлу использует поверхность полей.
+     В меню валюта должна лежать ровно на той же подложке, что и тема. */
+  html[data-theme="dark"] #root .header-menu-currency {
+    background: var(--panel-soft);
   }
   .header-actions .account-link,
   .header-actions .favorites-link {
@@ -14241,15 +14263,6 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   font-size: 13px;
   line-height: 1.45;
 }
-/* В меню телефона карточка стоит раскрытой, без своей подложки: меню уже панель.
-   Ни линии, ни заголовка сверху нет — блоки самой карточки видно и так. */
-.header-menu-quota {
-  padding-top: 4px;
-}
-.header-menu-quota .quota-panel-figure > b {
-  font-size: 19px;
-}
-
 /* На планшете в шапке уже тесно, поэтому от кнопки остаётся молния и число —
    что это за число, объясняет подсказка и сама карточка. */
 @media (max-width: 980px) {
@@ -14263,9 +14276,42 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 }
 
 @media (max-width: 700px) {
-  /* Четвёртая кнопка в шапку телефона не влезает — остаток квоты
-     показываем в том же меню, где валюта и «Мои поиски». */
+  /* На телефоне квота остаётся самостоятельным элементом шапки, как на
+     десктопе. Кнопка компактная: молния и актуальный остаток без подписи. */
   .quota-shell {
+    display: flex;
+  }
+  .header-actions .quota-link {
+    height: 40px;
+    gap: 4px;
+    padding: 0 8px;
+    border-radius: calc(12px * var(--corner-scale));
+  }
+  .header-actions .quota-link > strong {
+    font-size: 14px;
+  }
+  /* Карточка шире кнопки и с её позиции ушла бы за правый край. На телефоне
+     привязываем её к безопасным отступам всего окна. */
+  .quota-pop {
+    position: fixed;
+    top: 66px;
+    right: 14px;
+    left: 14px;
+    width: auto;
+    max-width: none;
+    transform-origin: top center;
+  }
+}
+
+@media (max-width: 360px) {
+  /* На самых узких телефонах число не помещается между логотипом и действиями;
+     сама отдельная кнопка квоты остаётся на месте и открывает ту же карточку. */
+  .header-actions .quota-link {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  .header-actions .quota-link > strong {
     display: none;
   }
 }

@@ -157,11 +157,13 @@ How-it-works section-spacing preference: keep the vertical gap between the three
 
 Information-page CTA preference: do not invert the closing catalog CTA to a dark block in the light theme. Use the shared light-gray soft surface with normal dark text and muted supporting copy; preserve the yellow primary button.
 
-Mobile popular-brands preference: center the catalog arrow inside a compact square control aligned with the section heading, and keep generous vertical spacing between brand rows.
+Mobile popular-brands preference: center the catalog arrow inside a compact square control aligned with the section heading, and keep generous vertical spacing between brand rows. Use 15px for brand names on mobile while keeping listing counts smaller and secondary.
 
 Home conversion content preference: use the space between the vehicle feed and footer for concise trust, objection-handling, and SEO content. Prioritize a transparent order journey and practical answers over generic promotional claims.
 
 Home FAQ appearance preference: place the entire FAQ section inside a rounded light-gray container, use 18px question text, and present every question as a separate rounded white card instead of using divider lines. Keep the question summary at the same 62px minimum height and preserve identical top and bottom padding in both collapsed and expanded states so its title never jumps. Size FAQ grid rows to their content and align the list to the top so closed cards never stretch to fill the height of the intro column. Keep expanded answers inside their question card, render “Все вопросы и ответы” as a regular yellow primary CTA, and do not show a sourcing CTA below the questions.
+
+Home FAQ copy preference (owner decision, 2026-09-10): keep question headings concise and immediately distinguishable instead of repeating «автомобиль из Китая», «доставка» and «Беларусь» in every row. Preserve the relevant search language naturally in the section heading and answers, not as repetitive keyword-heavy question titles.
 
 Home trust-strip preference: lead with “Сопровождаем до выдачи” and the supporting line “От подбора до получения в Минске”; use 18px headings and keep them short enough to remain on one line at desktop widths. Present the three trust points as separate rounded cards on a light-gray surface with each icon inside its own white tile.
 
@@ -179,7 +181,9 @@ Header appearance preference: keep the header container borderless and use the s
 
 Mobile header-control preference: place the favorites and account icon buttons on the same soft gray filled blocks as the burger-menu and theme controls, with matching compact dimensions and corner radii.
 
-Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; align it to the viewport's left safe inset and cap its width against both safe insets so it never creates horizontal page overflow on narrow devices. Place the currency switch inside the burger menu on mobile. Keep the theme selector inside the header menu on every screen as a three-position icon switch matching the currency control: system, light and dark.
+Mobile header-menu preference: keep the burger-menu popover compact and content-width rather than stretching it across the viewport; align it to the viewport's left safe inset and cap its width against both safe insets so it never creates horizontal page overflow on narrow devices. Place the currency switch at the very top inside the burger menu on mobile and give it the same outer background, height, radii and active-segment treatment as the theme switch. Keep the theme selector inside the header menu on every screen as a three-position icon switch matching the currency control: system, light and dark.
+
+Mobile quota-control preference (owner decision, 2026-09-10): keep the EV quota control as a separate compact header button beside the burger menu, matching its desktop placement instead of placing the quota panel inside the mobile menu. Open the quota card below the header within both viewport safe insets; on the narrowest phones the button may show only the lightning icon so the rest of the header does not overflow.
 
 Header menu-surface preference: in the dark theme, render the opened burger-menu popover slightly lighter than the standard dark card surface so the floating menu remains clearly visible against the page; use a dedicated surface token rather than changing every panel.
 
@@ -193,7 +197,7 @@ Logo preference: render the customer-facing `abcars.by` logo from the supplied S
 
 Theme preference: support both light and dark themes with a compact theme toggle in the main header. Remember the explicit device-local choice, otherwise follow the operating-system preference. Preserve the red brand accent and yellow primary CTAs in both themes.
 
-Header contact preference (owner decision, 2026-09-08; updated 2026-09-10): on desktop, keep the `+375 показать номер` reveal button to the left of adjacent «Мои поиски» and «Избранное» icons, with a phone icon at the start of the button. The phone button toggles between its prompt and the masked preview `+375 29 508-56-1*`; do not infer or expose the final digit. Place the coloured circular Telegram, Viber and Instagram buttons as separate, slightly larger controls in the footer, replacing its old monochrome social buttons. Until real order channels are enabled, clicking any social button opens the shared «Временно не принимаем заказы» modal.
+Header contact preference (owner decision, 2026-09-08; updated 2026-09-10): on desktop, keep the `+375 показать номер` reveal button to the left of adjacent «Мои поиски» and «Избранное» icons, with a phone icon at the start of the button. The phone button toggles between its prompt and the masked preview `+375 29 508-56-1*`; do not infer or expose the final digit. Place the coloured circular Telegram, Viber and Instagram buttons plus a genuine monochrome Threads mark as separate, slightly larger controls in the footer, replacing its old monochrome social buttons. The Threads circle is dark with a white mark in the light theme and white with a dark mark in the dark theme. Until real order channels are enabled, clicking any social button opens the shared «Временно не принимаем заказы» modal.
 
 Company-presence preference: the prototype should feel like a real Minsk-based company, with a substantial footer, office/contact page, legal entity details, social links, and policy pages. Keep temporary company details centralized in `src/company-data.js` so they can be replaced before publication.
 

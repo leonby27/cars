@@ -28,3 +28,19 @@ test("в компактных информационных окнах умень
   assert.match(styles, /availability-paused-modal\.social-unavailable-modal > h2\s*\{[^}]*margin-bottom:\s*0/s);
   assert.match(styles, /availability-paused-modal\.social-unavailable-modal > p\s*\{[^}]*margin-top:\s*6px/s);
 });
+
+test("в контактах есть фирменный Threads с инверсией круга по теме", async () => {
+  const [app, icons, styles] = await Promise.all([
+    readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/icons.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(app, /className="header-social-link is-threads" aria-label="Threads"/);
+  assert.match(app, /openSocialUnavailable\("threads"\)/);
+  assert.match(app, /<ThreadsLogo size=\{25\}/);
+  assert.match(icons, /export const ThreadsLogo[^]*scale\(10\.6666667\)[^]*M12\.186 24h-/);
+  assert.match(styles, /\.header-social-link\.is-threads\s*\{[^}]*background:\s*#17191c[^}]*color:\s*#fff/s);
+  assert.match(styles, /\.header-social-link\.is-threads svg\s*\{[^}]*color:\s*#fff/s);
+  assert.match(styles, /:root\[data-theme="dark"\] \.header-social-link\.is-threads\s*\{[^}]*background:\s*#fff[^}]*color:\s*#17191c/s);
+  assert.match(styles, /:root\[data-theme="dark"\] \.header-social-link\.is-threads svg\s*\{[^}]*color:\s*#17191c/s);
+});

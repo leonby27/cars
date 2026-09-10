@@ -295,7 +295,7 @@ test("на главной есть разметка сайта, поиска и 
   assert.match(home, /"urlTemplate":"https:\/\/abcars\.by\/catalog\?q=\{search_term_string\}"/);
   assert.match(home, /"query-input":"required name=search_term_string"/);
   assert.match(home, /"@type":"FAQPage"/);
-  assert.match(home, /Как купить б\/у автомобиль из Китая с доставкой в Беларусь\?/);
+  assert.match(home, /С чего начинается покупка\?/);
   for (const path of ["/catalog", "/how-it-works", "/calculator", "/delivery-cost", "/guarantees", "/customs"]) {
     assert.match(home, new RegExp(`<a class="article-inline-link" href="${path}">`), `в FAQ главной нет фирменной текстовой ссылки на ${path}`);
   }

@@ -1341,6 +1341,9 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             aria-hidden={!menuOpen}
             inert={menuOpen ? undefined : true}
           >
+              <div className="header-menu-settings">
+                {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
+              </div>
               <nav aria-label="Основная навигация">
                 <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>Автомобили</AppLink>
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
@@ -1354,13 +1357,6 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
                 </AppLink>
               </nav>
               <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
-              <div className="header-menu-settings">
-                {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
-                {/* На телефоне карточка квоты находится в меню. */}
-                <div className="header-menu-quota">
-                  <EvQuotaPanel quotas={quotas} />
-                </div>
-              </div>
           </div>
         </div>
         <div className="header-actions header-left-controls">
@@ -10415,6 +10411,7 @@ function SiteFooter({ navigate }) {
             <button type="button" className="header-social-link is-telegram" aria-label="Telegram" onClick={() => openSocialUnavailable("telegram")}><TelegramOfficialLogo size={36} weight="fill" /></button>
             <button type="button" className="header-social-link is-viber" aria-label="Viber" onClick={() => openSocialUnavailable("viber")}><ViberLogo size={24} /></button>
             <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
+            <button type="button" className="header-social-link is-threads" aria-label="Threads" onClick={() => openSocialUnavailable("threads")}><ThreadsLogo size={25} /></button>
           </div>
         </div>
         <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>

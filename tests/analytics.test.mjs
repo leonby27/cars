@@ -179,7 +179,7 @@ test("analytics events are allowlisted and drop personal data", () => {
   // прислали: контакты берутся только из таблицы аккаунтов.
   assert.deepEqual(event.properties, { source:"server" });
   assert.equal(normalizeAnalyticsEvent({ eventName:"arbitrary" }).error, "invalid_event");
-  for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted","contact_phone_reveal","contact_telegram_click","contact_viber_click","contact_instagram_click","app_download_qr_click","app_download_app_store_click","app_download_google_play_click","app_download_qr_modal_open","app_download_qr_deeplink_modal_open","app_download_app_store_modal_open","app_download_google_play_modal_open","newsletter_subscribe_click","newsletter_subscribe_modal_open"]) {
+  for (const eventName of ["page_view","vehicle_view","availability_click","availability_request_click","registration_completed","favorite_added","custom_search_submitted","contact_phone_reveal","contact_telegram_click","contact_viber_click","contact_instagram_click","contact_threads_click","app_download_qr_click","app_download_app_store_click","app_download_google_play_click","app_download_qr_modal_open","app_download_qr_deeplink_modal_open","app_download_app_store_modal_open","app_download_google_play_modal_open","newsletter_subscribe_click","newsletter_subscribe_modal_open"]) {
     assert.equal(normalizeAnalyticsEvent({ eventId:`event-${eventName}`, visitorId:"visitor", sessionId:"session", eventName, path:"/" }).eventName, eventName);
   }
 });
