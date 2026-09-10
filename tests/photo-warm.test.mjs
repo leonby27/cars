@@ -11,7 +11,7 @@ const images = Array.from({ length: 8 }, (_, i) => `https://erscglobal2.autoimg.
 
 test("ночной проход сохраняет два размера только обложки", () => {
   assert.deepEqual(photoWarmUrls({ image: images[0], images }, { site }),
-    ["original", 600].map(width => site + photoHref(images[0], width)));
+    ["original", 600].map(width => site + photoHref(images[0], width, { cacheVersion:"" })));
 });
 
 test("новая машина: пять превью и миниатюр, три оригинала, без дублей и дальнейших кадров", () => {
@@ -19,8 +19,8 @@ test("новая машина: пять превью и миниатюр, три
   assert.equal(urls.length, 13);
   assert.equal(new Set(urls).size, 13);
   for (let i = 0; i < 5; i++) {
-    for (const width of [600, 240]) assert.ok(urls.includes(site + photoHref(images[i], width)));
-    assert.equal(urls.includes(site + photoHref(images[i], "original")), i < 3);
+    for (const width of [600, 240]) assert.ok(urls.includes(site + photoHref(images[i], width, { cacheVersion:"" })));
+    assert.equal(urls.includes(site + photoHref(images[i], "original", { cacheVersion:"" })), i < 3);
   }
   assert.ok(urls.every(url => !url.includes("car5")));
 });

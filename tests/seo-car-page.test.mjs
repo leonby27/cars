@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSeoRenderer, photoHref } from "../server/seo-render.mjs";
+import { PHOTO_BROWSER_CACHE_VERSION } from "../src/photo-source.js";
 
 // Заготовка страницы — то, что отдаёт сборка: пустое место под содержимое и ссылки
 // на стили со скриптами. Отрисовщик обязан работать с любой такой заготовкой, поэтому
@@ -145,12 +146,12 @@ test("photoHref просит у хранилища нужный размер с�
   // Настоящий оригинал: части «1400x0_c42_» в адресе нет.
   assert.equal(
     photoHref(source, "original"),
-    "/photo/escimg/auto/g34/M02/DF/A9/autohomecar__Chtp063.jpg.webp",
+    `/photo/escimg/auto/g34/M02/DF/A9/autohomecar__Chtp063.jpg.webp?v=${PHOTO_BROWSER_CACHE_VERSION}`,
   );
   // Обычная ширина по-прежнему подставляется на место прежней.
   assert.equal(
     photoHref(source, 900),
-    "/photo/escimg/auto/g34/M02/DF/A9/900x0_c42_autohomecar__Chtp063.jpg.webp",
+    `/photo/escimg/auto/g34/M02/DF/A9/900x0_c42_autohomecar__Chtp063.jpg.webp?v=${PHOTO_BROWSER_CACHE_VERSION}`,
   );
   // Чужие адреса не трогаем.
   assert.equal(photoHref("https://example.com/a.jpg", "original"), "https://example.com/a.jpg");
