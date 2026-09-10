@@ -50,10 +50,21 @@ test("чужой пропуск не подкладывается без явн�
   assert.match(source, /args\.get\("use-pass"\)/, "пропуск снова подкладывается всегда");
 });
 
-test("ходим по той версии сайта, на которой мерили", () => {
+test("обход списков сохраняет проверенную русскую сессию", () => {
   // Оба успешных ручных замера шли через /ru/; на /en/ мы не проверяли.
   assert.match(source, /\/ru\/used-cars\?vehicle_list=1&\$\{params\}/, "запрос списков ушёл с русской версии");
   assert.doesNotMatch(source, /\/en\/used-cars\?vehicle_list=1&\$\{params\}/, "вернулась английская версия списков");
+});
+
+test("новые характеристики во всех импортерах приходят только с английской версии", () => {
+  const fallback = readFileSync(new URL("../scripts/import-che168-browser.mjs", import.meta.url), "utf8");
+  for (const text of [source, importer, fallback]) {
+    assert.doesNotMatch(text, /\/ru\/detail\//);
+    assert.match(text, /\/en\/detail\//);
+    assert.match(text, /buildChe168Car\(payload, \{ expectedLocale: "en" \}\)/);
+  }
+  assert.match(source, /error\.code !== "CHE168_LOCALE_MISMATCH"/,
+    "неправильный язык одной карточки не должен прерывать весь обход");
 });
 
 test("страницу каждой марки по умолчанию не открываем", () => {

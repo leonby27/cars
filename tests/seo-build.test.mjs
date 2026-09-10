@@ -91,11 +91,15 @@ const sitemapToken = "testtoken";
 const sitemapIndex = `sitemap-${sitemapToken}.xml`;
 const sitemapCars = `sitemap-${sitemapToken}-cars.xml`;
 
-test("удалённая страница доставок отсутствует вместе со ссылками и картой сайта", async () => {
+test("удалённые страницы отсутствуют вместе со ссылками и картой сайта", async () => {
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
-  await missing("delivered/index.html");
+  for (const route of ["delivered", "guarantees"]) {
+    await missing(`${route}/index.html`);
+  }
   for (const file of ["index.html", "how-it-works/index.html", "contacts/index.html", `sitemap-${sitemapToken}-pages.xml`]) {
-    assert.doesNotMatch(await read(file), /\/delivered(?:[\/"<?#]|$)/, file);
+    const html = await read(file);
+    assert.doesNotMatch(html, /\/delivered(?:[\/"<?#]|$)/, file);
+    assert.doesNotMatch(html, /\/guarantees(?:[\/"<?#]|$)/, file);
   }
 });
 
@@ -296,7 +300,7 @@ test("на главной есть разметка сайта, поиска и 
   assert.match(home, /"query-input":"required name=search_term_string"/);
   assert.match(home, /"@type":"FAQPage"/);
   assert.match(home, /С чего начинается покупка\?/);
-  for (const path of ["/catalog", "/how-it-works", "/calculator", "/delivery-cost", "/guarantees", "/customs"]) {
+  for (const path of ["/catalog", "/how-it-works", "/calculator", "/delivery-cost", "/customs"]) {
     assert.match(home, new RegExp(`<a class="article-inline-link" href="${path}">`), `в FAQ главной нет фирменной текстовой ссылки на ${path}`);
   }
   assert.doesNotMatch(home, /\[каталога б\/у автомобилей из Китая\]\(\/catalog\)/);
@@ -313,7 +317,7 @@ test("тексты информационных страниц лежат в с�
     const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
     return body.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
   };
-  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 250], ["payment-and-contract/index.html", 120], ["guarantees/index.html", 110], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
+  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 250], ["payment-and-contract/index.html", 120], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
     const count = await words(file);
     assert.ok(count >= least, `${file}: слов ${count}, ожидалось не меньше ${least}`);
   }
@@ -352,7 +356,6 @@ test("с информационных страниц и расчётов вед�
     ["calculator/index.html", "Посчитать на конкретной машине"],
     ["faq/index.html", "Ответы, которые видно в каталоге"],
     ["how-it-works/index.html", "С чего начать выбор"],
-    ["guarantees/index.html", "Что именно мы проверяем"],
     ["payment-and-contract/index.html", "Сколько это выходит в деньгах"],
     ["contacts/index.html", "Пока мы отвечаем"],
   ];

@@ -195,6 +195,11 @@ const VALUES = {
   "None": "Нет",
   // энергия и приводы
   "Pure Electric": "Электро",
+  "Gasoline": "Бензин",
+  "Petrol": "Бензин",
+  "Diesel": "Дизель",
+  "Gasoline + 48V Mild Hybrid System": "Бензин + мягкая гибридная система 48 В",
+  "Diesel + 48V Mild Hybrid System": "Дизель + мягкая гибридная система 48 В",
   "Plug-in Hybrid": "Подключаемый гибрид",
   "Range Extender": "Увеличитель запаса хода (EREV)",
   "Electric 4WD": "Электрический полный привод",
@@ -202,6 +207,10 @@ const VALUES = {
   "Front-Wheel Drive (FWD)": "Передний привод",
   "Rear-Wheel Drive (RWD)": "Задний привод",
   "All-Wheel Drive (AWD)": "Полный привод",
+  "Front-Wheel Drive": "Передний привод",
+  "Rear-Wheel Drive": "Задний привод",
+  "All-Wheel Drive": "Полный привод",
+  "Two-Wheel Drive": "Привод на одну ось",
   "Front Engine, Front-Wheel Drive": "Передний двигатель, передний привод",
   "Front Engine, Rear-Wheel Drive": "Передний двигатель, задний привод",
   "Front Engine, All-Wheel Drive": "Передний двигатель, полный привод",
@@ -210,6 +219,7 @@ const VALUES = {
   "Dual Motor": "Два мотора",
   "Dual Motors": "Два мотора",
   "Three Motors": "Три мотора",
+  "Triple Motor": "Три мотора",
   "Front-mounted": "Спереди",
   "Rear-mounted": "Сзади",
   "Front+Rear-mounted": "Спереди и сзади",
@@ -222,6 +232,8 @@ const VALUES = {
   "Front: Permanent magnet/Synchronous; Rear: AC/Asynchronous": "Спереди синхронный на постоянных магнитах, сзади асинхронный",
   // батареи
   "LFP Battery": "Литий-железо-фосфатная (LFP)",
+  "LMFP Battery": "Литий-марганец-железо-фосфатная (LMFP)",
+  "Lithium Iron Phosphate Battery": "Литий-железо-фосфатная (LFP)",
   "Ternary Lithium Battery": "Тройная литиевая (NMC)",
   "Ternary Lithium + Lithium Iron Phosphate Battery": "NMC + LFP",
   "Blade Battery": "Blade (BYD)",
@@ -270,6 +282,7 @@ const VALUES = {
   "Double-ball-joint MacPherson independent suspension": "McPherson с двумя шаровыми опорами",
   "Multi-link independent suspension": "Многорычажная независимая",
   "Multi-Link Independent Suspension": "Многорычажная независимая",
+  "H-arm Multi-link Independent Suspension": "Многорычажная независимая с H-образными рычагами",
   "Five-link independent suspension": "Пятирычажная независимая",
   "Four-link independent suspension": "Четырёхрычажная независимая",
   "Double wishbone independent suspension": "Двухрычажная независимая",
@@ -286,6 +299,14 @@ const VALUES = {
   "E-CVT Continuously Variable Transmission": "Вариатор E-CVT",
   "Electronic CVT (E-CVT)": "Электронный вариатор (E-CVT)",
   "Dedicated Hybrid Transmission (DHT)": "Гибридная трансмиссия (DHT)",
+  "Wet Dual-Clutch Transmission (DCT)": "Роботизированная с мокрыми сцеплениями (DCT)",
+  "Dry Dual-Clutch Transmission (DCT)": "Роботизированная с сухими сцеплениями (DCT)",
+  "Dual-Clutch Transmission (DCT)": "Роботизированная (DCT)",
+  "Continuously Variable Transmission (CVT)": "Вариатор (CVT)",
+  "CVT continuously variable transmission": "Вариатор (CVT)",
+  "Semi-Automatic Transmission (AT)": "АКПП с ручным режимом (AT)",
+  "Automatic Transmission (AT)": "Автоматическая (AT)",
+  "Manual Transmission (MT)": "Механическая (MT)",
   // тормоза и колёса
   "Ventilated disc": "Вентилируемый диск",
   "Disc": "Дисковые",
@@ -296,6 +317,7 @@ const VALUES = {
   "Tire repair kit": "Ремкомплект",
   "Full-size": "Полноразмерное",
   "Non-full-size": "Докатка",
+  "Non-full size": "Докатка",
   "Aluminum Alloy": "Алюминиевый сплав",
   "Cast Iron": "Чугун",
   // двигатель
@@ -313,11 +335,13 @@ const VALUES = {
   "China VI": "Китай VI",
   "China VIb": "Китай VIb",
   "China V": "Китай V",
+  "Miller cycle": "Цикл Миллера",
   // гарантии без цифрового шаблона
   "Lifetime Warranty/Non-commercial Use (Exclusion clauses subject to official terms)": "Пожизненная, для некоммерческого использования (см. условия производителя)",
   "Lifetime warranty/Non-commercial use (Exclusion clauses subject to official terms)": "Пожизненная, для некоммерческого использования (см. условия производителя)",
   "Lifetime warranty/Non-commercial use (exclusions apply as per official terms)": "Пожизненная, для некоммерческого использования (см. условия производителя)",
   "Lifetime warranty (non-commercial use, exclusions apply as per official terms)": "Пожизненная, для некоммерческого использования (см. условия производителя)",
+  "Lifetime warranty for the first owner / non-commercial use (Disclaimer terms are subject to the official version)": "Пожизненная для первого владельца, для некоммерческого использования (см. условия производителя)",
   "Lifetime Warranty/Non-Operational (Exclusion clauses subject to official terms)": "Пожизненная, для некоммерческого использования (см. условия производителя)",
   "Unlimited years/mileage for first owner (exclusion clauses subject to official terms)": "Без ограничения срока и пробега для первого владельца (см. условия производителя)",
   "10 years unlimited mileage for first owner (exclusion clauses subject to official terms)": "10 лет без ограничения пробега для первого владельца (см. условия производителя)",
@@ -347,31 +371,72 @@ const GEARBOX_TAILS = {
   "dual-clutch": "робот (DCT)",
   "automatic with manual shift mode": "АКПП с ручным режимом",
   "automatic": "АКПП",
+  "automatic transmission": "АКПП",
+  "wet dual-clutch transmission": "робот с мокрыми сцеплениями",
+  "dry dual-clutch transmission": "робот с сухими сцеплениями",
   "manual": "МКПП",
-  "DHT": "DHT",
+  "dht": "DHT",
 };
 
+// Source spelling/capitalization varies by model. Match normalized vocabulary,
+// but preserve original codes, proper names and unknown values verbatim.
+const vocabularyKey = (text) => String(text ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+const vocabulary = (entries) => new Map(Object.entries(entries).map(([key, value]) => [vocabularyKey(key), value]));
+const groupVocabulary = vocabulary(GROUPS);
+const nameVocabulary = vocabulary(NAMES);
+const valueVocabulary = vocabulary(VALUES);
+
 export function translateSpecGroup(name) {
-  return GROUPS[name] || name;
+  return groupVocabulary.get(vocabularyKey(name)) || name;
 }
 
 export function translateSpecName(name) {
-  return NAMES[name] || name;
+  return nameVocabulary.get(vocabularyKey(name)) || name;
 }
 
-export function translateSpecValue(value) {
+// Translate descriptive parts of a trim only in the model-name row. Keep brand,
+// model, commercial trim names (GT-Line, Platinum, EM-i, etc.) and codes intact.
+function translateModelDescription(text) {
+  return text
+    .replace(/\b(20\d{2})\s+Model\b/gi, "$1 года")
+    .replace(/\bUltra Long Range\b/gi, "увеличенный запас хода")
+    .replace(/\bLong Range Edition\b/gi, "версия с увеличенным запасом хода")
+    .replace(/\bLong Range\b/gi, "увеличенный запас хода")
+    .replace(/\bStandard Range\b/gi, "стандартный запас хода")
+    .replace(/\bRear-Wheel Drive\b/gi, "задний привод")
+    .replace(/\bFront-Wheel Drive\b/gi, "передний привод")
+    .replace(/\bAll-Wheel Drive\b/gi, "полный привод")
+    .replace(/\bUpgrade(?: Version)?\b/gi, "обновлённая версия")
+    .replace(/\bBase (?:Model|Version)\b/gi, "базовая версия")
+    .replace(/\bFacelift\b/gi, "рестайлинг")
+    .replace(/\b(Champion|Platinum|Sport|Flagship|Luxury|Premium) Edition\b/gi, "комплектация $1")
+    .replace(/\b(?:Edition|Version)\b/gi, "версия")
+    .replace(/\b(\d+)-Seater\b/gi, "$1 мест")
+    .replace(/\b(\d+)km\b/gi, "$1 км");
+}
+
+export function translateSpecValue(value, name = "") {
   const text = String(value ?? "").trim();
   if (!text) return text;
-  if (VALUES[text]) return VALUES[text];
+  const fieldName = String(name ?? "").trim();
+  if (/^Model Name$/i.test(fieldName)) return translateModelDescription(text);
+  const translated = valueVocabulary.get(vocabularyKey(text));
+  if (translated) return translated;
+  if (/^Manufacturer$/i.test(fieldName)) return text.replace(/\(Imported\)/gi, "(импорт)");
 
   const warranty = text.match(WARRANTY);
   if (warranty) {
     const years = Number(warranty[1]) || WORD_NUMBERS[warranty[1][0].toUpperCase() + warranty[1].slice(1).toLowerCase()];
     if (years) return `${years} ${yearsWord(years)} или ${warranty[2].replace(/,/g, " ")} км`;
   }
+  const unlimitedWarranty = text.match(/^(\d+) years? (?:with )?unlimited mileage$/i);
+  if (unlimitedWarranty) {
+    const years = Number(unlimitedWarranty[1]);
+    return `${years} ${yearsWord(years)}, без ограничения пробега`;
+  }
 
   const gearbox = text.match(/^(\d+)-(?:speed|gear) (.+)$/i);
-  if (gearbox && GEARBOX_TAILS[gearbox[2]]) return `${gearbox[1]}-ступ. ${GEARBOX_TAILS[gearbox[2]]}`;
+  if (gearbox && GEARBOX_TAILS[gearbox[2].toLowerCase()]) return `${gearbox[1]}-ступ. ${GEARBOX_TAILS[gearbox[2].toLowerCase()]}`;
 
   const octane = text.match(/^(\d+)\s*Octane$/i);
   if (octane) return `АИ-${octane[1]}`;
@@ -399,7 +464,7 @@ export function translateTechnicalSpecs(technicalSpecs) {
       name: translateSpecGroup(group.name),
       items: (group.items || []).map((item) => ({
         name: translateSpecName(item.name),
-        value: translateSpecValue(item.value),
+        value: translateSpecValue(item.value, item.name),
       })),
     }))
     .filter((group) => group.items.length);

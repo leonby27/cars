@@ -144,7 +144,7 @@ async function dashboard(db, days) {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
   // Список регистраций с контактами живёт только там, где есть таблица аккаунтов
   // (основной хостинг). Здесь остаётся счётчик регистраций без личных данных.
-  const [summary,daily,vehicles,recent,visits] = await Promise.all([
+  const [summary,daily,catalogPages,vehicles,recent,visits] = await Promise.all([
     db.prepare(`SELECT count(DISTINCT visitor_id) AS visitors, count(DISTINCT session_id) AS sessions,
       sum(CASE WHEN event_name='page_view' THEN 1 ELSE 0 END) AS page_views,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS vehicle_views,
@@ -170,6 +170,16 @@ async function dashboard(db, days) {
       sum(CASE WHEN event_name='custom_search_submitted' THEN 1 ELSE 0 END) AS custom_searches
       FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND ${PUBLIC_EVENT} AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})
       GROUP BY date(created_at) ORDER BY date(created_at)`).bind(cutoff, cutoff).all(),
+    db.prepare(`SELECT path,
+      count(*) AS views,
+      count(DISTINCT visitor_id) AS viewers,
+      max(created_at) AS last_viewed
+      FROM analytics_events
+      WHERE event_name='page_view' AND datetime(created_at) >= datetime(?)
+        AND (path='/catalog' OR path LIKE '/catalog?%' OR path LIKE '/catalog/%')
+        AND ${PUBLIC_EVENT}
+        AND visitor_id IN (SELECT visitor_id FROM analytics_events WHERE datetime(created_at) >= datetime(?) AND human_action = 1 AND ${PUBLIC_EVENT})
+      GROUP BY path ORDER BY max(created_at) DESC, count(*) DESC LIMIT 100`).bind(cutoff, cutoff).all(),
     db.prepare(`SELECT listing_id, max(listing_title) AS listing_title,
       sum(CASE WHEN event_name='vehicle_view' THEN 1 ELSE 0 END) AS views,
       sum(CASE WHEN event_name='availability_click' THEN 1 ELSE 0 END) AS availability_clicks,
@@ -205,6 +215,7 @@ async function dashboard(db, days) {
     generatedAt:new Date().toISOString(),
     summary:safeSummary,
     daily:daily.results || [],
+    catalogPages:(catalogPages.results || []).map((row) => ({ path:row.path, views:Number(row.views) || 0, viewers:Number(row.viewers) || 0, lastViewedAt:row.last_viewed })),
     vehicles:(vehicles.results || []).map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, availabilityClicks:row.availability_clicks, favorites:row.favorites })),
     registrations:[],
     recent:(recent.results || []).map((row) => ({ eventName:row.event_name, listingId:row.listing_id, listingTitle:row.listing_title, path:row.path, createdAt:row.created_at })),

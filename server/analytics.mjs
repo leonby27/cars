@@ -411,7 +411,7 @@ export async function getAnalyticsDashboard(rangeValue) {
   // вкладка, закрытая страница) и его может подделать кто угодно, а строка в таблице
   // появляется только от настоящего действия. Из событий берём лишь то, чего в базе нет:
   // посетителей, заходы и просмотры карточек.
-  const [summaryResult,visitsResult,actionsResult,dailyResult,vehiclesResult,favoritesResult,registrationsResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
+  const [summaryResult,visitsResult,actionsResult,dailyResult,catalogPagesResult,vehiclesResult,favoritesResult,registrationsResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS visitors,
       count(*) FILTER (WHERE event_name='page_view' AND ${HUMAN_VISITOR})::int AS page_views,
@@ -458,6 +458,17 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
       FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
       GROUP BY created_at::date ORDER BY created_at::date`, [from, to]),
+    pool.query(`SELECT path,
+        count(*)::int AS views,
+        count(DISTINCT visitor_id)::int AS viewers,
+        max(created_at) AS last_viewed
+      FROM analytics_events
+      WHERE event_name='page_view' AND created_at >= $1 AND created_at < $2
+        AND (split_part(path, '?', 1) = '/catalog' OR split_part(path, '?', 1) LIKE '/catalog/%')
+        AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
+      GROUP BY path
+      ORDER BY max(created_at) DESC, count(*) DESC
+      LIMIT 100`, [from, to]),
     pool.query(`WITH views AS (
         SELECT listing_id, max(listing_title) AS listing_title,
           count(*) FILTER (WHERE event_name='vehicle_view')::int AS views,
@@ -610,6 +621,7 @@ export async function getAnalyticsDashboard(rangeValue) {
     generatedAt:new Date().toISOString(),
     summary:{ ...summaryResult.rows[0], ...visitsResult.rows[0], ...actionsResult.rows[0], registrations },
     daily,
+    catalogPages:catalogPagesResult.rows.map((row) => ({ path:row.path, views:row.views, viewers:row.viewers, lastViewedAt:row.last_viewed })),
     vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, availabilityRequests:row.availability_requests, favorites:row.favorites, lastViewedAt:row.last_viewed })),
     favorites:favoritesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.title, people:row.people, addedAt:row.added_at, gone:row.gone, status:row.status, priceUsd:row.estimated_total_usd })),
     // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
@@ -645,7 +657,7 @@ export async function readAnalyticsSeen(viewing = "") {
     `INSERT INTO analytics_seen(section, seen_at) SELECT unnest($1::text[]), now() ON CONFLICT (section) DO NOTHING`,
     [ANALYTICS_SECTIONS],
   );
-  const viewingSections = viewing === "vehicles" ? ["vehicles", "vehicle_cars"] : ANALYTICS_SECTIONS.includes(viewing) ? [viewing] : [];
+  const viewingSections = ANALYTICS_SECTIONS.includes(viewing) ? [viewing] : [];
   if (viewingSections.length) {
     await pool.query("UPDATE analytics_seen SET seen_at=now() WHERE section = ANY($1::text[])", [viewingSections]);
   }
@@ -664,7 +676,10 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
         SELECT created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap
         FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}
       ) SELECT count(*) FILTER (WHERE gap IS NULL OR gap > interval '30 minutes')::int AS n FROM steps`, [since.overview]),
-    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicles]),
+    pool.query(`SELECT count(*)::int AS n FROM analytics_events
+      WHERE event_name='page_view' AND created_at > $1
+        AND (split_part(path, '?', 1) = '/catalog' OR split_part(path, '?', 1) LIKE '/catalog/%')
+        AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicles]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicle_cars]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='favorite_added' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicle_favorites]),
     pool.query(`SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")} AND btrim(coalesce(properties->>'query','')) <> ''`, [since.searches]),

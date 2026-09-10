@@ -30,6 +30,16 @@ Guazi Global result-page previews are used only for discovery. A card is written
 
 The Che168 Global pilot uses the **Incomplete Reports** layer (`vehicle_list=1`) in a connected browser because the public HTTP endpoint presents a JavaScript bot challenge. `scripts/import-che168-browser.mjs` exports the browser-backed pilot runner. It applies the same 2020+, electric-only, allowed-brand policy and requires a structured detail page with at least two original photos before appending a card. New Che168 imports retain every populated row from the detail page's grouped technical specification table in `technicalSpecs`; this uses the detail response already required for validation and does not add a source request. The catalog API omits this heavier block from list responses and returns it only on the individual vehicle endpoint.
 
+### Specification language (2026-09-10)
+
+All three Che168 import paths read vehicle details from `/en/detail/<id>`. The regular refresh keeps its established `/ru/used-cars` discovery session, filters, pagination, pace and request allowance; discovery supplies IDs and prices, never the technical specification sheet. This avoids changing the proven list walk just to change the specification language.
+
+Che168's Russian detail response translates `Front-Wheel Drive (FWD)` into `Задний привод` for listings 59396664 and 59665828. The importers therefore pass `expectedLocale: "en"` to the parser and reject an unexpected Russian response rather than falling back to it. A language mismatch does not terminate the regular refresh. Existing saved Russian sheets remain readable for compatibility.
+
+English specifications are stored unchanged; `src/spec-translations.js` translates the sheet when rendering, including fuel, transmission, suspension, warranties and descriptive trim wording. Proper names, model codes, tire sizes and unknown terms are preserved rather than guessed. The main numeric fields are extracted independently from the original values. System horsepower takes precedence over motor and engine horsepower when explicitly published; electric and combined range stay separate.
+
+`tests/che168-english-import.test.mjs` uses sanitized live responses for nine vehicles (petrol, mild hybrid, EV, PHEV and range extender) to check parsing, Russian rendering, preservation of every populated row, and the database write boundary without writing to a real database. Historical catalog records are not rewritten by switching the import language; a separate, verified re-fetch is required to repair old records. No blanket rear-to-front replacement is safe.
+
 ### Import v2 — default Che168 bulk path
 
 `scripts/import-v2.mjs` (`npm run importv2`) is the fastest route and the one to reach for first. Measured on the first full sweep: ~17,700 candidates discovered across 20 policy brands, imported at roughly 100 cards per 40 seconds with a 0.3% rejection rate.

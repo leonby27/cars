@@ -511,7 +511,7 @@ try {
           }
           consecutiveFailures = 0;
           successesSinceWall += 1;
-          const car = buildChe168Car(payload);
+          const car = buildChe168Car(payload, { expectedLocale: "en" });
           if (!car) {
             reject("detail page lacks required structured fields or gallery", candidate.externalId);
             continue;

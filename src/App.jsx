@@ -19,7 +19,7 @@ import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPat
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isZeekrGuide, ZEEKR_ALTERNATIVES, ZEEKR_BUDGETS, ZEEKR_GUIDE_INTRO } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
+import { estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
 import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -48,7 +48,7 @@ import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
-import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "./purchase-info.js";
+import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES } from "./purchase-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
 // таблиц) не кладём в общий файл приложения, а подгружаем отдельным файлом при
@@ -101,7 +101,7 @@ const SetOrderedListingsContext = createContext(null);
 // короткий номер. Сравниваем по номеру, как и избранное.
 const orderedListingsFrom = (orders) => new Set((orders || []).map((order) => listingNumber(order?.listingId)).filter(Boolean));
 const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORDERED_LISTINGS;
-const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? Math.round(usd * PRICING.usdByn) : usd);
+const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? usdToByn(usd) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
 // Суммы в блоке «Цена среди похожих» — крупным шагом (сотня рублей, полсотни
@@ -394,6 +394,7 @@ const IMAGE_WIDTH_DOUBLE_CAP = 1400;
 // 70,7 КБ против 55 КБ у кадра 1400x0_c42. Дороже на четверть, а разрешение и чистота
 // заметно выше — для снимка, показанного во всю ширину галереи, это того стоит.
 const IMAGE_ORIGINAL = "original";
+const GALLERY_ZOOM = 1.4;
 
 /**
  * Второй, вдвое более широкий кадр для экранов с двойной плотностью. На обычном экране
@@ -816,7 +817,7 @@ function PriceChangeMark({ car }) {
   // Сначала деньги, процент — в скобках; знак у обоих один: «−20 500 BYN (−6%)».
   const sign = change.direction === "up" ? "+" : "−";
   const shift = percent && gap ? `${sign}${money(gap, currency)} (${percent})` : percent;
-  // Вторая строка подсказки — одной фразой: «2 дня назад было 116 093 BYN».
+  // Вторая строка подсказки — одной фразой: «2 дня назад было 116 100 BYN».
   const before = date ? `${date} было ${was}` : `Было ${was}`;
   const hint = ["Цена изменилась", shift, before].filter(Boolean).join(" · ");
   const tooltip = (
@@ -835,7 +836,7 @@ function PriceChangeMark({ car }) {
 
 // Итог «под ключ» со стрелкой переоценки — одной строкой.
 //
-// Длинная цена в рублях («≈ 1 521 424 BYN») вместе с кружком стрелки в строку не
+// Длинная цена в рублях («≈ 1 521 400 BYN») вместе с кружком стрелки в строку не
 // влезала, и стрелка съезжала под цену. По длине надписи этого не угадать: места
 // разной ширины (каталог, карточка заказа, телефон), а в карточке заказа рядом стоит
 // ещё и переключатель валюты. Поэтому смотрим на уже нарисованную строку: если она
@@ -963,7 +964,6 @@ const routeSeo = {
   "/catalog": ["Купить б/у авто из Китая — каталог и цены | abcars.by", "Каталог б/у авто из Китая: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь."],
   "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
   "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | abcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
-  "/guarantees": ["Гарантии при покупке автомобиля из Китая | abcars.by", "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает abcars.by и какие риски обсуждаются до договора."],
   "/faq": ["Вопросы о покупке и доставке авто из Китая | abcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
   "/contacts": ["Контакты abcars.by — автомобили из Китая в Минске", "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая."],
   "/privacy": ["Политика конфиденциальности | abcars.by", "Политика обработки и защиты персональных данных пользователей сайта abcars.by."],
@@ -6007,7 +6007,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             </button>
           )}
           {displayed.length > 0 && !hasMore && !remoteLoading && (
-            <CustomSearchCta variant="end" onOpen={() => setCustomSearchOpen(true)} />
+            <CustomSearchCta variant="end" navigate={navigate} />
           )}
         </section>
         <aside className="side-card">
@@ -6206,10 +6206,10 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
                       <span className="brand-guide-model-thumb">{row.image ? <img src={imageSource(row.image, IMAGE_WIDTH_TILE)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, row.image)} /> : <CarProfile size={20} weight="duotone" aria-hidden="true" />}</span>
                       <span className="brand-guide-model-copy"><strong>Zeekr {row.model}</strong><small>В наличии {guideNumber(row.count)} шт.</small></span>
                     </AppLink></th>
-                    <td>{guideYears(row)}</td>
-                    <td><BrandGuidePowertrain values={row.powertrains} /></td>
-                    <td>{guidePrice(row.priceMin, currency)}</td>
-                    <td>{guidePrice(row.priceMedian, currency)}</td>
+                    <td data-label={row.yearMin && row.yearMin === row.yearMax ? "Год" : "Годы"}>{guideYears(row)}</td>
+                    <td data-label="Тип"><BrandGuidePowertrain values={row.powertrains} /></td>
+                    <td data-label="Цена от">{guidePrice(row.priceMin, currency)}</td>
+                    <td data-label="Медиана">{guidePrice(row.priceMedian, currency)}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -6227,6 +6227,14 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
                 </button>;
               })}
             </div>
+            <SelectField
+              className="brand-guide-budget-select"
+              label="Диапазон цены"
+              value={selectedBudget}
+              options={ZEEKR_BUDGETS.map((band) => band.key)}
+              onChange={setSelectedBudget}
+              formatOption={(key) => guideBudgetTitle(ZEEKR_BUDGETS.find((band) => band.key === key) || ZEEKR_BUDGETS[0], currency)}
+            />
             <div className="brand-guide-budget-models" aria-live="polite">
               {activeBudgetData?.models?.length ? activeBudgetData.models.slice(0, 5).map((model) => {
                 const row = guideModels.get(model);
@@ -6279,6 +6287,7 @@ function BrandGuidePowertrain({ values = [] }) {
   return (
     <span className="brand-guide-powertrain" role="img" tabIndex={0} aria-label={label}>
       <Icon size={20} weight="duotone" aria-hidden="true" />
+      <span className="brand-guide-powertrain-label" aria-hidden="true">{label}</span>
       <ActionTooltip text={label} />
     </span>
   );
@@ -6326,6 +6335,15 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
   const navigationFrame = useRef(null);
   const navigating = useRef(false);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [zoomIndex, setZoomIndex] = useState(null);
+  const [loadedZoomKey, setLoadedZoomKey] = useState("");
+  const zoomLensRef = useRef(null);
+  const zoomImageRef = useRef(null);
+  const zoomFrame = useRef(0);
+  const zoomPointer = useRef(null);
+  const zoomSource = zoomIndex === null ? "" : imageSource(images[zoomIndex], IMAGE_ORIGINAL);
+  const zoomKey = zoomIndex === null ? "" : `${zoomIndex}-${zoomSource}`;
+  const zoomReady = Boolean(zoomKey) && loadedZoomKey === zoomKey;
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -6337,6 +6355,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
       window.removeEventListener("keydown", onKeyDown);
       if (scrollFrame.current) cancelAnimationFrame(scrollFrame.current);
       if (navigationFrame.current) cancelAnimationFrame(navigationFrame.current);
+      if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current);
     };
   }, [initialIndex, onClose]);
   useEffect(() => {
@@ -6375,8 +6394,50 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
     };
     navigationFrame.current = requestAnimationFrame(animate);
   };
+  const positionZoom = (index, clientX, clientY) => {
+    zoomPointer.current = { index, x: clientX, y: clientY };
+    cancelAnimationFrame(zoomFrame.current);
+    zoomFrame.current = requestAnimationFrame(() => {
+      const figure = imageRefs.current[index];
+      const sourceImage = figure?.querySelector(":scope > img");
+      const lens = zoomLensRef.current;
+      const previewImage = zoomImageRef.current;
+      if (!figure || !sourceImage || !lens || !previewImage) return;
+      const figureRect = figure.getBoundingClientRect();
+      const sourceRect = sourceImage.getBoundingClientRect();
+      const lensRect = lens.getBoundingClientRect();
+      if (!sourceRect.width || !sourceRect.height || !lensRect.width || !lensRect.height) return;
+      const pointerX = Math.min(sourceRect.width, Math.max(0, clientX - sourceRect.left));
+      const pointerY = Math.min(sourceRect.height, Math.max(0, clientY - sourceRect.top));
+      const lensX = sourceRect.left - figureRect.left + Math.min(sourceRect.width - lensRect.width, Math.max(0, pointerX - lensRect.width / 2));
+      const lensY = sourceRect.top - figureRect.top + Math.min(sourceRect.height - lensRect.height, Math.max(0, pointerY - lensRect.height / 2));
+      const imageWidth = sourceRect.width * GALLERY_ZOOM;
+      const imageHeight = sourceRect.height * GALLERY_ZOOM;
+      const imageX = Math.min(0, Math.max(lensRect.width - imageWidth, lensRect.width / 2 - pointerX * GALLERY_ZOOM));
+      const imageY = Math.min(0, Math.max(lensRect.height - imageHeight, lensRect.height / 2 - pointerY * GALLERY_ZOOM));
+      lens.style.transform = `translate3d(${lensX}px, ${lensY}px, 0)`;
+      previewImage.style.width = `${imageWidth}px`;
+      previewImage.style.height = `${imageHeight}px`;
+      previewImage.style.transform = `translate3d(${imageX}px, ${imageY}px, 0)`;
+    });
+  };
+  const showZoom = (event, index) => {
+    if (event.pointerType !== "mouse" || !window.matchMedia("(min-width: 981px) and (hover: hover) and (pointer: fine)").matches) return;
+    setZoomIndex(index);
+    positionZoom(index, event.clientX, event.clientY);
+  };
+  const moveZoom = (event, index) => {
+    if (event.pointerType === "mouse" && zoomIndex === index) positionZoom(index, event.clientX, event.clientY);
+  };
+  const hideZoom = (event) => {
+    if (event.pointerType !== "mouse") return;
+    zoomPointer.current = null;
+    setZoomIndex(null);
+  };
   const trackActiveImage = (event) => {
     if (event.target !== event.currentTarget) return;
+    zoomPointer.current = null;
+    setZoomIndex(null);
     if (navigating.current) return;
     if (scrollFrame.current) return;
     scrollFrame.current = requestAnimationFrame(() => {
@@ -6432,8 +6493,30 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
               ref={(node) => {
                 imageRefs.current[index] = node;
               }}
+              className={zoomIndex === index ? "zooming" : ""}
+              onPointerEnter={(event) => showZoom(event, index)}
+              onPointerMove={(event) => moveZoom(event, index)}
+              onPointerLeave={hideZoom}
             >
               <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title} из Китая, фото ${index + 1}`} loading={index === initialIndex ? "eager" : "lazy"} fetchPriority={index === initialIndex ? "high" : "low"} decoding="async" onError={(event) => retryWithFullImage(event, image)} />
+              {zoomIndex === index && (
+                <div ref={zoomLensRef} className={`gallery-modal-zoom-lens${zoomReady ? " is-visible" : ""}`} aria-hidden="true">
+                  <img
+                    key={zoomKey}
+                    ref={zoomImageRef}
+                    src={zoomSource}
+                    alt=""
+                    draggable="false"
+                    decoding="async"
+                    onLoad={() => {
+                      setLoadedZoomKey(zoomKey);
+                      const pointer = zoomPointer.current;
+                      if (pointer?.index === index) positionZoom(index, pointer.x, pointer.y);
+                    }}
+                    onError={(event) => retryWithFullImage(event, image)}
+                  />
+                </div>
+              )}
               <figcaption>
                 {index + 1} из {images.length}
               </figcaption>
@@ -6449,6 +6532,10 @@ function VehicleGallery({ car }) {
   const images = car.images?.length ? car.images : [car.image];
   const [active, setActive] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [zoomVisible, setZoomVisible] = useState(false);
+  const activeZoomSource = imageSource(images[active], IMAGE_ORIGINAL);
+  const [loadedZoomSource, setLoadedZoomSource] = useState("");
+  const zoomReady = loadedZoomSource === activeZoomSource;
   // Соседние кадры ставим в ленту не сразу, а как только приехал главный снимок:
   // иначе первая загрузка страницы качала бы шесть фотографий вместо одной и
   // главный кадр — тот самый, по которому считают скорость сайта, — ждал бы в
@@ -6457,6 +6544,10 @@ function VehicleGallery({ car }) {
   const [ready, setReady] = useState(false);
   const stripRef = useRef(null);
   const thumbsRef = useRef(null);
+  const zoomImageRef = useRef(null);
+  const zoomLensRef = useRef(null);
+  const zoomFrame = useRef(0);
+  const zoomPointer = useRef(null);
   // Фотографии лежат лентой в прокручиваемой полосе с прилипанием кадра. Раньше
   // смахивание тянуло единственный кадр в сторону, а за ним не было ничего —
   // отсюда пустое поле на мгновение. Теперь палец тянет ленту, и соседний снимок
@@ -6576,6 +6667,7 @@ function VehicleGallery({ car }) {
     () => () => {
       window.clearTimeout(pendingTimer.current);
       stopGlide();
+      window.cancelAnimationFrame(zoomFrame.current);
     },
     [],
   );
@@ -6595,7 +6687,7 @@ function VehicleGallery({ car }) {
     drag.current = { id: event.pointerId, x: event.clientX, left: strip.scrollLeft, moved: false };
     setFreeScroll(true);
   };
-  const onPointerMove = (event) => {
+  const dragGallery = (event) => {
     const start = drag.current;
     const strip = stripRef.current;
     if (!start || start.id !== event.pointerId || !strip) return;
@@ -6614,6 +6706,78 @@ function VehicleGallery({ car }) {
       }
     }
     if (start.moved) strip.scrollLeft = start.left - distance;
+  };
+  // Нижняя панель с миниатюрами и кнопкой «Все фото» остаётся обычным управлением:
+  // линза не включается над ней и не может наползти на неё сверху. Границу берём
+  // по фактическому положению миниатюр, поэтому защита сохраняется при любой
+  // ширине галереи и при изменении масштаба страницы.
+  const inlineZoomBounds = () => {
+    const strip = stripRef.current;
+    const thumbs = thumbsRef.current;
+    if (!strip || !thumbs) return null;
+    const sourceRect = strip.getBoundingClientRect();
+    const thumbsRect = thumbs.getBoundingClientRect();
+    return {
+      sourceRect,
+      bottom: Math.min(sourceRect.bottom, thumbsRect.top - 10),
+    };
+  };
+  // На широком экране сама рамка под курсором становится увеличительным стеклом.
+  // Внутри неё лежит оригинал активного снимка, увеличенный относительно того же
+  // кадра в галерее: поэтому под курсором видна та же точка, но без потери качества.
+  const positionZoom = (clientX, clientY) => {
+    const initialBounds = inlineZoomBounds();
+    if (!initialBounds || clientY >= initialBounds.bottom) return false;
+    zoomPointer.current = { x: clientX, y: clientY };
+    window.cancelAnimationFrame(zoomFrame.current);
+    zoomFrame.current = window.requestAnimationFrame(() => {
+      const strip = stripRef.current;
+      const previewImage = zoomImageRef.current;
+      const lens = zoomLensRef.current;
+      if (!strip || !previewImage || !lens) return;
+      const sourceRect = strip.getBoundingClientRect();
+      const lensRect = lens.getBoundingClientRect();
+      if (!sourceRect.width || !sourceRect.height || !lensRect.width || !lensRect.height) return;
+      const zoomBounds = inlineZoomBounds();
+      if (!zoomBounds) return;
+      const zoom = GALLERY_ZOOM;
+      const pointerX = Math.min(sourceRect.width, Math.max(0, clientX - sourceRect.left));
+      const pointerY = Math.min(sourceRect.height, Math.max(0, clientY - sourceRect.top));
+      const lensX = Math.min(sourceRect.width - lensRect.width, Math.max(0, pointerX - lensRect.width / 2));
+      const zoomAreaHeight = Math.max(0, Math.min(sourceRect.height, zoomBounds.bottom - sourceRect.top));
+      const lensY = Math.min(Math.max(0, zoomAreaHeight - lensRect.height), Math.max(0, pointerY - lensRect.height / 2));
+      const imageWidth = sourceRect.width * zoom;
+      const imageHeight = sourceRect.height * zoom;
+      const imageX = Math.min(0, Math.max(lensRect.width - imageWidth, lensRect.width / 2 - pointerX * zoom));
+      const imageY = Math.min(0, Math.max(lensRect.height - imageHeight, lensRect.height / 2 - pointerY * zoom));
+      lens.style.transform = `translate3d(${lensX}px, ${lensY}px, 0)`;
+      previewImage.style.width = `${imageWidth}px`;
+      previewImage.style.height = `${imageHeight}px`;
+      previewImage.style.transform = `translate3d(${imageX}px, ${imageY}px, 0)`;
+    });
+    return true;
+  };
+  const showZoom = (event) => {
+    if (event.pointerType !== "mouse" || !window.matchMedia("(min-width: 981px) and (hover: hover) and (pointer: fine)").matches) return;
+    if (positionZoom(event.clientX, event.clientY)) setZoomVisible(true);
+  };
+  const movePointer = (event) => {
+    dragGallery(event);
+    if (event.pointerType !== "mouse" || !window.matchMedia("(min-width: 981px) and (hover: hover) and (pointer: fine)").matches) return;
+    if (positionZoom(event.clientX, event.clientY)) {
+      if (!zoomVisible) setZoomVisible(true);
+      return;
+    }
+    zoomPointer.current = null;
+    setZoomVisible(false);
+  };
+  const hideZoom = (event) => {
+    if (event.pointerType === "mouse") {
+      window.cancelAnimationFrame(zoomFrame.current);
+      zoomFrame.current = 0;
+      zoomPointer.current = null;
+      setZoomVisible(false);
+    }
   };
   const endDrag = (event) => {
     const start = drag.current;
@@ -6714,7 +6878,7 @@ function VehicleGallery({ car }) {
   const near = ready ? 1 : 0;
   return (
     <>
-      <section className="gallery-panel">
+      <section className={`gallery-panel${zoomVisible ? " zooming" : ""}`}>
         {/* Кадры дальше двух от текущего в разметку не ставим: у иных объявлений
             снимков под сотню, и сотня рамок в ленте — это лишняя работа браузеру.
             Соседние всегда на месте, поэтому тянуть ленту не во что пустое. */}
@@ -6722,10 +6886,12 @@ function VehicleGallery({ car }) {
           className={`gallery-strip${freeScroll ? " free" : ""}`}
           ref={stripRef}
           onScroll={onStripScroll}
+          onPointerEnter={showZoom}
           onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
+          onPointerMove={movePointer}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
+          onPointerLeave={hideZoom}
         >
           {images.map((image, index) => (
             <button
@@ -6755,6 +6921,22 @@ function VehicleGallery({ car }) {
               )}
             </button>
           ))}
+        </div>
+        <div ref={zoomLensRef} className={`gallery-zoom-lens${zoomVisible && zoomReady ? " is-visible" : ""}`} aria-hidden="true">
+          <img
+            key={`${active}-${activeZoomSource}`}
+            ref={zoomImageRef}
+            src={activeZoomSource}
+            alt=""
+            draggable="false"
+            decoding="async"
+            onLoad={() => {
+              setLoadedZoomSource(activeZoomSource);
+              const pointer = zoomPointer.current;
+              if (pointer) positionZoom(pointer.x, pointer.y);
+            }}
+            onError={(event) => retryWithFullImage(event, images[active])}
+          />
         </div>
         <span aria-live="polite">
           <Images size={17} />
@@ -6951,7 +7133,7 @@ function ConsentField({ checked, onChange, error }) {
   );
 }
 
-function CustomSearchCta({ variant, onOpen }) {
+function CustomSearchCta({ variant, onOpen, navigate }) {
   const isEmpty = variant === "empty";
   return (
     <section className={`custom-search-cta ${isEmpty ? "is-empty" : "is-end"}`} aria-labelledby={`custom-search-${variant}-title`}>
@@ -6959,13 +7141,19 @@ function CustomSearchCta({ variant, onOpen }) {
         <CarProfile size={28} weight="duotone" />
       </div>
       <div className="custom-search-copy">
-        <span>{isEmpty ? "По вашему запросу нет вариантов" : "Вы посмотрели все варианты"}</span>
-        <h2 id={`custom-search-${variant}-title`}>{isEmpty ? "Не нашли нужный автомобиль?" : "Не увидели подходящий автомобиль?"}</h2>
-        <p>Напишите, что ищете. Мы подберём автомобиль индивидуально — даже если его пока нет в каталоге.</p>
+        {isEmpty && <span>По вашему запросу нет вариантов</span>}
+        <h2 id={`custom-search-${variant}-title`}>{isEmpty ? "Не нашли нужный автомобиль?" : "Не нашли подходящий автомобиль?"}</h2>
+        <p>{isEmpty ? "Напишите, что ищете. Мы подберём автомобиль индивидуально — даже если его пока нет в каталоге." : "Напишите, что ищете — подберём подходящий вариант."}</p>
       </div>
-      <button className="primary" type="button" onClick={onOpen}>
-        Описать желаемое авто <ArrowRight size={18} />
-      </button>
+      {isEmpty ? (
+        <button className="primary" type="button" onClick={onOpen}>
+          Описать желаемое авто <ArrowRight size={18} />
+        </button>
+      ) : (
+        <AppLink className="primary" href="/contacts" navigate={navigate}>
+          Свяжитесь с нами <ArrowRight size={18} />
+        </AppLink>
+      )}
     </section>
   );
 }
@@ -8422,46 +8610,6 @@ function PaymentAndContractPage({ navigate }) {
         </div>
       </section>
       <InfoCta navigate={navigate} title="Начните с предварительного расчёта" text="Выберите автомобиль — покажем структуру цены и объясним каждый платёж до договора." />
-    </main>
-  );
-}
-
-function GuaranteesPage({ navigate }) {
-  return (
-    <main className="purchase-info-page">
-      <section className="guarantees-hero page-width">
-        <div>
-          <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
-          <span className="info-eyebrow">Гарантии и ответственность</span>
-          <h1>Не обещаем невозможного. Фиксируем то, за что отвечаем</h1>
-          <p>Подержанный автомобиль нельзя сделать новым обещанием. Поэтому мы разделяем проверку, риски продавца, перевозку и собственную ответственность.</p>
-        </div>
-        <aside className="guarantee-principle-card">
-          <ShieldCheck size={34} weight="duotone" />
-          <h2>Главный принцип</h2>
-          <p>Если важный факт не подтверждён документом, диагностикой или договором, мы не называем его гарантией.</p>
-        </aside>
-      </section>
-
-      <section className="responsibility-section page-width">
-        <div className="purchase-section-heading">
-          <span className="info-eyebrow">Карта ответственности</span>
-          <h2>Что происходит в спорной ситуации</h2>
-          <p>Заранее показываем, кто отвечает за следующий шаг и какой результат получает клиент.</p>
-        </div>
-        <div className="responsibility-table">
-          <div className="responsibility-head"><span>Ситуация</span><span>Ответственная сторона</span><span>Что делаем</span></div>
-          {RESPONSIBILITY_ITEMS.map((item) => <div className="responsibility-row" key={item.title}><b>{item.title}</b><span>{item.owner}</span><p>{item.result}</p></div>)}
-        </div>
-      </section>
-
-      <section className="guarantee-boundaries">
-        <div className="page-width guarantee-boundaries-grid">
-          <div><CheckCircle size={24} weight="fill" /><h3>Что гарантируем</h3><p>Выполнение согласованной проверки, корректное оформление документов, прозрачность платежей и сопровождение на всём маршруте.</p></div>
-          <div><X size={24} weight="bold" /><h3>Чего не обещаем</h3><p>Будущее техническое состояние подержанного автомобиля, неизменность внешних тарифов и отсутствие задержек на границе.</p></div>
-        </div>
-      </section>
-      <InfoCta navigate={navigate} title="Обсудим риски до выбора автомобиля" text="Покажем пример проверки, договора и сметы — без обязательства оформлять заказ." />
     </main>
   );
 }
@@ -12369,8 +12517,6 @@ export function App() {
       <HowItWorksPage navigate={navigate} />
     ) : contentPath === "/payment-and-contract" ? (
       <PaymentAndContractPage navigate={navigate} />
-    ) : contentPath === "/guarantees" ? (
-      <GuaranteesPage navigate={navigate} />
     ) : contentPath === "/faq" ? (
       <ServiceFaqRedirect />
     ) : REVIEWS_ENABLED && contentPath === "/reviews" ? (

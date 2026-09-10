@@ -166,6 +166,19 @@ test("счётчики отделяют просмотренное от ново
   assert.match(server, /cabinet_orders:cabinetOrders\.rows\[0\]\.n/);
 });
 
+test("раздел каталога первым показывает просмотренные страницы каталога", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  const worker = await readFile(new URL("../worker/analytics.js", import.meta.url), "utf8");
+  assert.match(source, /const vehicleModes = \[\s*\{ id:"catalog", label:"Каталог" \}/);
+  assert.match(source, /useState\("catalog"\)/);
+  assert.match(source, /id:"vehicles", label:"Каталог"/);
+  assert.match(source, /data\.catalogPages/);
+  assert.match(server, /catalogPages:catalogPagesResult\.rows/);
+  assert.match(server, /event_name='page_view'[\s\S]{0,220}split_part\(path, '\?', 1\) = '\/catalog'/);
+  assert.match(worker, /catalogPages:\(catalogPages\.results \|\| \[\]\)/);
+});
+
 test("analytics events are allowlisted and drop personal data", () => {
   const event = normalizeAnalyticsEvent({
     eventId:"event-1",

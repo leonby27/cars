@@ -513,6 +513,7 @@ function VisitsSection({ visits, total, unread }) {
 }
 
 const vehicleModes = [
+  { id:"catalog", label:"Каталог" },
   { id:"cars", label:"Авто" },
   { id:"models", label:"Модели" },
   { id:"favorites", label:"Избранное" },
@@ -521,7 +522,7 @@ const vehicleModes = [
 const modelTitle = (title) => String(title || "").replace(/\s+\d{4}\s*$/, "").trim() || title || "—";
 
 function VehiclesSection({ data, updates, markViewed }) {
-  const [mode, setMode] = useState("cars");
+  const [mode, setMode] = useState("catalog");
   // Во всех представлениях сначала показываем то, что смотрели последним.
   const [sort, setSort] = useState({ column:"lastViewed", desc:true });
   const [visible, setVisible] = useState(20);
@@ -535,6 +536,7 @@ function VehiclesSection({ data, updates, markViewed }) {
     return grouped;
   }, {})), [data.vehicles]);
   const sources = {
+    catalog:(data.catalogPages || []).map((item) => ({ ...item, id:item.path, title:item.path, lastViewedAt:item.lastViewedAt })),
     models,
     cars:(data.vehicles || []).map((item) => ({ ...item, id:item.listingId, title:item.listingTitle || listingNumber(item.listingId), asks:item.availabilityClicks })),
     favorites:(data.favorites || []).map((item) => ({ ...item, id:item.listingId, title:item.listingTitle || listingNumber(item.listingId), lastViewedAt:item.addedAt })),
@@ -547,7 +549,7 @@ function VehiclesSection({ data, updates, markViewed }) {
       { id:"lastViewed", label:"Просмотр", value:(item) => item.lastViewedAt ? new Date(item.lastViewedAt).getTime() || 0 : 0 },
     ]
     : [
-      { id:"title", label:mode === "models" ? "Модель" : "Автомобиль", text:true, value:(item) => item.title || "" },
+      { id:"title", label:mode === "catalog" ? "Страница каталога" : mode === "models" ? "Модель" : "Автомобиль", text:true, value:(item) => item.title || "" },
       { id:"viewers", label:"Люди", value:(item) => Number(item.viewers) || 0 },
       { id:"views", label:"Просмотры", value:(item) => Number(item.views) || 0 },
       ...(mode === "cars" ? [{ id:"asks", label:"Уточнения", value:(item) => Number(item.asks) || 0 }] : []),
@@ -560,25 +562,26 @@ function VehiclesSection({ data, updates, markViewed }) {
       const a = column.value(left); const b = column.value(right);
       return (column.text ? String(a).localeCompare(String(b), "ru") : (a === b ? 0 : a < b ? -1 : 1)) * direction;
     });
-  }, [mode, sources.models, sources.cars, sources.favorites, columns, sort]);
+  }, [mode, sources.catalog, sources.models, sources.cars, sources.favorites, columns, sort]);
   const setVehicleMode = (nextMode) => {
     setMode(nextMode); setVisible(20);
     setSort({ column:"lastViewed", desc:true });
+    if (nextMode === "catalog") markViewed("vehicles");
     if (nextMode === "cars" || nextMode === "favorites") markViewed(`vehicle_${nextMode}`);
   };
   const toggleSort = (column) => setSort((current) => current.column === column.id ? { column:column.id, desc:!current.desc } : { column:column.id, desc:!column.text });
-  return <section className="analytics-panel" aria-label="Автомобили">
-    <div className="analytics-panel-heading analytics-vehicles-heading"><div className="analytics-range" aria-label="Представление автомобилей">
+  return <section className="analytics-panel" aria-label="Каталог">
+    <div className="analytics-panel-heading analytics-vehicles-heading"><div className="analytics-range" aria-label="Представление каталога">
       {vehicleModes.map((item) => {
-        const fresh = item.id === "models" ? 0 : Number(updates[`vehicle_${item.id}`]) || 0;
+        const fresh = item.id === "catalog" ? Number(updates.vehicles) || 0 : item.id === "models" ? 0 : Number(updates[`vehicle_${item.id}`]) || 0;
         return <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}{fresh ? <b className="analytics-tab-count" title={`Нового с прошлого просмотра: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}</button>;
       })}
     </div></div>
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
       <tbody>{rows.length ? rows.slice(0, visible).map((item) => <tr key={item.id} className={mode === "favorites" && (item.gone || item.status === "unavailable") ? "analytics-row-warning" : undefined}>
-        <td>{mode === "models" ? item.title : <a href={analyticsNoCountHref(carHref(item.listingId))}>{item.title}</a>}</td>
+        <td>{mode === "models" ? item.title : mode === "catalog" ? <a href={analyticsNoCountHref(item.path)} target="_blank" rel="noopener noreferrer">{item.title}</a> : <a href={analyticsNoCountHref(carHref(item.listingId))}>{item.title}</a>}</td>
         {mode === "favorites" ? <><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></> : <><td>{formatNumber(item.viewers)}</td><td>{formatNumber(item.views)}</td>{mode === "cars" && <td>{formatNumber(item.asks)}</td>}<td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></>}
-      </tr>) : <tr><td colSpan={columns.length}>{mode === "favorites" ? "Избранного пока нет." : "Событий по автомобилям пока нет."}</td></tr>}</tbody></table></div>
+      </tr>) : <tr><td colSpan={columns.length}>{mode === "catalog" ? "Страницы каталога пока не просматривали." : mode === "favorites" ? "Избранного пока нет." : "Событий по автомобилям пока нет."}</td></tr>}</tbody></table></div>
     {visible < rows.length && <button className="analytics-show-more" type="button" onClick={() => setVisible((count) => count + 20)}>Показать ещё</button>}
   </section>;
 }
@@ -733,7 +736,7 @@ const analyticsPeriods = [
 const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
   { id:"search-traffic", label:"Запросы и позиции", icon:MagnifyingGlass, ranged:true },
-  { id:"vehicles", label:"Автомобили", icon:CarProfile, ranged:true },
+  { id:"vehicles", label:"Каталог", icon:CarProfile, ranged:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:false },
   { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },

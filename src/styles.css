@@ -92,8 +92,6 @@ html[data-theme="dark"] #root :where(
   .side-card,
   .delivery-case,
   .agreement-preview,
-  .guarantee-principle-card,
-  .guarantee-boundaries-grid > div,
   .auth-card,
   .customer-order-stages,
   .customer-order-stage-heading,
@@ -112,10 +110,8 @@ html[data-theme="dark"] #root :where(
   .service-scope,
   .case-proof-section,
   .purchase-notice-section,
-  .guarantee-boundaries,
   .faq-hero aside,
   .payment-stage-list dl,
-  .responsibility-head,
   .delivery-case blockquote,
   .site-footer
 ) {
@@ -143,6 +139,11 @@ html[data-theme="dark"] #root :where(.secondary, .side-card .secondary, .danger-
 }
 html {
   scroll-behavior: smooth;
+  /* Мобильные браузеры не должны самовольно увеличивать текст относительно
+     размеров из адаптивных правил: на реальном устройстве статья иначе крупнее,
+     чем в браузерном превью при той же ширине экрана. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 body {
   margin: 0;
@@ -1438,7 +1439,7 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
    справа от него. Верхний отступ меньше прежнего: часть зазора даёт сама сетка. */
 .catalog-layout > .catalog-landing-notes {
   grid-column: 1;
-  margin-top: 22px;
+  margin-top: 0;
 }
 /* Вопросы раздела стоят последним блоком в том же тексте: заголовок мельче, чем у
    самого блока, плашки — на светлой подложке, как ссылки рядом. Рамки нет: блок
@@ -1468,7 +1469,7 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
 }
 .brand-guide {
   gap: 20px;
-  border: 1px solid var(--line);
+  border: 0;
   background: var(--panel);
 }
 .brand-guide-loading {
@@ -1502,7 +1503,7 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   width: 220px;
   min-width: 220px;
   height: 44px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: calc(10px * var(--corner-scale));
   background: var(--surface);
 }
@@ -1750,6 +1751,9 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   color: var(--muted);
   cursor: help;
 }
+.brand-guide-powertrain-label {
+  display: none;
+}
 .brand-guide-powertrain:hover,
 .brand-guide-powertrain:focus-visible {
   background: var(--model-chip-hover-bg);
@@ -1797,6 +1801,10 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
 .brand-guide-budget-tabs button.active strong {
   opacity: 1;
 }
+.select-field.brand-guide-budget-select {
+  display: none;
+  border: 0;
+}
 .brand-guide-budget-models {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1808,6 +1816,7 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   flex-direction: column;
   gap: 8px;
   padding: 12px 8px 14px;
+  border: 0;
   border-radius: calc(14px * var(--corner-scale));
   background: var(--surface);
   color: var(--ink);
@@ -1866,6 +1875,7 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   align-items: center;
   gap: 14px;
   padding: 16px 18px;
+  border: 0;
   border-radius: calc(16px * var(--corner-scale));
   background: var(--surface);
   color: inherit;
@@ -1903,7 +1913,7 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-html[data-theme="dark"] :is(.brand-guide-price-range, .brand-guide-table-wrap, .brand-guide-budget-tabs, .brand-guide-budget-models a, .brand-guide-alternatives a, .brand-guide-loading, .brand-guide-select) {
+html[data-theme="dark"] :is(.brand-guide-price-range, .brand-guide-table-wrap, .brand-guide-budget-models a, .brand-guide-alternatives a, .brand-guide-loading, .brand-guide-select) {
   background: var(--filter-field-bg);
 }
 html[data-theme="dark"] .brand-guide-budget-tabs button.active {
@@ -1931,6 +1941,14 @@ html[data-theme="dark"] .brand-guide-budget-tabs button.active {
 }
 html[data-theme="dark"] .brand-guide :is(.catalog-landing-links a, .catalog-landing-faq .home-faq-item) {
   background: var(--filter-field-bg);
+}
+html[data-theme="dark"] .brand-guide .catalog-landing-links a:hover,
+html[data-theme="dark"] .brand-guide .catalog-landing-links a:focus-visible,
+html[data-theme="dark"] .brand-guide .brand-guide-budget-models a:hover,
+html[data-theme="dark"] .brand-guide .brand-guide-budget-models a:focus-visible,
+html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:hover,
+html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
+  background: #383d45;
 }
 .filter-panel {
   padding: 18px;
@@ -2759,7 +2777,8 @@ body.header-menu-open .detail-floating-availability {
 }
 .gallery-panel {
   position: relative;
-  height: 495px;
+  /* На 15% ниже исходного 4:3: кадр компактнее, но заметно просторнее прежнего 16:9. */
+  aspect-ratio: 80 / 51;
   overflow: hidden;
   border-radius: calc(16px * var(--corner-scale));
   background: var(--surface);
@@ -3874,8 +3893,6 @@ body.header-menu-open .detail-floating-availability {
   .side-card,
   .delivery-case,
   .agreement-preview,
-  .guarantee-principle-card,
-  .guarantee-boundaries-grid > div,
   .auth-card,
   .customer-order-stages,
   .customer-order-stage-heading,
@@ -3893,10 +3910,8 @@ body.header-menu-open .detail-floating-availability {
   .service-scope,
   .case-proof-section,
   .purchase-notice-section,
-  .guarantee-boundaries,
   .faq-hero aside,
   .payment-stage-list dl,
-  .responsibility-head,
   .delivery-case blockquote
 ) {
   background: var(--panel-soft);
@@ -3940,7 +3955,7 @@ html[data-theme="dark"] #root .load-more {
 :root[data-theme="dark"] .price-currency-switch button.active,
 :root[data-theme="dark"] .header-actions .currency-switch button.active {
   background: #383d45;
-  color: #ff7a81;
+  color: #fff;
   box-shadow: none;
 }
 :root[data-theme="dark"] .theme-toggle {
@@ -4866,6 +4881,7 @@ html[data-theme="dark"] #root .load-more {
     text-align: left;
   }
   .gallery-panel {
+    aspect-ratio: auto;
     height: 450px;
   }
   .order-card {
@@ -5271,6 +5287,9 @@ html[data-theme="dark"] #root .load-more {
   .brand-guide-alternatives {
     grid-template-columns: 1fr;
   }
+  .brand-guide .catalog-landing-faq {
+    margin-top: 12px;
+  }
   .brand-guide-model-control {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -5294,16 +5313,6 @@ html[data-theme="dark"] #root .load-more {
   .brand-guide-model-control > span {
     order: 3;
   }
-  .brand-guide-budget-tabs {
-    display: flex;
-    gap: 4px;
-  }
-  .brand-guide-budget-tabs button {
-    flex: 0 0 auto;
-    min-height: 38px;
-    padding: 6px 8px;
-    font-size: 14px;
-  }
   .brand-guide-alternative-copy > span {
     overflow: visible;
     text-overflow: clip;
@@ -5314,8 +5323,90 @@ html[data-theme="dark"] #root .load-more {
     flex-direction: column;
     gap: 3px;
   }
+  .brand-guide-table-wrap {
+    overflow: visible;
+    background: transparent;
+  }
+  .brand-guide-table,
+  .brand-guide-table tbody {
+    width: 100%;
+    display: block;
+    background: transparent;
+  }
   .brand-guide-table {
-    min-width: 690px;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .brand-guide-table thead {
+    display: none;
+  }
+  .brand-guide-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+  .brand-guide-table .brand-guide-model-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    padding: 14px;
+    overflow: hidden;
+    border: 0;
+    border-radius: calc(14px * var(--corner-scale));
+    background: var(--surface);
+  }
+  .brand-guide-table .brand-guide-model-row > * {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+  .brand-guide-table .brand-guide-model-row > th {
+    grid-column: 1 / -1;
+  }
+  .brand-guide-table .brand-guide-model-row > td {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+    text-align: left;
+  }
+  .brand-guide-table .brand-guide-model-row > td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.25;
+  }
+  .brand-guide-table .brand-guide-model-row > td:nth-child(3) {
+    text-align: left;
+  }
+  .brand-guide-table .brand-guide-model-link {
+    width: 100%;
+  }
+  .brand-guide-table .brand-guide-powertrain {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: default;
+  }
+  .brand-guide-table .brand-guide-powertrain > svg {
+    flex: 0 0 auto;
+  }
+  .brand-guide-table .brand-guide-powertrain-label {
+    min-width: 0;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  html[data-theme="dark"] .brand-guide-table-wrap {
+    background: transparent !important;
+  }
+  html[data-theme="dark"] .brand-guide-table .brand-guide-model-row {
+    background: var(--filter-field-bg);
   }
   .brand-guide-budget-models {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6680,8 +6771,9 @@ html[data-theme="dark"] .select-search-clear:hover {
 }
 .custom-search-copy h2 {
   margin: 0;
-  font-size: 21px;
-  letter-spacing: -0.5px;
+  font-size: 27px;
+  line-height: 1.2;
+  letter-spacing: -0.8px;
 }
 .custom-search-copy p {
   max-width: 540px;
@@ -6696,9 +6788,10 @@ html[data-theme="dark"] .select-search-clear:hover {
 .custom-search-cta .primary {
   min-width: 230px;
   padding-inline: 18px;
+  text-decoration: none;
   white-space: nowrap;
 }
-html[data-theme="dark"] #root .brand-guide {
+html[data-theme="dark"] #root :is(.custom-search-cta, .brand-guide) {
   border-color: transparent;
 }
 .lead-modal textarea {
@@ -6735,7 +6828,7 @@ html[data-theme="dark"] #root .brand-guide {
     margin-inline: 0;
   }
   .custom-search-copy h2 {
-    font-size: 20px;
+    font-size: 23px;
   }
   .custom-search-cta .primary {
     width: 100%;
@@ -7305,7 +7398,7 @@ footer {
   border-radius: calc(12px * var(--corner-scale));
   background: #202329;
 }
-.gallery-modal figure img {
+.gallery-modal figure > img {
   width: 100%;
   height: 100%;
   max-height: calc(100vh - 110px);
@@ -7343,7 +7436,7 @@ footer {
     aspect-ratio: 4/3;
     border-radius: 0;
   }
-  .gallery-modal figure img {
+  .gallery-modal figure > img {
     max-height: none;
     min-height: 0;
   }
@@ -8021,6 +8114,68 @@ footer {
   min-width: 0;
   display: grid;
   gap: 38px;
+}
+.detail-gallery {
+  position: relative;
+}
+
+/* Увеличение фотографии на компьютере живёт прямо в квадратной линзе под
+   курсором. На сенсорных и узких экранах она не участвует ни в раскладке, ни в UI. */
+.gallery-zoom-lens,
+.gallery-modal-zoom-lens {
+  display: none;
+}
+@media (min-width: 981px) and (hover: hover) and (pointer: fine) {
+  .gallery-slide img {
+    object-fit: cover;
+  }
+  .gallery-zoom-lens,
+  .gallery-modal-zoom-lens {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 5;
+    display: block;
+    width: min(clamp(280px, 40%, 320px), 100%);
+    aspect-ratio: 1;
+    overflow: hidden;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.86);
+    border-radius: calc(14px * var(--corner-scale));
+    background: var(--surface);
+    box-shadow: 0 0 0 1px rgba(17, 19, 22, 0.22), 0 10px 30px rgba(17, 19, 22, 0.2);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 120ms ease, visibility 0s linear 120ms;
+    will-change: transform;
+  }
+  .gallery-zoom-lens.is-visible,
+  .gallery-modal-zoom-lens.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+  .gallery-panel.zooming .gallery-slide {
+    cursor: crosshair;
+  }
+  .gallery-modal figure.zooming {
+    cursor: crosshair;
+  }
+  .gallery-zoom-lens img,
+  .gallery-modal-zoom-lens img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: block;
+    max-width: none;
+    object-fit: cover;
+    pointer-events: none;
+    user-select: none;
+    will-change: transform;
+  }
+  .gallery-modal-zoom-lens img {
+    object-fit: contain;
+  }
 }
 .detail-facts-section {
   min-width: 0;
@@ -9433,6 +9588,31 @@ html[data-theme="dark"] #root .spec-search,
   }
 }
 
+/* The desktop newsletter needs more room than the four footer columns can give it
+   just above the tablet breakpoint. Collapse only its inner layout in that gap. */
+@media (min-width: 981px) and (max-width: 1060px) {
+  .footer-newsletter {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: -60px;
+  }
+}
+
+/* Four footer columns stop fitting before the phone layout takes over. Keep the
+   link groups in one row, but give the brand and newsletter a full tablet row. */
+@media (min-width: 701px) and (max-width: 840px) {
+  .footer-main {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .footer-brand,
+  .footer-newsletter {
+    grid-column: 1 / -1;
+  }
+  .footer-newsletter {
+    margin-top: 0;
+  }
+}
+
 @media (max-width: 700px) {
   .contact-hero {
     min-height: 0;
@@ -9565,12 +9745,11 @@ html[data-theme="dark"] #root .spec-search,
   }
 }
 
-/* Payment, guarantees and FAQ */
+/* Payment and FAQ */
 .purchase-info-page {
   overflow: hidden;
 }
-.purchase-info-hero,
-.guarantees-hero {
+.purchase-info-hero {
   min-height: 545px;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(350px, 0.85fr);
@@ -9580,7 +9759,6 @@ html[data-theme="dark"] #root .spec-search,
   padding-bottom: 72px;
 }
 .purchase-info-hero h1,
-.guarantees-hero h1,
 .faq-hero h1 {
   max-width: 790px;
   margin: 14px 0 20px;
@@ -9589,7 +9767,6 @@ html[data-theme="dark"] #root .spec-search,
   letter-spacing: -2.7px;
 }
 .purchase-info-hero > div > p,
-.guarantees-hero > div > p,
 .faq-hero > div > p {
   max-width: 680px;
   margin: 0;
@@ -9597,8 +9774,7 @@ html[data-theme="dark"] #root .spec-search,
   font-size: 17px;
   line-height: 1.65;
 }
-.agreement-preview,
-.guarantee-principle-card {
+.agreement-preview {
   padding: 28px;
   border: 1px solid var(--line);
   border-radius: calc(20px * var(--corner-scale));
@@ -9622,8 +9798,7 @@ html[data-theme="dark"] #root .spec-search,
   text-transform: uppercase;
   letter-spacing: 0.09em;
 }
-.agreement-preview h2,
-.guarantee-principle-card h2 {
+.agreement-preview h2 {
   margin: 9px 0 18px;
   font-size: 24px;
   letter-spacing: -0.6px;
@@ -9647,8 +9822,7 @@ html[data-theme="dark"] #root .spec-search,
   flex: 0 0 auto;
   color: var(--green);
 }
-.payment-stages,
-.responsibility-section {
+.payment-stages {
   padding-top: 84px;
   padding-bottom: 96px;
 }
@@ -9746,103 +9920,6 @@ html[data-theme="dark"] #root .spec-search,
 }
 .purchase-notice .secondary {
   padding: 0 18px;
-}
-.guarantee-principle-card {
-  background: #17191c;
-  color: #fff;
-}
-.guarantee-principle-card > svg {
-  color: var(--accent-on-dark);
-}
-.guarantee-principle-card h2 {
-  margin-top: 21px;
-}
-.guarantee-principle-card p {
-  margin: 0;
-  color: #b9bec6;
-  font-size: 16px;
-  line-height: 1.65;
-}
-.responsibility-table {
-  border: 1px solid var(--line);
-  border-radius: calc(16px * var(--corner-scale));
-  overflow: hidden;
-}
-.responsibility-head,
-.responsibility-row {
-  display: grid;
-  grid-template-columns: 1fr 0.72fr 1.35fr;
-  gap: 26px;
-  align-items: center;
-}
-.responsibility-head {
-  padding: 13px 20px;
-  background: var(--panel-soft);
-  color: var(--muted);
-  font-size: 16px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-.responsibility-row {
-  min-height: 86px;
-  padding: 17px 20px;
-  border-top: 1px solid var(--line);
-}
-.responsibility-row b {
-  font-size: 16px;
-}
-.responsibility-row > span {
-  width: fit-content;
-  padding: 6px 9px;
-  border-radius: calc(20px * var(--corner-scale));
-  background: var(--accent-soft);
-  color: var(--accent-dark);
-  font-size: 16px;
-  font-weight: 750;
-}
-.responsibility-row p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.55;
-}
-.guarantee-boundaries {
-  background: var(--panel-soft);
-}
-.guarantee-boundaries-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  padding-top: 68px;
-  padding-bottom: 68px;
-}
-.guarantee-boundaries-grid > div {
-  padding: 28px 34px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-.guarantee-boundaries-grid > div:first-child {
-  border-radius: calc(16px * var(--corner-scale)) 0 0 calc(16px * var(--corner-scale));
-}
-.guarantee-boundaries-grid > div:last-child {
-  border-radius: 0 calc(16px * var(--corner-scale)) calc(16px * var(--corner-scale)) 0;
-}
-.guarantee-boundaries-grid > div:first-child > svg {
-  color: var(--green);
-}
-.guarantee-boundaries-grid > div:last-child > svg {
-  color: var(--accent-dark);
-}
-.guarantee-boundaries-grid h3 {
-  margin: 17px 0 9px;
-  font-size: 19px;
-}
-.guarantee-boundaries-grid p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.65;
 }
 .faq-page {
   padding-top: 70px;
@@ -9943,14 +10020,12 @@ html[data-theme="dark"] #root .spec-search,
 
 @media (max-width: 980px) {
   .purchase-info-hero,
-  .guarantees-hero,
   .faq-hero {
     grid-template-columns: 1fr;
     gap: 36px;
     min-height: 0;
   }
   .agreement-preview,
-  .guarantee-principle-card,
   .faq-hero aside {
     max-width: 650px;
   }
@@ -9967,32 +10042,27 @@ html[data-theme="dark"] #root .spec-search,
 }
 
 @media (max-width: 700px) {
-  .purchase-info-hero,
-  .guarantees-hero {
+  .purchase-info-hero {
     gap: 28px;
     padding-top: 12px;
     padding-bottom: 44px;
   }
   .purchase-info-hero h1,
-  .guarantees-hero h1,
   .faq-hero h1 {
     margin-top: 11px;
     font-size: 36px;
     letter-spacing: -1.7px;
   }
   .purchase-info-hero > div > p,
-  .guarantees-hero > div > p,
   .faq-hero > div > p {
     font-size: 16px;
   }
-  .agreement-preview,
-  .guarantee-principle-card {
+  .agreement-preview {
     padding: 22px 18px;
     border-radius: calc(15px * var(--corner-scale));
     box-shadow: none;
   }
-  .payment-stages,
-  .responsibility-section {
+  .payment-stages {
     padding-top: 54px;
     padding-bottom: 62px;
   }
@@ -10015,31 +10085,6 @@ html[data-theme="dark"] #root .spec-search,
   .purchase-notice .secondary {
     grid-column: 1 / -1;
     width: 100%;
-  }
-  .responsibility-table {
-    border-radius: calc(14px * var(--corner-scale));
-  }
-  .responsibility-head {
-    display: none;
-  }
-  .responsibility-row {
-    grid-template-columns: 1fr;
-    gap: 9px;
-    padding: 18px;
-  }
-  .responsibility-row:first-of-type {
-    border-top: 0;
-  }
-  .guarantee-boundaries-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding-top: 48px;
-    padding-bottom: 48px;
-  }
-  .guarantee-boundaries-grid > div:first-child,
-  .guarantee-boundaries-grid > div:last-child {
-    padding: 23px 19px;
-    border-radius: calc(14px * var(--corner-scale));
   }
   .faq-page {
     padding-top: 20px;
@@ -12584,7 +12629,10 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
     flex-basis: 40px;
     border-radius: calc(12px * var(--corner-scale));
   }
-  :root[data-theme="dark"] .header-menu-currency button.active,
+  :root[data-theme="dark"] .header-menu-currency button.active {
+    background: #383d45;
+    color: #fff;
+  }
   :root[data-theme="dark"] .header-menu-theme button.active {
     background: #383d45;
     color: #ff7a81;
@@ -17449,5 +17497,17 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
     flex-wrap: wrap;
     gap: 8px 12px;
     min-width: 0;
+  }
+}
+
+/* На телефоне длинные диапазоны удобнее выбирать из списка. На планшетной и
+   десктопной ширине остаются только сегментированные бюджетные табы. */
+@media (max-width: 520px) {
+  .brand-guide-budget-tabs {
+    display: none;
+  }
+  .select-field.brand-guide-budget-select {
+    display: block;
+    width: 100%;
   }
 }

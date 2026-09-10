@@ -134,9 +134,8 @@ export function normalizeChe168TechnicalSpecs(groups) {
     normalizedGroups.push({ name:String(group?.name || "Other").trim() || "Other", items });
     count += items.length;
   }
-  // Язык подписей определяется по ним самим: сборщик с 31.08.2026 ходит по русской
-  // версии источника, и записывать «en» у всех подряд значило бы врать в своих же
-  // данных — а по этой отметке видно, каким разбором машину заводили.
+  // Determine language from actual labels: legacy RU sheets must remain
+  // distinguishable from EN details required for new imports since 2026-09-10.
   const cyrillic = normalizedGroups.some((group) => group.items.some((item) => /[А-Яа-яЁё]/.test(item.name)));
   return {
     schemaVersion: 1,
@@ -147,13 +146,19 @@ export function normalizeChe168TechnicalSpecs(groups) {
 }
 
 function specValue(specs, patterns) {
-  const item = specs.find((candidate) => patterns.some((pattern) => pattern.test(candidate.name || "")));
-  return actualSpecValue(item);
+  // Duplicate parameters can appear in several groups. A placeholder in the
+  // summary must not hide a populated row in the engine/battery section.
+  for (const item of specs) {
+    if (!patterns.some((pattern) => pattern.test(item.name || ""))) continue;
+    const value = actualSpecValue(item);
+    if (value && !/^[-—–]+$/.test(value)) return value;
+  }
+  return null;
 }
 
 // Характеристики машины лежат в карточке строками «название — значение», и назван
 // каждая строка на языке той версии сайта, откуда карточка взята. С 31.08.2026
-// сборщик ходит по русской версии (так он проходит проверку «не робот»), а искали
+// сборщик ходил по русской версии (с 10.09 детали снова EN), а искали
 // мы по-английски — и у 6 202 машин остались пустыми батарея, запас хода, разгон,
 // момент, шины и объём двигателя. Объём вдобавок нужен расчёту пошлины: без него
 // растаможку считали по «полтора литра по умолчанию». Поэтому каждое название
@@ -176,17 +181,23 @@ export function deriveChe168SpecFields(specs) {
   // и никогда не смешиваются с собственным замером продавца.
   const electricRange = [
     [/^CLTC Pure Electric Range/i, /^запас хода на электротяге по CLTC/i],
-    [/^WLTP Pure Electric Range/i, /^Запас хода на электротяге по WLTC/i],
+    [/^WLTC Pure Electric Range/i, /^WLTP Pure Electric Range/i, /^Запас хода на электротяге по WLTC/i],
     [/^NEDC Pure Electric Range/i, /^Запас хода на электротяге по NEDC/i],
     [/^Pure Electric Range/i, /^Запас хода на электротяге/i],
   ].reduce((found, patterns) => found ?? numeric(specValue(specs, patterns)), null);
-  const horsepower = numeric(specValue(specs, [
-    /^Total Electric Motor Horsepower/i, /^Electric Motor \(Ps\)$/i,
-    /^Суммарная мощность электродвигателей \(л[.,]с[.,]\)/i,
-    /^Совокупная мощность системы \(л[.,]с[.,]\)/i,
-    /^Электродвигатель \(л[.,]с[.,]\)/i,
-    /^максимальная мощность \(л[.,]с[.,]\)/i,
-  ]));
+  // Prefer published system power, then electric motors, then the combustion
+  // engine. Never add engine and motor ratings or depend on source row order.
+  const horsepower = [
+    [/^System Combined Power \(Ps\)$/i, /^Совокупная мощность системы \(л[.,]с[.,]\)/i],
+    [/^Total Electric Motor Horsepower/i, /^Electric Motor \(Ps\)$/i,
+      /^Суммарная мощность электродвигателей \(л[.,]с[.,]\)/i, /^Электродвигатель \(л[.,]с[.,]\)/i],
+    [/^Maximum horsepower \(Ps\)$/i, /^максимальная мощность \(л[.,]с[.,]\)/i],
+  ].reduce((found, patterns) => found ?? numeric(specValue(specs, patterns)), null);
+  const combinedRange = [
+    [/^CLTC Combined Range/i, /^Общий запас хода.*CLTC/i],
+    [/^WLTC Combined Range/i, /^Общий запас хода.*WLTC/i],
+    [/^NEDC Combined Range/i, /^Общий запас хода.*NEDC/i],
+  ].reduce((found, patterns) => found ?? numeric(specValue(specs, patterns)), null);
   const acceleration = numeric(specValue(specs, [
     /^Official 0-100km\/h acceleration/i, /^Measured 0-100km\/h acceleration/i,
     /^Официальное ускорение 0-100/i, /^Фактическое ускорение 0-100/i,
@@ -206,6 +217,7 @@ export function deriveChe168SpecFields(specs) {
   return {
     battery,
     electricRange,
+    combinedRange,
     horsepower,
     acceleration,
     torqueNm: torqueValues.length ? Math.max(...torqueValues) : null,
@@ -218,6 +230,9 @@ export function deriveChe168SpecFields(specs) {
     bodyStructure: specValue(specs, [/^Body structure$/i, /^Тип кузова$/i, /^Структура кузова$/i]),
     seats: numeric(specValue(specs, [/^Seating capacity$/i, /^Количество мест/i])),
     doors: numeric(specValue(specs, [/^Number of doors$/i, /^Количество дверей/i])),
+    curbWeight: numeric(specValue(specs, [/^Curb weight \(kg\)$/i, /^Снаряж[её]нная масса/i])),
+    dimensions: specValue(specs, [/^Length\*Width\*Height \(mm\)$/i, /^Длина.*Ширина.*Высота/i]),
+    transmission: specValue(specs, [/^Abbreviation$/i, /^Сокращ[её]нное название$/i, /^Краткое название$/i]),
   };
 }
 
@@ -255,7 +270,7 @@ function cleanModel(value, brand) {
 }
 
 export function normalizeChe168Energy(detail, specs) {
-  // Слова берём и по-английски, и по-русски: с 31.08.2026 сборщик ходит по русской
+  // Слова берём и по-английски, и по-русски: с 31.08.2026 сборщик ходил по русской
   // версии источника, и там «Электромобиль», «Продлённый запас хода», «Тип топлива»
   // вместо Pure Electric, Range Extender, Energy Type. Пока условия были только
   // английскими, 1 547 электромобилей и гибридов записались как бензиновые — а от
@@ -277,7 +292,7 @@ export function normalizeChe168Energy(detail, specs) {
   return "ДВС";
 }
 
-export function buildChe168Car(payload, { importedAt = new Date().toISOString(), usdToCny = 7.15 } = {}) {
+export function buildChe168Car(payload, { importedAt = new Date().toISOString(), usdToCny = 7.15, expectedLocale } = {}) {
   const detail = payload?.detail;
   if (!detail?.infoid) return null;
   const specs = flattenedSpecs(payload.specGroups);
@@ -292,15 +307,24 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
   if (!brand || !model || !year || !sourcePriceUsd || mileage === null || images.length < 2) return null;
 
   const {
-    battery, electricRange, horsepower, batteryType, batteryBrand, acceleration,
+    battery, electricRange, combinedRange, horsepower, batteryType, batteryBrand, acceleration,
     torqueNm, tireSizeFront, tireRim, engine, driveRaw: driveFromSpecs,
     bodyStructure: structureFromSpecs, seats: seatsFromSpecs, doors: doorsFromSpecs,
+    curbWeight: weightFromSpecs, dimensions: dimensionsFromSpecs, transmission: transmissionFromSpecs,
   } = deriveChe168SpecFields(specs);
   const sourceUrl = `https://global.che168.com/en/detail/${detail.infoid}`;
   const chinaPrice = Math.round((sourcePriceUsd * usdToCny) / 100) * 100;
-  const driveRaw = detail.drivingmode || driveFromSpecs;
+  const driveRaw = normalizeDrive(detail.drivingmode) !== "Не указан" ? detail.drivingmode : driveFromSpecs;
   const bodyStructure = detail.structure || structureFromSpecs;
   const technicalSpecs = normalizeChe168TechnicalSpecs(payload.specGroups);
+  // Old stored RU sheets remain readable, but every network importer explicitly
+  // requests EN and must reject an accidental localized response before writing.
+  if (expectedLocale === "en" && (technicalSpecs.sourceLocale !== "en"
+    || /[А-Яа-яЁё]/.test([detail.drivingmode, detail.fuelname, detail.gearbox].join(" ")))) {
+    const error = new Error(`Che168 ${detail.infoid}: expected English specifications; localized response rejected`);
+    error.code = "CHE168_LOCALE_MISMATCH";
+    throw error;
+  }
 
   const car = repairVerifiedDrive({
     id: `che168-${detail.infoid}`,
@@ -335,10 +359,11 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     batteryType,
     batteryBrand,
     electricRange,
+    combinedRange,
     range: electricRange,
     horsepower,
     engine,
-    transmission: detail.gearbox || null,
+    transmission: detail.gearbox && !/^[-—–]+$/.test(detail.gearbox.trim()) ? detail.gearbox : transmissionFromSpecs,
     bodyColor: detail.color || null,
     vehicleClass: detail.level || null,
     bodyStructure,
@@ -348,8 +373,8 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     tireRim,
     seats: numeric(detail.setcount) ?? seatsFromSpecs,
     doors: numeric(detail.structuredoor) ?? doorsFromSpecs,
-    dimensions: detail.dimension || null,
-    curbWeight: numeric(detail.curbweight),
+    dimensions: detail.dimension && !/^[-—–]+$/.test(detail.dimension.trim()) ? detail.dimension : dimensionsFromSpecs,
+    curbWeight: numeric(detail.curbweight) ?? weightFromSpecs,
     technicalSpecs,
     image: images[0],
     images,
@@ -362,7 +387,7 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     importedAt,
     checkedAt: importedAt,
     sourceId: `CH-${detail.infoid}`,
-    originalLanguage: "en",
+    originalLanguage: technicalSpecs.sourceLocale,
     priceHistory: [{ at:importedAt, priceCny:chinaPrice }],
   });
   return { ...car, specWarnings: driveConflicts(car) };

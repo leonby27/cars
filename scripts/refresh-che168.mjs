@@ -65,6 +65,7 @@ import { extractChe168ListPayload, extractChe168DetailPayload, buildChe168Car } 
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
+import { prioritizeBrandBacklog, updateBrandBacklog } from "./lib/refresh-backlog.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, sourceBrandOf, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
@@ -392,7 +393,7 @@ function orderedBrands(fuelType, table, doneSet, { restartWhenEmpty = true } = {
 // бы никогда.
 async function loadCursor() {
   try { return JSON.parse(await fs.readFile(path.join(ROOT, CURSOR_PATH), "utf8")); }
-  catch { return { brandsDone: [], round: 1 }; }
+  catch { return { brandsDone: [], round: 1, uncheckedBeforeByBrand: {} }; }
 }
 async function saveCursor(cursor) {
   if (dryRun) return;
@@ -703,7 +704,7 @@ const { importCars } = await import("../server/repository.mjs");
 // Порядок важен: очередь поштучных проверок берётся из этого же списка, и
 // «сначала самые давно не проверенные» превращает ограниченный ночной запас
 // проверок в честную карусель по всему каталогу.
-const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_total_usd,
+const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_total_usd, last_checked_at,
     (source_payload->>'usdPrice')::numeric AS usd_price,
     (source_payload->>'year')::int AS year,
     source_payload->>'type' AS type,
@@ -782,7 +783,7 @@ const burstBrands = new Set();
 const allBrandsThisRun = new Set();
 const tgQuiet = args.get("quiet") === "true";
 // Курсор читается до обхода, пишется после: ночь продолжает с места остановки.
-let cursor = { brandsDone: [], round: 1 };
+let cursor = { brandsDone: [], round: 1, uncheckedBeforeByBrand: {} };
 
 // Страница списка учтена: цены — в общую копилку, незнакомые машины — в находки.
 function absorbList(payload, fuelType) {
@@ -978,6 +979,7 @@ async function reportBrand(entry, res) {
     `Цены изменились у: ${res.rePriced}`,
     `Новых заведено: ${res.added}${res.addFailed ? ` (не удалось: ${res.addFailed})` : ""}`,
     `Снято с продажи: ${res.sold}`,
+    ...(res.unchecked ? [`Не проверено: ${res.unchecked} — первыми в следующем круге марки`] : []),
     `Осталось в каталоге: ${res.remaining}`,
     `Страниц прочитано: ${res.pages}${res.windows > 1 ? ` в ${res.windows} ценовых окнах` : ""} · ${res.minutes} мин`,
   ];
@@ -1025,7 +1027,7 @@ async function writeDiscoveries() {
 // after retries) stays untouched and is only counted: guessing here would
 // either hide a live car or keep advertising a sold one.
 async function checkDetail(externalId) {
-  const { status, text, answered } = await safeFlight(`/ru/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
+  const { status, text, answered } = await safeFlight(`/en/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
   const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
   // Машина, снятая с продажи, с начала сентября 2026 отдаётся не ошибкой, а
   // обычной пустой страницей «ничего не найдено» (12 КБ вместо 88 КБ у живой).
@@ -1040,12 +1042,21 @@ async function checkDetail(externalId) {
 // нужна ради фотографий и характеристик (в списке их нет), а посетитель должен
 // увидеть машину в тот же проход. Возвращает 'added' | 'rejected' | 'failed'.
 async function addNewCar(externalId) {
-  const { status, text, answered } = await safeFlight(`/ru/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
+  // Discovery keeps its proven RU session/pagination; specifications must come
+  // from EN. Che168 RU mistranslates FWD as RWD (verified 2026-09-10).
+  const { status, text, answered } = await safeFlight(`/en/detail/${externalId}?_rsc=${RSC_DETAIL}`, "ssrCarDetail");
   const payload = status === 200 && text ? extractChe168DetailPayload([asFlightScript(text)]) : null;
   // Найденная в списке машина к моменту скачивания карточки бывает уже снята —
   // это не сбой скачивания, а «её больше нет»: молчанием источника не считаем.
   if (!payload?.detail) return answered ? "rejected" : "failed";
-  const car = buildChe168Car(payload);
+  let car;
+  try {
+    car = buildChe168Car(payload, { expectedLocale: "en" });
+  } catch (error) {
+    if (error.code !== "CHE168_LOCALE_MISMATCH") throw error;
+    console.warn(`[new] ${externalId}: источник вернул характеристики не на английском; запись пропущена`);
+    return "failed";
+  }
   if (!car) return "rejected";
   // Правила ввоза и потолок цены проверяем здесь же: список показывает цену в
   // Китае, а решает стоимость под ключ.
@@ -1202,6 +1213,9 @@ try {
   }
 
   cursor = await loadCursor();
+  // Старые курсоры не знали о хвостах марок. Добавляем поле мягко: выкладка
+  // новой версии продолжит текущий круг, не начиная его заново.
+  cursor.uncheckedBeforeByBrand = cursor.uncheckedBeforeByBrand || {};
   await loadOrder();
   if (orderConfig?.burst) {
     // Ноль — осмысленное значение («заранее не отдыхаем»), поэтому проверяем
@@ -1268,8 +1282,11 @@ try {
   for (const entry of brandsToWalk) {
     if (stopped) break;
     const began = Date.now();
+    const attemptedAt = new Date(began).toISOString();
     const ourRows = ourRowsByBrand.get(entry.brand) || [];
     const ourPrices = ourPricesByBrand.get(entry.brand) || [];
+    const backlogCutoff = cursor.uncheckedBeforeByBrand[entry.brand] || null;
+    const verifiedThisBrand = new Set();
     const pricedBefore = seenPrices.size;
     const pagesBefore = listPages;
     const rePricedBefore = stats.rePriced;
@@ -1339,25 +1356,37 @@ try {
     const missingHere = [];
     for (const row of ourRows) {
       const liveUsd = seenPrices.get(String(row.external_id));
-      if (liveUsd) classify(row, liveUsd);
+      if (liveUsd) { classify(row, liveUsd); verifiedThisBrand.add(row.id); }
       else if (ok) missingHere.push(row);
     }
     let soldHere = 0;
     if (!skipDetail && ok && !stopped) {
-      const queue = missingHere.slice(0, detailPerBrand);
+      // Хвост прошлого прохода занимает первые места в той же квоте. Обращений
+      // не становится больше: меняется только порядок уже выбранных проверок.
+      const queue = prioritizeBrandBacklog(missingHere, backlogCutoff).slice(0, detailPerBrand);
       detailSkipped += missingHere.length - queue.length;
       for (const row of queue) {
         if (stopped) break;
         const result = await checkDetail(row.external_id);
         await noteAnswer(result.verdict !== "unknown");
-        if (result.verdict === "sold") { soldIds.push(row.id); soldHere += 1; }
-        else if (result.verdict === "alive") classify(row, result.price);
+        if (result.verdict === "sold") { soldIds.push(row.id); soldHere += 1; verifiedThisBrand.add(row.id); }
+        else if (result.verdict === "alive") { classify(row, result.price); verifiedThisBrand.add(row.id); }
         else unknown += 1;
         detailChecked += 1;
         await sleep(pace);
       }
     }
     await flushWrites();
+
+    // Одна дата на марку заменяет длинный список id. При следующем проходе все
+    // строки со старой last_checked_at узнаются как хвост и идут первыми. Когда
+    // хвост исчерпан, запись марки исчезает из курсора.
+    const unchecked = ourRows.length - verifiedThisBrand.size;
+    cursor.uncheckedBeforeByBrand = updateBrandBacklog(
+      cursor.uncheckedBeforeByBrand,
+      entry.brand,
+      unchecked > 0 ? attemptedAt : null,
+    );
 
     // Машина в базе — ещё не машина на сайте: каталог отдаётся из кэша.
     if (added > 0 && !dryRun) await purgePageCache(added);
@@ -1372,6 +1401,7 @@ try {
       added,
       addFailed,
       sold: soldHere,
+      unchecked,
       remaining: Math.max(0, ourRows.length - soldHere + added),
       pages: listPages - pagesBefore,
       windows,
@@ -1382,10 +1412,14 @@ try {
     totals.rePriced += res.rePriced;
     totals.added += added;
     totals.sold += soldHere;
-    console.log(`[brand] ${entry.brand}: ${res.priced} цен, ${res.rePriced} изменилось, +${added} новых, ${soldHere} снято, ${res.pages} страниц, ${res.minutes} мин${res.ok ? "" : " — не до конца"}`);
+    console.log(`[brand] ${entry.brand}: ${res.priced} цен, ${res.rePriced} изменилось, +${added} новых, ${soldHere} снято, ${unchecked} ждут следующего круга, ${res.pages} страниц, ${res.minutes} мин${res.ok ? "" : " — не до конца"}`);
     await reportBrand(entry, res);
     // Курсор двигаем после каждой марки: обрыв не потеряет пройденное.
-    await saveCursor({ brandsDone: [...new Set([...(cursor.brandsDone || []), ...coveredBrands])], round: cursor.round || 1 });
+    await saveCursor({
+      brandsDone: [...new Set([...(cursor.brandsDone || []), ...coveredBrands])],
+      round: cursor.round || 1,
+      uncheckedBeforeByBrand: cursor.uncheckedBeforeByBrand,
+    });
   }
 
   console.log(`[lists] done: ${listPages} pages (${listPagesEmpty} empty), ${seenPrices.size} cars priced`);
@@ -1413,8 +1447,8 @@ try {
   outOfShift = remainingBrands;
   const circleClosed = doneNow.size > 0 && remainingBrands === 0;
   const nextCursor = circleClosed
-    ? { brandsDone: [], round: (cursor.round || 1) + 1 }
-    : { brandsDone: [...doneNow], round: cursor.round || 1 };
+    ? { brandsDone: [], round: (cursor.round || 1) + 1, uncheckedBeforeByBrand: cursor.uncheckedBeforeByBrand }
+    : { brandsDone: [...doneNow], round: cursor.round || 1, uncheckedBeforeByBrand: cursor.uncheckedBeforeByBrand };
   await saveCursor(nextCursor);
   console.log(
     circleClosed

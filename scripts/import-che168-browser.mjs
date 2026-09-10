@@ -146,10 +146,10 @@ export async function createChe168Pilot({ browser, limit = 100, pages = 24, conc
   }
 
   async function parseCandidate(candidate, tab) {
-    await tab.goto(candidate.url);
+    await tab.goto(`https://global.che168.com/en/detail/${encodeURIComponent(candidate.externalId)}`);
     await wait(250);
     const payload = extractChe168DetailPayload(await scriptTexts(tab));
-    const car = buildChe168Car(payload);
+    const car = buildChe168Car(payload, { expectedLocale: "en" });
     if (!car) throw new Error("detail page lacks required structured fields or gallery");
     const violation = importPolicyViolation(car);
     if (violation) throw new Error(`Import policy: ${violation}`);

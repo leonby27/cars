@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { estimateLandedCost, PRICING, CLEARANCE_MONTHS } from "../src/pricing.js";
+import { estimateLandedCost, PRICING, CLEARANCE_MONTHS, usdToByn } from "../src/pricing.js";
 import { engineVolume } from "../src/engine-spec.js";
+
+test("rounds converted Belarusian-ruble prices to the nearest hundred", () => {
+  assert.equal(usdToByn(123449 / PRICING.usdByn), 123400);
+  assert.equal(usdToByn(123451 / PRICING.usdByn), 123500);
+});
 
 test("keeps the landed estimate internally consistent", () => {
   const price = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль" }, { quotaOver:false });

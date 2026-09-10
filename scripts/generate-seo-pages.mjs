@@ -17,7 +17,7 @@ import { estimateLandedCost } from "../src/pricing.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
-import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES, RESPONSIBILITY_ITEMS } from "../src/purchase-info.js";
+import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES } from "../src/purchase-info.js";
 import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
 import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
@@ -120,7 +120,6 @@ const publicPages = [
   // подход и «чего мы не обещаем» — перенесены вниз `/how-it-works`, а сам адрес
   // перебрасывается туда навсегда (правило в vercel.json).
   { route: "/payment-and-contract/", title: "Оплата и договор при покупке авто из Китая | abcars.by", description: "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы.", h1: "Оплата и договор", lead: "До оплаты фиксируем выбранный автомобиль, состав услуг, порядок расчётов и ответственность сторон." },
-  { route: "/guarantees/", title: "Гарантии при покупке автомобиля из Китая | abcars.by", description: "Что проверяется и фиксируется при покупке автомобиля из Китая, за что отвечает abcars.by и какие риски обсуждаются до договора.", h1: "Гарантии и ответственность", lead: "Фиксируем проверку, документы, платежи и сопровождение доставки, не подменяя факты обещаниями." },
   { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы о проверке, цене, договоре, оплате, доставке и ответственности." },
   { route: "/contacts/", title: "Контакты abcars.by — автомобили из Китая в Минске", description: "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая.", h1: "Контакты abcars.by", lead: "Обсудим бюджет, подбор, проверку, договор и доставку автомобиля из Китая в Беларусь." },
   { route: "/privacy/", title: "Политика конфиденциальности | abcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
@@ -176,7 +175,7 @@ const withoutMetrika = (html) => html
   .replace(/\s*<script\b[^>]*id=["']google-analytics["'][^>]*>[\s\S]*?<\/script>/i, "");
 
 // ── Куда идти дальше с информационной страницы ────────────────────────────────
-// Страницы про растаможку, квоту, стоимость доставки, расчёт, гарантии и вопросы —
+// Страницы про растаможку, квоту, стоимость доставки, расчёт и вопросы —
 // самые содержательные на сайте, от 1 100 до 1 800 слов. При этом они были тупиками:
 // ни одной ссылки в каталог, только меню и подвал. Человеку после «на электромобиль
 // пошлины нет» некуда нажать, а поисковик не переносит вес этих страниц на
@@ -199,11 +198,6 @@ const PATHWAYS = {
     heading: "Сколько это выходит в деньгах",
     intro: "Порядок расчётов от машины не зависит, а сумма зависит. Подборки собраны по итоговой цене до Минска — со всеми платежами.",
     links: ["under-15000", "under-20000", "under-30000", "petrol-under-25000", "petrol-under-30000", "petrol-under-40000", "/calculator", "/delivery-cost"],
-  },
-  "/guarantees/": {
-    heading: "Что именно мы проверяем",
-    intro: "Проверка одна для всех машин, но смотреть приходится на разное: в электромобиле — батарея и её остаточная ёмкость, в гибриде — обе системы сразу, в бензиновой машине — двигатель, коробка и история обслуживания.",
-    links: ["electric", "hybrid", "petrol", "electric-suv", "petrol-suv", "/models", "/catalog"],
   },
   "/contacts/": {
     heading: "Пока мы отвечаем — посмотрите каталог",
@@ -347,9 +341,6 @@ function infoArticle(route) {
     return `<section><h2>Этапы оплаты</h2>${PAYMENT_STAGES.map(
       (stage) => `<h3>${escapeHtml(stage.title)}</h3><p>${escapeHtml(stage.description)}</p><p><strong>Платёж:</strong> ${escapeHtml(stage.payment)}. <strong>Когда:</strong> ${escapeHtml(stage.timing)}.</p>`,
     ).join("")}</section>`;
-  }
-  if (route === "/guarantees/") {
-    return `<section><h2>Кто за что отвечает</h2>${list(RESPONSIBILITY_ITEMS.map((item) => [`${item.title} — ${item.owner}`, item.result]))}</section>`;
   }
   if (route === "/contacts/") {
     const rows = [
