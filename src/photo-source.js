@@ -1,21 +1,31 @@
 const guaziHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 
+// Source photo URLs are stable most of the time, but a browser can occasionally
+// cache a broken response under that stable URL. Bumping this value gives every
+// visitor a fresh browser-cache key without throwing away the server-side copy.
+export const PHOTO_BROWSER_CACHE_VERSION = "20260910-1";
+
+const versionedPhotoHref = (href, version) => {
+  if (!href || !version) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
+};
+
 // Единый путь для интерфейса, аналитики и поисковой разметки.
 // На превью без собственного прокси mirrorOrigin указывает на наш сервер.
-export function vehiclePhotoHref(source, width = 0, { mirrorOrigin = "" } = {}) {
+export function vehiclePhotoHref(source, width = 0, { mirrorOrigin = "", cacheVersion = PHOTO_BROWSER_CACHE_VERSION } = {}) {
   if (!source) return source;
   try {
     const url = new URL(source.startsWith("//") ? `https:${source}` : source);
     if (!/^https?:$/.test(url.protocol)) return source;
     if (guaziHosts.has(url.hostname)) {
       url.protocol = "https:";
-      return `${mirrorOrigin}/api/image?src=${encodeURIComponent(url.href)}`;
+      return versionedPhotoHref(`${mirrorOrigin}/api/image?src=${encodeURIComponent(url.href)}`, cacheVersion);
     }
     if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return source;
     const path = width === "original"
       ? url.pathname.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, "/")
       : width ? url.pathname.replace(/\/\d+x\d+_(?=[^/]*$)/, `/${width}x0_`) : url.pathname;
-    return `${mirrorOrigin}/photo${path}`;
+    return versionedPhotoHref(`${mirrorOrigin}/photo${path}`, cacheVersion);
   } catch { return source; }
 }
 

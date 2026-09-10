@@ -5,7 +5,7 @@ export const PHOTO_RETENTION_MS = 7 * 86400_000;
 
 // All sizes of the same source share ownership, including old 900px copies.
 export function photoIdentity(source) {
-  const href = source?.startsWith('/photo/') ? source : vehiclePhotoHref(source, 'original');
+  const href = source?.startsWith('/photo/') ? source : vehiclePhotoHref(source, 'original', { cacheVersion:'' });
   if (typeof href !== 'string' || !/^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) || href.split('/').includes('..')) return null;
   return href.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, '/');
 }

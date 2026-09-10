@@ -5,7 +5,9 @@ import { vehiclePhotoHref } from '../../src/photo-source.js';
 
 export function catalogPhotoPaths(car, { previewCount = 1 } = {}) {
   return [...new Set((car.images?.length ? car.images : [car.image]).filter(Boolean).slice(0, previewCount === 5 ? 5 : 1)
-    .map(source => vehiclePhotoHref(source,600))
+    // Disk paths stay unversioned: the query marker exists only to refresh a
+    // visitor's browser and must never become part of the stored filename.
+    .map(source => vehiclePhotoHref(source,600,{cacheVersion:''}))
     .filter(href => /^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) && !href.split('/').includes('..')))];
 }
 
