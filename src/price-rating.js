@@ -9,15 +9,8 @@
 // пределах пары процентов, каждая пятая машина всё равно оказывалась бы «намного
 // дешевле остальных», хотя разницы там нет.
 //
-// Планка — это типичная цена набора, сдвинутая под пробег самой машины (сдвиг считает
-// сервер). Поэтому у машины с большим пробегом планка ниже, и её цена сравнивается не
-// с машинами вообще, а с тем, сколько такая машина с таким пробегом и стоит.
-//
-// Строки под шкалой — про деньги, а не про место в очереди. «Дешевле, чем 105 из 205»
-// пересказывает шкалу и ничего не добавляет; «такие машины с таким пробегом стоят
-// около столько, эта на столько дешевле» отвечает на вопрос, который человек и
-// задаёт. Все строки — обычные серые предложения: цветом отвечает только слово у
-// шкалы, иначе выделено всё и не выделено ничего.
+// Основа шкалы — медиана реальных цен. Больший пробег может ухудшить
+// только оценку близкой к медиане цены, не превращая дешёвую машину в дорогую.
 
 /** Края шкалы: отклонение от типичной цены на эту долю и больше упирается в конец. */
 export const PRICE_RATING_SPAN = 0.2;
@@ -26,8 +19,8 @@ export const PRICE_RATING_STEPS = 5;
 /** Отклонения, по которым цена получает своё название. */
 export const PRICE_RATING_BANDS = { same:0.03, far:0.1 };
 
-/** Планка набора: типичная цена, сдвинутая под пробег этой машины. */
-export const priceRatingBar = (mode) => Number(mode?.expectedUsd) || Number(mode?.medianUsd) || 0;
+/** Медиана реальных цен; старую расчётную expectedUsd не используем. */
+export const priceRatingBar = (mode) => Number(mode?.medianUsd) || 0;
 
 const deviation = (priceUsd, medianUsd) =>
   (Number(medianUsd) > 0 && Number(priceUsd) > 0 ? (priceUsd - medianUsd) / medianUsd : null);
@@ -99,15 +92,26 @@ const carsWord = (count) => (count % 10 === 1 && count % 100 !== 11 ? "тако�
 // служебные вызовы) остаётся шаг в сотню долларов.
 const roughUsd = (usd) => `${(Math.round(usd / 100) * 100).toLocaleString("ru-RU")} $`;
 
-/**
- * Первая строка: планка для этой машины и чем её цена от планки отличается. Одним
- * предложением и без выделений — цветом отвечает только слово у шкалы.
- *
- * Когда планка сдвинута под пробег, так и сказано: «с таким пробегом». Иначе вышло бы
- * непонятное «такие машины стоят в среднем 96 000» под машиной, у которой пробег вдвое
- * больше, чем у набора.
- */
-export const priceRatingPriceNote = (rating, mode, priceUsd, formatMoney) => {
+/** Общая оценка для слова, маркера и объяснения: одна логика во всех местах. */
+export const priceRatingAssessment = (rating, mode, priceUsd, mileage) => {
+  const bar = priceRatingBar(mode);
+  const base = priceRatingVerdict(priceUsd, bar);
+  if (!base) return null;
+  const ownMileage = Number(mileage) || 0;
+  const typicalMileage = Number(rating?.mileageMedian) || 0;
+  const strictlyCheapest = Number(rating?.count) > 0 && mode?.cheaperThan === rating.count;
+  const mileageAdjusted = base.step === 2 && !strictlyCheapest && rating?.sameYear === true
+    && typicalMileage > 0 && ownMileage >= typicalMileage * 1.15;
+  const verdict = mileageAdjusted ? { ...VERDICTS[3], step:3 } : base;
+  return {
+    verdict,
+    position:mileageAdjusted ? 3.5 / PRICE_RATING_STEPS : priceRatingPosition(priceUsd, bar),
+    mileageAdjusted,
+  };
+};
+
+/** Суммы всегда про реальные объявления, а поправка на пробег объясняется отдельно. */
+export const priceRatingPriceNote = (rating, mode, priceUsd, formatMoney, mileage) => {
   const bar = priceRatingBar(mode);
   const price = Number(priceUsd) || 0;
   if (!bar || !price) return null;
@@ -119,10 +123,12 @@ export const priceRatingPriceNote = (rating, mode, priceUsd, formatMoney) => {
     ? (year === lastYear ? `${year} года` : `${year}–${lastYear} годов`) : "";
   const cars = `Такие машины${years ? ` ${years}` : ""}`;
   const caveat = rating?.sameYear === false ? " Сравнение приблизительное: без поправки на год." : "";
-  const head = mode.mileageAdjusted
-    ? `${cars} с таким пробегом стоят около ${money(bar)}`
-    : `${cars} стоят в среднем ${money(bar)}`;
-  if (verdict.tone === "mid") return { text:`${head} — эта почти столько же.${caveat}`, tone:"mid" };
+  const head = `${cars} стоят в среднем ${money(bar)}`;
+  const assessment = priceRatingAssessment(rating, mode, price, mileage);
+  const mileageCaveat = assessment?.mileageAdjusted
+    ? " При близкой цене у этой машины заметно больше пробег — поэтому оценка выше средней."
+    : "";
+  if (verdict.tone === "mid") return { text:`${head} — эта почти столько же.${caveat}${mileageCaveat}`, tone:assessment.verdict.tone };
   const gap = money(Math.abs(price - bar));
   return { text:`${head} — эта на ${gap} ${price < bar ? "дешевле" : "дороже"}.${caveat}`, tone:verdict.tone };
 };
@@ -142,17 +148,13 @@ export const priceRatingBasisNote = (rating) => {
   // Перечисление по-русски: «а, б и в», а не «а и б и в».
   const list = matched.length > 1 ? `${matched.slice(0, -1).join(", ")} и ${matched.at(-1)}` : matched[0] || "";
   const tail = list ? ` ${list}` : "";
-  const adjusted = rating.quotaOn?.mileageAdjusted || rating.quotaOff?.mileageAdjusted
-    ? " Планка сдвинута под пробег этой машины."
-    : "";
-  return `Сравнили с ${rating.count} ${carsWord(rating.count)} ${years}${tail}.${adjusted}`;
+  return `Сравнили с ${rating.count} ${carsWord(rating.count)} ${years}${tail}.`;
 };
 
 /**
  * Строка про пробег. Пишем всегда, когда пробег выбивается из набора, — даже если
  * набор по пробегу и собирался: допуск там широкий, и разница в четверть внутри него
- * обычное дело. Планка её уже учла, но человек должен видеть, откуда взялась разница
- * в цене.
+ * обычное дело. Человек должен видеть отличие независимо от итоговой оценки.
  */
 export const priceRatingMileageNote = (rating, mileage) => {
   const own = Number(mileage) || 0;
@@ -188,9 +190,7 @@ export const priceRatingLimits = (rating) => {
   // Про батарею оговариваемся только там, где батарея вообще есть: у машины с мотором
   // её нет ни у одной стороны сравнения.
   if (!rating?.sameBattery && Number(rating?.batteryMedian) > 0) missing.push("батарея тоже разная");
-  // Про разный пробег оговариваемся, только если планку под него не сдвинули: иначе
-  // подсказка спорила бы сама с собой — «поправили» и тут же «приблизительно».
-  const adjusted = rating?.quotaOn?.mileageAdjusted || rating?.quotaOff?.mileageAdjusted;
-  if (!rating?.sameMileage && !adjusted) missing.push("пробег разный");
+  // Разный пробег остаётся ограничением сравнения реальных цен.
+  if (!rating?.sameMileage) missing.push("пробег разный");
   return missing.length ? `Сравнение приблизительное: ${missing.join(", ")}.` : "";
 };

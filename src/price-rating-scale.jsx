@@ -6,14 +6,12 @@
 // микрорывок, который видно глазом.
 import {
   PRICE_RATING_STEPS,
-  priceRatingBar,
+  priceRatingAssessment,
   priceRatingBasisNote,
   priceRatingBatteryNote,
   priceRatingLimits,
   priceRatingMileageNote,
-  priceRatingPosition,
   priceRatingPriceNote,
-  priceRatingVerdict,
 } from "./price-rating.js";
 
 const PriceRatingCard = ({ children, className = "", title }) => (
@@ -43,13 +41,10 @@ const PriceRatingSkeleton = () => (
 export function PriceRatingScale({ rating, priceUsd, mileage, battery, quotaPricingOn = true, formatMoney, loading = false }) {
   if (!rating) return loading ? <PriceRatingSkeleton /> : null;
   const mode = quotaPricingOn ? rating.quotaOn : rating.quotaOff;
-  // Планка — типичная цена набора, сдвинутая под пробег этой машины: с ней и сверяем.
-  const bar = priceRatingBar(mode);
-  if (!(Number(priceUsd) > 0) || !(bar > 0)) return null;
-  const position = priceRatingPosition(priceUsd, bar);
-  const verdict = priceRatingVerdict(priceUsd, bar);
-  if (position === null || !verdict) return null;
-  const priceNote = priceRatingPriceNote(rating, mode, priceUsd, formatMoney);
+  const assessment = priceRatingAssessment(rating, mode, priceUsd, mileage);
+  if (!assessment) return null;
+  const { position, verdict } = assessment;
+  const priceNote = priceRatingPriceNote(rating, mode, priceUsd, formatMoney, mileage);
   const mileageNote = priceRatingMileageNote(rating, mileage);
   const batteryNote = priceRatingBatteryNote(rating, battery);
   // Всё, что можно сказать про цену, — одним абзацем. С кем сравнивали и чего в

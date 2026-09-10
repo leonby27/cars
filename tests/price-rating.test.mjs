@@ -10,6 +10,8 @@ import {
 } from "../server/price-rating.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import {
+  priceRatingAssessment,
+  priceRatingBar,
   priceRatingBasisNote,
   priceRatingBatteryNote,
   priceRatingLimits,
@@ -233,15 +235,14 @@ test("первая строка называет планку и разницу,
     plain(priceRatingPriceNote(rating, mode, 30_200, money).text),
     "Такие машины стоят в среднем 30 000 $ — эта почти столько же.",
   );
-  // Планку сдвинули под пробег — так и сказано, иначе цифра выглядела бы взятой ниоткуда.
+  // Даже старый ответ со сдвинутой планкой не подменяет реальные цены.
   const shifted = { medianUsd:30_000, expectedUsd:26_000, mileageAdjusted:true };
   assert.equal(
     plain(priceRatingPriceNote(rating, shifted, 24_000, money).text),
-    "Такие машины с таким пробегом стоят около 26 000 $ — эта на 2 000 $ дешевле.",
+    "Такие машины стоят в среднем 30 000 $ — эта на 6 000 $ дешевле.",
   );
-  // Сравнение идёт с планкой, а не с типичной ценой: та же цена рядом со сдвинутой
-  // планкой — уже «почти столько же», а не «намного дешевле».
-  assert.equal(priceRatingPriceNote(rating, shifted, 26_100, money).tone, "mid");
+  // Цена около старой расчётной планки по-прежнему ниже реальной медианы.
+  assert.equal(priceRatingPriceNote(rating, shifted, 26_100, money).tone, "low");
   assert.equal(priceRatingPriceNote(rating, { medianUsd:0 }, 30_000, money), null);
 });
 
@@ -268,7 +269,7 @@ test("вторая строка называет рамку сравнения",
   );
   assert.equal(
     priceRatingBasisNote({ count:30, sameYear:true, sameMileage:true, yearFrom:2020, yearTo:2020, quotaOn:{ mileageAdjusted:true } }),
-    "Сравнили с 30 такими же машинами 2020 года с похожим пробегом. Планка сдвинута под пробег этой машины.",
+    "Сравнили с 30 такими же машинами 2020 года с похожим пробегом.",
   );
   assert.equal(priceRatingBasisNote({ count:0 }), null);
 });
@@ -341,10 +342,10 @@ test("подсказка честно говорит, чего в наборе �
     priceRatingLimits({ sameTrim:false, sameBattery:false, sameMileage:false, batteryMedian:75 }),
     "Сравнение приблизительное: комплектация у них может быть другой, батарея тоже разная, пробег разный.",
   );
-  // Планку под пробег сдвинули — второй раз про пробег не оговариваемся.
+  // Старый флаг сдвига не скрывает оговорку о разном пробеге.
   assert.equal(
     priceRatingLimits({ sameTrim:false, sameMileage:false, quotaOn:{ mileageAdjusted:true } }),
-    "Сравнение приблизительное: комплектация у них может быть другой.",
+    "Сравнение приблизительное: комплектация у них может быть другой, пробег разный.",
   );
 });
 
@@ -359,16 +360,59 @@ test("режим цен с квотой считается заранее для
 
 test("год сравнения виден в тексте цены, включая поправку на пробег", () => {
   const rating = { count:5, sameYear:true, yearFrom:2023, yearTo:2023 };
-  const mode = { expectedUsd:30_000, mileageAdjusted:false };
+  const mode = { medianUsd:30_000, expectedUsd:30_000, mileageAdjusted:false };
   assert.equal(plain(priceRatingPriceNote(rating, mode, 27_000, money).text),
     "Такие машины 2023 года стоят в среднем 30 000 $ — эта на 3 000 $ дешевле.");
   assert.equal(plain(priceRatingPriceNote(rating, { ...mode, mileageAdjusted:true }, 27_000, money).text),
-    "Такие машины 2023 года с таким пробегом стоят около 30 000 $ — эта на 3 000 $ дешевле.");
+    "Такие машины 2023 года стоят в среднем 30 000 $ — эта на 3 000 $ дешевле.");
 });
 
 
 test("сравнение разных лет называет диапазон и оговорку", () => {
   const rating = { sameYear:false, yearFrom:2022, yearTo:2024 };
-  assert.equal(plain(priceRatingPriceNote(rating, { expectedUsd:30_000 }, 27_000, money).text),
+  assert.equal(plain(priceRatingPriceNote(rating, { medianUsd:30_000, expectedUsd:30_000 }, 27_000, money).text),
     "Такие машины 2022–2024 годов стоят в среднем 30 000 $ — эта на 3 000 $ дешевле. Сравнение приблизительное: без поправки на год.");
+});
+
+
+test("Volkswagen 59514400: самая дешёвая машина не становится дорогой из-за пробега", () => {
+  const rating = { count:15, sameYear:true, mileageMedian:54_000 };
+  const mode = { medianUsd:18_400, expectedUsd:15_673.626, mileageAdjusted:true, cheaperThan:15 };
+  const assessment = priceRatingAssessment(rating, mode, 16_200, 136_700);
+  assert.equal(priceRatingBar(mode), 18_400);
+  assert.equal(assessment.verdict.label, "намного ниже");
+  assert.equal(assessment.mileageAdjusted, false);
+  assert.match(plain(priceRatingPriceNote(rating, mode, 16_200, money, 136_700).text), /18 400.*2 200.*дешевле/);
+});
+
+test("близкая цена и больший пробег ухудшают оценку, но не подменяют реальную медиану", () => {
+  const rating = { count:10, sameYear:true, mileageMedian:50_000 };
+  const mode = { medianUsd:20_000, cheaperThan:5 };
+  const assessment = priceRatingAssessment(rating, mode, 20_000, 80_000);
+  assert.equal(assessment.verdict.label, "выше средней");
+  assert.equal(assessment.position, 0.7);
+  assert.equal(assessment.mileageAdjusted, true);
+  const note = priceRatingPriceNote(rating, mode, 20_000, money, 80_000);
+  assert.match(plain(note.text), /20 000.*почти столько же.*больше пробег.*выше средней/);
+  assert.equal(note.tone, "high");
+  // Одинаковые цены также дают повод сравнить пробеги, без оценки цены километра.
+  assert.equal(priceRatingAssessment(rating, { ...mode, cheaperThan:0 }, 20_000, 80_000).mileageAdjusted, true);
+  for (const mileage of [0, 30_000, 50_000, 57_000]) {
+    assert.equal(priceRatingAssessment(rating, mode, 20_000, mileage).verdict.label, "средняя");
+  }
+  for (const price of [18_000, 19_000, 21_000, 23_000]) {
+    assert.deepEqual(priceRatingAssessment(rating, mode, price, 80_000).verdict, priceRatingVerdict(price, 20_000));
+  }
+  assert.equal(priceRatingAssessment(rating, { ...mode, cheaperThan:10 }, 19_900, 80_000).mileageAdjusted, false);
+  assert.equal(priceRatingAssessment({ ...rating, sameYear:false }, mode, 20_000, 80_000).mileageAdjusted, false);
+});
+
+test("сервер возвращает реальные цены без расчётной скидки на пробег в обоих режимах", () => {
+  const own = car({ mileage:136_700 });
+  const rows = Array.from({ length:10 }, (_, i) => peer(`p${i}`, 40_000 - i * 1_000, { mileage:20_000 + i * 5_000 }));
+  const rating = priceRatingFrom(own, rows);
+  for (const mode of [rating.quotaOn, rating.quotaOff]) {
+    assert.equal(mode.expectedUsd, mode.medianUsd);
+    assert.equal(mode.mileageAdjusted, false);
+  }
 });
