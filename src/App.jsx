@@ -4115,6 +4115,7 @@ const showcaseDemotedBrands = new Set(["Buick", "Changan", "Chery", "Ford", "Hyu
 // больше, нельзя. Марку без машин правило всё равно не покажет — она отсеивается
 // раньше, вместе с остальными пустыми.
 const showcaseExpandedOnlyBrands = new Set(["Honda", "Leapmotor", "Lynk & Co", "XPeng"]);
+const showcaseMobileExpandedOnlyBrands = new Set(["Honda", "Toyota", "Volkswagen"]);
 
 const showcasePinnedBrands = new Set(["Avatr", "Deepal", "Voyah", "Xiaomi", "Zeekr"]);
 
@@ -4247,12 +4248,13 @@ function PopularBrands({ navigate, cars, apiMode }) {
     .map((brand) => ({ brand, count: brandCounts.get(brand) || 0 }))
     .filter((item) => !countsKnown || item.count > 0)
     .sort((a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }));
-  const limit = columns * BRAND_SHOWCASE_ROWS;
+  const limit = columns * (mobileLayout ? 4 : BRAND_SHOWCASE_ROWS);
   // В сокращённом виде оставляем самые многочисленные марки, но показываем их всё равно
   // по алфавиту: список ищут глазами по имени, а не читают как рейтинг. Марки без машин
   // сюда не попадают даже когда свободные строки есть: «Acura 0» в популярных — это
   // тупик, а не предложение. В полном списке они остаются.
-  const ranked = brands.filter((item) => (mobileLayout || !showcaseExpandedOnlyBrands.has(item.brand)) && (!countsKnown || item.count > 0));
+  const expandedOnlyBrands = mobileLayout ? showcaseMobileExpandedOnlyBrands : showcaseExpandedOnlyBrands;
+  const ranked = brands.filter((item) => !expandedOnlyBrands.has(item.brand) && (!countsKnown || item.count > 0));
   const byName = (a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" });
   const byCount = (a, b) => b.count - a.count || byName(a, b);
   // Закреплённые марки занимают свои места первыми, дальше идут остальные по числу
@@ -4297,7 +4299,9 @@ function PopularBrands({ navigate, cars, apiMode }) {
       {brands.length > collapsed.length && (
         <div className="popular-brands-more">
           <button type="button" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded}>
-            {expanded ? "Свернуть список" : "Показать все марки"}
+            {expanded ? "Свернуть список" : countsKnown
+              ? `Показать ${pluralRu(brands.length, "всю", "все", "все")} ${number(brands.length)} ${pluralRu(brands.length, "марку", "марки", "марок")}`
+              : "Показать все марки"}
             <CaretDown size={16} weight="bold" aria-hidden="true" />
           </button>
         </div>

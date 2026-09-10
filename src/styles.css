@@ -4302,24 +4302,30 @@ html[data-theme="dark"] #root .load-more {
   }
   .popular-brands-grid {
     columns: 3;
-    column-gap: 8px;
+    column-gap: 2px;
   }
   .brand-link {
-    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    margin-bottom: 2px;
     gap: 4px;
-    padding: 8px 8px;
+    padding: 8px;
     font-size: 14px;
     line-height: 1.25;
   }
   .brand-link .brand-count {
+    grid-column: 2;
     margin-left: 0;
-    font-size: 13px;
+    font-size: 12px;
     white-space: nowrap;
   }
   .brand-logo {
     width: 24px;
     height: 20px;
     flex-basis: 24px;
+  }
+  .brand-link .brand-logo img[src$="/lexus.svg"] {
+    width: 22px;
   }
   .trust-strip {
     grid-template-columns: 1fr;
