@@ -10370,7 +10370,7 @@ function SiteFooter({ navigate }) {
         </div>
         <form className="footer-newsletter" onSubmit={openNewsletterUnavailable}>
           <span className="footer-newsletter-title">
-            <EnvelopeSimple size={30} weight="bold" aria-hidden="true" />
+            <img src="/app-download/newsletter-mailbox.png" width="64" height="64" alt="" aria-hidden="true" />
             <strong>Подпишитесь на обновления и аналитику рынка авто в Китае</strong>
           </span>
           <div className="footer-newsletter-form">

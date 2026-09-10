@@ -2164,8 +2164,8 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
 .mobile-scroll-top {
   position: fixed;
   z-index: 40;
-  right: 26px;
-  bottom: 26px;
+  right: 42px;
+  bottom: 42px;
   width: 46px;
   height: 46px;
   display: grid;
@@ -3470,7 +3470,10 @@ html[data-theme="dark"] #root .load-more {
 }
 :root[data-theme="dark"] #root .footer-newsletter-form {
   border-color: #343a44;
-  background: #1b1e22;
+  background: var(--panel-soft);
+}
+:root[data-theme="dark"] #root .footer-newsletter-form input {
+  background: var(--panel-soft);
 }
 :root[data-theme="dark"] .footer-app-store-apple {
   filter: invert(1);
@@ -3882,9 +3885,12 @@ html[data-theme="dark"] #root .load-more {
   min-width: 0;
   color: var(--ink);
 }
-.footer-newsletter-title svg {
+.footer-newsletter-title > img {
+  width: 64px;
+  height: 64px;
   flex: 0 0 auto;
   margin-inline: 8px;
+  object-fit: contain;
 }
 .footer-newsletter-title strong {
   color: var(--ink);
@@ -6289,8 +6295,8 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
     padding: 0 11px;
   }
   .mobile-scroll-top {
-    right: 18px;
-    bottom: max(18px, env(safe-area-inset-bottom));
+    right: 34px;
+    bottom: max(34px, env(safe-area-inset-bottom));
   }
   .result-summary {
     display: block;
@@ -8894,7 +8900,9 @@ html[data-theme="dark"] #root .spec-search,
     flex-direction: column;
     gap: 10px;
   }
-  .footer-newsletter-title svg {
+  .footer-newsletter-title > img {
+    width: 64px;
+    height: 64px;
     margin-inline: 0;
   }
   .footer-newsletter-form {
