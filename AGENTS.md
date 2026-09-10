@@ -4,6 +4,10 @@ Homepage SEO ownership (owner decision, 2026-09-10): the home page targets «б/
 
 Quick-view default preference (owner decision, 2026-09-09): keep «Быстрый просмотр» off by default. Enable it only when the visitor explicitly switches it on; preserve their saved choice.
 
+Catalog service-card icon preference (owner decision, 2026-09-10): use the supplied green 3D shield with a checkmark in the «Как устроена покупка» sidebar card and display it at exactly 80×80 px.
+
+Vehicle source-disclosure preference (owner decision, 2026-09-10): show the seller/platform disclaimer as small muted plain text directly below the vehicle page's calculation links and before similar cars; do not place it in a bordered card.
+
 Talking to the user: he is not a programmer. He sets the goals and makes the product calls, but
 he does not read code and does not know the vocabulary. Work at full depth; explain in plain
 words. Say what a change means in practice — what a visitor sees, what breaks, what it costs —

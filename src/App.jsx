@@ -1693,7 +1693,7 @@ function HomeFaqItem({ item, open, onToggle, navigate = null }) {
 }
 
 function HomeFaqList({ items, navigate = null, className = "home-faq-list" }) {
-  const [openIndex, setOpenIndex] = useState(0);
+  const [openIndex, setOpenIndex] = useState(null);
   return (
     <div className={className}>
       {items.map((item, index) => (
@@ -4860,29 +4860,38 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
       <section className="trust-strip page-width">
         <div>
           <span>
-            <CarProfile size={22} weight="duotone" />
+            <img src="/trust-strip/delivery-route.png" width="100" height="100" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Сопровождаем до выдачи</b>
-            <small>От подбора до получения в Минске</small>
+            <small>От подбора автомобиля в Китае<br />до доставки и выдачи<br />в Минске</small>
           </p>
         </div>
         <div>
           <span>
-            <ShieldCheck size={22} weight="duotone" />
+            <img src="/trust-strip/vehicle-documents.png" width="100" height="100" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Проверяем до оплаты</b>
-            <small>История, батарея и документы</small>
+            <small>Проверяем историю и батарею,<br />документы и данные<br />продавца до оплаты</small>
           </p>
         </div>
         <div>
           <span>
-            <CurrencyCny size={22} weight="duotone" />
+            <img src="/trust-strip/two-prices.png" width="100" height="100" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Показываем обе цены</b>
-            <small>В Китае и ориентир до Минска</small>
+            <small>Показываем цену автомобиля<br />в Китае и стоимость<br />с доставкой до Минска</small>
+          </p>
+        </div>
+        <div>
+          <span>
+            <img src="/trust-strip/fixed-terms.png" width="100" height="100" alt="" aria-hidden="true" />
+          </span>
+          <p>
+            <b>Фиксируем условия</b>
+            <small>Фиксируем стоимость и сроки,<br />этапы оплаты и<br />ответственность сторон</small>
           </p>
         </div>
       </section>
@@ -6002,9 +6011,14 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           )}
         </section>
         <aside className="side-card">
-          <div className="side-icon">
-            <ShieldCheck size={26} weight="duotone" />
-          </div>
+          <img
+            className="side-card-icon"
+            src="/illustrations/catalog-service-shield.png"
+            width="80"
+            height="80"
+            alt=""
+            aria-hidden="true"
+          />
           <h3>Как устроена покупка</h3>
           <p>Покажем весь путь автомобиля из Китая до выдачи в Минске — без скрытых этапов.</p>
           <ul>
@@ -7350,9 +7364,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           )}
           <TechnicalSpecs car={car} />
           {modelPage && <ModelIntroCard modelPage={modelPage} car={car} navigate={navigate} />}
-          <aside className="source-card detail-source-card">
-            <small>Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</small>
-          </aside>
           {/* Куда идти за объяснением сметы — в самом низу карточки, строками с
               иконками. Раньше эти ссылки стояли внутри разбора цены и терялись в
               нём; человек, который дочитал страницу, дальше либо считает другую
@@ -7367,11 +7378,14 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </div>
             </nav>
           )}
-          <nav className="detail-tool-links" aria-label="Страницы расчётов">
-            <AppLink href="/customs" navigate={navigate}><Scales size={21} /><span>Как считается растаможка</span><CaretRight size={17} weight="bold" /></AppLink>
-            <AppLink href="/calculator" navigate={navigate}><Calculator size={21} /><span>Посчитать другую машину</span><CaretRight size={17} weight="bold" /></AppLink>
-            {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
-          </nav>
+          <div className="detail-tools-footer">
+            <nav className="detail-tool-links" aria-label="Страницы расчётов">
+              <AppLink href="/customs" navigate={navigate}><Scales size={21} /><span>Как считается растаможка</span><CaretRight size={17} weight="bold" /></AppLink>
+              <AppLink href="/calculator" navigate={navigate}><Calculator size={21} /><span>Посчитать другую машину</span><CaretRight size={17} weight="bold" /></AppLink>
+              {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
+            </nav>
+            <p className="detail-source-note">Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</p>
+          </div>
         </div>
         <div className="detail-sidebar">
           {/* Итоговая цена стоит над плашками и без своей плашки: это главный ответ
