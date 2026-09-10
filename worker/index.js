@@ -1,4 +1,5 @@
 import { handleAnalyticsRequest } from "./analytics.js";
+import { handleNewsletterRequest } from "./newsletter.js";
 
 export default {
   async fetch(request, env) {
@@ -7,6 +8,8 @@ export default {
     const analyticsPage = cleanRequestPath === "/analytics" || cleanRequestPath.startsWith("/analytics/");
     const analyticsResponse = await handleAnalyticsRequest(request, env, requestUrl);
     if (analyticsResponse) return analyticsResponse;
+    const newsletterResponse = await handleNewsletterRequest(request, env, requestUrl);
+    if (newsletterResponse) return newsletterResponse;
     const indexingEnabled = String(env.SEO_ALLOW_INDEXING || "").toLowerCase() === "true";
     // Те же защитные заголовки, что настроены для основного хостинга в `vercel.json`:
     // запрет встраивания страниц в чужую рамку, запрет угадывания типа файла, ограничение

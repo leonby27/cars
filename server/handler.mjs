@@ -10,6 +10,7 @@ import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCus
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
 import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, isDatacenterAddress, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
+import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 // Ограничение размера: через прокси идёт фотография объявления, а не файл в сотни
@@ -225,6 +226,19 @@ export async function handleApiRequest(request, response) {
         pool.query("SELECT source,status,blocked_until,last_success_at,last_failure_at,consecutive_failures,last_error FROM source_health ORDER BY source"),
       ]);
       return json(response, 200, { ...publicHealth, database:"postgresql", jobs:jobs.rows[0], sources:sources.rows });
+    }
+    if (request.method === "POST" && url.pathname === "/api/newsletter") {
+      const ownPage = fromOwnPage(request.headers);
+      const localOrigin = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(String(request.headers.origin || ""));
+      if ((!ownPage && !localOrigin) || isBotAgent(request.headers["user-agent"])) return json(response, 403, { error:"invalid_source" });
+      const limit = await checkRateLimit("newsletterSubscribe", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
+      const body = await readJson(request);
+      const email = normalizeNewsletterEmail(body.email);
+      if (!validNewsletterEmail(email)) return json(response, 400, { error:"invalid_email" });
+      if (body.consent !== true) return json(response, 400, { error:"consent_required" });
+      await subscribeToNewsletter(email);
+      return json(response, 200, { ok:true });
     }
     if (request.method === "POST" && url.pathname === "/api/auth/register") {
       // Ограничение здесь закрывает сразу две вещи: набивание базы пустыми аккаунтами

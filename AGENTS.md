@@ -1,5 +1,9 @@
 # Prototype Instructions
 
+How-it-works feature-grid preference (owner decision, 2026-09-10): replace the former three-item proof strip with a larger grid of concrete, customer-facing service capabilities. Show the grid without an eyebrow or section heading. Use generously sized icon tiles and icons, and keep every feature description to one line on desktop. In the dark theme, keep the cards and their icon tiles close to the page background with only gentle tonal separation. Keep claims limited to the actual abcars.by process; do not copy competitors' financing, used-car warranty, rusification or post-sale service promises unless those products are genuinely added.
+
+Purchase-timeline card radius preference (owner decision, 2026-09-10): use visibly generous rounding on the large purchase-stage cards and every visible layer of the collapsed card stack; keep the mobile radius proportionally smaller.
+
 Homepage SEO ownership (owner decision, 2026-09-10): the home page targets «б/у авто из Китая с доставкой в Беларусь» and must ship one shared H1/content version for visitors and search engines. Never restore the separate hidden/removed SEO body. The general catalog owns the transactional cluster «купить б/у авто из Китая — каталог и цены»; catalog landings, model reviews and calculator pages retain their narrower intents. A small number of natural contextual links from relevant information pages may point home, but do not repeat an exact-match home anchor across vehicle or model pages.
 
 Quick-view default preference (owner decision, 2026-09-09): keep «Быстрый просмотр» off by default. Enable it only when the visitor explicitly switches it on; preserve their saved choice.
@@ -7,6 +11,8 @@ Quick-view default preference (owner decision, 2026-09-09): keep «Быстры�
 Catalog service-card icon preference (owner decision, 2026-09-10): use the supplied green 3D shield with a checkmark in the «Как устроена покупка» sidebar card and display it at exactly 80×80 px.
 
 Vehicle source-disclosure preference (owner decision, 2026-09-10): show the seller/platform disclaimer as small muted plain text directly below the vehicle page's calculation links and before similar cars; do not place it in a bordered card.
+
+Newsletter preference (owner decision, 2026-09-10): the footer form is a real email subscription, not a coming-soon placeholder. Store explicitly submitted addresses in the dedicated subscriber list without enrolling account emails automatically; after a successful save, confirm that the visitor is subscribed and can unsubscribe at any time.
 
 Talking to the user: he is not a programmer. He sets the goals and makes the product calls, but
 he does not read code and does not know the vocabulary. Work at full depth; explain in plain

@@ -7,7 +7,7 @@ import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyCny, Desktop, DeviceMobile, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -39,7 +39,7 @@ import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
-import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS } from "./service-copy.js";
+import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS, SERVICE_PROOF } from "./service-copy.js";
 import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
@@ -8028,6 +8028,16 @@ function OrderDraft({ car, navigate }) {
 // текстами заполняется страница для поисковика.
 const purchaseStepIcons = [MagnifyingGlass, ChatCircleText, ShieldCheck, ListChecks, CarProfile];
 const purchaseSteps = PURCHASE_STEPS.map((step, index) => ({ ...step, icon: purchaseStepIcons[index] }));
+const serviceProofIcons = [
+  CarProfile,
+  ShieldCheck,
+  Scales,
+  BatteryHigh,
+  Calculator,
+  ListChecks,
+  RoadHorizon,
+  ClipboardText,
+];
 
 function HowItWorksPage({ navigate }) {
   const purchaseTimelineRef = usePurchaseMotion();
@@ -8058,27 +8068,18 @@ function HowItWorksPage({ navigate }) {
           <Illustration src="/illustrations/how-it-works-hero.png" alt="Автомобиль из Китая с проверкой и доставкой" />
         </div>
       </section>
-      <section className="info-proof page-width">
-        <div>
-          <ShieldCheck size={23} />
-          <p>
-            <b>Проверка до оплаты</b>
-            <span>Сначала факты, затем решение</span>
-          </p>
-        </div>
-        <div>
-          <CurrencyCny size={23} />
-          <p>
-            <b>Прозрачная стоимость</b>
-            <span>Разделяем цену и расчёт</span>
-          </p>
-        </div>
-        <div>
-          <MapPin size={23} />
-          <p>
-            <b>Сопровождение до Минска</b>
-            <span>Один понятный маршрут</span>
-          </p>
+      <section className="info-proof-section page-width" aria-label="Возможности сервиса">
+        <div className="info-proof">
+          {SERVICE_PROOF.map(({ title, text }, index) => {
+            const Icon = serviceProofIcons[index];
+            return (
+              <article key={title}>
+                <span className="info-proof-icon"><Icon size={29} weight="duotone" /></span>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            );
+          })}
         </div>
       </section>
       <section className="info-section page-width" id="steps">
@@ -10259,10 +10260,10 @@ function SocialUnavailableModal({ onClose }) {
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="social-unavailable-title" aria-describedby="social-unavailable-description">
+      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal orders-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="social-unavailable-title" aria-describedby="social-unavailable-description">
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
-        <div className="order-removal-icon availability-paused-icon"><ChatCircleText size={32} weight="duotone" /></div>
-        <h2 id="social-unavailable-title">Временно не принимаем заказы</h2>
+        <img className="orders-unavailable-icon" src="/app-download/orders-stopwatch.png" width="80" height="80" alt="" aria-hidden="true" />
+        <h2 id="social-unavailable-title">Скоро вернёмся к вам</h2>
         <p id="social-unavailable-description">Сейчас мы временно не принимаем новые заказы через соцсети. Совсем скоро вновь будем доступны — не теряйте нас! 🙏</p>
         <div className="order-removal-actions availability-paused-actions">
           <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
@@ -10283,9 +10284,9 @@ function AppUnavailableModal({ onClose }) {
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="app-unavailable-title" aria-describedby="app-unavailable-description">
+      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal app-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="app-unavailable-title" aria-describedby="app-unavailable-description">
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
-        <div className="order-removal-icon availability-paused-icon"><DeviceMobile size={32} weight="duotone" /></div>
+        <img className="app-unavailable-icon" src="/app-download/app-gear.png" width="80" height="80" alt="" aria-hidden="true" />
         <h2 id="app-unavailable-title">Приложение уже в работе</h2>
         <p id="app-unavailable-description">Мы активно работаем над приложением. Совсем скоро оно появится в App Store и Google Play.</p>
         <div className="order-removal-actions availability-paused-actions">
@@ -10296,7 +10297,7 @@ function AppUnavailableModal({ onClose }) {
   );
 }
 
-function NewsletterUnavailableModal({ onClose }) {
+function NewsletterSubscribedModal({ onClose }) {
   useEffect(() => {
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -10307,14 +10308,15 @@ function NewsletterUnavailableModal({ onClose }) {
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="newsletter-unavailable-title" aria-describedby="newsletter-unavailable-description">
+      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal newsletter-subscribed-modal" role="dialog" aria-modal="true" aria-labelledby="newsletter-subscribed-title" aria-describedby="newsletter-subscribed-description newsletter-subscribed-unsubscribe">
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
-        <div className="order-removal-icon availability-paused-icon"><EnvelopeSimple size={32} weight="duotone" /></div>
-        <h2 id="newsletter-unavailable-title">Рассылка скоро появится</h2>
-        <p id="newsletter-unavailable-description">Мы готовим полезные обновления и аналитику рынка автомобилей Китая. Подписка станет доступна совсем скоро.</p>
+        <img className="newsletter-subscribed-icon" src="/app-download/newsletter-mailbox.png" width="80" height="80" alt="" aria-hidden="true" />
+        <h2 id="newsletter-subscribed-title">Вы подписались на рассылку</h2>
+        <p id="newsletter-subscribed-description">Будем присылать полезные обновления и аналитику рынка автомобилей Китая.</p>
         <div className="order-removal-actions availability-paused-actions">
-          <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
+          <button className="primary" type="button" onClick={onClose} autoFocus>Готово</button>
         </div>
+        <small id="newsletter-subscribed-unsubscribe" className="newsletter-subscribed-unsubscribe">Отписаться можно в любой момент — по ссылке в письме.</small>
       </section>
     </div>
   );
@@ -10340,7 +10342,10 @@ function FooterAppDownload({ onOpen }) {
 function SiteFooter({ navigate }) {
   const [socialUnavailableOpen, setSocialUnavailableOpen] = useState(false);
   const [appUnavailableOpen, setAppUnavailableOpen] = useState(false);
-  const [newsletterUnavailableOpen, setNewsletterUnavailableOpen] = useState(false);
+  const [newsletterSubscribedOpen, setNewsletterSubscribedOpen] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterSaving, setNewsletterSaving] = useState(false);
+  const [newsletterError, setNewsletterError] = useState("");
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("app") === "download") {
       trackEvent("app_download_qr_deeplink_modal_open");
@@ -10356,11 +10361,41 @@ function SiteFooter({ navigate }) {
     trackEvent(`app_download_${source}_modal_open`);
     setAppUnavailableOpen(true);
   };
-  const openNewsletterUnavailable = (event) => {
+  const subscribeNewsletter = async (event) => {
     event.preventDefault();
+    if (newsletterSaving) return;
+    const email = newsletterEmail.trim().toLowerCase();
+    if (!email) {
+      setNewsletterError("Введите адрес электронной почты.");
+      return;
+    }
+    if (email.length > 160 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
+      setNewsletterError("Проверьте адрес электронной почты.");
+      return;
+    }
     trackEvent("newsletter_subscribe_click");
-    trackEvent("newsletter_subscribe_modal_open", { properties:{ source:"footer_form" } });
-    setNewsletterUnavailableOpen(true);
+    setNewsletterSaving(true);
+    setNewsletterError("");
+    try {
+      const response = await fetch("/api/newsletter", {
+        method:"POST",
+        headers:{ "content-type":"application/json" },
+        body:JSON.stringify({ email, consent:true }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "subscription_failed");
+      setNewsletterEmail("");
+      trackEvent("newsletter_subscribe_modal_open", { properties:{ source:"footer_form" } });
+      setNewsletterSubscribedOpen(true);
+    } catch (error) {
+      setNewsletterError(error.message === "invalid_email"
+        ? "Проверьте адрес электронной почты."
+        : error.message === "too_many_requests"
+          ? "Слишком много попыток. Попробуйте немного позже."
+          : "Не удалось сохранить email. Попробуйте ещё раз.");
+    } finally {
+      setNewsletterSaving(false);
+    }
   };
   return (
     <>
@@ -10382,14 +10417,26 @@ function SiteFooter({ navigate }) {
             <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
           </div>
         </div>
-        <form className="footer-newsletter" onSubmit={openNewsletterUnavailable}>
+        <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
           <span className="footer-newsletter-title">
             <img src="/app-download/newsletter-mailbox.png" width="64" height="64" alt="" aria-hidden="true" />
             <strong>Подпишитесь на обновления и аналитику рынка авто в Китае</strong>
           </span>
-          <div className="footer-newsletter-form">
-            <input id="footer-newsletter-email" type="email" inputMode="email" autoComplete="email" placeholder="Введите Email" aria-label="Электронная почта" required />
-            <button type="submit">Подписаться</button>
+          <div className="footer-newsletter-action">
+            <div className="footer-newsletter-form">
+              <input id="footer-newsletter-email" type="email" inputMode="email" autoComplete="email" placeholder="Введите Email" aria-label="Электронная почта" value={newsletterEmail} onChange={(event) => { setNewsletterEmail(event.target.value); setNewsletterError(""); }} aria-invalid={newsletterError ? "true" : undefined} aria-describedby={newsletterError ? "footer-newsletter-error" : undefined} maxLength={160} disabled={newsletterSaving} required />
+              <button type="submit" disabled={newsletterSaving}>{newsletterSaving ? "Сохраняем…" : "Подписаться"}</button>
+            </div>
+            <div className={`footer-newsletter-status-reveal${newsletterError ? " is-visible" : ""}`} aria-hidden={newsletterError ? undefined : "true"}>
+              <div className="footer-newsletter-status-clip">
+                <small id="footer-newsletter-error" className="footer-newsletter-status is-error" role="alert">{newsletterError}</small>
+              </div>
+            </div>
+            <div className="footer-newsletter-consent-reveal">
+              <div className="footer-newsletter-consent-clip">
+                <small className="footer-newsletter-consent">Нажимая «Подписаться», вы соглашаетесь получать письма и принимаете <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политику конфиденциальности</a>.</small>
+              </div>
+            </div>
           </div>
         </form>
       </div>
@@ -10400,7 +10447,7 @@ function SiteFooter({ navigate }) {
     </footer>
     {socialUnavailableOpen && <SocialUnavailableModal onClose={() => setSocialUnavailableOpen(false)} />}
     {appUnavailableOpen && <AppUnavailableModal onClose={() => setAppUnavailableOpen(false)} />}
-    {newsletterUnavailableOpen && <NewsletterUnavailableModal onClose={() => setNewsletterUnavailableOpen(false)} />}
+    {newsletterSubscribedOpen && <NewsletterSubscribedModal onClose={() => setNewsletterSubscribedOpen(false)} />}
     </>
   );
 }

@@ -46,6 +46,7 @@ export const RATE_LIMITS = {
   accountDelete:{ limit:10, windowSeconds:600 },
   analyticsLogin:{ limit:10, windowSeconds:3600 },
   orderDraft:{ limit:10, windowSeconds:3600 },
+  newsletterSubscribe:{ limit:10, windowSeconds:3600 },
   // Одна страница присылает десятки событий, и за одним адресом может сидеть целый
   // мобильный оператор, поэтому предел здесь высокий: он отсекает наполнение базы,
   // а не обычную посещаемость.
