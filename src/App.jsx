@@ -17,6 +17,7 @@ import { cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS } from "../config/import-policy.mjs";
 import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
+import { guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isZeekrGuide, ZEEKR_ALTERNATIVES, ZEEKR_BUDGETS, ZEEKR_GUIDE_INTRO } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, yuanToUsdAbout } from "./pricing.js";
 import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
@@ -6083,6 +6084,16 @@ function CatalogSectionLinks({ navigate }) {
    машины, а не чтение. Здесь же ссылки на обзоры моделей этой марки и на соседние
    страницы каталога — по ним поисковик обходит раздел, а человек переходит к похожему. */
 function CatalogLandingNotes({ landing, models, navigate, total = null }) {
+  const [guide, setGuide] = useState(null);
+  useEffect(() => {
+    if (landing.brand !== "Zeekr") return undefined;
+    const controller = new AbortController();
+    fetch(`/api/brand-guide?brand=${encodeURIComponent(landing.brand)}&version=3`, { signal:controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("brand guide unavailable")))
+      .then(setGuide)
+      .catch(() => {});
+    return () => controller.abort();
+  }, [landing.brand]);
   const modelPages = landing.brand ? MODEL_PAGES.filter((page) => page.brand === landing.brand) : [];
   const available = new Set((models || []).filter((model) => model !== ANY_MODEL));
   const reviews = modelPages.filter((page) => !available.size || available.has(page.model));
@@ -6090,6 +6101,9 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
   // естественное место. Одинаковый на всех страницах блок ссылок поисковик со временем
   // считает частью шаблона и обесценивает, а вес размазывается ровным слоем.
   const others = relatedLandings(landing);
+  if (landing.brand === "Zeekr") return (
+    <ZeekrCatalogGuide landing={landing} guide={guide} modelPages={modelPages} navigate={navigate} total={total} />
+  );
   return (
     <section className="catalog-landing-notes catalog-landing-article" aria-labelledby="catalog-landing-notes-title">
       <h2 id="catalog-landing-notes-title">{landing.name} из Китая: что важно знать</h2>
@@ -6121,14 +6135,164 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
   );
 }
 
+function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
+  const currency = useCurrency();
+  const setCurrency = useSetCurrency();
+  const complete = isZeekrGuide(landing, guide);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [selectedBudget, setSelectedBudget] = useState(ZEEKR_BUDGETS[0].key);
+  const changedDate = guideDate(guide?.changedAt);
+  const selectedPriceData = selectedModel
+    ? guide?.models?.find((item) => item.model === selectedModel) || guide
+    : guide;
+  const selectedCount = selectedModel ? selectedPriceData?.count : guide?.total;
+  const priceSpan = Number(selectedPriceData?.priceMax) - Number(selectedPriceData?.priceMin);
+  const medianPosition = priceSpan > 0
+    ? Math.min(100, Math.max(0, ((Number(selectedPriceData?.priceMedian) - Number(selectedPriceData?.priceMin)) / priceSpan) * 100))
+    : 50;
+  const medianAlignment = medianPosition < 12 ? " is-start" : medianPosition > 88 ? " is-end" : "";
+  const guideModels = new Map((guide?.models || []).map((row) => [row.model, row]));
+  const activeBudget = ZEEKR_BUDGETS.find((band) => band.key === selectedBudget) || ZEEKR_BUDGETS[0];
+  const activeBudgetData = guide?.budgets?.[activeBudget.key];
+  const reviewByModel = new Map(modelPages.map((page) => [page.model, page]));
+  const modelHref = (model) => reviewByModel.get(model)?.path
+    || `${landing.path}?model=${encodeURIComponent(model)}`;
+  const alternatives = ZEEKR_ALTERNATIVES.map((item) => ({ ...item, href:brandLandingPath(item.brand) })).filter((item) => item.href);
+  return (
+    <section className="catalog-landing-notes catalog-landing-article brand-guide" aria-labelledby="catalog-landing-notes-title">
+      <h2 id="catalog-landing-notes-title">Zeekr из Китая: цены и выбор по данным каталога</h2>
+      <p>{ZEEKR_GUIDE_INTRO}</p>
+      {!complete ? (
+        <p className="brand-guide-loading">Загружаем актуальную сводку по марке…</p>
+      ) : (
+        <>
+          <div className="brand-guide-market" aria-label="Цены на автомобили Zeekr">
+            <div className="brand-guide-model-control">
+              <SelectField
+                className="brand-guide-select"
+                label="Модель Zeekr"
+                value={selectedModel}
+                options={["", ...guide.models.map((row) => row.model)]}
+                onChange={setSelectedModel}
+                formatOption={(model) => model ? `Zeekr ${model}` : "Все модели"}
+              />
+              <span>{guideNumber(selectedCount)} {guidePlural(selectedCount, "автомобиль", "автомобиля", "автомобилей")}{selectedModel ? " этой модели" : " в каталоге"}</span>
+              {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch brand-guide-currency-switch" />}
+            </div>
+            <div className="brand-guide-price-range" style={{ "--brand-guide-median":`${medianPosition}%` }}>
+              <div className="brand-guide-price-range-inner">
+                <div className="brand-guide-price-track" role="img" aria-label={`Медианная цена ${guidePrice(selectedPriceData?.priceMedian, currency)} в диапазоне от ${guidePrice(selectedPriceData?.priceMin, currency)} до ${guidePrice(selectedPriceData?.priceMax, currency)}`}>
+                  <span aria-hidden="true" />
+                </div>
+                <div className="brand-guide-price-labels">
+                  <span className="brand-guide-price-min"><small>Минимальная</small><strong>{guidePrice(selectedPriceData?.priceMin, currency)}</strong></span>
+                  <span className={`brand-guide-price-median${medianAlignment}`}><small>Медианная</small><strong>{guidePrice(selectedPriceData?.priceMedian, currency)}</strong></span>
+                  <span className="brand-guide-price-max"><small>Максимальная</small><strong>{guidePrice(selectedPriceData?.priceMax, currency)}</strong></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <section className="brand-guide-section" aria-labelledby="zeekr-models-title">
+            <div className="brand-guide-heading">
+              <h3 id="zeekr-models-title">Модели Zeekr в каталоге</h3>
+              <span>{guideYears(guide)} годы выпуска</span>
+            </div>
+            <div className="brand-guide-table-wrap">
+              <table className="brand-guide-table">
+                <thead><tr><th>Модель</th><th>Годы</th><th>Тип</th><th>Цена от</th><th>Медиана</th></tr></thead>
+                <tbody>{guide.models.map((row) => (
+                  <tr className="brand-guide-model-row" key={row.model}>
+                    <th scope="row"><AppLink className="brand-guide-model-link" href={modelHref(row.model)} navigate={navigate} aria-label={`Открыть Zeekr ${row.model}`}>
+                      <span className="brand-guide-model-thumb">{row.image ? <img src={imageSource(row.image, IMAGE_WIDTH_TILE)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, row.image)} /> : <CarProfile size={20} weight="duotone" aria-hidden="true" />}</span>
+                      <span className="brand-guide-model-copy"><strong>Zeekr {row.model}</strong><small>В наличии {guideNumber(row.count)} шт.</small></span>
+                    </AppLink></th>
+                    <td>{guideYears(row)}</td>
+                    <td><BrandGuidePowertrain values={row.powertrains} /></td>
+                    <td>{guidePrice(row.priceMin, currency)}</td>
+                    <td>{guidePrice(row.priceMedian, currency)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </section>
+          <section className="brand-guide-section" aria-labelledby="zeekr-budget-title">
+            <div className="brand-guide-heading">
+              <h3 id="zeekr-budget-title">Что можно выбрать по бюджету</h3>
+            </div>
+            <div className="brand-guide-budget-tabs" role="group" aria-label="Диапазон цены">
+              {ZEEKR_BUDGETS.map((band) => {
+                const active = selectedBudget === band.key;
+                return <button type="button" className={active ? "active" : ""} aria-pressed={active} key={band.key} onClick={() => setSelectedBudget(band.key)}>
+                  <strong>{guideBudgetTitle(band, currency)}</strong>
+                </button>;
+              })}
+            </div>
+            <div className="brand-guide-budget-models" aria-live="polite">
+              {activeBudgetData?.models?.length ? activeBudgetData.models.slice(0, 5).map((model) => {
+                const row = guideModels.get(model);
+                return <AppLink key={model} href={modelHref(model)} navigate={navigate}>
+                  <span className="brand-guide-budget-thumb">{row?.image ? <img src={imageSource(row.image, IMAGE_WIDTH_TILE)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, row.image)} /> : <CarProfile size={28} weight="duotone" aria-hidden="true" />}</span>
+                  <strong>Zeekr {model}</strong>
+                </AppLink>;
+              }) : <p>{activeBudget.text}</p>}
+            </div>
+          </section>
+          <p className="brand-guide-method">Статистика рассчитана {guideDate(guide.calculatedAt)} по {guideNumber(guide.total)} активным объявлениям abcars.by{changedDate ? <>; последнее изменение состава или содержания этого раздела — {changedDate}</> : null}. Ценовые показатели используют {guideNumber(guide.pricedCount)} объявлений, для которых уже рассчитана итоговая стоимость: автомобиль, доставка и предварительные платежи до Минска. Медиана делит эти предложения пополам и меньше зависит от единичных дорогих версий, чем среднее значение. Перед договором цену продавца, курс и логистику подтверждаем заново.</p>
+        </>
+      )}
+      <section className="brand-guide-section brand-guide-about" aria-labelledby="zeekr-about-title">
+        <h3 id="zeekr-about-title">Что важно знать о Zeekr</h3>
+        {landing.notes.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
+      </section>
+      {modelPages.length > 0 && (
+        <div className="catalog-landing-links">
+          <b>Подробные обзоры моделей</b>
+          <div>{modelPages.map((page) => <AppLink key={page.path} href={page.path} navigate={navigate}>{page.name}</AppLink>)}</div>
+        </div>
+      )}
+      {alternatives.length > 0 && (
+        <section className="brand-guide-section" aria-labelledby="zeekr-compare-title">
+          <h3 id="zeekr-compare-title">С чем сравнить Zeekr</h3>
+          <div className="brand-guide-alternatives">{alternatives.map((item) => (
+            <AppLink key={item.brand} href={item.href} navigate={navigate}>
+              <BrandMark brand={item.brand} />
+              <span className="brand-guide-alternative-copy"><strong>{item.brand}</strong><span>{item.note}</span></span>
+            </AppLink>
+          ))}</div>
+        </section>
+      )}
+      <CatalogLandingFaq landing={landing} total={complete ? guide.total : total} guide={guide} navigate={navigate} />
+    </section>
+  );
+}
+
+function BrandGuidePowertrain({ values = [] }) {
+  const label = guidePowertrains(values);
+  const normalized = values.join(" ").toLowerCase();
+  const Icon = normalized.includes("гибрид")
+    ? ArrowsLeftRight
+    : normalized.includes("двс") || normalized.includes("бензин")
+      ? GasPump
+      : normalized.includes("элект")
+        ? Lightning
+        : Engine;
+  return (
+    <span className="brand-guide-powertrain" role="img" tabIndex={0} aria-label={label}>
+      <Icon size={20} weight="duotone" aria-hidden="true" />
+      <ActionTooltip text={label} />
+    </span>
+  );
+}
+
 /* Частые вопросы раздела: те же плашки, что в обзорах моделей, только внутри текстового
    блока каталога — и с разметкой FAQPage, по которой вопросы попадают прямо в выдачу.
    Сами вопросы собираются из типа раздела и количества машин (src/landing-faq.js),
    поэтому у бензинового раздела спрашивают про пошлину по объёму, а у электрического —
    про квоту. Пока количество машин не пришло, первый вопрос про цену не показываем:
    выдумывать число нельзя. */
-function CatalogLandingFaq({ landing, total, navigate }) {
-  const faq = landingFaq(landing, { total });
+function CatalogLandingFaq({ landing, total, guide = null, navigate }) {
+  const currency = useCurrency();
+  const faq = landingFaq(landing, { total, guide, currency });
   if (!faq.length) return null;
   const schema = {
     "@context": "https://schema.org",

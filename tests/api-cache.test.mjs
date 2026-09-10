@@ -11,6 +11,7 @@ const requestApi = async (path) => {
   // Запросы к базе подменяем: проверяем заголовки маршрутов, а не SQL.
   pool.query = async (config) => {
     const sql = typeof config === "string" ? config : String(config?.text || "");
+    if (sql.includes("count(DISTINCT v.model)")) return { rows:[{ total:1, model_count:1, priced_count:1, price_min:25000, price_max:25000, price_p25:25000, price_median:25000, price_p75:25000, year_min:2024, year_max:2024 }] };
     return /count\(\*\)/.test(sql) ? { rows:[{ total:0, cars:0 }] } : { rows:[] };
   };
   const state = { status:0, headers:{} };
@@ -32,7 +33,7 @@ const requestApi = async (path) => {
 };
 
 test("каталог отдаётся с общим кэшем, но браузер своей копии не держит", async () => {
-  for (const path of ["/api/cars?limit=24", "/api/cars?limit=60&sort=variety", "/api/catalog/meta", "/api/model-facts"]) {
+  for (const path of ["/api/cars?limit=24", "/api/cars?limit=60&sort=variety", "/api/catalog/meta", "/api/model-facts", "/api/brand-guide?brand=Zeekr"]) {
     const { status, cacheControl } = await requestApi(path);
     assert.equal(status, 200, path);
     assert.match(cacheControl, /\bpublic\b/, path);

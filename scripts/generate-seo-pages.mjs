@@ -1251,6 +1251,8 @@ const robots = allowIndexing
       "Allow: /api/catalog/meta?",
       "Allow: /api/model-facts$",
       "Allow: /api/model-facts?",
+      "Allow: /api/brand-guide$",
+      "Allow: /api/brand-guide?",
       "Disallow: /data",
       "Disallow: /account",
       "Disallow: /favorites",

@@ -93,8 +93,9 @@ function aboutSection(landing) {
  * `total` — сколько машин в разделе сейчас; без него первый вопрос пропускаем, чтобы
  * не сочинять число. Возвращает массив `{ q, a }` — тот же вид, что у обзоров моделей.
  */
-export function landingFaq(landing, { total = null } = {}) {
+export function landingFaq(landing, { total = null, guide = null, currency = "USD" } = {}) {
   if (!landing) return [];
+  if (isZeekrGuide(landing, guide)) return zeekrGuideFaq(guide, currency);
   const items = [];
   const count = Number(total);
   if (Number.isFinite(count) && count > 0) {
@@ -113,3 +114,4 @@ export function landingFaq(landing, { total = null } = {}) {
 /** Заголовок блока вопросов — своими словами для каждого раздела. */
 export const landingFaqTitle = (landing) =>
   landing?.kind === "brand" ? `Частые вопросы про ${landing.brand} из Китая` : `Частые вопросы: ${landing?.name || "раздел каталога"}`;
+import { isZeekrGuide, zeekrGuideFaq } from "./brand-guide.js";

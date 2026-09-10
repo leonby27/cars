@@ -4,7 +4,7 @@ import { gzip } from "node:zlib";
 import { promisify } from "node:util";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionAccount, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
-import { createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelSummary } from "./repository.mjs";
+import { brandCatalogGuide, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelSummary } from "./repository.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
@@ -456,6 +456,10 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "GET" && url.pathname === "/api/cars") return json(response, 200, await listCars(url.searchParams), catalogCache);
     if (request.method === "GET" && url.pathname === "/api/model-facts") return json(response, 200, await getModelFacts(), metaCache);
+    if (request.method === "GET" && url.pathname === "/api/brand-guide") {
+      const guide = await brandCatalogGuide(url.searchParams.get("brand"));
+      return guide ? json(response, 200, guide, metaCache) : json(response, 404, { error:"brand_not_found" });
+    }
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")), metaCache);
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.
     // Стоит до разбора адреса машины — иначе «summary» приняли бы за номер объявления.

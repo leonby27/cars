@@ -340,6 +340,84 @@ export async function modelSummary(searchParams) {
   };
 }
 
+/**
+ * Проверяемая сводка для справочного блока марки. Цены — итоговые до Минска из
+ * тех же active-записей, что показывает каталог. Медиана и центральные 50%
+ * устойчивее среднего к редким дорогим комплектациям.
+ */
+export async function brandCatalogGuide(brand) {
+  const name = String(brand || "").trim();
+  if (!name) return null;
+  const [summary, models, budgets] = await Promise.all([
+    pool.query(`SELECT count(*)::int AS total, count(DISTINCT v.model)::int AS model_count,
+        count(*) FILTER (WHERE l.estimated_total_usd > 0)::int AS priced_count,
+        min(l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS price_min,
+        max(l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS price_max,
+        CAST(percentile_cont(0.25) WITHIN GROUP (ORDER BY l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS numeric) AS price_p25,
+        CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS numeric) AS price_median,
+        CAST(percentile_cont(0.75) WITHIN GROUP (ORDER BY l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS numeric) AS price_p75,
+        min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY NULLIF(l.mileage_km, 0))::numeric AS mileage_median,
+        ${SECTION_CHANGED_AT} AS changed_at
+      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+      WHERE l.status='active' AND v.brand=$1`, [name]),
+    pool.query(`SELECT v.model, count(*)::int AS count,
+        min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
+        min(l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS price_min,
+        max(l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS price_max,
+        CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY l.estimated_total_usd) FILTER (WHERE l.estimated_total_usd > 0) AS numeric) AS price_median,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY NULLIF(l.mileage_km, 0))::numeric AS mileage_median,
+        array_agg(DISTINCT v.powertrain ORDER BY v.powertrain) FILTER (WHERE v.powertrain IS NOT NULL) AS powertrains,
+        (array_agg(m.url ORDER BY l.listed_at DESC NULLS LAST, l.id) FILTER (WHERE m.url IS NOT NULL))[1] AS image
+      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+      LEFT JOIN listing_media m ON m.listing_id=l.id AND m.position=0
+      WHERE l.status='active' AND v.brand=$1
+      GROUP BY v.model ORDER BY count(*) DESC, v.model`, [name]),
+    pool.query(`SELECT CASE
+          WHEN l.estimated_total_usd < 25000 THEN 'under25'
+          WHEN l.estimated_total_usd < 35000 THEN '25to35'
+          WHEN l.estimated_total_usd < 50000 THEN '35to50'
+          ELSE 'over50' END AS band,
+        count(*)::int AS count,
+        array_agg(DISTINCT v.model ORDER BY v.model) AS models
+      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+      WHERE l.status='active' AND v.brand=$1 AND l.estimated_total_usd > 0
+      GROUP BY band`, [name]),
+  ]);
+  const row = summary.rows[0] || {};
+  if (!row.total) return null;
+  const number = (value) => value == null ? null : Number(value);
+  return {
+    brand:name,
+    calculatedAt:new Date().toISOString(),
+    changedAt:row.changed_at || null,
+    total:row.total,
+    modelCount:row.model_count,
+    pricedCount:row.priced_count,
+    yearMin:row.year_min,
+    yearMax:row.year_max,
+    priceMin:number(row.price_min),
+    priceMax:number(row.price_max),
+    priceP25:number(row.price_p25),
+    priceMedian:number(row.price_median),
+    priceP75:number(row.price_p75),
+    mileageMedian:number(row.mileage_median),
+    models:models.rows.map((item) => ({
+      model:item.model,
+      count:item.count,
+      yearMin:item.year_min,
+      yearMax:item.year_max,
+      priceMin:number(item.price_min),
+      priceMax:number(item.price_max),
+      priceMedian:number(item.price_median),
+      mileageMedian:number(item.mileage_median),
+      powertrains:item.powertrains || [],
+      image:item.image || null,
+    })),
+    budgets:Object.fromEntries(budgets.rows.map((item) => [item.band, { count:item.count, models:item.models || [] }])),
+  };
+}
+
 /** Сколько машин в разделе. Нужно сборке: по этому числу в карту сайта попадают страницы раздела. */
 export async function countCars(searchParams) {
   return (await sectionStats(searchParams)).total;

@@ -4,7 +4,7 @@
 // Зачем сервером, а не файлами: список машин в разделе меняется каждый день, а держать
 // тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
-import { brandStock, carsByIds, listCarPage, priceEdges } from "./repository.mjs";
+import { brandCatalogGuide, brandStock, carsByIds, listCarPage, priceEdges } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
@@ -123,9 +123,10 @@ export async function renderCatalogPage(slug, searchParams) {
 
   const params = landingApiParams(landing);
   params.set("sort", "price_asc");
-  const [{ items, total, changedAt }, edges] = await Promise.all([
+  const [{ items, total, changedAt }, edges, guide] = await Promise.all([
     listCarPage(params, { limit: carsOnPage, offset: (number - 1) * carsOnPage }),
     priceEdges(params),
+    landing.brand === "Zeekr" && number === 1 ? brandCatalogGuide(landing.brand) : null,
   ]);
   const pages = catalogPageCount(total);
   if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
@@ -145,6 +146,6 @@ export async function renderCatalogPage(slug, searchParams) {
   const stock = await brandStock();
   const others = relatedLandings(landing).filter(visibleLandings(stock));
 
-  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage, edges, priced, changedAt });
+  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage, edges, priced, changedAt, guide });
   return { status: 200, html: page.html };
 }
