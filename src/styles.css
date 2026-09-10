@@ -4129,7 +4129,7 @@ html[data-theme="dark"] #root .load-more {
   .hero {
     min-height: auto;
     /* Отступ от шапки до заголовка — вдвое меньше десктопного ритма. Снизу отступа
-       нет: расстояние до марок целиком задаёт сам блок марок (6 точек), иначе
+       нет: расстояние до марок целиком задаёт сам блок марок (14 точек), иначе
        отступы складывались втрое. */
     padding: 13px 14px 0;
     text-align: center;
@@ -4240,7 +4240,7 @@ html[data-theme="dark"] #root .load-more {
     grid-column: span 2;
   }
   .popular-brands {
-    padding: 6px 0 15px;
+    padding: 14px 0 15px;
   }
   .popular-brands-heading {
     align-items: center;
@@ -4301,19 +4301,25 @@ html[data-theme="dark"] #root .load-more {
     font-size: 15px;
   }
   .popular-brands-grid {
-    columns: 2;
+    columns: 3;
     column-gap: 8px;
   }
   .brand-link {
     margin-bottom: 10px;
-    gap: 8px;
-    padding: 8px 2px;
-    font-size: 16px;
+    gap: 4px;
+    padding: 8px 8px;
+    font-size: 14px;
+    line-height: 1.25;
+  }
+  .brand-link .brand-count {
+    margin-left: 0;
+    font-size: 13px;
+    white-space: nowrap;
   }
   .brand-logo {
-    width: 38px;
-    height: 23px;
-    flex-basis: 38px;
+    width: 24px;
+    height: 20px;
+    flex-basis: 24px;
   }
   .trust-strip {
     grid-template-columns: 1fr;
@@ -5052,7 +5058,7 @@ html[data-theme="dark"] #root .load-more {
   margin: 15px 0 0;
   color: var(--muted);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.5;
   letter-spacing: 0;
 }

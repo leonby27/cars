@@ -427,9 +427,9 @@ Home trust-card placement (owner decision, 2026-09-10): place the three cards «
 
 Home filter navigation (owner decision, 2026-09-10): remove the powertrain tabs/mobile select and «Все предложения» link above the home brand grid. Keep all-powertrain brand counts and «Показать все марки». The filter icon in the home search opens `/catalog` instead of expanding inline quick filters.
 
-Home popular-brand rows (owner decision, 2026-09-10): show five rows instead of six in the collapsed home brand grid. Honda, Leapmotor, Lynk & Co, and XPeng appear only after expanding the full list, never as collapsed fallback items.
+Home popular-brand rows (owner decision, 2026-09-10): show five rows instead of six in the collapsed home brand grid. On desktop, Honda, Leapmotor, Lynk & Co, and XPeng appear only after expanding the full list. On mobile, show three columns and up to 15 brands (five complete rows), allowing these previously omitted brands back into the popular selection. Use smaller 24px logos, 14px names and 13px counts (owner increased both text sizes by 1px and explicitly accepts ellipsized names). Preserve the original column layout and inline logo–name–count arrangement; never move counts below names. Keep the existing ellipsis for long names. Give mobile brand links 8px horizontal padding so logos and counts have breathing room inside the hover background.
 
-Home search-to-brands spacing (owner decision, 2026-09-10): halve the gap between the search field and brand grid: desktop spacing contributions total 23px instead of 46px, mobile 6px instead of 12px.
+Home search-to-brands spacing (owner decision, 2026-09-10): halve the gap between the search field and brand grid: desktop spacing contributions total 23px instead of 46px. Latest mobile adjustment: use 14px between the search field and brand grid for more breathing room.
 
 Home trust-to-process spacing (owner correction, 2026-09-10): match the gap above «Понятный путь к автомобилю из Китая» to the gap below it before the FAQ: 92px desktop, 62px mobile.
 
@@ -444,3 +444,5 @@ Vehicle price caption spacing (owner correction, 2026-09-10): keep «Цена п
 Petrol vehicle fact tile (owner decision, 2026-09-10): show «Масса» instead of «Батарея» for petrol cars (normalized type «ДВС», displayed «Бензин»). Use the listing’s curbWeight in kilograms, or «Не указана» if unavailable. Electric and hybrid cars retain the battery tile.
 
 Vehicle fact tile density (owner decision, 2026-09-10): use a 2px gap between labels and values, 14px top padding on desktop (12px mobile), and 12px bottom padding; remove the former 96px minimum height so compact content does not leave extra space underneath. Preserve side padding and value-to-label alignment.
+
+Price comparison description typography (owner decision, 2026-09-10): use Regular (400) weight for the explanatory paragraph beneath the price comparison scale on vehicle pages and quick view.

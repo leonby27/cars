@@ -4150,7 +4150,7 @@ const BRAND_SHOWCASE_ROWS = 5;
 const brandSwitchLabel = (item) => (item === "Все" ? "Все марки авто" : item);
 const BRAND_SWITCH_OPTIONS = POWERTRAIN_TABS.map(brandSwitchLabel);
 const brandSwitchType = (label) => POWERTRAIN_TABS.find((item) => brandSwitchLabel(item) === label) || "Все";
-const brandShowcaseColumns = () => (window.innerWidth <= 700 ? 2 : window.innerWidth <= 980 ? 3 : 4);
+const brandShowcaseColumns = () => (window.innerWidth <= 980 ? 3 : 4);
 // Раздел под выбранный тип двигателя: у каждого из трёх есть своя страница.
 const powertrainLandingPath = (label) => CATALOG_LANDINGS.find((landing) => landing.kind === "powertrain" && landing.powertrain === typeValue(label))?.path || "/catalog";
 
@@ -4184,6 +4184,7 @@ const initialBrandCounts = () => {
 };
 
 function PopularBrands({ navigate, cars, apiMode }) {
+  const mobileLayout = useNarrowViewport();
   // Сервер отдаёт разметку в четыре колонки, поэтому и здесь начинаем с четырёх:
   // мерить ширину окна можно только после того, как страница появилась в браузере.
   const [columns, setColumns] = useState(4);
@@ -4251,7 +4252,7 @@ function PopularBrands({ navigate, cars, apiMode }) {
   // по алфавиту: список ищут глазами по имени, а не читают как рейтинг. Марки без машин
   // сюда не попадают даже когда свободные строки есть: «Acura 0» в популярных — это
   // тупик, а не предложение. В полном списке они остаются.
-  const ranked = brands.filter((item) => !showcaseExpandedOnlyBrands.has(item.brand) && (!countsKnown || item.count > 0));
+  const ranked = brands.filter((item) => (mobileLayout || !showcaseExpandedOnlyBrands.has(item.brand)) && (!countsKnown || item.count > 0));
   const byName = (a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" });
   const byCount = (a, b) => b.count - a.count || byName(a, b);
   // Закреплённые марки занимают свои места первыми, дальше идут остальные по числу
