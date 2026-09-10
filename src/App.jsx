@@ -17,7 +17,7 @@ import { cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS } from "../config/import-policy.mjs";
 import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
-import { guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isZeekrGuide, ZEEKR_ALTERNATIVES, ZEEKR_BUDGETS, ZEEKR_GUIDE_INTRO } from "./brand-guide.js";
+import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
 import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
@@ -5565,7 +5565,6 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType)) || EMPTY_CATALOG_META);
   const [remoteLoading, setRemoteLoading] = useState(useApi);
   const [remoteError, setRemoteError] = useState(false);
-  const [customSearchOpen, setCustomSearchOpen] = useState(false);
   // Сортировку может нести и ссылка (например, из сохранённого поиска); снимок
   // истории при возврате важнее — он описывает то, что было на экране.
   // Адрес со страницей списка («?page=7») приходит из поисковой выдачи, а сервер режет
@@ -5993,7 +5992,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
               skeletonCards.map((key) => <CardSkeleton key={key} row />)
             )
           ) : (
-            <CustomSearchCta variant="empty" onOpen={() => setCustomSearchOpen(true)} />
+            <CustomSearchCta variant="empty" />
           )}
           {remoteLoading && displayed.length > 0 && <div className="catalog-message">Загружаем объявления…</div>}
           {hasMore && !remoteLoading && !remoteError && (
@@ -6045,7 +6044,6 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       </div>
       <ScrollToTopButton />
       {Boolean(toast) && <Toast text={toast} onClose={() => setToast(null)} />}
-      {customSearchOpen && <CustomSearchModal filters={filters} onClose={() => setCustomSearchOpen(false)} />}
       {quickViewModal}
     </main>
   );
@@ -6086,7 +6084,7 @@ function CatalogSectionLinks({ navigate }) {
 function CatalogLandingNotes({ landing, models, navigate, total = null }) {
   const [guide, setGuide] = useState(null);
   useEffect(() => {
-    if (landing.brand !== "Zeekr") return undefined;
+    if (!isBrandGuideLanding(landing)) return undefined;
     const controller = new AbortController();
     fetch(`/api/brand-guide?brand=${encodeURIComponent(landing.brand)}&version=3`, { signal:controller.signal })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("brand guide unavailable")))
@@ -6101,8 +6099,8 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
   // естественное место. Одинаковый на всех страницах блок ссылок поисковик со временем
   // считает частью шаблона и обесценивает, а вес размазывается ровным слоем.
   const others = relatedLandings(landing);
-  if (landing.brand === "Zeekr") return (
-    <ZeekrCatalogGuide landing={landing} guide={guide} modelPages={modelPages} navigate={navigate} total={total} />
+  if (isBrandGuideLanding(landing)) return (
+    <BrandCatalogGuide landing={landing} guide={guide} modelPages={modelPages} navigate={navigate} total={total} />
   );
   return (
     <section className="catalog-landing-notes catalog-landing-article" aria-labelledby="catalog-landing-notes-title">
@@ -6135,10 +6133,14 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
   );
 }
 
-function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
+function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
-  const complete = isZeekrGuide(landing, guide);
+  const complete = isBrandGuide(landing, guide);
+  const brand = landing.brand;
+  const config = brandGuideConfig(brand, landing.notes);
+  const aboutNotes = config.aboutNotes ?? landing.notes;
+  const idPrefix = landing.path.split("/").filter(Boolean).at(-1) || brand.toLowerCase().replaceAll(" ", "-");
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedBudget, setSelectedBudget] = useState(ZEEKR_BUDGETS[0].key);
   const changedDate = guideDate(guide?.changedAt);
@@ -6157,24 +6159,24 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
   const reviewByModel = new Map(modelPages.map((page) => [page.model, page]));
   const modelHref = (model) => reviewByModel.get(model)?.path
     || `${landing.path}?model=${encodeURIComponent(model)}`;
-  const alternatives = ZEEKR_ALTERNATIVES.map((item) => ({ ...item, href:brandLandingPath(item.brand) })).filter((item) => item.href);
+  const alternatives = config.alternatives.map((item) => ({ ...item, href:brandLandingPath(item.brand) })).filter((item) => item.href);
   return (
     <section className="catalog-landing-notes catalog-landing-article brand-guide" aria-labelledby="catalog-landing-notes-title">
-      <h2 id="catalog-landing-notes-title">Zeekr из Китая: цены и выбор по данным каталога</h2>
-      <p>{ZEEKR_GUIDE_INTRO}</p>
+      <h2 id="catalog-landing-notes-title">{brand} из Китая: цены и выбор по данным каталога</h2>
+      <p>{config.intro}</p>
       {!complete ? (
         <p className="brand-guide-loading">Загружаем актуальную сводку по марке…</p>
       ) : (
         <>
-          <div className="brand-guide-market" aria-label="Цены на автомобили Zeekr">
+          <div className="brand-guide-market" aria-label={`Цены на автомобили ${brand}`}>
             <div className="brand-guide-model-control">
               <SelectField
                 className="brand-guide-select"
-                label="Модель Zeekr"
+                label={`Модель ${brand}`}
                 value={selectedModel}
                 options={["", ...guide.models.map((row) => row.model)]}
                 onChange={setSelectedModel}
-                formatOption={(model) => model ? `Zeekr ${model}` : "Все модели"}
+                formatOption={(model) => model ? `${brand} ${model}` : "Все модели"}
               />
               <span>{guideNumber(selectedCount)} {guidePlural(selectedCount, "автомобиль", "автомобиля", "автомобилей")}{selectedModel ? " этой модели" : " в каталоге"}</span>
               {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch brand-guide-currency-switch" />}
@@ -6192,9 +6194,9 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
               </div>
             </div>
           </div>
-          <section className="brand-guide-section" aria-labelledby="zeekr-models-title">
+          <section className="brand-guide-section" aria-labelledby={`${idPrefix}-models-title`}>
             <div className="brand-guide-heading">
-              <h3 id="zeekr-models-title">Модели Zeekr в каталоге</h3>
+              <h3 id={`${idPrefix}-models-title`}>Модели {brand} в каталоге</h3>
               <span>{guideYears(guide)} годы выпуска</span>
             </div>
             <div className="brand-guide-table-wrap">
@@ -6202,9 +6204,9 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
                 <thead><tr><th>Модель</th><th>Годы</th><th>Тип</th><th>Цена от</th><th>Медиана</th></tr></thead>
                 <tbody>{guide.models.map((row) => (
                   <tr className="brand-guide-model-row" key={row.model}>
-                    <th scope="row"><AppLink className="brand-guide-model-link" href={modelHref(row.model)} navigate={navigate} aria-label={`Открыть Zeekr ${row.model}`}>
+                    <th scope="row"><AppLink className="brand-guide-model-link" href={modelHref(row.model)} navigate={navigate} aria-label={`Открыть ${brand} ${row.model}`}>
                       <span className="brand-guide-model-thumb">{row.image ? <img src={imageSource(row.image, IMAGE_WIDTH_TILE)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, row.image)} /> : <CarProfile size={20} weight="duotone" aria-hidden="true" />}</span>
-                      <span className="brand-guide-model-copy"><strong>Zeekr {row.model}</strong><small>В наличии {guideNumber(row.count)} шт.</small></span>
+                      <span className="brand-guide-model-copy"><strong>{brand} {row.model}</strong><small>В наличии {guideNumber(row.count)} шт.</small></span>
                     </AppLink></th>
                     <td data-label={row.yearMin && row.yearMin === row.yearMax ? "Год" : "Годы"}>{guideYears(row)}</td>
                     <td data-label="Тип"><BrandGuidePowertrain values={row.powertrains} /></td>
@@ -6215,9 +6217,9 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
               </table>
             </div>
           </section>
-          <section className="brand-guide-section" aria-labelledby="zeekr-budget-title">
+          <section className="brand-guide-section" aria-labelledby={`${idPrefix}-budget-title`}>
             <div className="brand-guide-heading">
-              <h3 id="zeekr-budget-title">Что можно выбрать по бюджету</h3>
+              <h3 id={`${idPrefix}-budget-title`}>Что можно выбрать по бюджету</h3>
             </div>
             <div className="brand-guide-budget-tabs" role="group" aria-label="Диапазон цены">
               {ZEEKR_BUDGETS.map((band) => {
@@ -6240,7 +6242,7 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
                 const row = guideModels.get(model);
                 return <AppLink key={model} href={modelHref(model)} navigate={navigate}>
                   <span className="brand-guide-budget-thumb">{row?.image ? <img src={imageSource(row.image, IMAGE_WIDTH_TILE)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, row.image)} /> : <CarProfile size={28} weight="duotone" aria-hidden="true" />}</span>
-                  <strong>Zeekr {model}</strong>
+                  <strong>{brand} {model}</strong>
                 </AppLink>;
               }) : <p>{activeBudget.text}</p>}
             </div>
@@ -6248,10 +6250,12 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
           <p className="brand-guide-method">Статистика рассчитана {guideDate(guide.calculatedAt)} по {guideNumber(guide.total)} активным объявлениям abcars.by{changedDate ? <>; последнее изменение состава или содержания этого раздела — {changedDate}</> : null}. Ценовые показатели используют {guideNumber(guide.pricedCount)} объявлений, для которых уже рассчитана итоговая стоимость: автомобиль, доставка и предварительные платежи до Минска. Медиана делит эти предложения пополам и меньше зависит от единичных дорогих версий, чем среднее значение. Перед договором цену продавца, курс и логистику подтверждаем заново.</p>
         </>
       )}
-      <section className="brand-guide-section brand-guide-about" aria-labelledby="zeekr-about-title">
-        <h3 id="zeekr-about-title">Что важно знать о Zeekr</h3>
-        {landing.notes.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
-      </section>
+      {aboutNotes.length > 0 && (
+        <section className="brand-guide-section brand-guide-about" aria-labelledby={`${idPrefix}-about-title`}>
+          <h3 id={`${idPrefix}-about-title`}>Что важно знать о {brand}</h3>
+          {aboutNotes.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
+        </section>
+      )}
       {modelPages.length > 0 && (
         <div className="catalog-landing-links">
           <b>Подробные обзоры моделей</b>
@@ -6259,8 +6263,8 @@ function ZeekrCatalogGuide({ landing, guide, modelPages, navigate, total }) {
         </div>
       )}
       {alternatives.length > 0 && (
-        <section className="brand-guide-section" aria-labelledby="zeekr-compare-title">
-          <h3 id="zeekr-compare-title">С чем сравнить Zeekr</h3>
+        <section className="brand-guide-section" aria-labelledby={`${idPrefix}-compare-title`}>
+          <h3 id={`${idPrefix}-compare-title`}>С чем сравнить {brand}</h3>
           <div className="brand-guide-alternatives">{alternatives.map((item) => (
             <AppLink key={item.brand} href={item.href} navigate={navigate}>
               <BrandMark brand={item.brand} />
@@ -7133,23 +7137,18 @@ function ConsentField({ checked, onChange, error }) {
   );
 }
 
-function CustomSearchCta({ variant, onOpen, navigate }) {
+function CustomSearchCta({ variant, navigate }) {
   const isEmpty = variant === "empty";
   return (
     <section className={`custom-search-cta ${isEmpty ? "is-empty" : "is-end"}`} aria-labelledby={`custom-search-${variant}-title`}>
       <div className="custom-search-icon" aria-hidden="true">
-        <CarProfile size={28} weight="duotone" />
+        {isEmpty ? <MagnifyingGlass size={28} weight="bold" /> : <CarProfile size={28} weight="duotone" />}
       </div>
       <div className="custom-search-copy">
-        {isEmpty && <span>По вашему запросу нет вариантов</span>}
-        <h2 id={`custom-search-${variant}-title`}>{isEmpty ? "Не нашли нужный автомобиль?" : "Не нашли подходящий автомобиль?"}</h2>
-        <p>{isEmpty ? "Напишите, что ищете. Мы подберём автомобиль индивидуально — даже если его пока нет в каталоге." : "Напишите, что ищете — подберём подходящий вариант."}</p>
+        <h2 id={`custom-search-${variant}-title`}>{isEmpty ? "Объявления не найдены" : "Не нашли подходящий автомобиль?"}</h2>
+        <p>{isEmpty ? "По данным фильтрам ни одного объявления не найдено. Попробуйте изменить параметры фильтра." : "Напишите, что ищете — подберём подходящий вариант."}</p>
       </div>
-      {isEmpty ? (
-        <button className="primary" type="button" onClick={onOpen}>
-          Описать желаемое авто <ArrowRight size={18} />
-        </button>
-      ) : (
+      {!isEmpty && (
         <AppLink className="primary" href="/contacts" navigate={navigate}>
           Свяжитесь с нами <ArrowRight size={18} />
         </AppLink>

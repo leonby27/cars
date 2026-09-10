@@ -6744,10 +6744,13 @@ html[data-theme="dark"] .select-search-clear:hover {
   background: var(--panel);
 }
 .custom-search-cta.is-empty {
-  min-height: 300px;
+  min-height: 220px;
   grid-template-columns: 1fr;
+  align-content: center;
   justify-items: center;
-  padding: 48px 32px;
+  padding: 32px;
+  border-color: var(--line-strong);
+  background: transparent;
   text-align: center;
 }
 .custom-search-icon {
@@ -6775,6 +6778,10 @@ html[data-theme="dark"] .select-search-clear:hover {
   line-height: 1.2;
   letter-spacing: -0.8px;
 }
+.custom-search-cta.is-empty .custom-search-copy h2 {
+  font-size: 22px;
+  letter-spacing: -0.4px;
+}
 .custom-search-copy p {
   max-width: 540px;
   margin: 8px 0 0;
@@ -6793,6 +6800,10 @@ html[data-theme="dark"] .select-search-clear:hover {
 }
 html[data-theme="dark"] #root :is(.custom-search-cta, .brand-guide) {
   border-color: transparent;
+}
+html[data-theme="dark"] #root .custom-search-cta.is-empty {
+  border-color: var(--line);
+  background: transparent;
 }
 .lead-modal textarea {
   min-height: 128px;
@@ -6829,6 +6840,9 @@ html[data-theme="dark"] #root :is(.custom-search-cta, .brand-guide) {
   }
   .custom-search-copy h2 {
     font-size: 23px;
+  }
+  .custom-search-cta.is-empty .custom-search-copy h2 {
+    font-size: 20px;
   }
   .custom-search-cta .primary {
     width: 100%;
@@ -9441,6 +9455,8 @@ html[data-theme="dark"] #root .spec-search,
   }
   .side-card {
     display: flex;
+    grid-column: 2;
+    grid-row: 1 / span 2;
     flex-direction: column;
     padding: 18px;
     border-color: #e3e5e8;

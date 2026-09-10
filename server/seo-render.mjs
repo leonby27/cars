@@ -16,7 +16,7 @@ import { brandNotice } from "../src/brand-notice.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
 import { brandLandingPath, landingHeading } from "../src/catalog-landings.js";
-import { guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isZeekrGuide, ZEEKR_ALTERNATIVES, ZEEKR_BUDGETS, ZEEKR_GUIDE_INTRO } from "../src/brand-guide.js";
+import { brandGuideConfig, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, ZEEKR_BUDGETS } from "../src/brand-guide.js";
 
 // Заголовок каталога и его разделов: две половины отдельными кусками, между ними пробел.
 // На телефоне стили ставят каждую своей строкой, на компьютере они идут одной строкой.
@@ -702,40 +702,42 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}${paging}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
     // Ссылки на расчёты — только на первой странице раздела: на страницах 2–50 это был
     // бы один и тот же блок пятьдесят раз подряд.
-    const zeekrGuide = page === 1 && isZeekrGuide(landing, guide);
-    const guideChangedDate = zeekrGuide ? guideDate(guide.changedAt) : "";
+    const brandedGuide = page === 1 && isBrandGuide(landing, guide);
+    const guideConfig = brandedGuide ? brandGuideConfig(landing.brand, landing.notes) : null;
+    const guideChangedDate = brandedGuide ? guideDate(guide.changedAt) : "";
     const modelReview = new Map(modelPages.map((model) => [model.model, model.path]));
-    const zeekrNotes = zeekrGuide ? `<section><h2>Zeekr из Китая: цены и выбор по данным каталога</h2>
-      <p>${escapeHtml(ZEEKR_GUIDE_INTRO)}</p>
-      <p>В каталоге ${guideNumber(guide.total)} ${guidePlural(guide.total, "автомобиль", "автомобиля", "автомобилей")} Zeekr, ${guideNumber(guide.modelCount)} ${guidePlural(guide.modelCount, "модель", "модели", "моделей")} ${guideYears(guide)} годов выпуска. Среди ${guideNumber(guide.pricedCount)} объявлений с рассчитанной стоимостью минимальная цена — ${guidePrice(guide.priceMin)}, медианная — ${guidePrice(guide.priceMedian)}, максимальная — ${guidePrice(guide.priceMax)}. Центральная половина этих предложений стоит от ${guidePrice(guide.priceP25)} до ${guidePrice(guide.priceP75)} с доставкой до Минска.</p>
-      <h3>Модели Zeekr в каталоге</h3>
+    const brand = landing.brand;
+    const brandNotes = brandedGuide ? `<section><h2>${escapeHtml(brand)} из Китая: цены и выбор по данным каталога</h2>
+      <p>${escapeHtml(guideConfig.intro)}</p>
+      <p>В каталоге ${guideNumber(guide.total)} ${guidePlural(guide.total, "автомобиль", "автомобиля", "автомобилей")} ${escapeHtml(brand)}, ${guideNumber(guide.modelCount)} ${guidePlural(guide.modelCount, "модель", "модели", "моделей")} ${guideYears(guide)} годов выпуска. Среди ${guideNumber(guide.pricedCount)} объявлений с рассчитанной стоимостью минимальная цена — ${guidePrice(guide.priceMin)}, медианная — ${guidePrice(guide.priceMedian)}, максимальная — ${guidePrice(guide.priceMax)}. Центральная половина этих предложений стоит от ${guidePrice(guide.priceP25)} до ${guidePrice(guide.priceP75)} с доставкой до Минска.</p>
+      <h3>Модели ${escapeHtml(brand)} в каталоге</h3>
       <table><thead><tr><th>Модель</th><th>В наличии</th><th>Годы</th><th>Тип</th><th>Цена от</th><th>Медианная цена</th></tr></thead><tbody>${guide.models.map((row) => {
         const reviewPath = modelReview.get(row.model);
         const href = reviewPath ? `${reviewPath}/` : `${landing.path}?model=${encodeURIComponent(row.model)}`;
-        return `<tr><th><a href="${hrefRoute(href)}">Zeekr ${escapeHtml(row.model)}</a></th><td>${guideNumber(row.count)}</td><td>${guideYears(row)}</td><td>${escapeHtml(guidePowertrains(row.powertrains))}</td><td>${guidePrice(row.priceMin)}</td><td>${guidePrice(row.priceMedian)}</td></tr>`;
+        return `<tr><th><a href="${hrefRoute(href)}">${escapeHtml(brand)} ${escapeHtml(row.model)}</a></th><td>${guideNumber(row.count)}</td><td>${guideYears(row)}</td><td>${escapeHtml(guidePowertrains(row.powertrains))}</td><td>${guidePrice(row.priceMin)}</td><td>${guidePrice(row.priceMedian)}</td></tr>`;
       }).join("")}</tbody></table>
       <h3>Что можно выбрать по бюджету</h3>
       <ul>${ZEEKR_BUDGETS.map((band) => {
         const value = guide.budgets?.[band.key];
-        return `<li><strong>${band.title}:</strong> ${value?.count ? `${guideNumber(value.count)} ${guidePlural(value.count, "автомобиль", "автомобиля", "автомобилей")} — ${value.models.slice(0, 5).map((model) => `Zeekr ${model}`).join(", ")}` : "сейчас предложений нет"}.</li>`;
+        return `<li><strong>${band.title}:</strong> ${value?.count ? `${guideNumber(value.count)} ${guidePlural(value.count, "автомобиль", "автомобиля", "автомобилей")} — ${value.models.slice(0, 5).map((model) => `${brand} ${model}`).join(", ")}` : "сейчас предложений нет"}.</li>`;
       }).join("")}</ul>
       <p>Статистика рассчитана ${escapeHtml(guideDate(guide.calculatedAt))} по ${guideNumber(guide.total)} активным объявлениям abcars.by${guideChangedDate ? `; последнее изменение состава или содержания этого раздела — ${escapeHtml(guideChangedDate)}` : ""}. Ценовые показатели используют ${guideNumber(guide.pricedCount)} объявлений, для которых уже рассчитана итоговая стоимость: автомобиль, доставка и предварительные платежи до Минска. Медиана делит эти предложения пополам и меньше зависит от редких дорогих версий, чем среднее значение. Перед договором цену продавца, курс и логистику подтверждаем заново.</p>
-      <h3>Что важно знать о Zeekr</h3>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}
+      ${(guideConfig.aboutNotes ?? landing.notes).length ? `<h3>Что важно знать о ${escapeHtml(brand)}</h3>${(guideConfig.aboutNotes ?? landing.notes).map((text) => `<p>${escapeHtml(text)}</p>`).join("")}` : ""}
       ${modelPages.length ? `<h3>Подробные обзоры моделей</h3><ul>${modelPages.map((model) => `<li><a href="${hrefRoute(`${model.path}/`)}">${escapeHtml(model.name)}</a></li>`).join("")}</ul>` : ""}
-      <h3>С чем сравнить Zeekr</h3><ul>${ZEEKR_ALTERNATIVES.map((item) => {
+      <h3>С чем сравнить ${escapeHtml(brand)}</h3><ul>${guideConfig.alternatives.map((item) => {
         const href = brandLandingPath(item.brand);
         return href ? `<li><a href="${hrefRoute(href)}">${escapeHtml(item.brand)}</a> — ${escapeHtml(item.note)}</li>` : "";
       }).join("")}</ul>${toolPageLinks()}</section>` : "";
-    const notes = zeekrGuide ? zeekrNotes : `<section><h2>${escapeHtml(landing.name)} из Китая: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}${
+    const notes = brandedGuide ? brandNotes : `<section><h2>${escapeHtml(landing.name)} из Китая: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}${
       page > 1 ? "" : toolPageLinks({ electric: landing.path === "/catalog/electric" || /^\/catalog\/electric-/.test(landing.path) })
     }</section>`;
-    const reviews = !zeekrGuide && modelPages.length
+    const reviews = !brandedGuide && modelPages.length
       ? `<section><h2>Обзоры моделей ${escapeHtml(landing.brand || landing.name)}</h2><ul>${modelPages.map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a></li>`).join("")}</ul></section>`
       : "";
     // Ссылки на все остальные разделы, а не только на однотипные: у типов двигателя
     // их всего два, и раздел электромобилей — самый ценный на сайте — получал ровно
     // одну входящую ссылку.
-    const near = !zeekrGuide && others.length ? sectionLinks(others, { skip: landing.path, heading: "Другие разделы каталога" }) : "";
+    const near = !brandedGuide && others.length ? sectionLinks(others, { skip: landing.path, heading: "Другие разделы каталога" }) : "";
     // Вопросы — только на первой странице раздела: на страницах 2–50 это был бы один
     // и тот же блок пятьдесят раз, а вместе с ним и пятьдесят одинаковых разметок FAQ.
     const questions = page > 1 ? [] : landingFaq(landing, { total, guide });

@@ -5,6 +5,7 @@
 // тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
 import { brandCatalogGuide, brandStock, carsByIds, listCarPage, priceEdges } from "./repository.mjs";
+import { isBrandGuideLanding } from "../src/brand-guide.js";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
@@ -126,7 +127,7 @@ export async function renderCatalogPage(slug, searchParams) {
   const [{ items, total, changedAt }, edges, guide] = await Promise.all([
     listCarPage(params, { limit: carsOnPage, offset: (number - 1) * carsOnPage }),
     priceEdges(params),
-    landing.brand === "Zeekr" && number === 1 ? brandCatalogGuide(landing.brand) : null,
+    isBrandGuideLanding(landing) && number === 1 ? brandCatalogGuide(landing.brand) : null,
   ]);
   const pages = catalogPageCount(total);
   if (number > pages) return { status: 404, html: renderer.landingMissingPage() };

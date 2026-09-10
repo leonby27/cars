@@ -10,6 +10,8 @@ Quick-view default preference (owner decision, 2026-09-09): keep «Быстры�
 
 Catalog service-card icon preference (owner decision, 2026-09-10): use the supplied green 3D shield with a checkmark in the «Как устроена покупка» sidebar card and display it at exactly 80×80 px.
 
+Catalog empty-state preference (owner decision, 2026-09-10): render an unfilled, neutrally outlined block with a search icon and compact vertical padding. Show the compact heading «Объявления не найдены» and a short suggestion to change the filters; do not show an eyebrow or action button. On desktop, do not let a taller sidebar card create a large blank gap before the catalog landing copy below the empty state.
+
 Vehicle source-disclosure preference (owner decision, 2026-09-10): show the seller/platform disclaimer as small muted plain text directly below the vehicle page's calculation links and before similar cars; do not place it in a bordered card.
 
 Newsletter preference (owner decision, 2026-09-10): the footer form is a real email subscription, not a coming-soon placeholder. Store explicitly submitted addresses in the dedicated subscriber list without enrolling account emails automatically; after a successful save, confirm that the visitor is subscribed and can unsubscribe at any time.
