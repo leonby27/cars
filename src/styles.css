@@ -2164,15 +2164,15 @@ html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
 .mobile-scroll-top {
   position: fixed;
   z-index: 40;
-  right: 22px;
-  bottom: 22px;
+  right: 26px;
+  bottom: 26px;
   width: 46px;
   height: 46px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: calc(13px * var(--corner-scale));
+  border-radius: calc(15px * var(--corner-scale));
   /* Кнопка «наверх» идёт наперекор теме, как подсказки: на тёмном сайте светлая, на
      светлом тёмная. С обычным фоном панели она почти сливалась со страницей —
      плавающая кнопка поверх содержимого должна читаться сразу. */
@@ -3670,6 +3670,12 @@ html[data-theme="dark"] #root .load-more {
   color: var(--muted);
   font-size: 16px;
 }
+@media (min-width: 701px) {
+  .site-footer {
+    margin: 0 16px 16px;
+    border-radius: calc(20px * var(--corner-scale));
+  }
+}
 /* Логотип и три столбца ссылок в одну строку. Пока столбцов было три, «Связаться»
    не помещался и переносился под логотип, оставляя пустое место справа. */
 .footer-main {
@@ -3762,22 +3768,6 @@ html[data-theme="dark"] #root .load-more {
   border-radius: calc(14px * var(--corner-scale));
 }
 
-.footer-contacts .footer-contact-line {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--ink);
-  font-size: 16px;
-  font-weight: 750;
-}
-.footer-contacts .footer-contact-line svg {
-  flex: none;
-  color: var(--accent);
-}
-.footer-contacts .footer-contact-address {
-  max-width: 210px;
-  line-height: 1.55;
-}
 .footer-bottom {
   min-height: 70px;
   display: flex;
@@ -6088,8 +6078,8 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
     padding: 0 11px;
   }
   .mobile-scroll-top {
-    right: 14px;
-    bottom: max(14px, env(safe-area-inset-bottom));
+    right: 18px;
+    bottom: max(18px, env(safe-area-inset-bottom));
   }
   .result-summary {
     display: block;
@@ -11432,6 +11422,10 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   outline-offset: 2px;
 }
 .header-actions .header-phone-reveal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-width: 164px;
   height: 48px;
   padding: 0 16px;
@@ -11443,6 +11437,9 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   font-size: 16px;
   font-weight: 800;
   transition: background var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease);
+}
+.header-actions .header-phone-reveal > svg {
+  flex: none;
 }
 .header-actions .header-phone-reveal:hover {
   background: var(--panel-soft);

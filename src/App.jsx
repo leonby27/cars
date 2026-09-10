@@ -1,7 +1,7 @@
 import { readCatalogFallback } from "./catalog-fallback.js";
 import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute } from "./auth-route.js";
 import { usePurchaseMotion } from "./use-purchase-motion.js";
-import { Star } from "@phosphor-icons/react";
+import { Phone, Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -1374,6 +1374,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               aria-expanded={phoneRevealed}
               onClick={togglePhone}
             >
+              <Phone size={18} weight="fill" aria-hidden="true" />
               {phoneRevealed ? COMPANY.phonePreview : "+375 показать номер"}
               {phoneRevealed && <ActionTooltip className="phone-unavailable-tooltip" text="Временно не принимаем заказы. Совсем скоро вновь будем доступны, не теряйте нас! 🙏" showOnMount />}
             </button>
@@ -10275,8 +10276,6 @@ function SiteFooter({ navigate }) {
         <div className="footer-column footer-contacts">
           <b>Связаться</b>
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
-          <a className="footer-contact-line" href={`mailto:${COMPANY.email}`}><EnvelopeSimple size={18} weight="duotone" /><span>{COMPANY.email}</span></a>
-          <span className="footer-contact-address">{COMPANY.address}</span>
         </div>
       </div>
       <div className="page-width footer-bottom">

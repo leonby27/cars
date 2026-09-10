@@ -1,0 +1,80 @@
+[
+  {
+    "i": 2,
+    "status": 200,
+    "ms": 171,
+    "cache": "HIT"
+  },
+  {
+    "i": 1,
+    "status": 200,
+    "ms": 225,
+    "cache": "HIT"
+  },
+  {
+    "i": 3,
+    "status": 200,
+    "ms": 194,
+    "cache": "HIT"
+  },
+  {
+    "i": 5,
+    "status": 200,
+    "ms": 59,
+    "cache": "HIT"
+  },
+  {
+    "i": 6,
+    "status": 200,
+    "ms": 56,
+    "cache": "HIT"
+  },
+  {
+    "i": 7,
+    "status": 200,
+    "ms": 40,
+    "cache": "HIT"
+  },
+  {
+    "i": 9,
+    "status": 200,
+    "ms": 41,
+    "cache": "HIT"
+  },
+  {
+    "i": 10,
+    "status": 200,
+    "ms": 36,
+    "cache": "HIT"
+  },
+  {
+    "i": 4,
+    "status": 200,
+    "ms": 158,
+    "cache": "HIT"
+  },
+  {
+    "i": 8,
+    "status": 200,
+    "ms": 43,
+    "cache": "HIT"
+  },
+  {
+    "i": 11,
+    "status": 200,
+    "ms": 40,
+    "cache": "HIT"
+  },
+  {
+    "i": 13,
+    "status": 200,
+    "ms": 40,
+    "cache": "HIT"
+  },
+  {
+    "i": 12,
+    "status": 200,
+    "ms": 181,
+    "cache": "HIT"
+  }
+]
