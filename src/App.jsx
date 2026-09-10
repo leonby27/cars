@@ -1273,6 +1273,8 @@ function EvQuotaButton({ quotas }) {
 }
 
 function Header({ navigate, favoritesCount, savedSearchesCount, path, user, themeMode, setThemeMode }) {
+  const currency = useCurrency();
+  const setCurrency = useSetCurrency();
   const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
   const [menuOpen, setMenuOpen] = useState(false);
   const [phoneRevealed, setPhoneRevealed] = useState(false);
@@ -1353,6 +1355,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               </nav>
               <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
               <div className="header-menu-settings">
+                {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
                 {/* На телефоне карточка квоты находится в меню. */}
                 <div className="header-menu-quota">
                   <EvQuotaPanel quotas={quotas} />
@@ -7308,7 +7311,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           </div>
           <div className="detail-mobile-price-row">
             <TotalPrice car={car} price={price} currency={currency} className="detail-mobile-price" />
-            {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
           </div>
           {/* Тип, привод и пробег из подзаголовка убраны: они и так стоят
               строкой ниже, в «Характеристиках». Остались только даты. */}
