@@ -1,6 +1,5 @@
 import { readCatalogFallback } from "./catalog-fallback.js";
 import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "./auth-route.js";
-import { usePurchaseMotion } from "./use-purchase-motion.js";
 import { Phone, Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
@@ -40,7 +39,7 @@ import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
-import { ABOUT_LIMITS, ABOUT_PRINCIPLES, PURCHASE_STEPS, SERVICE_PROOF } from "./service-copy.js";
+import { ABOUT_LIMITS, ABOUT_PRINCIPLES, SERVICE_PROOF } from "./service-copy.js";
 import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
@@ -8413,10 +8412,6 @@ function OrderDraft({ car, navigate }) {
   );
 }
 
-// Значки к этапам покупки; сами тексты — в src/service-copy.js, потому что теми же
-// текстами заполняется страница для поисковика.
-const purchaseStepIcons = [MagnifyingGlass, ChatCircleText, ShieldCheck, ListChecks, CarProfile];
-const purchaseSteps = PURCHASE_STEPS.map((step, index) => ({ ...step, icon: purchaseStepIcons[index] }));
 function ServiceScrollVideo({ navigate, total, updatedAt }) {
   const sceneRef = useRef(null);
   const stickyRef = useRef(null);
@@ -8574,9 +8569,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
 }
 
 function HowItWorksPage({ navigate }) {
-  const purchaseTimelineRef = usePurchaseMotion();
   const darkIntroRef = useRef(null);
-  const [stepsExpanded, setStepsExpanded] = useState(false);
   const { total, updatedAt } = useCatalogFacts();
   const principleIcons = [ListChecks, ShieldCheck, Lightning];
 
@@ -8584,14 +8577,14 @@ function HowItWorksPage({ navigate }) {
     const intro = darkIntroRef.current;
     const pageShell = intro?.closest(".service-video-shell");
     const header = pageShell?.querySelector(":scope > .site-header");
-    const steps = pageShell?.querySelector("#steps");
-    if (!intro || !pageShell || !header || !steps) return undefined;
+    const lightRegion = pageShell?.querySelector(".service-light-region");
+    if (!intro || !pageShell || !header || !lightRegion) return undefined;
 
     let frame = 0;
     const updateHeaderTheme = () => {
       frame = 0;
       const headerHeight = header.getBoundingClientRect().height;
-      const lightSectionTop = steps.getBoundingClientRect().top;
+      const lightSectionTop = lightRegion.getBoundingClientRect().top;
       pageShell.classList.toggle("service-dark-region-active", lightSectionTop > headerHeight);
     };
     const scheduleUpdate = () => {
@@ -8609,6 +8602,8 @@ function HowItWorksPage({ navigate }) {
       pageShell.classList.remove("service-dark-region-active");
     };
   }, []);
+
+  const opportunitiesListingCount = total >= 1000 ? `${number(Math.floor(total / 1000) * 1000)} +` : "64 000 +";
 
   return (
     <main className="info-page service-video-page">
@@ -8636,57 +8631,33 @@ function HowItWorksPage({ navigate }) {
           </div>
         </section>
       </div>
-      <section className="info-section page-width" id="steps">
-        <div className="info-section-heading">
-          <h2>Как купить автомобиль</h2>
-        </div>
-        <ol className="purchase-timeline purchase-deck" id="purchase-deck" data-expanded={stepsExpanded} ref={purchaseTimelineRef}>
-          {purchaseSteps.map(({ title, text }, index) => (
-            <li className="purchase-timeline-step" key={title} aria-hidden={!stepsExpanded && index > 0}>
-              <article className="purchase-timeline-card">
-                <div className="purchase-step-heading">
-                  <span className="purchase-timeline-number" aria-hidden="true">{index + 1}</span>
-                  <h3>{title}</h3>
-                </div>
-                <p>{text}</p>
-                {index === 0 ? (
-                  <div className="purchase-timeline-illustration purchase-timeline-screenshot">
-                    <img className="purchase-catalog-light" src="/illustrations/purchase-catalog-light.png" width="3456" height="1726" alt="Выбор автомобиля в каталоге: фильтры и объявления Zeekr" loading="lazy" decoding="async" />
-                    <img className="purchase-catalog-dark" src="/illustrations/purchase-catalog-dark.png" width="3456" height="1726" alt="Выбор автомобиля в каталоге: фильтры и объявления Zeekr" loading="lazy" decoding="async" />
-                  </div>
-                ) : index === 1 ? (
-                  <div className="purchase-timeline-illustration purchase-verification-art">
-                    <img className="purchase-verification-light" src="/illustrations/purchase-verification-light.png" width="1774" height="887" alt="Часы и чеклист: два пункта подтверждены, третий в ожидании" loading="lazy" decoding="async" />
-                    <img className="purchase-verification-dark" src="/illustrations/purchase-verification-dark.png" width="1774" height="887" alt="Часы и чеклист: два пункта подтверждены, третий в ожидании" loading="lazy" decoding="async" />
-                  </div>
-                ) : index === 2 ? (
-                  <div className="purchase-timeline-illustration purchase-inspection-art">
-                    <img src="/illustrations/purchase-inspection.png" width="1280" height="960" alt="Проверка автомобиля диагностическим сканером" loading="lazy" decoding="async" />
-                  </div>
-                ) : index === 3 ? (
-                  <div className="purchase-timeline-illustration purchase-inspection-art">
-                    <img src="/illustrations/purchase-estimate.png" width="1219" height="450" alt="Расчёт сметы на калькуляторе и проверка документов" loading="lazy" decoding="async" />
-                  </div>
-                ) : (
-                  <div className="purchase-timeline-illustration purchase-inspection-art">
-                    <img src="/illustrations/purchase-delivery.png" width="1595" height="986" alt="Автомобили на автовозе перед доставкой" loading="lazy" decoding="async" />
-                  </div>
-                )}
-              </article>
-            </li>
-          ))}
-        </ol>
-        {stepsExpanded && <div className="purchase-deck-close-wrap"><button type="button" className="purchase-deck-close" aria-expanded={true} aria-controls="purchase-deck" onClick={() => { setStepsExpanded(false); document.getElementById("steps")?.scrollIntoView({ behavior: "instant" }); }}>Свернуть этапы <ArrowUp size={18} /></button></div>}
-        <div className="purchase-timeline-cta">
-          {stepsExpanded ? <button className="primary" onClick={() => navigate("/catalog")}>
-            <CarProfile size={20} aria-hidden="true" />
-            {total > 0 ? `Выбрать авто из ${number(total)} ${total % 10 === 1 && total % 100 !== 11 ? "предложения" : "предложений"}` : "Выбрать авто"}
-            <ArrowRight size={18} />
-          </button> : <button className="primary purchase-deck-expand" type="button" aria-expanded={false} aria-controls="purchase-deck" onClick={() => setStepsExpanded(true)}>
-            Показать все 5 этапов <ArrowDown size={18} aria-hidden="true" />
-          </button>}
-        </div>
-      </section>
+      <div className="service-light-region">
+        <section className="service-opportunities page-width" aria-labelledby="service-opportunities-title">
+          <h2 id="service-opportunities-title">Возможности платформы</h2>
+          <div className="service-opportunities-grid">
+            <article className="service-opportunity-card service-opportunity-card-wide">
+              <strong>{opportunitiesListingCount}</strong>
+              <p>Активных объявлений<br />для выбора автомобиля</p>
+              <img src="/services/fast-convenient-car-rear.png" width="1254" height="1254" alt="Автомобиль с включёнными задними фонарями" loading="lazy" decoding="async" />
+            </article>
+            <article className="service-opportunity-card">
+              <strong>Еженедельно</strong>
+              <p>Обновляем наличие и цены в каталоге</p>
+              <button className="primary service-opportunity-cta" type="button" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
+            </article>
+            <article className="service-opportunity-card service-opportunity-card-no-cta">
+              <strong>Расчёт</strong>
+              <p>Сразу показываем, из чего состоит цена под ключ</p>
+            </article>
+            <article className="service-opportunity-card service-opportunity-card-wide service-opportunity-card-convenience">
+              <strong>Удобно</strong>
+              <p>Множество фильтров, умный поиск, детали и всё для вашего удобства</p>
+              <img className="service-opportunity-filter-dark" src="/services/convenient-filters.png" width="1254" height="1254" alt="Панель настройки фильтров" loading="lazy" decoding="async" />
+              <img className="service-opportunity-filter-light" src="/services/convenient-filters-light.png" width="1254" height="1254" alt="" aria-hidden="true" loading="lazy" decoding="async" />
+            </article>
+          </div>
+        </section>
+      </div>
       <section className="decision-section">
         <div className="page-width decision-grid">
           <div>

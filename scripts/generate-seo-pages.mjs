@@ -20,7 +20,7 @@ import { estimateLandedCost } from "../src/pricing.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES } from "../src/purchase-info.js";
 import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
-import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_STEPS, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
+import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
 // Журнал: подборки. Раздел собирается только при включённом выключателе — пока он
 // выключен, у сайта нет ни страниц журнала, ни его адресов в карте сайта.
 import { BLOG_ENABLED } from "../src/feature-flags.js";
@@ -353,9 +353,7 @@ function infoArticle(route) {
     return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства оформлять заказ.</p><p>До обращения можно посмотреть <a href="${hrefRoute("/")}">автомобили из Китая с расчётом до Минска</a>.</p></section>`;
   }
   if (route === "/how-it-works/") {
-    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p>${PURCHASE_STEPS.map(
-      (step, index) => `<h3>${index + 1}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.text)}</p>`,
-    ).join("")}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[1].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[1].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Прозрачность на каждом шаге</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Чего мы не обещаем</h2>${list(ABOUT_LIMITS.map((item) => [item.title, item.text]))}</section>`;
+    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Прозрачность на каждом шаге</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Чего мы не обещаем</h2>${list(ABOUT_LIMITS.map((item) => [item.title, item.text]))}</section>`;
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {
