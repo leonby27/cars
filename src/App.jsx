@@ -85,6 +85,17 @@ const EMPTY_CATALOG_FACTS = { total: 0, updatedAt: "" };
 const CatalogFactsContext = createContext(EMPTY_CATALOG_FACTS);
 const useCatalogFacts = () => useContext(CatalogFactsContext) || EMPTY_CATALOG_FACTS;
 
+const SERVICE_PROOF_ARTWORK = Object.freeze([
+  { src: "/services/budget-wallet.png", className: "wallet", width: 256, height: 213 },
+  { src: "/services/prepayment-check.png", className: "prepayment", width: 512, height: 512 },
+  { src: "/services/independent-diagnostics.png", className: "diagnostics", width: 512, height: 512 },
+  { src: "/services/battery-check.png", className: "battery", width: 512, height: 512 },
+  { src: "/services/full-estimate.png", className: "estimate", width: 512, height: 512 },
+  { src: "/services/staged-payment.png", className: "payment", width: 512, height: 512 },
+  { src: "/services/delivery-control.png", className: "delivery", width: 512, height: 341 },
+  { src: "/services/customs-documents.png", className: "customs", width: 512, height: 341 },
+]);
+
 const CurrencyContext = createContext("USD");
 // Валюту переключают не только в шапке: в быстром просмотре шапка недоступна,
 // поэтому сеттер доступен из любого места дерева.
@@ -8406,17 +8417,6 @@ function OrderDraft({ car, navigate }) {
 // текстами заполняется страница для поисковика.
 const purchaseStepIcons = [MagnifyingGlass, ChatCircleText, ShieldCheck, ListChecks, CarProfile];
 const purchaseSteps = PURCHASE_STEPS.map((step, index) => ({ ...step, icon: purchaseStepIcons[index] }));
-const serviceProofIcons = [
-  CarProfile,
-  ShieldCheck,
-  Scales,
-  BatteryHigh,
-  Calculator,
-  ListChecks,
-  RoadHorizon,
-  ClipboardText,
-];
-
 function ServiceScrollVideo({ navigate, total, updatedAt }) {
   const sceneRef = useRef(null);
   const stickyRef = useRef(null);
@@ -8457,21 +8457,25 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
 
       // The film reaches its final frame first; the remaining scroll distance
       // fades that frame into the page before the service cards arrive.
+      const isMobileViewport = window.innerWidth <= 700;
       const playbackProgress = Math.min(1, progress / 0.84);
       const fadeProgress = Math.min(1, Math.max(0, (progress - 0.7) / 0.28));
-      const primaryCopyMotion = Math.min(1, progress / 0.42);
-      const primaryCopyFade = Math.min(1, Math.max(0, (progress - 0.24) / 0.18));
-      const secondaryCopyMotion = Math.min(1, Math.max(0, (progress - 0.4) / 0.38));
+      const primaryCopyMotion = Math.min(1, progress / (isMobileViewport ? 0.12 : 0.42));
+      const primaryCopyFade = isMobileViewport
+        ? Math.min(1, progress / 0.07)
+        : Math.min(1, Math.max(0, (progress - 0.24) / 0.18));
+      const secondaryCopyMotion = Math.min(1, Math.max(0, (progress - 0.4) / (isMobileViewport ? 0.16 : 0.38)));
       const secondaryCopyReveal = Math.min(1, Math.max(0, (progress - 0.38) / 0.08));
-      const secondaryCopyFade = Math.min(1, Math.max(0, (progress - 0.68) / 0.14));
+      const secondaryCopyFade = Math.min(1, Math.max(0, (progress - (isMobileViewport ? 0.52 : 0.68)) / (isMobileViewport ? 0.08 : 0.14)));
       const trustCardFade = Math.min(1, Math.max(0, progress / 0.08));
+      const copyTravel = isMobileViewport ? -28 : -160;
       scene.style.setProperty("--service-video-opacity", String(1 - fadeProgress));
       scene.style.setProperty("--service-scroll-cue-opacity", String(Math.max(0, 1 - progress / 0.12)));
       scene.style.setProperty("--service-primary-copy-opacity", String(1 - primaryCopyFade));
       scene.style.setProperty("--service-secondary-copy-opacity", String(secondaryCopyReveal * (1 - secondaryCopyFade)));
       scene.style.setProperty("--service-trust-card-opacity", String(1 - trustCardFade));
-      scene.style.setProperty("--service-primary-copy-y", `${-160 * primaryCopyMotion}px`);
-      scene.style.setProperty("--service-secondary-copy-y", `${-160 * secondaryCopyMotion}px`);
+      scene.style.setProperty("--service-primary-copy-y", `${copyTravel * primaryCopyMotion}px`);
+      scene.style.setProperty("--service-secondary-copy-y", `${copyTravel * secondaryCopyMotion}px`);
       scene.classList.toggle("service-video-copy-swapped", progress >= 0.37);
       pageShell?.classList.toggle("service-video-header-active", fadeProgress < 0.8);
 
@@ -8507,7 +8511,8 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
   const catalogUpdateLabel = updatedAt ? catalogUpdatedDate(updatedAt) : "";
   // The complete opening region intentionally matches the dark theme in both
   // modes; the selected site theme resumes after the capability cards.
-  const videoSource = "/videos/how-it-works-scroll.mp4?v=20260911-6";
+  const mobileVideoSource = "/videos/how-it-works-scroll-mobile.mp4?v=20260911-1";
+  const desktopVideoSource = "/videos/how-it-works-scroll.mp4?v=20260911-6";
   const videoPoster = "/videos/how-it-works-scroll-poster.png?v=20260911-6";
 
   return (
@@ -8516,14 +8521,16 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
         <video
           ref={videoRef}
           className="service-scroll-video"
-          src={videoSource}
           poster={videoPoster}
           preload="auto"
           muted
           playsInline
           aria-hidden="true"
           tabIndex={-1}
-        />
+        >
+          <source src={mobileVideoSource} media="(max-width: 700px)" type="video/mp4" />
+          <source src={desktopVideoSource} type="video/mp4" />
+        </video>
         <div className="service-video-copy">
           <div className="service-video-copy-inner">
             <div className="service-video-copy-panel service-video-copy-panel-primary">
@@ -8610,10 +8617,17 @@ function HowItWorksPage({ navigate }) {
         <section className="info-proof-section page-width" aria-label="Возможности сервиса">
           <div className="info-proof">
             {SERVICE_PROOF.map(({ title, text }, index) => {
-              const Icon = serviceProofIcons[index];
+              const artwork = SERVICE_PROOF_ARTWORK[index] || SERVICE_PROOF_ARTWORK[0];
               return (
                 <article key={title}>
-                  <span className="info-proof-icon"><Icon size={29} weight="duotone" /></span>
+                  <span className={`info-proof-icon info-proof-icon-art info-proof-icon-${artwork.className}`} aria-hidden="true">
+                    <img
+                      src={artwork.src}
+                      alt=""
+                      width={artwork.width}
+                      height={artwork.height}
+                    />
+                  </span>
                   <h3>{title}</h3>
                   <p>{text}</p>
                 </article>

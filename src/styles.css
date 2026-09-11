@@ -17644,6 +17644,68 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
   background: #1d2024;
   color: #ff6870;
 }
+.service-dark-intro .info-proof-icon-art {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  overflow: hidden;
+  background: #30353c;
+}
+:root[data-theme="dark"] .service-dark-intro .info-proof-icon-art {
+  background: #30353c;
+}
+.service-dark-intro .info-proof-icon-art img {
+  position: absolute;
+  max-width: none;
+  height: auto;
+  transform-origin: center;
+  transition: transform 220ms ease;
+}
+@media (hover: hover) {
+  .service-dark-intro .info-proof > article:hover .info-proof-icon-art img {
+    transform: scale(1.2);
+  }
+}
+.service-dark-intro .info-proof-icon-wallet img {
+  top: 10px;
+  left: 9px;
+  width: 98px;
+}
+.service-dark-intro .info-proof-icon-battery img {
+  top: 3px;
+  left: 4px;
+  width: 115px;
+}
+.service-dark-intro .info-proof-icon-prepayment img {
+  top: 6px;
+  left: 9px;
+  width: 103px;
+}
+.service-dark-intro .info-proof-icon-diagnostics img {
+  top: 6px;
+  left: 9px;
+  width: 100px;
+}
+.service-dark-intro .info-proof-icon-estimate img {
+  top: 6px;
+  left: 9px;
+  width: 103px;
+}
+.service-dark-intro .info-proof-icon-payment img {
+  top: 6px;
+  left: 10px;
+  width: 103px;
+}
+.service-dark-intro .info-proof-icon-delivery img {
+  top: 9px;
+  left: 8px;
+  width: 125px;
+}
+.service-dark-intro .info-proof-icon-customs img {
+  top: 10px;
+  left: 8px;
+  width: 125px;
+}
 html[data-theme="dark"] .service-dark-intro {
   --page: #000;
   background: #000;
@@ -17942,6 +18004,9 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .service-dark-intro .info-proof-icon-art img {
+    transition: none;
+  }
   .service-video-scroll-cue-dot {
     animation: none;
   }
@@ -17953,6 +18018,10 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   padding-top: clamp(40px, 6vw, 76px);
 }
 @media (max-width: 700px) {
+  .service-dark-intro {
+    --page: #000;
+    background: #000;
+  }
   .service-video-story {
     height: 400svh;
   }
@@ -18008,6 +18077,9 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   }
   .service-video-scroll-cue {
     bottom: 18px;
+  }
+  .service-video-scroll-cue > span:first-child {
+    display: none;
   }
   .service-dark-intro .service-video-story + .info-proof-section {
     margin-top: -92svh;
