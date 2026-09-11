@@ -3320,6 +3320,7 @@ body.header-menu-open .detail-floating-availability {
   padding: 22px;
   border-radius: calc(18px * var(--corner-scale));
   background: var(--surface);
+  box-shadow: 0 18px 46px rgba(17, 19, 22, 0.1);
 }
 .info-proof-icon {
   display: grid;
@@ -3354,6 +3355,7 @@ body.header-menu-open .detail-floating-availability {
 }
 :root[data-theme="dark"] .info-proof > article {
   background: #191c20;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
 }
 :root[data-theme="dark"] .info-proof-icon {
   background: #1d2024;
@@ -5526,6 +5528,9 @@ html[data-theme="dark"] #root .load-more {
   .car-row-image.hover-image-preview > img {
     display: none;
   }
+  .car-row-image.sold-vehicle-photo > img {
+    display: block;
+  }
   .car-row-mobile-image-strip {
     height: 100%;
     display: flex;
@@ -5895,6 +5900,18 @@ html[data-theme="dark"] #root .load-more {
 }
 .vehicle-quick-info p + p {
   margin-top: 10px;
+}
+.sold-order-state {
+  display: grid;
+  place-items: center;
+  min-height: 50px;
+  margin-top: 18px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
 }
 /* Блок «Цена среди похожих»: отдельная плашка в правой колонке, как «Основная
    информация» — тот же фон, отбивка и шрифт подписи.
@@ -8493,6 +8510,55 @@ html[data-theme="dark"] #root .spec-search,
   height: 100%;
   object-fit: cover;
   user-select: none;
+}
+.sold-vehicle-photo {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--surface);
+}
+.sold-vehicle-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(12, 14, 18, 0.28);
+  pointer-events: none;
+}
+.sold-vehicle-photo > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(12px);
+  transform: scale(1.05);
+  user-select: none;
+  pointer-events: none;
+}
+.sold-vehicle-photo > strong {
+  position: absolute;
+  z-index: 2;
+  inset: 50% auto auto 50%;
+  min-width: 132px;
+  padding: 11px 18px;
+  border-radius: calc(10px * var(--corner-scale));
+  background: rgba(17, 19, 22, 0.86);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.gallery-panel.sold-vehicle-photo {
+  cursor: default;
+}
+.gallery-panel.sold-vehicle-photo > strong {
+  min-width: 170px;
+  padding: 14px 24px;
+  font-size: 25px;
 }
 /* Счётчик фото держим у левого края: справа над картинкой сидит сердечко избранного,
    и на одной стороне они накладывались друг на друга. */

@@ -1,5 +1,5 @@
 import { readCatalogFallback } from "./catalog-fallback.js";
-import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute } from "./auth-route.js";
+import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "./auth-route.js";
 import { usePurchaseMotion } from "./use-purchase-motion.js";
 import { Phone, Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
@@ -2915,7 +2915,24 @@ const NARROW_VIEWPORT = "(max-width: 700px)";
 
 const useNarrowViewport = () => useMediaQuery(NARROW_VIEWPORT);
 
-function HoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, badge = null }) {
+function SoldVehiclePhoto({ car, className = "", detail = false }) {
+  const source = car.images?.[0] || car.image;
+  return (
+    <div className={`${className} sold-vehicle-photo${detail ? " gallery-panel" : " hover-image-preview"}`} aria-label={`${car.title}: продано`}>
+      {source && <img src={imageSource(source, detail ? IMAGE_ORIGINAL : IMAGE_WIDTH_CARD)} alt={car.title} draggable="false" onError={(event) => retryWithFullImage(event, source)} />}
+      <strong>Продано</strong>
+    </div>
+  );
+}
+
+// У проданной машины карточка тоже перестаёт быть мини-галереей: только первая
+// фотография с тем же состоянием, которое посетитель увидит на полной странице.
+function HoverImagePreview(props) {
+  if (props.car.available === false) return <SoldVehiclePhoto car={props.car} className={props.className} />;
+  return <ActiveHoverImagePreview {...props} />;
+}
+
+function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, badge = null }) {
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
   const narrow = useNarrowViewport();
   // Один размер превью для телефона и компьютера, общий с серверной копией.
@@ -6533,6 +6550,11 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
 }
 
 function VehicleGallery({ car }) {
+  if (car.available === false) return <SoldVehiclePhoto car={car} detail />;
+  return <ActiveVehicleGallery car={car} />;
+}
+
+function ActiveVehicleGallery({ car }) {
   const images = car.images?.length ? car.images : [car.image];
   const [active, setActive] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
@@ -7563,6 +7585,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // По этой машине заказ уже создан — тогда кнопка не заводит второй, а ведёт в кабинет.
   const orderedListings = useOrderedListings();
   const inOrder = orderedListings.has(listingNumber(car.id));
+  const sold = car.available === false;
   useEffect(() => {
     if (car) trackEvent("vehicle_view", { listingId:car.id, listingTitle:car.title });
   }, [car?.id]);
@@ -7601,6 +7624,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // Кнопка заводит заказ: машину запоминаем, кабинет создаёт заказ сам.
   // Неавторизованных на /account встречает окно входа, ожидание переживает его.
   const requestAvailability = () => {
+    if (sold) return;
     // Машина уже в заказе — заводить второй не нужно. Обычно ведём в кабинет, но если
     // карточку и открыли из самого заказа, идти некуда: просто закрываем превью.
     if (inOrder) {
@@ -7841,9 +7865,13 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 </div>
               </div>
             </section>
-            <button ref={availabilityCtaRef} className={`primary report-order-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
-              {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
-            </button>
+            {sold ? (
+              <div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>
+            ) : (
+              <button ref={availabilityCtaRef} className={`primary report-order-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
+                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+              </button>
+            )}
           </aside>
           <BrandNotice car={car} />
           <ListingIdRow car={car} />
@@ -7851,7 +7879,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               висит поверх страницы, на широком экране прилипает к низу окна, пока
               правая колонка на виду. Стоит внутри колонки, чтобы на широком экране
               совпадать с ней по ширине без подгонки цифрами. */}
-          {floatingCta && (
+          {floatingCta && !sold && (
             <div className={`detail-floating-availability${floatingCtaHidden ? " is-hidden" : ""}`} aria-hidden={floatingCtaHidden}>
               <button className={`primary${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={floatingCtaHidden ? -1 : 0}>
                 {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
@@ -11119,7 +11147,7 @@ function PasswordField({ label, value, onChange, autoComplete, placeholder = "",
   );
 }
 
-function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectTo = "/account" }) {
+function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectTo = "/" }) {
   const registering = mode === "register";
   const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:true });
   const [error, setError] = useState("");
@@ -11141,7 +11169,7 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
     if (registering && !values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
     try {
       await onAuthenticate(mode, values);
-      navigate(redirectTo, { replace:true });
+      navigate(redirectTo, { replace:true, preserveScroll:true });
     } catch (authError) {
       setError(authMessages[authError.message] || "Не удалось продолжить. Попробуйте ещё раз.");
     }
@@ -12623,7 +12651,7 @@ export function App() {
           onAuthenticate={authenticate}
           pending={authPending}
           onClose={closeAuthModal}
-          redirectTo={pendingFavorite || path === "/favorites" ? "/favorites" : pendingSavedSearch || path === "/searches" ? "/searches" : "/account"}
+          redirectTo={resolvePostAuthPath(path, authBackgroundPath, pendingFavorite, pendingSavedSearch)}
         />
       )}
      </SetOrderedListingsContext.Provider>

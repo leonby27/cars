@@ -1172,7 +1172,7 @@ try {
         await pool.query(`UPDATE listings SET last_seen_at=now(), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
       }
       for (const batch of chunk(sold, 5000)) {
-        await pool.query(`UPDATE listings SET status='unavailable', last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
+        await pool.query(`UPDATE listings SET status='unavailable', sold_at=COALESCE(sold_at, now()), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
       }
     }
     stats.rePriced += prices.length;

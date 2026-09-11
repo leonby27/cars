@@ -8,7 +8,7 @@ const source='https://erscglobal2.autoimg.cn/escimg/auto/1400x0_c42_car.webp';
 const key='/photo/escimg/auto/car.webp';
 const now=1800000000000;
 const removed={id:'car',status:'unavailable',last_seen_at:'2026-09-01',images:[source]};
-test('seven days start on observation, reset on reactivation or changed last-seen date',()=>{
+test('fourteen days start on observation, reset on reactivation or changed last-seen date',()=>{
  const observed=observeListing(removed,undefined,now);
  assert.equal(eligibleListing(observed,now),false);
  assert.equal(eligibleListing(observed,now+PHOTO_RETENTION_MS-1),false);

@@ -10,6 +10,16 @@ import { FUEL_TYPES, GEARBOX_TYPES, enginePower, engineVolume, fuelType, gearbox
 
 const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).slice(0, 2)) : Number(value) || null;
 const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({ price:car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images })).digest("hex");
+export const SOLD_LISTING_RETENTION_MS = 14 * 86400_000;
+
+// Проданная машина ещё две недели открывается из избранного и по старой ссылке.
+// После этого она снова становится обычной исчезнувшей карточкой (404), чтобы
+// старые объявления не копились в выдаче поисковиков и в аккаунтах без срока.
+export function soldListingVisible(car, now = Date.now()) {
+  if (!car || car.available !== false) return Boolean(car);
+  const soldAt = new Date(car.soldAt || car.checkedAt || "").getTime();
+  return Number.isFinite(soldAt) && now - soldAt < SOLD_LISTING_RETENTION_MS;
+}
 
 export function normalizeCar(car) {
   car = repairVerifiedDrive(car);
@@ -37,9 +47,9 @@ export async function upsertCar(car, client = pool) {
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
     ON CONFLICT (id) DO UPDATE SET brand=EXCLUDED.brand, model=EXCLUDED.model, model_year=EXCLUDED.model_year, powertrain=EXCLUDED.powertrain, drivetrain=EXCLUDED.drivetrain, battery_kwh=EXCLUDED.battery_kwh, electric_range_km=EXCLUDED.electric_range_km, combined_range_km=EXCLUDED.combined_range_km, specifications=EXCLUDED.specifications, updated_at=now()`,
     [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify(vehicleSpecifications(item))]);
-  await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at)
-    VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()))
-    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= 700 THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / 7.15)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= 700 THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash THEN now() ELSE listings.content_changed_at END`,
+  await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at, sold_at)
+    VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()),NULL)
+    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', sold_at=NULL, content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= 700 THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / 7.15)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= 700 THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash THEN now() ELSE listings.content_changed_at END`,
     [item.id,item.source,item.externalId,item.sourceUrl,item.title,item.city,item.firstRegistration,item.mileage,item.chinaPrice,item.guidePriceCny,item.owners,item.transfers,item.conditionGrade,item.appearanceScore,item.claims || item.incident,item.description,contentHash(item),JSON.stringify(item),checkedAt,item.importedAt || checkedAt,estimatedTotalUsd]);
   await client.query("DELETE FROM listing_media WHERE listing_id=$1", [item.id]);
   const images = (item.images || [item.image]).filter(Boolean);
@@ -172,12 +182,12 @@ export function buildCarOrder(searchParams) {
 export function rowToCar(row) {
   const raw = row.source_payload || {};
   // Проданное объявление тоже доходит сюда: карточку по номеру спрашивают заявки и
-  // служебные скрипты, поэтому `getCar` не фильтрует по состоянию. Признак
-  // `available` — единственное место, где настоящее состояние строки видно снаружи:
-  // по нему и `/api/cars/<номер>`, и готовая страница машины отвечают «объявления
-  // больше нет». Строка без столбца состояния (узкие выборки) считается живой.
+  // служебные скрипты, поэтому `getCar` не фильтрует по состоянию. Признаки
+  // `available` и `soldAt` позволяют внешним страницам оставить его на две недели.
+  // Строка без столбца состояния (узкие выборки) считается живой.
   const available = row.status === undefined || row.status === "active";
-  return normalizeCar({ ...raw, available, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:available ? "Карточка доступна" : "Объявление снято с продажи", statusTone:available ? "green" : "red", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, previousPriceUsd:Number(row.previous_price_usd) || null, priceChangedAt:row.price_changed_at, sourceId:raw.sourceId || `${row.source === "Che168" ? "CH" : "GZ"}-${row.external_id}`, ...row.specifications });
+  const soldAt = available ? null : row.sold_at || row.last_checked_at || row.last_seen_at || null;
+  return normalizeCar({ ...raw, available, soldAt, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:available ? "Карточка доступна" : "Продано", statusTone:available ? "green" : "red", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, previousPriceUsd:Number(row.previous_price_usd) || null, priceChangedAt:row.price_changed_at, sourceId:raw.sourceId || `${row.source === "Che168" ? "CH" : "GZ"}-${row.external_id}`, ...row.specifications });
 }
 
 export function withoutDetailPayload(car) {

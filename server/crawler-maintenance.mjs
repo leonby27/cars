@@ -16,7 +16,7 @@ export async function scheduleStaleListings(limit = 1000) {
 
 export async function expireUnseenListings(days = 30) {
   const safeDays=Math.max(7,Number(days) || 30);
-  const result=await pool.query(`UPDATE listings SET status='unavailable'
+  const result=await pool.query(`UPDATE listings SET status='unavailable', sold_at=COALESCE(sold_at, now())
     WHERE status='active' AND last_seen_at < now() - make_interval(days => $1)
     RETURNING id`, [safeDays]);
   return result.rowCount;

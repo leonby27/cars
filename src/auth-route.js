@@ -14,3 +14,9 @@ export function resolveAuthRoute(path, fromPath, user, authLoading) {
   const contentPath = authRoute || authModalOpen ? authBackgroundPath : path;
   return { authRoute, authBackgroundPath, authModalOpen, contentPath };
 }
+
+export function resolvePostAuthPath(path, authBackgroundPath, pendingFavorite, pendingSavedSearch) {
+  if (pendingFavorite || path === "/favorites") return "/favorites";
+  if (pendingSavedSearch || path === "/searches") return "/searches";
+  return authBackgroundPath;
+}

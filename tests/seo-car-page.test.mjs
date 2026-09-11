@@ -122,6 +122,14 @@ test("на закрытой сборке страница машины не ин
   assert.match(html, /data-seo-indexing="false"/);
 });
 
+test("временная страница проданной машины закрыта от поиска и помечена SoldOut", () => {
+  const { html } = render().carPage({ car:{ ...car, available:false, soldAt:"2026-09-10T12:00:00.000Z" }, indexable:false });
+  assert.match(html, /<title>BYD Han 2023 — продано \| abcars\.by<\/title>/);
+  assert.match(html, /<meta name="robots" content="noindex, nofollow, noarchive"/);
+  assert.match(html, /"availability":"https:\/\/schema\.org\/SoldOut"/);
+  assert.match(html, /BYD Han 2023 продан/);
+});
+
 test("снятое объявление отдаёт страницу без индексации и без первоисточника", () => {
   const html = render().carGonePage();
   assert.match(html, /<h1>Объявление больше не доступно<\/h1>/);

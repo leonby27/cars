@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { vehiclePhotoHref } from '../../src/photo-source.js';
-export const PHOTO_RETENTION_MS = 7 * 86400_000;
+// Первая фотография нужна двухнедельному состоянию «Продано» по прямой ссылке и
+// в избранном, поэтому локальную копию нельзя чистить раньше самой карточки.
+export const PHOTO_RETENTION_MS = 14 * 86400_000;
 
 // All sizes of the same source share ownership, including old 900px copies.
 export function photoIdentity(source) {

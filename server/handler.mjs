@@ -4,7 +4,7 @@ import { gzip } from "node:zlib";
 import { promisify } from "node:util";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionAccount, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
-import { brandCatalogGuide, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelSummary } from "./repository.mjs";
+import { brandCatalogGuide, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelSummary, soldListingVisible } from "./repository.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
@@ -65,6 +65,10 @@ const acceptsGzip = (response) => /\bgzip\b/.test(String(response.req?.headers?.
 // человека ждать»: посетитель мгновенно получает прошлый ответ, а свежий готовится
 // в фоне и достаётся уже следующему. Плюс прогрев после выкладки — scripts/warm-api.mjs.
 const catalogCache = { "cache-control":"public, max-age=0, s-maxage=900, stale-while-revalidate=86400" };
+// У проданной карточки есть точная граница жизни в две недели. Не разрешаем сети
+// держать её вчерашней ещё сутки после этой границы; пять минут сглаживают повторные
+// открытия и оставляют удаление практически точным.
+const soldListingCache = { "cache-control":"public, max-age=0, s-maxage=300" };
 // Справочники фильтров — списки марок и моделей со счётчиками — считаются по всему
 // каталогу, и холодный ответ занимает около 1,8 секунды (23 КБ). Меняются они только
 // после ночного пополнения, поэтому держим их час, а сутки после этого отдаём прежний
@@ -381,7 +385,7 @@ export async function handleApiRequest(request, response) {
           response.writeHead(301, { location: page.location, ...seoPageCache });
           return response.end();
         }
-        return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+        return html(response, page.status, page.html, page.status === 200 ? (page.sold ? soldListingCache : seoPageCache) : { "cache-control":"no-store" });
       } catch (error) {
         console.error(error);
         // База или заготовка недоступны: отдаём обычную заготовку страницы, чтобы
@@ -467,16 +471,15 @@ export async function handleApiRequest(request, response) {
     const carMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)$/);
     if (carMatch) {
       const car = await getCar(decodeURIComponent(carMatch[1]));
-      // Проданная машина отвечает так же, как несуществующая: каталог её уже не
-      // показывает, и карточка не должна обещать то, чего в Китае больше нет.
-      // На этом же ответе держится чистка избранного: страница «Избранное» убирает
-      // из списка машину, за которой пришло «объявления нет».
+      // Проданное объявление ещё две недели отвечает своей карточкой: оно остаётся
+      // доступно из избранного и по прямой ссылке. После этого снова приходит 404,
+      // и страница «Избранное» убирает окончательно устаревшую запись.
       // Ненайденную карточку не кэшируем: объявление может появиться следующим импортом.
-      if (car && car.available === false) return json(response, 404, { error:"listing_unavailable" });
+      if (car && !soldListingVisible(car)) return json(response, 404, { error:"listing_unavailable" });
       // Положение цены среди таких же машин считаем здесь же: карточке нужен готовый
       // ответ, а не ещё один запрос с её стороны.
       return car
-        ? json(response, 200, { ...car, priceRating:await priceRating(car) }, catalogCache)
+        ? json(response, 200, { ...car, priceRating:await priceRating(car) }, car.available === false ? soldListingCache : catalogCache)
         : json(response, 404, { error:"car_not_found" });
     }
     if (request.method === "POST" && url.pathname === "/api/order-drafts") {

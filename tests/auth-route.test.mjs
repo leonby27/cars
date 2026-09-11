@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute } from "../src/auth-route.js";
+import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "../src/auth-route.js";
 
 test("guest account entry keeps the vehicle behind sign-in", () => {
   for (const path of ["/account", "/favorites", "/searches", "/login", "/register"]) {
@@ -35,4 +35,17 @@ test("sign-in tabs preserve scroll while ordinary page navigation resets it", ()
     for (const path of ["/login", "/register"]) assert.equal(preservesAuthScroll(path, user), true);
     for (const path of ["/", "/cars/12345", "/catalog"]) assert.equal(preservesAuthScroll(path, user), false);
   }
+});
+
+test("ordinary sign-in returns to the page behind the modal", () => {
+  assert.equal(resolvePostAuthPath("/login", "/cars/12345", null, null), "/cars/12345");
+  assert.equal(resolvePostAuthPath("/register", "/catalog/byd", null, null), "/catalog/byd");
+  assert.equal(resolvePostAuthPath("/account", "/", null, null), "/");
+});
+
+test("sign-in still finishes explicit favorites and saved-search actions", () => {
+  assert.equal(resolvePostAuthPath("/register", "/cars/12345", "car-1", null), "/favorites");
+  assert.equal(resolvePostAuthPath("/favorites", "/catalog", null, null), "/favorites");
+  assert.equal(resolvePostAuthPath("/register", "/catalog", null, { brand:"BYD" }), "/searches");
+  assert.equal(resolvePostAuthPath("/searches", "/catalog", null, null), "/searches");
 });

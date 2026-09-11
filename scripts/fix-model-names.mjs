@@ -56,7 +56,7 @@ for (const row of listings) {
 // Единственная машина «Toyota bz7» в марке ORA — ошибка источника: по размерам
 // и характеристикам это не bZ7, чья это карточка на самом деле — неизвестно.
 const hidden = await pool.query(`
-  UPDATE listings l SET status='unavailable'
+  UPDATE listings l SET status='unavailable', sold_at=COALESCE(sold_at, now())
   FROM vehicles v
   WHERE v.id = l.vehicle_id AND v.brand = 'ORA' AND v.model = 'Toyota bz7' AND l.status = 'active'`);
 

@@ -451,7 +451,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const route = carRoute(car);
     const canonical = routeUrl(route);
     const landed = estimateLandedCost(car);
-    const description = carDescription(car, landed);
+    const sold = car.available === false;
+    const description = sold
+      ? `${titleText} продан. Объявление временно сохранено для избранного и прямых ссылок; актуальные похожие автомобили есть в каталоге abcars.by.`
+      : carDescription(car, landed);
     const image = /^https:\/\//.test(String(car.image || "")) ? car.image : null;
     // Тот же снимок, что откроет галерея после запуска приложения, — и просим его
     // по тому же адресу (свой кэш фотографий, /photo/…), иначе браузер скачает
@@ -483,7 +486,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         url: canonical,
         priceCurrency: "USD",
         price: landed.totalUsd,
-        availability: "https://schema.org/InStock",
+        availability: sold ? "https://schema.org/SoldOut" : "https://schema.org/InStock",
         itemCondition: "https://schema.org/UsedCondition",
         seller: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
       },
@@ -514,11 +517,11 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const sectionBlock = sections.length
       ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p><h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({
-        title: `${titleText}, ${carTitleDetails(car, landed.totalUsd)} | abcars.by`,
+        title: sold ? `${titleText} — продано | abcars.by` : `${titleText}, ${carTitleDetails(car, landed.totalUsd)} | abcars.by`,
         description,
         canonical,
         body,

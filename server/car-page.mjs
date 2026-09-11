@@ -9,7 +9,7 @@
 // кэша каждый его заход был бы отдельным запросом к базе.
 import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { getCar, listCars } from "./repository.mjs";
+import { getCar, listCars, soldListingVisible } from "./repository.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer, carRoute, listingNumber } from "./seo-render.mjs";
@@ -73,8 +73,8 @@ async function relatedCars(car) {
 
 /**
  * Готовая страница машины: `{ status, html }`.
- * Снятое или несуществующее объявление отдаётся с кодом 404 — иначе поисковик держит
- * в индексе адреса проданных машин, каждый из которых отвечает «страница есть».
+ * Снятое объявление две недели остаётся доступным по сохранённой ссылке, но сразу
+ * получает noindex. После этого, как и несуществующее, оно отдаётся с кодом 404.
  */
 export async function renderCarPage(id) {
   // Полный идентификатор объявления («che168-59355862») по-прежнему открывает машину:
@@ -87,9 +87,8 @@ export async function renderCarPage(id) {
   const shell = await appShell();
   const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
   const car = await getCar(String(id || "").trim());
-  // Проданная машина здесь равна несуществующей: страница с честной ценой и наличием
-  // из неё уже не получится, а 200 держал бы её в индексе поисковика как живую.
-  if (!car || car.available === false) return { status: 404, html: renderer.carGonePage() };
+  if (!car || !soldListingVisible(car)) return { status: 404, html: renderer.carGonePage() };
+  const sold = car.available === false;
   const related = await relatedCars(car);
   // Шкала «цена среди похожих» приезжает вместе с машиной: так один и тот же объект
   // уходит и в готовую разметку, и в данные для оживления, — сверка их не разойдётся.
@@ -111,6 +110,7 @@ export async function renderCarPage(id) {
     appRoot,
     appRootPath: route,
     bootData: appRoot ? { carId: car.id, carValue: car, relatedValue: related } : null,
+    indexable: sold ? false : undefined,
   });
-  return { status: 200, html: page.html };
+  return { status: 200, html: page.html, sold };
 }

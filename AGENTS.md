@@ -39,6 +39,8 @@ Mobile text sizing preference (owner decision, 2026-09-10): keep browser text au
 
 Authentication modal preference: present login and registration as a centered modal over the current page without changing its scroll position. Keep only a centered heading above the tabs, with no eyebrow or supporting description. Use darker dark-theme inputs and tab rail, and give the close control a lighter circular surface. Animate the modal's height smoothly when switching between login and registration. Keep the registration consent selected by default and its sentence compact enough for one desktop line with plain underlined links; the consent line is deliberately small.
 
+Authentication return preference (owner decision, 2026-09-11): after ordinary login or registration in the modal, close it and keep the visitor on the page that was behind it instead of opening the account page. Preserve explicit destinations when authentication was required to finish a favorites or saved-search action.
+
 Vehicle estimate density preference: in the detail sidebar, lead the estimate with the final landed-price figure aligned left and do not label it “Итого” or show a “Предварительный расчёт” heading. Keep intermediate labels and prices slightly smaller, omit dividers between them, and render the non-offer disclaimer as an extra-small plain text line without an icon.
 
 Belarusian-ruble price preference (owner decision, 2026-09-10): after converting displayed prices from dollars at the current rate, round every BYN amount to the nearest 100 rubles. Keep the underlying dollar estimates and calculations unchanged.
@@ -60,6 +62,8 @@ Select opening-focus preference: opening any searchable select must keep focus o
 Favicon preference: use a compact red `#EE1C25` favicon with a centered lowercase white `e` rendered as the Comfortaa 700 glyph from the customer-facing wordmark.
 
 Vehicle gallery preference: clicking the main image should open an immersive modal with a vertical photo stream similar to Auto.ru. On desktop, keep a sticky left-side thumbnail rail for quick navigation and expose the full thumbnail set; on mobile, support horizontal swipe navigation directly on the main gallery. Keep the inline gallery’s previous/next arrows dark on their translucent white circular buttons in both themes so the icons remain legible over photos.
+
+Sold-vehicle preference (owner decision, 2026-09-11): remove sold vehicles from every catalog result immediately, but keep them in favorites and available by direct link for 14 days. During that window show only a blurred first photo with a clear «Продано» overlay; remove gallery navigation, click-to-open and zoom, and do not offer an availability request. After 14 days the direct page returns the normal gone state and the stale favorite may be removed.
 
 Desktop inline-gallery aspect preference (owner decision, 2026-09-10): keep the main vehicle-photo frame responsive and approximately 15% shorter than the source-like 4:3 ratio (80:51), using a filled crop as a compromise between showing the original composition and keeping the detail page compact. This frame must remain visibly taller and crop less than the former 16:9 strip. Preserve the existing tablet and phone heights.
 
