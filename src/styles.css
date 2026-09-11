@@ -17593,3 +17593,346 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
     width: 100%;
   }
 }
+
+/* The service page opens with one scroll-controlled film. It stays pinned below
+   the persistent site header, fills every remaining pixel of the viewport and
+   hands the page to the capability cards only after its final frame has faded. */
+.service-video-story {
+  --service-video-opacity: 1;
+  --service-scroll-cue-opacity: 1;
+  --service-primary-copy-opacity: 1;
+  --service-secondary-copy-opacity: 0;
+  --service-trust-card-opacity: 1;
+  --service-primary-copy-y: 0px;
+  --service-secondary-copy-y: 0px;
+  position: relative;
+  height: 440svh;
+  background: var(--page);
+}
+.service-video-page {
+  /* Unlike overflow:hidden, clip does not create a scroll container, so the
+     film can remain genuinely pinned to the browser viewport. */
+  overflow: clip;
+}
+.service-video-page .page-width {
+  width: min(1320px, calc(100% - 48px));
+}
+.service-video-shell > .site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  width: 100%;
+  background: var(--page);
+  transition: background-color 180ms ease;
+}
+.service-video-shell.service-video-header-active > .site-header {
+  background: transparent;
+}
+.service-video-sticky {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  height: 100svh;
+  overflow: hidden;
+  background: var(--page);
+}
+.service-scroll-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: var(--service-video-opacity);
+  will-change: opacity;
+}
+@media (min-width: 701px) {
+  html[data-theme="light"] .service-scroll-video {
+    position: absolute;
+    top: auto;
+    bottom: 0;
+    left: 50%;
+    width: 95%;
+    height: calc(100% - 78px);
+    transform: translateX(-50%);
+    transform-origin: center;
+    -webkit-mask-image:
+      linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.55) 4%, #000 9%, #000 100%),
+      linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.55) 8%, #000 18%, #000 82%, rgba(0, 0, 0, 0.55) 92%, transparent 100%),
+      linear-gradient(to bottom, transparent 0%, transparent 82%, #000 96%, #000 100%);
+    -webkit-mask-composite: source-in, source-over;
+    mask-image:
+      linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.55) 4%, #000 9%, #000 100%),
+      linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.55) 8%, #000 18%, #000 82%, rgba(0, 0, 0, 0.55) 92%, transparent 100%),
+      linear-gradient(to bottom, transparent 0%, transparent 82%, #000 96%, #000 100%);
+    mask-composite: intersect, add;
+  }
+}
+.service-video-copy {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  color: #fff;
+  opacity: var(--service-video-opacity);
+  pointer-events: none;
+  will-change: opacity;
+}
+.service-video-copy-inner {
+  position: relative;
+  width: min(1320px, calc(100% - 48px));
+  height: 100%;
+  margin-inline: auto;
+}
+.service-video-copy-panel {
+  position: absolute;
+  z-index: 0;
+  width: 520px;
+  max-width: 100%;
+  bottom: clamp(96px, 12vh, 150px);
+  isolation: isolate;
+  will-change: opacity, transform;
+}
+.service-video-copy-panel-primary {
+  left: 0;
+  opacity: var(--service-primary-copy-opacity);
+  transform: translate3d(0, var(--service-primary-copy-y), 0);
+}
+.service-video-copy-panel-secondary {
+  right: 0;
+  opacity: var(--service-secondary-copy-opacity);
+  transform: translate3d(0, var(--service-secondary-copy-y), 0);
+}
+.service-video-copy-panel::before {
+  content: "";
+  position: absolute;
+  inset: -30px -38px;
+  z-index: -1;
+  border-radius: 48px;
+  background: rgba(0, 0, 0, 0.48);
+  filter: blur(28px);
+}
+.service-video-copy h1,
+.service-video-copy h2 {
+  max-width: 100%;
+  margin: 0;
+  color: inherit;
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.service-video-copy-panel-secondary h2 {
+  font-size: 40px;
+}
+.service-video-country-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.service-video-country-mark img {
+  width: 38px;
+  height: auto;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+  transform: translateY(2px);
+}
+.service-video-trust-card {
+  position: absolute;
+  top: clamp(118px, 14vh, 170px);
+  right: 0;
+  width: 280px;
+  min-height: 0;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 28px;
+  background: rgba(20, 22, 24, 0.3);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(32px) saturate(135%);
+  -webkit-backdrop-filter: blur(32px) saturate(135%);
+  opacity: var(--service-trust-card-opacity);
+  will-change: opacity;
+}
+.service-video-trust-card-icon {
+  display: block;
+  margin-bottom: 10px;
+  flex: 0 0 auto;
+  color: #fff;
+}
+.service-video-trust-card h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+.service-video-copy p {
+  max-width: 500px;
+  margin: 20px 0 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.service-video-checkline {
+  position: absolute;
+  right: 0;
+  bottom: clamp(96px, 12vh, 150px);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+  opacity: var(--service-trust-card-opacity);
+  will-change: opacity;
+}
+.service-video-checkline svg {
+  flex: 0 0 auto;
+  color: #fff;
+}
+.service-video-copy-actions {
+  margin-top: 28px;
+}
+.service-video-copy-actions .primary {
+  min-height: 54px;
+  padding: 0 20px;
+  pointer-events: none;
+}
+.service-video-copy-actions .service-video-copy-cta {
+  background: #fff;
+  color: #111315;
+}
+.service-video-copy-actions .service-video-copy-cta:hover {
+  background: #eceef0;
+}
+.service-video-shell.service-video-header-active .service-video-story:not(.service-video-copy-swapped) .service-video-copy-actions .primary {
+  pointer-events: auto;
+}
+.service-video-scroll-cue {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: var(--service-scroll-cue-opacity);
+  pointer-events: none;
+  transform: translateX(-50%);
+  will-change: opacity;
+}
+.service-video-scroll-cue-track {
+  width: 24px;
+  height: 38px;
+  padding-top: 7px;
+  display: flex;
+  justify-content: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+}
+.service-video-scroll-cue-dot {
+  width: 4px;
+  height: 8px;
+  border-radius: 999px;
+  background: #fff;
+  animation: service-scroll-cue 1.55s ease-in-out infinite;
+}
+@keyframes service-scroll-cue {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  25% {
+    opacity: 1;
+  }
+  75%,
+  100% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .service-video-scroll-cue-dot {
+    animation: none;
+  }
+}
+.service-video-story + .info-proof-section {
+  position: relative;
+  z-index: 2;
+  margin-top: -108svh;
+  padding-top: clamp(40px, 6vw, 76px);
+}
+@media (max-width: 700px) {
+  .service-video-story {
+    height: 400svh;
+  }
+  .service-video-sticky {
+    top: 0;
+    height: 100svh;
+  }
+  .service-scroll-video {
+    position: absolute;
+    top: 66px;
+    left: 0;
+    width: 100%;
+    height: 100vw;
+    max-height: 60svh;
+    object-fit: cover;
+    object-position: center;
+    transform: none;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%);
+  }
+  .service-video-copy-inner {
+    width: min(100% - 28px, 1320px);
+  }
+  .service-video-page .page-width {
+    width: min(100% - 28px, 1320px);
+  }
+  .service-video-copy-panel::before {
+    inset: -22px -18px;
+    filter: blur(22px);
+  }
+  .service-video-copy-panel {
+    text-align: center;
+  }
+  .service-video-copy-panel p {
+    margin-inline: auto;
+  }
+  .service-video-copy h1,
+  .service-video-copy h2 {
+    font-size: 36px;
+  }
+  .service-video-copy-panel-secondary h2 {
+    font-size: 32px;
+  }
+  .service-video-trust-card,
+  .service-video-checkline {
+    display: none;
+  }
+  .service-video-copy-actions {
+    margin-top: 24px;
+  }
+  .service-video-copy-actions .primary {
+    width: 100%;
+  }
+  .service-video-scroll-cue {
+    bottom: 18px;
+  }
+  .service-video-story + .info-proof-section {
+    margin-top: -92svh;
+    padding-top: 36px;
+  }
+}

@@ -8417,35 +8417,165 @@ const serviceProofIcons = [
   ClipboardText,
 ];
 
-function HowItWorksPage({ navigate }) {
-  const purchaseTimelineRef = usePurchaseMotion();
-  const [stepsExpanded, setStepsExpanded] = useState(false);
-  const { total } = useCatalogFacts();
-  const principleIcons = [ListChecks, ShieldCheck, Lightning];
+function ServiceScrollVideo({ navigate, total, updatedAt, theme }) {
+  const sceneRef = useRef(null);
+  const stickyRef = useRef(null);
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const sticky = stickyRef.current;
+    const video = videoRef.current;
+    if (!scene || !sticky || !video) return undefined;
+    const pageShell = scene.closest(".service-video-shell");
+
+    let updateFrame = 0;
+    let seekFrame = 0;
+    let targetTime = 0;
+    let seeking = false;
+
+    const commitFrame = () => {
+      seekFrame = 0;
+      if (seeking || video.readyState < 1 || !Number.isFinite(video.duration)) return;
+      if (Math.abs(video.currentTime - targetTime) <= 1 / 45) return;
+      seeking = true;
+      video.currentTime = targetTime;
+    };
+    const scheduleSeek = () => {
+      if (!seeking && !seekFrame) seekFrame = window.requestAnimationFrame(commitFrame);
+    };
+    const handleSeeked = () => {
+      seeking = false;
+      scheduleSeek();
+    };
+    const update = () => {
+      updateFrame = 0;
+      const rect = scene.getBoundingClientRect();
+      const stickyTop = Number.parseFloat(window.getComputedStyle(sticky).top) || 0;
+      const scrollDistance = Math.max(1, scene.offsetHeight - sticky.offsetHeight);
+      const progress = Math.min(1, Math.max(0, (stickyTop - rect.top) / scrollDistance));
+
+      // The film reaches its final frame first; the remaining scroll distance
+      // fades that frame into the page before the service cards arrive.
+      const playbackProgress = Math.min(1, progress / 0.84);
+      const fadeProgress = Math.min(1, Math.max(0, (progress - 0.7) / 0.28));
+      const primaryCopyMotion = Math.min(1, progress / 0.42);
+      const primaryCopyFade = Math.min(1, Math.max(0, (progress - 0.24) / 0.18));
+      const secondaryCopyMotion = Math.min(1, Math.max(0, (progress - 0.4) / 0.38));
+      const secondaryCopyReveal = Math.min(1, Math.max(0, (progress - 0.38) / 0.08));
+      const secondaryCopyFade = Math.min(1, Math.max(0, (progress - 0.68) / 0.14));
+      const trustCardFade = Math.min(1, Math.max(0, progress / 0.08));
+      scene.style.setProperty("--service-video-opacity", String(1 - fadeProgress));
+      scene.style.setProperty("--service-scroll-cue-opacity", String(Math.max(0, 1 - progress / 0.12)));
+      scene.style.setProperty("--service-primary-copy-opacity", String(1 - primaryCopyFade));
+      scene.style.setProperty("--service-secondary-copy-opacity", String(secondaryCopyReveal * (1 - secondaryCopyFade)));
+      scene.style.setProperty("--service-trust-card-opacity", String(1 - trustCardFade));
+      scene.style.setProperty("--service-primary-copy-y", `${-160 * primaryCopyMotion}px`);
+      scene.style.setProperty("--service-secondary-copy-y", `${-160 * secondaryCopyMotion}px`);
+      scene.classList.toggle("service-video-copy-swapped", progress >= 0.37);
+      pageShell?.classList.toggle("service-video-header-active", fadeProgress < 0.8);
+
+      if (video.readyState >= 1 && Number.isFinite(video.duration)) {
+        const finalFrame = Math.max(0, video.duration - 0.04);
+        targetTime = finalFrame * playbackProgress;
+        scheduleSeek();
+      }
+    };
+    const scheduleUpdate = () => {
+      if (!updateFrame) updateFrame = window.requestAnimationFrame(update);
+    };
+
+    video.pause();
+    video.addEventListener("loadedmetadata", update);
+    video.addEventListener("seeked", handleSeeked);
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    update();
+
+    return () => {
+      if (updateFrame) window.cancelAnimationFrame(updateFrame);
+      if (seekFrame) window.cancelAnimationFrame(seekFrame);
+      video.removeEventListener("loadedmetadata", update);
+      video.removeEventListener("seeked", handleSeeked);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      pageShell?.classList.remove("service-video-header-active");
+    };
+  }, []);
+
+  const roundedListings = total >= 100 ? formatRoundedListingCount(total).replace(/\+$/, "") : "64900";
+  const catalogUpdateLabel = updatedAt ? catalogUpdatedDate(updatedAt) : "";
+  const videoSource = theme === "light"
+    ? "/videos/how-it-works-scroll-light.mp4?v=20260911-1"
+    : "/videos/how-it-works-scroll.mp4?v=20260911-6";
+  const videoPoster = theme === "light"
+    ? "/videos/how-it-works-scroll-light-poster.png?v=20260911-1"
+    : "/videos/how-it-works-scroll-poster.png?v=20260911-6";
+
   return (
-    <main className="info-page">
-      <section className="info-hero page-width">
-        <div className="info-hero-copy">
-          <button className="back-mobile" onClick={() => navigate("/")}>
-            <ArrowLeft size={18} />
-            На главную
-          </button>
-          <span className="info-eyebrow">О сервисе</span>
-          <h1>Покупка авто из Китая — всё под контролем</h1>
-          <p>
-            Сначала проверка автомобиля и понятная смета. Только потом — решение о покупке, договор и оплата. Актуальные{" "}
-            <AppLink className="info-context-link" href="/" navigate={navigate}>б/у авто из Китая с доставкой в Беларусь</AppLink> собраны на главной.
-          </p>
-          <div className="info-actions">
-            <button className="primary" onClick={() => navigate("/catalog")}>
-              Выбрать автомобиль <ArrowRight size={18} />
-            </button>
+    <section className="service-video-story" ref={sceneRef} aria-label="Автомобиль прибывает из Китая">
+      <div className="service-video-sticky" ref={stickyRef}>
+        <video
+          ref={videoRef}
+          className="service-scroll-video"
+          src={videoSource}
+          poster={videoPoster}
+          preload="auto"
+          muted
+          playsInline
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        <div className="service-video-copy">
+          <div className="service-video-copy-inner">
+            <div className="service-video-copy-panel service-video-copy-panel-primary">
+              <h1>Доставляем авто из Китая в Минск под ключ.</h1>
+              <p>Полное сопровождение сделки от выбора авто и до передачи ключей</p>
+              <div className="service-video-copy-actions">
+                <button className="primary service-video-copy-cta" onClick={() => navigate("/catalog")}>
+                  Выбрать автомобиль <ArrowRight size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="service-video-copy-panel service-video-copy-panel-secondary">
+              <h2>
+                Более {roundedListings} авто с пробегом напрямую из{" "}
+                <span className="service-video-country-mark">
+                  Китая
+                  <img src="/services/china-flag.svg" alt="" aria-hidden="true" />
+                </span>
+              </h2>
+              <p>{catalogUpdateLabel ? `Обновили каталог ${catalogUpdateLabel}` : "Обновили каталог"}</p>
+            </div>
+            <aside className="service-video-trust-card">
+              <ShieldCheck className="service-video-trust-card-icon" size={28} weight="duotone" />
+              <h3>Работаем по договору. Оплата напрямую в Китай.</h3>
+            </aside>
+            <div className="service-video-checkline">
+              <Check size={20} weight="bold" />
+              <span>Полная проверка автомобиля перед покупкой</span>
+            </div>
           </div>
         </div>
-        <div className="info-hero-visual">
-          <Illustration src="/illustrations/how-it-works-hero.png" alt="Автомобиль из Китая с проверкой и доставкой" />
+        <div className="service-video-scroll-cue" aria-hidden="true">
+          <span>Листайте вниз</span>
+          <span className="service-video-scroll-cue-track">
+            <span className="service-video-scroll-cue-dot" />
+          </span>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
+
+function HowItWorksPage({ navigate, theme }) {
+  const purchaseTimelineRef = usePurchaseMotion();
+  const [stepsExpanded, setStepsExpanded] = useState(false);
+  const { total, updatedAt } = useCatalogFacts();
+  const principleIcons = [ListChecks, ShieldCheck, Lightning];
+  return (
+    <main className="info-page service-video-page">
+      <ServiceScrollVideo navigate={navigate} total={total} updatedAt={updatedAt} theme={theme} />
       <section className="info-proof-section page-width" aria-label="Возможности сервиса">
         <div className="info-proof">
           {SERVICE_PROOF.map(({ title, text }, index) => {
@@ -12541,7 +12671,7 @@ export function App() {
   // home page renders its own feed skeletons instead of blocking the whole route on it.
   const staticPage =
     contentPath === "/how-it-works" ? (
-      <HowItWorksPage navigate={navigate} />
+      <HowItWorksPage navigate={navigate} theme={theme} />
     ) : contentPath === "/payment-and-contract" ? (
       <PaymentAndContractPage navigate={navigate} />
     ) : contentPath === "/faq" ? (
@@ -12623,7 +12753,7 @@ export function App() {
      <OrderedListingsContext.Provider value={orderedListings}>
      <SetOrderedListingsContext.Provider value={publishOrderedListings}>
       <ClientSeo path={path} car={findCarByListing(cars, detailId)} landing={findCatalogLanding(path)} />
-      <div className="app-content" aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
+      <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}
           favoritesCount={favorites.size}
