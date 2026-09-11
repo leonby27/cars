@@ -71,7 +71,8 @@ import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, sourceBrandOf, im
 import { sendTelegram } from "./lib/telegram.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REPORT_PATH = path.join(ROOT, "runtime", "refresh-report.json");
+const ONLY_UNVERIFIED_RUN = process.argv.slice(2).some((arg) => arg === "--only-unverified" || arg === "--only-unverified=true");
+const REPORT_PATH = path.join(ROOT, "runtime", ONLY_UNVERIFIED_RUN ? "refresh-unverified-report.json" : "refresh-report.json");
 // Машины источника, которых у нас нет: обход списков всё равно проходит мимо
 // каждой, так что находки достаются даром. Отсюда их забирает пополнение вместо
 // собственного обхода — см. `scripts/lib/che168-discovery.mjs`.
@@ -96,7 +97,7 @@ const SLICE_MAX_PAGES = 250;
 // Порядок обхода и норма одного подхода живут в настройке, а не в программе:
 // поменять очередь марок можно правкой config/refresh-order.json.
 const ORDER_PATH = "config/refresh-order.json";
-const CURSOR_PATH = "runtime/refresh-cursor.json";
+const CURSOR_PATH = ONLY_UNVERIFIED_RUN ? "runtime/refresh-unverified-cursor.json" : "runtime/refresh-cursor.json";
 const USD_TO_CNY = 7.15;
 // Day-to-day the source re-quotes yuan prices in dollars at the current rate,
 // which moves almost every card by $10–20. Those wiggles are noise: they would
@@ -116,6 +117,10 @@ const args = new Map(process.argv.slice(2).map((arg) => {
 }));
 const dryRun = args.get("dry-run") === "true";
 const skipDetail = args.get("skip-detail") === "true";
+// После большого импорта можно временно пройти только карточки, у которых дата
+// проверки всё ещё совпадает с днём добавления. Это в точности тот набор, где
+// сайт показывает только «Добавлено» без отдельной даты «Обновлено».
+const onlyUnverified = args.get("only-unverified") === "true";
 // Потолок поштучных проверок за ночь: очередь берётся «сначала самые
 // залежавшиеся», так что весь каталог проходит через них по кругу за несколько
 // ночей, а прогон никогда не выжигает сессионную квоту источника подчистую.
@@ -704,7 +709,8 @@ const { importCars } = await import("../server/repository.mjs");
 // Порядок важен: очередь поштучных проверок берётся из этого же списка, и
 // «сначала самые давно не проверенные» превращает ограниченный ночной запас
 // проверок в честную карусель по всему каталогу.
-const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_total_usd, last_checked_at,
+const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_total_usd, last_checked_at, first_seen_at,
+    date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at) AS never_rechecked,
     (source_payload->>'usdPrice')::numeric AS usd_price,
     (source_payload->>'year')::int AS year,
     source_payload->>'type' AS type,
@@ -719,8 +725,9 @@ const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_
     (source_payload->>'curbWeight')::numeric AS curb_weight,
     title
   FROM listings WHERE source='Che168' AND status='active'
+    ${onlyUnverified ? "AND date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at)" : ""}
   ORDER BY last_checked_at ASC NULLS FIRST`);
-console.log(`[db] ${rows.length} active Che168 listings`);
+console.log(`[db] ${rows.length} ${onlyUnverified ? "unverified" : "active"} Che168 listings`);
 
 // Все наши идентификаторы, вместе с проданными: машина, снятая с витрины, иногда
 // ещё мелькает в списках, и без этого списка находки предлагали бы качать её
@@ -795,7 +802,7 @@ function absorbList(payload, fuelType) {
     // Незнакомая машина попадается здесь бесплатно — страница всё равно
     // прочитана ради цен. Отбор идёт по списку, окончательное решение
     // остаётся за карточкой при скачивании.
-    if (id && !knownIds.has(`che168-${id}`) && !discoveries.has(id)) {
+    if (!onlyUnverified && id && !knownIds.has(`che168-${id}`) && !discoveries.has(id)) {
       const candidate = discoveryCandidate(item, { fuelType, knownIds, requirePowertrain: false });
       if (candidate) discoveries.set(id, candidate);
       else discoveriesSkipped += 1;
@@ -894,12 +901,15 @@ async function brandQueue(ourCountByBrand) {
     }
   }
   const done = new Set(cursor?.brandsDone || []);
-  const list = [...ids.values()].map((rec) => ({
+  let list = [...ids.values()].map((rec) => ({
     brand: rec.brand,
     ids: [...rec.ids],
     sourceCount: rec.sourceCount,
     ourCars: ourCountByBrand.get(rec.brand) || 0,
   }));
+  // В целевом проходе не тратим запросы на марки, у которых уже нет карточек
+  // без повторной проверки.
+  if (onlyUnverified) list = list.filter((item) => item.ourCars > 0);
   // Мелкие первыми: марка укладывается в один подход целиком, и отбивка по ней
   // уходит сразу. Крупные иначе выели бы весь дневной запас источника.
   const smallestFirst = String(orderConfig?.order || "smallest-first") !== "largest-first";
@@ -1342,7 +1352,9 @@ try {
     // Новые машины этой марки — сразу в каталог.
     let added = 0;
     let addFailed = 0;
-    const fresh = [...discoveries.values()].filter((item) => canonicalImportBrand(item.brand) === entry.brand).slice(0, newPerBrand);
+    const fresh = onlyUnverified
+      ? []
+      : [...discoveries.values()].filter((item) => canonicalImportBrand(item.brand) === entry.brand).slice(0, newPerBrand);
     for (const item of fresh) {
       if (stopped) break;
       const verdict = await addNewCar(String(item.externalId));
@@ -1361,7 +1373,8 @@ try {
     }
     let soldHere = 0;
     if (!skipDetail && ok && !stopped) {
-      // Хвост прошлого прохода занимает первые места в той же квоте. Обращений
+      // Хвост прошлого прохода занимает первые места в той же квоте. Следом идут
+      // машины, которые со дня импорта ещё ни разу не перепроверялись. Обращений
       // не становится больше: меняется только порядок уже выбранных проверок.
       const queue = prioritizeBrandBacklog(missingHere, backlogCutoff).slice(0, detailPerBrand);
       detailSkipped += missingHere.length - queue.length;
@@ -1425,7 +1438,7 @@ try {
   console.log(`[lists] done: ${listPages} pages (${listPagesEmpty} empty), ${seenPrices.size} cars priced`);
   // Ненайденные находки остаются в файле: их подберёт пополнение, если прогон
   // оборвался до того, как дошёл до их марки.
-  if (!dryRun) await writeDiscoveries();
+  if (!dryRun && !onlyUnverified) await writeDiscoveries();
 
   await flushWrites();
 
@@ -1434,7 +1447,7 @@ try {
   // только помеченные этим прогоном, а всё избранное с неживыми объявлениями —
   // состояние снимает и `db:expire`, а до этого места чистка не доходила.
   // Заказы не трогаем: по ним человек уже общается с нами, там машина должна остаться.
-  const favoritesCleared = dryRun ? 0 : (await pool.query(`DELETE FROM customer_favorites f
+  const favoritesCleared = dryRun || onlyUnverified ? 0 : (await pool.query(`DELETE FROM customer_favorites f
     USING listings l WHERE l.id = f.listing_id AND l.status <> 'active'`)).rowCount;
   if (favoritesCleared) console.log(`[favorites] ${favoritesCleared} saved cards removed: their listings are gone`);
 

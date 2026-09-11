@@ -17,9 +17,25 @@ test("непроверенный хвост прошлой попытки пол
   assert.equal(queue.length, rows.length, "приоритет не должен добавлять обращения");
 });
 
-test("без хвоста порядок старой очереди не меняется", () => {
-  const rows = [{ id:"a" }, { id:"b" }];
-  assert.deepEqual(prioritizeBrandBacklog(rows, null), rows);
+test("без хвоста ни разу не перепроверенные машины идут раньше обычных", () => {
+  const rows = [
+    { id:"old", last_checked_at:"2026-09-01T10:00:00Z", first_seen_at:"2026-08-01T10:00:00Z" },
+    { id:"import-only", last_checked_at:"2026-09-09T10:00:00Z", first_seen_at:"2026-09-09T08:00:00Z" },
+    { id:"fresh", last_checked_at:"2026-09-08T10:00:00Z", first_seen_at:"2026-09-01T10:00:00Z" },
+  ];
+  assert.deepEqual(prioritizeBrandBacklog(rows, null).map((row) => row.id), ["import-only", "old", "fresh"]);
+  assert.equal(prioritizeBrandBacklog(rows, null).length, rows.length, "приоритет не должен добавлять обращения");
+});
+
+test("хвост прошлого прохода остаётся важнее новых импортов", () => {
+  const rows = [
+    { id:"import-only", last_checked_at:"2026-09-09T10:00:00Z", first_seen_at:"2026-09-09T08:00:00Z" },
+    { id:"pending", last_checked_at:"2026-09-01T10:00:00Z", first_seen_at:"2026-08-01T10:00:00Z" },
+  ];
+  assert.deepEqual(
+    prioritizeBrandBacklog(rows, "2026-09-07T00:00:00Z").map((row) => row.id),
+    ["pending", "import-only"],
+  );
 });
 
 test("хвост хранится отдельно по каждой марке и удаляется после закрытия", () => {

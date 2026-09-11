@@ -8417,7 +8417,7 @@ const serviceProofIcons = [
   ClipboardText,
 ];
 
-function ServiceScrollVideo({ navigate, total, updatedAt, theme }) {
+function ServiceScrollVideo({ navigate, total, updatedAt }) {
   const sceneRef = useRef(null);
   const stickyRef = useRef(null);
   const videoRef = useRef(null);
@@ -8505,12 +8505,10 @@ function ServiceScrollVideo({ navigate, total, updatedAt, theme }) {
 
   const roundedListings = total >= 100 ? formatRoundedListingCount(total).replace(/\+$/, "") : "64900";
   const catalogUpdateLabel = updatedAt ? catalogUpdatedDate(updatedAt) : "";
-  const videoSource = theme === "light"
-    ? "/videos/how-it-works-scroll-light.mp4?v=20260911-1"
-    : "/videos/how-it-works-scroll.mp4?v=20260911-6";
-  const videoPoster = theme === "light"
-    ? "/videos/how-it-works-scroll-light-poster.png?v=20260911-1"
-    : "/videos/how-it-works-scroll-poster.png?v=20260911-6";
+  // The complete opening region intentionally matches the dark theme in both
+  // modes; the selected site theme resumes after the capability cards.
+  const videoSource = "/videos/how-it-works-scroll.mp4?v=20260911-6";
+  const videoPoster = "/videos/how-it-works-scroll-poster.png?v=20260911-6";
 
   return (
     <section className="service-video-story" ref={sceneRef} aria-label="Автомобиль прибывает из Китая">
@@ -8568,28 +8566,62 @@ function ServiceScrollVideo({ navigate, total, updatedAt, theme }) {
   );
 }
 
-function HowItWorksPage({ navigate, theme }) {
+function HowItWorksPage({ navigate }) {
   const purchaseTimelineRef = usePurchaseMotion();
+  const darkIntroRef = useRef(null);
   const [stepsExpanded, setStepsExpanded] = useState(false);
   const { total, updatedAt } = useCatalogFacts();
   const principleIcons = [ListChecks, ShieldCheck, Lightning];
+
+  useLayoutEffect(() => {
+    const intro = darkIntroRef.current;
+    const pageShell = intro?.closest(".service-video-shell");
+    const header = pageShell?.querySelector(":scope > .site-header");
+    const steps = pageShell?.querySelector("#steps");
+    if (!intro || !pageShell || !header || !steps) return undefined;
+
+    let frame = 0;
+    const updateHeaderTheme = () => {
+      frame = 0;
+      const headerHeight = header.getBoundingClientRect().height;
+      const lightSectionTop = steps.getBoundingClientRect().top;
+      pageShell.classList.toggle("service-dark-region-active", lightSectionTop > headerHeight);
+    };
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateHeaderTheme);
+    };
+
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    updateHeaderTheme();
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      pageShell.classList.remove("service-dark-region-active");
+    };
+  }, []);
+
   return (
     <main className="info-page service-video-page">
-      <ServiceScrollVideo navigate={navigate} total={total} updatedAt={updatedAt} theme={theme} />
-      <section className="info-proof-section page-width" aria-label="Возможности сервиса">
-        <div className="info-proof">
-          {SERVICE_PROOF.map(({ title, text }, index) => {
-            const Icon = serviceProofIcons[index];
-            return (
-              <article key={title}>
-                <span className="info-proof-icon"><Icon size={29} weight="duotone" /></span>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+      <div className="service-dark-intro" ref={darkIntroRef}>
+        <ServiceScrollVideo navigate={navigate} total={total} updatedAt={updatedAt} />
+        <section className="info-proof-section page-width" aria-label="Возможности сервиса">
+          <div className="info-proof">
+            {SERVICE_PROOF.map(({ title, text }, index) => {
+              const Icon = serviceProofIcons[index];
+              return (
+                <article key={title}>
+                  <span className="info-proof-icon"><Icon size={29} weight="duotone" /></span>
+                  <h3>{title}</h3>
+                  <p>{text}</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </div>
       <section className="info-section page-width" id="steps">
         <div className="info-section-heading">
           <h2>Как купить автомобиль</h2>
@@ -12671,7 +12703,7 @@ export function App() {
   // home page renders its own feed skeletons instead of blocking the whole route on it.
   const staticPage =
     contentPath === "/how-it-works" ? (
-      <HowItWorksPage navigate={navigate} theme={theme} />
+      <HowItWorksPage navigate={navigate} />
     ) : contentPath === "/payment-and-contract" ? (
       <PaymentAndContractPage navigate={navigate} />
     ) : contentPath === "/faq" ? (
@@ -12753,7 +12785,7 @@ export function App() {
      <OrderedListingsContext.Provider value={orderedListings}>
      <SetOrderedListingsContext.Provider value={publishOrderedListings}>
       <ClientSeo path={path} car={findCarByListing(cars, detailId)} landing={findCatalogLanding(path)} />
-      <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
+      <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}
           favoritesCount={favorites.size}

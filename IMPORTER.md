@@ -64,6 +64,20 @@ Commands:
 - `npm run importv2 -- --brands=AION,ORA --static=0` — write only to PostgreSQL, for when another importer is already running
 - `--database=0` skips the PostgreSQL write; `--concurrency` above 6 starts drawing HTTP 429 from the source
 
+After a large import, `npm run refresh -- --only-unverified --quiet` walks only
+active Che168 cards whose displayed date still says “Added” without a later
+“Updated” date. It uses a separate report and cursor, does not touch already
+rechecked cards, does not discover or add new listings, and does not alter the
+regular refresh circle. A card seen in the live source gets its current price
+and landed estimate; a card missing from the list is marked sold only when its
+own detail endpoint explicitly confirms that it is gone.
+
+In every regular refresh, cards that have only their import-time check now take
+the first available detail slots inside their brand after any unfinished tail
+from the previous circle. This does not increase the source request allowance;
+it prevents older routine checks from pushing newly imported cards to the back
+of the queue for several circles.
+
 Two importers must not share `public/data/cars.json`: each rewrites it whole from its own snapshot, so the second writer drops the first one's cards. `--static=0` keeps a run out of that file and parks its accepted cards in `runtime/che168-pending.json`, ready to be merged into the catalog once the other run finishes. A run always seeds its skip list from both the static file and the `listings` table, so cards that reached only the database are not fetched twice.
 
 Keep concurrency modest: the source rate-limits, and the runner backs off on 429 rather than dropping a listing.
