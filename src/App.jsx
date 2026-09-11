@@ -4888,11 +4888,11 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
       <section className="trust-strip page-width">
         <div>
           <span>
-            <img src="/trust-strip/delivery-route.png" width="100" height="100" alt="" aria-hidden="true" />
+            <img src="/services/delivery-control.png" width="512" height="341" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Сопровождаем до выдачи</b>
-            <small>От подбора автомобиля в Китае<br />до доставки и выдачи<br />в Минске</small>
+            <small>От подбора до получения</small>
           </p>
         </div>
         <div>
@@ -4901,16 +4901,16 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           </span>
           <p>
             <b>Проверяем до оплаты</b>
-            <small>Проверяем историю и батарею,<br />документы и данные<br />продавца до оплаты</small>
+            <small>История, батарея и документы</small>
           </p>
         </div>
         <div>
           <span>
-            <img src="/trust-strip/two-prices.png" width="100" height="100" alt="" aria-hidden="true" />
+            <img src="/trust-strip/two-prices.png" width="512" height="512" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Показываем обе цены</b>
-            <small>Показываем цену автомобиля<br />в Китае и стоимость<br />с доставкой до Минска</small>
+            <small>Цена в Китае и с доставкой</small>
           </p>
         </div>
         <div>
@@ -4919,7 +4919,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           </span>
           <p>
             <b>Фиксируем условия</b>
-            <small>Фиксируем стоимость и сроки,<br />этапы оплаты и<br />ответственность сторон</small>
+            <small>Цена, сроки и ответственность</small>
           </p>
         </div>
       </section>

@@ -39,7 +39,7 @@ Typography preference: prioritize comfortable readability over ultra-compact UI.
 
 Mobile text sizing preference (owner decision, 2026-09-10): keep browser text autosizing at 100% so authored responsive font sizes render consistently on real mobile devices and in browser previews.
 
-How-it-works mobile scroll-copy preference (owner decision, 2026-09-11): as soon as scrolling begins, fade the hero text away quickly while moving it upward only slightly (about 28px). Apply the same restrained upward movement and faster exit to the secondary catalog-count copy; keep the desktop timing and travel unchanged. Hide the “Листайте вниз” label on mobile while retaining the visual scroll indicator. Keep the entire opening region pure black in both site themes until the page reaches the later theme-transition section.
+How-it-works mobile scroll-copy preference (owner decision, 2026-09-11): as soon as scrolling begins, fade the hero text away quickly while moving it upward only slightly (about 28px). Apply the same restrained upward movement and faster exit to the secondary catalog-count copy; keep the desktop timing and travel unchanged. Start bringing the capability cards into view when the secondary copy is approximately halfway through its fade. Hide the “Листайте вниз” label on mobile while retaining the visual scroll indicator. Keep the entire opening region pure black in both site themes until the page reaches the later theme-transition section.
 
 How-it-works mobile video performance preference (owner decision, 2026-09-11): serve the dedicated 960×540 H.264 `public/videos/how-it-works-scroll-mobile.mp4` source at viewport widths up to 700px, while retaining the full-resolution source on desktop. Keep the mobile source aligned in duration with the desktop film so scroll-controlled seeking remains consistent.
 
@@ -240,6 +240,14 @@ Home FAQ appearance preference: place the entire FAQ section inside a rounded li
 Home FAQ copy preference (owner decision, 2026-09-10): keep question headings concise and immediately distinguishable instead of repeating «автомобиль из Китая», «доставка» and «Беларусь» in every row. Preserve the relevant search language naturally in the section heading and answers, not as repetitive keyword-heavy question titles.
 
 Home trust-strip preference: lead with “Сопровождаем до выдачи” and the supporting line “От подбора до получения в Минске”; use 18px headings and keep them short enough to remain on one line at desktop widths. Present the three trust points as separate rounded cards on a light-gray surface with each icon inside its own white tile.
+
+Home trust-strip layout correction (owner decision, 2026-09-11): supersede the earlier 18px-heading and three-card details. Render the four home trust cards with exactly the same card anatomy, spacing, radii and 16px heading/description typography as the capability cards on “О сервисе”: left-aligned copy and an 80×80px clipped icon tile above it. Keep the light theme as a gray card with a white tile and the dark theme as a `#191c20` card with a `#30353c` tile. Do not use card shadows in either the home trust row or the “О сервисе” capability grid.
+
+Home delivery trust-card correction (owner decision, 2026-09-11): use the same `public/services/delivery-control.png` artwork and clipped placement as the “Доставка под контролем” capability card for the home “Сопровождаем до выдачи” card. Its supporting line is exactly “От подбора до получения”.
+
+Home two-prices trust-card artwork (owner decision, 2026-09-11): use the supplied transparent artwork showing stacked Chinese yuan and Belarusian rubles for the home “Показываем обе цены” card, stored as `public/trust-strip/two-prices.png`. Keep it cropped inside the shared 80×80px icon tile.
+
+Home trust-card hover behavior (owner decision, 2026-09-11): on hover-capable devices, enlarge every home trust-card artwork by 20% inside its clipped 80×80px tile, matching the “О сервисе” capability-card hover. Honor reduced-motion preferences by removing the transition.
 
 Home utility-service preference: place a compact Auto.ru-inspired row of automatic service shortcuts directly below the home search panel, with smaller illustrations and a reserved wide banner slot on the right at desktop widths. Keep the five labels short and on one line: “Таможня”, “Подбор”, “Сравнить”, “Разбор”, “Обслуживание”; size the adjacent banner to the resulting single-row card height. Use original, soft 3D automotive illustrations with borderless tiles; describe only calculations and catalog analysis the product can actually perform, and never claim automatic battery-health diagnostics without BMS or manufacturer data.
 

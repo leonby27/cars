@@ -942,18 +942,17 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 }
 .trust-strip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-top: 34px;
 }
 .trust-strip > div {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  gap: 13px;
-  padding: 20px 16px;
-  border-radius: calc(16px * var(--corner-scale));
-  background: var(--panel-soft);
+  min-width: 0;
+  min-height: 174px;
+  padding: 22px;
+  border-radius: calc(18px * var(--corner-scale));
+  background: var(--surface);
+  box-shadow: none;
 }
 .trust-strip > div + div {
   border-left: 0;
@@ -972,36 +971,84 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   box-shadow: 0 1px 3px rgba(24, 27, 32, 0.06);
 }
 .trust-strip div > span {
-  width: 100px;
-  height: 100px;
-  flex-basis: 100px;
-  border-radius: 0;
-  background: transparent;
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 24px;
+  overflow: hidden;
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--panel);
   box-shadow: none;
 }
 .trust-strip div > span img {
+  position: absolute;
+  top: 3px;
+  left: 4px;
   display: block;
-  width: 100px;
-  height: 100px;
+  width: 94px;
+  height: 94px;
+  max-width: none;
   object-fit: contain;
+  transform-origin: center;
+  transition: transform 220ms ease;
+}
+.trust-strip > div:first-child > span img {
+  top: 9px;
+  left: 8px;
+  width: 125px;
+  height: auto;
+}
+.trust-strip > div:nth-child(2) > span img {
+  top: 4px;
+  left: 5px;
+  width: 96px;
+  height: 96px;
+}
+.trust-strip > div:nth-child(3) > span img {
+  top: 4px;
+  left: 4px;
+  width: 96px;
+  height: 96px;
+}
+.trust-strip > div:nth-child(4) > span img {
+  top: 4px;
+  left: 6px;
+  width: 94px;
+  height: 94px;
+}
+@media (hover: hover) {
+  .trust-strip > div:hover > span img {
+    transform: scale(1.2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trust-strip div > span img {
+    transition: none;
+  }
 }
 .trust-strip p {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
   width: 100%;
   margin: 0;
-  text-align: center;
+  text-align: left;
 }
 .trust-strip b {
-  font-size: 18px;
+  display: block;
+  font-size: 16px;
+  line-height: 1.35;
 }
 .trust-strip small {
   display: block;
   width: 100%;
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+:root[data-theme="dark"] .trust-strip > div {
+  background: #191c20;
+}
+:root[data-theme="dark"] .trust-strip div > span {
+  background: #30353c;
 }
 @media (min-width: 701px) and (max-width: 980px) {
   .trust-strip {
@@ -3320,7 +3367,7 @@ body.header-menu-open .detail-floating-availability {
   padding: 22px;
   border-radius: calc(18px * var(--corner-scale));
   background: var(--surface);
-  box-shadow: 0 18px 46px rgba(17, 19, 22, 0.1);
+  box-shadow: none;
 }
 .info-proof-icon {
   display: grid;
@@ -3355,7 +3402,7 @@ body.header-menu-open .detail-floating-availability {
 }
 :root[data-theme="dark"] .info-proof > article {
   background: #191c20;
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
+  box-shadow: none;
 }
 :root[data-theme="dark"] .info-proof-icon {
   background: #1d2024;
@@ -6696,11 +6743,11 @@ html[data-theme="dark"] .select-search-clear:hover {
   font-size: 16px;
 }
 .trust-strip b {
-  font-size: 18px;
+  font-size: 16px;
 }
 .trust-strip small {
-  font-size: 15px;
-  line-height: 1.4;
+  font-size: 16px;
+  line-height: 1.45;
 }
 .section-heading span {
   font-size: 16px;
@@ -11688,26 +11735,26 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   .featured--search .search-results-bar {
     margin-top: 0;
   }
-  /* Плашки доверия: ужимаем поля и шрифт, чтобы подписи помещались в одну строку. */
+  /* На телефоне карточки доверия повторяют компактный ритм карточек возможностей. */
   .trust-strip {
     gap: 10px;
     margin-top: 26px;
   }
   .trust-strip > div {
-    gap: 11px;
-    padding: 14px 15px;
+    min-height: 0;
+    padding: 18px;
   }
   .trust-strip div > span {
-    width: 100px;
-    height: 100px;
-    flex-basis: 100px;
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
   }
   .trust-strip b {
-    font-size: 17px;
+    font-size: 16px;
   }
   .trust-strip small {
-    margin-top: 8px;
-    font-size: 14px;
+    margin-top: 6px;
+    font-size: 16px;
   }
   /* `display: contents` on the heading lets the logout button leave the title
      row and become the last item of the page grid, under the content. */
@@ -17638,7 +17685,7 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
 }
 .service-dark-intro .info-proof > article {
   background: #191c20;
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
+  box-shadow: none;
 }
 .service-dark-intro .info-proof-icon {
   background: #1d2024;
@@ -18082,7 +18129,7 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
     display: none;
   }
   .service-dark-intro .service-video-story + .info-proof-section {
-    margin-top: -92svh;
+    margin-top: -132svh;
     padding-top: 36px;
     padding-bottom: 52px;
   }
