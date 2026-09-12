@@ -44,14 +44,13 @@ export const MODEL_RENAMES = Object.freeze([
   { brand: "Geely", model: "Borui", toModel: "Emgrand GT", zh: "博瑞", pinyin: "Borui" },
   // Решение Сергея: главным именем ставим дилерское, китайское уходит в подсказку и в поиск.
   { brand: "Geely", model: "Xingyue L", toModel: "Monjaro", zh: "星越L", pinyin: "Xingyue L" },
-  // 银河E5 в Беларуси продаёт дилер под именем Geely EX5 — без приставки Galaxy,
-  // поэтому модель переезжает из подмарки «Geely Galaxy» в основную марку.
-  { brand: "Geely Galaxy", model: "Galaxy E5", toBrand: "Geely", toModel: "EX5", zh: "银河E5", pinyin: "Yinhe E5" },
+  // Galaxy теперь лежит внутри Geely; дилерское имя этой модели — Geely EX5.
+  { brand: "Geely", model: "Galaxy E5", toModel: "EX5", zh: "银河E5", pinyin: "Yinhe E5" },
   // 星愿 у завода и на av.by называется EX2 — тоже без приставки.
-  { brand: "Geely Galaxy", model: "Starry Wish", toBrand: "Geely", toModel: "EX2", zh: "星愿", pinyin: "Xingyuan" },
-  { brand: "Geely Galaxy", model: "Galaxy Xingyao 8", toModel: "Galaxy Starshine 8", zh: "星耀8", pinyin: "Xingyao 8" },
-  { brand: "Geely Galaxy", model: "Galaxy Stellar 6", toModel: "Galaxy Starshine 6", zh: "星耀6", pinyin: "Xingyao 6" },
-  { brand: "Geely Galaxy", model: "Galaxy Starship 7 EM-i", toModel: "Galaxy Starship 7", zh: "星舰7", pinyin: "Xingjian 7" },
+  { brand: "Geely", model: "Starry Wish", toModel: "EX2", zh: "星愿", pinyin: "Xingyuan" },
+  { brand: "Geely", model: "Galaxy Xingyao 8", toModel: "Galaxy Starshine 8", zh: "星耀8", pinyin: "Xingyao 8" },
+  { brand: "Geely", model: "Galaxy Stellar 6", toModel: "Galaxy Starshine 6", zh: "星耀6", pinyin: "Xingyao 6" },
+  { brand: "Geely", model: "Galaxy Starship 7 EM-i", toModel: "Galaxy Starship 7", zh: "星舰7", pinyin: "Xingjian 7" },
 
   // ---------- Haval, Chery, Changan, Jetour, Great Wall ----------
   { brand: "Haval", model: "Big Dog", toModel: "Dargo", zh: "大狗", pinyin: "Dagou" },

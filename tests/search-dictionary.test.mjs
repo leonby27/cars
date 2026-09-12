@@ -71,9 +71,9 @@ test("марки бензиновых машин пишутся кириллиц
   for (const [query, expected] of cases) assert.equal(parse(query).text, expected, `«${query}» не стало ${expected}`);
 });
 
-test("«джили» — это марка Geely целиком, «джили галакси» — её электрическая линейка", () => {
+test("«джили» и «джили галакси» ведут в объединённую марку Geely", () => {
   assert.equal(parse("джили").text, "geely");
-  assert.equal(parse("джили галакси").text, "geely galaxy");
+  assert.equal(parse("джили галакси").text, "geely");
 });
 
 test("русские названия моделей приводятся к каталожным", () => {

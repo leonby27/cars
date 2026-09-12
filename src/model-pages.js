@@ -435,7 +435,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-galaxy-panda",
     path: "/models/geely-galaxy-panda",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Panda",
     name: "Geely Galaxy Panda",
     tagline: "Микро-электромобиль для города",
@@ -995,7 +995,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-galaxy-starshine-8",
     path: "/models/geely-galaxy-starshine-8",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Galaxy Starshine 8",
     name: "Geely Galaxy Starshine 8",
     tagline: "Большой седан-гибрид",
@@ -1219,7 +1219,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-galaxy-a7",
     path: "/models/geely-galaxy-a7",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Galaxy A7",
     name: "Geely Galaxy A7",
     tagline: "Седан-гибрид с зарядкой от розетки",
@@ -1471,7 +1471,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-galaxy-l6",
     path: "/models/geely-galaxy-l6",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Galaxy L6",
     name: "Geely Galaxy L6",
     tagline: "Седан-гибрид с зарядкой от розетки",
@@ -1485,7 +1485,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-galaxy-l7",
     path: "/models/geely-galaxy-l7",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Galaxy L7",
     name: "Geely Galaxy L7",
     tagline: "Кроссовер-гибрид с зарядкой от розетки",
@@ -1583,7 +1583,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-galaxy-e8",
     path: "/models/geely-galaxy-e8",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Galaxy E8",
     name: "Geely Galaxy E8",
     tagline: "Большой электрический седан",
@@ -1597,7 +1597,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-starship-7",
     path: "/models/geely-starship-7",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Galaxy Starship 7",
     name: "Geely Galaxy Starship 7",
     tagline: "Кроссовер-гибрид с зарядкой от розетки",
@@ -5699,7 +5699,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-galaxy-starshine-6",
     path: "/models/geely-galaxy-starshine-6",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Galaxy Starshine 6",
     name: "Geely Galaxy Starshine 6",
     tagline: "Гибридный седан с розеткой",
@@ -5853,7 +5853,7 @@ const MODEL_PAGES_SOURCE = [
   {
     slug: "geely-galaxy-m9",
     path: "/models/geely-galaxy-m9",
-    brand: "Geely Galaxy",
+    brand: "Geely",
     model: "Galaxy M9",
     name: "Geely Galaxy M9",
     tagline: "Флагманский трёхрядный кроссовер-гибрид",

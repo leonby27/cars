@@ -27,7 +27,7 @@
     "other": { "minPrice": 15, "maxPrice": 100, "minYear": 2022 },
     "chineseBrands": [
       "AITO", "AION", "Avatr", "BYD", "Changan", "Chery", "Deepal", "Denza", "Firefly",
-      "Geely", "Geely Galaxy", "Haval", "Hongqi", "IM Motors", "Jetour", "Leapmotor",
+      "Geely", "Haval", "Hongqi", "IM Motors", "Jetour", "Leapmotor",
       "Li Auto", "Luxeed", "Lynk & Co", "Maextro", "MG", "Nezha", "NIO", "ORA",
       "Polestar", "Shangjie", "Stelato", "Tank", "Voyah", "Wuling", "Xiaomi", "XPeng", "Zeekr"
     ]

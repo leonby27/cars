@@ -22,6 +22,8 @@ test("normalizes source brand variants used by the import policy", () => {
   assert.equal(canonicalImportBrand("Lync Co"), "Lynk & Co");
   assert.equal(canonicalImportBrand("ZEEKR"), "Zeekr");
   assert.equal(canonicalImportBrand("XPENG"), "XPeng");
+  assert.equal(canonicalImportBrand("Geely Galaxy"), "Geely");
+  assert.equal(IMPORT_BRAND_SLUGS.includes("geely-galaxy"), true);
 });
 
 test("марки альянса Huawei разъезжаются по своим маркам, а не в общую HIMA", () => {
@@ -80,6 +82,7 @@ test("китайское название модели меняется на б�
     // 银河E5 продают как Geely EX5 — без приставки Galaxy, поэтому меняется и марка.
     [["Geely Galaxy", "Galaxy E5"], ["Geely", "EX5"]],
     [["Geely Galaxy", "Starry Wish"], ["Geely", "EX2"]],
+    [["Geely Galaxy", "Galaxy L7"], ["Geely", "Galaxy L7"]],
     // Сергей оставил эти под китайскими именами: 26.08.2026.
     [["Volkswagen", "Sagitar"], ["Volkswagen", "Sagitar"]],
     [["Volkswagen", "Magotan"], ["Volkswagen", "Magotan"]],

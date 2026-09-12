@@ -121,7 +121,7 @@ const BRAND_GUIDE_CONFIG = {
   BYD: {
     intro:guideIntro("BYD предлагает одну из самых широких линеек в каталоге: от компактных Seagull и Dolphin до седана Han и семейства кроссоверов Song. У многих моделей есть электрические и гибридные версии, которые при одинаковом названии заметно отличаются по платежам при ввозе."),
     alternatives:alternatives(
-      ["Geely Galaxy", "электрические и гибридные модели Geely"],
+      ["Deepal", "электромобили и гибриды Changan"],
       ["AION", "доступные массовые электромобили"],
       ["Geely", "массовые седаны и кроссоверы"],
       ["Tesla", "электрические седаны и кроссоверы"],
@@ -141,7 +141,7 @@ const BRAND_GUIDE_CONFIG = {
     ),
   },
   Geely: {
-    intro:guideIntro("Под маркой Geely в каталоге собраны массовые седаны Preface и Emgrand и кроссоверы Monjaro, Boyue и Coolray. Большинство предложений бензиновые; электрические и гибридные модели концерна также представлены в отдельных линейках."),
+    intro:guideIntro("Под маркой Geely в каталоге собраны массовые седаны Preface и Emgrand, кроссоверы Monjaro, Boyue и Coolray, а также электрические и гибридные модели линейки Galaxy."),
     alternatives:alternatives(
       ["Changan", "массовые седаны и кроссоверы"],
       ["Haval", "широкий выбор бензиновых кроссоверов"],
@@ -254,7 +254,7 @@ const BRAND_GUIDE_CONFIG = {
     intro:guideIntro("Leapmotor выпускает доступный городской T03, седаны и кроссоверы серий B и C. В каталоге есть как полностью электрические машины, так и гибридные версии C01, C10, C11 и C16 с генератором."),
     alternatives:alternatives(
       ["BYD", "широкий выбор электромобилей и гибридов"],
-      ["Geely Galaxy", "электрические и гибридные модели Geely"],
+      ["Geely", "массовые модели и линейка Galaxy"],
       ["XPeng", "технологичные электромобили разных классов"],
       ["AION", "доступные массовые электромобили"],
       ["Deepal", "электромобили и гибриды Changan"],
@@ -297,16 +297,16 @@ const BRAND_GUIDE_CONFIG = {
 };
 
 const OTHER_GUIDE_BRANDS = [
-  "Land Rover", "Hyundai", "Ford", "Volvo", "AITO", "Mazda", "Porsche", "Geely Galaxy", "AION", "Jetour", "Voyah",
+  "Land Rover", "Hyundai", "Ford", "Volvo", "AITO", "Mazda", "Porsche", "AION", "Jetour", "Voyah",
   "Chevrolet", "MG", "Lexus", "MINI", "ORA", "Denza", "Deepal", "Kia", "Jaguar", "Avatr", "Luxeed", "Shangjie",
   "Mitsubishi", "Jeep", "Stelato", "Subaru", "Peugeot", "Maserati", "Great Wall", "Infiniti", "Dongfeng", "Maextro",
 ];
 
 const NEW_ENERGY_GUIDE_BRANDS = new Set([
-  "AITO", "Geely Galaxy", "AION", "Voyah", "ORA", "Denza", "Deepal", "Avatr", "Luxeed", "Shangjie", "Stelato", "Maextro",
+  "AITO", "AION", "Voyah", "ORA", "Denza", "Deepal", "Avatr", "Luxeed", "Shangjie", "Stelato", "Maextro",
 ]);
 const PREMIUM_GUIDE_BRANDS = new Set(["Land Rover", "Volvo", "Porsche", "Lexus", "MINI", "Jaguar", "Maserati", "Infiniti"]);
-const NEW_ENERGY_ALTERNATIVES = ["BYD", "Tesla", "Zeekr", "XPeng", "NIO", "Li Auto", "Geely Galaxy", "Leapmotor"];
+const NEW_ENERGY_ALTERNATIVES = ["BYD", "Tesla", "Zeekr", "XPeng", "NIO", "Li Auto", "Geely", "Leapmotor"];
 const PREMIUM_ALTERNATIVES = ["BMW", "Mercedes-Benz", "Audi", "Volvo", "Lexus", "Porsche", "Land Rover", "Jaguar"];
 const MASS_ALTERNATIVES = ["Volkswagen", "Toyota", "Honda", "Geely", "Changan", "Chery", "Haval", "Nissan"];
 const COMPARISON_NOTES = {
@@ -316,7 +316,6 @@ const COMPARISON_NOTES = {
   Changan:"массовые седаны и кроссоверы",
   Chery:"седаны и семейство кроссоверов Tiggo",
   Geely:"массовые китайские седаны и кроссоверы",
-  "Geely Galaxy":"электрические и гибридные модели Geely",
   Haval:"широкий выбор бензиновых кроссоверов",
   Honda:"японские седаны и семейные кроссоверы",
   Jaguar:"премиальные седаны и кроссоверы",

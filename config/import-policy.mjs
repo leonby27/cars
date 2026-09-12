@@ -93,7 +93,7 @@ export const HOMEPAGE_POPULAR_BRANDS = Object.freeze([
   "Li Auto",
   "Voyah",
   "Deepal",
-  "Geely Galaxy",
+  "Geely",
   "Avatr",
   "AITO",
   "Xiaomi",
@@ -148,7 +148,8 @@ export const IMPORT_BRAND_BY_SLUG = Object.freeze({
   "li-auto": "Li Auto",
   voyah: "Voyah",
   deepal: "Deepal",
-  "geely-galaxy": "Geely Galaxy",
+  // Galaxy is a Geely model line, not a separate catalog brand.
+  "geely-galaxy": "Geely",
   dongfeng: "Dongfeng",
   avatr: "Avatr",
   aito: "AITO",
@@ -177,6 +178,9 @@ export const IMPORT_BRAND_BY_SLUG = Object.freeze({
 export const IMPORT_BRAND_SLUGS = Object.freeze(Object.keys(IMPORT_BRAND_BY_SLUG));
 
 const BRAND_ALIASES = new Map([
+  // Источники выделяют Galaxy в отдельную марку. В каталоге все эти машины
+  // лежат в Geely, а слово Galaxy остаётся частью названия модели.
+  ["geely galaxy", "Geely"],
   // Альянс Huawei приходит к источнику отдельными марками, и в Беларуси их тоже знают
   // по отдельности: на av.by есть марка Aito. Раньше все пять сваливались в «HIMA» —
   // имя альянса, которого не знает ни один покупатель. Теперь каждая едет под своим.

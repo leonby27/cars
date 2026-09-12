@@ -12,7 +12,7 @@ const BRAND_MAP = new Map([
   ["腾势", "Denza"], ["小米汽车", "Xiaomi"], ["小米", "Xiaomi"],
   ["岚图汽车", "Voyah"], ["岚图", "Voyah"], ["智界", "Luxeed"],
   ["享界", "Stelato"], ["尚界", "Shangjie"], ["鸿蒙智行", "AITO"], ["尊界", "Maextro"],
-  ["吉利银河", "Geely Galaxy"], ["东风风神", "Dongfeng"],
+  ["吉利银河", "Geely"], ["东风风神", "Dongfeng"],
   ["宝马", "BMW"], ["华晨宝马", "BMW"], ["宝马汽车", "BMW"],
   ["大众", "Volkswagen"], ["上汽大众", "Volkswagen"], ["一汽-大众", "Volkswagen"],
   ["奥迪", "Audi"], ["一汽奥迪", "Audi"], ["上汽奥迪", "Audi"],
@@ -81,7 +81,8 @@ export function parseGuaziMarkdown(markdown, sourceUrl) {
   const rawBrand = field(markdown, "brand") || manufacturer;
   const rawSeries = field(markdown, "series") || "";
   const mappedBrand = BRAND_MAP.get(rawBrand) || BRAND_MAP.get(manufacturer) || null;
-  const brand = /银河/.test(`${rawBrand || ""} ${manufacturer || ""} ${rawSeries}`) ? "Geely Galaxy" : mappedBrand;
+  const isGalaxy = /银河/.test(`${rawBrand || ""} ${manufacturer || ""} ${rawSeries}`);
+  const brand = isGalaxy ? "Geely" : mappedBrand;
   const rawModel = field(markdown, "model") || "";
   const priceCny = numeric(field(markdown, "full_payment"));
   const guidePriceCny = numeric(field(markdown, "guide_price"));
@@ -99,7 +100,10 @@ export function parseGuaziMarkdown(markdown, sourceUrl) {
   if (!id || !brand || !priceCny || !year || !mileage || energy !== "新能源") return null;
 
   const strippedSeries = rawSeries.replace(rawBrand || "", "").replace(manufacturer || "", "").trim();
-  const model = SERIES_MAP.get(rawSeries) || SERIES_MAP.get(strippedSeries) || strippedSeries || rawModel.split(" ")[0];
+  let model = SERIES_MAP.get(rawSeries) || SERIES_MAP.get(strippedSeries) || strippedSeries || rawModel.split(" ")[0];
+  // Guazi returns Galaxy as a separate marque and shortens the series to E5/L7.
+  // Once the marque is folded into Geely, keep the line in the model name.
+  if (isGalaxy) model = model === "E5" ? "EX5" : `Galaxy ${model}`;
 
   return {
     id: `guazi-${id}`,

@@ -134,7 +134,7 @@ test("all active catalog brands use the same data-driven guide", () => {
     "Zeekr", "Xiaomi", "Volkswagen", "Mercedes-Benz", "BMW", "Audi", "BYD", "Tesla", "Geely", "Honda",
     "Li Auto", "Buick", "Changan", "Toyota", "NIO", "Haval", "Nissan", "Hongqi", "Leapmotor", "XPeng",
     "Lynk & Co", "Chery", "Land Rover", "Hyundai", "Ford", "Volvo", "AITO", "Mazda", "Porsche",
-    "Geely Galaxy", "AION", "Jetour", "Voyah", "Chevrolet", "MG", "Lexus", "MINI", "ORA", "Denza",
+    "AION", "Jetour", "Voyah", "Chevrolet", "MG", "Lexus", "MINI", "ORA", "Denza",
     "Deepal", "Kia", "Jaguar", "Avatr", "Luxeed", "Shangjie", "Mitsubishi", "Jeep", "Stelato", "Subaru",
     "Peugeot", "Maserati", "Great Wall", "Infiniti", "Dongfeng", "Maextro",
   ];

@@ -19,12 +19,12 @@ test("parses a Guazi markdown vehicle", () => {
   assert.equal(car.sourceListedAt, "2026-07-20T02:30:00.000Z");
 });
 
-test("normalizes priority-market Galaxy and Dongfeng brands", () => {
+test("folds the Galaxy line into Geely and normalizes Dongfeng", () => {
   const base = `id:c168848183157611\nfull_payment:81700元\nfirst_register:2025-05\nmileage:1.25万公里\ntransfer_times:0次\ncity:杭州\ntype:新能源`;
   const galaxy = parseGuaziMarkdown(`${base}\nmanufacturer:吉利汽车\nbrand:吉利\nseries:银河E5\nmodel:2024款 530km`, "https://www.guazi.com/car-detail/c168848183157611.md");
   const dongfeng = parseGuaziMarkdown(`${base.replace("c168848183157611", "c168848183157612")}\nmanufacturer:东风风神\nbrand:东风风神\nseries:东风风神E70\nmodel:2023款 PRO`, "https://www.guazi.com/car-detail/c168848183157612.md");
-  assert.equal(galaxy.brand, "Geely Galaxy");
-  assert.equal(galaxy.model, "E5");
+  assert.equal(galaxy.brand, "Geely");
+  assert.equal(galaxy.model, "EX5");
   assert.equal(dongfeng.brand, "Dongfeng");
   assert.equal(dongfeng.model, "E70");
 });

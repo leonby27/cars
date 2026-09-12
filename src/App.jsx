@@ -55,6 +55,31 @@ import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./a
 const AnalyticsPage = lazy(() => import("./analytics-page.jsx").then((m) => ({ default: m.AnalyticsPage })));
 
 const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
+function ModelQuickLabel({ model }) {
+  const labelRef = useRef(null);
+  const [truncated, setTruncated] = useState(false);
+
+  useEffect(() => {
+    const label = labelRef.current;
+    if (!label) return undefined;
+    const update = () => setTruncated(label.scrollWidth > label.clientWidth + 1);
+    update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(label);
+    return () => observer.disconnect();
+  }, [model]);
+
+  return (
+    <>
+      <span ref={labelRef}>{model}</span>
+      {truncated && <ActionTooltip text={model} />}
+    </>
+  );
+}
 // В адресе карточки и в подписи «ID объявления» показываем только номер объявления:
 // приставка источника («che168-», «CH-») посетителю ничего не говорит. Внутри
 // приложения и в базе идентификатор остаётся полным, а сервер понимает оба вида,
@@ -4071,7 +4096,6 @@ const brandLogos = {
   "Li Auto": "li-auto.svg",
   Voyah: "voyah.svg",
   Deepal: "deepal.svg",
-  "Geely Galaxy": "geely-galaxy.svg",
   Dongfeng: "dongfeng.svg",
   Avatr: "avatr.svg",
   AITO: "aito.svg",
@@ -4101,7 +4125,8 @@ const brandLogos = {
   Porsche: "porsche.svg",
   Buick: "buick.svg",
   Ford: "ford.svg",
-  Geely: "geely.svg",
+  // После объединения Geely и Galaxy используем выбранный логотип Galaxy.
+  Geely: "geely-galaxy.svg",
   Haval: "haval.svg",
   Changan: "changan.svg",
   Chevrolet: "chevrolet.svg",
@@ -4154,7 +4179,7 @@ const showcasePinnedBrands = new Set(["Avatr", "Deepal", "Voyah", "Xiaomi", "Zee
 // black artwork stays readable on a dark surface; applying that to these fixed-
 // colour marks would repaint the brand, so they opt out.
 const coloredBrandLogos = new Set([
-  "BMW", "BYD", "Changan", "Chevrolet", "Denza", "Dongfeng", "Ford", "Geely Galaxy",
+  "BMW", "BYD", "Changan", "Chevrolet", "Denza", "Dongfeng", "Ford", "Geely",
   "Honda", "Hongqi", "Hyundai", "Nissan", "Porsche", "Tesla", "Toyota", "Voyah", "Xiaomi",
   "Great Wall", "Subaru", "Maserati", "Volvo", "Infiniti", "MG", "Mitsubishi", "Kia",
 ]);
@@ -5897,13 +5922,18 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const hasMore = useApi ? remoteHasMore : startOffset + displayed.length < resultCount;
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
   const selectedModels = multiValues(filters.model, ANY_MODEL);
-  // Чипы моделей работают как мультивыбор без чекбоксов: клик добавляет модель,
-  // повторный — убирает, а когда не осталось ни одной, снова активно «Все модели».
-  const toggleModelChip = (model) => updateFilters((current) => {
-    if (model === ANY_MODEL) return { ...current, model: [] };
-    const chosen = multiValues(current.model, ANY_MODEL);
-    return { ...current, model: chosen.includes(model) ? chosen.filter((item) => item !== model) : [...chosen, model] };
-  });
+  const quickModels = [
+    ANY_MODEL,
+    ...models
+      .filter((model) => model !== ANY_MODEL)
+      .sort((left, right) => left.localeCompare(right, "ru", { numeric: true, sensitivity: "base" })),
+  ];
+  // Быстрый список работает как переключатель: в нём выбирают ровно одну модель.
+  // Мультивыбор остаётся в полном списке фильтра, где он явно показан чекбоксами.
+  const selectQuickModel = (model) => updateFilters((current) => ({
+    ...current,
+    model: model === ANY_MODEL ? [] : [model],
+  }));
   // Кнопка «Сохранить поиск» знает, что этот набор уже сохранён, и вместо второй
   // копии ведёт в «Мои поиски». У гостя список пуст, поэтому кнопка всегда активна.
   const currentSearchKey = savedSearchKey({ ...filters, sort });
@@ -5971,17 +6001,20 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} />
       {filters.brand !== "Все марки" && models.length > 1 && (
         <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
-          {models.map((model) => {
+          {quickModels.map((model) => {
             const active = model === ANY_MODEL ? !selectedModels.length : selectedModels.includes(model);
+            const count = modelOptionCounts.get(model);
             return (
               <button
                 type="button"
                 key={model}
                 className={active ? "active" : ""}
                 aria-pressed={active}
-                onClick={() => toggleModelChip(model)}
+                aria-label={Number.isFinite(count) ? `${model}: ${number(count)} авто` : model}
+                onClick={() => selectQuickModel(model)}
               >
-                {model}
+                <ModelQuickLabel model={model} />
+                {Number.isFinite(count) && <small>{number(count)}</small>}
               </button>
             );
           })}
@@ -8448,30 +8481,38 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
       const rect = scene.getBoundingClientRect();
       const stickyTop = Number.parseFloat(window.getComputedStyle(sticky).top) || 0;
       const scrollDistance = Math.max(1, scene.offsetHeight - sticky.offsetHeight);
+      const isMobileViewport = window.innerWidth <= 700;
       const progress = Math.min(1, Math.max(0, (stickyTop - rect.top) / scrollDistance));
 
-      // The film reaches its final frame first; the remaining scroll distance
-      // fades that frame into the page before the service cards arrive.
-      const isMobileViewport = window.innerWidth <= 700;
-      const playbackProgress = Math.min(1, progress / 0.84);
-      const fadeProgress = Math.min(1, Math.max(0, (progress - 0.7) / 0.28));
-      const primaryCopyMotion = Math.min(1, progress / (isMobileViewport ? 0.12 : 0.42));
-      const primaryCopyFade = isMobileViewport
-        ? Math.min(1, progress / 0.07)
-        : Math.min(1, Math.max(0, (progress - 0.24) / 0.18));
-      const secondaryCopyMotion = Math.min(1, Math.max(0, (progress - 0.4) / (isMobileViewport ? 0.16 : 0.38)));
-      const secondaryCopyReveal = Math.min(1, Math.max(0, (progress - 0.38) / 0.08));
-      const secondaryCopyFade = Math.min(1, Math.max(0, (progress - (isMobileViewport ? 0.52 : 0.68)) / (isMobileViewport ? 0.08 : 0.14)));
-      const trustCardFade = Math.min(1, Math.max(0, progress / 0.08));
-      const copyTravel = isMobileViewport ? -28 : -160;
+      // Desktop keeps the two-copy film sequence. On mobile the film stays pinned
+      // behind naturally scrolling copy/cards and fades independently near the end.
+      const playbackProgress = isMobileViewport
+        ? 0.44 + 0.56 * Math.min(1, progress / 0.5)
+        : Math.min(1, progress / 0.84);
+      const fadeProgress = isMobileViewport
+        ? Math.min(1, Math.max(0, (progress - 0.5) / 0.28))
+        : Math.min(1, Math.max(0, (progress - 0.7) / 0.28));
+      const primaryCopyMotion = isMobileViewport
+        ? progress
+        : Math.min(1, progress / 0.42);
+      const primaryCopyOpacity = isMobileViewport
+        ? 1
+        : 1 - Math.min(1, Math.max(0, (progress - 0.24) / 0.18));
+      const copyTravel = isMobileViewport ? -scrollDistance : -160;
       scene.style.setProperty("--service-video-opacity", String(1 - fadeProgress));
-      scene.style.setProperty("--service-scroll-cue-opacity", String(Math.max(0, 1 - progress / 0.12)));
-      scene.style.setProperty("--service-primary-copy-opacity", String(1 - primaryCopyFade));
-      scene.style.setProperty("--service-secondary-copy-opacity", String(secondaryCopyReveal * (1 - secondaryCopyFade)));
-      scene.style.setProperty("--service-trust-card-opacity", String(1 - trustCardFade));
+      scene.style.setProperty("--service-primary-copy-opacity", String(primaryCopyOpacity));
       scene.style.setProperty("--service-primary-copy-y", `${copyTravel * primaryCopyMotion}px`);
-      scene.style.setProperty("--service-secondary-copy-y", `${copyTravel * secondaryCopyMotion}px`);
-      scene.classList.toggle("service-video-copy-swapped", progress >= 0.37);
+      if (!isMobileViewport) {
+        const secondaryCopyMotion = Math.min(1, Math.max(0, (progress - 0.4) / 0.38));
+        const secondaryCopyReveal = Math.min(1, Math.max(0, (progress - 0.38) / 0.08));
+        const secondaryCopyFade = Math.min(1, Math.max(0, (progress - 0.68) / 0.14));
+        const trustCardFade = Math.min(1, Math.max(0, progress / 0.08));
+        scene.style.setProperty("--service-scroll-cue-opacity", String(Math.max(0, 1 - progress / 0.12)));
+        scene.style.setProperty("--service-secondary-copy-opacity", String(secondaryCopyReveal * (1 - secondaryCopyFade)));
+        scene.style.setProperty("--service-trust-card-opacity", String(1 - trustCardFade));
+        scene.style.setProperty("--service-secondary-copy-y", `${copyTravel * secondaryCopyMotion}px`);
+      }
+      scene.classList.toggle("service-video-copy-swapped", !isMobileViewport && progress >= 0.37);
       pageShell?.classList.toggle("service-video-header-active", fadeProgress < 0.8);
 
       if (video.readyState >= 1 && Number.isFinite(video.duration)) {
@@ -8573,7 +8614,7 @@ const SERVICE_CATALOG_TARGETS = Object.freeze([
   { brand: "Zeekr", model: "001" },
   { brand: "Geely", model: "EX2" },
   { brand: "Geely", model: "EX5" },
-  { brand: "Geely Galaxy", model: "Galaxy M9" },
+  { brand: "Geely", model: "Galaxy M9" },
   { brand: "BYD", model: "Song PLUS" },
   { brand: "Xiaomi", model: "SU7" },
   { brand: "Deepal", model: "S05" },

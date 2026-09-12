@@ -4,9 +4,9 @@
 // скрипт выравнивает то, что попало в базу раньше. Повторный запуск безопасен:
 // машины с правильными именами он не трогает.
 //
-// Марка меняется вместе с моделью: 银河E5 в Беларуси продают как Geely EX5 — без
-// приставки Galaxy, а машины альянса Huawei разъезжаются из общей «HIMA» по пяти
-// своим маркам (AITO, Luxeed, Stelato, Shangjie, Maextro).
+// Марка меняется вместе с моделью: вся линейка Geely Galaxy объединяется с Geely
+// (слово Galaxy остаётся в модели), а машины альянса Huawei разъезжаются из общей
+// «HIMA» по пяти своим маркам (AITO, Luxeed, Stelato, Shangjie, Maextro).
 import { canonicalImportName } from "../config/import-policy.mjs";
 import { carTitle } from "../src/car-title.js";
 import { pool } from "../server/db.mjs";

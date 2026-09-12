@@ -139,8 +139,8 @@ export const swapKeyboardLayout = (value) => [...String(value ?? "").toLocaleLow
 // кириллицей — «ауди», «мерс», «зикр». Многословные варианты стоят раньше
 // коротких, чтобы «джили галакси» не обрывалось на «джили».
 export const HERO_BRAND_RU = [
-  ["джили галакси", "Geely Galaxy"],
-  ["гили галакси", "Geely Galaxy"],
+  ["джили галакси", "Geely"],
+  ["гили галакси", "Geely"],
   ["ли авто", "Li Auto"],
   // Марки бензиновых машин: их в каталоге сорок семь, и почти все посетители
   // набирают их кириллицей. Многословные стоят раньше коротких, чтобы
@@ -647,4 +647,3 @@ export const collectHeroAliases = (tokens) => {
   }
   return { drive, bodyType, powertrain, gearbox, fuel, colors, words };
 };
-
