@@ -17903,11 +17903,13 @@ html[data-theme="dark"] .service-catalog-section {
 .service-catalog-heading {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  row-gap: 42px;
   align-items: center;
-  margin-bottom: 42px;
+  margin-bottom: 22px;
 }
 .service-catalog-heading > h2 {
-  grid-column: 2;
+  grid-column: 1 / -1;
+  grid-row: 1;
   margin: 0;
   font-size: clamp(38px, 4vw, 56px);
   font-weight: 700;
@@ -17917,6 +17919,7 @@ html[data-theme="dark"] .service-catalog-section {
 }
 .service-catalog-heading .section-heading-title {
   grid-column: 1;
+  grid-row: 2;
   justify-self: start;
 }
 .service-catalog-heading .section-heading-title:empty {
@@ -17924,6 +17927,7 @@ html[data-theme="dark"] .service-catalog-section {
 }
 .service-catalog-heading .section-heading-link {
   grid-column: 3;
+  grid-row: 2;
   justify-self: end;
   margin-left: auto;
 }
@@ -18358,6 +18362,7 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   }
   .service-catalog-heading {
     display: flex;
+    row-gap: 0;
     margin-bottom: 30px;
   }
   .service-catalog-heading > h2 {
