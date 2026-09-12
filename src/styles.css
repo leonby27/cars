@@ -17819,8 +17819,8 @@ html[data-theme="dark"] .service-light-region::after {
   position: relative;
   z-index: 2;
   display: block;
-  font-size: clamp(44px, 4vw, 60px);
-  font-weight: 500;
+  font-size: 44px;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: -0.06em;
   white-space: nowrap;
@@ -17892,6 +17892,56 @@ html[data-theme="dark"] .service-opportunity-card {
 }
 html[data-theme="dark"] .service-opportunity-card p {
   color: var(--muted);
+}
+.service-catalog-section {
+  padding: 80px 0 96px;
+  background: var(--page);
+}
+html[data-theme="dark"] .service-catalog-section {
+  background: #0b0d0f;
+}
+.service-catalog-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  margin-bottom: 42px;
+}
+.service-catalog-heading > h2 {
+  grid-column: 2;
+  margin: 0;
+  font-size: clamp(38px, 4vw, 56px);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.05em;
+  text-align: center;
+}
+.service-catalog-heading .section-heading-title {
+  grid-column: 1;
+  justify-self: start;
+}
+.service-catalog-heading .section-heading-title:empty {
+  display: none;
+}
+.service-catalog-heading .section-heading-link {
+  grid-column: 3;
+  justify-self: end;
+  margin-left: auto;
+}
+.service-catalog-heading .quick-view-toggle {
+  margin-top: 0;
+}
+.service-catalog-cta-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 36px;
+}
+.service-catalog-cta {
+  min-width: 390px;
+  min-height: 56px;
+  justify-content: center;
+  padding-inline: 30px;
+  font-size: 18px;
+  font-weight: 800;
 }
 #steps {
   padding-top: 0;
@@ -18266,9 +18316,6 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
     padding: 24px;
     border-radius: calc(18px * var(--corner-scale));
   }
-  .service-opportunity-card strong {
-    font-size: clamp(36px, 11vw, 48px);
-  }
   .service-opportunity-card p {
     left: 24px;
     bottom: 24px;
@@ -18305,5 +18352,24 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   .service-opportunity-card-convenience img {
     width: min(72%, 220px);
     margin: 8px auto -20px;
+  }
+  .service-catalog-section {
+    padding: 56px 0 72px;
+  }
+  .service-catalog-heading {
+    display: flex;
+    margin-bottom: 30px;
+  }
+  .service-catalog-heading > h2 {
+    margin-right: auto;
+    font-size: 26px;
+    text-align: left;
+  }
+  .service-catalog-cta-wrap {
+    margin-top: 28px;
+  }
+  .service-catalog-cta {
+    width: 100%;
+    min-width: 0;
   }
 }

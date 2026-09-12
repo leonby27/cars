@@ -8568,7 +8568,123 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
   );
 }
 
-function HowItWorksPage({ navigate }) {
+const SERVICE_CATALOG_TARGETS = Object.freeze([
+  { brand: "Geely", model: "Monjaro" },
+  { brand: "Zeekr", model: "001" },
+  { brand: "Geely", model: "EX2" },
+  { brand: "Geely", model: "EX5" },
+  { brand: "Geely Galaxy", model: "Galaxy M9" },
+  { brand: "BYD", model: "Song PLUS" },
+  { brand: "Xiaomi", model: "SU7" },
+  { brand: "Deepal", model: "S05" },
+]);
+
+const serviceCatalogPrice = (car) => Number(estimateLandedCost(car).totalUsd) || Number.POSITIVE_INFINITY;
+const sortServiceCatalogCars = (cars) => [...cars].sort((left, right) => serviceCatalogPrice(left) - serviceCatalogPrice(right));
+const isServiceCatalogTarget = (car) => SERVICE_CATALOG_TARGETS.some(({ brand, model }) => car.brand === brand && car.model === model);
+const mergeServiceCatalogCars = (priorityCars, fillerCars) => {
+  const selectedIds = new Set(priorityCars.map((car) => car.id));
+  const fillers = sortServiceCatalogCars(fillerCars)
+    .filter((car) => !selectedIds.has(car.id) && !isServiceCatalogTarget(car))
+    .slice(0, Math.max(0, 8 - priorityCars.length));
+  return [...priorityCars, ...fillers];
+};
+const selectServiceCatalogCars = (cars) => {
+  const priorityCars = SERVICE_CATALOG_TARGETS.map(({ brand, model }) => (
+    sortServiceCatalogCars(cars.filter((car) => car.brand === brand && car.model === model))[0]
+  )).filter(Boolean);
+  return mergeServiceCatalogCars(priorityCars, cars);
+};
+
+function ServiceCatalogShowcase({ navigate, cars, apiMode, total, favorites, toggleFavorite, loading }) {
+  const [showcaseCars, setShowcaseCars] = useState(() => selectServiceCatalogCars(cars));
+  const [showcaseLoading, setShowcaseLoading] = useState(true);
+  const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({
+    apiMode: apiMode !== false,
+    favorites,
+    toggleFavorite,
+    navigate,
+  });
+  const openCar = (car) => {
+    if (openQuickView(car)) return;
+    navigate(carHref(car));
+  };
+  useEffect(() => {
+    if (apiMode === null) return undefined;
+    const localSelection = selectServiceCatalogCars(cars);
+    if (apiMode === false) {
+      setShowcaseCars(localSelection);
+      setShowcaseLoading(false);
+      return undefined;
+    }
+    const controller = new AbortController();
+    let cancelled = false;
+    setShowcaseLoading(true);
+    Promise.all([
+      Promise.all(SERVICE_CATALOG_TARGETS.map(async ({ brand, model }) => {
+        const query = new URLSearchParams({ brand, model, sort: "price_asc", limit: "1" });
+        const catalog = await fetchCarsJson(`/api/cars?${query}`, controller.signal);
+        return catalog.items?.[0] ? normalizeImportedCar(catalog.items[0]) : null;
+      })),
+      fetchCarsJson("/api/cars?sort=price_asc&limit=20", controller.signal),
+    ])
+      .then(([priorityItems, catalog]) => {
+        if (cancelled) return;
+        const fillerCars = (catalog.items || []).map(normalizeImportedCar);
+        setShowcaseCars(mergeServiceCatalogCars(priorityItems.filter(Boolean), fillerCars));
+      })
+      .catch(() => {
+        if (!cancelled) setShowcaseCars(localSelection);
+      })
+      .finally(() => {
+        if (!cancelled) setShowcaseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [apiMode, cars]);
+  const listingCount = total || cars.length || 64000;
+  const showSkeletons = (loading || showcaseLoading) && !showcaseCars.length;
+  const showcaseSkeletons = ["service-a", "service-b", "service-c", "service-d", "service-e", "service-f"];
+
+  return (
+    <section className="service-catalog-section" aria-labelledby="service-catalog-title">
+      <div className="page-width">
+        <div className="section-heading service-catalog-heading">
+          <div className="section-heading-title">{quickViewToggle}</div>
+          <h2 id="service-catalog-title">Каталог авто</h2>
+          <AppLink className="section-heading-link" href="/catalog" navigate={navigate}>
+            К фильтрам <ArrowRight size={18} className="section-heading-link-arrow" />
+            <CaretRight size={20} weight="bold" className="section-heading-link-caret" aria-hidden="true" />
+          </AppLink>
+        </div>
+        <div className="featured-grid mobile-cards-grid" aria-busy={showSkeletons ? "true" : undefined}>
+          {showSkeletons
+            ? showcaseSkeletons.map((key) => <CardSkeleton key={key} />)
+            : showcaseCars.map((car) => (
+                <FeaturedCard
+                  key={car.id}
+                  anchorKey={`service-${car.id}`}
+                  car={car}
+                  favorite={favorites.has(car.id)}
+                  toggleFavorite={toggleFavorite}
+                  onClick={() => openCar(car)}
+                />
+              ))}
+        </div>
+        <div className="service-catalog-cta-wrap">
+          <button className="primary service-catalog-cta" type="button" onClick={() => navigate("/catalog")}>
+            Перейти к {number(listingCount)} объявлениям
+          </button>
+        </div>
+      </div>
+      {quickViewModal}
+    </section>
+  );
+}
+
+function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, loading }) {
   const darkIntroRef = useRef(null);
   const { total, updatedAt } = useCatalogFacts();
   const principleIcons = [ListChecks, ShieldCheck, Lightning];
@@ -8658,37 +8774,15 @@ function HowItWorksPage({ navigate }) {
           </div>
         </section>
       </div>
-      <section className="decision-section">
-        <div className="page-width decision-grid">
-          <div>
-            <span className="info-eyebrow">До оформления</span>
-            <h2>Вы принимаете решение на основе полной картины</h2>
-            <p>Если автомобиль не проходит проверку или итоговые условия меняются, мы не подталкиваем к сделке — помогаем найти другой вариант.</p>
-          </div>
-          <div className="decision-card decision-card-illustrated">
-            <h3>До оплаты автомобиля вы получите</h3>
-            <ul>
-              <li>
-                <CheckCircle size={19} weight="fill" />
-                Подтверждение наличия и цены
-              </li>
-              <li>
-                <CheckCircle size={19} weight="fill" />
-                VIN и результаты проверки
-              </li>
-              <li>
-                <CheckCircle size={19} weight="fill" />
-                Итоговую смету с диапазонами
-              </li>
-              <li>
-                <CheckCircle size={19} weight="fill" />
-                Понятный план доставки
-              </li>
-            </ul>
-            <img className="decision-checklist-art" src="/illustrations/decision-checklist.png" alt="" loading="lazy" decoding="async" />
-          </div>
-        </div>
-      </section>
+      <ServiceCatalogShowcase
+        navigate={navigate}
+        cars={cars}
+        apiMode={apiMode}
+        total={total}
+        favorites={favorites}
+        toggleFavorite={toggleFavorite}
+        loading={loading}
+      />
       {/* Наш подход и «чего мы не обещаем» переехали сюда с отдельной страницы «О нас»:
           у неё был тот же заголовок «О сервисе abcars.by», и обе страницы отвечали на
           один запрос. Тексты берём из src/service-copy.js — оттуда же их берёт разметка
@@ -12688,7 +12782,14 @@ export function App() {
   // home page renders its own feed skeletons instead of blocking the whole route on it.
   const staticPage =
     contentPath === "/how-it-works" ? (
-      <HowItWorksPage navigate={navigate} />
+      <HowItWorksPage
+        navigate={navigate}
+        cars={cars}
+        apiMode={apiMode}
+        favorites={favorites}
+        toggleFavorite={toggleFavorite}
+        loading={loading}
+      />
     ) : contentPath === "/payment-and-contract" ? (
       <PaymentAndContractPage navigate={navigate} />
     ) : contentPath === "/faq" ? (
