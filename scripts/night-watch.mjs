@@ -78,10 +78,11 @@ if (!refresh || hoursSince(refresh.finishedAt) > FRESH_HOURS) {
 } else if (refresh.entryDenied) {
   troubles.push("Источник не пустил на сайт — проверка «не робот» не пройдена. Цены и наличие не обновились.");
 } else {
-  const checked = Number(refresh.detailChecked || 0) + Number(refresh.pricedByLists || 0);
-  if (refresh.stoppedEarly) troubles.push("Актуализация свернулась досрочно: источник замолчал посреди работы.");
+  const checked = Number(refresh.checkedThisRun ?? (Number(refresh.detailChecked || 0) + Number(refresh.pricedByLists || 0)));
+  if (refresh.stoppedEarly) troubles.push("Актуализация остановилась до завершения круга; остаток требует продолжения.");
+  if (refresh.remainingListings > 0) troubles.push(`В текущем круге ещё не проверено ${cars(refresh.remainingListings)}.`);
   if (checked < MIN_CHECKED) troubles.push(`Актуализация проверила подозрительно мало — ${cars(checked)}.`);
-  lines.push(`Смена «${refresh.shift || "?"}»: проверено ${cars(checked)}, за ${refresh.minutes} мин.`);
+  lines.push(`Актуализация: проверено ${cars(checked)}, за ${refresh.minutes} мин.`);
   if (refresh.rePriced) lines.push(`Изменились цены: ${cars(Number(refresh.rePriced))} (подешевело ${refresh.priceDrops}).`);
   if (refresh.sold) lines.push(`Ушло с продажи: ${cars(Number(refresh.sold))}.`);
   if (refresh.noAnswer > checked / 4) troubles.push(`Источник часто молчал: ${refresh.noAnswer} запросов без ответа.`);

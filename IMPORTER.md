@@ -72,11 +72,37 @@ regular refresh circle. A card seen in the live source gets its current price
 and landed estimate; a card missing from the list is marked sold only when its
 own detail endpoint explicitly confirms that it is gone.
 
-In every regular refresh, cards that have only their import-time check now take
-the first available detail slots inside their brand after any unfinished tail
-from the previous circle. This does not increase the source request allowance;
-it prevents older routine checks from pushing newly imported cards to the back
-of the queue for several circles.
+### Complete catalog refresh (2026-09-12)
+
+The regular `npm run refresh` checks **all active Che168 listings present at the
+start of the cycle**, including listings checked in the past and now stale.
+Lists confirm prices and availability in batches. Every listing not seen there
+gets a detail check, oldest first, even if a brand list was incomplete or the
+brand is missing from the discovery maps. Absence from a list alone never means
+sold. Unknown answers remain pending; they do not update the check date.
+
+There is no default per-brand or per-run detail cap. Optional `--detail-per-brand=N`
+and `--detail-limit=N` deliberately shorten a run; zero disables those checks.
+`--skip-detail`, `--brands`, and other short-run options cannot turn outstanding
+listings into a completed cycle. `--only-unverified` remains a separate, narrower
+catch-up mode and never reports that the whole catalog was updated.
+
+The version-2 cursor stores a fixed cycle start time. List confirmations are
+saved before detail work; each successful detail result is committed before the
+next request. After interruption, restart the same command: database check dates
+exclude completed cards. Legacy cursors are upgraded by discarding their old
+“brand visited” flags. A cycle closes only when no listings from its starting
+snapshot remain unchecked and the brand queue is complete. New imports do not
+extend that snapshot indefinitely. The next invocation starts the next cycle;
+the script does not relaunch itself.
+
+Deploy the code and install the service override with
+`bash /srv/abcars/deploy/install-refresh-config.sh` to remove the old 4.5-hour
+service timeout. This configuration-only installer neither starts the importer
+nor enables any timer. Do not run concurrent refreshes sharing the same database
+and browser profile. Scheduling and the first real run require the owner's
+separate instruction. A short dry run still contacts the source; use the isolated
+tests for offline verification.
 
 Two importers must not share `public/data/cars.json`: each rewrites it whole from its own snapshot, so the second writer drops the first one's cards. `--static=0` keeps a run out of that file and parks its accepted cards in `runtime/che168-pending.json`, ready to be merged into the catalog once the other run finishes. A run always seeds its skip list from both the static file and the `listings` table, so cards that reached only the database are not fetched twice.
 

@@ -24,33 +24,22 @@
 //    (`xvfb-run -a npm run refresh`). Никакой блокировки по адресу за этим не
 //    стояло: тот же сервер, тот же час — окно с экраном пускают.
 //
-// 2. The source's quota is per session, not per IP: the night it first
-//    blocked us, a freshly-challenged import session on the same machine kept
-//    downloading happily. So the browser session is rotated after a fixed
-//    number of requests, and when the source goes silent mid-run the script
-//    first rotates the session; only if that doesn't help does it stop —
-//    gracefully, keeping everything already checked.
-//
 // A card that vanished from every list slice is either sold or merely
 // unlisted; absence alone must never unpublish a card. Its own page is the
 // authority: a sold card still answers with a detail payload, just without a
-// price. Detail checks are capped per night and drawn oldest-checked-first,
-// so the whole catalog rotates through them fairly.
+// price. All missing cards are checked, oldest first, even after an incomplete
+// list walk. Unknown answers remain pending in the SAME cycle.
 //
-// The run starts with a priority pass: cards visitors opened in the last 30
-// days (view/availability/favorite events, top 300) get a detail check and a
-// database write first. --skip-detail skips this pass too.
+// Each cycle stores a stable start timestamp. Successful checks are committed
+// immediately; after interruption only dates older than that timestamp remain
+// in its queue. A complete brand walk alone is not a complete catalog refresh.
 //
-// 3. Плотность обращений за одну ночь — то, по чему источник и вычисляет
-//    робота. Ночь 25→26.08.2026 (24 тысячи обращений в темпе 3–7 в секунду)
-//    кончилась блокировкой всего сервера на несколько дней. Поэтому работа
-//    разложена на четыре ночные смены (scripts/lib/refresh-shifts.mjs), а темп
-//    сбавлен примерно до одного обращения в секунду. Смена определяет не только
-//    что листать, но и за какие карточки мы сегодня отвечаем: чужие не уходят в
-//    поштучную очередь, а спокойно ждут своей ночи.
+// Earlier volume/quota explanations were not established: browser/request
+// configuration caused the observed failures. Keep the proven transport and
+// failure handling, but do not truncate a healthy run to an assumed quota.
 //
 // Usage:
-//   npm run refresh                     # смена по календарю: списки + поштучные проверки + запись
+//   npm run refresh                     # полный круг: списки + все оставшиеся карточки
 //   npm run refresh -- --shift=ev      # явная смена: ev | petrol-a | petrol-b | petrol-c
 //   npm run refresh -- --dry-run       # measure only, no database writes
 //   npm run refresh -- --skip-detail   # lists only (prices), leave missing cards alone
@@ -65,7 +54,7 @@ import { extractChe168ListPayload, extractChe168DetailPayload, buildChe168Car } 
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
-import { prioritizeBrandBacklog, updateBrandBacklog } from "./lib/refresh-backlog.mjs";
+import { PENDING_CYCLE_SQL, resumeRefreshCycle, readCheckLimit, checkPendingListings, finishRefreshCycle } from "./lib/refresh-cycle.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, sourceBrandOf, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
@@ -121,10 +110,11 @@ const skipDetail = args.get("skip-detail") === "true";
 // проверки всё ещё совпадает с днём добавления. Это в точности тот набор, где
 // сайт показывает только «Добавлено» без отдельной даты «Обновлено».
 const onlyUnverified = args.get("only-unverified") === "true";
-// Потолок поштучных проверок за ночь: очередь берётся «сначала самые
-// залежавшиеся», так что весь каталог проходит через них по кругу за несколько
-// ночей, а прогон никогда не выжигает сессионную квоту источника подчистую.
-const detailLimit = Number(args.get("detail-limit") || 2000);
+// Без явного ограничения проверяются все карточки. Числовой лимит — только
+// для сокращённых запусков; остаток сохраняется в текущем круге.
+const detailLimit = readCheckLimit(args.get("detail-limit"));
+const detailPerBrand = readCheckLimit(args.get("detail-per-brand"));
+const newPerBrand = readCheckLimit(args.get("new-per-brand") ?? 120);
 // Один поток: замер 31.08.2026 с пропуском прошёл 500 страниц подряд именно
 // так — одно обращение раз в ~2 секунды. Два потока с той же паузой (втрое
 // чаще) в то же утро упёрлись в стену через несколько минут.
@@ -157,7 +147,7 @@ let burstLimit = Number(args.get("burst") || 450);
 let burstPauseMin = Number(args.get("burst-pause") || 15);
 // Сколько подходов за одну сессию работы. Полный круг длиннее одной сессии —
 // остаток берёт следующая, курсор помнит место.
-let burstsMax = Number(args.get("bursts") || 6);
+let burstsMax = Number(args.get("bursts") ?? 0);
 // Ценовой срез по моделям: у крупной марки каждая модель листается только на
 // первые N страниц по возрастанию цены — посетителей интересуют дешёвые
 // предложения внутри модели (у дорогого в целом Туарега есть свои дешёвые
@@ -402,7 +392,10 @@ async function loadCursor() {
 }
 async function saveCursor(cursor) {
   if (dryRun) return;
-  await fs.writeFile(path.join(ROOT, CURSOR_PATH), JSON.stringify(cursor, null, 2));
+  const target = path.join(ROOT, CURSOR_PATH);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(`${target}.tmp`, JSON.stringify(cursor, null, 2));
+  await fs.rename(`${target}.tmp`, target);
 }
 
 async function openSession() {
@@ -703,9 +696,17 @@ async function listFlight(params) {
   return answered ? { items: [], answered: true } : null;
 }
 
-const { pool } = await import("../server/db.mjs");
+const { pool, withTransaction } = await import("../server/db.mjs");
 // Запись новых машин: та же функция, которой пользуется пополнение каталога.
 const { importCars } = await import("../server/repository.mjs");
+// Use the database clock, which also writes last_checked_at. Persist BEFORE
+// checking any card; an abrupt exit then cannot lose the cycle boundary.
+const cycleNow = (await pool.query("SELECT now() AS at")).rows[0].at;
+let cursor = resumeRefreshCycle(await loadCursor(), cycleNow);
+await saveCursor(cursor);
+const unverifiedSql = onlyUnverified
+  ? "AND (last_checked_at IS NULL OR date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at))"
+  : "";
 // Порядок важен: очередь поштучных проверок берётся из этого же списка, и
 // «сначала самые давно не проверенные» превращает ограниченный ночной запас
 // проверок в честную карусель по всему каталогу.
@@ -725,15 +726,21 @@ const { rows } = await pool.query(`SELECT id, external_id, price_cny, estimated_
     (source_payload->>'curbWeight')::numeric AS curb_weight,
     title
   FROM listings WHERE source='Che168' AND status='active'
-    ${onlyUnverified ? "AND date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at)" : ""}
-  ORDER BY last_checked_at ASC NULLS FIRST`);
-console.log(`[db] ${rows.length} ${onlyUnverified ? "unverified" : "active"} Che168 listings`);
+    AND ${PENDING_CYCLE_SQL} ${unverifiedSql}
+  ORDER BY last_checked_at ASC NULLS FIRST, id`, [cursor.startedAt]);
+console.log(`[db] ${rows.length} ожидают проверки в круге №${cursor.round} (начат ${cursor.startedAt})`);
 
 // Все наши идентификаторы, вместе с проданными: машина, снятая с витрины, иногда
 // ещё мелькает в списках, и без этого списка находки предлагали бы качать её
 // каждую ночь заново.
-const { rows: knownRows } = await pool.query(`SELECT id FROM listings WHERE source='Che168'`);
+const { rows: knownRows } = await pool.query(`SELECT id, status, source_payload->>'brand' AS brand FROM listings WHERE source='Che168'`);
 const knownIds = new Set(knownRows.map((row) => row.id));
+const activeCountByBrand = new Map();
+for (const row of knownRows) {
+  if (row.status !== "active") continue;
+  const brand = sourceBrandOf(row.brand);
+  activeCountByBrand.set(brand, (activeCountByBrand.get(brand) || 0) + 1);
+}
 
 // Cards visitors actually opened in the last month jump the queue: each gets a
 // detail-page check and a database write before the list sweep even starts, so
@@ -788,9 +795,9 @@ let soldTotal = 0;
 const burstBrands = new Set();
 // Все марки за прогон — для итогового сообщения: burstBrands по ходу чистится.
 const allBrandsThisRun = new Set();
-const tgQuiet = args.get("quiet") === "true";
+const tgQuiet = dryRun || args.get("quiet") === "true";
 // Курсор читается до обхода, пишется после: ночь продолжает с места остановки.
-let cursor = { brandsDone: [], round: 1, uncheckedBeforeByBrand: {} };
+const verifiedThisRun = new Set();
 
 // Страница списка учтена: цены — в общую копилку, незнакомые машины — в находки.
 function absorbList(payload, fuelType) {
@@ -900,6 +907,11 @@ async function brandQueue(ourCountByBrand) {
       ids.set(canon, rec);
     }
   }
+  // Refresh every saved brand, even if it no longer occurs in discovery maps
+  // or current import policy. Without a map, all its cards use detail checks.
+  for (const brand of ourCountByBrand.keys()) {
+    if (!ids.has(brand)) ids.set(brand, { brand, ids: new Set(), sourceCount: 0 });
+  }
   const done = new Set(cursor?.brandsDone || []);
   let list = [...ids.values()].map((rec) => ({
     brand: rec.brand,
@@ -914,8 +926,8 @@ async function brandQueue(ourCountByBrand) {
   // уходит сразу. Крупные иначе выели бы весь дневной запас источника.
   const smallestFirst = String(orderConfig?.order || "smallest-first") !== "largest-first";
   list.sort((a, b) => (smallestFirst ? a.ourCars - b.ourCars || a.sourceCount - b.sourceCount : b.ourCars - a.ourCars || b.sourceCount - a.sourceCount));
-  const left = list.filter((item) => !done.has(item.brand));
-  return { all: list, queue: left.length ? left : list, restarted: !left.length };
+  const left = list.filter((item) => !done.has(item.brand) || item.ourCars > 0);
+  return { all: list, queue: left };
 }
 
 // Крупную марку режем окнами по цене: окно из нескольких страниц источник отдаёт
@@ -989,7 +1001,7 @@ async function reportBrand(entry, res) {
     `Цены изменились у: ${res.rePriced}`,
     `Новых заведено: ${res.added}${res.addFailed ? ` (не удалось: ${res.addFailed})` : ""}`,
     `Снято с продажи: ${res.sold}`,
-    ...(res.unchecked ? [`Не проверено: ${res.unchecked} — первыми в следующем круге марки`] : []),
+    ...(res.unchecked ? [`Не проверено: ${res.unchecked} — остались в текущем круге`] : []),
     `Осталось в каталоге: ${res.remaining}`,
     `Страниц прочитано: ${res.pages}${res.windows > 1 ? ` в ${res.windows} ценовых окнах` : ""} · ${res.minutes} мин`,
   ];
@@ -1002,12 +1014,12 @@ async function reportBrand(entry, res) {
 // Итог круга: последняя марка пройдена, каталог обновлён целиком.
 async function reportCircleDone(round, totals) {
   const lines = [
-    "🏁 Каталог обновлён целиком",
+    onlyUnverified ? "🏁 Проверка объявлений без повторного обновления завершена" : "🏁 Каталог обновлён целиком",
     `Круг №${round} закрыт: обойдено марок ${totals.brands}`,
     "",
-    `Проверено цен: ${totals.priced} · изменилось: ${totals.rePriced}`,
-    `Новых заведено: ${totals.added}`,
-    `Снято с продажи: ${totals.sold}`,
+    `За эту сессию проверено наших объявлений: ${totals.checked} · изменилось цен: ${totals.rePriced}`,
+    `За эту сессию новых заведено: ${totals.added}`,
+    `За эту сессию снято с продажи: ${totals.sold}`,
     `В каталоге сейчас: ${totals.remaining}`,
     `Заняло: ${totals.hours} ч`,
   ];
@@ -1155,7 +1167,8 @@ try {
     const estimates = estimateUpdates.splice(0);
     const touches = touchIds.splice(0);
     const sold = soldIds.splice(0);
-    if (!dryRun) {
+    if (!prices.length && !estimates.length && !touches.length && !sold.length) return;
+    if (!dryRun) await withTransaction(async (client) => {
       for (const batch of chunk(prices, 1000)) {
         // `content_changed_at` — дата настоящего изменения объявления, её берёт карта
         // сайта. Двигаем её только здесь: цена у продавца действительно изменилась.
@@ -1164,27 +1177,29 @@ try {
         // `previous_price_usd` и `price_changed_at` — для стрелки изменения цены на
         // карточке: карточка показывает прошлую цену и дату в подсказке. Прошлую
         // цену пишем в долларах, как её отдал источник, без пересчёта через юани.
-        await pool.query(`UPDATE listings l SET price_cny=v.cny, estimated_total_usd=v.est,
+        await client.query(`UPDATE listings l SET price_cny=v.cny, estimated_total_usd=v.est,
             source_payload = l.source_payload || jsonb_build_object('usdPrice', v.usd, 'sourcePriceUsd', v.usd, 'chinaPrice', v.cny),
             previous_price_usd=v.old_usd, price_changed_at=now(),
             last_seen_at=now(), last_checked_at=now(), content_changed_at=now()
           FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer, usd numeric, est numeric, old_usd numeric)
           WHERE l.id = v.id`, [JSON.stringify(batch.map(({ id, cny, usd, est, oldUsd }) => ({ id, cny, usd, est, old_usd: oldUsd })))]);
-        await pool.query(`INSERT INTO price_history (listing_id, observed_at, price_cny)
+        await client.query(`INSERT INTO price_history (listing_id, observed_at, price_cny)
           SELECT v.id, now(), v.cny FROM jsonb_to_recordset($1::jsonb) AS v(id text, cny integer)
           ON CONFLICT DO NOTHING`, [JSON.stringify(batch.map(({ id, cny }) => ({ id, cny })))]);
       }
       for (const batch of chunk(estimates, 2000)) {
-        await pool.query(`UPDATE listings l SET estimated_total_usd=v.est, last_seen_at=now(), last_checked_at=now()
+        await client.query(`UPDATE listings l SET estimated_total_usd=v.est, last_seen_at=now(), last_checked_at=now()
           FROM jsonb_to_recordset($1::jsonb) AS v(id text, est numeric) WHERE l.id = v.id`, [JSON.stringify(batch)]);
       }
       for (const batch of chunk(touches, 5000)) {
-        await pool.query(`UPDATE listings SET last_seen_at=now(), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
+        await client.query(`UPDATE listings SET last_seen_at=now(), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
       }
       for (const batch of chunk(sold, 5000)) {
-        await pool.query(`UPDATE listings SET status='unavailable', sold_at=COALESCE(sold_at, now()), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
+        await client.query(`UPDATE listings SET status='unavailable', sold_at=COALESCE(sold_at, now()), last_checked_at=now() WHERE id = ANY($1::text[])`, [batch]);
       }
-    }
+    });
+    for (const item of [...prices, ...estimates]) verifiedThisRun.add(item.id);
+    for (const id of [...touches, ...sold]) verifiedThisRun.add(id);
     stats.rePriced += prices.length;
     stats.priceUpdates.push(...prices);
     stats.drops.push(...prices.filter((u) => u.usd < u.oldUsd));
@@ -1204,28 +1219,30 @@ try {
   const priorityFirst = args.get("priority-first") === "true";
   if (priorityFirst && !skipDetail && popularRows.length) {
     console.log(`[priority] ${popularRows.length} visitor-viewed cars go first`);
-    const queue = [...popularRows];
-    const worker = async () => {
-      while (queue.length && !stopped) {
-        const row = queue.shift();
-        const result = await checkDetail(row.external_id);
-        await noteAnswer(result.verdict !== "unknown");
+    const result = await checkPendingListings(popularRows, {
+      limit: detailLimit,
+      stopped: () => stopped,
+      check: checkDetail,
+      persist: async (row, result) => {
         if (result.verdict === "sold") soldIds.push(row.id);
-        else if (result.verdict === "alive") classify(row, result.price);
-        else unknown += 1;
-        prioritized.add(row.id);
+        else classify(row, result.price);
+        await flushWrites();
+        if (result.verdict === "sold") {
+          const brand = sourceBrandOf(row.brand);
+          activeCountByBrand.set(brand, Math.max(0, (activeCountByBrand.get(brand) || 0) - 1));
+        }
+      },
+      afterAttempt: async (result) => {
+        detailChecked += 1;
+        await noteAnswer(result.verdict !== "unknown");
         await sleep(pace);
-      }
-    };
-    await Promise.all(Array.from({ length: concurrency }, worker));
-    console.log(`[priority] done: ${prioritized.size} checked · ${soldIds.length} sold · ${priceUpdates.length} re-priced`);
-    await flushWrites();
+      },
+    });
+    unknown += result.unknown;
+    for (const id of result.verified) prioritized.add(id);
+    console.log(`[priority] done: ${prioritized.size} checked · ${result.sold} sold`);
   }
 
-  cursor = await loadCursor();
-  // Старые курсоры не знали о хвостах марок. Добавляем поле мягко: выкладка
-  // новой версии продолжит текущий круг, не начиная его заново.
-  cursor.uncheckedBeforeByBrand = cursor.uncheckedBeforeByBrand || {};
   await loadOrder();
   if (orderConfig?.burst) {
     // Ноль — осмысленное значение («заранее не отдыхаем»), поэтому проверяем
@@ -1261,6 +1278,11 @@ try {
   const ourPricesByBrand = new Map();
   for (const row of rows) {
     if (prioritized.has(row.id)) continue;
+    if (args.get("shift") && args.get("shift") !== "auto" && !inShift(row)) continue;
+    if (args.has("feeds")) {
+      const rowFeeds = row.type === "Электромобиль" ? [7] : row.type === "Гибрид" ? [5, 6, 3] : row.type === "ДВС" ? [1] : activeFeeds;
+      if (!rowFeeds.some((feed) => activeFeeds.includes(feed))) continue;
+    }
     // Не наша марка, а марка источника: машина под именем Jaecoo лежит в списках
     // Chery, и искать её надо там, иначе она выпадет из обхода насовсем.
     const canon = sourceBrandOf(row.brand);
@@ -1270,7 +1292,7 @@ try {
     if (usd > 0) ourPricesByBrand.get(canon).push(usd);
   }
   const ourCountByBrand = new Map([...ourRowsByBrand].map(([brand, list]) => [brand, list.length]));
-  const { all: allBrands, queue: fullQueue, restarted } = await brandQueue(ourCountByBrand);
+  const { all: allBrands, queue: fullQueue } = await brandQueue(ourCountByBrand);
   // Для проверочных прогонов: `--brand-limit=N` берёт первые N марок очереди,
   // `--brands=Stelato,Kia` — только названные (имена как в каталоге, регистр не важен).
   const wantedBrands = args.get("brands")
@@ -1281,21 +1303,16 @@ try {
     : fullQueue;
   if (wantedBrands && !brandsToWalk.length) throw new Error(`марок не нашлось: ${args.get("brands")}`);
   if (brandLimit) brandsToWalk = brandsToWalk.slice(0, brandLimit);
-  if (restarted) console.log("[order] круг был пройден — начинаю заново");
   console.log(`[order] в очереди ${brandsToWalk.length} марок из ${allBrands.length}; первые: ${brandsToWalk.slice(0, 5).map((b) => `${b.brand} (${b.ourCars})`).join(", ")}`);
 
-  // Потолки на одну марку, чтобы одна крупная не выела весь дневной запас.
-  const newPerBrand = Number(args.get("new-per-brand") || 120);
-  const detailPerBrand = Number(args.get("detail-per-brand") || 150);
+  // Пополнение по-прежнему ограничено; актуализация существующих карточек — нет.
   const totals = { brands: 0, priced: 0, rePriced: 0, added: 0, sold: 0 };
 
   for (const entry of brandsToWalk) {
     if (stopped) break;
     const began = Date.now();
-    const attemptedAt = new Date(began).toISOString();
     const ourRows = ourRowsByBrand.get(entry.brand) || [];
     const ourPrices = ourPricesByBrand.get(entry.brand) || [];
-    const backlogCutoff = cursor.uncheckedBeforeByBrand[entry.brand] || null;
     const verifiedThisBrand = new Set();
     const pricedBefore = seenPrices.size;
     const pagesBefore = listPages;
@@ -1349,7 +1366,37 @@ try {
       }
     }
 
-    // Новые машины этой марки — сразу в каталог.
+    // Цены и пропавшие — только по этой марке.
+    const missingHere = [];
+    for (const row of ourRows) {
+      const liveUsd = seenPrices.get(String(row.external_id));
+      if (liveUsd) { classify(row, liveUsd); verifiedThisBrand.add(row.id); }
+      else missingHere.push(row);
+    }
+    // Списочные подтверждения записываются до долгого поштучного прохода.
+    await flushWrites();
+    let soldHere = 0;
+    const checked = await checkPendingListings(missingHere, {
+      limit: skipDetail ? 0 : Math.min(detailPerBrand, Math.max(0, detailLimit - detailChecked)),
+      stopped: () => stopped,
+      check: checkDetail,
+      persist: async (row, result) => {
+        if (result.verdict === "sold") soldIds.push(row.id);
+        else classify(row, result.price);
+        await flushWrites();
+      },
+      afterAttempt: async (result) => {
+        detailChecked += 1;
+        await noteAnswer(result.verdict !== "unknown");
+        await sleep(pace);
+      },
+    });
+    soldHere = checked.sold;
+    unknown += checked.unknown;
+    detailSkipped += checked.skipped;
+    for (const id of checked.verified) verifiedThisBrand.add(id);
+
+    // Пополнение — после актуализации текущих машин марки.
     let added = 0;
     let addFailed = 0;
     const fresh = onlyUnverified
@@ -1364,58 +1411,30 @@ try {
       await sleep(pace);
     }
 
-    // Цены и пропавшие — только по этой марке.
-    const missingHere = [];
-    for (const row of ourRows) {
-      const liveUsd = seenPrices.get(String(row.external_id));
-      if (liveUsd) { classify(row, liveUsd); verifiedThisBrand.add(row.id); }
-      else if (ok) missingHere.push(row);
-    }
-    let soldHere = 0;
-    if (!skipDetail && ok && !stopped) {
-      // Хвост прошлого прохода занимает первые места в той же квоте. Следом идут
-      // машины, которые со дня импорта ещё ни разу не перепроверялись. Обращений
-      // не становится больше: меняется только порядок уже выбранных проверок.
-      const queue = prioritizeBrandBacklog(missingHere, backlogCutoff).slice(0, detailPerBrand);
-      detailSkipped += missingHere.length - queue.length;
-      for (const row of queue) {
-        if (stopped) break;
-        const result = await checkDetail(row.external_id);
-        await noteAnswer(result.verdict !== "unknown");
-        if (result.verdict === "sold") { soldIds.push(row.id); soldHere += 1; verifiedThisBrand.add(row.id); }
-        else if (result.verdict === "alive") { classify(row, result.price); verifiedThisBrand.add(row.id); }
-        else unknown += 1;
-        detailChecked += 1;
-        await sleep(pace);
-      }
-    }
-    await flushWrites();
-
-    // Одна дата на марку заменяет длинный список id. При следующем проходе все
-    // строки со старой last_checked_at узнаются как хвост и идут первыми. Когда
-    // хвост исчерпан, запись марки исчезает из курсора.
     const unchecked = ourRows.length - verifiedThisBrand.size;
-    cursor.uncheckedBeforeByBrand = updateBrandBacklog(
-      cursor.uncheckedBeforeByBrand,
-      entry.brand,
-      unchecked > 0 ? attemptedAt : null,
-    );
+    activeCountByBrand.set(entry.brand, Math.max(0, (activeCountByBrand.get(entry.brand) || 0) - soldHere + added));
 
     // Машина в базе — ещё не машина на сайте: каталог отдаётся из кэша.
     if (added > 0 && !dryRun) await purgePageCache(added);
 
-    coveredBrands.add(entry.brand);
+    const brandComplete = ok && !stopped && unchecked === 0;
+    if (brandComplete) coveredBrands.add(entry.brand);
+    const done = new Set(cursor.brandsDone);
+    if (brandComplete) done.add(entry.brand);
+    else done.delete(entry.brand);
+    cursor.brandsDone = [...done];
+    await saveCursor(cursor);
     allBrandsThisRun.add(entry.brand);
     const res = {
-      ok: ok && !stopped,
-      why: stopped ? "прогон свернулся: дневной запас источника исчерпан" : why,
+      ok: brandComplete,
+      why: stopped ? "прогон остановлен; незавершённые проверки сохранены" : why,
       priced: seenPrices.size - pricedBefore,
       rePriced: stats.rePriced - rePricedBefore,
       added,
       addFailed,
       sold: soldHere,
       unchecked,
-      remaining: Math.max(0, ourRows.length - soldHere + added),
+      remaining: activeCountByBrand.get(entry.brand),
       pages: listPages - pagesBefore,
       windows,
       minutes: Math.round((Date.now() - began) / 6000) / 10,
@@ -1425,14 +1444,8 @@ try {
     totals.rePriced += res.rePriced;
     totals.added += added;
     totals.sold += soldHere;
-    console.log(`[brand] ${entry.brand}: ${res.priced} цен, ${res.rePriced} изменилось, +${added} новых, ${soldHere} снято, ${unchecked} ждут следующего круга, ${res.pages} страниц, ${res.minutes} мин${res.ok ? "" : " — не до конца"}`);
+    console.log(`[brand] ${entry.brand}: ${res.priced} цен, ${res.rePriced} изменилось, +${added} новых, ${soldHere} снято, ${unchecked} осталось в текущем круге, ${res.pages} страниц, ${res.minutes} мин${res.ok ? "" : " — не до конца"}`);
     await reportBrand(entry, res);
-    // Курсор двигаем после каждой марки: обрыв не потеряет пройденное.
-    await saveCursor({
-      brandsDone: [...new Set([...(cursor.brandsDone || []), ...coveredBrands])],
-      round: cursor.round || 1,
-      uncheckedBeforeByBrand: cursor.uncheckedBeforeByBrand,
-    });
   }
 
   console.log(`[lists] done: ${listPages} pages (${listPagesEmpty} empty), ${seenPrices.size} cars priced`);
@@ -1455,13 +1468,17 @@ try {
   // когда в очереди не осталось НИ ОДНОЙ марки ни в одном фиде — раньше здесь
   // была ошибка: остаток считался по уже отфильтрованному списку, и круг
   // «замыкался» после первой же ночи, а хвост очереди не доходил никогда.
-  const doneNow = new Set([...(cursor.brandsDone || []), ...coveredBrands]);
+  const doneNow = new Set(cursor.brandsDone);
   const remainingBrands = allBrands.filter((item) => !doneNow.has(item.brand)).length;
   outOfShift = remainingBrands;
-  const circleClosed = doneNow.size > 0 && remainingBrands === 0;
-  const nextCursor = circleClosed
-    ? { brandsDone: [], round: (cursor.round || 1) + 1, uncheckedBeforeByBrand: cursor.uncheckedBeforeByBrand }
-    : { brandsDone: [...doneNow], round: cursor.round || 1, uncheckedBeforeByBrand: cursor.uncheckedBeforeByBrand };
+  const remainingListings = dryRun
+    ? rows.filter((row) => !verifiedThisRun.has(row.id)).length
+    : (await pool.query(`SELECT count(*)::int AS n FROM listings
+        WHERE source='Che168' AND status='active' AND ${PENDING_CYCLE_SQL} ${unverifiedSql}`,
+      [cursor.startedAt])).rows[0].n;
+  const { complete: circleClosed, cursor: nextCursor } = finishRefreshCycle(cursor, {
+    remainingListings, remainingBrands, stopped,
+  });
   await saveCursor(nextCursor);
   console.log(
     circleClosed
@@ -1492,6 +1509,11 @@ try {
     brandsCoveredThisRun: coveredBrands.size,
     brandsCoveredInCircle: nextCursor.brandsDone.length,
     circleClosed,
+    cycleStartedAt: cursor.startedAt,
+    remainingListings,
+    remainingBrands,
+    checkedThisRun: verifiedThisRun.size,
+    scope: onlyUnverified ? "only-unverified" : "catalog",
     activeBefore: rows.length,
     listPages,
     listPagesEmpty,
@@ -1507,7 +1529,7 @@ try {
     priceRises: stats.rePriced - drops.length,
     estimateOnly: stats.estimateOnly,
     unchanged: stats.unchanged,
-    detailChecked: prioritized.size + detailChecked,
+    detailChecked,
     detailSkipped,
     sold: stats.sold,
     noAnswer: unknown,
@@ -1523,7 +1545,8 @@ try {
   // следующий раз с того места, где остановилась, и сообщать об этом нечего.
   if (circleClosed) {
     await reportCircleDone(cursor.round || 1, {
-      brands: totals.brands,
+      brands: doneNow.size,
+      checked: verifiedThisRun.size,
       priced: totals.priced,
       rePriced: totals.rePriced,
       added: totals.added,

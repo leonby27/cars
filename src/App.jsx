@@ -1311,7 +1311,6 @@ function EvQuotaButton({ quotas }) {
 function Header({ navigate, favoritesCount, savedSearchesCount, path, user, themeMode, setThemeMode }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
-  const catalogActive = path === "/catalog" || path.startsWith("/catalog/") || path.startsWith("/cars/") || path.startsWith("/orders/");
   const [menuOpen, setMenuOpen] = useState(false);
   const [phoneRevealed, setPhoneRevealed] = useState(false);
   const menuRef = useRef(null);
@@ -1381,7 +1380,6 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
                 {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
               </div>
               <nav aria-label="Основная навигация">
-                <AppLink href="/catalog" navigate={navigate} className={catalogActive ? "active" : ""} aria-current={catalogActive ? "page" : undefined}>Автомобили</AppLink>
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
                 <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>
                 <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
