@@ -32,7 +32,7 @@ export const ANALYTICS_EVENTS = new Set([
 ]);
 
 const COOKIE_NAME = "abcars_analytics";
-const SESSION_TTL_SECONDS = 60 * 60 * 12;
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const text = (value, max) => String(value || "").trim().slice(0, max);
 
 // `/analytics` — внутренняя CRM. Фильтр стоит и перед записью, и во всех отчётах:

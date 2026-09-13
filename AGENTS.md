@@ -37,7 +37,7 @@ Before making substantial visual changes, use the Product Design plugin's `get-c
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
 
-Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
+Build app UI in `src/`. The only production website is `https://abcars.by` on the Timeweb servers. Never create `.openai/hosting.json`, prepare or publish a ChatGPT Sites build, or deploy this project to any `*.chatgpt.site` address. Treat any future Sites configuration or publication reference as an error and remove it. Deploy only through the established Timeweb production process and only after an explicit owner request.
 
 Typography preference: prioritize comfortable readability over ultra-compact UI. Reading copy — body text, article prose, descriptions, anything a visitor actually reads — stays at 16px or larger. There is no project-wide minimum beyond that (the owner retired it on 2026-08-20, and `tests/typography.test.mjs` no longer checks sizes): service labels, badges, counters, dates and other chrome may be smaller where it reads better, and the sizes recorded elsewhere in this file are the decisions, not exceptions to a rule. Match the “Срок доставки до Минска” label typography to the “Основная информация” label instead of uppercasing it.
 
@@ -120,6 +120,8 @@ Analytics device-tooltip preference (owner decision, 2026-09-08): the device ico
 Analytics block-radius preference (owner decision, 2026-09-07): all major CRM blocks—KPI cards, content panels, sidebar surfaces and lead cards—share one fixed 24px outer radius. Controls and small chips retain their own component-specific radii.
 
 Analytics promo-spacing preference (owner decision, 2026-09-07): when «Баннер в статьях» is expanded, keep a clear 16px vertical gap between its heading row and the three metrics; the collapsed panel height stays unchanged.
+
+Analytics session preference (owner decision, 2026-09-13): keep a successful analytics login on the same device for 30 days instead of 12 hours. Explicit logout still ends access immediately; clearing browser data, using private mode or switching devices requires a new login.
 
 Analytics overview disclosure preference (owner decision, 2026-09-07): «График посещений» and «Заходы» are permanently expanded, non-collapsible blocks without chevrons. «Баннер в статьях» remains the only disclosure in this sequence and starts collapsed on every entry; its manual toggle remains available for the current visit. Keep the same 16px vertical gap between every overview block.
 

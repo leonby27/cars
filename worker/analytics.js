@@ -1,6 +1,6 @@
 const EVENTS = new Set(["page_view", "vehicle_view", "availability_click", "availability_request_click", "registration_completed", "favorite_added", "search_saved", "custom_search_submitted", "search_query", "article_promo_shown", "article_promo_click", "contact_phone_reveal", "contact_telegram_click", "contact_viber_click", "contact_instagram_click", "app_download_qr_click", "app_download_app_store_click", "app_download_google_play_click", "app_download_qr_modal_open", "app_download_qr_deeplink_modal_open", "app_download_app_store_modal_open", "app_download_google_play_modal_open", "newsletter_subscribe_click", "newsletter_subscribe_modal_open"]);
 const COOKIE_NAME = "abcars_analytics";
-const SESSION_TTL_SECONDS = 60 * 60 * 12;
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const encoder = new TextEncoder();
 const clean = (value, max) => String(value || "").trim().slice(0, max);
 let schemaPromise;
@@ -569,7 +569,7 @@ export async function syncSearchTraffic(env, store, { now = Date.now(), fetcher 
   return Object.fromEntries(results);
 }
 
-// Sites uses the same archive shape; production runs the PostgreSQL adapter and timer.
+// The edge worker uses the same archive shape; production runs the PostgreSQL adapter and timer.
 function workerSearchStore(db) {
   return {
     async read(source, property, range) {

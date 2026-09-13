@@ -106,7 +106,7 @@ test('failed refresh retains history and does not leak upstream messages', async
   assert.equal(report.google.lastSyncAt, '2026-09-07T10:00:00Z');
   assert.ok(!JSON.stringify(report).includes('private-secret'));
 });
-test('Sites report requires login even without storage', async () => {
+test('Analytics report requires login even without storage', async () => {
   const url = new URL('https://abcars.by/api/analytics/search-traffic?period=7');
   const response = await handleAnalyticsRequest(new Request(url), { ANALYTICS_PASSWORD:'secret' }, url);
   assert.equal(response.status, 401);

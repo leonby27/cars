@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ANALYTICS_SECTIONS, confirmHumanVisit, deviceKindFromHeaders, devicePlatformFromHeaders, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, analyticsCookie, confirmHumanVisit, deviceKindFromHeaders, devicePlatformFromHeaders, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { analyticsEntrySource, hasYandexClickId, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm, withoutYandexClickId } from "../src/analytics.js";
 import { formatVisitDate } from "../src/analytics-format.js";
 import { analyticsNoCountHref } from "../src/analytics-links.js";
@@ -290,11 +290,20 @@ test("analytics tokens expire and reject tampering", () => {
     const token = createAnalyticsToken(now);
     assert.equal(verifyAnalyticsToken(token, now + 1000), true);
     assert.equal(verifyAnalyticsToken(`${token}x`, now + 1000), false);
-    assert.equal(verifyAnalyticsToken(token, now + 13 * 60 * 60 * 1000), false);
+    assert.equal(verifyAnalyticsToken(token, now + 29 * 24 * 60 * 60 * 1000), true);
+    assert.equal(verifyAnalyticsToken(token, now + 31 * 24 * 60 * 60 * 1000), false);
   } finally {
     if (previousPassword === undefined) delete process.env.ANALYTICS_PASSWORD;
     else process.env.ANALYTICS_PASSWORD = previousPassword;
   }
+});
+
+test("analytics login cookie is kept for 30 days", () => {
+  const cookie = analyticsCookie("token", { headers:{ "x-forwarded-proto":"https" } });
+  assert.match(cookie, /Max-Age=2592000/);
+  assert.match(cookie, /HttpOnly/);
+  assert.match(cookie, /SameSite=Strict/);
+  assert.match(cookie, /Secure/);
 });
 
 test("одно и то же событие не записывается дважды подряд", async () => {

@@ -28,7 +28,7 @@ test("подписка хранит адрес отдельно и повтор�
   assert.match(call.sql, /unsubscribed_at=NULL/);
 });
 
-test("Sites сохраняет email только после явного согласия со своей страницы", async () => {
+test("Edge worker сохраняет email только после явного согласия со своей страницы", async () => {
   const executed = [];
   const DB = {
     prepare(sql) {

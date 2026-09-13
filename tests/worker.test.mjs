@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { access } from "node:fs/promises";
 import test from "node:test";
 import worker from "../worker/index.js";
 
@@ -177,7 +176,9 @@ test("protects analytics reset and uses calendar-safe date filtering", async () 
 
   const login = await worker.fetch(new Request("https://example.test/api/analytics/login", { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify({ password:"test-password" }) }), env);
   assert.equal(login.status, 200);
-  const cookie = login.headers.get("set-cookie").split(";")[0];
+  const setCookie = login.headers.get("set-cookie");
+  assert.match(setCookie, /Max-Age=2592000/);
+  const cookie = setCookie.split(";")[0];
 
   const dashboard = await worker.fetch(new Request("https://example.test/api/analytics/dashboard?days=30", { headers:{ cookie } }), env);
   assert.equal(dashboard.status, 200);
@@ -191,12 +192,6 @@ test("protects analytics reset and uses calendar-safe date filtering", async () 
   assert.equal(reset.status, 200);
   assert.deepEqual(await reset.json(), { ok:true, deleted:4 });
   assert.equal(executed.includes("DELETE FROM analytics_events"), true);
-});
-
-test("emits the files required by Sites packaging", async () => {
-  await access(new URL("../dist/client/index.html", import.meta.url));
-  await access(new URL("../dist/server/index.js", import.meta.url));
-  await access(new URL("../dist/.openai/hosting.json", import.meta.url));
 });
 
 test("каталог без готового файла отдаёт заготовку приложения, а не 404", async () => {

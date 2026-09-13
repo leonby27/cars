@@ -55,9 +55,9 @@ Google OAuth (альтернатива): включить Search Console API в 
 3. Установить `deploy/abcars-search-traffic.service` и `.timer` в `/etc/systemd/system/`, выполнить `systemctl daemon-reload` и `systemctl enable --now abcars-search-traffic.timer`.
 4. Проверить состояние таймера и сводку. Запущенные одновременно сборщики блокируются advisory lock, снимки сохраняются в транзакции.
 
-Публикация сайта сама по себе не устанавливает новый systemd-таймер; этот шаг обязателен при развёртывании. PostgreSQL — действующее производственное хранилище. Sites-сборка сохраняет совместимость и читает ту же схему архива через D1, если архив перенесён в эту среду; расписание производственного сбора обслуживает серверный таймер.
+Публикация сайта сама по себе не устанавливает новый systemd-таймер; этот шаг обязателен при развёртывании на Timeweb. PostgreSQL — действующее производственное хранилище; расписание производственного сбора обслуживает серверный таймер.
 
-Проверки: `node --test tests/search-traffic.test.mjs tests/analytics.test.mjs tests/metrika.test.mjs`, `npm run build`, `npm run test:sites`.
+Проверки: `node --test tests/search-traffic.test.mjs tests/analytics.test.mjs tests/metrika.test.mjs`, `npm run build`, `npm run test:worker`.
 
 Документация:
 - https://yandex.ru/dev/webmaster/doc/ru/reference/host-query-analytics
