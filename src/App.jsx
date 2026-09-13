@@ -1170,16 +1170,16 @@ const QUOTA_AUDIENCES = [["personal", "Физ. лица"], ["business", "Юр. �
 
 // Переключатель режима цен. Стоит над вкладками, потому что относится ко всему
 // сайту, а не к выбранной половине квоты: с ним видно цену по льготе, без него —
-// с пошлиной 15%, которая включится, когда квота кончится.
+// текущую цену с пошлиной 15%.
 function QuotaPricingToggle() {
   const pricing = useQuotaPricing();
   const available = Boolean(pricing?.available);
   const on = Boolean(pricing?.on);
   const hint = !available
-    ? "Квота выбрана — пошлина 15% уже в каждой цене."
+    ? "Режим цены задан ссылкой для проверки."
     : on
-      ? "Цены по льготе: пошлина 0%. Выключите — прибавится пошлина 15%."
-      : "В ценах пошлина 15%. Включите — вернутся цены по льготной квоте.";
+      ? "Цены по квоте: пошлина 0%. Выключите — увидите текущую цену с пошлиной 15%."
+      : "Текущие цены с пошлиной 15%. Включите — увидите расчёт по квоте.";
   return (
     <div className="quota-panel-pricing">
       <label className="quick-view-toggle quota-pricing-toggle">
@@ -1252,7 +1252,7 @@ function EvQuotaPanel({ quotas }) {
 const QUOTA_TOOLTIP = (
   <>
     <b>Что за квоты</b>
-    <span>Беларусь пускает без пошлины ограниченное число электромобилей в год. Пока квота есть, машина дешевле на 15%.</span>
+    <span>Беларусь ограничивает число электромобилей, которые можно ввезти без пошлины. После исчерпания квоты действует пошлина 15%.</span>
   </>
 );
 
@@ -9369,14 +9369,29 @@ function QuotaFigures() {
           <small>Выбрано {number(state.spent)} {pluralRu(state.spent, "машина", "машины", "машин")} — это {usedPercent}% квоты для граждан</small>
         </div>
         <dl className="tool-live-side">
-          <div>
-            <dt>Темп расхода</dt>
-            <dd>{state.perWeek ? `≈ ${number(state.perWeek)} машин в неделю` : "по сводкам не считается"}</dd>
-          </div>
-          <div>
-            <dt>Хватит примерно до</dt>
-            <dd>{state.exhausted ? "квота выбрана" : state.runsOutLabel && !state.overdue && !state.stale ? state.runsOutLabel : "нужна свежая сводка"}</dd>
-          </div>
+          {state.exhausted ? (
+            <>
+              <div>
+                <dt>Квота физлиц</dt>
+                <dd>{`выбрана${state.exhaustedOnLabel ? ` ${state.exhaustedOnLabel}` : ""}`}</dd>
+              </div>
+              <div>
+                <dt>Ввозная пошлина</dt>
+                <dd>15% от стоимости</dd>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <dt>Темп расхода</dt>
+                <dd>{state.perWeek ? `≈ ${number(state.perWeek)} машин в неделю` : "по сводкам не считается"}</dd>
+              </div>
+              <div>
+                <dt>Хватит примерно до</dt>
+                <dd>{state.runsOutLabel && !state.overdue && !state.stale ? state.runsOutLabel : "нужна свежая сводка"}</dd>
+              </div>
+            </>
+          )}
           <div>
             <dt>Квота юрлиц</dt>
             <dd>{businessQuota.exhausted ? `выбрана${businessQuota.exhaustedOnLabel ? ` ${businessQuota.exhaustedOnLabel}` : ""}` : `осталось ${number(businessQuota.remaining)}`}</dd>

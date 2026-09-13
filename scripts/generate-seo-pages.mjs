@@ -213,7 +213,7 @@ const PATHWAYS = {
   },
   "/ev-quota/": {
     heading: "Что можно ввезти по квоте",
-    intro: "Льгота действует только на электромобили. Вот они — с ценами уже до Минска. Рядом — бензиновые машины: на них квота не влияла никогда, и от её остатка их цена не зависит.",
+    intro: "Квота распространяется только на электромобили. По умолчанию каталог показывает их цены до Минска по квоте; текущий расчёт с пошлиной 15% включается переключателем. Рядом — бензиновые машины: на них квота не влияла, и её состояние их цену не меняет.",
     links: ["electric", "electric-suv", "electric-sedan", "under-20000", "petrol", "petrol-under-30000", "/catalog"],
   },
   "/delivery-cost/": {
@@ -297,14 +297,17 @@ function toolArticle(tool) {
   if (tool.kind === "quota") {
     const state = evQuotaState();
     const rows = [...EV_QUOTA.reports].reverse().slice(0, 12);
+    const personalStatus = state.exhausted
+      ? `<p><strong>Квота для граждан выбрана полностью${state.exhaustedOnLabel ? ` ${escapeHtml(state.exhaustedOnLabel)}` : ""}.</strong> При дальнейшем ввозе электромобиля применяется пошлина 15% от стоимости машины.</p>`
+      : `<p><strong>Гражданам доступно ещё ${number(state.remaining)} ${plural(state.remaining, "электромобиль", "электромобиля", "электромобилей")}</strong> из ${number(state.total)} по квоте ${EV_QUOTA.year} года — по сводке на ${escapeHtml(state.asOfLabel)}.</p>`;
     // Живая часть страницы: остаток, темп и история сводок. Это то, за чем сюда придут.
-    live = `<section><h2>Сколько квоты на электромобили осталось сейчас</h2><p><strong>Гражданам доступно ещё ${number(state.remaining)} ${plural(state.remaining, "электромобиль", "электромобиля", "электромобилей")}</strong> из ${number(state.total)} по квоте ${EV_QUOTA.year} года — по сводке на ${escapeHtml(state.asOfLabel)}.</p>${
-      state.perWeek ? `<p>Темп расхода — около ${number(state.perWeek)} машин в неделю.${state.runsOutLabel && !state.overdue ? ` При таком темпе квота заканчивается около ${escapeHtml(state.runsOutLabel)}.` : ""}</p>` : ""
+    live = `<section><h2>Сколько квоты на электромобили осталось сейчас</h2>${personalStatus}${
+      !state.exhausted && state.perWeek ? `<p>Темп расхода — около ${number(state.perWeek)} машин в неделю.${state.runsOutLabel && !state.overdue ? ` При таком темпе квота заканчивается около ${escapeHtml(state.runsOutLabel)}.` : ""}</p>` : ""
     }<p>Квота для торгового оборота (юридические лица) объёмом ${number(EV_QUOTA.businessTotal)} машин выбрана полностью.</p></section><section><h2>Остаток по месяцам</h2><dl>${state.periods
       .map((period) => `<dt>${escapeHtml(period.label)}</dt><dd>${period.left == null ? "нет данных" : number(period.left)}</dd>`)
       .join("")}</dl></section><section><h2>История сводок таможни</h2><table><thead><tr><th scope="col">Дата сводки</th><th scope="col">Осталось у граждан</th><th scope="col">Осталось у юрлиц</th></tr></thead><tbody>${rows
       .map(([date, personal, business]) => `<tr><th scope="row">${escapeHtml(date)}</th><td>${personal === null ? "не названо" : number(personal)}</td><td>${business === null ? "не названо" : number(business)}</td></tr>`)
-      .join("")}</tbody></table><p>Источник — недельные сводки Государственного таможенного комитета. Квота ${EV_QUOTA.year} года действует с ${escapeHtml(EV_QUOTA.startedOn)}.</p></section>`;
+      .join("")}</tbody></table><p>Источник — сводки Государственного таможенного комитета. Квота ${EV_QUOTA.year} года вступила в силу ${escapeHtml(EV_QUOTA.startedOn)}.</p></section>`;
   }
   if (tool.kind === "customs") live = table(customsExample());
   if (tool.kind === "cost") live = table(deliveryStages());

@@ -222,7 +222,7 @@ test("страницы-инструменты собираются с живым
   const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
   const quota = await read("ev-quota/index.html");
   assert.match(quota, /<h1>Квота на беспошлинный ввоз электромобилей в Беларусь в \d{4} году<\/h1>/);
-  assert.match(quota, /Гражданам доступно ещё [\d\s  ]+ электромобил/);
+  assert.match(quota, /Квота для граждан выбрана полностью 5 сентября/);
   assert.match(quota, /История сводок таможни/);
   for (const [file, heading] of [
     ["customs/index.html", "Растаможка авто из Китая"],

@@ -39,6 +39,7 @@ export const EV_QUOTA = {
     ["2026-08-28", 437, 0],
     ["2026-09-03", 158, 0],
     ["2026-09-04", 98, null],
+    ["2026-09-05", 0, null],
   ],
 };
 
@@ -63,8 +64,8 @@ const quotaOverrideFromUrl = () => {
 // браузере, чтобы он не сбрасывался при переходах по сайту.
 const QUOTA_PRICING_KEY = "abcars-quota-pricing";
 
-// Льгота кончилась по данным сводок (или по аварийному рубильнику) — тогда
-// выбирать нечего: пошлина в ценах в любом случае.
+// Фактическое состояние квоты и выбранный сценарий цены храним отдельно:
+// даже после исчерпания посетитель может посмотреть расчёт по квоте.
 const quotaGone = () => EV_QUOTA_ASSUME_EXHAUSTED || evQuotaState({ audience: "personal" }).exhausted;
 
 /**
@@ -91,14 +92,13 @@ const quotaPricingChoice = () => {
 export const isEvQuotaOver = () => {
   const override = quotaOverrideFromUrl();
   if (override !== null) return override;
-  if (quotaGone()) return true;
   return !quotaPricingChoice();
 };
 
-/** Можно ли вообще выбирать режим цен: пока квота есть и адрес страницы не задаёт своё. */
-export const evQuotaPricingAvailable = () => quotaOverrideFromUrl() === null && !quotaGone();
+/** Можно ли выбирать режим цен: адрес страницы может зафиксировать один сценарий для проверки. */
+export const evQuotaPricingAvailable = () => quotaOverrideFromUrl() === null;
 
-/** Включены ли сейчас цены по льготной квоте. По умолчанию — да, пока квота есть. */
+/** Включены ли сейчас цены по льготной квоте. По умолчанию — да. */
 export const isEvQuotaPricingOn = () => !isEvQuotaOver();
 
 /**
