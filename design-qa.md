@@ -1,83 +1,112 @@
-# Design QA — abcars.by MVP
+# Design QA — vehicle tracking desktop spacing
 
-Date: 2026-08-13
+- Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-1bfeee1a-6cbb-4529-87bb-322f637864c2.png`
+- Implementation screenshot: `/tmp/abcars-tracking-compact-desktop.png`
+- Side-by-side comparison: `/tmp/abcars-tracking-qa-comparison.png`
+- Viewport: 1256 × 774 CSS px, dark theme, desktop tracking route, default closed-FAQ state
+- Density normalization: both source and implementation are 2512 × 1548 px at 2× density; no resizing was needed before comparison
 
-## Scope and evidence
+## Full-view comparison evidence
 
-- Reference: Auto.ru home, results, listing, and vehicle-detail captures at 1280×720.
-- Implementation: abcars.by home, catalog, vehicle detail, and lead-success state.
-- Responsive checks: desktop 1280×720 and mobile 390×844.
-- Side-by-side visual evidence: `qa-comparison.png`.
+The implementation preserves the existing header, icon, copy, search controls, FAQ cards, colors, type scale, radii and dark-theme surfaces. The requested desktop title now occupies one line. The header-to-icon gap is 44 CSS px, and the search-to-first-question gap is 48 CSS px, visibly reducing both annotated spaces without compressing the inner hero hierarchy.
 
-## Comparison passes
+## Focused region comparison evidence
 
-### Layout, spacing, typography, and surfaces
+The hero and first FAQ rows are large and legible in the equal-size side-by-side comparison, so a separate crop was not needed. The title bounding box is 779 × 64 CSS px and remains centered. The search row and FAQ list both measure 920 CSS px wide and share the same left and right edges.
 
-Passed. The implementation preserves the reference's familiar hierarchy: restrained top navigation, prominent search area, compact grey fields, horizontal result rows, a large vehicle gallery, and a right-side price/action panel. Density, border treatment, radii, and spacing remain consistent across the core screens. Manrope provides the same compact marketplace character while supporting Cyrillic cleanly.
+## Required fidelity surfaces
 
-### Color, imagery, and icons
+- Fonts and typography: existing Manrope family, weights, line heights and letter spacing are unchanged; desktop heading wrapping is corrected to one line. Mobile keeps its two-line wrap and fits within 390 CSS px.
+- Spacing and layout rhythm: both user-annotated vertical gaps are reduced; search and FAQ alignment remains exact.
+- Colors and visual tokens: unchanged from the existing dark-theme tokens.
+- Image quality and asset fidelity: the existing road icon is unchanged and remains sharp; no assets were replaced or approximated.
+- Copy and content: all visible copy remains unchanged.
 
-Passed. The neutral white/grey marketplace palette is retained with a project-specific coral action color. All vehicle imagery is raster and product-specific, with consistent marketplace crops and no placeholder art. Phosphor icons use one visual family and consistent weights.
+## Findings
 
-### Copy and product context
+No actionable P0, P1 or P2 mismatches remain. The red arrows in the source are review annotations and are intentionally not part of the implementation.
 
-Passed. Auto.ru's generic marketplace copy was adapted for the Belarus-to-China workflow: China price, approximate Minsk price, source/update status, export availability, battery SOH, and pre-order verification. The advertising rail was intentionally replaced by a verification explainer because it supports the MVP's conversion path.
+## Interaction and responsive checks
 
-### States and interactions
+- VIN validation message appears after an invalid submission.
+- FAQ disclosure opens and reveals its answer.
+- No page errors were detected during desktop or mobile checks.
+- At 390 × 844 CSS px, the title remains responsive and fits without horizontal overflow.
 
-Passed after fixes. Verified: home filters → filtered catalog, filter reset/empty state, favorites counter, comparison counter, detail opening, availability request, required contact fields, success confirmation, and Escape/backdrop modal closing.
+## Comparison history
 
-### Responsiveness and accessibility
+- Earlier finding: desktop title wrapped to two lines and both annotated vertical gaps were too large.
+- Fix: widened the desktop hero copy, kept the title on one line above 980 px, reduced top hero padding to 44 px and the search-to-FAQ gap to 48 px.
+- Post-fix evidence: `/tmp/abcars-tracking-qa-comparison.png`; the requested changes are visible with no new layout regressions.
 
-Passed after fixes. Desktop and mobile layouts have no overlap or clipped primary controls. Mobile search and catalog controls keep practical tap sizes. Form inputs have visible labels, images have alt text, icon-only actions have accessible names, cards are keyboard reachable, and reduced-motion preferences are respected.
+## Implementation checklist
 
-## Resolved findings
+- [x] Keep the desktop heading on one line.
+- [x] Reduce the header-to-icon gap.
+- [x] Reduce the search-to-FAQ gap.
+- [x] Preserve responsive mobile wrapping.
+- [x] Verify the production build and primary interactions.
 
-1. **P1 · Behavior:** Search navigation stored the full query string as the route state and displayed the 404 view. Fixed by deriving the pathname after updating browser history.
-2. **P2 · Accessibility:** Catalog and detail icon actions were missing accessible names. Fixed with explicit Russian `aria-label` values and keyboard activation for featured vehicle cards.
+## Follow-up polish
 
-## Intentional product deviations
+No additional polish is required for this scoped change.
 
-- Temporary `abcars.by` wordmark and coral accent establish the MVP's own identity.
-- No advertising column; it is replaced by an explanation of the vehicle-check service.
-- Destination price is explicitly approximate, matching the agreed MVP scope.
-
-## Final result
-
-Passed. No open P0, P1, or P2 findings.
+final result: passed
 
 ---
 
-## Home catalog-card parity — 2026-08-18
+# Design QA — mobile service-card density
 
-### Evidence
+- Source visual truth paths: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-de025266-062b-4369-b0d5-717ac03b9753.png` and `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-5b2d2be7-67da-4977-baf0-880088886fca.png`
+- Implementation screenshot path: inline Codex in-app Browser captures from `http://127.0.0.1:5173/how-it-works` (the browser exposed these captures inline rather than as filesystem files)
+- Viewport: 390 × 844 CSS px, dark and light themes, mobile service route
+- Source dimensions: 802 × 916 px and 830 × 1350 px; implementation captures: 390 × 844 px
+- Density normalization: the source problem-state crops were scaled to the implementation content width for visual comparison. Their differing crop heights were excluded from the density judgment.
+- State: static cards, dark-theme comparison for both groups plus light-theme verification for «Возможности платформы»
 
-- User annotation: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-27682d76-4687-40d9-a0d8-e721c0885514.png` (1032 × 1154 px), identifying the separate home-card layout to replace.
-- Source visual truth: `/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/design-qa-catalog-card-mobile.png` (532 × 898 px), the existing catalog `CarRow` at a 532 × 898 CSS viewport.
-- Implementation: `/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/design-qa-home-card-mobile.png` (532 × 898 px), the home feed using the shared catalog `CarRow` at the same 532 × 898 CSS viewport.
-- Combined comparison: `/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/design-qa-home-vs-catalog-mobile.png` (1084 × 938 px).
-- State: dark theme, USD selected, mobile card list, first cards visible.
-- Density normalization: browser captures were normalized to identical 532 × 898 output pixels before comparison; the implementation capture originated from devicePixelRatio 2 and the catalog reference capture from devicePixelRatio 1.
-- Browser checks: both feeds rendered responsive mobile headers, photo strips, favorite controls, prices, specifications, and location metadata; no horizontal overflow was present at the comparison viewport. An existing React warning about empty-string `inert` attributes was corrected to use boolean attributes; a fresh home-page load then produced zero console errors.
+## Full-view comparison evidence
 
-### Full-view and focused comparison
+The mobile cards retain the source anatomy, content order, imagery, palette and rounded treatment while using a visibly tighter scale. The four «Возможности платформы» cards now measure 295, 220, 220 and 293 CSS px high. The two «Проверка и сопровождение» cards now measure 385 and 427 CSS px high, including the tracking button and artwork.
 
-The combined evidence compares two full mobile viewports side by side. A separate focused crop was not needed because the first two complete cards are large enough to inspect typography, spacing, imagery, controls, and metadata directly.
+## Focused region comparison evidence
 
-### Required fidelity surfaces
+Focused browser captures checked the first three opportunity cards together, the «Удобно» card with its illustration, and both assurance cards. Titles, descriptions, CTA and artwork remain fully visible without horizontal overflow at 390 CSS px.
 
-- Fonts and typography: passed. The home feed inherits the same title, price, summary, chip, and location styles from `CarRow`.
-- Spacing and layout rhythm: passed. Card width, padding, radii, image-strip height, inter-card spacing, and content order match the catalog.
-- Colors and visual tokens: passed. Both surfaces use the same dark panel, field, text, muted-text, and selected-state tokens.
-- Image quality and asset fidelity: passed. Both use `HoverImagePreview` with the same real vehicle imagery, crop behavior, count badge, and mobile strip.
-- Copy and content: passed. The home feed now exposes the same mileage, vehicle type, drive, battery, range, body type, city, destination price, and favorite state as the catalog.
+## Required fidelity surfaces
 
-### Comparison history
+- Fonts and typography: Manrope is preserved; mobile card headings use 36px and descriptions use 16px with readable line height. Weight, hierarchy and wrapping remain consistent.
+- Spacing and layout rhythm: both groups use 18px mobile padding and 16px radii. Opportunity-card gaps are reduced to 10px, and text-only opportunity cards use a 220px minimum height.
+- Colors and visual tokens: existing light and dark surface tokens are unchanged; contrast remains consistent in both themes.
+- Image quality and asset fidelity: all supplied car, filter, magnifier and container assets are preserved. Only their mobile rendered size changed; crops remain intentional and sharp.
+- Copy and content: no labels, descriptions or actions were changed.
 
-- Initial comparison: no actionable P0, P1, or P2 mismatch. The shared component produces equivalent catalog and home card anatomy; differences are limited to the randomized vehicle data and surrounding page controls.
+## Findings
 
-### Findings
+No actionable P0, P1 or P2 issues remain. The requested compactness is visible across all six cards without clipping, overlap or lost content.
 
-No actionable P0, P1, or P2 findings remain.
+## Interaction and responsive checks
+
+- The «Перейти в каталог» and «Отследить авто по VIN» controls remain visible and correctly sized.
+- The page has no horizontal overflow at 390 × 844 CSS px.
+- No browser error overlay or console errors were detected.
+- The production build completes successfully.
+
+## Comparison history
+
+- Earlier finding: the mobile opportunity and assurance cards used desktop-like 44px headings, large padding and oversized artwork, producing long single-card screens.
+- Fix: introduced mobile-only 18px padding, 36px headings, 16px descriptions, smaller artwork and shorter opportunity-card minimum heights while leaving desktop styles unchanged.
+- Post-fix evidence: the inline in-app Browser captures show the revised cards in both themes at 390 × 844 CSS px; measured computed sizes match the intended mobile scale.
+
+## Implementation checklist
+
+- [x] Compact all four «Возможности платформы» cards on mobile.
+- [x] Apply the same mobile scale to both «Проверка и сопровождение» cards.
+- [x] Preserve desktop dimensions and content.
+- [x] Verify light and dark themes at the mobile breakpoint.
+- [x] Verify the production build and browser console.
+
+## Follow-up polish
+
+No additional polish is required for this scoped change.
 
 final result: passed

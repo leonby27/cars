@@ -39,7 +39,7 @@ import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
-import { ABOUT_LIMITS, ABOUT_PRINCIPLES, SERVICE_PROOF } from "./service-copy.js";
+import { ABOUT_PRINCIPLES, SERVICE_PROOF } from "./service-copy.js";
 import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
@@ -48,6 +48,7 @@ import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES } from "./purchase-info.js";
+import { TRACKING_FAQ } from "./tracking-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
 // таблиц) не кладём в общий файл приложения, а подгружаем отдельным файлом при
@@ -1000,6 +1001,7 @@ const routeSeo = {
   "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
   "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | abcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
   "/faq": ["Вопросы о покупке и доставке авто из Китая | abcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
+  "/tracking": ["Отслеживание автомобиля по VIN | abcars.by", "Проверка текущего этапа доставки автомобиля из Китая по VIN-номеру."],
   "/contacts": ["Контакты abcars.by — автомобили из Китая в Минске", "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая."],
   "/privacy": ["Политика конфиденциальности | abcars.by", "Политика обработки и защиты персональных данных пользователей сайта abcars.by."],
   "/terms": ["Условия использования сайта | abcars.by", "Условия использования каталога abcars.by, предварительных расчётов и информации об автомобилях из Китая."],
@@ -1382,6 +1384,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               <nav aria-label="Основная навигация">
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
                 <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>
+                <AppLink href="/tracking" navigate={navigate} className={path === "/tracking" ? "active" : ""} aria-current={path === "/tracking" ? "page" : undefined}>Отслеживание авто</AppLink>
                 <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
                 {/* На узких экранах кнопке «Мои поиски» в шапке не хватает места,
                     поэтому там она живёт в этом меню; на широких — прячется, чтобы
@@ -8659,10 +8662,67 @@ function ServiceCatalogShowcase({ navigate, cars, apiMode, total, favorites, tog
   );
 }
 
+function ServiceContactCta() {
+  const [unavailableOpen, setUnavailableOpen] = useState(false);
+  const openUnavailable = (eventName) => {
+    trackEvent(eventName);
+    setUnavailableOpen(true);
+  };
+
+  return (
+    <>
+      <section className="service-contact-cta page-width" aria-labelledby="service-contact-cta-title">
+        <div className="service-contact-cta-copy">
+          <h2 id="service-contact-cta-title">Остались вопросы?</h2>
+          <p>Поговорите с нашим экспертом. Ответим на вопросы и поможем выбрать подходящий автомобиль.</p>
+          <button className="primary service-contact-cta-button" type="button" onClick={() => openUnavailable("service_contact_question_click")}>
+            <Phone size={20} weight="fill" aria-hidden="true" />
+            Задать вопрос
+          </button>
+        </div>
+        <img
+          src="/services/contact-manager-black.png"
+          width="1145"
+          height="1374"
+          alt="Консультант abcars.by"
+          loading="lazy"
+          decoding="async"
+        />
+      </section>
+      <section className="service-contact-options page-width" aria-label="Способы связи">
+        <button className="service-contact-option" type="button" onClick={() => openUnavailable("service_contact_sales_click")}>
+          <span aria-hidden="true"><Phone size={26} weight="duotone" /></span>
+          <strong>Отдел продаж</strong>
+          <p>Поможем выбрать автомобиль и рассчитать стоимость до Минска.</p>
+        </button>
+        <button className="service-contact-option" type="button" onClick={() => openUnavailable("service_contact_telegram_click")}>
+          <span aria-hidden="true"><TelegramLogo size={27} weight="duotone" /></span>
+          <strong>Telegram</strong>
+          <p>Быстро ответим на вопросы и подскажем по вашему запросу.</p>
+        </button>
+        <button className="service-contact-option" type="button" onClick={() => openUnavailable("service_contact_email_click")}>
+          <span aria-hidden="true"><EnvelopeSimple size={27} weight="duotone" /></span>
+          <strong>Электронная почта</strong>
+          <p>Для документов, расчётов и деловых вопросов.</p>
+        </button>
+      </section>
+      {unavailableOpen && (
+        <SocialUnavailableModal
+          onClose={() => setUnavailableOpen(false)}
+          description="Сейчас мы временно не принимаем новые обращения. Совсем скоро вновь будем доступны — не теряйте нас! 🙏"
+        />
+      )}
+    </>
+  );
+}
+
 function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, loading }) {
   const darkIntroRef = useRef(null);
   const { total, updatedAt } = useCatalogFacts();
-  const principleIcons = [ListChecks, ShieldCheck, Lightning];
+  const assuranceArtwork = [
+    { src: "/services/independent-check-magnifier.png", alt: "Автомобиль под увеличительным стеклом", className: "service-assurance-art-diagnostics", width: 768, height: 768 },
+    { src: "/services/vehicle-tracking-container.png", alt: "Красный грузовой контейнер", className: "service-assurance-art-tracking", width: 768, height: 768 },
+  ];
 
   useLayoutEffect(() => {
     const intro = darkIntroRef.current;
@@ -8758,49 +8818,40 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
         toggleFavorite={toggleFavorite}
         loading={loading}
       />
-      {/* Наш подход и «чего мы не обещаем» переехали сюда с отдельной страницы «О нас»:
-          у неё был тот же заголовок «О сервисе abcars.by», и обе страницы отвечали на
-          один запрос. Тексты берём из src/service-copy.js — оттуда же их берёт разметка
+      {/* Эти карточки переехали сюда с отдельной страницы «О нас». Тексты берём из
+          src/service-copy.js — оттуда же их берёт разметка
           для поисковика, поэтому страница и её видимая роботу версия не разойдутся. */}
-      <section className="info-section page-width">
-        <div className="info-section-heading compact">
-          <span>Наш подход</span>
-          <h2>Прозрачность на каждом шаге</h2>
-        </div>
-        <div className="principles-grid">
+      <section className="service-assurance-section page-width" aria-labelledby="service-assurance-title">
+        <h2 className="visually-hidden" id="service-assurance-title">Проверка и сопровождение</h2>
+        <div className="service-assurance-grid">
           {ABOUT_PRINCIPLES.map(({ title, text }, index) => {
-            const Icon = principleIcons[index];
+            const artwork = assuranceArtwork[index];
             return (
-              <article key={title}>
-                <span>
-                  <Icon size={25} weight="duotone" />
-                </span>
-                <h3>{title}</h3>
+              <article className={`service-opportunity-card service-assurance-card${index === 1 ? " service-assurance-card-tracking" : ""}`} key={title}>
+                <strong>{title}</strong>
                 <p>{text}</p>
+                {index === 1 && (
+                  <button className="secondary service-assurance-cta" type="button" onClick={() => navigate("/tracking")}>
+                    Отследить авто по VIN
+                  </button>
+                )}
+                <img
+                  className={artwork.className}
+                  src={artwork.src}
+                  width={artwork.width}
+                  height={artwork.height}
+                  alt={artwork.alt}
+                  loading="lazy"
+                  decoding="async"
+                />
               </article>
             );
           })}
         </div>
       </section>
-      <section className="honesty-section page-width">
-        <div>
-          <span className="info-eyebrow">Важно</span>
-          <h2>Чего мы не обещаем</h2>
-        </div>
-        <div className="honesty-list">
-          {ABOUT_LIMITS.map(({ title, text }) => (
-            <p key={title}>
-              <X size={19} weight="bold" />
-              <span>
-                <b>{title}</b> {text}
-              </span>
-            </p>
-          ))}
-        </div>
-      </section>
       {REVIEWS_ENABLED && <ReviewsSection navigate={navigate} />}
       <FaqSection navigate={navigate} />
-      <InfoCta navigate={navigate} title="Начните с подходящего автомобиля" text="В каталоге уже собраны объявления и предварительные расчёты до Минска." />
+      <ServiceContactCta />
     </main>
   );
 }
@@ -8857,13 +8908,73 @@ function PaymentAndContractPage({ navigate }) {
   );
 }
 
+function TrackingPage() {
+  const [vin, setVin] = useState("");
+  const [message, setMessage] = useState(null);
+  const normalizedVin = vin.trim().toUpperCase();
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!normalizedVin) {
+      setMessage({ type: "error", text: "Введите VIN автомобиля." });
+      return;
+    }
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(normalizedVin)) {
+      setMessage({ type: "error", text: "Проверьте VIN: нужно 17 латинских букв и цифр без I, O и Q." });
+      return;
+    }
+    setMessage({ type: "empty", text: "По этому VIN пока нет статуса. Проверьте номер или уточните у менеджера, привязан ли автомобиль к отслеживанию." });
+  };
+
+  return (
+    <main className="tracking-page">
+      <section className="tracking-hero page-width" aria-labelledby="tracking-title">
+        <div className="tracking-hero-copy">
+          <img className="tracking-illustration" src="/services/vehicle-tracking-container.png" width="120" height="120" alt="" aria-hidden="true" />
+          <h1 id="tracking-title">Отслеживание автомобиля</h1>
+          <p>Введите VIN, чтобы узнать, на каком этапе находится ваш автомобиль.</p>
+        </div>
+        <form className="tracking-search" onSubmit={submit} noValidate>
+          <div className="tracking-search-row">
+            <label className="tracking-vin-field" htmlFor="tracking-vin">
+              <MagnifyingGlass size={22} aria-hidden="true" />
+              <input
+                id="tracking-vin"
+                type="text"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoComplete="off"
+                spellCheck="false"
+                maxLength={17}
+                value={vin}
+                placeholder="Введите vin авто"
+                aria-describedby={message ? "tracking-message" : undefined}
+                aria-invalid={message?.type === "error" ? "true" : undefined}
+                onChange={(event) => {
+                  setVin(event.target.value.toUpperCase().replace(/[\s-]/g, "").slice(0, 17));
+                  setMessage(null);
+                }}
+              />
+            </label>
+            <button className="primary" type="submit">Найти</button>
+          </div>
+          {message && <p className={`tracking-message ${message.type}`} id="tracking-message" role={message.type === "error" ? "alert" : "status"}>{message.text}</p>}
+        </form>
+      </section>
+
+      <section className="tracking-faq page-width" aria-label="Частые вопросы">
+        <HomeFaqList items={TRACKING_FAQ} />
+      </section>
+    </main>
+  );
+}
+
 function ServiceFaqRedirect() {
   useEffect(() => { window.location.replace("/how-it-works#faq"); }, []);
   return null;
 }
 
 function FaqSection({ navigate }) {
-  const [openItem, setOpenItem] = useState("0-0");
   useEffect(() => {
     if (window.location.hash === "#faq") document.getElementById("faq")?.scrollIntoView();
   }, []);
@@ -8875,16 +8986,10 @@ function FaqSection({ navigate }) {
         </div>
       </section>
       <section className="faq-groups">
-        {FAQ_GROUPS.map((group, groupIndex) => (
+        {FAQ_GROUPS.map((group) => (
           <div className="faq-group" key={group.title}>
             <h3>{group.title}</h3>
-            <div>
-              {group.items.map((item, itemIndex) => {
-                const itemKey = `${groupIndex}-${itemIndex}`;
-                const open = openItem === itemKey;
-                return <article className={open ? "open" : ""} key={item.question}><button type="button" aria-expanded={open} onClick={() => setOpenItem(open ? null : itemKey)}><span>{item.question}</span><b aria-hidden="true">{open ? "−" : "+"}</b></button><div className="animated-disclosure" aria-hidden={!open}><div><p>{item.answer}</p></div></div></article>;
-              })}
-            </div>
+            <HomeFaqList items={group.items} navigate={navigate} />
           </div>
         ))}
       </section>
@@ -8949,14 +9054,14 @@ function ReviewsSection({ navigate }) {
           ].map(({ number, model, brand, catalogModel, year, mileage, name, text, extension = "jpg", width = 941, height = 1672 }) => (
             <article className="review-item" key={number}>
               <div className="review-card">
-              <img src={`/reviews/${number}.${extension}`} alt={`Фото с автомобилем — ${number}`} width={width} height={height} loading="lazy" decoding="async" />
+                <img src={`/reviews/${number}.${extension}`} alt={`Фото с автомобилем — ${number}`} width={width} height={height} loading="lazy" decoding="async" />
+              </div>
               <div className="review-card-copy">
                 <div className="review-card-stars" role="img" aria-label="5 из 5 звёзд">
                   {[1, 2, 3, 4, 5].map((star) => <Star key={star} size={16} weight="fill" aria-hidden="true" />)}
                 </div>
                 <h2>{name}</h2>
                 <p>{text}</p>
-              </div>
               </div>
               <div className="review-car-details">
                 <h3>{model} {year}</h3>
@@ -10803,7 +10908,10 @@ function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
   );
 }
 
-function SocialUnavailableModal({ onClose }) {
+function SocialUnavailableModal({
+  onClose,
+  description = "Сейчас мы временно не принимаем новые заказы через соцсети. Совсем скоро вновь будем доступны — не теряйте нас! 🙏",
+}) {
   useEffect(() => {
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -10818,7 +10926,7 @@ function SocialUnavailableModal({ onClose }) {
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
         <img className="orders-unavailable-icon" src="/app-download/orders-stopwatch.png" width="80" height="80" alt="" aria-hidden="true" />
         <h2 id="social-unavailable-title">Скоро вернёмся к вам</h2>
-        <p id="social-unavailable-description">Сейчас мы временно не принимаем новые заказы через соцсети. Совсем скоро вновь будем доступны — не теряйте нас! 🙏</p>
+        <p id="social-unavailable-description">{description}</p>
         <div className="order-removal-actions availability-paused-actions">
           <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
         </div>
@@ -12769,6 +12877,8 @@ export function App() {
       <PaymentAndContractPage navigate={navigate} />
     ) : contentPath === "/faq" ? (
       <ServiceFaqRedirect />
+    ) : contentPath === "/tracking" ? (
+      <TrackingPage />
     ) : REVIEWS_ENABLED && contentPath === "/reviews" ? (
       <ReviewsRedirect />
     ) : contentPath === "/contacts" ? (

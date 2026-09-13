@@ -148,6 +148,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     <a href="${hrefRoute("/catalog/")}">Автомобили</a>
     <a href="${hrefRoute("/how-it-works/")}">О сервисе</a>
     <a href="${hrefRoute(`${modelsPath}/`)}">О моделях авто</a>
+    <a href="${hrefRoute("/tracking/")}">Отслеживание авто</a>
     <a href="${hrefRoute("/contacts/")}">Контакты</a>
   </nav></header>`;
   }

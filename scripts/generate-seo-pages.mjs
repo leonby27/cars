@@ -18,9 +18,10 @@ import { estimateLandedCost } from "../src/pricing.js";
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
 import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES } from "../src/purchase-info.js";
+import { TRACKING_FAQ } from "../src/tracking-info.js";
 import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
-import { ABOUT_LIMITS, ABOUT_PRINCIPLES, BEFORE_PAYMENT, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
+import { ABOUT_PRINCIPLES, BEFORE_PAYMENT, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
 // Журнал: подборки. Раздел собирается только при включённом выключателе — пока он
 // выключен, у сайта нет ни страниц журнала, ни его адресов в карте сайта.
 import { BLOG_ENABLED } from "../src/feature-flags.js";
@@ -121,6 +122,7 @@ const publicPages = [
   // перебрасывается туда навсегда (правило в vercel.json).
   { route: "/payment-and-contract/", title: "Оплата и договор при покупке авто из Китая | abcars.by", description: "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы.", h1: "Оплата и договор", lead: "До оплаты фиксируем выбранный автомобиль, состав услуг, порядок расчётов и ответственность сторон." },
   { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы о проверке, цене, договоре, оплате, доставке и ответственности." },
+  { route: "/tracking/", title: "Отслеживание автомобиля по VIN | abcars.by", description: "Проверка текущего этапа доставки автомобиля из Китая по VIN-номеру.", h1: "Отслеживание автомобиля", lead: "Введите VIN, чтобы узнать, на каком этапе находится ваш автомобиль." },
   { route: "/contacts/", title: "Контакты abcars.by — автомобили из Китая в Минске", description: "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая.", h1: "Контакты abcars.by", lead: "Обсудим бюджет, подбор, проверку, договор и доставку автомобиля из Китая в Беларусь." },
   { route: "/privacy/", title: "Политика конфиденциальности | abcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
   { route: "/terms/", title: "Условия использования сайта | abcars.by", description: "Условия использования каталога abcars.by, предварительных расчётов и информации об автомобилях из Китая.", h1: "Условия использования сайта", lead: "Информация каталога и расчёты являются предварительными; финальные условия фиксируются после проверки и в договоре." },
@@ -337,6 +339,9 @@ function infoArticle(route) {
       (group) => `<section><h2>${escapeHtml(group.title)}</h2>${group.items.map((item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`).join("")}</section>`,
     ).join("");
   }
+  if (route === "/tracking/") {
+    return `<section><h2>Частые вопросы</h2>${TRACKING_FAQ.map((item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`).join("")}</section>`;
+  }
   if (route === "/payment-and-contract/") {
     return `<section><h2>Этапы оплаты</h2>${PAYMENT_STAGES.map(
       (stage) => `<h3>${escapeHtml(stage.title)}</h3><p>${escapeHtml(stage.description)}</p><p><strong>Платёж:</strong> ${escapeHtml(stage.payment)}. <strong>Когда:</strong> ${escapeHtml(stage.timing)}.</p>`,
@@ -353,7 +358,7 @@ function infoArticle(route) {
     return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства оформлять заказ.</p><p>До обращения можно посмотреть <a href="${hrefRoute("/")}">автомобили из Китая с расчётом до Минска</a>.</p></section>`;
   }
   if (route === "/how-it-works/") {
-    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Прозрачность на каждом шаге</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Чего мы не обещаем</h2>${list(ABOUT_LIMITS.map((item) => [item.title, item.text]))}</section>`;
+    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и сопровождение</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section>`;
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {

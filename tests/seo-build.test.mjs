@@ -283,9 +283,10 @@ test("страницы «О нас» больше нет, а её содержи
   const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
   assert.doesNotMatch(pagesXml, /<loc>https:\/\/abcars\.by\/about<\/loc>/);
   const service = await read("how-it-works/index.html");
-  assert.match(service, /Прозрачность на каждом шаге/);
-  assert.match(service, /Чего мы не обещаем/);
-  assert.match(service, /Факты отдельно от оценки/);
+  assert.match(service, /Проверка и сопровождение/);
+  assert.doesNotMatch(service, /Чего мы не обещаем/);
+  assert.match(service, /Независимая проверка/);
+  assert.match(service, /Отслеживание авто/);
 });
 
 test("на главной есть разметка сайта, поиска и видимых частых вопросов", async () => {
