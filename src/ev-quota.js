@@ -99,8 +99,11 @@ export const isEvQuotaOver = () => {
 /** Выбирать режим можно, пока у включённой квоты и режима без льготы разные цены. */
 export const evQuotaPricingAvailable = () => quotaOverrideFromUrl() === null && !quotaGone();
 
-/** Учитывает ли цена фактическое состояние квоты. Переключатель по умолчанию включён. */
-export const isEvQuotaPricingOn = () => quotaPricingChoice();
+/**
+ * Учитывает ли цена фактическое состояние квоты. После исчерпания переключатель
+ * остаётся включённым даже при старом сохранённом выборе: оба режима уже дают 15%.
+ */
+export const isEvQuotaPricingOn = () => quotaGone() || quotaPricingChoice();
 
 /**
  * Запоминает выбранный режим цен. Сам пересчёт делает вызывающая сторона: цены

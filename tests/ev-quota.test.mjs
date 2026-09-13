@@ -81,6 +81,21 @@ test("keeps the quota switch on while exhausted quota prices include the duty", 
   assert.equal(evQuotaPricingAvailable(), false);
 });
 
+test("forces the exhausted quota switch on over an old saved off preference", () => {
+  const savedWindow = globalThis.window;
+  globalThis.window = {
+    location:{ search:"" },
+    localStorage:{ getItem:() => "off" },
+  };
+  try {
+    assert.equal(isEvQuotaPricingOn(), true);
+    assert.equal(isEvQuotaOver(), true);
+  } finally {
+    if (savedWindow === undefined) delete globalThis.window;
+    else globalThis.window = savedWindow;
+  }
+});
+
 test("flags stale data when the reports stop coming", () => {
   const quota = evQuotaState({ today: new Date("2026-10-01T00:00:00Z") });
   assert.equal(quota.stale, true);
