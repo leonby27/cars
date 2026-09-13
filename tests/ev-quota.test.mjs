@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaExhausted, isEvQuotaPricingOn } from "../src/ev-quota.js";
+import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaExhausted, isEvQuotaOver, isEvQuotaPricingOn } from "../src/ev-quota.js";
 
 const state = () => evQuotaState({ today: new Date("2026-08-22T00:00:00Z") });
 
@@ -74,10 +74,11 @@ test("uses the customs exhaustion report as the final personal quota state", () 
   assert.equal(quota.exhaustedOnLabel, "5 сентября");
 });
 
-test("shows quota prices by default even after the reported quota is exhausted", () => {
+test("keeps the quota switch on while exhausted quota prices include the duty", () => {
   assert.equal(isEvQuotaExhausted(), true);
+  assert.equal(isEvQuotaOver(), true);
   assert.equal(isEvQuotaPricingOn(), true);
-  assert.equal(evQuotaPricingAvailable(), true);
+  assert.equal(evQuotaPricingAvailable(), false);
 });
 
 test("flags stale data when the reports stop coming", () => {

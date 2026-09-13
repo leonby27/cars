@@ -64,8 +64,9 @@ const quotaOverrideFromUrl = () => {
 // браузере, чтобы он не сбрасывался при переходах по сайту.
 const QUOTA_PRICING_KEY = "abcars-quota-pricing";
 
-// Фактическое состояние квоты и выбранный сценарий цены храним отдельно:
-// даже после исчерпания посетитель может посмотреть расчёт по квоте.
+// Фактическое состояние квоты и положение переключателя храним отдельно.
+// Включённый переключатель применяет фактический остаток: пока квота есть, пошлина
+// нулевая, после исчерпания — 15%. Выключенный всегда показывает цену без льготы.
 const quotaGone = () => EV_QUOTA_ASSUME_EXHAUSTED || evQuotaState({ audience: "personal" }).exhausted;
 
 /**
@@ -92,14 +93,14 @@ const quotaPricingChoice = () => {
 export const isEvQuotaOver = () => {
   const override = quotaOverrideFromUrl();
   if (override !== null) return override;
-  return !quotaPricingChoice();
+  return quotaGone() || !quotaPricingChoice();
 };
 
-/** Можно ли выбирать режим цен: адрес страницы может зафиксировать один сценарий для проверки. */
-export const evQuotaPricingAvailable = () => quotaOverrideFromUrl() === null;
+/** Выбирать режим можно, пока у включённой квоты и режима без льготы разные цены. */
+export const evQuotaPricingAvailable = () => quotaOverrideFromUrl() === null && !quotaGone();
 
-/** Включены ли сейчас цены по льготной квоте. По умолчанию — да. */
-export const isEvQuotaPricingOn = () => !isEvQuotaOver();
+/** Учитывает ли цена фактическое состояние квоты. Переключатель по умолчанию включён. */
+export const isEvQuotaPricingOn = () => quotaPricingChoice();
 
 /**
  * Запоминает выбранный режим цен. Сам пересчёт делает вызывающая сторона: цены

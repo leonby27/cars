@@ -19,7 +19,7 @@ import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
-import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
+import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaExhausted, isEvQuotaOver, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
@@ -1169,17 +1169,19 @@ function SiteLogo() {
 const QUOTA_AUDIENCES = [["personal", "Физ. лица"], ["business", "Юр. лица"]];
 
 // Переключатель режима цен. Стоит над вкладками, потому что относится ко всему
-// сайту, а не к выбранной половине квоты: с ним видно цену по льготе, без него —
-// текущую цену с пошлиной 15%.
+// сайту, а не к выбранной половине квоты: включённый применяет фактическое
+// состояние квоты, выключенный всегда показывает цену с пошлиной 15%.
 function QuotaPricingToggle() {
   const pricing = useQuotaPricing();
   const available = Boolean(pricing?.available);
   const on = Boolean(pricing?.on);
   const hint = !available
-    ? "Режим цены задан ссылкой для проверки."
+    ? pricing?.quotaOver
+      ? "Квота выбрана — пошлина 15% уже в каждой цене."
+      : "Режим цены задан ссылкой для проверки."
     : on
-      ? "Цены по квоте: пошлина 0%. Выключите — увидите текущую цену с пошлиной 15%."
-      : "Текущие цены с пошлиной 15%. Включите — увидите расчёт по квоте.";
+      ? "Цены учитывают действующую квоту: пошлина 0%."
+      : "В ценах пошлина 15%. Включите — вернутся цены по действующей квоте.";
   return (
     <div className="quota-panel-pricing">
       <label className="quick-view-toggle quota-pricing-toggle">
@@ -7760,7 +7762,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             priceUsd={price.totalUsd}
             mileage={car.mileage}
             battery={car.battery}
-            quotaPricingOn={quotaPricing?.on !== false}
+            quotaPricingOn={quotaPricing?.quotaOver !== true}
             formatMoney={(usd) => roughMoney(usd, currency)}
             loading={priceRatingPending}
           />
@@ -12232,16 +12234,17 @@ export function App() {
   // в рублях сумма понятнее без пересчёта в уме. Доллары остаются в переключателе,
   // и выбранная валюта запоминается в браузере.
   const [currency, setCurrency] = useState("BYN");
-  // Режим цен: включённый переключатель — цены по льготной квоте, выключенный —
-  // с пошлиной 15%. Выбор запоминается в браузере, расчёту цен он передаётся
-  // отдельно: тот держит его в модуле, чтобы не тянуть флаг через все карточки.
+  // Режим цен: включённый переключатель учитывает фактический остаток квоты,
+  // выключенный всегда добавляет пошлину 15%. Выбор запоминается в браузере,
+  // расчёту цен он передаётся отдельно, чтобы не тянуть флаг через все карточки.
   const [quotaPricingOn, setQuotaPricingOn] = useState(isEvQuotaPricingOn);
   const quotaPricing = useMemo(() => ({
     on: quotaPricingOn,
+    quotaOver: isEvQuotaOver(),
     available: evQuotaPricingAvailable(),
     set: (on) => {
       rememberEvQuotaPricing(on);
-      setPricingQuotaOver(!on);
+      setPricingQuotaOver(isEvQuotaExhausted() || !on);
       setQuotaPricingOn(on);
     },
   }), [quotaPricingOn]);
