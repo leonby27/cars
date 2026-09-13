@@ -12,3 +12,8 @@ test("catalog cards keep raised surfaces in the light theme and tonal surfaces i
   assert.match(styles, /\.custom-search-cta\.is-empty\s*\{[^}]*box-shadow:\s*none/s);
   assert.match(styles, /html\[data-theme="dark"\] #root :is\(\.custom-search-cta, \.brand-guide, \.side-card, \.source-card\)\s*\{[^}]*box-shadow:\s*none/s);
 });
+
+test("service catalog has a solid contrasting surface in both themes", () => {
+  assert.match(styles, /\.service-catalog-section\s*\{[^}]*background:\s*var\(--panel-soft\)/s);
+  assert.match(styles, /html\[data-theme="dark"\] \.service-catalog-section\s*\{[^}]*background:\s*#0b0d0f/s);
+});

@@ -7512,6 +7512,8 @@ footer {
   background: #202329;
 }
 .gallery-modal figure > img {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   max-height: calc(100vh - 110px);
@@ -7519,8 +7521,30 @@ footer {
   object-fit: contain;
   margin: auto;
 }
+.gallery-modal-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #8e949e;
+  font-size: 14px;
+  line-height: 1.3;
+  pointer-events: none;
+  animation: gallery-photo-loading-pulse 1.6s ease-in-out infinite;
+}
+@keyframes gallery-photo-loading-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.82; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gallery-modal-loading {
+    animation: none;
+    opacity: 0.65;
+  }
+}
 .gallery-modal figcaption {
   position: absolute;
+  z-index: 2;
   right: 12px;
   bottom: 12px;
   padding: 7px 10px;
@@ -8234,16 +8258,14 @@ footer {
 
 /* Увеличение фотографии на компьютере живёт прямо в квадратной линзе под
    курсором. На сенсорных и узких экранах она не участвует ни в раскладке, ни в UI. */
-.gallery-zoom-lens,
-.gallery-modal-zoom-lens {
+.gallery-zoom-lens {
   display: none;
 }
 @media (min-width: 981px) and (hover: hover) and (pointer: fine) {
   .gallery-slide img {
     object-fit: cover;
   }
-  .gallery-zoom-lens,
-  .gallery-modal-zoom-lens {
+  .gallery-zoom-lens {
     position: absolute;
     left: 0;
     top: 0;
@@ -8262,8 +8284,7 @@ footer {
     transition: opacity 120ms ease, visibility 0s linear 120ms;
     will-change: transform;
   }
-  .gallery-zoom-lens.is-visible,
-  .gallery-modal-zoom-lens.is-visible {
+  .gallery-zoom-lens.is-visible {
     opacity: 1;
     visibility: visible;
     transition-delay: 0s;
@@ -8271,11 +8292,7 @@ footer {
   .gallery-panel.zooming .gallery-slide {
     cursor: crosshair;
   }
-  .gallery-modal figure.zooming {
-    cursor: crosshair;
-  }
-  .gallery-zoom-lens img,
-  .gallery-modal-zoom-lens img {
+  .gallery-zoom-lens img {
     position: absolute;
     left: 0;
     top: 0;
@@ -8285,9 +8302,6 @@ footer {
     pointer-events: none;
     user-select: none;
     will-change: transform;
-  }
-  .gallery-modal-zoom-lens img {
-    object-fit: contain;
   }
 }
 .detail-facts-section {
@@ -17930,7 +17944,7 @@ html[data-theme="dark"] .service-opportunity-card p {
 }
 .service-catalog-section {
   padding: 80px 0 96px;
-  background: var(--page);
+  background: var(--panel-soft);
 }
 html[data-theme="dark"] .service-catalog-section {
   background: #0b0d0f;

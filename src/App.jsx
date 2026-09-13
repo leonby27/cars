@@ -6397,15 +6397,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
   const navigationFrame = useRef(null);
   const navigating = useRef(false);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
-  const [zoomIndex, setZoomIndex] = useState(null);
-  const [loadedZoomKey, setLoadedZoomKey] = useState("");
-  const zoomLensRef = useRef(null);
-  const zoomImageRef = useRef(null);
-  const zoomFrame = useRef(0);
-  const zoomPointer = useRef(null);
-  const zoomSource = zoomIndex === null ? "" : imageSource(images[zoomIndex], IMAGE_ORIGINAL);
-  const zoomKey = zoomIndex === null ? "" : `${zoomIndex}-${zoomSource}`;
-  const zoomReady = Boolean(zoomKey) && loadedZoomKey === zoomKey;
+  const [loadedImages, setLoadedImages] = useState(() => new Set());
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -6417,7 +6409,6 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
       window.removeEventListener("keydown", onKeyDown);
       if (scrollFrame.current) cancelAnimationFrame(scrollFrame.current);
       if (navigationFrame.current) cancelAnimationFrame(navigationFrame.current);
-      if (zoomFrame.current) cancelAnimationFrame(zoomFrame.current);
     };
   }, [initialIndex, onClose]);
   useEffect(() => {
@@ -6456,50 +6447,8 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
     };
     navigationFrame.current = requestAnimationFrame(animate);
   };
-  const positionZoom = (index, clientX, clientY) => {
-    zoomPointer.current = { index, x: clientX, y: clientY };
-    cancelAnimationFrame(zoomFrame.current);
-    zoomFrame.current = requestAnimationFrame(() => {
-      const figure = imageRefs.current[index];
-      const sourceImage = figure?.querySelector(":scope > img");
-      const lens = zoomLensRef.current;
-      const previewImage = zoomImageRef.current;
-      if (!figure || !sourceImage || !lens || !previewImage) return;
-      const figureRect = figure.getBoundingClientRect();
-      const sourceRect = sourceImage.getBoundingClientRect();
-      const lensRect = lens.getBoundingClientRect();
-      if (!sourceRect.width || !sourceRect.height || !lensRect.width || !lensRect.height) return;
-      const pointerX = Math.min(sourceRect.width, Math.max(0, clientX - sourceRect.left));
-      const pointerY = Math.min(sourceRect.height, Math.max(0, clientY - sourceRect.top));
-      const lensX = sourceRect.left - figureRect.left + Math.min(sourceRect.width - lensRect.width, Math.max(0, pointerX - lensRect.width / 2));
-      const lensY = sourceRect.top - figureRect.top + Math.min(sourceRect.height - lensRect.height, Math.max(0, pointerY - lensRect.height / 2));
-      const imageWidth = sourceRect.width * GALLERY_ZOOM;
-      const imageHeight = sourceRect.height * GALLERY_ZOOM;
-      const imageX = Math.min(0, Math.max(lensRect.width - imageWidth, lensRect.width / 2 - pointerX * GALLERY_ZOOM));
-      const imageY = Math.min(0, Math.max(lensRect.height - imageHeight, lensRect.height / 2 - pointerY * GALLERY_ZOOM));
-      lens.style.transform = `translate3d(${lensX}px, ${lensY}px, 0)`;
-      previewImage.style.width = `${imageWidth}px`;
-      previewImage.style.height = `${imageHeight}px`;
-      previewImage.style.transform = `translate3d(${imageX}px, ${imageY}px, 0)`;
-    });
-  };
-  const showZoom = (event, index) => {
-    if (event.pointerType !== "mouse" || !window.matchMedia("(min-width: 981px) and (hover: hover) and (pointer: fine)").matches) return;
-    setZoomIndex(index);
-    positionZoom(index, event.clientX, event.clientY);
-  };
-  const moveZoom = (event, index) => {
-    if (event.pointerType === "mouse" && zoomIndex === index) positionZoom(index, event.clientX, event.clientY);
-  };
-  const hideZoom = (event) => {
-    if (event.pointerType !== "mouse") return;
-    zoomPointer.current = null;
-    setZoomIndex(null);
-  };
   const trackActiveImage = (event) => {
     if (event.target !== event.currentTarget) return;
-    zoomPointer.current = null;
-    setZoomIndex(null);
     if (navigating.current) return;
     if (scrollFrame.current) return;
     scrollFrame.current = requestAnimationFrame(() => {
@@ -6516,6 +6465,14 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
         }
       });
       setActiveIndex((current) => (current === closestIndex ? current : closestIndex));
+    });
+  };
+  const markImageLoaded = (index) => {
+    setLoadedImages((current) => {
+      if (current.has(index)) return current;
+      const next = new Set(current);
+      next.add(index);
+      return next;
     });
   };
   return (
@@ -6555,30 +6512,9 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
               ref={(node) => {
                 imageRefs.current[index] = node;
               }}
-              className={zoomIndex === index ? "zooming" : ""}
-              onPointerEnter={(event) => showZoom(event, index)}
-              onPointerMove={(event) => moveZoom(event, index)}
-              onPointerLeave={hideZoom}
             >
-              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title} из Китая, фото ${index + 1}`} loading={index === initialIndex ? "eager" : "lazy"} fetchPriority={index === initialIndex ? "high" : "low"} decoding="async" onError={(event) => retryWithFullImage(event, image)} />
-              {zoomIndex === index && (
-                <div ref={zoomLensRef} className={`gallery-modal-zoom-lens${zoomReady ? " is-visible" : ""}`} aria-hidden="true">
-                  <img
-                    key={zoomKey}
-                    ref={zoomImageRef}
-                    src={zoomSource}
-                    alt=""
-                    draggable="false"
-                    decoding="async"
-                    onLoad={() => {
-                      setLoadedZoomKey(zoomKey);
-                      const pointer = zoomPointer.current;
-                      if (pointer?.index === index) positionZoom(index, pointer.x, pointer.y);
-                    }}
-                    onError={(event) => retryWithFullImage(event, image)}
-                  />
-                </div>
-              )}
+              {!loadedImages.has(index) && <span className="gallery-modal-loading" aria-hidden="true">Загружаем фото…</span>}
+              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title} из Китая, фото ${index + 1}`} loading={index === initialIndex ? "eager" : "lazy"} fetchPriority={index === initialIndex ? "high" : "low"} decoding="async" onLoad={() => markImageLoaded(index)} onError={(event) => retryWithFullImage(event, image)} />
               <figcaption>
                 {index + 1} из {images.length}
               </figcaption>
