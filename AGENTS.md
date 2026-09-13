@@ -28,6 +28,8 @@ Homepage SEO ownership (owner decision, 2026-09-10): the home page targets «б/
 
 Quick-view default preference (owner decision, 2026-09-09): keep «Быстрый просмотр» off by default. Enable it only when the visitor explicitly switches it on; preserve their saved choice.
 
+EV quota pricing preference (owner decision, 2026-09-13): keep «Цены с квотами» available even after quota exhaustion. On shows the quota scenario with 0% duty, off shows the no-quota scenario with 15% duty. Default to on for visitors without a saved choice and preserve each visitor's manual choice in the browser.
+
 Catalog service-card icon preference (owner decision, 2026-09-10): use the supplied green 3D shield with a checkmark in the «Как устроена покупка» sidebar card and display it at exactly 80×80 px.
 
 Catalog empty-state preference (owner decision, 2026-09-10): render an unfilled, neutrally outlined block with a search icon and compact vertical padding. Show the compact heading «Объявления не найдены» and a short suggestion to change the filters; do not show an eyebrow or action button. On desktop, do not let a taller sidebar card create a large blank gap before the catalog landing copy below the empty state.

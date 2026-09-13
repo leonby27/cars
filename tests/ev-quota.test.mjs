@@ -74,21 +74,21 @@ test("uses the customs exhaustion report as the final personal quota state", () 
   assert.equal(quota.exhaustedOnLabel, "5 сентября");
 });
 
-test("keeps the quota switch on while exhausted quota prices include the duty", () => {
+test("keeps the factual exhaustion separate from the default quota-price choice", () => {
   assert.equal(isEvQuotaExhausted(), true);
-  assert.equal(isEvQuotaOver(), true);
+  assert.equal(isEvQuotaOver(), false);
   assert.equal(isEvQuotaPricingOn(), true);
-  assert.equal(evQuotaPricingAvailable(), false);
+  assert.equal(evQuotaPricingAvailable(), true);
 });
 
-test("forces the exhausted quota switch on over an old saved off preference", () => {
+test("remembers a visitor's saved no-quota price choice", () => {
   const savedWindow = globalThis.window;
   globalThis.window = {
     location:{ search:"" },
     localStorage:{ getItem:() => "off" },
   };
   try {
-    assert.equal(isEvQuotaPricingOn(), true);
+    assert.equal(isEvQuotaPricingOn(), false);
     assert.equal(isEvQuotaOver(), true);
   } finally {
     if (savedWindow === undefined) delete globalThis.window;
