@@ -50,7 +50,9 @@ const running = () =>
   });
 
 async function startRun(brands) {
-  const args = ["scripts/refresh-che168.mjs", "--new-per-brand=100", "--detail-per-brand=50"];
+  // Актуализация существующего каталога должна доходить до каждой машины.
+  // Ограничиваем только пополнение новыми карточками, а не поштучные проверки.
+  const args = ["scripts/refresh-che168.mjs", "--new-per-brand=100"];
   if (brands?.length) args.push(`--brands=${brands.join(",")}`);
   const child = spawn("xvfb-run", ["-a", "node", ...args], {
     cwd: ROOT,

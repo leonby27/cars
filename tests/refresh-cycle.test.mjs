@@ -135,3 +135,10 @@ test("production wiring persists the cycle before selecting rows and checks left
   assert.match(source, /await withTransaction/);
   assert.match(source, /if \(!ids.has\(brand\)\) ids.set/);
 });
+
+test("Telegram full-circle command does not cap existing listing checks", () => {
+  const source = readFileSync(new URL("../scripts/telegram-commands.mjs", import.meta.url), "utf8");
+  const startRun = source.slice(source.indexOf("async function startRun"), source.indexOf("// Разбираем сообщение"));
+  assert.doesNotMatch(startRun, /--detail-limit|--detail-per-brand|--skip-detail|--only-unverified/);
+  assert.match(startRun, /--new-per-brand=100/);
+});
