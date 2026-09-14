@@ -21,7 +21,7 @@ import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES } from "../src/p
 import { TRACKING_FAQ } from "../src/tracking-info.js";
 import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
-import { ABOUT_PRINCIPLES, BEFORE_PAYMENT, SERVICE_PROOF, SERVICE_SECTIONS } from "../src/service-copy.js";
+import { ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EXAMPLE, SERVICE_SECTIONS } from "../src/service-copy.js";
 // Журнал: подборки. Раздел собирается только при включённом выключателе — пока он
 // выключен, у сайта нет ни страниц журнала, ни его адресов в карте сайта.
 import { BLOG_ENABLED } from "../src/feature-flags.js";
@@ -361,7 +361,29 @@ function infoArticle(route) {
     return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства оформлять заказ.</p><p>До обращения можно посмотреть <a href="${hrefRoute("/")}">автомобили из Китая с расчётом до Минска</a>.</p></section>`;
   }
   if (route === "/how-it-works/") {
-    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и сопровождение</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section>`;
+    const report = SERVICE_REPORT_EXAMPLE;
+    const reportPhotos = report.photoGroups.flatMap((group) => group.photos);
+    const reportPhotoGroups = list(report.photoGroups.map((group) => [
+      group.title,
+      group.result,
+    ]));
+    const inspectionStatusLabels = {
+      clear: "Без замечаний",
+      attention: "Есть замечание",
+      limited: "Осмотр ограничен",
+      "not-applicable": "Не предусмотрено конструкцией",
+    };
+    const reportInspection = report.inspectionSections?.length
+      ? `<h3>${escapeHtml(report.labels.inspectionTitle || "Что именно проверили")}</h3>${report.inspectionSections.map((section) => `<h4>${escapeHtml(section.title)}</h4>${list(section.points.map((point) => [point.label, inspectionStatusLabels[point.status] || inspectionStatusLabels.clear]))}`).join("")}`
+      : "";
+    const reportLimitations = report.limitations?.items?.length
+      ? `<h3>${escapeHtml(report.limitations.title)}</h3><ul>${report.limitations.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+      : "";
+    const reportRecommendation = report.recommendation
+      ? `<h3>${escapeHtml(report.recommendation.eyebrow)}</h3><h4>${escapeHtml(report.recommendation.title)}</h4><p>${escapeHtml(report.recommendation.summary)}</p><ol>${report.recommendation.steps.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`
+      : "";
+    const reportPowertrainNote = report.powertrainNote?.text ? `<p>${escapeHtml(report.powertrainNote.text)}</p>` : "";
+    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и сопровождение</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Покупка авто: от выбора до ключей</h2>${list(PURCHASE_FLOW_STEPS.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(report.presentation.title)}</h2><h3>${escapeHtml(report.vehicle.name)}</h3><p><strong>${escapeHtml(report.verdict.title)}.</strong> ${escapeHtml(report.verdict.summary)}</p>${list(report.risks.map((item) => [item.title, [item.status, item.note].filter(Boolean).join(". ")]))}${reportInspection}<h3>${escapeHtml(report.labels.evidenceTitle)}</h3>${reportPhotoGroups}<h3>${escapeHtml(report.labels.factsTitle)}</h3>${list(report.facts.map((item) => [item.label, item.metric === "photoCount" ? String(reportPhotos.length) : item.value]))}<h3>${escapeHtml(report.labels.findingsTitle)}</h3><ul>${report.findings.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul>${reportLimitations}${reportRecommendation}${reportPowertrainNote}</section>`;
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {

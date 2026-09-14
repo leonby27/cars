@@ -39,7 +39,8 @@ import { translateTechnicalSpecs } from "./spec-translations.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
-import { ABOUT_PRINCIPLES, SERVICE_PROOF } from "./service-copy.js";
+import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EXAMPLE } from "./service-copy.js";
+import { InspectionReport } from "./inspection-report.jsx";
 import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
@@ -8716,6 +8717,44 @@ function ServiceContactCta() {
   );
 }
 
+function ServicePurchaseFlow() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeStep = PURCHASE_FLOW_STEPS[activeIndex];
+
+  return (
+    <section className="service-purchase-flow page-width" aria-labelledby="service-purchase-flow-title">
+      <h2 id="service-purchase-flow-title">Покупка авто: от выбора до ключей</h2>
+      <div className="service-purchase-flow-layout">
+        <div className="service-purchase-flow-switchers" role="group" aria-label="Этапы покупки">
+          {PURCHASE_FLOW_STEPS.map((step, index) => {
+            const selected = index === activeIndex;
+            return (
+              <button
+                className={`service-purchase-flow-switcher${selected ? " active" : ""}`}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setActiveIndex(index)}
+                key={step.title}
+              >
+                <span className="service-purchase-flow-number" aria-hidden="true">{index + 1}</span>
+                <span className="service-purchase-flow-copy">
+                  <strong>{step.title}</strong>
+                  <small>{step.text}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="service-purchase-flow-visual" role="region" aria-live="polite" aria-label={`Заглушка визуала этапа «${activeStep.title}»`}>
+          <div className="service-purchase-flow-placeholder" key={activeStep.title}>
+            <span>Здесь появится визуал этапа</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, loading }) {
   const darkIntroRef = useRef(null);
   const { total, updatedAt } = useCatalogFacts();
@@ -8849,6 +8888,8 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
           })}
         </div>
       </section>
+      <ServicePurchaseFlow />
+      <InspectionReport report={SERVICE_REPORT_EXAMPLE} />
       {REVIEWS_ENABLED && <ReviewsSection navigate={navigate} />}
       <FaqSection navigate={navigate} />
       <ServiceContactCta />
