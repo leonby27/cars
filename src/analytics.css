@@ -14,6 +14,8 @@
 .analytics-logout { min-width:112px; min-height:41px; height:41px; padding:0 18px; box-sizing:border-box; font-size:14px; }
 .analytics-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
 .analytics-contact-kpis { grid-template-columns:repeat(3,1fr); }
+.analytics-kpis .analytics-contact-value { display:flex; align-items:center; gap:10px; }
+.analytics-kpis .analytics-contact-fresh { display:inline-grid; place-items:center; min-height:25px; padding:0 8px; border-radius:8px; background:var(--accent); color:#fff; font-size:16px; font-weight:800; letter-spacing:0; line-height:1; font-variant-numeric:tabular-nums; }
 .analytics-kpis article, .analytics-panel, .analytics-login-card { border:0; border-radius:var(--analytics-block-radius); background:var(--panel); }
 html[data-theme="light"] .analytics-kpis article,
 html[data-theme="light"] .analytics-panel,

@@ -702,28 +702,32 @@ function CustomersSection({ data }) {
   );
 }
 
-function ContactInterestSection({ data }) {
+function ContactInterestSection({ data, fresh = {} }) {
   const summary = data.summary || {};
   const cards = [
-    ["Просмотр телефона", summary.contact_phone_views, "Номер раскрыли"],
-    ["Клик по TG", summary.contact_telegram_clicks, "Нажали Telegram"],
-    ["Клик по Viber", summary.contact_viber_clicks, "Нажали Viber"],
-    ["Клик по Instagram", summary.contact_instagram_clicks, "Нажали Instagram"],
-    ["Клик по Threads", summary.contact_threads_clicks, "Нажали Threads"],
-    ["О сервисе — задать вопрос", summary.service_contact_question_clicks, "Нажали главную кнопку в блоке связи"],
-    ["О сервисе — отдел продаж", summary.service_contact_sales_clicks, "Выбрали карточку отдела продаж"],
-    ["О сервисе — Telegram", summary.service_contact_telegram_clicks, "Выбрали карточку Telegram"],
-    ["О сервисе — почта", summary.service_contact_email_clicks, "Выбрали карточку электронной почты"],
-    ["Интерес к приложению — QR", summary.app_download_qr_modal_opens, "Открыли QR или перешли по нему"],
-    ["Интерес к App Store", summary.app_download_app_store_modal_opens, "Нажали кнопку App Store"],
-    ["Интерес к Google Play", summary.app_download_google_play_modal_opens, "Нажали кнопку Google Play"],
-    ["Интерес к подписке", summary.newsletter_subscribe_modal_opens, "Нажали «Подписаться»"],
-    ["Открытие страницы «Контакты»", summary.contact_page_views, "Из любого раздела сайта"],
-    ["Открытие страницы «О сервисе»", summary.about_page_views, "Из любого раздела сайта"],
+    ["Просмотр телефона", "contact_phone_views", "Номер раскрыли"],
+    ["Клик по TG", "contact_telegram_clicks", "Нажали Telegram"],
+    ["Клик по Viber", "contact_viber_clicks", "Нажали Viber"],
+    ["Клик по Instagram", "contact_instagram_clicks", "Нажали Instagram"],
+    ["Клик по Threads", "contact_threads_clicks", "Нажали Threads"],
+    ["О сервисе — задать вопрос", "service_contact_question_clicks", "Нажали главную кнопку в блоке связи"],
+    ["О сервисе — отдел продаж", "service_contact_sales_clicks", "Выбрали карточку отдела продаж"],
+    ["О сервисе — Telegram", "service_contact_telegram_clicks", "Выбрали карточку Telegram"],
+    ["О сервисе — почта", "service_contact_email_clicks", "Выбрали карточку электронной почты"],
+    ["Интерес к приложению — QR", "app_download_qr_modal_opens", "Открыли QR или перешли по нему"],
+    ["Интерес к App Store", "app_download_app_store_modal_opens", "Нажали кнопку App Store"],
+    ["Интерес к Google Play", "app_download_google_play_modal_opens", "Нажали кнопку Google Play"],
+    ["Интерес к подписке", "newsletter_subscribe_modal_opens", "Нажали «Подписаться»"],
+    ["Открытие страницы «Контакты»", "contact_page_views", "Из любого раздела сайта"],
+    ["Открытие страницы «О сервисе»", "about_page_views", "Из любого раздела сайта"],
   ];
   return (
     <section className="analytics-kpis analytics-contact-kpis" aria-label="Интерес к контактам">
-      {cards.map(([label, value, note]) => <article key={label}><span>{label}</span><strong>{formatNumber(value)}</strong><p>{note}</p></article>)}
+      {cards.map(([label, key, note]) => {
+        const value = Number(summary[key]) || 0;
+        const newAmount = Math.max(0, Number(fresh[key]) || 0);
+        return <article key={key}><span>{label}</span><strong className="analytics-contact-value">{formatNumber(value)}{newAmount ? <b className="analytics-contact-fresh" title={`Нового с прошлого просмотра (независимо от выбранного периода): ${formatNumber(newAmount)}`}>+{formatNumber(newAmount)}</b> : null}</strong><p>{note}</p></article>;
+      })}
     </section>
   );
 }
@@ -854,6 +858,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
   // цифры на компьютере.
   const [updates, setUpdates] = useState({});
+  const [contactFresh, setContactFresh] = useState({});
   const viewedSections = useRef(new Set());
   useEffect(() => watchAnalyticsExit(() => viewedSections.current), []);
   const loadUpdates = useCallback(async (viewing = "") => {
@@ -868,9 +873,10 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   // Автоматически открытый «Обзор» ещё не означает, что пользователь успел
   // заметить новое. Сохраняем его при закрытии страницы или явном нажатии.
   const openSection = (id) => {
+    if (id === "contact_interest") setContactFresh(updates.contact_interest_details || {});
     setSection(id);
     // Цифру гасим сразу, не дожидаясь ответа сервера.
-    setUpdates((current) => ({ ...current, [id]:0 }));
+    setUpdates((current) => ({ ...current, [id]:0, ...(id === "contact_interest" ? { contact_interest_details:{} } : {}) }));
     loadUpdates(id);
   };
   const markViewed = (id) => {
@@ -929,7 +935,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "contact_interest"}><ContactInterestSection data={data} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "contact_interest"}><ContactInterestSection data={data} fresh={contactFresh} /></div>
         </div>
       </div>
       {resetOpen && <ResetAnalyticsModal pending={resetting} error={resetError} onCancel={() => setResetOpen(false)} onConfirm={resetAnalytics} />}

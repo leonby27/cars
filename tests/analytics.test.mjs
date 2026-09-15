@@ -423,6 +423,20 @@ test("интерес к контактам собран в отдельном р
   assert.match(server, /split_part\(path, '\?', 1\) IN \('\/how-it-works', '\/how-it-works\/'\)/);
 });
 
+test("новые действия в интересе к контактам подсвечиваются на своих карточках", async () => {
+  const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  for (const key of ["contact_phone_views", "contact_telegram_clicks", "contact_viber_clicks", "contact_instagram_clicks", "contact_threads_clicks", "service_contact_question_clicks", "service_contact_sales_clicks", "service_contact_telegram_clicks", "service_contact_email_clicks", "app_download_qr_modal_opens", "app_download_app_store_modal_opens", "app_download_google_play_modal_opens", "newsletter_subscribe_modal_opens", "contact_page_views", "about_page_views"]) {
+    assert.match(page, new RegExp(`\"${key}\"`));
+    assert.match(server, new RegExp(`AS ${key}`));
+  }
+  assert.match(server, /contact_interest_details:contactInterestDetails/);
+  assert.match(page, /setContactFresh\(updates\.contact_interest_details \|\| \{\}\)/);
+  assert.match(page, /className="analytics-contact-fresh"[^>]*>\+\{formatNumber\(newAmount\)\}/);
+  assert.match(styles, /\.analytics-kpis \.analytics-contact-fresh \{[^}]*background:var\(--accent\)/);
+});
+
 // Приём событий открыт без пароля, поэтому записываем только то, что прислала
 // страница сайта: фильтры «не считать свой заход» живут в браузере, и запрос,
 // посланный мимо браузера, обошёл бы их все.
