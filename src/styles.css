@@ -18562,42 +18562,71 @@ html[data-theme="dark"] .service-opportunity-card p {
   line-height: 1.55;
   text-wrap: balance;
 }
-.service-report-sheet {
-  padding: 14px;
-  border-radius: calc(34px * var(--corner-scale));
-  background: var(--panel-soft);
+@media (min-width: 900px) {
+  .service-report-example-heading {
+    max-width: none;
+  }
+  .service-report-example-heading h2 {
+    white-space: nowrap;
+  }
 }
 .service-report-vehicle {
+  --report-surface: #fff;
+  --report-card: #f1f3f5;
+  --report-ink: #17191c;
+  --report-muted: #666c75;
+  --report-line: rgba(23, 25, 28, 0.1);
+  --report-hover: rgba(23, 25, 28, 0.045);
   min-height: 0;
-  padding: 34px 36px;
+  padding: 52px 50px 50px;
+  border: 1px solid rgba(23, 25, 28, 0.07);
   border-radius: calc(26px * var(--corner-scale));
-  background: #1b1e22;
-  color: #f7f8fa;
+  background: var(--report-surface);
+  color: var(--report-ink);
+  box-shadow: 0 16px 44px rgba(23, 25, 28, 0.06);
 }
 .service-report-vehicle-top {
   display: grid;
-  grid-template-columns: minmax(240px, 0.78fr) minmax(420px, 1.22fr);
-  gap: 30px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  gap: 36px;
+  align-items: start;
 }
-.service-report-vehicle-identity {
+.service-report-vehicle-overview {
+  min-width: 0;
+}
+.service-report-vehicle-heading {
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  gap: 30px;
+  align-items: center;
 }
-.service-report-vehicle-identity > h3 {
+.service-report-vehicle-image {
+  width: clamp(108px, 8.5vw, 116px);
+  height: auto;
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.service-report-vehicle-heading h3 {
+  min-width: 0;
   margin: 0;
-  font-size: clamp(32px, 3.2vw, 46px);
+  font-size: clamp(32px, 3vw, 42px);
   font-weight: 750;
   line-height: 1.08;
   letter-spacing: -0.045em;
 }
+.service-report-vehicle-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: 25px;
+  margin-top: 25px;
+}
 .service-report-vehicle dl {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 30px;
-  margin: 23px 0 0;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  align-content: start;
+  margin: 0;
 }
 .service-report-vehicle dl div {
   display: flex;
@@ -18610,24 +18639,24 @@ html[data-theme="dark"] .service-opportunity-card p {
   line-height: 1.4;
 }
 .service-report-vehicle dt {
-  color: #8f969f;
+  color: var(--report-muted);
 }
 .service-report-vehicle dd {
-  color: #f7f8fa;
+  color: var(--report-ink);
   font-weight: 700;
 }
 .service-report-demo-badge {
   flex: 0 0 auto;
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #dfe3e8;
+  background: var(--report-card);
+  color: var(--report-muted);
   font-size: 13px;
   font-weight: 750;
   white-space: nowrap;
 }
 .service-report-verdict {
-  width: min(100%, 520px);
+  width: min(100%, 460px);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
@@ -18666,7 +18695,7 @@ html[data-theme="dark"] .service-opportunity-card p {
 .service-report-verdict p {
   max-width: 680px;
   margin: 7px 0 0;
-  color: #aeb4bd;
+  color: var(--report-muted);
   font-size: 16px;
   font-weight: 500;
   line-height: 1.45;
@@ -18719,7 +18748,7 @@ html[data-theme="dark"] .service-opportunity-card p {
   background: var(--panel);
 }
 .service-report-vehicle-risks {
-  margin-top: 28px;
+  margin-top: 46px;
 }
 .service-report-subheading {
   display: flex;
@@ -18745,25 +18774,50 @@ html[data-theme="dark"] .service-opportunity-card p {
 }
 .service-report-risk-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 .service-report-risk-grid > article {
+  position: relative;
   min-width: 0;
-  min-height: 136px;
-  display: flex;
-  flex-direction: column;
-  padding: 18px 20px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
   border-radius: calc(18px * var(--corner-scale));
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--report-card);
 }
-.service-report-risk-grid > article > div {
+.service-report-risk-summary {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 18px 64px 18px 20px;
+}
+.service-report-risk-summary-toggle {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-end;
+  padding: 0 30px;
+  border: 0;
+  background: transparent;
+  color: var(--report-muted);
+  cursor: pointer;
+  transition: background-color 160ms ease;
 }
-.service-report-risk-grid > article > div > span {
+.service-report-risk-summary-toggle:hover,
+.service-report-risk-summary-toggle[aria-expanded="true"] {
+  background: var(--report-hover);
+}
+.service-report-risk-summary-toggle:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  outline-offset: -3px;
+}
+.service-report-risk-summary > span {
   width: 42px;
   height: 42px;
   display: grid;
@@ -18772,41 +18826,94 @@ html[data-theme="dark"] .service-opportunity-card p {
   background: color-mix(in srgb, var(--green) 14%, transparent);
   color: var(--green);
 }
-.service-report-risk-grid > article.attention > div > span {
+.service-report-risk-grid > article.attention .service-report-risk-summary > span {
   background: var(--warn-soft);
   color: var(--warn-ink);
 }
-.service-report-risk-grid > article.critical > div > span {
+.service-report-risk-grid > article.critical .service-report-risk-summary > span {
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
-.service-report-risk-grid small {
+.service-report-risk-summary small {
   color: var(--muted);
   font-size: 13px;
   font-weight: 750;
 }
 .service-report-risk-grid h4 {
-  margin: 18px 0 0;
-  color: #aeb4bd;
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.35;
-}
-.service-report-risk-grid strong {
-  display: block;
-  margin-top: 6px;
-  color: #f7f8fa;
+  margin: 0;
+  color: var(--report-ink);
   font-size: 18px;
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: -0.025em;
 }
-.service-report-risk-grid p {
-  margin: auto 0 0;
-  padding-top: 20px;
+.service-report-risk-summary strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--report-muted);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+.service-report-risk-grid > article.confirmed:not(.service-report-photo-section) .service-report-risk-summary strong {
+  color: var(--green);
+}
+.service-report-risk-summary strong em {
+  color: var(--warn-ink);
+  font-style: normal;
+  font-weight: 750;
+}
+.service-report-risk-summary-toggle svg {
+  transform: rotate(0deg);
+  transition: transform 160ms ease;
+}
+.service-report-risk-summary-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.service-report-risk-summary p {
+  margin: 6px 0 0;
+  padding: 0;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.45;
+}
+.service-report-inspection-list.service-report-risk-points {
+  display: block;
+  margin: 0 20px 18px;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+.service-report-inspection-list.service-report-risk-points .service-report-inspection-row,
+html[data-theme="dark"] .service-report-inspection-list.service-report-risk-points .service-report-inspection-row,
+.service-report-inspection-list.service-report-risk-points .service-report-inspection-row.attention,
+.service-report-inspection-list.service-report-risk-points .service-report-inspection-row.limited,
+.service-report-inspection-list.service-report-risk-points .service-report-inspection-row.has-photos:hover {
+  min-height: 64px;
+  padding: 11px 0;
+  background: transparent;
+}
+.service-report-inspection-list.service-report-risk-points .service-report-inspection-row {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 14px;
+}
+.service-report-inspection-list.service-report-risk-points .service-report-inspection-icon {
+  width: 42px;
+  height: 42px;
+}
+.service-report-inspection-list.service-report-risk-points .service-report-inspection-row + .service-report-inspection-row {
+  border-top: 1px solid var(--report-line);
+}
+.service-report-risk-photo-panel {
+  margin: 0 20px 18px;
+  padding-top: 17px;
+}
+.service-report-risk-photo-panel .service-report-photo-grid {
+  margin-top: 0;
 }
 .service-report-inspection-tabs {
   min-height: 50px;
@@ -19018,113 +19125,15 @@ html[data-theme="dark"] .service-opportunity-card p {
   line-height: 1.5;
   text-align: center;
 }
-.service-report-evidence-groups {
-  display: grid;
-  gap: 12px;
-}
-.service-report-evidence-group {
-  min-width: 0;
-  padding: 22px;
-  border-radius: calc(18px * var(--corner-scale));
-  background: var(--panel-soft);
-}
-.service-report-evidence-group > header {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 13px;
-  align-items: flex-start;
-}
-.service-report-evidence-group > header > span {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  background: transparent;
-}
-.service-report-evidence-group.confirmed > header > span {
-  background: transparent;
-  color: var(--green);
-}
-.service-report-evidence-group.attention > header > span {
-  background: transparent;
-  color: var(--warn-ink);
-}
-.service-report-evidence-group.critical > header > span {
-  background: transparent;
-  color: var(--accent-dark);
-}
-.service-report-evidence-group.neutral > header > span {
-  background: transparent;
-  color: var(--muted);
-}
-.service-report-evidence-group h4 {
-  margin: 1px 0 0;
-  font-size: 19px;
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-.service-report-evidence-group > header p {
-  max-width: 790px;
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 1.5;
-}
-.service-report-photo-carousel {
-  position: relative;
-  min-width: 0;
-}
 .service-report-photo-grid {
   margin-top: 17px;
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  padding: 3px 1px 10px;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-}
-.service-report-photo-grid::-webkit-scrollbar {
-  display: none;
-}
-.service-report-photo-carousel-arrow {
-  position: absolute;
-  z-index: 2;
-  top: var(--service-report-carousel-arrow-center, 50%);
-  width: 42px;
-  height: 42px;
   display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 50%;
-  background: rgba(15, 17, 20, 0.86);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-  color: #fff;
-  cursor: pointer;
-  transform: translateY(-50%);
-  transition: background-color 160ms ease, transform 160ms ease;
-}
-.service-report-photo-carousel-arrow:hover {
-  background: rgba(15, 17, 20, 0.98);
-  transform: translateY(-50%) scale(1.05);
-}
-.service-report-photo-carousel-arrow:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: 3px;
-}
-.service-report-photo-carousel-arrow.previous {
-  left: -21px;
-}
-.service-report-photo-carousel-arrow.next {
-  right: -21px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 10px;
 }
 .service-report-photo-grid figure {
-  flex: 0 0 calc((100% - 20px) / 3);
-  min-width: 220px;
+  min-width: 0;
   margin: 0;
-  scroll-snap-align: start;
 }
 .service-report-photo-grid figure > button {
   position: relative;
@@ -19494,19 +19503,18 @@ html[data-theme="dark"] .service-opportunity-card p {
   font-size: 14px;
   line-height: 1.45;
 }
-.service-report-photo-viewer-card footer p strong {
-  display: block;
-  margin-bottom: 2px;
-  color: #f7f8fa;
-}
 .service-report-photo-viewer-card footer p > span {
   display: block;
+  color: #f7f8fa;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 .service-report-photo-viewer-card footer p > small {
   display: block;
   margin-top: 5px;
   color: #969da6;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.4;
 }
 .service-report-photo-viewer-card nav {
@@ -19530,18 +19538,25 @@ html[data-theme="dark"] .service-opportunity-card p {
   outline: 3px solid rgba(255, 255, 255, 0.62);
   outline-offset: 2px;
 }
-html[data-theme="dark"] .service-report-sheet {
-  background: #171a1e;
-}
 html[data-theme="dark"] .service-report-vehicle,
 html[data-theme="dark"] .service-report-electric-note {
   background: #0d0f11;
+}
+html[data-theme="dark"] .service-report-vehicle {
+  --report-surface: #080a0c;
+  --report-card: #202328;
+  --report-ink: #f7f8fa;
+  --report-muted: #aeb4bd;
+  --report-line: rgba(255, 255, 255, 0.08);
+  --report-hover: rgba(255, 255, 255, 0.035);
+  border-color: transparent;
+  background: var(--report-surface);
+  box-shadow: none;
 }
 html[data-theme="dark"] .service-report-risk-grid > article,
 html[data-theme="dark"] .service-report-inspection-tabs,
 html[data-theme="dark"] .service-report-inspection-row,
 html[data-theme="dark"] .service-report-inspection-empty,
-html[data-theme="dark"] .service-report-evidence-group,
 html[data-theme="dark"] .service-report-facts dl > div,
 html[data-theme="dark"] .service-report-recommendation li {
   background: #292d33;
@@ -19561,15 +19576,24 @@ html[data-theme="dark"] .service-report-inspection-row.limited {
 html[data-theme="dark"] .service-report-inspection-row.has-photos:hover {
   background: color-mix(in srgb, var(--warn-ink) 18%, #292d33);
 }
+html[data-theme="dark"] .service-report-risk-points .service-report-inspection-row,
+html[data-theme="dark"] .service-report-risk-points .service-report-inspection-row.attention,
+html[data-theme="dark"] .service-report-risk-points .service-report-inspection-row.limited,
+html[data-theme="dark"] .service-report-risk-points .service-report-inspection-row.has-photos:hover {
+  background: transparent;
+}
 .service-report-example + .reviews-section {
   padding-top: 64px;
 }
-@media (max-width: 980px) {
+@media (max-width: 1080px) {
   .service-report-vehicle-top {
     grid-template-columns: 1fr;
   }
+  .service-report-vehicle {
+    padding: 50px 40px 40px;
+  }
   .service-report-verdict {
-    grid-template-columns: minmax(0, 1fr);
+    justify-self: start;
   }
   .service-report-verdict > strong {
     grid-column: 2;
@@ -19584,16 +19608,6 @@ html[data-theme="dark"] .service-report-inspection-row.has-photos:hover {
   }
 }
 @media (max-width: 760px) {
-  .service-report-risk-grid {
-    grid-template-columns: 1fr;
-  }
-  .service-report-risk-grid > article {
-    min-height: 0;
-  }
-  .service-report-risk-grid p {
-    margin-top: 16px;
-    padding-top: 0;
-  }
   .service-report-limitations {
     grid-template-columns: 46px minmax(0, 1fr);
   }
@@ -19621,23 +19635,23 @@ html[data-theme="dark"] .service-report-inspection-row.has-photos:hover {
     font-size: 16px;
     text-wrap: pretty;
   }
-  .service-report-sheet {
-    margin-inline: -6px;
-    padding: 8px;
-    border-radius: calc(24px * var(--corner-scale));
-  }
   .service-report-vehicle {
     min-height: 0;
     display: block;
-    padding: 24px 20px;
+    padding: 24px 20px 20px;
     border-radius: calc(19px * var(--corner-scale));
   }
-  .service-report-vehicle-identity > h3 {
+  .service-report-vehicle-top {
+    gap: 28px;
+  }
+  .service-report-vehicle-image {
+    width: 104px;
+  }
+  .service-report-vehicle-heading h3 {
     font-size: 32px;
   }
-  .service-report-vehicle dl {
-    display: grid;
-    gap: 8px;
+  .service-report-vehicle-meta-grid {
+    gap: 18px;
     margin-top: 20px;
   }
   .service-report-demo-badge {
@@ -19645,7 +19659,7 @@ html[data-theme="dark"] .service-report-inspection-row.has-photos:hover {
     margin-top: 22px;
   }
   .service-report-vehicle-risks {
-    margin-top: 24px;
+    margin-top: 36px;
     padding-top: 0;
   }
   .service-report-verdict {
@@ -19697,11 +19711,42 @@ html[data-theme="dark"] .service-report-inspection-row.has-photos:hover {
     margin-top: 14px;
   }
   .service-report-risk-grid > article {
-    padding: 18px;
+    padding: 0;
     border-radius: calc(15px * var(--corner-scale));
   }
+  .service-report-risk-summary {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 11px;
+    padding: 16px 56px 16px 16px;
+  }
+  .service-report-risk-summary-toggle {
+    padding-inline: 24px;
+  }
+  .service-report-risk-summary > span {
+    width: 38px;
+    height: 38px;
+  }
+  .service-report-risk-summary small {
+    grid-column: 2;
+  }
   .service-report-risk-grid h4 {
-    margin-top: 19px;
+    margin-top: 0;
+  }
+  .service-report-inspection-list.service-report-risk-points {
+    margin-inline: 16px;
+    margin-bottom: 16px;
+  }
+  .service-report-inspection-list.service-report-risk-points .service-report-inspection-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 11px;
+  }
+  .service-report-inspection-list.service-report-risk-points .service-report-inspection-icon {
+    width: 38px;
+    height: 38px;
+  }
+  .service-report-risk-photo-panel {
+    margin: 0 16px 16px;
+    padding-top: 16px;
   }
   .service-report-inspection-tabs {
     margin-inline: -2px;
@@ -19733,30 +19778,13 @@ html[data-theme="dark"] .service-report-inspection-row.has-photos:hover {
     justify-self: start;
     margin-top: -2px;
   }
-  .service-report-evidence-group {
-    padding: 18px;
-    border-radius: calc(15px * var(--corner-scale));
-  }
-  .service-report-evidence-group > header {
-    grid-template-columns: 34px minmax(0, 1fr);
-    gap: 11px;
-  }
-  .service-report-evidence-group > header > span {
-    width: 34px;
-    height: 34px;
-  }
   .service-report-photo-grid {
     max-width: none;
-    display: flex;
-    gap: 10px;
-    overflow-x: auto;
-    padding: 3px 2px 8px;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: thin;
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
   .service-report-photo-grid figure {
-    flex: 0 0 min(74vw, 286px);
-    scroll-snap-align: start;
+    min-width: 0;
   }
   .service-report-facts dl {
     grid-template-columns: 1fr 1fr;
@@ -19826,8 +19854,23 @@ html[data-theme="dark"] .service-report-inspection-row.has-photos:hover {
   .service-report-photo-viewer-card footer p {
     font-size: 13px;
   }
-  .service-report-example + .reviews-section {
+  .service-report-photo-viewer-card footer p > span {
+    font-size: 16px;
+  }
+.service-report-example + .reviews-section {
     padding-top: 40px;
+  }
+}
+@media (max-width: 520px) {
+  .service-report-vehicle-heading {
+    gap: 12px;
+  }
+  .service-report-vehicle-image {
+    width: 104px;
+  }
+  .service-report-vehicle-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }
 .service-catalog-section {

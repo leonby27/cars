@@ -14,6 +14,7 @@ test("пример отчёта сохраняет полный список и 
   assert.equal(photos.length, 17);
   assert.equal(knownPhotoIds.size, photoIds.length, "id фотографий должны быть уникальными");
   assert.equal(report.document?.title, undefined, "служебный заголовок отчёта не должен выводиться");
+  assert.ok(report.facts.every((fact) => fact.id !== "body"), "тип кузова не должен выводиться в примере отчёта");
   assert.ok(report.risks.every((risk) => !risk.note), "карточки рисков должны оставаться без вторичных описаний");
   assert.deepEqual(report.inspectionSections.map((section) => section.points.length), [70, 31, 23]);
 

@@ -74,10 +74,16 @@ const inspectionPoints = (rows) => Object.freeze(rows.map(([
 export const SERVICE_REPORT_EXAMPLE = Object.freeze({
   id: "audi-q2l-2021-demo",
   presentation: Object.freeze({
-    title: "Что вы узнаете до оплаты автомобиля",
+    title: "Пример отчёта о состоянии авто",
   }),
   vehicle: Object.freeze({
     name: "Audi Q2L",
+    image: Object.freeze({
+      src: "/services/report-example/audi-q2l-cover.png",
+      alt: "Audi Q2L серого цвета, вид спереди слева",
+      width: 960,
+      height: 506,
+    }),
     meta: Object.freeze([
       { id: "vin", label: "VIN", value: "LFV2••••••499094" },
       { id: "year", label: "Год", value: "2021" },
@@ -261,7 +267,6 @@ export const SERVICE_REPORT_EXAMPLE = Object.freeze({
   ]),
   facts: Object.freeze([
     { id: "mileage", label: "Пробег", value: "49 470 км" },
-    { id: "body", label: "Кузов", value: "Кроссовер" },
     { id: "engine", label: "Двигатель", value: "1,4 л · турбо" },
     { id: "fuel", label: "Топливо", value: "Бензин" },
     { id: "production-date", label: "Дата выпуска", value: "Декабрь 2021" },
