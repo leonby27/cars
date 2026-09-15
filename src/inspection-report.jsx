@@ -172,7 +172,7 @@ export function InspectionReport({ report }) {
     <section className="service-report-example page-width" aria-labelledby={`${sectionId}-title`}>
       <div className="service-report-example-heading">
         {report.presentation?.eyebrow && <span>{report.presentation.eyebrow}</span>}
-        <h2 id={`${sectionId}-title`}>{report.presentation?.title || "Пример отчёта о состоянии авто"}</h2>
+        <h2 id={`${sectionId}-title`}>{report.presentation?.title || "Пример отчёта до покупки авто"}</h2>
         {report.presentation?.description && <p>{report.presentation.description}</p>}
       </div>
 

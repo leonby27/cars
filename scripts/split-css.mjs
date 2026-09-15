@@ -36,7 +36,7 @@ const arg = (name, fallback) => {
   return found ? found.slice(name.length + 3) : fallback;
 };
 
-const clientDir = arg("dir", "dist/client");
+const clientDir = arg("dir", `${process.env.ABCARS_BUILD_DIR || "dist"}/client`);
 const assetsDir = join(clientDir, "assets");
 const indexPath = join(clientDir, "index.html");
 

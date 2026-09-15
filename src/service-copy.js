@@ -23,26 +23,69 @@ export const PURCHASE_FLOW_STEPS = Object.freeze([
   {
     title: "Выбор автомобиля",
     text: "Каталог или подбор под вас",
+    visual: {
+      src: "/illustrations/purchase-catalog-2026-light.webp",
+      darkSrc: "/illustrations/purchase-catalog-2026-dark.webp",
+      alt: "Автомобили и фильтры в каталоге abcars.by",
+      width: 2740,
+      height: 1720,
+      kind: "screenshot",
+    },
   },
   {
     title: "Проверка и диагностика",
     text: "Проверка VIN и состояния",
+    visual: {
+      src: "/illustrations/purchase-inspection.png",
+      alt: "Проверка автомобиля диагностическим сканером",
+      width: 1280,
+      height: 960,
+      kind: "photo",
+    },
   },
   {
     title: "Договор и выкуп",
     text: "Договор и выкуп автомобиля",
+    visual: {
+      src: "/illustrations/purchase-buyout.webp",
+      alt: "Договор купли-продажи и передача ключа у автомобиля",
+      width: 1536,
+      height: 1024,
+      kind: "photo",
+    },
   },
   {
     title: "Логистика из Китая",
     text: "Экспорт и доставка в Беларусь",
+    visual: {
+      src: "/illustrations/purchase-delivery.png",
+      alt: "Автомобили на автовозе перед доставкой",
+      width: 1595,
+      height: 986,
+      kind: "photo",
+    },
   },
   {
     title: "Таможня и оформление",
     text: "Таможня и комплект документов",
+    visual: {
+      src: "/illustrations/purchase-customs-documents.webp",
+      alt: "Автомобиль, паспорт транспортного средства и документы",
+      width: 1675,
+      height: 939,
+      kind: "photo",
+    },
   },
   {
     title: "Выдача в Минске",
     text: "Автомобиль, документы и ключи",
+    visual: {
+      src: "/illustrations/purchase-contract.png",
+      alt: "Договор купли-продажи автомобиля и ключ на фоне автомобиля",
+      width: 1536,
+      height: 1024,
+      kind: "photo",
+    },
   },
 ]);
 
@@ -74,7 +117,7 @@ const inspectionPoints = (rows) => Object.freeze(rows.map(([
 export const SERVICE_REPORT_EXAMPLE = Object.freeze({
   id: "audi-q2l-2021-demo",
   presentation: Object.freeze({
-    title: "Пример отчёта о состоянии авто",
+    title: "Пример отчёта до покупки авто",
   }),
   vehicle: Object.freeze({
     name: "Audi Q2L",

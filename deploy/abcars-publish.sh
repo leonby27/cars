@@ -22,11 +22,16 @@ case $? in
   *) echo "проверка журнала сломалась — на всякий случай ничего не пересобираю"; exit 1 ;;
 esac
 
-# Прошлая сборка остаётся рядом: если новая окажется плохой, возвращаем её на место
-# тут же, не дожидаясь, пока кто-то заметит поломанный сайт.
-rm -rf dist.prev
-[ -d dist ] && cp -a dist dist.prev
-if npm run build >/tmp/abcars-publish-build.log 2>&1; then
+# Build beside the live site: its pictures and already-opened text chunks stay
+# available for the whole build, even when the new publication takes minutes.
+if ABCARS_BUILD_DIR=dist.next npm run build >/tmp/abcars-publish-build.log 2>&1; then
+  rm -rf dist.prev
+  if [ -d dist ]; then mv dist dist.prev; fi
+  if ! mv dist.next dist; then
+    [ -d dist.prev ] && mv dist.prev dist
+    exit 1
+  fi
+  bash deploy/abcars-archive-assets.sh
   systemctl restart abcars
   find /var/cache/nginx/abcars -type f -delete
   npm run warm:api || true
@@ -36,14 +41,7 @@ if npm run build >/tmp/abcars-publish-build.log 2>&1; then
   npm run indexnow || echo "поисковикам сообщить не удалось — уйдёт со следующей рассылкой"
   echo "журнал обновлён"
 else
-  echo "СБОРКА НЕ УДАЛАСЬ — возвращаю прежнюю, подробности в /tmp/abcars-publish-build.log"
+  echo "СБОРКА НЕ УДАЛАСЬ — прежняя версия продолжает работать, подробности в /tmp/abcars-publish-build.log"
   tail -5 /tmp/abcars-publish-build.log
-  if [ -d dist.prev ]; then
-    rm -rf dist
-    cp -a dist.prev dist
-    systemctl restart abcars
-    systemctl reload nginx
-    echo "прежняя сборка возвращена, сайт работает как вчера"
-  fi
   exit 1
 fi

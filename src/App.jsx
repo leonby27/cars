@@ -4358,7 +4358,7 @@ function PopularBrands({ navigate, cars, apiMode }) {
         <div className="popular-brands-more">
           <button type="button" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded}>
             {expanded ? "Свернуть список" : countsKnown
-              ? `Показать ${pluralRu(brands.length, "всю", "все", "все")} ${number(brands.length)} ${pluralRu(brands.length, "марку", "марки", "марок")}`
+              ? `Показать все марки (${number(brands.length)})`
               : "Показать все марки"}
             <CaretDown size={16} weight="bold" aria-hidden="true" />
           </button>
@@ -8745,9 +8745,28 @@ function ServicePurchaseFlow() {
             );
           })}
         </div>
-        <div className="service-purchase-flow-visual" role="region" aria-live="polite" aria-label={`Заглушка визуала этапа «${activeStep.title}»`}>
-          <div className="service-purchase-flow-placeholder" key={activeStep.title}>
-            <span>Здесь появится визуал этапа</span>
+        <div className="service-purchase-flow-visual" role="region" aria-live="polite" aria-label={`Иллюстрация этапа «${activeStep.title}»`}>
+          <div className={`service-purchase-flow-artwork ${activeStep.visual.kind}`} key={activeStep.title}>
+            <img
+              className={activeStep.visual.darkSrc ? "theme-light" : undefined}
+              src={activeStep.visual.src}
+              width={activeStep.visual.width}
+              height={activeStep.visual.height}
+              alt={activeStep.visual.alt}
+              loading="lazy"
+              decoding="async"
+            />
+            {activeStep.visual.darkSrc && (
+              <img
+                className="theme-dark"
+                src={activeStep.visual.darkSrc}
+                width={activeStep.visual.width}
+                height={activeStep.visual.height}
+                alt={activeStep.visual.alt}
+                loading="lazy"
+                decoding="async"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -8759,7 +8778,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
   const darkIntroRef = useRef(null);
   const { total, updatedAt } = useCatalogFacts();
   const assuranceArtwork = [
-    { src: "/services/independent-check-magnifier.png", alt: "Автомобиль под увеличительным стеклом", className: "service-assurance-art-diagnostics", width: 768, height: 768 },
+    { src: "/services/independent-check-body-repair.png", alt: "Повреждения кузова автомобиля под увеличительным стеклом", className: "service-assurance-art-diagnostics", width: 1254, height: 1254 },
     { src: "/services/vehicle-tracking-container.png", alt: "Красный грузовой контейнер", className: "service-assurance-art-tracking", width: 768, height: 768 },
   ];
 
@@ -9612,9 +9631,13 @@ function useBlogText(slug) {
     setText(ready);
     if (ready) return undefined;
     let alive = true;
-    loadBlogText(slug).then((loaded) => {
-      if (alive) setText(loaded);
-    });
+    loadBlogText(slug)
+      .then((loaded) => {
+        if (alive) setText(loaded || { intro: ["Текст временно не загрузился. Обновите страницу, чтобы попробовать ещё раз."] });
+      })
+      .catch(() => {
+        if (alive) setText({ intro: ["Текст временно не загрузился. Обновите страницу, чтобы попробовать ещё раз."] });
+      });
     return () => {
       alive = false;
     };
@@ -10490,7 +10513,17 @@ function BlogTopList({ post, cars, total, changedAt, navigate, onOpen }) {
  */
 function BlogCoverImage({ cover, place, eager = false }) {
   if (!cover?.src) return null;
-  return <img src={appHref(`${cover.src}-${place}.jpg`)} alt={cover.alt || ""} loading={eager ? "eager" : "lazy"} />;
+  const source = appHref(`${cover.src}-${place}.jpg`);
+  const retry = (event) => {
+    const image = event.currentTarget;
+    const attempt = Number(image.dataset.retryAttempt || 0);
+    if (attempt >= 2) return;
+    image.dataset.retryAttempt = String(attempt + 1);
+    setTimeout(() => {
+      if (image.isConnected) image.src = `${source}?retry=${attempt + 1}`;
+    }, (attempt + 1) * 500);
+  };
+  return <img src={source} alt={cover.alt || ""} loading={eager ? "eager" : "lazy"} onError={retry} />;
 }
 
 // Рекламная врезка внутри материала журнала: одна строка про каталог и кнопка.

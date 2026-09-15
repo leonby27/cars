@@ -81,6 +81,7 @@ import registration_belarus from "./blog-texts/registration-belarus.js";
 import avatr_07_vs_deepal_s07 from "./blog-texts/avatr-07-vs-deepal-s07.js";
 import which_minivan from "./blog-texts/which-minivan.js";
 import ev_quota_2027 from "./blog-texts/ev-quota-2027.js";
+import ev_quota_extra_2026 from "./blog-texts/ev-quota-extra-2026.js";
 import low_mileage_under_20000 from "./blog-texts/low-mileage-under-20000.js";
 import ev_tyres_suspension from "./blog-texts/ev-tyres-suspension.js";
 import byd_han_vs_tesla_model_3 from "./blog-texts/byd-han-vs-tesla-model-3.js";
@@ -168,6 +169,7 @@ export const BLOG_TEXTS_RAW = Object.freeze({
   "avatr-07-vs-deepal-s07": avatr_07_vs_deepal_s07,
   "which-minivan": which_minivan,
   "ev-quota-2027": ev_quota_2027,
+  "ev-quota-extra-2026": ev_quota_extra_2026,
   "low-mileage-under-20000": low_mileage_under_20000,
   "ev-tyres-suspension": ev_tyres_suspension,
   "byd-han-vs-tesla-model-3": byd_han_vs_tesla_model_3,

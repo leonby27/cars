@@ -1,11 +1,12 @@
 import { defineConfig } from "vite";
+import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import { trimModelPages } from "./scripts/vite-trim-model-pages.mjs";
 
 export default defineConfig({
   base: "/",
   build: {
-    outDir: "dist/client",
+    outDir: join(process.env.ABCARS_BUILD_DIR || "dist", "client"),
   },
   optimizeDeps: {
     include: ["react", "react-dom/client"],

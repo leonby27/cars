@@ -71,31 +71,23 @@ else
   echo "формула цены не менялась: полный пересчёт каталога пропущен"
 fi
 
-rm -rf dist.prev
-[ -d dist ] && cp -a dist dist.prev
-if npm run build >/tmp/abcars-deploy-build.log 2>&1; then
+if ABCARS_BUILD_DIR=dist.next npm run build >/tmp/abcars-deploy-build.log 2>&1; then
   echo "сборка готова"
 else
-  echo "сборка не удалась — возвращаю предыдущую версию"
+  echo "сборка не удалась — предыдущая версия продолжает работать"
   tail -20 /tmp/abcars-deploy-build.log
-  if [ -d dist.prev ]; then
-    rm -rf dist
-    cp -a dist.prev dist
-  fi
   exit 1
 fi
 
-# Архив файлов сборки. У каждого файла в имени отпечаток содержимого, поэтому
-# после выкладки старые имена исчезают, а их продолжают просить записи Вебвизора
-# и вкладки, открытые до выкладки. Храним такие файлы три месяца.
-mkdir -p asset-archive/assets
-cp -an dist/client/assets/. asset-archive/assets/ 2>/dev/null || true
-cur=$(ls -t dist/client/assets/index-*.css 2>/dev/null | head -1)
-if [ -n "${cur:-}" ]; then
-  cp -f "$cur" asset-archive/assets/latest-style.css
-  [ -f "$cur.br" ] && cp -f "$cur.br" asset-archive/assets/latest-style.css.br || true
+# Build beside the live directory, then exchange the two directories only after
+# the new pages, images and text chunks are all ready.
+rm -rf dist.prev
+if [ -d dist ]; then mv dist dist.prev; fi
+if ! mv dist.next dist; then
+  [ -d dist.prev ] && mv dist.prev dist
+  exit 1
 fi
-find asset-archive/assets -type f -mtime +90 ! -name "latest-style.css*" -delete || true
+bash deploy/abcars-archive-assets.sh
 
 systemctl restart abcars
 find /var/cache/nginx/abcars -type f -delete

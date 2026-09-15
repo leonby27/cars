@@ -23,12 +23,13 @@ const arg = (name, fallback) => {
   return found ? found.slice(name.length + 3) : fallback;
 };
 
-const root = arg("dir", "dist/client");
+const buildDir = process.env.ABCARS_BUILD_DIR || "dist";
+const root = arg("dir", `${buildDir}/client`);
 // Прошлая сборка: выкладка на сервере сохраняет её в dist.prev до пересборки. Если
 // файл не изменился с прошлого раза, его сжатую копию берём оттуда готовой — между
 // выкладками без смены данных не меняется почти ничего, а распаковать для сравнения
 // в разы дешевле, чем сжать уровнем 11 заново. Локально dist.prev нет — жмём всё.
-const previousRoot = arg("previous", "dist.prev/client");
+const previousRoot = arg("previous", buildDir === "dist.next" ? "dist/client" : "dist.prev/client");
 // Только то, что сжимается с толком. Фотографии, шрифты woff2 и картинки png/jpg/webp
 // уже сжаты внутри себя — второй проход дал бы проценты при заметном размере на диске.
 const compressible = new Set([".css", ".js", ".mjs", ".svg", ".json", ".xml", ".txt", ".html"]);

@@ -110,3 +110,34 @@ No actionable P0, P1 or P2 issues remain. The requested compactness is visible a
 No additional polish is required for this scoped change.
 
 final result: passed
+
+---
+
+# Design QA — Audi report layout from reference image
+
+- Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-5669232f-9006-4356-abaa-beb446ff8009.png`
+- Source image: 2722 × 1528 px; its CSS viewport and device pixel ratio are unknown.
+- Implementation route: `http://127.0.0.1:5173/how-it-works`.
+- Implementation screenshot: unavailable; the owner requested to review the page visually themselves.
+- Intended state: dark theme, four report sections collapsed.
+- Current annotation viewport: 1114 × 894 CSS px. No same-viewport capture or density normalization was performed.
+
+## Full-view and focused comparison evidence
+
+The reference was opened and inspected: car and name in one row, two vehicle-data columns below, verdict on the right, and four full-width collapsed sections. The implementation uses that structure. No rendered full-view or focused-region screenshot was captured, so visual comparison cannot be completed.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing Manrope styles retained; rendered wrapping unverified.
+- Spacing and layout rhythm: header and metadata positions adjusted to the reference; rendered alignment unverified.
+- Colors and tokens: existing dark and light report palettes retained; rendered colors unverified.
+- Image quality and asset fidelity: existing Audi cutout reused; rendered size and sharpness unverified.
+- Copy and content: report content preserved, including the body type not shown in the reference; rendering unverified.
+
+## Findings, interaction checks and comparison history
+
+No visual severity finding is possible without an implementation capture. The production build and all 645 automated tests passed. The four disclosure controls were not browser-tested in this pass. This is the first layout pass; there is no post-fix comparison.
+
+final result: blocked
+
+Blocker: browser-based image-to-code QA was intentionally left to the owner.

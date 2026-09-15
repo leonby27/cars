@@ -23,8 +23,9 @@ const arg = (name, fallback) => {
   return found ? found.slice(name.length + 3) : fallback;
 };
 
-const clientDir = arg("dir", "dist/client");
-const ssrDir = arg("ssr", "dist/ssr");
+const buildDir = process.env.ABCARS_BUILD_DIR || "dist";
+const clientDir = arg("dir", `${buildDir}/client`);
+const ssrDir = arg("ssr", `${buildDir}/ssr`);
 const indexPath = join(clientDir, "index.html");
 
 const { renderAppPage } = await import(pathToFileURL(join(process.cwd(), ssrDir, "entry-server.js")).href);

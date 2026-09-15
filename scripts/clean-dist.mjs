@@ -10,4 +10,8 @@ if (existsSync(forbiddenHostingConfig)) {
   throw new Error("ChatGPT Sites hosting is disabled for this project; production is abcars.by on Timeweb.");
 }
 
-rmSync(path.join(root, "dist"), { recursive:true, force:true });
+const buildDir = process.env.ABCARS_BUILD_DIR || "dist";
+if (buildDir !== "dist" && buildDir !== "dist.next") {
+  throw new Error(`Unexpected build directory: ${buildDir}`);
+}
+rmSync(path.join(root, buildDir), { recursive:true, force:true });

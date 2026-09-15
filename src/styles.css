@@ -8255,6 +8255,27 @@ footer {
 .detail-gallery {
   position: relative;
 }
+@media (max-width: 700px) {
+  .detail-main > .detail-content {
+    display: contents;
+  }
+  .detail-content > * {
+    grid-column: 1;
+    order: 4;
+  }
+  .detail-main .detail-sidebar > * {
+    order: 10;
+  }
+  .detail-main .detail-sidebar > .order-card {
+    order: 7;
+  }
+  .detail-content > .detail-section-links {
+    order: 8;
+  }
+  .detail-content > .detail-tools-footer {
+    order: 9;
+  }
+}
 
 /* Увеличение фотографии на компьютере живёт прямо в квадратной линзе под
    курсором. На сенсорных и узких экранах она не участвует ни в раскладке, ни в UI. */
@@ -18416,23 +18437,53 @@ html[data-theme="dark"] .service-opportunity-card p {
   border-radius: calc(28px * var(--corner-scale));
   background: var(--panel-soft);
 }
-.service-purchase-flow-placeholder {
+.service-purchase-flow-artwork {
   flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
+  min-height: 492px;
+  position: relative;
+  overflow: hidden;
   border-radius: calc(20px * var(--corner-scale));
   background: var(--surface);
-  text-align: center;
   animation: service-purchase-flow-panel-in 220ms ease-out both;
 }
-.service-purchase-flow-placeholder span {
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.45;
+.service-purchase-flow-artwork img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.service-purchase-flow-artwork.photo img,
+.service-purchase-flow-artwork.wide-photo img {
+  object-fit: cover;
+}
+.service-purchase-flow-artwork.screenshot img {
+  inset: 16px 0 auto;
+  height: auto;
+}
+.service-purchase-flow-artwork.cutout img {
+  inset: 50% auto auto 50%;
+  width: min(85%, 560px);
+  height: min(90%, 450px);
+  transform: translate(-50%, -50%);
+}
+.service-purchase-flow-artwork.screenshot,
+.service-purchase-flow-artwork.theme-art {
+  background: #fff;
+}
+html[data-theme="dark"] .service-purchase-flow-artwork.screenshot,
+html[data-theme="dark"] .service-purchase-flow-artwork.theme-art {
+  background: #101214;
+}
+.service-purchase-flow-artwork .theme-dark {
+  display: none;
+}
+html[data-theme="dark"] .service-purchase-flow-artwork .theme-light {
+  display: none;
+}
+html[data-theme="dark"] .service-purchase-flow-artwork .theme-dark {
+  display: block;
 }
 @keyframes service-purchase-flow-panel-in {
   from { opacity: 0; transform: translateY(7px); }
@@ -18460,6 +18511,9 @@ html[data-theme="dark"] .service-opportunity-card p {
   }
   .service-purchase-flow-visual {
     min-height: 508px;
+  }
+  .service-purchase-flow-artwork {
+    min-height: 456px;
   }
 }
 @media (max-width: 700px) {
@@ -18509,8 +18563,8 @@ html[data-theme="dark"] .service-opportunity-card p {
     padding: 18px;
     border-radius: calc(20px * var(--corner-scale));
   }
-  .service-purchase-flow-placeholder {
-    padding: 22px;
+  .service-purchase-flow-artwork {
+    min-height: 264px;
     border-radius: calc(16px * var(--corner-scale));
   }
   .service-purchase-flow + .reviews-section {
@@ -18522,7 +18576,7 @@ html[data-theme="dark"] .service-opportunity-card p {
   .service-purchase-flow-number {
     transition: none;
   }
-  .service-purchase-flow-placeholder {
+  .service-purchase-flow-artwork {
     animation: none;
   }
 }
@@ -18833,6 +18887,9 @@ html[data-theme="dark"] .service-opportunity-card p {
 .service-report-risk-grid > article.critical .service-report-risk-summary > span {
   background: var(--accent-soft);
   color: var(--accent-dark);
+}
+html[data-theme="light"] .service-report-risk-grid > article .service-report-risk-summary > span {
+  background: #fff;
 }
 .service-report-risk-summary small {
   color: var(--muted);

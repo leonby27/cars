@@ -28,7 +28,7 @@ import { BLOG_ENABLED } from "../src/feature-flags.js";
 import { SAMPLE_REPORT, groups, indexChartSvg, percent } from "../src/blog-report.js";
 import { blogFigureHtml } from "../src/blog-figures.js";
 import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt, blogPostHidden } from "../src/blog-posts.js";
-import { blogPostWithText } from "../src/blog-texts.js";
+import { BLOG_TEXTS, blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
@@ -37,7 +37,20 @@ import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
 // временной папке, чтобы не зависеть ни от дампа каталога, ни от общей сборки.
-const clientDir = process.env.SEO_OUTPUT_DIR ? path.resolve(process.env.SEO_OUTPUT_DIR) : path.join(root, "dist", "client");
+const clientDir = process.env.SEO_OUTPUT_DIR ? path.resolve(process.env.SEO_OUTPUT_DIR) : path.join(root, process.env.ABCARS_BUILD_DIR || "dist", "client");
+// Stable URLs give the browser a second way to get an article when an older tab
+// still refers to a text chunk from before a publication.
+if (BLOG_ENABLED) {
+  const textDir = path.join(clientDir, "blog-texts");
+  mkdirSync(textDir, { recursive: true });
+  for (const name of readdirSync(textDir)) {
+    if (name.endsWith(".json")) rmSync(path.join(textDir, name));
+  }
+  for (const post of blogPosts()) {
+    const text = BLOG_TEXTS[post.slug];
+    if (text) writeFileSync(path.join(textDir, `${post.slug}.json`), `${JSON.stringify(text)}\n`);
+  }
+}
 // Заготовку читаем из `app-shell.html`, если он уже есть, и только иначе из
 // `index.html`. Причина: генератор перезаписывает `index.html` готовой главной
 // страницей, поэтому повторный запуск на той же сборке брал бы за заготовку страницу
