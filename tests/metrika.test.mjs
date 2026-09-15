@@ -129,3 +129,8 @@ test("модалка быстрого просмотра сообщает Мет
   assert.ok(open.slice(0, 700).includes("trackMetrikaView("), "открытие модалки перестало считаться просмотром");
   assert.ok(open.slice(0, 700).includes('trackMetrikaGoal("quick_view")'), "цель быстрого просмотра пропала");
 });
+
+// The service film is prepared fully before attaching a local object URL.
+test("политика безопасности разрешает подготовленное видео", () => {
+  assert.match(nginxCsp, /(?:^|;)\s*media-src 'self' blob:/);
+});

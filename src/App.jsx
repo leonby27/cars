@@ -1,3 +1,4 @@
+import { prepareServiceVideo } from "./service-video-loading.js";
 import { readCatalogFallback } from "./catalog-fallback.js";
 import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "./auth-route.js";
 import { Phone, Star } from "@phosphor-icons/react";
@@ -8383,6 +8384,8 @@ function OrderDraft({ car, navigate }) {
 }
 
 function ServiceScrollVideo({ navigate, total, updatedAt }) {
+  const isMobileVideo = useMediaQuery("(max-width: 700px)");
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const sceneRef = useRef(null);
   const stickyRef = useRef(null);
   const videoRef = useRef(null);
@@ -8391,17 +8394,18 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
     const scene = sceneRef.current;
     const sticky = stickyRef.current;
     const video = videoRef.current;
-    if (!scene || !sticky || !video) return undefined;
+    if (!scene || !sticky || !video || isMobileVideo !== (window.innerWidth <= 700)) return undefined;
     const pageShell = scene.closest(".service-video-shell");
 
     let updateFrame = 0;
     let seekFrame = 0;
     let targetTime = 0;
     let seeking = false;
+    let prepared = false;
 
     const commitFrame = () => {
       seekFrame = 0;
-      if (seeking || video.readyState < 1 || !Number.isFinite(video.duration)) return;
+      if (!prepared || seeking || video.readyState < 2 || !Number.isFinite(video.duration)) return;
       if (Math.abs(video.currentTime - targetTime) <= 1 / 45) return;
       seeking = true;
       video.currentTime = targetTime;
@@ -8416,6 +8420,10 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
     const update = () => {
       updateFrame = 0;
       const rect = scene.getBoundingClientRect();
+      if (!prepared) {
+        pageShell?.classList.toggle("service-video-header-active", rect.bottom > sticky.offsetHeight * 0.2);
+        return;
+      }
       const stickyTop = Number.parseFloat(window.getComputedStyle(sticky).top) || 0;
       const scrollDistance = Math.max(1, scene.offsetHeight - sticky.offsetHeight);
       const isMobileViewport = window.innerWidth <= 700;
@@ -8424,7 +8432,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
       // Desktop keeps the two-copy film sequence. On mobile the film stays pinned
       // behind naturally scrolling copy/cards and fades independently near the end.
       const playbackProgress = isMobileViewport
-        ? 0.44 + 0.56 * Math.min(1, progress / 0.5)
+        ? Math.min(1, progress / 0.5)
         : Math.min(1, progress / 0.84);
       const fadeProgress = isMobileViewport
         ? Math.min(1, Math.max(0, (progress - 0.5) / 0.28))
@@ -8463,47 +8471,51 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
     };
 
     video.pause();
-    video.addEventListener("loadedmetadata", update);
     video.addEventListener("seeked", handleSeeked);
     window.addEventListener("scroll", scheduleUpdate, { passive: true });
     window.addEventListener("resize", scheduleUpdate);
+    const cancelPreparation = prepareServiceVideo({
+      video,
+      poster: scene.querySelector(".service-scroll-poster"),
+      source: isMobileVideo ? "/videos/how-it-works-mobile-v2.mp4" : "/videos/how-it-works-desktop-v2.mp4",
+      onReady: () => {
+        prepared = true;
+        scene.classList.add("service-video-ready");
+        update();
+      },
+    });
     update();
 
     return () => {
+      cancelPreparation();
+      scene.classList.remove("service-video-ready", "service-video-copy-swapped");
+      scene.removeAttribute("style");
       if (updateFrame) window.cancelAnimationFrame(updateFrame);
       if (seekFrame) window.cancelAnimationFrame(seekFrame);
-      video.removeEventListener("loadedmetadata", update);
       video.removeEventListener("seeked", handleSeeked);
       window.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
       pageShell?.classList.remove("service-video-header-active");
     };
-  }, []);
+  }, [isMobileVideo, reducedMotion]);
 
   const roundedListings = total >= 100 ? formatRoundedListingCount(total).replace(/\+$/, "") : "64900";
   const catalogUpdateLabel = updatedAt ? catalogUpdatedDate(updatedAt) : "";
   // The complete opening region intentionally matches the dark theme in both
   // modes; the selected site theme resumes after the capability cards.
-  const mobileVideoSource = "/videos/how-it-works-scroll-mobile.mp4?v=20260911-1";
-  const desktopVideoSource = "/videos/how-it-works-scroll.mp4?v=20260911-6";
-  const videoPoster = "/videos/how-it-works-scroll-poster.png?v=20260911-6";
 
   return (
     <section className="service-video-story" ref={sceneRef} aria-label="Автомобиль прибывает из Китая">
       <div className="service-video-sticky" ref={stickyRef}>
-        <video
-          ref={videoRef}
-          className="service-scroll-video"
-          poster={videoPoster}
-          preload="auto"
-          muted
-          playsInline
-          aria-hidden="true"
-          tabIndex={-1}
-        >
-          <source src={mobileVideoSource} media="(max-width: 700px)" type="video/mp4" />
-          <source src={desktopVideoSource} type="video/mp4" />
-        </video>
+        <div className="service-scroll-media">
+          <picture>
+            <source media="(max-width: 700px)" srcSet="/videos/how-it-works-mobile-poster.webp" />
+            <img className="service-scroll-poster" src="/videos/how-it-works-desktop-poster.webp"
+              alt="" width="1920" height="1080" fetchPriority="high" />
+          </picture>
+          <video ref={videoRef} className="service-scroll-video" preload="none"
+            muted playsInline aria-hidden="true" tabIndex={-1} />
+        </div>
         <div className="service-video-copy">
           <div className="service-video-copy-inner">
             <div className="service-video-copy-panel service-video-copy-panel-primary">

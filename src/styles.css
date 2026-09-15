@@ -20045,7 +20045,9 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   overflow: hidden;
   background: var(--page);
 }
-.service-scroll-video {
+.service-scroll-media {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -20053,6 +20055,26 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   object-position: center;
   opacity: var(--service-video-opacity);
   will-change: opacity;
+}
+.service-scroll-poster,
+.service-scroll-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.service-scroll-video { opacity: 0; }
+.service-video-ready .service-scroll-video { opacity: 1; }
+/* The initial and slow-network layout is an ordinary single-screen hero.
+   Only a fully prepared film may opt into the longer pinned sequence. */
+.service-video-story:not(.service-video-ready) { height: 100svh; }
+.service-video-story:not(.service-video-ready) .service-video-sticky { position: relative; }
+.service-video-story:not(.service-video-ready) .service-video-copy-panel-secondary,
+.service-video-story:not(.service-video-ready) .service-video-scroll-cue { display: none; }
+.service-dark-intro .service-video-story:not(.service-video-ready) + .info-proof-section {
+  margin-top: 0;
 }
 .service-video-copy {
   position: absolute;
@@ -20277,7 +20299,7 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
     top: 0;
     height: 100svh;
   }
-  .service-scroll-video {
+  .service-scroll-media {
     position: absolute;
     top: 66px;
     left: 0;
