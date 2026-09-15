@@ -48,7 +48,7 @@ import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
-import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES } from "./purchase-info.js";
+import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS } from "./purchase-info.js";
 import { TRACKING_FAQ } from "./tracking-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
@@ -1000,7 +1000,6 @@ const routeSeo = {
   "/": ["Б/у авто из Китая в Беларусь — доставка и проверка | abcars.by", "Б/у авто из Китая с проверкой и доставкой в Беларусь. Каталог актуальных объявлений, цена в Китае и предварительный расчёт стоимости до Минска."],
   "/catalog": ["Купить б/у авто из Китая — каталог и цены | abcars.by", "Каталог б/у авто из Китая: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь."],
   "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
-  "/payment-and-contract": ["Оплата и договор при покупке авто из Китая | abcars.by", "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы."],
   "/faq": ["Вопросы о покупке и доставке авто из Китая | abcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
   "/tracking": ["Отслеживание автомобиля по VIN | abcars.by", "Проверка текущего этапа доставки автомобиля из Китая по VIN-номеру."],
   "/contacts": ["Контакты abcars.by — автомобили из Китая в Минске", "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая."],
@@ -8916,58 +8915,6 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
   );
 }
 
-function PaymentAndContractPage({ navigate }) {
-  return (
-    <main className="purchase-info-page">
-      <section className="purchase-info-hero page-width">
-        <div>
-          <button className="back-mobile" onClick={() => navigate(-1)}><ArrowLeft size={18} />Назад</button>
-          <span className="info-eyebrow">Оплата и договор</span>
-          <h1>Сначала понятные условия, затем деньги</h1>
-          <p>Разбиваем расчёт на этапы и отделяем стоимость автомобиля от услуг, логистики и обязательных платежей.</p>
-        </div>
-        <aside className="agreement-preview">
-          <span><ListChecks size={25} weight="duotone" /></span>
-          <small>До первой крупной оплаты</small>
-          <h2>В договоре уже зафиксировано</h2>
-          <ul>
-            <li><Check size={17} weight="bold" />Конкретный автомобиль и VIN</li>
-            <li><Check size={17} weight="bold" />Состав и стоимость услуг</li>
-            <li><Check size={17} weight="bold" />Порядок платежей и отказа</li>
-            <li><Check size={17} weight="bold" />Ответственность каждой стороны</li>
-          </ul>
-        </aside>
-      </section>
-
-      <section className="payment-stages page-width">
-        <div className="purchase-section-heading">
-          <span className="info-eyebrow">Четыре платежных этапа</span>
-          <h2>Вы платите по мере выполнения работы</h2>
-          <p>Следующий платёж появляется только после подтверждения предыдущего этапа документами и согласования с вами.</p>
-        </div>
-        <div className="payment-stage-list">
-          {PAYMENT_STAGES.map((stage) => (
-            <article key={stage.number}>
-              <b className="payment-stage-number">{stage.number}</b>
-              <div><h3>{stage.title}</h3><p>{stage.description}</p></div>
-              <dl><div><dt>Оплата</dt><dd>{stage.payment}</dd></div><div><dt>Когда</dt><dd>{stage.timing}</dd></div></dl>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="purchase-notice-section">
-        <div className="page-width purchase-notice">
-          <Info size={24} weight="duotone" />
-          <div><h2>Предварительный расчёт на сайте — не счёт на оплату</h2><p>Финальная смета формируется после подтверждения объявления, комплектации, маршрута и курса. Любое изменение согласуется до платежа.</p></div>
-          <button className="secondary" onClick={() => window.location.assign("/how-it-works#faq")}>Частые вопросы <ArrowRight size={17} /></button>
-        </div>
-      </section>
-      <InfoCta navigate={navigate} title="Начните с предварительного расчёта" text="Выберите автомобиль — покажем структуру цены и объясним каждый платёж до договора." />
-    </main>
-  );
-}
-
 function TrackingPage() {
   const [vin, setVin] = useState("");
   const [message, setMessage] = useState(null);
@@ -12028,7 +11975,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
           {contractDone ? (
             <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Договор согласован.</b><span>Переходим к счёту и выкупу автомобиля.</span></p></div>
           ) : (
-            <><p>Данные уже заполнены из профиля. Подтвердите автомобиль и условия.</p><div className="contract-summary"><span>{user.name}</span><span>{formatAccountPhone(user.phone)}</span><span>{order.car.title}</span></div><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("confirm_contract")}>Согласовать договор</button><button className="order-text-action" type="button" onClick={() => navigate("/payment-and-contract")}>Посмотреть условия</button></div></>
+            <><p>Данные уже заполнены из профиля. Подтвердите автомобиль и условия.</p><div className="contract-summary"><span>{user.name}</span><span>{formatAccountPhone(user.phone)}</span><span>{order.car.title}</span></div><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("confirm_contract")}>Согласовать договор</button></div></>
           )}
         </OrderStageRow>
         <OrderStageRow number={4} title="Оплата и выкуп" description="Сформируем счёт и подтвердим выкуп автомобиля." open={expandedStage === 4} locked={!paymentUnlocked} done={order.paymentStatus === "invoice_requested"} onToggle={() => setExpandedStage(expandedStage === 4 ? 0 : 4)}>
@@ -12961,8 +12908,6 @@ export function App() {
         toggleFavorite={toggleFavorite}
         loading={loading}
       />
-    ) : contentPath === "/payment-and-contract" ? (
-      <PaymentAndContractPage navigate={navigate} />
     ) : contentPath === "/faq" ? (
       <ServiceFaqRedirect />
     ) : contentPath === "/tracking" ? (

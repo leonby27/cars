@@ -1,8 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaExhausted, isEvQuotaOver, isEvQuotaPricingOn } from "../src/ev-quota.js";
+import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaExhausted, isEvQuotaOver, isEvQuotaPricingOn, rememberEvQuotaPricing } from "../src/ev-quota.js";
 
 const state = () => evQuotaState({ today: new Date("2026-08-22T00:00:00Z") });
+
+const mockWindow = (t, value) => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "window");
+  globalThis.window = value;
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, "window", original);
+    else delete globalThis.window;
+  });
+};
 
 test("takes the remaining quota from the latest customs report", () => {
   // Сводки после дня расчёта не в счёт: их не было, когда этот день наступал.
@@ -74,26 +83,55 @@ test("uses the customs exhaustion report as the final personal quota state", () 
   assert.equal(quota.exhaustedOnLabel, "5 сентября");
 });
 
-test("keeps the factual exhaustion separate from the default quota-price choice", () => {
+test("defaults server-rendered prices to no quota and leaves the switch available", () => {
   assert.equal(isEvQuotaExhausted(), true);
-  assert.equal(isEvQuotaOver(), false);
-  assert.equal(isEvQuotaPricingOn(), true);
+  assert.equal(isEvQuotaOver(), true);
+  assert.equal(isEvQuotaPricingOn(), false);
   assert.equal(evQuotaPricingAvailable(), true);
 });
 
-test("remembers a visitor's saved no-quota price choice", () => {
-  const savedWindow = globalThis.window;
-  globalThis.window = {
-    location:{ search:"" },
-    localStorage:{ getItem:() => "off" },
-  };
-  try {
-    assert.equal(isEvQuotaPricingOn(), false);
-    assert.equal(isEvQuotaOver(), true);
-  } finally {
-    if (savedWindow === undefined) delete globalThis.window;
-    else globalThis.window = savedWindow;
-  }
+for (const [label, savedChoice, enabled] of [
+  ["a first visit", null, false],
+  ["a saved off choice", "off", false],
+  ["an explicit saved on choice", "on", true],
+  ["an invalid stored choice", "invalid", false],
+]) {
+  test(`uses the correct price scenario for ${label}`, (t) => {
+    mockWindow(t, {
+      location: { search: "" },
+      localStorage: { getItem: () => savedChoice },
+    });
+    assert.equal(isEvQuotaPricingOn(), enabled);
+    assert.equal(isEvQuotaOver(), !enabled);
+    assert.equal(evQuotaPricingAvailable(), true);
+  });
+}
+
+test("defaults to no-quota prices when browser storage is unavailable", (t) => {
+  mockWindow(t, {
+    location: { search: "" },
+    get localStorage() { throw new Error("Storage is unavailable"); },
+  });
+  assert.equal(isEvQuotaPricingOn(), false);
+  assert.equal(isEvQuotaOver(), true);
+});
+
+test("remembers manual switching both ways after starting without quota", (t) => {
+  const storage = new Map();
+  mockWindow(t, {
+    location: { search: "" },
+    localStorage: {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+    },
+  });
+  assert.equal(isEvQuotaPricingOn(), false);
+  rememberEvQuotaPricing(true);
+  assert.equal(isEvQuotaPricingOn(), true);
+  assert.equal(isEvQuotaOver(), false);
+  rememberEvQuotaPricing(false);
+  assert.equal(isEvQuotaPricingOn(), false);
+  assert.equal(isEvQuotaOver(), true);
 });
 
 test("flags stale data when the reports stop coming", () => {

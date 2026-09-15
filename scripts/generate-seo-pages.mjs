@@ -17,7 +17,7 @@ import { estimateLandedCost } from "../src/pricing.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
-import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS, PAYMENT_STAGES } from "../src/purchase-info.js";
+import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS } from "../src/purchase-info.js";
 import { TRACKING_FAQ } from "../src/tracking-info.js";
 import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
@@ -133,7 +133,6 @@ const publicPages = [
   // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
   // подход и «чего мы не обещаем» — перенесены вниз `/how-it-works`, а сам адрес
   // перебрасывается туда навсегда (правило в vercel.json).
-  { route: "/payment-and-contract/", title: "Оплата и договор при покупке авто из Китая | abcars.by", description: "Этапы оплаты автомобиля из Китая, условия договора, состав стоимости, ответственность сторон и документы.", h1: "Оплата и договор", lead: "До оплаты фиксируем выбранный автомобиль, состав услуг, порядок расчётов и ответственность сторон." },
   { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы о проверке, цене, договоре, оплате, доставке и ответственности." },
   { route: "/tracking/", title: "Отслеживание автомобиля по VIN | abcars.by", description: "Проверка текущего этапа доставки автомобиля из Китая по VIN-номеру.", h1: "Отслеживание автомобиля", lead: "Введите VIN, чтобы узнать, на каком этапе находится ваш автомобиль." },
   { route: "/contacts/", title: "Контакты abcars.by — автомобили из Китая в Минске", description: "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая.", h1: "Контакты abcars.by", lead: "Обсудим бюджет, подбор, проверку, договор и доставку автомобиля из Китая в Беларусь." },
@@ -208,11 +207,6 @@ const PATHWAYS = {
     heading: "Ответы, которые видно в каталоге",
     intro: "Большинство вопросов упирается в конкретную машину: её возраст, тип двигателя и цену. В этих разделах ответ виден цифрами.",
     links: ["electric", "hybrid", "petrol", "under-20000", "petrol-under-30000", "byd", "volkswagen", "/catalog"],
-  },
-  "/payment-and-contract/": {
-    heading: "Сколько это выходит в деньгах",
-    intro: "Порядок расчётов от машины не зависит, а сумма зависит. Подборки собраны по итоговой цене до Минска — со всеми платежами.",
-    links: ["under-15000", "under-20000", "under-30000", "petrol-under-25000", "petrol-under-30000", "petrol-under-40000", "/calculator", "/delivery-cost"],
   },
   "/contacts/": {
     heading: "Пока мы отвечаем — посмотрите каталог",
@@ -357,11 +351,6 @@ function infoArticle(route) {
   }
   if (route === "/tracking/") {
     return `<section><h2>Частые вопросы</h2>${TRACKING_FAQ.map((item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`).join("")}</section>`;
-  }
-  if (route === "/payment-and-contract/") {
-    return `<section><h2>Этапы оплаты</h2>${PAYMENT_STAGES.map(
-      (stage) => `<h3>${escapeHtml(stage.title)}</h3><p>${escapeHtml(stage.description)}</p><p><strong>Платёж:</strong> ${escapeHtml(stage.payment)}. <strong>Когда:</strong> ${escapeHtml(stage.timing)}.</p>`,
-    ).join("")}</section>`;
   }
   if (route === "/contacts/") {
     const rows = [

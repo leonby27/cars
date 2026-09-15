@@ -93,13 +93,14 @@ const sitemapCars = `sitemap-${sitemapToken}-cars.xml`;
 
 test("удалённые страницы отсутствуют вместе со ссылками и картой сайта", async () => {
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
-  for (const route of ["delivered", "guarantees"]) {
+  for (const route of ["delivered", "guarantees", "payment-and-contract"]) {
     await missing(`${route}/index.html`);
   }
   for (const file of ["index.html", "how-it-works/index.html", "contacts/index.html", `sitemap-${sitemapToken}-pages.xml`]) {
     const html = await read(file);
     assert.doesNotMatch(html, /\/delivered(?:[\/"<?#]|$)/, file);
     assert.doesNotMatch(html, /\/guarantees(?:[\/"<?#]|$)/, file);
+    assert.doesNotMatch(html, /\/payment-and-contract(?:[\/"<?#]|$)/, file);
   }
 });
 
@@ -318,7 +319,7 @@ test("тексты информационных страниц лежат в с�
     const body = html.slice(html.indexOf('<div id="root">'), html.indexOf("</body>"));
     return body.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
   };
-  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 250], ["payment-and-contract/index.html", 120], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
+  for (const [file, least] of [["index.html", 180], ["faq/index.html", 300], ["how-it-works/index.html", 250], ["privacy/index.html", 110], ["terms/index.html", 110]]) {
     const count = await words(file);
     assert.ok(count >= least, `${file}: слов ${count}, ожидалось не меньше ${least}`);
   }
@@ -357,7 +358,6 @@ test("с информационных страниц и расчётов вед�
     ["calculator/index.html", "Посчитать на конкретной машине"],
     ["faq/index.html", "Ответы, которые видно в каталоге"],
     ["how-it-works/index.html", "С чего начать выбор"],
-    ["payment-and-contract/index.html", "Сколько это выходит в деньгах"],
     ["contacts/index.html", "Пока мы отвечаем"],
   ];
   for (const [file, heading] of pages) {

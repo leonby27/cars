@@ -38,7 +38,7 @@ Homepage SEO ownership (owner decision, 2026-09-10): the home page targets «б/
 
 Quick-view default preference (owner decision, 2026-09-09): keep «Быстрый просмотр» off by default. Enable it only when the visitor explicitly switches it on; preserve their saved choice.
 
-EV quota pricing preference (owner decision, 2026-09-13): keep «Цены с квотами» available even after quota exhaustion. On shows the quota scenario with 0% duty, off shows the no-quota scenario with 15% duty. Default to on for visitors without a saved choice and preserve each visitor's manual choice in the browser.
+EV quota pricing preference (owner correction, 2026-09-15): keep «Цены с квотами» off by default, including first visits, server-rendered prices and unavailable browser storage. Prices must include the no-quota scenario with 15% duty unless the visitor explicitly enables the switch. Keep the switch available even after quota exhaustion: on shows the quota scenario with 0% duty, off shows the no-quota scenario with 15% duty. Preserve each visitor's explicit manual choice in the browser. Never restore the previous default-on behavior.
 
 Catalog service-card icon preference (owner decision, 2026-09-10): use the supplied green 3D shield with a checkmark in the «Как устроена покупка» sidebar card and display it at exactly 80×80 px.
 
@@ -626,3 +626,5 @@ Brand-guide link hover behavior (owner correction, 2026-09-10): detailed model-r
 Mobile brand-guide controls (owner decision, 2026-09-10): stack the full-width model selector, full-width 44px currency switch, then the catalog count. On mobile, budget tabs use 4px gaps with 14px labels, 38px minimum height and 6px by 8px padding. Alternative-brand descriptions may wrap on mobile; the one-line ellipsis rule applies only on desktop.
 
 Mobile brand-guide budget tabs (owner correction, 2026-09-10): do not impose fixed or minimum tab widths. Size every tab to its complete no-wrap currency label plus its padding, and let the tab row scroll horizontally when it exceeds the viewport.
+
+Payment-page removal (owner decision, 2026-09-15): remove `/payment-and-contract` entirely, including its client page, generated HTML, sitemap entry and incoming links. The removed address follows the standard not-found policy.

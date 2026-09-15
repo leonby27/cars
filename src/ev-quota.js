@@ -59,8 +59,8 @@ const quotaOverrideFromUrl = () => {
   return null;
 };
 
-// Переключатель «Цены с квотами» в карточке остатка: посетитель может заранее
-// посмотреть, во сколько выйдет машина, когда льгота кончится. Выбор храним в
+// Переключатель «Цены с квотами» по умолчанию выключен: цена включает пошлину.
+// Льготный сценарий доступен по явному выбору посетителя. Выбор храним в
 // браузере, чтобы он не сбрасывался при переходах по сайту.
 const QUOTA_PRICING_KEY = "abcars-quota-pricing";
 
@@ -79,12 +79,12 @@ export const isEvQuotaExhausted = () => {
 };
 
 const quotaPricingChoice = () => {
-  if (typeof window === "undefined") return true;
+  if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(QUOTA_PRICING_KEY) !== "off";
+    return window.localStorage.getItem(QUOTA_PRICING_KEY) === "on";
   } catch {
-    // Приватный режим Safari запрещает хранилище — тогда просто держим льготу.
-    return true;
+    // Без доступа к хранилищу используем обычную цену без квоты.
+    return false;
   }
 };
 
@@ -98,7 +98,7 @@ export const isEvQuotaOver = () => {
 /** Адрес страницы может зафиксировать один сценарий для служебной проверки. */
 export const evQuotaPricingAvailable = () => quotaOverrideFromUrl() === null;
 
-/** Включена ли льготная цена. По умолчанию — да; ручной выбор берём из браузера. */
+/** Включена ли льготная цена. По умолчанию — нет; ручной выбор берём из браузера. */
 export const isEvQuotaPricingOn = () => quotaPricingChoice();
 
 /**

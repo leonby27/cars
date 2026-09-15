@@ -28,9 +28,10 @@ test("charges the 15% duty once the quota is gone", () => {
   assert.ok(dutied.totalUsd > free.totalUsd);
 });
 
-test("uses the quota price in the default displayed state", () => {
+test("includes the no-quota duty in the default displayed price", () => {
   const car = { chinaPrice:100000, year:2024, type:"Электромобиль" };
-  assert.deepEqual(estimateLandedCost(car), estimateLandedCost(car, { quotaOver:false }));
+  assert.deepEqual(estimateLandedCost(car), estimateLandedCost(car, { quotaOver:true }));
+  assert.ok(estimateLandedCost(car).totalUsd > estimateLandedCost(car, { quotaOver:false }).totalUsd);
 });
 
 test("leaves combustion cars out of the quota story", () => {
