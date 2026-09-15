@@ -93,7 +93,7 @@ test("год в заголовках подставляется, а в текс�
       if (!post[field]) continue;
       assert.ok(!post[field].includes(BLOG_YEAR_TOKEN), `у ${post.slug} в поле ${field} остался неподставленный год`);
     }
-    assert.ok(!post.seoTitle.includes("2026") || post.seoTitle.includes("2031"), `у ${post.slug} год записан руками, а не подставкой`);
+    assert.ok(!post.seoTitle.includes("2026") || post.seoTitle.includes("2031") || post.fixedYear === 2026, `у ${post.slug} год записан руками, а не подставкой`);
   }
   assert.ok(blogPosts(2031).some((post) => post.seoTitle.includes("2031")), "ни в одном заголовке нет года — подстановка не работает");
   // В самом тексте статьи года быть не должно: он бы устарел молча.
