@@ -7799,10 +7799,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
               {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
-              <div>
-                <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
-                <strong>{money(price.serviceUsd, currency)}</strong>
-              </div>
             </div>
             <div className="price-assumption">
               <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
@@ -8223,10 +8219,6 @@ function OrderDraft({ car, navigate }) {
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
               {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
-              <div>
-                <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
-                <b>{money(price.serviceUsd, currency)}</b>
-              </div>
             </div>
             <div className="order-grand-total">
               <PriceLabel label="Ориентировочно до Минска" description="Без постановки на учёт и страховки" />

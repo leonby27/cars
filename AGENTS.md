@@ -1,5 +1,7 @@
 # Prototype Instructions
 
+Service-fee row visibility (owner decision, 2026-09-16): temporarily hide the «Услуги abcars.by» row in the vehicle price breakdown and order estimate. Keep the service fee included in landed-price totals.
+
 Mobile vehicle-page section order (owner decision, 2026-09-16): place «Из чего складывается цена» above the «О модели» card on mobile (up to 700px), after the vehicle facts and technical specifications. Preserve the desktop layout.
 
 How-it-works honesty-section preference (owner decision, 2026-09-13): remove the complete «Важно / Чего мы не обещаем» block from the service page and from its search-engine markup.
