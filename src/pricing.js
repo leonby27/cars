@@ -4,7 +4,9 @@ import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
   usdByn:3.026, cnyBynPer10:4.5231, eurByn:3.4922, rateDate:"15.09.2026",
-  serviceUsd:800,
+  serviceByn:1000,
+  // Тариф фиксирован в BYN; долларовый эквивалент следует за курсом НБРБ.
+  get serviceUsd() { return Math.round(this.serviceByn / this.usdByn / 10) * 10; },
   // Обязательные сборы при оформлении: утилизационный сбор, таможенный сбор и
   // оформление. Утильсбор с 23.04.2026 (постановление Совета Министров № 195)
   // по льготной ставке для физлиц — 624,92 руб. машине до трёх лет и 1282,02 руб.

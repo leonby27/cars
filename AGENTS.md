@@ -83,6 +83,8 @@ Vehicle estimate density preference: in the detail sidebar, lead the estimate wi
 
 Belarusian-ruble price preference (owner decision, 2026-09-10): after converting displayed prices from dollars at the current rate, round every BYN amount to the nearest 100 rubles. Keep the underlying dollar estimates and calculations unchanged.
 
+Service fee (owner decision, corrected 2026-09-16): fix «Услуги abcars.by» at 1000 BYN. Derive its USD equivalent from the shared NBRB rate and round to the nearest ten dollars without decimal digits (for example, $330), including vehicle estimates, quick view, the calculator and delivery cost pages. Include the reduced fee in landed-price totals.
+
 Russian typography preference: prevent short Russian prepositions and conjunctions from hanging at the ends of lines throughout the rendered interface, including dynamic content. Keep the shared typography processor enabled instead of relying only on manually inserted non-breaking spaces.
 
 Brand color preference: use red `#EE1C25` for brand accents, links, icons, and active states instead of orange. Use yellow `#F4D90E` with dark text for all regular primary CTA buttons. Preserve red for destructive actions where it communicates danger.
