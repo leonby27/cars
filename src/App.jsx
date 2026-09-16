@@ -11122,7 +11122,7 @@ function SiteFooter({ navigate }) {
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
           <div className="footer-socials">
             <a className="header-social-link is-telegram" aria-label="Telegram" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("contact_telegram_click")}><TelegramOfficialLogo size={36} weight="fill" /></a>
-            <button type="button" className="header-social-link is-viber" aria-label="Viber" onClick={() => openSocialUnavailable("viber")}><ViberLogo size={24} /></button>
+            <a className="header-social-link is-viber" aria-label="Viber" href={COMPANY.viberUrl} onClick={() => trackEvent("contact_viber_click")}><ViberLogo size={24} /></a>
             <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
             <button type="button" className="header-social-link is-threads" aria-label="Threads" onClick={() => openSocialUnavailable("threads")}><ThreadsLogo size={25} /></button>
           </div>
