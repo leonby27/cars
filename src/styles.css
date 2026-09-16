@@ -4090,8 +4090,8 @@ html[data-theme="dark"] #root .load-more {
 :root[data-theme="dark"] .footer-app-store-apple {
   filter: invert(1);
 }
-:root[data-theme="dark"] .footer-socials a,
-:root[data-theme="dark"] .footer-socials a:hover {
+:root[data-theme="dark"] .footer-socials a:not(.header-social-link),
+:root[data-theme="dark"] .footer-socials a:not(.header-social-link):hover {
   background: var(--panel);
   color: #17191c;
 }
@@ -4414,7 +4414,7 @@ html[data-theme="dark"] #root .load-more {
     transform: translateY(55px);
   }
 }
-.footer-socials a {
+.footer-socials a:not(.header-social-link) {
   width: 46px;
   height: 46px;
   display: grid;
@@ -4426,7 +4426,7 @@ html[data-theme="dark"] #root .load-more {
   color: var(--ink);
   transition: box-shadow 0.18s, transform 0.18s;
 }
-.footer-socials a:hover {
+.footer-socials a:not(.header-social-link):hover {
   background: var(--panel);
   box-shadow: 0 4px 12px rgba(20, 24, 32, 0.1);
   transform: translateY(-1px);
@@ -8267,6 +8267,9 @@ footer {
     order: 10;
   }
   .detail-main .detail-sidebar > .order-card {
+    order: 6;
+  }
+  .detail-content > .model-intro {
     order: 7;
   }
   .detail-content > .detail-section-links {
@@ -12408,7 +12411,7 @@ html[data-theme="dark"] :where(
 ) {
   border-color: var(--line);
 }
-html[data-theme="dark"] body #root :where(.footer-socials a, .footer-socials a:hover) {
+html[data-theme="dark"] body #root :where(.footer-socials a:not(.header-social-link), .footer-socials a:not(.header-social-link):hover) {
   background: #fff;
   color: #17191c;
 }
@@ -13280,11 +13283,6 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
   visibility: visible;
   opacity: 1;
   transform: translateY(0);
-}
-.detail-action-tooltip.phone-unavailable-tooltip {
-  width: min(290px, calc(100vw - 20px));
-  max-width: none;
-  text-align: center;
 }
 /* Свитчер «Быстрый просмотр» рядом с выдачей: на главной — у заголовка каталога,
    в каталоге — у счётчика найденного. */

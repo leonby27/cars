@@ -1409,8 +1409,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               onClick={togglePhone}
             >
               <Phone size={18} weight="fill" aria-hidden="true" />
-              {phoneRevealed ? COMPANY.phonePreview : "+375 показать номер"}
-              {phoneRevealed && <ActionTooltip className="phone-unavailable-tooltip" text="Временно не принимаем заказы. Совсем скоро вновь будем доступны, не теряйте нас! 🙏" showOnMount />}
+              {phoneRevealed ? COMPANY.phone : "+375 показать номер"}
             </button>
           </div>
           <button
@@ -8707,11 +8706,11 @@ function ServiceContactCta() {
           <strong>Отдел продаж</strong>
           <p>Поможем выбрать автомобиль и рассчитать стоимость до Минска.</p>
         </button>
-        <button className="service-contact-option" type="button" onClick={() => openUnavailable("service_contact_telegram_click")}>
+        <a className="service-contact-option" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("service_contact_telegram_click")}>
           <span aria-hidden="true"><TelegramLogo size={27} weight="duotone" /></span>
           <strong>Telegram</strong>
           <p>Быстро ответим на вопросы и подскажем по вашему запросу.</p>
-        </button>
+        </a>
         <button className="service-contact-option" type="button" onClick={() => openUnavailable("service_contact_email_click")}>
           <span aria-hidden="true"><EnvelopeSimple size={27} weight="duotone" /></span>
           <strong>Электронная почта</strong>
@@ -11122,7 +11121,7 @@ function SiteFooter({ navigate }) {
           <b>Связаться</b>
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
           <div className="footer-socials">
-            <button type="button" className="header-social-link is-telegram" aria-label="Telegram" onClick={() => openSocialUnavailable("telegram")}><TelegramOfficialLogo size={36} weight="fill" /></button>
+            <a className="header-social-link is-telegram" aria-label="Telegram" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("contact_telegram_click")}><TelegramOfficialLogo size={36} weight="fill" /></a>
             <button type="button" className="header-social-link is-viber" aria-label="Viber" onClick={() => openSocialUnavailable("viber")}><ViberLogo size={24} /></button>
             <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
             <button type="button" className="header-social-link is-threads" aria-label="Threads" onClick={() => openSocialUnavailable("threads")}><ThreadsLogo size={25} /></button>
