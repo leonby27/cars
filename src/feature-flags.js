@@ -24,7 +24,8 @@ const FLAGS = Object.freeze({
   // production — виден ли раздел на боевом сайте; local — виден ли на локальной версии.
   // Журнал включён на боевом сайте 27.08.2026 по решению владельца.
   BLOG_ENABLED: { production: true, local: true },
-  REVIEWS_ENABLED: { production: true, local: true },
+  // Отзывы временно скрыты по решению владельца 16.09.2026.
+  REVIEWS_ENABLED: { production: false, local: false },
   // Черновики материалов журнала. На локальной версии они стоят в списке журнала и на
   // главной наравне с остальными — иначе новую статью нельзя посмотреть так, как её
   // увидит посетитель, вместе с карточкой в сетке. На боевом сайте черновика не
@@ -59,5 +60,5 @@ export const BLOG_ENABLED = flag("BLOG_ENABLED");
 /** Показывать ли черновики журнала в списках. Локально да, на боевом сайте нет. */
 export const BLOG_DRAFTS_VISIBLE = flag("BLOG_DRAFTS_VISIBLE");
 
-/** Одобренные отзывы опубликованы в разделе «О сервисе». */
+/** Видимость блока отзывов в разделе «О сервисе». */
 export const REVIEWS_ENABLED = flag("REVIEWS_ENABLED");

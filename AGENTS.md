@@ -1,5 +1,7 @@
 # Prototype Instructions
 
+Service reviews visibility (owner decision, 2026-09-16): temporarily hide the complete reviews section on «О сервисе» in both local and production versions using `REVIEWS_ENABLED`. Preserve its content for later re-enabling. This supersedes the earlier published-reviews visibility preference.
+
 Service-fee row visibility (owner decision, 2026-09-16): temporarily hide the «Услуги abcars.by» row in the vehicle price breakdown and order estimate. Keep the service fee included in landed-price totals.
 
 Mobile vehicle-page section order (owner decision, 2026-09-16): place «Из чего складывается цена» above the «О модели» card on mobile (up to 700px), after the vehicle facts and technical specifications. Preserve the desktop layout.
