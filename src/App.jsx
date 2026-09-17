@@ -6,6 +6,8 @@ import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { appHref } from "./app-href.js";
+import { Illustration } from "./illustration.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
@@ -135,10 +137,16 @@ const SetCurrencyContext = createContext(null);
 const EMPTY_ORDERED_LISTINGS = new Set();
 const OrderedListingsContext = createContext(null);
 const SetOrderedListingsContext = createContext(null);
+// Всё, что нужно карточке машины для запроса актуальности: вошёл ли посетитель и как
+// отправить запрос. Заказ заводит и запрос шлёт приложение — оно знает, работает ли
+// кабинет на сервере или в браузере, карточке это знать незачем.
+const EMPTY_AVAILABILITY = { signedIn:false, request:null };
+const AvailabilityContext = createContext(EMPTY_AVAILABILITY);
 // Заказ хранит полный идентификатор объявления, карточка — тоже, но в адресах живёт
 // короткий номер. Сравниваем по номеру, как и избранное.
 const orderedListingsFrom = (orders) => new Set((orders || []).map((order) => listingNumber(order?.listingId)).filter(Boolean));
 const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORDERED_LISTINGS;
+const useAvailability = () => useContext(AvailabilityContext) || EMPTY_AVAILABILITY;
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? usdToByn(usd) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
@@ -771,7 +779,7 @@ function useRoute(user) {
   return { path: route.path, navigate, backToCatalog };
 }
 
-const appHref = (path) => `${import.meta.env.BASE_URL.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+
 
 // Страницы марок, типов двигателя и кузова — это тот же каталог с выставленным фильтром,
 // поэтому всё, что каталог делает со своим адресом (сохраняет прокрутку, помнит фильтры
@@ -944,21 +952,6 @@ function TotalPrice({ car, price, currency, className = "" }) {
 // поэтому подложку убираем и с клавиатуры, и из скринридеров, чтобы не дублировать.
 function CardLinkOverlay({ car, open }) {
   return <AppLink className="card-link-overlay" href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()} tabIndex={-1} aria-hidden="true" />;
-}
-
-// Иллюстрации отдаём в AVIF и WebP, PNG оставляем последним запасом: браузер берёт
-// первый формат, который понимает, и вместо ~10 МБ картинок страницы тянут ~0,8 МБ.
-// Обёртка `<picture>` из раскладки исключена через `display: contents`, поэтому все
-// существующие правила размеров продолжают относиться к самой картинке.
-function Illustration({ src, alt, ...props }) {
-  const base = src.replace(/\.png$/, "");
-  return (
-    <picture className="illustration">
-      <source type="image/avif" srcSet={appHref(`${base}.avif`)} />
-      <source type="image/webp" srcSet={appHref(`${base}.webp`)} />
-      <img src={appHref(src)} alt={alt} {...props} />
-    </picture>
-  );
 }
 
 function ScrollToTopButton() {
@@ -1583,6 +1576,28 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     if (!open) return;
     optionsRef.current?.querySelector('[role="option"].active')?.scrollIntoView({ block: "nearest" });
   }, [open, activeIndex]);
+
+  // Список привязан к краю кнопки (сортировка в выдаче — к правому) и шире её.
+  // На узком экране он от этого уезжал за левый край: первые буквы пунктов
+  // обрезались краем окна. Сдвигаем раскрытый список внутрь окна.
+  // Геометрию берём из вёрстки (offsetLeft/offsetWidth), а не из
+  // getBoundingClientRect меню: пока идёт анимация раскрытия, прямоугольник
+  // меню отражает промежуточный масштаб и сдвиг вышел бы неточным.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const menu = root?.querySelector(".select-menu");
+    if (!menu) return;
+    menu.style.removeProperty("--select-menu-shift");
+    if (!open) return;
+    const gutter = 8;
+    const left = root.getBoundingClientRect().left + menu.offsetLeft;
+    const right = left + menu.offsetWidth;
+    // Если список шире окна, прижимаем его к левому краю: обрезать хвост
+    // названия лучше, чем начало.
+    const viewport = document.documentElement.clientWidth;
+    const shift = left < gutter ? gutter - left : Math.min(0, viewport - gutter - right);
+    if (shift) menu.style.setProperty("--select-menu-shift", `${Math.round(shift)}px`);
+  }, [open, filteredOptions.length, query]);
 
   // Внутри мобильной шторки фильтров меню раскрывается вниз и может уйти за
   // нижний край; докручиваем шторку, чтобы раскрытый список был виден целиком.
@@ -4913,7 +4928,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
       <section className="trust-strip page-width">
         <div>
           <span>
-            <img src="/services/delivery-control.png" width="512" height="341" alt="" aria-hidden="true" />
+            <Illustration src="/services/delivery-control.png" width="512" height="341" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Сопровождаем до выдачи</b>
@@ -4922,7 +4937,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         </div>
         <div>
           <span>
-            <img src="/trust-strip/vehicle-documents.png" width="100" height="100" alt="" aria-hidden="true" />
+            <Illustration src="/trust-strip/vehicle-documents.png" width="100" height="100" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Проверяем до оплаты</b>
@@ -4931,7 +4946,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         </div>
         <div>
           <span>
-            <img src="/trust-strip/two-prices.png" width="512" height="512" alt="" aria-hidden="true" />
+            <Illustration src="/trust-strip/two-prices.png" width="512" height="512" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Показываем обе цены</b>
@@ -4940,7 +4955,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         </div>
         <div>
           <span>
-            <img src="/trust-strip/fixed-terms.png" width="100" height="100" alt="" aria-hidden="true" />
+            <Illustration src="/trust-strip/fixed-terms.png" width="100" height="100" alt="" aria-hidden="true" />
           </span>
           <p>
             <b>Фиксируем условия</b>
@@ -6071,7 +6086,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           )}
         </section>
         <aside className="side-card">
-          <img
+          <Illustration
             className="side-card-icon"
             src="/illustrations/catalog-service-shield.png"
             width="80"
@@ -7554,6 +7569,108 @@ function ChineseNameMark({ car }) {
   );
 }
 
+// Что делает кнопка «Уточнить актуальность авто» в карточке: раньше она молча уводила
+// в кабинет, и человек попадал неизвестно куда. Теперь запрос уходит с самой страницы,
+// а окно подтверждает, что заявка принята. Собрано тем же набором, что и остальные
+// такие окна сайта: значок, заголовок, строка текста и кнопка.
+function AvailabilityRequestModal({ onClose }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal availability-request-modal" role="dialog" aria-modal="true" aria-labelledby="availability-request-title" aria-describedby="availability-request-description">
+        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
+        <Illustration className="availability-request-icon" src="/illustrations/catalog-service-shield.png" width="80" height="80" alt="" aria-hidden="true" />
+        <h2 id="availability-request-title">Заявка принята</h2>
+        <p id="availability-request-description">Мы получили запрос и уже занимаемся им. Свяжемся с продавцом и вернёмся к вам с ответом.</p>
+        <div className="order-removal-actions availability-paused-actions">
+          <button className="invert-button" type="button" onClick={onClose} autoFocus>Закрыть</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// Заявка от незарегистрированного: имя и телефон обязательны, аккаунт — по желанию.
+// Форма повторяет окно входа, но без вкладок: человек пришёл не заводить аккаунт, а
+// спросить про машину.
+function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
+  const [values, setValues] = useState({ name:"", phone:"+375", account:false, password:"", confirm:"", consent:true });
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
+  const withAccount = values.account;
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
+  const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
+  const blockPhoneWhitespace = (event) => {
+    if (/\s/.test(event.key)) event.preventDefault();
+  };
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape" && !pending) onClose();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose, pending]);
+  const submit = async (event) => {
+    event.preventDefault();
+    setError("");
+    const phone = normalizeLocalPhone(values.phone);
+    if (values.name.trim().length < 2) return setError(authMessages.invalid_name);
+    if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (withAccount) {
+      if (values.password.length < 8) return setError(authMessages.invalid_password);
+      if (values.password !== values.confirm) return setError("Пароли не совпадают.");
+      if (!values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
+    }
+    setPending(true);
+    try {
+      await submitLead(car, { name:values.name.trim(), phone, createAccount:withAccount, password:values.password, confirm:values.confirm });
+      onDone();
+    } catch (submitError) {
+      setError(authMessages[submitError.message] || "Не удалось отправить заявку. Попробуйте ещё раз.");
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <div className="modal-backdrop auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
+      <form className="auth-card auth-modal availability-lead-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="availability-lead-title">
+        <button className="modal-close" type="button" onClick={onClose} disabled={pending} aria-label="Закрыть"><X size={19} /></button>
+        <div className="auth-modal-heading">
+          <h1 id="availability-lead-title">Оставить заявку</h1>
+        </div>
+        <p className="availability-lead-note">Проверим у продавца, что автомобиль ещё в продаже, цена и комплектация не изменились, и вернёмся к вам с ответом.</p>
+        <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
+        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
+        <label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
+        <div className={`auth-registration-reveal${withAccount ? " open" : ""}`} aria-hidden={!withAccount} inert={withAccount ? undefined : true}>
+          <div className="auth-registration-reveal-inner">
+            <PasswordField label="Пароль" autoComplete="new-password" value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : "Минимум 8 символов"} required={withAccount} disabled={!withAccount} />
+            <PasswordField label="Ещё раз пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Ещё раз пароль" : "Ещё раз"} required={withAccount} disabled={!withAccount} />
+            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!withAccount} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
+          </div>
+        </div>
+        {error && <div className="auth-error" role="alert">{error}</div>}
+        <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Оставить заявку"}<ArrowRight size={18} /></button>
+        {!withAccount && (
+          <p className="availability-lead-legal">Нажимая кнопку, вы соглашаетесь с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой конфиденциальности</a>.</p>
+        )}
+      </form>
+    </div>
+  );
+}
+
 function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
@@ -7565,6 +7682,10 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // По этой машине заказ уже создан — тогда кнопка не заводит второй, а ведёт в кабинет.
   const orderedListings = useOrderedListings();
   const inOrder = orderedListings.has(listingNumber(car.id));
+  const { signedIn, request:sendAvailabilityRequest, submitLead:submitAvailabilityLead } = useAvailability();
+  // Пусто — окна нет; дальше «lead» (форма гостя) или «sent» (заявка принята). Окно
+  // открывается сразу, запрос идёт параллельно.
+  const [availabilityStatus, setAvailabilityStatus] = useState("");
   const sold = car.available === false;
   useEffect(() => {
     if (car) trackEvent("vehicle_view", { listingId:car.id, listingTitle:car.title });
@@ -7601,8 +7722,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   const price = estimateLandedCost(car);
   const quotaPricing = useQuotaPricing();
   const timing = estimateDeliveryDays(car.city);
-  // Кнопка заводит заказ: машину запоминаем, кабинет создаёт заказ сам.
-  // Неавторизованных на /account встречает окно входа, ожидание переживает его.
+  // Кнопка не уводит со страницы: сначала окно объясняет, что именно мы проверим.
+  // Дальше вошедшему запрос уходит из самого окна, гостя ведём заводить аккаунт.
   const requestAvailability = () => {
     if (sold) return;
     // Машина уже в заказе — заводить второй не нужно. Обычно ведём в кабинет, но если
@@ -7613,8 +7734,20 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
       return;
     }
     trackEvent("availability_click", { listingId:car.id, listingTitle:car.title });
-    window.localStorage.setItem(pendingOrderKey, car.id);
-    navigate("/account");
+    // Вошедшему спрашивать нечего: он нажал ровно то, что и значит запрос. У гостя
+    // сначала спрашиваем имя и телефон — иначе заявке некуда прийти.
+    if (!signedIn) {
+      setAvailabilityStatus("lead");
+      return;
+    }
+    sendAvailability();
+  };
+  const sendAvailability = async () => {
+    setAvailabilityStatus("sent");
+    // Не дошло — окно закрываем и ничем больше не пугаем: кнопка карточки остаётся
+    // жёлтой «Уточнить актуальность авто», а не зелёной «Перейти в заказ», так что
+    // человек видит, что отправить надо ещё раз, и может просто нажать её снова.
+    if (!await sendAvailabilityRequest?.(car)) setAvailabilityStatus("");
   };
   const favoriteHint = favorite ? "Удалить из избранного" : "Добавить в избранное";
   const quickInfo = buildVehicleQuickInfo(car);
@@ -7862,6 +7995,16 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </button>
             </div>
           )}
+          {availabilityStatus === "lead" ? (
+            <AvailabilityLeadModal
+              car={car}
+              submitLead={submitAvailabilityLead}
+              onClose={() => setAvailabilityStatus("")}
+              onDone={() => setAvailabilityStatus("sent")}
+            />
+          ) : availabilityStatus ? (
+            <AvailabilityRequestModal onClose={() => setAvailabilityStatus("")} />
+          ) : null}
         </div>
       </div>
     </>
@@ -8683,7 +8826,7 @@ function ServiceContactCta() {
             Задать вопрос
           </button>
         </div>
-        <img
+        <Illustration
           src="/services/contact-manager-black.png"
           width="1145"
           height="1374"
@@ -8749,7 +8892,7 @@ function ServicePurchaseFlow() {
         </div>
         <div className="service-purchase-flow-visual" role="region" aria-live="polite" aria-label={`Иллюстрация этапа «${activeStep.title}»`}>
           <div className={`service-purchase-flow-artwork ${activeStep.visual.kind}`} key={activeStep.title}>
-            <img
+            <Illustration
               className={activeStep.visual.darkSrc ? "theme-light" : undefined}
               src={activeStep.visual.src}
               width={activeStep.visual.width}
@@ -8759,7 +8902,7 @@ function ServicePurchaseFlow() {
               decoding="async"
             />
             {activeStep.visual.darkSrc && (
-              <img
+              <Illustration
                 className="theme-dark"
                 src={activeStep.visual.darkSrc}
                 width={activeStep.visual.width}
@@ -8827,7 +8970,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
               return (
                 <article key={title}>
                   <span className={`info-proof-icon info-proof-icon-art info-proof-icon-${artwork.className}`} aria-hidden="true">
-                    <img
+                    <Illustration
                       src={artwork.src}
                       alt=""
                       width={artwork.width}
@@ -8849,7 +8992,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
             <article className="service-opportunity-card service-opportunity-card-wide">
               <strong>{opportunitiesListingCount}</strong>
               <p>Активных объявлений<br />для выбора автомобиля</p>
-              <img src="/services/fast-convenient-car-rear.png" width="1254" height="1254" alt="Автомобиль с включёнными задними фонарями" loading="lazy" decoding="async" />
+              <Illustration src="/services/fast-convenient-car-rear.png" width="1254" height="1254" alt="Автомобиль с включёнными задними фонарями" loading="lazy" decoding="async" />
             </article>
             <article className="service-opportunity-card">
               <strong>Еженедельно</strong>
@@ -8863,8 +9006,8 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
             <article className="service-opportunity-card service-opportunity-card-wide service-opportunity-card-convenience">
               <strong>Удобно</strong>
               <p>Множество фильтров, умный поиск, детали и всё для вашего удобства</p>
-              <img className="service-opportunity-filter-dark" src="/services/convenient-filters.png" width="1254" height="1254" alt="Панель настройки фильтров" loading="lazy" decoding="async" />
-              <img className="service-opportunity-filter-light" src="/services/convenient-filters-light.png" width="1254" height="1254" alt="" aria-hidden="true" loading="lazy" decoding="async" />
+              <Illustration className="service-opportunity-filter-dark" src="/services/convenient-filters.png" width="1254" height="1254" alt="Панель настройки фильтров" loading="lazy" decoding="async" />
+              <Illustration className="service-opportunity-filter-light" src="/services/convenient-filters-light.png" width="1254" height="1254" alt="" aria-hidden="true" loading="lazy" decoding="async" />
             </article>
           </div>
         </section>
@@ -8895,7 +9038,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
                     Отследить авто по VIN
                   </button>
                 )}
-                <img
+                <Illustration
                   className={artwork.className}
                   src={artwork.src}
                   width={artwork.width}
@@ -8940,7 +9083,7 @@ function TrackingPage() {
     <main className="tracking-page">
       <section className="tracking-hero page-width" aria-labelledby="tracking-title">
         <div className="tracking-hero-copy">
-          <img className="tracking-illustration" src="/services/vehicle-tracking-container.png" width="120" height="120" alt="" aria-hidden="true" />
+          <Illustration className="tracking-illustration" src="/services/vehicle-tracking-container.png" width="120" height="120" alt="" aria-hidden="true" />
           <h1 id="tracking-title">Отслеживание автомобиля</h1>
           <p>Введите VIN, чтобы узнать, на каком этапе находится ваш автомобиль.</p>
         </div>
@@ -11240,7 +11383,20 @@ const catalogUpdatedKey = "abcars-catalog-updated";
 const guestFavoritesKey = "navostok-favorites";
 const favoritesMigrationKey = "navostok-favorites-account-migration";
 const accountFavoritesKey = (userId) => `navostok-account-favorites:${userId}`;
+// Машина, отложенная старой кнопкой карточки: до сентября 2026 она уводила на вход, и
+// заказ заводился уже в кабинете. Сейчас заявка уходит прямо со страницы, но у тех, кто
+// нажал кнопку до обновления и с тех пор не заходил, отметка ещё лежит в браузере.
 const pendingOrderKey = "abcars-pending-order-listing";
+// Клик по «Уточнить актуальность» — ключевое действие воронки и считается всегда:
+// и когда человек нажал кнопку в кабинете, и когда запрос ушёл сам из карточки.
+const trackAvailabilityRequest = (order, comment = "") => {
+  trackEvent("availability_request_click", {
+    listingId:order?.listingId,
+    listingTitle:order?.car?.title,
+    properties:{ withComment:comment.trim() ? "yes" : "no" },
+  });
+  trackMetrikaGoal("availability_request");
+};
 const accountOrdersKey = (userId) => `abcars-account-orders:${userId}`;
 const accountSearchesKey = (userId) => `abcars-account-searches:${userId}`;
 const readLocalSearches = (userId) => {
@@ -11658,31 +11814,6 @@ function AccountRemovalModal({ pending, error, onCancel, onConfirm }) {
   );
 }
 
-// Пока не запускаем проверку объявлений: кнопка есть, но заявка никуда не уходит.
-function AvailabilityPausedModal({ onClose }) {
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal" role="dialog" aria-modal="true" aria-labelledby="availability-paused-title" aria-describedby="availability-paused-description">
-        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={19} /></button>
-        <div className="order-removal-icon availability-paused-icon"><Clock size={32} weight="duotone" /></div>
-        <h2 id="availability-paused-title">Временно не принимаем заказы</h2>
-        <p id="availability-paused-description">Приём заказов на авто временно приостановлен. Через несколько дней он снова станет доступен.</p>
-        <div className="order-removal-actions availability-paused-actions">
-          <button className="primary" type="button" onClick={onClose}>Хорошо, вернусь позже</button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, authBackend, navigate }) {
   // Цена заказа тоже слушается переключателя валюты в шапке: рубли в каталоге и
   // доллары в заказе выглядели бы разными ценами.
@@ -11696,8 +11827,6 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
   const [removalOpen, setRemovalOpen] = useState(false);
   const [removalError, setRemovalError] = useState("");
   const [availabilityComment, setAvailabilityComment] = useState("");
-  // Запросы актуальности временно отключены: кнопка вместо отправки объясняет это окном.
-  const [availabilityPausedOpen, setAvailabilityPausedOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState("");
   // Машин в заказе может быть несколько: показываем выбранную, по умолчанию свежую.
   const order = orders.find((item) => item.id === selectedOrderId) || orders[0] || null;
@@ -11879,16 +12008,10 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
   const contractUnlocked = order.contractStatus !== "locked";
   const contractDone = order.contractStatus === "confirmed";
   const paymentUnlocked = order.paymentStatus !== "locked";
-  // Заявка временно никуда не уходит, но клик по этой кнопке — ключевое действие
-  // воронки: она стоит ближе всего к сделке, поэтому в аналитике его считаем всегда.
   const requestAvailabilityCheck = () => {
-    trackEvent("availability_request_click", {
-      listingId:order.listingId,
-      listingTitle:order.car.title,
-      properties:{ withComment:availabilityComment.trim() ? "yes" : "no" },
-    });
-    trackMetrikaGoal("availability_request");
-    setAvailabilityPausedOpen(true);
+    if (availabilityRequested || saving) return;
+    trackAvailabilityRequest(order, availabilityComment);
+    applyAction("request_availability_check", { comment:availabilityComment.trim() });
   };
   const requestOrderRemoval = (event) => {
     event.currentTarget.closest("details")?.removeAttribute("open");
@@ -11958,7 +12081,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
               </label>
             )}
             <div className="availability-check-actions">
-              <button className="primary" type="submit">Уточнить актуальность</button>
+              <button className="primary" type="submit" disabled={saving || availabilityRequested}>Уточнить актуальность</button>
               {availabilityRequested && (
                 <p className="availability-check-status"><CheckCircle size={20} weight="fill" />{availabilityConfirmed ? "Актуальность подтверждена." : "Запрос отправлен, скоро свяжемся."}</p>
               )}
@@ -11990,7 +12113,6 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         </OrderStageRow>
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
-      {availabilityPausedOpen && <AvailabilityPausedModal onClose={() => setAvailabilityPausedOpen(false)} />}
       {removalOpen && <OrderRemovalModal carTitle={order.car.title} orderNumber={order.orderNumber} saving={saving} error={removalError} onCancel={() => { setRemovalOpen(false); setRemovalError(""); }} onConfirm={removeOrder} />}
       {quickViewModal}
     </section>
@@ -12335,6 +12457,40 @@ export function App() {
   // кнопка меняется на «Добавлено в заказ». Держим здесь список её номеров.
   const [orderedListings, setOrderedListings] = useState(EMPTY_ORDERED_LISTINGS);
   const publishOrderedListings = useCallback((orders) => setOrderedListings(orderedListingsFrom(orders)), []);
+  // Запрос актуальности прямо из карточки: заводим заказ и сразу отправляем запрос,
+  // не уводя человека в кабинет. Кабинет он откроет сам, когда захочет.
+  const requestCarAvailability = useCallback(async (car, account = user, backend = authBackend) => {
+    if (!account || !car) return false;
+    trackAvailabilityRequest({ listingId:car.id, car });
+    try {
+      if (backend === "local") {
+        const created = createLocalOrder(account.id, car);
+        const orders = created.order.availabilityStatus === "decision"
+          ? updateLocalOrder(account.id, created.order.id, "request_availability_check", { comment:"" }).orders
+          : created.orders;
+        publishOrderedListings(orders);
+        return true;
+      }
+      const createResponse = await fetch("/api/account/orders", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ listingId:car.id }) });
+      if (!createResponse.ok) return false;
+      const created = await createResponse.json().catch(() => ({}));
+      // Заказ по этой машине мог уже существовать — тогда запрос не повторяем.
+      if (created.order?.id && created.order.availabilityStatus === "decision") {
+        const sent = await fetch(`/api/account/orders/${created.order.id}`, {
+          method:"PATCH",
+          credentials:"same-origin",
+          headers:{ "content-type":"application/json" },
+          body:JSON.stringify({ action:"request_availability_check", comment:"" }),
+        });
+        if (!sent.ok) return false;
+      }
+      const list = await fetch("/api/account/orders", { cache:"no-store", credentials:"same-origin" });
+      if (list.ok) publishOrderedListings((await list.json()).orders);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [authBackend, publishOrderedListings, user]);
   // Метрика засчитывает первый заход сама при запуске счётчика. Дальше страницы
   // меняются без перезагрузки, и о каждом переходе ей нужно сказать отдельно —
   // иначе весь визит выглядит как одна страница.
@@ -12768,16 +12924,18 @@ export function App() {
     setAuthPending(true);
     const complete = (authenticatedUser, source) => {
       setUser(authenticatedUser);
+      // Возвращаем аккаунт наружу: после регистрации из карточки нужно сразу отправить
+      // запрос актуальности, а состояние приложения к этому мгновению ещё не обновилось.
       // В аналитику уходит только факт регистрации и способ (сервер или местный режим).
       // Имя и телефон живут в таблице аккаунтов — единственном месте, откуда их берёт
       // защищённый раздел: подделать их запросом со стороны там нельзя.
       if (mode === "register") trackEvent("registration_completed", { properties:{ source } });
+      return { user:authenticatedUser, backend:source === "local" ? "local" : "server" };
     };
     try {
       if (authBackend === "local") {
         const localUser = await localAuthenticate(mode, values);
-        complete(localUser, "local");
-        return;
+        return complete(localUser, "local");
       }
       let response;
       try {
@@ -12785,25 +12943,49 @@ export function App() {
       } catch {
         setAuthBackend("local");
         const localUser = await localAuthenticate(mode, values);
-        complete(localUser, "local");
-        return;
+        return complete(localUser, "local");
       }
       if (response.status === 404) {
         setAuthBackend("local");
         const localUser = await localAuthenticate(mode, values);
-        complete(localUser, "local");
-        return;
+        return complete(localUser, "local");
       }
       // Сервер жив, но временно сбоит: честная ошибка вместо местного аккаунта,
       // который разошёлся бы с настоящим.
       if (transientStatuses.has(response.status)) throw new Error("auth_failed");
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "auth_failed");
-      complete(payload.user, "server");
+      return complete(payload.user, "server");
     } finally {
       setAuthPending(false);
     }
   };
+  // Заявка от незарегистрированного: либо обычная заявка с именем и телефоном, либо
+  // сразу аккаунт — тогда машина попадает в кабинет заказом, как у всех остальных.
+  const submitAvailabilityLead = async (car, form) => {
+    if (form.createAccount) {
+      const session = await authenticate("register", { name:form.name, phone:form.phone, password:form.password, confirm:form.confirm, consent:true });
+      const done = await requestCarAvailability(car, session?.user, session?.backend);
+      if (!done) throw new Error("lead_failed");
+      return true;
+    }
+    trackAvailabilityRequest({ listingId:car.id, car });
+    const response = await fetch("/api/order-drafts", {
+      method:"POST",
+      headers:{ "content-type":"application/json" },
+      body:JSON.stringify({
+        listingId:car.id,
+        name:form.name,
+        contact:form.phone,
+        consent:true,
+        // Тот же тип, что у запроса из кабинета: в разделе «Заявки» это «Запрос актуальности».
+        calculation:{ requestType:"availability_check", contactMethods:["phone"] },
+      }),
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "lead_failed");
+    return true;
+  };
+  const availability = { signedIn:Boolean(user), request:requestCarAvailability, submitLead:submitAvailabilityLead };
   const logout = async () => {
     setAuthPending(true);
     try {
@@ -12991,6 +13173,7 @@ export function App() {
      <SetCurrencyContext.Provider value={setCurrency}>
      <OrderedListingsContext.Provider value={orderedListings}>
      <SetOrderedListingsContext.Provider value={publishOrderedListings}>
+     <AvailabilityContext.Provider value={availability}>
       <ClientSeo path={path} car={findCarByListing(cars, detailId)} landing={findCatalogLanding(path)} />
       <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
@@ -13023,6 +13206,7 @@ export function App() {
           redirectTo={resolvePostAuthPath(path, authBackgroundPath, pendingFavorite, pendingSavedSearch)}
         />
       )}
+     </AvailabilityContext.Provider>
      </SetOrderedListingsContext.Provider>
      </OrderedListingsContext.Provider>
      </SetCurrencyContext.Provider>

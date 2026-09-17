@@ -6094,6 +6094,23 @@ html[data-theme="dark"] #root .load-more {
   line-height: 1.5;
   letter-spacing: 0;
 }
+/* Предупреждение о подозрительно низкой цене: отдельной плашки нет — строка идёт
+   следом за текстом блока, только оранжевая. Значок вровень с первой строкой. */
+.price-rating p.price-rating-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: var(--warn-ink);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+.price-rating p.price-rating-warning svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
 /* Заготовка на время, пока сравнение не приехало: та же высота, чтобы блок не
    сдвигал страницу, когда данные встанут на место. */
 .price-rating p.price-rating-stub {
@@ -6555,7 +6572,9 @@ html[data-theme="dark"] #root .load-more {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translateY(-5px) scale(0.985);
+  /* Сдвиг внутрь окна: список привязан к краю кнопки и на узком экране мог
+     уйти за край экрана. Величину считает сам селект при открытии. */
+  transform: translate(var(--select-menu-shift, 0px), -5px) scale(0.985);
   transition:
     opacity var(--motion-fast) ease,
     transform var(--motion-medium) var(--motion-ease),
@@ -6565,7 +6584,7 @@ html[data-theme="dark"] #root .load-more {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  transform: translateY(0) scale(1);
+  transform: translate(var(--select-menu-shift, 0px), 0) scale(1);
   transition-delay: 0s;
 }
 .select-options {
@@ -10593,6 +10612,30 @@ html[data-theme="dark"] #root .spec-search,
 .auth-modal .auth-switch {
   margin-bottom: 20px;
 }
+/* Заявка из карточки: то же окно, что у входа, но без вкладок — сверху объяснение,
+   аккаунт по желанию, под кнопкой строка про условия для тех, кто его не заводит. */
+.availability-lead-modal .auth-modal-heading {
+  margin-bottom: 12px;
+}
+.availability-lead-modal .availability-lead-note {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: center;
+}
+.availability-lead-modal .availability-lead-account {
+  margin-top: 20px;
+  color: var(--ink);
+  white-space: normal;
+}
+.availability-lead-modal .availability-lead-legal {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
 .auth-registration-reveal {
   display: grid;
   grid-template-rows: 0fr;
@@ -11135,11 +11178,6 @@ html[data-theme="dark"] #root .spec-search,
 .lead-modal.availability-paused-modal.social-unavailable-modal > p {
   margin-top: 6px;
 }
-.availability-paused-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: calc(18px * var(--corner-scale));
-}
 .newsletter-subscribed-icon {
   width: 80px;
   height: 80px;
@@ -11302,6 +11340,18 @@ button.customer-order-stage-heading:hover:not(:disabled) {
   color: var(--muted);
   font-size: 16px;
   line-height: 1.55;
+}
+/* Окно «заявка принята»: тот же набор, что у соседних окон-уведомлений — значок,
+   заголовок, текст, кнопка. Вторая строка поясняет, что именно мы проверим. */
+.lead-modal.availability-paused-modal.social-unavailable-modal.availability-request-modal {
+  width: min(460px, 100%);
+}
+.availability-request-icon {
+  width: 80px;
+  height: 80px;
+  display: block;
+  margin: 0 auto 14px;
+  object-fit: contain;
 }
 .availability-check-block {
   padding: 20px 22px;

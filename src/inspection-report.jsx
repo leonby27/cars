@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState } from "react";
+import { Illustration } from "./illustration.jsx";
 import {
   ArrowLeft,
   ArrowRight,
@@ -181,7 +182,7 @@ export function InspectionReport({ report }) {
             <div className="service-report-vehicle-overview">
               <div className="service-report-vehicle-heading">
                 {report.vehicle.image?.src && (
-                  <img
+                  <Illustration
                     className="service-report-vehicle-image"
                     src={report.vehicle.image.src}
                     width={report.vehicle.image.width || 960}
