@@ -110,6 +110,18 @@ async function modelListings(brand, model) {
   return rows.map(shape).map(priced).sort((left, right) => left.totalUsd - right.totalUsd);
 }
 
+// В списке одна модель встречается один раз: пять одинаковых Seagull подряд выглядят
+// как сбой, даже когда по правилу отбора они и правда первые пять.
+const oneCarPerModel = (cars) => {
+  const seen = new Set();
+  return cars.filter((car) => {
+    const key = `${car.brand} ${car.model}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)];
@@ -188,14 +200,13 @@ export async function biggestDrops({ models, network = "telegram", limit = 5 }) 
   );
   // previous_price_usd — прошлая цена у источника, а не под ключ. Чтобы показать
   // честное падение, старую цену прогоняем через тот же расчёт под ключ.
-  const cars = rows.map(shape).map(priced)
+  const cars = oneCarPerModel(rows.map(shape).map(priced)
     .map((car) => {
       const before = car.previousPriceUsd ? estimateLandedCost({ ...car, usdPrice: car.previousPriceUsd }).totalUsd : 0;
       return { ...car, drop: before - car.totalUsd };
     })
     .filter((car) => car.drop > 0)
-    .sort((left, right) => right.drop - left.drop)
-    .slice(0, limit);
+    .sort((left, right) => right.drop - left.drop)).slice(0, limit);
   if (!cars.length) return null;
 
   const lines = cars.map((car, index) => listLine(car, index, { extra: ` (−${money(car.drop)})` }));
@@ -216,10 +227,10 @@ export async function freshArrivals({ models, network = "telegram", limit = 5 })
      where l.status = 'active' and l.estimated_total_usd > 0
        and (v.brand, v.model) in (${pairs.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(", ")})
        and exists (select 1 from listing_media m where m.listing_id = l.id)
-     order by l.imported_at desc limit ${limit}`,
+     order by l.imported_at desc limit ${limit * 6}`,
     pairs.flat(),
   );
-  const cars = rows.map(shape).map(priced);
+  const cars = oneCarPerModel(rows.map(shape).map(priced)).slice(0, limit);
   if (!cars.length) return null;
   return {
     block: "fresh",
