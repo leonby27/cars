@@ -324,6 +324,11 @@ export const HERO_MODEL_RU = [
   ["galaxy e5", "EX5"],
   ["starry wish", "EX2"],
   ["xingyuan", "EX2"],
+  // Haval Jolion в Китае продаётся как «Первая любовь» — под этим именем модель
+  // и лежит в каталоге, а ищут её по экспортному названию.
+  ["jolion", "First Love"],
+  ["джолион", "First Love"],
+  ["chulian", "First Love"],
   ["big dog", "Dargo"],
   ["биг дог", "Dargo"],
   ["da gou", "Dargo II"],
@@ -548,6 +553,31 @@ export const listSearchMatches = (items, query) => {
   });
 };
 
+// Марка в строке запроса: ищем её название целыми словами в любом месте, а не
+// только в начале. Пишут и «bmw ix3», и «ix3 bmw», и «ix3 бмв» — для поиска это
+// одно и то же. Совпадений может быть несколько («mini» внутри «mini cooper»),
+// побеждает самое длинное название, при равенстве — стоящее раньше. Остаток строки
+// (rest) уходит на поиск модели среди моделей этой марки.
+export const findBrandInText = (text, brandNames) => {
+  const words = String(text ?? "")
+    .split(" ")
+    .filter(Boolean);
+  if (!words.length) return null;
+  let best = null;
+  for (const name of brandNames) {
+    const norm = searchNormalize(name);
+    const brandWords = norm.split(" ").filter(Boolean);
+    if (!brandWords.length) continue;
+    for (let at = 0; at + brandWords.length <= words.length; at += 1) {
+      if (!brandWords.every((word, shift) => words[at + shift] === word)) continue;
+      if (!best || norm.length > best.length || (norm.length === best.length && at < best.index)) best = { name, index: at, length: norm.length, size: brandWords.length };
+      break;
+    }
+  }
+  if (!best) return null;
+  return { name: best.name, index: best.index, rest: [...words.slice(0, best.index), ...words.slice(best.index + best.size)].join(" ") };
+};
+
 // в «или» ещё при разборе чисел): «001 и 007» — два куска текста, каждый ищется сам.
 const MODEL_SEPARATORS = new Set(["или", "и", "либо"]);
 export const splitModelSegments = (value) => {
@@ -561,6 +591,67 @@ export const splitModelSegments = (value) => {
   }
   if (current.length) segments.push(current.join(" "));
   return segments;
+};
+
+/**
+ * Марка и модели из остатка запроса — того, что осталось после чисел, кузова,
+ * привода и цвета. brandEntries и modelEntries — справочники каталога вида
+ * {name, count}, modelsOfBrand отдаёт такой же список моделей одной марки.
+ * Функция без React и сети, чтобы весь порядок разбора проверялся тестами.
+ */
+export const resolveBrandAndModels = async (text, { brandEntries = [], modelEntries = [], modelsOfBrand }) => {
+  const empty = { brand: "", models: [], matched: false };
+  if (!text) return empty;
+
+  // Полностью введённая марка: остаток текста ищем среди её моделей. Марку пишут
+  // и первой («bmw ix3»), и после модели («ix3 bmw»), поэтому ищем её в любом месте.
+  const brandHit = findBrandInText(
+    text,
+    brandEntries.map((entry) => entry.name),
+  );
+  if (brandHit) {
+    const segments = splitModelSegments(brandHit.rest);
+    if (!segments.length) return { brand: brandHit.name, models: [], matched: true };
+    const models = (await modelsOfBrand?.(brandHit.name)) || [];
+    const matchedModels = [];
+    let missed = false;
+    for (const segment of segments) {
+      const found = rankSearchEntries(models, segment)
+        .slice(0, 12)
+        .map((entry) => entry.name);
+      if (!found.length) {
+        missed = true;
+        break;
+      }
+      for (const name of found) if (!matchedModels.includes(name)) matchedModels.push(name);
+    }
+    if (!missed) return { brand: brandHit.name, models: matchedModels.slice(0, 12), matched: true };
+    // Марку узнали, а кусок текста ни на одну её модель не похож — честнее
+    // показать пустую выдачу, чем все машины марки. Но если марку написали не
+    // первой, совпадение могло быть случайным («x5 mini»), и строку стоит
+    // разобрать целиком, как будто марки в ней нет.
+    if (brandHit.index === 0) return empty;
+  }
+
+  // Марка целиком не совпала: недописанная марка важнее случайного совпадения модели.
+  const brandMatches = rankSearchEntries(brandEntries, text);
+  if (brandMatches.length && brandMatches[0].rank >= 3) return { brand: brandMatches[0].name, models: [], matched: true };
+  const modelNames = [];
+  const textSegments = splitModelSegments(text);
+  let allSegmentsMatched = textSegments.length > 0;
+  for (const segment of textSegments) {
+    const found = rankSearchEntries(modelEntries, segment)
+      .slice(0, 12)
+      .map((entry) => entry.name);
+    if (!found.length) {
+      allSegmentsMatched = false;
+      break;
+    }
+    for (const name of found) if (!modelNames.includes(name)) modelNames.push(name);
+  }
+  if (allSegmentsMatched && modelNames.length) return { brand: "", models: modelNames.slice(0, 12), matched: true };
+  if (brandMatches.length) return { brand: brandMatches[0].name, models: [], matched: true };
+  return empty;
 };
 
 // Слова-исключения: всё, что стоит после них, попадает в списки «не показывать».

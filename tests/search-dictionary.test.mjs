@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectHeroAliases, listSearchMatches, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, translateBrandWords, translateModelWords } from "../src/search-dictionary.js";
+import { collectHeroAliases, findBrandInText, listSearchMatches, listSearchVariants, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, translateBrandWords, translateModelWords } from "../src/search-dictionary.js";
 
 // Строка запроса проходит тот же путь, что и в приложении: разбор чисел отдаёт
 // остаток, он режется на слова, из них вынимаются кузов, привод, тип и коробка,
@@ -164,4 +164,63 @@ test("список марок и моделей ищется по всем на�
   assert.deepEqual(listSearchMatches(models, "Спортбэк"), ["A5L Sportback"]);
   // Пустой запрос ничего не отсеивает.
   assert.deepEqual(listSearchMatches(brands, "  "), brands);
+});
+
+// Разбор остатка строки на марку и модель — тот же путь, каким идёт быстрый поиск
+// на главной: справочник каталога подменён небольшим списком, модели марки отдаёт
+// функция вместо запроса к серверу.
+const CATALOG = {
+  BMW: ["X3", "X5", "iX3", "iX1", "i3", "3 Series"],
+  MINI: ["Cooper", "Countryman"],
+  Zeekr: ["001", "007", "7X"],
+  Tesla: ["Model 3", "Model Y"],
+  "Li Auto": ["L6", "L7"],
+  Geely: ["Preface", "Coolray"],
+};
+const entries = (names) => names.map((name) => ({ name, count: 10 }));
+const resolve = (query) =>
+  resolveBrandAndModels(dictionaryText(query), {
+    brandEntries: entries(Object.keys(CATALOG)),
+    modelEntries: entries([...new Set(Object.values(CATALOG).flat())]),
+    modelsOfBrand: async (brand) => entries(CATALOG[brand] || []),
+  });
+const dictionaryText = (query) => parse(query).text;
+
+test("марку находим и когда она написана после модели", async () => {
+  assert.deepEqual(await resolve("bmw ix3"), { brand: "BMW", models: ["iX3"], matched: true });
+  // То же самое задом наперёд и по-русски: искали именно BMW iX3.
+  assert.deepEqual(await resolve("ix3 bmw"), { brand: "BMW", models: ["iX3"], matched: true });
+  assert.deepEqual(await resolve("ix3 бмв"), { brand: "BMW", models: ["iX3"], matched: true });
+  assert.deepEqual(await resolve("001 зикр"), { brand: "Zeekr", models: ["001"], matched: true });
+  assert.deepEqual(await resolve("l6 ли авто"), { brand: "Li Auto", models: ["L6"], matched: true });
+  // Перечисление моделей тоже переживает марку в конце: «x3» попутно находит и iX3,
+  // как в обычном поиске по части названия.
+  assert.deepEqual(await resolve("x3 или x5 bmw"), { brand: "BMW", models: ["X3", "iX3", "X5"], matched: true });
+});
+
+test("одна марка без модели и марка с чужой моделью", async () => {
+  assert.deepEqual(await resolve("bmw"), { brand: "BMW", models: [], matched: true });
+  // Марка первая, модель не её — пустая выдача честнее, чем все машины марки.
+  assert.deepEqual(await resolve("bmw coolray"), { brand: "", models: [], matched: false });
+  // Марка не первая: слово могло совпасть случайно, поэтому строку разбираем
+  // заново целиком — «x5 mini» так и не находит ничего, а не все MINI подряд.
+  assert.deepEqual(await resolve("x5 mini"), { brand: "", models: [], matched: false });
+});
+
+test("недописанная марка и модель без марки ищутся как раньше", async () => {
+  assert.deepEqual(await resolve("bm"), { brand: "BMW", models: [], matched: true });
+  assert.deepEqual(await resolve("зикр"), { brand: "Zeekr", models: [], matched: true });
+  assert.deepEqual(await resolve("coolray"), { brand: "", models: ["Coolray"], matched: true });
+  assert.deepEqual(await resolve("тесла модель 3"), { brand: "Tesla", models: ["Model 3"], matched: true });
+  assert.deepEqual(await resolve("фывфыв"), { brand: "", models: [], matched: false });
+});
+
+test("марка в строке: самое длинное название и остаток на модель", () => {
+  const names = ["MINI", "Li Auto", "BMW", "Land Rover"];
+  assert.deepEqual(findBrandInText("ix3 bmw", names), { name: "BMW", index: 1, rest: "ix3" });
+  assert.deepEqual(findBrandInText("land rover defender", names), { name: "Land Rover", index: 0, rest: "defender" });
+  // Марка из двух слов побеждает случайное совпадение одного.
+  assert.deepEqual(findBrandInText("l6 li auto", names), { name: "Li Auto", index: 1, rest: "l6" });
+  assert.equal(findBrandInText("coolray", names), null);
+  assert.equal(findBrandInText("", names), null);
 });

@@ -6,7 +6,7 @@ import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, Magnify
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
-import { analyticsUpdatesUrl, watchAnalyticsExit } from "./analytics-updates.js";
+import { analyticsUpdatesUrl, sectionFreshCount, watchAnalyticsExit } from "./analytics-updates.js";
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
@@ -331,7 +331,7 @@ function OverviewSection({ data, period, updates = {} }) {
     // Заход — не вкладка: человек, вернувшийся вечером, считается вторым заходом, а
     // три карточки, открытые в трёх вкладках подряд, остаются одним.
     ["Заходы", summary.visits, `${formatNumber(summary.visitors)} уник.${Number(summary.robot_visits) ? ` +${formatNumber(summary.robot_visits)} без действий` : ""}`, updates.overview],
-    ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, updates.vehicles],
+    ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, updates.vehicle_cars],
     // Машины, добавленные в кабинет: человек нажал в карточке «Уточнить актуальность»,
     // вошёл в кабинет и там завёлся заказ. Считаем по самим заказам, а не по нажатию:
     // нажатие бывает и у тех, кто ушёл на входе. Рядом мелким — заявки, оставленные
@@ -758,7 +758,7 @@ const sections = [
 function AnalyticsNavigationItems({ section, updates, onChoose, mobile = false }) {
   return sections.map((item) => {
     const Icon = item.icon;
-    const fresh = Number(updates[item.id]) || 0;
+    const fresh = sectionFreshCount(updates, item.id);
     return (
       <button key={item.id} type="button" role={mobile ? "menuitem" : undefined} className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => onChoose(item.id)}>
         <Icon size={21} weight="duotone" />

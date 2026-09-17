@@ -14,7 +14,7 @@ import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Arrow
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
-import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, rankSearchEntries, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
+import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS } from "../config/import-policy.mjs";
@@ -2549,84 +2549,28 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
     return result;
   }
 
-  // Полностью введённая марка в начале запроса: остаток текста ищем среди её моделей.
-  let matchedBrand = "";
-  let matchedBrandNorm = "";
-  let modelText = text;
-  for (const entry of brandEntries) {
-    const norm = searchNormalize(entry.name);
-    if (!norm) continue;
-    if ((text === norm || text.startsWith(`${norm} `)) && norm.length > matchedBrandNorm.length) {
-      matchedBrand = entry.name;
-      matchedBrandNorm = norm;
-      modelText = text.slice(norm.length).trim();
-    }
-  }
-  if (matchedBrand) {
-    result.brand = matchedBrand;
-    if (!modelText) {
-      result.matched = true;
-      return result;
-    }
-    let models = [];
-    if (metaLoaded) {
-      try {
-        const meta = await requestCatalogMeta(new URLSearchParams({ brand: matchedBrand }).toString());
-        models = meta.models.map((item) => ({ name: item.model, count: Number(item.count) || 0 }));
-      } catch {}
-    } else {
-      const counts = new Map();
-      for (const car of cars) if (car.brand === matchedBrand && car.model) counts.set(car.model, (counts.get(car.model) || 0) + 1);
-      models = [...counts].map(([name, count]) => ({ name, count }));
-    }
-    const segments = splitModelSegments(modelText);
-    if (!segments.length) {
-      result.matched = true;
-      return result;
-    }
-    const matchedModels = [];
-    for (const segment of segments) {
-      const found = rankSearchEntries(models, segment).slice(0, 12).map((entry) => entry.name);
-      if (!found.length) {
-        // Марку узнали, а кусок текста ни на одну её модель не похож —
-        // честнее показать пустую выдачу, чем все машины марки.
-        result.brand = "";
-        return result;
+  // Марку и модели из остатка текста разбирает отдельный модуль — там же лежат
+  // словари названий, и там же этот разбор проверяют тесты.
+  const found = await resolveBrandAndModels(text, {
+    brandEntries,
+    modelEntries,
+    modelsOfBrand: async (brand) => {
+      if (metaLoaded) {
+        try {
+          const meta = await requestCatalogMeta(new URLSearchParams({ brand }).toString());
+          return meta.models.map((item) => ({ name: item.model, count: Number(item.count) || 0 }));
+        } catch {
+          return [];
+        }
       }
-      for (const name of found) if (!matchedModels.includes(name)) matchedModels.push(name);
-    }
-    result.models = matchedModels.slice(0, 12);
-    result.matched = true;
-    return result;
-  }
-
-  // Марка целиком не совпала: недописанная марка важнее случайного совпадения модели.
-  const brandMatches = rankSearchEntries(brandEntries, text);
-  if (brandMatches.length && brandMatches[0].rank >= 3) {
-    result.brand = brandMatches[0].name;
-    result.matched = true;
-    return result;
-  }
-  const textSegments = splitModelSegments(text);
-  const modelNames = [];
-  let allSegmentsMatched = textSegments.length > 0;
-  for (const segment of textSegments) {
-    const found = rankSearchEntries(modelEntries, segment).slice(0, 12).map((entry) => entry.name);
-    if (!found.length) {
-      allSegmentsMatched = false;
-      break;
-    }
-    for (const name of found) if (!modelNames.includes(name)) modelNames.push(name);
-  }
-  if (allSegmentsMatched && modelNames.length) {
-    result.models = modelNames.slice(0, 12);
-    result.matched = true;
-    return result;
-  }
-  if (brandMatches.length) {
-    result.brand = brandMatches[0].name;
-    result.matched = true;
-  }
+      const counts = new Map();
+      for (const car of cars) if (car.brand === brand && car.model) counts.set(car.model, (counts.get(car.model) || 0) + 1);
+      return [...counts].map(([name, count]) => ({ name, count }));
+    },
+  });
+  result.brand = found.brand;
+  result.models = found.models;
+  result.matched = found.matched;
   return result;
 }
 

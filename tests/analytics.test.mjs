@@ -160,10 +160,15 @@ test("счётчики отделяют просмотренное от ново
   assert.match(source, /function AnalyticsSplitCount[\s\S]*?previousAmount = amount - newAmount/);
   assert.match(source, /analytics-split-count\$\{newAmount \? " has-fresh"/);
   assert.match(source, /\["Заходы"[^\n]*updates\.overview\]/);
-  assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicles\]/);
+  // Карточка «Просмотры авто» считает просмотры карточек машин (vehicle_cars),
+  // а не открытия страниц каталога: у тех свой счётчик.
+  assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicle_cars\]/);
   assert.match(source, /\["Машины в кабинете"[^\n]*updates\.cabinet_orders\]/);
   assert.match(source, /\["Регистрации"[^\n]*updates\.customers\]/);
   assert.match(server, /cabinet_orders:cabinetOrders\.rows\[0\]\.n/);
+  // В боковом меню у «Каталога» три вкладки со своими счётчиками, и пункт меню
+  // показывает их сумму — иначе новые просмотры авто видно только внутри раздела.
+  assert.match(source, /const fresh = sectionFreshCount\(updates, item\.id\)/);
 });
 
 test("раздел каталога первым показывает просмотренные страницы каталога", async () => {

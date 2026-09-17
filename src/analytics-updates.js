@@ -21,3 +21,11 @@ export function watchAnalyticsExit(getViewedSections, target = window, send = fe
   target.addEventListener("pagehide", onPageHide);
   return () => target.removeEventListener("pagehide", onPageHide);
 }
+
+// Внутри «Каталога» три вкладки со своими счётчиками: страницы каталога, авто и
+// избранное. Пункт бокового меню показывает их сумму — иначе просмотренные авто
+// видно только после того, как раздел откроешь.
+export const SECTION_TABS = { vehicles:["vehicles", "vehicle_cars", "vehicle_favorites"] };
+
+export const sectionFreshCount = (updates = {}, section = "") =>
+  (SECTION_TABS[section] || [section]).reduce((sum, key) => sum + (Number(updates[key]) || 0), 0);

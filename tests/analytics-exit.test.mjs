@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { watchAnalyticsExit } from '../src/analytics-updates.js';
+import { sectionFreshCount, watchAnalyticsExit } from '../src/analytics-updates.js';
 
 test('closing analytics persists viewed sections without clearing them on entry or tab switch', async () => {
   const target = new EventTarget();
@@ -43,4 +43,13 @@ test('returning from browser history can persist another visit and network failu
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(attempts, 2);
   cleanup();
+});
+
+test('the catalog menu item counts every tab inside it', () => {
+  const updates = { overview:3, vehicles:0, vehicle_cars:5, vehicle_favorites:2, leads:1 };
+  assert.equal(sectionFreshCount(updates, 'vehicles'), 7, 'viewed cars and favorites must show up on the menu item');
+  assert.equal(sectionFreshCount(updates, 'overview'), 3);
+  assert.equal(sectionFreshCount(updates, 'searches'), 0, 'a section without data shows nothing');
+  assert.equal(sectionFreshCount({}, 'vehicles'), 0);
+  assert.equal(sectionFreshCount({ vehicles:4 }, 'vehicles'), 4, 'catalog pages alone still count');
 });
