@@ -12,12 +12,14 @@
 // его не трогает. Материал без выжимки не публикуется: о нём приходит напоминание
 // в телеграм, чтобы текст дописали.
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { blogPosts } from "../src/blog-posts.js";
 import { BLOG_SOCIAL } from "../src/blog-social.js";
 import { blogPost } from "./lib/social-blocks.mjs";
 import { publishToInstagram, publishToTelegram, publishToThreads, refreshSocialTokens } from "./lib/social.mjs";
+import { mediaStoreReady, stagePhotos, unstagePhotos } from "./lib/social-media-store.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -62,20 +64,43 @@ const config = await refreshSocialTokens({ log: console.log });
 const results = [];
 for (const post of ready) {
   const done = [];
+  const cover = blogPost({ slug: post.slug, site })?.cover || "";
+
+  // Обложку сети получают по-разному. Телеграму отдаём файлом: по ссылке он до
+  // нашего сервера не дотягивается. Meta качает только по ссылке, поэтому кадр
+  // проходит через хранилище GitHub и удаляется оттуда после публикации.
+  let coverFile = "";
+  if (cover) {
+    try {
+      const response = await fetch(cover);
+      if (response.ok) {
+        coverFile = path.join(os.tmpdir(), `abcars-cover-${post.slug}.jpg`);
+        await fs.writeFile(coverFile, Buffer.from(await response.arrayBuffer()));
+      }
+    } catch (error) { console.log(`обложка «${post.slug}» не скачалась: ${error.message}`); }
+  }
+  let staged = { links: [], assets: [] };
+  if (cover && await mediaStoreReady()) {
+    staged = await stagePhotos([cover], { carNumber: post.slug.replace(/[^a-z0-9]/gi, ""), log: console.log });
+  }
+
   for (const network of networks) {
     const draft = blogPost({ slug: post.slug, network, site });
     try {
-      // Instagram не публикует записи без картинки, поэтому материал журнала уходит
-      // туда только вместе с обложкой. Пока обложек нет, эта сеть пропускается.
-      if (network === "instagram") { done.push("Instagram: пропущен, нужна обложка"); continue; }
+      // Instagram не публикует записи без картинки: без обложки материал туда не идёт.
+      if (network === "instagram" && !staged.links.length) { done.push("Instagram: пропущен, нужна обложка"); continue; }
       const sentPost = network === "telegram"
-        ? await publishToTelegram({ text: draft.text, photos: [], config, log: console.log })
-        : await publishToThreads({ text: draft.text, photos: [], config, log: console.log });
-      done.push(`${network === "telegram" ? "Телеграм" : "Threads"}: ${sentPost.url || sentPost.id}`);
+        ? await publishToTelegram({ text: draft.text, photos: [], files: coverFile ? [coverFile] : [], config, log: console.log })
+        : network === "threads"
+          ? await publishToThreads({ text: draft.text, photos: staged.links, config, log: console.log })
+          : await publishToInstagram({ caption: draft.text, photos: staged.links, config, log: console.log });
+      done.push(`${network === "telegram" ? "Телеграм" : network === "threads" ? "Threads" : "Instagram"}: ${sentPost.url || sentPost.id}`);
     } catch (error) {
       done.push(`${network}: не вышло — ${error.message}`);
     }
   }
+  if (staged.assets.length) await unstagePhotos(staged.assets, { log: console.log });
+  if (coverFile) await fs.rm(coverFile, { force: true });
   sent[post.slug] = { at: new Date().toISOString(), networks: done };
   await fs.mkdir(path.dirname(sentPath), { recursive: true });
   await fs.writeFile(sentPath, `${JSON.stringify(sent, null, 2)}\n`);

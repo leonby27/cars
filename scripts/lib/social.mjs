@@ -291,14 +291,91 @@ async function telegramApi(token, method, payload) {
   throw lastError || new Error("телеграм недоступен");
 }
 
+// Отправка картинки файлом. Нужна там, где по ссылке не выходит: до нашего сервера
+// телеграм не дотягивается так же, как и загрузчик Meta, а обложки журнала лежат
+// именно у нас. Файл мы передаём сами, и качать ему ничего не нужно.
+//
+// Тело складываем руками, а не готовым FormData: телеграм с нашего сервера отвечает
+// только по шестой версии протокола, выбрать её можно лишь у обычного https-запроса,
+// а библиотечная отправка форм через него не проходит — виснет на ожидании ответа.
+function multipartBody(fields, file) {
+  const boundary = `----abcars${Math.random().toString(36).slice(2)}`;
+  const parts = [];
+  for (const [name, value] of Object.entries(fields)) {
+    if (value === undefined || value === null) continue;
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
+  }
+  parts.push(Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="${file.name}"\r\n` +
+    `Content-Type: image/jpeg\r\n\r\n`,
+  ));
+  parts.push(file.data, Buffer.from(`\r\n--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), boundary };
+}
+
+function uploadOnce(token, fields, file, family) {
+  const { body, boundary } = multipartBody(fields, file);
+  return new Promise((resolve, reject) => {
+    const request = https.request({
+      host: "api.telegram.org",
+      path: `/bot${token}/sendPhoto`,
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}`, "Content-Length": body.length },
+      ...(family ? { family } : {}),
+      timeout: 60_000,
+    }, (response) => {
+      let text = "";
+      response.on("data", (chunk) => { text += chunk; });
+      response.on("end", () => {
+        try { resolve(JSON.parse(text)); } catch { reject(new Error(`телеграм ответил не по делу: ${text.slice(0, 160)}`)); }
+      });
+    });
+    request.on("timeout", () => request.destroy(new Error("таймаут отправки файла")));
+    request.on("error", reject);
+    request.end(body);
+  });
+}
+
+async function telegramUploadPhoto(token, { chatId, filePath, caption, markup }) {
+  const data = await fs.readFile(filePath);
+  const file = { name: path.basename(filePath), data };
+  const fields = {
+    chat_id: chatId,
+    ...(caption ? { caption, parse_mode: "HTML" } : {}),
+    ...(markup ? { reply_markup: JSON.stringify(markup) } : {}),
+  };
+  let lastError;
+  for (const family of [6, undefined]) {
+    try {
+      const payload = await uploadOnce(token, fields, file, family);
+      if (payload.ok) return payload.result;
+      throw new Error(payload.description || `ошибка ${payload.error_code}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("телеграм не принял файл");
+}
+
 const channelLink = (message) => {
   const name = message?.chat?.username;
   return name ? `https://t.me/${name}/${message.message_id}` : "";
 };
 
-export async function publishToTelegram({ text, photos = [], buttonUrl = "", config, log = console.log }) {
+export async function publishToTelegram({ text, photos = [], files = [], buttonUrl = "", config, log = console.log }) {
   const { token, channel } = config.telegram;
   if (!token || !channel) throw new Error("нет бота или канала для телеграма");
+
+  // Картинка с нашего сервера уходит файлом: по ссылке телеграм её не возьмёт.
+  if (files.length) {
+    const message = await telegramUploadPhoto(token, {
+      chatId: channel, filePath: files[0], caption: text,
+      markup: buttonUrl ? { inline_keyboard: [[{ text: "Смотреть в каталоге", url: buttonUrl }]] } : undefined,
+    });
+    log("Телеграм: картинка отправлена файлом");
+    return { id: message.message_id, url: channelLink(message), frames: 1 };
+  }
+
   const usable = photos.slice(0, 10);
 
   // Кнопка и альбом несовместимы: если кнопка нужна, уходит один снимок.

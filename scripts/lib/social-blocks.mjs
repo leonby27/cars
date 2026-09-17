@@ -15,6 +15,7 @@
 import { pool } from "../../server/db.mjs";
 import { carTitle } from "../../src/car-title.js";
 import { estimateLandedCost, usdToByn } from "../../src/pricing.js";
+import { BLOG_POSTS } from "../../src/blog-posts.js";
 import { BLOG_SOCIAL } from "../../src/blog-social.js";
 import { buildPostText, carNumber, pickPhotos } from "./social-card.mjs";
 
@@ -282,6 +283,10 @@ export async function modelDuel({ left, right, network = "telegram" }) {
 export function blogPost({ slug, network = "telegram", site = "abcars.by" }) {
   const social = BLOG_SOCIAL[slug];
   if (!social) return null;
+  // Заглавная картинка материала — та же, что в миниатюре журнала. Берём широкий
+  // кадр 16:9: он проходит и по требованиям Instagram к пропорциям.
+  const post = BLOG_POSTS.find((item) => item.slug === slug);
+  const cover = post?.cover ? `https://${site}/blog/${slug}-hero.jpg` : "";
   const url = `https://${site}/blog/${slug}`;
   const link = network === "telegram" ? `🔗 <a href="${url}">Читать в журнале</a>`
     : network === "threads" ? `🔗 ${site}/blog/${slug}`
@@ -295,7 +300,7 @@ export function blogPost({ slug, network = "telegram", site = "abcars.by" }) {
     ? "✍️ Вопросы — в личные сообщения, поможем посчитать под вашу машину"
     : "✍️ Вопросы — в Директ, поможем посчитать под вашу машину";
   const text = [`📰 ${social.title}`, "", ...social.body.flatMap((part) => [part, ""]), link, invite].join("\n");
-  return { block: "blog", slug, cars: [], photos: [], text: `${text}${tags}` };
+  return { block: "blog", slug, cars: [], cover, photos: cover ? [cover] : [], text: `${text}${tags}` };
 }
 
 export const closeBlocks = () => pool.end();
