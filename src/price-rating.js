@@ -83,6 +83,22 @@ export const priceRatingVerdict = (priceUsd, medianUsd) => {
   return { ...VERDICTS[step], step };
 };
 
+/**
+ * Цена не просто ниже набора, а провалилась в левую половину первого деления шкалы —
+ * это уже не торг и не срочная продажа. Чаще всего так дёшево отдают то, что побывало
+ * в аварии и восстановлено: по объявлению этого не видно, а по цене видно. Порог —
+ * середина первого деления, то есть примерно пятнадцать процентов ниже типичной цены;
+ * взят от нарисованного бегунка, чтобы предупреждение всегда совпадало с тем, что
+ * человек видит на шкале. Набор для сравнения всегда не меньше пяти машин
+ * (PRICE_RATING_MIN_CARS на сервере), случайная дешёвая пара объявлений его не вызовет.
+ */
+export const PRICE_RATING_DAMAGE_WARNING = "Возможно, машина восстановлена после удара, так как цена сильно ниже рынка";
+export const priceRatingDamageWarning = (assessment) => {
+  const position = Number(assessment?.position);
+  const deep = assessment?.verdict?.step === 0 && position < 0.5 / PRICE_RATING_STEPS;
+  return deep ? PRICE_RATING_DAMAGE_WARNING : null;
+};
+
 const formatKm = (value) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits:0 }).format(value);
 const formatKwh = (value) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits:1 }).format(value);
 // «с 41 такой же машиной», «с 205 такими же машинами» — падеж по последней цифре.

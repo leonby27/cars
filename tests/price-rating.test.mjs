@@ -14,6 +14,7 @@ import {
   priceRatingBar,
   priceRatingBasisNote,
   priceRatingBatteryNote,
+  priceRatingDamageWarning,
   priceRatingLimits,
   priceRatingMileageNote,
   priceRatingPosition,
@@ -365,6 +366,23 @@ test("год сравнения виден в тексте цены, включ�
     "Такие машины 2023 года стоят в среднем 30 000 $ — эта на 3 000 $ дешевле.");
   assert.equal(plain(priceRatingPriceNote(rating, { ...mode, mileageAdjusted:true }, 27_000, money).text),
     "Такие машины 2023 года стоят в среднем 30 000 $ — эта на 3 000 $ дешевле.");
+});
+
+
+test("о возможном ремонте предупреждаем только в левой половине первого деления", () => {
+  const rating = { count:9, sameYear:true, mileageMedian:60_000 };
+  const mode = { medianUsd:30_000, cheaperThan:1 };
+  const warned = (price, mileage = 60_000) => priceRatingDamageWarning(priceRatingAssessment(rating, mode, price, mileage));
+  // Порог — середина первого деления: 15% ниже типичной цены.
+  assert.match(warned(25_000), /машина восстановлена/);
+  assert.equal(warned(25_000), warned(20_000));
+  assert.equal(warned(25_500), null);
+  // Первое деление начинается с 10% — само по себе оно ещё не повод пугать.
+  assert.equal(warned(26_000), null);
+  for (const price of [28_000, 30_000, 32_000, 34_000]) assert.equal(warned(price), null, `цена ${price}`);
+  // Поправка на пробег двигает оценку только вверх, поэтому предупреждения не рождает.
+  assert.equal(warned(30_000, 90_000), null);
+  assert.equal(priceRatingDamageWarning(null), null);
 });
 
 

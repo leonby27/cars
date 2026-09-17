@@ -4,11 +4,13 @@
 // Пока сравнение не приехало, блок стоит заготовкой той же высоты. Иначе он появлялся
 // бы через мгновение после открытия карточки и сдвигал бы всё под собой — тот самый
 // микрорывок, который видно глазом.
+import { Warning } from "./icons.jsx";
 import {
   PRICE_RATING_STEPS,
   priceRatingAssessment,
   priceRatingBasisNote,
   priceRatingBatteryNote,
+  priceRatingDamageWarning,
   priceRatingLimits,
   priceRatingMileageNote,
   priceRatingPriceNote,
@@ -52,6 +54,9 @@ export function PriceRatingScale({ rating, priceUsd, mileage, battery, quotaPric
   // отдельной строкой в блоке она только мешала читать ответ.
   const text = [priceNote?.text, batteryNote?.text, mileageNote?.text].filter(Boolean).join(" ");
   const hint = [priceRatingBasisNote(rating), priceRatingLimits(rating)].filter(Boolean).join(" ");
+  // Слишком дешёвая машина — не только удача: об этом честнее сказать прямо в блоке
+  // о цене, а не оставлять человека радоваться зелёной шкале.
+  const damageWarning = priceRatingDamageWarning(assessment);
   return (
     <PriceRatingCard className={`is-${verdict.tone}`} title={hint || undefined}>
       <div className="price-rating-heading">
@@ -65,6 +70,12 @@ export function PriceRatingScale({ rating, priceUsd, mileage, battery, quotaPric
         ))}
       </div>
       {text && <p className="price-rating-note">{text}</p>}
+      {damageWarning && (
+        <p className="price-rating-warning">
+          <Warning size={18} weight="regular" aria-hidden="true" />
+          <span>{damageWarning}</span>
+        </p>
+      )}
     </PriceRatingCard>
   );
 }
