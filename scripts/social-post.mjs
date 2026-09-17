@@ -20,7 +20,8 @@ import { fileURLToPath } from "node:url";
 import { estimateLandedCost, usdToByn } from "../src/pricing.js";
 import { buildPostText, carNumber, carPageUrl, pickPhotos } from "./lib/social-card.mjs";
 import { publishToInstagram, publishToTelegram, publishToThreads, refreshSocialTokens, remainingQuota } from "./lib/social.mjs";
-import { cleanupStalePhotos, mediaStoreReady, stagePhotos, unstagePhotos } from "./lib/social-media-store.mjs";
+import { cleanupStalePhotos, mediaStoreReady, stageBuffers, unstagePhotos } from "./lib/social-media-store.mjs";
+import { dropFrames, prepareFrames } from "./lib/photo-local.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -99,15 +100,19 @@ if (dryRun) {
   process.exit(0);
 }
 
-// Кадры кладутся в хранилище GitHub: наш сервер загрузчику Meta недоступен, а
-// оттуда он берёт их без вопросов. После публикации файлы удаляются.
-// Телеграм из этого хранилища качать отказывается («WEBPAGE_CURL_FAILED»): ему не
-// нравится, что вложение релиза отдаётся без пометки «это картинка». Поэтому ему
-// по-прежнему уходят прямые адреса источника — до тех пор, пока мы не начнём
-// отправлять ему файл напрямую, что он умеет и что понадобится для водяного знака.
+// Кадры готовятся один раз и из одного места — нашего хранилища снимков. Дальше
+// каждая сеть получает их так, как умеет: телеграм файлами, Threads и Instagram по
+// ссылке из хранилища GitHub (в Китай они ходить умеют, но незачем: кадр может быть
+// уже с нашим оформлением, а зависимость от чужой доступности лишняя).
+const framesDir = path.join(ROOT, "runtime", "social-frames", carNumber(car));
+const frames = await prepareFrames(sourcePhotos, { dir: framesDir, prefix: carNumber(car), log: console.log });
+console.log(`кадров подготовлено: ${frames.length}`);
+
 let staged = [];
-if (!flag("no-store") && await mediaStoreReady()) {
-  const result = await stagePhotos(sourcePhotos, { carNumber: carNumber(car), log: console.log });
+if (frames.length && !flag("no-store") && await mediaStoreReady()) {
+  const { readFile } = await import("node:fs/promises");
+  const items = await Promise.all(frames.map(async (file) => ({ name: path.basename(file), data: await readFile(file) })));
+  const result = await stageBuffers(items, { carNumber: carNumber(car), log: console.log });
   if (result.links.length) {
     photos = result.links;
     staged = result.assets;
@@ -133,7 +138,10 @@ for (const network of networks) {
         ? await publishToInstagram({ caption: texts.instagram, photos, config, log: console.log })
         : await publishToTelegram({
             text: texts.telegram,
-            photos: telegramStyle === "button" ? sourcePhotos.slice(0, 1) : sourcePhotos,
+            // Телеграму — файлы: по ссылке он не берёт ни наши кадры, ни одиночный
+            // снимок источника. Если подготовить кадры не вышло, остаются адреса.
+            files: telegramStyle === "button" ? frames.slice(0, 1) : frames,
+            photos: frames.length ? [] : (telegramStyle === "button" ? sourcePhotos.slice(0, 1) : sourcePhotos),
             buttonUrl: telegramStyle === "button" ? carPageUrl(car, site) : "",
             config, log: console.log,
           });
@@ -149,6 +157,7 @@ if (staged.length) {
   await unstagePhotos(staged, { log: console.log });
   console.log("кадры из хранилища убраны");
 }
+await dropFrames(frames);
 // Заодно подчистим то, что осталось от прогонов, оборвавшихся раньше.
 await cleanupStalePhotos({ log: console.log }).catch(() => {});
 

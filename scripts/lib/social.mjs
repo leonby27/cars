@@ -298,27 +298,30 @@ async function telegramApi(token, method, payload) {
 // Тело складываем руками, а не готовым FormData: телеграм с нашего сервера отвечает
 // только по шестой версии протокола, выбрать её можно лишь у обычного https-запроса,
 // а библиотечная отправка форм через него не проходит — виснет на ожидании ответа.
-function multipartBody(fields, file) {
+function multipartBody(fields, files) {
   const boundary = `----abcars${Math.random().toString(36).slice(2)}`;
   const parts = [];
   for (const [name, value] of Object.entries(fields)) {
     if (value === undefined || value === null) continue;
     parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
   }
-  parts.push(Buffer.from(
-    `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="${file.name}"\r\n` +
-    `Content-Type: image/jpeg\r\n\r\n`,
-  ));
-  parts.push(file.data, Buffer.from(`\r\n--${boundary}--\r\n`));
+  for (const file of files) {
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${file.field}"; filename="${file.name}"\r\n` +
+      `Content-Type: image/jpeg\r\n\r\n`,
+    ));
+    parts.push(file.data, Buffer.from("\r\n"));
+  }
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
   return { body: Buffer.concat(parts), boundary };
 }
 
-function uploadOnce(token, fields, file, family) {
-  const { body, boundary } = multipartBody(fields, file);
+function uploadOnce(token, method, fields, files, family) {
+  const { body, boundary } = multipartBody(fields, files);
   return new Promise((resolve, reject) => {
     const request = https.request({
       host: "api.telegram.org",
-      path: `/bot${token}/sendPhoto`,
+      path: `/bot${token}/${method}`,
       method: "POST",
       headers: { "Content-Type": `multipart/form-data; boundary=${boundary}`, "Content-Length": body.length },
       ...(family ? { family } : {}),
@@ -336,25 +339,46 @@ function uploadOnce(token, fields, file, family) {
   });
 }
 
-async function telegramUploadPhoto(token, { chatId, filePath, caption, markup }) {
-  const data = await fs.readFile(filePath);
-  const file = { name: path.basename(filePath), data };
-  const fields = {
-    chat_id: chatId,
-    ...(caption ? { caption, parse_mode: "HTML" } : {}),
-    ...(markup ? { reply_markup: JSON.stringify(markup) } : {}),
-  };
+async function telegramUpload(token, method, fields, files) {
   let lastError;
   for (const family of [6, undefined]) {
     try {
-      const payload = await uploadOnce(token, fields, file, family);
+      const payload = await uploadOnce(token, method, fields, files, family);
       if (payload.ok) return payload.result;
       throw new Error(payload.description || `ошибка ${payload.error_code}`);
     } catch (error) {
       lastError = error;
     }
   }
-  throw lastError || new Error("телеграм не принял файл");
+  throw lastError || new Error("телеграм не принял файлы");
+}
+
+/** Один снимок с подписью и, если нужно, кнопкой. */
+async function telegramUploadPhoto(token, { chatId, filePath, caption, markup }) {
+  const data = await fs.readFile(filePath);
+  return telegramUpload(token, "sendPhoto", {
+    chat_id: chatId,
+    ...(caption ? { caption, parse_mode: "HTML" } : {}),
+    ...(markup ? { reply_markup: JSON.stringify(markup) } : {}),
+  }, [{ field: "photo", name: path.basename(filePath), data }]);
+}
+
+/**
+ * Альбом из нескольких файлов. Телеграм ждёт описание галереи отдельным полем, а
+ * сами файлы — вложениями, на которые это описание ссылается по имени.
+ */
+async function telegramUploadAlbum(token, { chatId, filePaths, caption }) {
+  const files = await Promise.all(filePaths.map(async (filePath, index) => ({
+    field: `photo${index}`,
+    name: path.basename(filePath),
+    data: await fs.readFile(filePath),
+  })));
+  const media = files.map((file, index) => ({
+    type: "photo",
+    media: `attach://${file.field}`,
+    ...(index === 0 && caption ? { caption, parse_mode: "HTML" } : {}),
+  }));
+  return telegramUpload(token, "sendMediaGroup", { chat_id: chatId, media: JSON.stringify(media) }, files);
 }
 
 const channelLink = (message) => {
@@ -366,14 +390,18 @@ export async function publishToTelegram({ text, photos = [], files = [], buttonU
   const { token, channel } = config.telegram;
   if (!token || !channel) throw new Error("нет бота или канала для телеграма");
 
-  // Картинка с нашего сервера уходит файлом: по ссылке телеграм её не возьмёт.
+  // Кадры уходят файлами: по ссылке телеграм не берёт ни наши картинки, ни одиночный
+  // снимок из китайского хранилища. Кнопку можно прицепить только к одиночному кадру.
   if (files.length) {
-    const message = await telegramUploadPhoto(token, {
-      chatId: channel, filePath: files[0], caption: text,
-      markup: buttonUrl ? { inline_keyboard: [[{ text: "Смотреть в каталоге", url: buttonUrl }]] } : undefined,
-    });
-    log("Телеграм: картинка отправлена файлом");
-    return { id: message.message_id, url: channelLink(message), frames: 1 };
+    const single = files.length === 1 || buttonUrl;
+    const message = single
+      ? await telegramUploadPhoto(token, {
+          chatId: channel, filePath: files[0], caption: text,
+          markup: buttonUrl ? { inline_keyboard: [[{ text: "Смотреть в каталоге", url: buttonUrl }]] } : undefined,
+        })
+      : (await telegramUploadAlbum(token, { chatId: channel, filePaths: files.slice(0, 10), caption: text }))[0];
+    log(`Телеграм: ${single ? "картинка отправлена файлом" : `альбом из ${Math.min(files.length, 10)} файлов`}`);
+    return { id: message.message_id, url: channelLink(message), frames: single ? 1 : Math.min(files.length, 10) };
   }
 
   const usable = photos.slice(0, 10);
