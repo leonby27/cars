@@ -2862,7 +2862,7 @@ body.header-menu-open .detail-floating-availability {
   border-radius: calc(16px * var(--corner-scale));
   background: var(--surface);
 }
-.gallery-panel > img {
+.gallery-panel > img, .gallery-panel > picture > img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -4376,7 +4376,7 @@ html[data-theme="dark"] #root .load-more {
   padding: 10px;
   border-radius: calc(18px * var(--corner-scale));
 }
-.footer-app-qr > img {
+.footer-app-qr > img, .footer-app-qr > picture > img {
   display: block;
   width: 100%;
   height: 100%;
@@ -4501,7 +4501,7 @@ html[data-theme="dark"] #root .load-more {
   min-width: 0;
   color: var(--ink);
 }
-.footer-newsletter-title > img {
+.footer-newsletter-title > img, .footer-newsletter-title > picture > img {
   width: 64px;
   height: 64px;
   flex: 0 0 auto;
@@ -5604,10 +5604,10 @@ html[data-theme="dark"] #root .load-more {
     margin-inline: -14px;
     border-radius: 0;
   }
-  .car-row-image.hover-image-preview > img {
+  .car-row-image.hover-image-preview > img, .car-row-image.hover-image-preview > picture > img {
     display: none;
   }
-  .car-row-image.sold-vehicle-photo > img {
+  .car-row-image.sold-vehicle-photo > img, .car-row-image.sold-vehicle-photo > picture > img {
     display: block;
   }
   .car-row-mobile-image-strip {
@@ -5625,7 +5625,7 @@ html[data-theme="dark"] #root .load-more {
   .car-row-mobile-image-strip::-webkit-scrollbar {
     display: none;
   }
-  .car-row-mobile-image-strip > img {
+  .car-row-mobile-image-strip > img, .car-row-mobile-image-strip > picture > img {
     width: 66%;
     min-width: 66%;
     height: 100%;
@@ -5651,7 +5651,7 @@ html[data-theme="dark"] #root .load-more {
     border-radius: 0 calc(9px * var(--corner-scale)) calc(9px * var(--corner-scale)) 0;
     scroll-snap-align: start;
   }
-  .car-row-mobile-image-more > img {
+  .car-row-mobile-image-more > img, .car-row-mobile-image-more > picture > img {
     width: 100%;
     min-width: 100%;
     height: 100%;
@@ -7530,7 +7530,7 @@ footer {
   border-radius: calc(12px * var(--corner-scale));
   background: #202329;
 }
-.gallery-modal figure > img {
+.gallery-modal figure > img, .gallery-modal figure > picture > img {
   position: relative;
   z-index: 1;
   width: 100%;
@@ -7592,7 +7592,7 @@ footer {
     aspect-ratio: 4/3;
     border-radius: 0;
   }
-  .gallery-modal figure > img {
+  .gallery-modal figure > img, .gallery-modal figure > picture > img {
     max-height: none;
     min-height: 0;
   }
@@ -7678,7 +7678,7 @@ footer {
   border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
 }
-.order-car-summary > img {
+.order-car-summary > img, .order-car-summary > picture > img {
   width: 180px;
   height: 118px;
   object-fit: cover;
@@ -8124,7 +8124,7 @@ footer {
   .order-car-summary {
     grid-template-columns: 150px 1fr;
   }
-  .order-car-summary > img {
+  .order-car-summary > img, .order-car-summary > picture > img {
     width: 150px;
     height: 105px;
   }
@@ -8157,7 +8157,7 @@ footer {
     padding: 11px;
     gap: 12px;
   }
-  .order-car-summary > img {
+  .order-car-summary > img, .order-car-summary > picture > img {
     width: 92px;
     height: 78px;
   }
@@ -8643,7 +8643,7 @@ html[data-theme="dark"] #root .spec-search,
 .hover-image-preview {
   position: relative;
 }
-.hover-image-preview > img {
+.hover-image-preview > img, .hover-image-preview > picture > img {
   display: block;
   width: 100%;
   height: 100%;
@@ -8664,7 +8664,7 @@ html[data-theme="dark"] #root .spec-search,
   background: rgba(12, 14, 18, 0.28);
   pointer-events: none;
 }
-.sold-vehicle-photo > img {
+.sold-vehicle-photo > img, .sold-vehicle-photo > picture > img {
   display: block;
   width: 100%;
   height: 100%;
@@ -9926,7 +9926,7 @@ html[data-theme="dark"] #root .spec-search,
     flex-direction: column;
     gap: 10px;
   }
-  .footer-newsletter-title > img {
+  .footer-newsletter-title > img, .footer-newsletter-title > picture > img {
     width: 64px;
     height: 64px;
     margin-inline: 0;
@@ -17571,7 +17571,7 @@ html[data-theme="dark"] .review-car-cta:hover {
   font-size: 17px;
   text-decoration: none;
 }
-.service-contact-cta > img {
+.service-contact-cta > img, .service-contact-cta > picture > img {
   position: absolute;
   z-index: 0;
   right: clamp(28px, 6vw, 112px);
@@ -17648,7 +17648,7 @@ html[data-theme="dark"] .review-car-cta:hover {
   .service-faq + .service-contact-cta { margin-top: 128px; }
   .service-contact-cta h2 { font-size: clamp(35px, 4.6vw, 42px); }
   .service-contact-cta p { font-size: 17px; }
-  .service-contact-cta > img {
+  .service-contact-cta > img, .service-contact-cta > picture > img {
     right: 12px;
     height: 116.5%;
     max-width: 54%;
@@ -17688,7 +17688,7 @@ html[data-theme="dark"] .review-car-cta:hover {
     width: 100%;
     margin-top: 24px;
   }
-  .service-contact-cta > img {
+  .service-contact-cta > img, .service-contact-cta > picture > img {
     right: auto;
     bottom: -4px;
     left: 50%;
@@ -19558,7 +19558,7 @@ html[data-theme="dark"] .service-report-inspection-list.service-report-risk-poin
   color: #f7f8fa;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48);
 }
-.service-report-photo-viewer-card > img {
+.service-report-photo-viewer-card > img, .service-report-photo-viewer-card > picture > img {
   width: 100%;
   height: min(70vh, 720px);
   display: block;
@@ -19944,7 +19944,7 @@ html[data-theme="dark"] .service-report-risk-points .service-report-inspection-r
     max-height: calc(100vh - 24px);
     border-radius: calc(17px * var(--corner-scale));
   }
-  .service-report-photo-viewer-card > img {
+  .service-report-photo-viewer-card > img, .service-report-photo-viewer-card > picture > img {
     height: min(66vh, 560px);
   }
   .service-report-photo-viewer-card > footer {

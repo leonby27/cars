@@ -7,6 +7,7 @@ import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
+import { holdAnchor } from "./anchor-scroll.js";
 import { Illustration } from "./illustration.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
@@ -9129,7 +9130,8 @@ function ServiceFaqRedirect() {
 
 function FaqSection({ navigate }) {
   useEffect(() => {
-    if (window.location.hash === "#faq") document.getElementById("faq")?.scrollIntoView();
+    if (window.location.hash !== "#faq") return undefined;
+    return holdAnchor(document.getElementById("faq"));
   }, []);
   return (
     <section className="service-faq info-section page-width" id="faq" aria-labelledby="service-faq-title">

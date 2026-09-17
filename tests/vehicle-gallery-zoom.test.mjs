@@ -53,7 +53,7 @@ test("desktop inline gallery is 15 percent shorter than the 4:3 source photo", (
 test("sold vehicle replaces every gallery with one blurred, inert cover", () => {
   assert.ok(app.includes('if (car.available === false) return <SoldVehiclePhoto car={car} detail />;'));
   assert.ok(app.includes('<strong>Продано</strong>'));
-  assert.match(styles, /\.sold-vehicle-photo > img \{[^}]*filter: blur\(12px\);/s);
+  assert.match(styles, /\.sold-vehicle-photo > img[^{]*\{[^}]*filter: blur\(12px\);/s);
   const soldComponent = app.slice(app.indexOf("function SoldVehiclePhoto"), app.indexOf("function HoverImagePreview"));
   assert.doesNotMatch(soldComponent, /onClick|onPointer|zoom|GalleryModal/);
   assert.match(app, /\{floatingCta && !sold && \(/);
