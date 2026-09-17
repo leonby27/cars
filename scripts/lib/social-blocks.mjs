@@ -160,9 +160,15 @@ export async function bestValueOfModel({ brand, model, network = "telegram", sit
   return { block: asQuestion ? "question" : "best-value", cars: [best], photos: await photosFor(best), text: `${body}\n${compare}${tail}` };
 }
 
-// Общий вид строки в списке из нескольких машин.
-const listLine = (car, extra = "") =>
-  `• ${carTitle(car.brand, car.model, null)}, ${car.year} — ${money(car.totalUsd)}${extra}\n  ${number(car.mileage)} км · №${carNumber(car)}`;
+// Нумерованные значки: по ним место машины в списке видно сразу, и такой список
+// читается быстрее, чем с точками.
+const NUMERALS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+
+// Общий вид строки в списке из нескольких машин. Номера машин здесь намеренно нет:
+// в записи с несколькими машинами он превращает список в набор цифр, а найти нужную
+// проще по марке и цене. Номер остаётся там, где машина одна.
+const listLine = (car, index, extra = "") =>
+  `${NUMERALS[index] || "•"} ${carTitle(car.brand, car.model, null)}, ${car.year} — ${money(car.totalUsd)}${extra}\n     ${number(car.mileage)} км`;
 
 /** Блок 4. Машины костяка, у которых сильнее всего упала цена. */
 export async function biggestDrops({ models, network = "telegram", limit = 5 }) {
@@ -188,7 +194,7 @@ export async function biggestDrops({ models, network = "telegram", limit = 5 }) 
     .slice(0, limit);
   if (!cars.length) return null;
 
-  const lines = cars.map((car) => listLine(car, ` (−${money(car.drop)})`));
+  const lines = cars.map((car, index) => listLine(car, index, ` (−${money(car.drop)})`));
   return {
     block: "drops",
     cars,
@@ -215,7 +221,7 @@ export async function freshArrivals({ models, network = "telegram", limit = 5 })
     block: "fresh",
     cars,
     photos: (await Promise.all(cars.map((car) => photosFor(car, 1)))).flat(),
-    text: `🆕 Только что появились в каталоге\n\n${cars.map((car) => listLine(car)).join("\n")}\n\nЦены под ключ.\n${callToAction(network)}`,
+    text: `🆕 Только что появились в каталоге\n\n${cars.map((car, index) => listLine(car, index)).join("\n")}\n\nЦены под ключ.\n${callToAction(network)}`,
   };
 }
 
@@ -237,7 +243,7 @@ export async function budgetPick({ models, capUsd, network = "telegram", limit =
     block: "budget",
     cars,
     photos: (await Promise.all(cars.map((car) => photosFor(car, 1)))).flat(),
-    text: `💰 ${cars.length} машин до ${money(capUsd)} под ключ\n\n${cars.map((car) => listLine(car)).join("\n")}\n\nЦена под ключ — с доставкой, растаможкой и сборами, доплачивать сверху нечего.\n${callToAction(network)}`,
+    text: `💰 ${cars.length} машин до ${money(capUsd)} под ключ\n\n${cars.map((car, index) => listLine(car, index)).join("\n")}\n\nЦена под ключ — с доставкой, растаможкой и сборами, доплачивать сверху нечего.\n${callToAction(network)}`,
   };
 }
 
@@ -259,7 +265,7 @@ export async function modelDuel({ left, right, network = "telegram" }) {
     if (car.battery) parts.push(`${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(car.battery)} кВт·ч`);
     if (car.range) parts.push(`${number(car.range)} км хода`);
     if (car.horsepower) parts.push(`${car.horsepower} л.с.`);
-    return `${carTitle(car.brand, car.model, null)} — ${money(car.totalUsd)}\n  ${parts.join(" · ")} · №${carNumber(car)}`;
+    return `${carTitle(car.brand, car.model, null)} — ${money(car.totalUsd)}\n  ${parts.join(" · ")}`;
   };
   const gap = Math.abs(one.totalUsd - two.totalUsd);
   const cheaper = one.totalUsd <= two.totalUsd ? one : two;
