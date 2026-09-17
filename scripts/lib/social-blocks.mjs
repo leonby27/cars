@@ -151,8 +151,10 @@ export async function bestValueOfModel({ brand, model, network = "telegram", sit
   if ((best.totalUsd - cheapest.totalUsd) / cheapest.totalUsd < 0.03) return null;
 
   const body = buildPostText(best, { totalUsd: best.totalUsd, totalByn: best.totalByn, network, site });
-  const gap = best.totalUsd - cheapest.totalUsd;
-  const compare = `⚖️ Самая дешёвая ${carTitle(brand, model, null)} стоит ${money(cheapest.totalUsd)}, но там ${number(cheapest.mileage)} км пробега и ${cheapest.year} год. Здесь за ${money(gap)} разницы — ${number(best.mileage)} км и ${best.year}.`;
+  // Раньше здесь стояло сравнение с самой дешёвой машиной модели: сколько она стоит,
+  // какой у неё пробег и сколько доплатить за эту. Сергей 17.09.2026 попросил убрать —
+  // в ленте это читалось как оправдание цены. Осталась короткая строка о сути отбора.
+  const compare = "⚖️ Оптимальное соотношение цены и состояния";
   const tail = asQuestion
     ? `\n❓ Как вам цена за такое состояние?\n${callToAction(network)}`
     : `\n${callToAction(network)}`;
