@@ -78,11 +78,11 @@ for (const post of ready) {
   // поэтому телеграму они уходят файлом, а Meta — через хранилище GitHub. Кадр машины
   // лежит в китайском хранилище, и его обе стороны берут по ссылке.
   const cover = await blogCover(post.slug, { site, log: console.log });
-  const coverFile = cover?.kind === "file" ? cover.file : "";
+  const coverFile = cover?.file || "";
   let staged = { links: [], assets: [] };
   if (cover?.kind === "url") {
     staged = { links: [cover.url], assets: [] };
-  } else if (coverFile && await mediaStoreReady()) {
+  } else if (cover?.kind === "file" && coverFile && await mediaStoreReady()) {
     staged = await stageCoverFile(coverFile, post.slug);
   }
 
@@ -92,7 +92,13 @@ for (const post of ready) {
       // Instagram не публикует записи без картинки: без обложки материал туда не идёт.
       if (network === "instagram" && !staged.links.length) { done.push("Instagram: пропущен, нужна обложка"); continue; }
       const sentPost = network === "telegram"
-        ? await publishToTelegram({ text: draft.text, photos: [], files: coverFile ? [coverFile] : [], config, log: console.log })
+        ? await publishToTelegram({
+            text: draft.text,
+            // Телеграму всё уходит файлом: одиночный кадр по ссылке он не берёт.
+            photos: [],
+            files: coverFile ? [coverFile] : [],
+            config, log: console.log,
+          })
         : network === "threads"
           ? await publishToThreads({ text: draft.text, photos: staged.links, config, log: console.log })
           : await publishToInstagram({ caption: draft.text, photos: staged.links, config, log: console.log });
