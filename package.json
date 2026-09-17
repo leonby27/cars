@@ -34,6 +34,7 @@
     "blog:covers": "node scripts/blog-covers.mjs",
     "blog:due": "node scripts/blog-due.mjs",
     "social:post": "node scripts/social-post.mjs",
+    "social:blog": "node scripts/social-blog.mjs",
     "build": "node scripts/clean-dist.mjs && vite build && vite build --ssr src/entry-server.jsx --outDir ${ABCARS_BUILD_DIR:-dist}/ssr && node scripts/split-css.mjs && node scripts/generate-seo-pages.mjs && node scripts/prerender-home.mjs && node scripts/precompress-dist.mjs",
     "preview": "vite preview",
     "import:guazi": "node scripts/import-guazi.mjs",

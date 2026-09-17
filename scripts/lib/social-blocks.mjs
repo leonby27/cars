@@ -15,6 +15,7 @@
 import { pool } from "../../server/db.mjs";
 import { carTitle } from "../../src/car-title.js";
 import { estimateLandedCost, usdToByn } from "../../src/pricing.js";
+import { BLOG_SOCIAL } from "../../src/blog-social.js";
 import { buildPostText, carNumber, pickPhotos } from "./social-card.mjs";
 
 // Костяк ленты из SOCIAL_PLAN.md: по каждой модели показываем свои машины.
@@ -268,6 +269,33 @@ export async function modelDuel({ left, right, network = "telegram" }) {
     photos: [...(await photosFor(one, 2)), ...(await photosFor(two, 2))],
     text: `⚔️ ${carTitle(one.brand, one.model, null)} или ${carTitle(two.brand, two.model, null)}?\n\n1️⃣ ${card(one)}\n\n2️⃣ ${card(two)}\n\n💵 Разница ${money(gap)} в пользу ${carTitle(cheaper.brand, cheaper.model, null)}. Обе цены под ключ.\n\n❓ Что взяли бы вы — первую или вторую?\n${callToAction(network)}`,
   };
+}
+
+/**
+ * Блок 8. Материал журнала.
+ *
+ * Текст берётся из заранее написанной выжимки (src/blog-social.js), ссылка
+ * подставляется под сеть: в телеграме она прячется под словами, в Threads
+ * кликается прямым адресом, а в Instagram ссылок нет вообще — там вместо
+ * адреса отсылка к шапке профиля, иначе человек увидит некликабельный текст.
+ */
+export function blogPost({ slug, network = "telegram", site = "abcars.by" }) {
+  const social = BLOG_SOCIAL[slug];
+  if (!social) return null;
+  const url = `https://${site}/blog/${slug}`;
+  const link = network === "telegram" ? `🔗 <a href="${url}">Читать в журнале</a>`
+    : network === "threads" ? `🔗 ${site}/blog/${slug}`
+    : "🔗 Полный разбор в журнале — ссылка в шапке профиля";
+  const tags = network === "instagram" && social.tags?.length
+    ? `\n\n${["абкарс", "автоизкитая", ...social.tags].map((tag) => `#${tag.replace(/\s+/g, "")}`).join(" ")}`
+    : "";
+  // У материала журнала свой призыв: звать проверять наличие машины неуместно,
+  // когда речь о разборе правил или подборке.
+  const invite = network === "telegram"
+    ? "✍️ Вопросы — в личные сообщения, поможем посчитать под вашу машину"
+    : "✍️ Вопросы — в Директ, поможем посчитать под вашу машину";
+  const text = [`📰 ${social.title}`, "", ...social.body.flatMap((part) => [part, ""]), link, invite].join("\n");
+  return { block: "blog", slug, cars: [], photos: [], text: `${text}${tags}` };
 }
 
 export const closeBlocks = () => pool.end();
