@@ -47,7 +47,7 @@ test("у бензиновой вместо батареи объём, мощно
 
 test("в Threads ссылка кликается и меток нет, в Instagram наоборот", () => {
   const threads = norm(buildPostText(electric, { totalUsd: 35100, totalByn: 106100, network: "threads" }));
-  assert.match(threads, /🔎 abcars\.by\/cars\/59876786$/);
+  assert.match(threads, /🔎 №59876786 · abcars\.by\/cars\/59876786$/);
   assert.ok(!threads.includes("#"), "в Threads метки не ставим");
   assert.ok(threads.length <= 500, "запись в Threads не длиннее 500 знаков");
 
@@ -57,12 +57,12 @@ test("в Threads ссылка кликается и меток нет, в Instag
 
 test("в телеграме ссылка прячется под словами, а рядом с кнопкой её нет совсем", () => {
   const withLink = buildPostText(electric, { totalUsd: 35100, totalByn: 106100, network: "telegram" });
-  assert.match(withLink, /🔎 <a href="https:\/\/abcars\.by\/cars\/59876786">Смотреть в каталоге<\/a>$/);
+  assert.match(withLink, /🔎 №59876786 · <a href="https:\/\/abcars\.by\/cars\/59876786">Смотреть в каталоге<\/a>$/);
   assert.ok(!withLink.includes("#"), "меток в телеграме нет");
 
   const withButton = buildPostText(electric, { totalUsd: 35100, totalByn: 106100, network: "telegram", withLink: false });
   assert.ok(!withButton.includes("<a href"), "при кнопке ссылки в тексте не нужно");
-  assert.match(withButton, /📦 В цену входит доставка, растаможка и все сборы$/);
+  assert.match(withButton, /🔎 №59876786$/, "номер машины остаётся даже рядом с кнопкой");
   assert.ok(withButton.length <= 1024, "подпись под снимком в телеграме не длиннее 1024 знаков");
   assert.equal(carPageUrl(electric), "https://abcars.by/cars/59876786");
 });

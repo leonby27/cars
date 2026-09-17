@@ -79,8 +79,8 @@ export function buildPostText(car, { totalUsd, totalByn, network = "instagram", 
     Number(car?.mileage) > 0 ? `🛣 Пробег ${formatNumber(car.mileage)} км` : "",
     specLine(car),
     "📦 В цену входит доставка, растаможка и все сборы",
-    network === "threads" ? `🔎 ${site}/cars/${carNumber(car)}`
-      : network === "telegram" ? (withLink ? `🔎 <a href="${carPageUrl(car, site)}">Смотреть в каталоге</a>` : "")
+    network === "threads" ? `🔎 №${carNumber(car)} · ${site}/cars/${carNumber(car)}`
+      : network === "telegram" ? (withLink ? `🔎 №${carNumber(car)} · <a href="${carPageUrl(car, site)}">Смотреть в каталоге</a>` : `🔎 №${carNumber(car)}`)
       : `🔎 В каталоге под номером ${carNumber(car)} — ссылка в шапке профиля`,
   ].filter(Boolean);
   // В Telegram запись уходит размеченной, поэтому угловые скобки и амперсанды из
