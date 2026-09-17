@@ -116,6 +116,31 @@ export async function stagePhotos(photos, { carNumber = "0", log = console.log }
   return { links, assets };
 }
 
+/**
+ * То же, что stagePhotos, но кадры уже у нас в памяти: так кладутся наши собственные
+ * картинки — обложка материала журнала и собранная «vs», которых нет ни по какой
+ * внешней ссылке.
+ */
+export async function stageBuffers(items, { carNumber = "0", log = console.log } = {}) {
+  const info = await release();
+  const uploadBase = info.upload_url.replace(/\{.*$/, "");
+  const links = [];
+  const assets = [];
+  for (const [index, item] of items.entries()) {
+    const name = assetName(carNumber, index + 1);
+    try {
+      const uploaded = await api(`${uploadBase}?name=${encodeURIComponent(name)}`, {
+        method: "POST", body: item.data, contentType: "image/jpeg",
+      });
+      links.push(uploaded.browser_download_url);
+      assets.push({ id: uploaded.id, name });
+    } catch (error) {
+      log(`картинка «${item.name}» не попала в хранилище (${error.message})`);
+    }
+  }
+  return { links, assets };
+}
+
 /** Удаляет вложения, загруженные этим прогоном. Ничего другого не трогает. */
 export async function unstagePhotos(assets, { log = console.log } = {}) {
   for (const asset of assets) {
