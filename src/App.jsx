@@ -8847,11 +8847,11 @@ function ServiceContactCta() {
           <strong>Telegram</strong>
           <p>Быстро ответим на вопросы и подскажем по вашему запросу.</p>
         </a>
-        <button className="service-contact-option" type="button" onClick={() => openUnavailable("service_contact_email_click")}>
+        <a className="service-contact-option" href={`mailto:${COMPANY.email}`} onClick={() => trackEvent("service_contact_email_click")}>
           <span aria-hidden="true"><EnvelopeSimple size={27} weight="duotone" /></span>
           <strong>Электронная почта</strong>
-          <p>Для документов, расчётов и деловых вопросов.</p>
-        </button>
+          <p>{COMPANY.email} — для документов, расчётов и деловых вопросов.</p>
+        </a>
       </section>
       {unavailableOpen && (
         <SocialUnavailableModal

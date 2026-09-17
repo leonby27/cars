@@ -4,7 +4,7 @@ export const COMPANY = Object.freeze({
   legalName: "ООО «Абкарс»",
   address: "Минск, ул. Тимирязева, 65Б",
   hours: "Пн–Пт: 10:00–18:00 · Сб, Вс: Выходной",
-  email: "hello@abcars.by",
+  email: "abcarsby@gmail.com",
   phone: "+375 25 646-21-63",
   phoneHref: "+375256462163",
   telegram: "@abcarsby",
