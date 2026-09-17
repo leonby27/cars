@@ -6,6 +6,7 @@
 //   npm run social:post -- 59876786 --threads  только Threads (или --instagram, --telegram)
 //   npm run social:post -- 59876786 --photos=6 сколько кадров брать (по умолчанию 8)
 //   npm run social:post -- 59876786 --tg=button вид записи в телеграме: album или button
+//   npm run social:post -- 59876786 --no-store  не класть кадры в хранилище GitHub
 //
 // Расписание и правила отбора машин здесь намеренно отсутствуют: пока запись
 // выбирает человек. Когда порядок будет решён, поверх этой команды встанет
@@ -19,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { estimateLandedCost, usdToByn } from "../src/pricing.js";
 import { buildPostText, carNumber, carPageUrl, pickPhotos } from "./lib/social-card.mjs";
 import { publishToInstagram, publishToTelegram, publishToThreads, refreshSocialTokens, remainingQuota } from "./lib/social.mjs";
+import { cleanupStalePhotos, mediaStoreReady, stagePhotos, unstagePhotos } from "./lib/social-media-store.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -77,7 +79,8 @@ if (car.status && !String(car.status).startsWith("Карточка доступ�
 }
 
 const totalUsd = estimateLandedCost(car).totalUsd;
-const photos = pickPhotos(car, { limit: photoLimit });
+const sourcePhotos = pickPhotos(car, { limit: photoLimit });
+let photos = sourcePhotos;
 const texts = Object.fromEntries(networks.map((network) => [
   network,
   buildPostText(car, {
@@ -86,7 +89,7 @@ const texts = Object.fromEntries(networks.map((network) => [
   }),
 ]));
 
-console.log(`Машина: ${car.title} (№${carNumber(car)}), кадров подобрано: ${photos.length}`);
+console.log(`Машина: ${car.title} (№${carNumber(car)}), кадров подобрано: ${sourcePhotos.length}`);
 for (const network of networks) {
   console.log(`\n— ${network} —\n${texts[network]}`);
 }
@@ -94,6 +97,26 @@ for (const network of networks) {
 if (dryRun) {
   console.log("\nПробный запуск: ничего не опубликовано.");
   process.exit(0);
+}
+
+// Кадры кладутся в хранилище GitHub: наш сервер загрузчику Meta недоступен, а
+// оттуда он берёт их без вопросов. После публикации файлы удаляются.
+// Телеграм из этого хранилища качать отказывается («WEBPAGE_CURL_FAILED»): ему не
+// нравится, что вложение релиза отдаётся без пометки «это картинка». Поэтому ему
+// по-прежнему уходят прямые адреса источника — до тех пор, пока мы не начнём
+// отправлять ему файл напрямую, что он умеет и что понадобится для водяного знака.
+let staged = [];
+if (!flag("no-store") && await mediaStoreReady()) {
+  const result = await stagePhotos(sourcePhotos, { carNumber: carNumber(car), log: console.log });
+  if (result.links.length) {
+    photos = result.links;
+    staged = result.assets;
+    console.log(`кадров в хранилище: ${result.links.length}`);
+  } else {
+    console.log("хранилище не приняло ни одного кадра — беру адреса источника");
+  }
+} else if (!flag("no-store")) {
+  console.log("ключа к хранилищу нет — беру адреса источника");
 }
 
 const config = await refreshSocialTokens({ log: console.log });
@@ -110,7 +133,7 @@ for (const network of networks) {
         ? await publishToInstagram({ caption: texts.instagram, photos, config, log: console.log })
         : await publishToTelegram({
             text: texts.telegram,
-            photos: telegramStyle === "button" ? photos.slice(0, 1) : photos,
+            photos: telegramStyle === "button" ? sourcePhotos.slice(0, 1) : sourcePhotos,
             buttonUrl: telegramStyle === "button" ? carPageUrl(car, site) : "",
             config, log: console.log,
           });
@@ -121,5 +144,12 @@ for (const network of networks) {
     results.push(`${names[network]}: не вышло — ${error.message}`);
   }
 }
+
+if (staged.length) {
+  await unstagePhotos(staged, { log: console.log });
+  console.log("кадры из хранилища убраны");
+}
+// Заодно подчистим то, что осталось от прогонов, оборвавшихся раньше.
+await cleanupStalePhotos({ log: console.log }).catch(() => {});
 
 await sendTelegram([`Запись о машине ${car.title} (№${carNumber(car)})`, ...results].join("\n"), { root: ROOT, log: console.log }).catch(() => {});
