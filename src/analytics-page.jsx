@@ -7,6 +7,7 @@ import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
 import { analyticsUpdatesUrl, watchAnalyticsExit } from "./analytics-updates.js";
+import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
 // карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
@@ -184,32 +185,35 @@ function LeadCard({ lead }) {
   );
 }
 
-function LeadsSection({ leads, loading, error, unavailable, reload }) {
+function LeadsSection({ leads, loading, error, unavailable, reload, period }) {
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
+  // Период берём общий, из шапки: заявки — такой же раздел аналитики, как остальные,
+  // и свой переключатель тут был бы лишним.
+  const periodLeads = useMemo(() => filterLeadsByPeriod(leads, period), [leads, period]);
   const counts = useMemo(() => ({
-    all:leads.length,
-    car:leads.filter((lead) => lead.car).length,
-    custom_search:leads.filter((lead) => lead.kind === "custom_search").length,
-  }), [leads]);
+    all:periodLeads.length,
+    car:periodLeads.filter((lead) => lead.car).length,
+    custom_search:periodLeads.filter((lead) => lead.kind === "custom_search").length,
+  }), [periodLeads]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return leads.filter((lead) => {
+    return periodLeads.filter((lead) => {
       if (kind === "car" && !lead.car) return false;
       if (kind === "custom_search" && lead.kind !== "custom_search") return false;
       if (!needle) return true;
       const haystack = [lead.customer.name, lead.customer.phone, lead.customer.email, lead.customer.telegram, lead.car?.title, lead.car?.id, lead.comment, lead.orderNumber].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(needle);
     });
-  }, [leads, kind, query]);
-  const lastLead = leads[0];
+  }, [periodLeads, kind, query]);
+  const lastLead = periodLeads[0];
   return (
     <>
       <section className="analytics-kpis" aria-label="Заявки в цифрах">
-        <article><span>Всего заявок</span><strong>{formatNumber(counts.all)}</strong><p>За всё время работы</p></article>
+        <article><span>Заявок за период</span><strong>{formatNumber(counts.all)}</strong><p>{leadPeriodNote(period)}</p></article>
         <article><span>На конкретный автомобиль</span><strong>{formatNumber(counts.car)}</strong><p>Клиент выбрал машину в каталоге</p></article>
         <article><span>Индивидуальный подбор</span><strong>{formatNumber(counts.custom_search)}</strong><p>Описали, что ищут, своими словами</p></article>
-        <article><span>Последняя заявка</span><strong className="analytics-kpi-small">{lastLead ? formatLeadDate(lastLead.createdAt) : "—"}</strong><p>{lastLead?.customer.name || "Заявок пока нет"}</p></article>
+        <article><span>Последняя заявка</span><strong className="analytics-kpi-small">{lastLead ? formatLeadDate(lastLead.createdAt) : "—"}</strong><p>{lastLead?.customer.name || (leads.length ? "За этот период заявок нет" : "Заявок пока нет")}</p></article>
       </section>
       <section className="analytics-panel">
         <div className="analytics-panel-heading">
@@ -228,7 +232,7 @@ function LeadsSection({ leads, loading, error, unavailable, reload }) {
         {filtered.length ? (
           <div className="lead-list">{filtered.map((lead) => <LeadCard key={lead.id} lead={lead} />)}</div>
         ) : (
-          <p className="analytics-empty">{unavailable ? "Заявки хранятся на основном сайте — на этой копии их нет." : leads.length ? "По этому условию заявок нет." : "Заявок пока не было. Как только клиент оставит контакты, они появятся здесь."}</p>
+          <p className="analytics-empty">{unavailable ? "Заявки хранятся на основном сайте — на этой копии их нет." : !leads.length ? "Заявок пока не было. Как только клиент оставит контакты, они появятся здесь." : periodLeads.length ? "По этому условию заявок нет." : "За выбранный период заявок нет."}</p>
         )}
       </section>
     </>
@@ -745,7 +749,7 @@ const sections = [
   { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
   { id:"search-traffic", label:"Запросы и позиции", icon:MagnifyingGlass, ranged:true },
   { id:"vehicles", label:"Каталог", icon:CarProfile, ranged:true },
-  { id:"leads", label:"Заявки", icon:Tray, ranged:false },
+  { id:"leads", label:"Заявки", icon:Tray, ranged:true },
   { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
   { id:"contact_interest", label:"Интерес к контактам", icon:ChatCircleText, ranged:true },
@@ -930,7 +934,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
 
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} updates={updates} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} updates={updates} markViewed={markViewed} /></div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
