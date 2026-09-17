@@ -9,8 +9,8 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [] }) {
     { id:"yandex", y:"yandexY", label:"Яндекс" },
     { id:"google", y:"googleY", label:"Google" },
   ].filter((item) => sources.includes(item.id));
-  return <div className="analytics-line-chart" aria-label="График посещений по дням">
-    <div className="analytics-chart-axis-title">Посещения</div>
+  return <div className="analytics-line-chart" aria-label="График заходов по дням">
+    <div className="analytics-chart-axis-title">Заходы</div>
     <div className="analytics-chart-body">
       <div className="analytics-chart-axis" aria-hidden="true">{ticks.map(tick => <span key={tick.value} style={{ top: `${tick.y}%` }}>{tick.value}</span>)}</div>
       <div className="analytics-chart-plot">
@@ -20,11 +20,14 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [] }) {
           {sourceLines.map((source) => <polyline key={source.id} className={`analytics-chart-line analytics-chart-source is-${source.id}`} points={points.map(point => `${point.x},${point[source.y]}`).join(" ")} />)}
           {!single && points.slice(1).map((point, index) => points[index].selected && point.selected ? <line key={point.day} className="analytics-chart-line analytics-chart-selected" x1={points[index].x} y1={points[index].y} x2={point.x} y2={point.y} /> : null)}
         </svg>
-        {points.map(point => <button key={point.day} type="button" className={`analytics-chart-point${point.selected ? " is-highlighted" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${dateLabel(point.day)}: посещений — ${point.visitors}`}>
+        {points.map(point => <button key={point.day} type="button" className={`analytics-chart-point${point.selected ? " is-highlighted" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${dateLabel(point.day)}: заходов — ${point.visits}`}>
           <span className="analytics-chart-marker" />
-          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{dateLabel(point.day)}<strong>Посещений: {point.visitors}</strong></span>
+          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{dateLabel(point.day)}<strong>Заходов: {point.visits}</strong></span>
         </button>)}
-        {sourceLines.flatMap((source) => points.map((point) => <span key={`${source.id}-${point.day}`} className={`analytics-chart-source-point is-${source.id}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%` }} aria-hidden="true" />))}
+        {sourceLines.flatMap((source) => points.map((point) => <button key={`${source.id}-${point.day}`} type="button" className={`analytics-chart-point analytics-chart-source-point is-${source.id}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${dateLabel(point.day)}: заходов из ${source.label} — ${point[source.id]}`}>
+          <span className="analytics-chart-marker" />
+          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{dateLabel(point.day)}<strong>{source.label}: {point[source.id]}</strong></span>
+        </button>))}
       </div>
     </div>
     <div className="analytics-chart-dates">{points.filter((_, index) => index % labelStep === 0 || index === points.length - 1).map(point => <span key={point.day} style={{ left: `${point.x}%` }} data-edge={point.x === 0 ? "left" : point.x === 100 ? "right" : "center"}>{dateLabel(point.day)}</span>)}</div>

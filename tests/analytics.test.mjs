@@ -147,7 +147,8 @@ test("мобильная навигация использует два каст
   assert.match(source, /function MobileAnalyticsPeriodSelect[\s\S]*?className="analytics-mobile-period-trigger"[^>]*aria-haspopup="listbox"/);
   assert.match(source, /className="analytics-mobile-period-menu" role="listbox"/);
   assert.doesNotMatch(source, /analytics-mobile-period-select[\s\S]{0,200}<select/);
-  assert.match(source, /analytics-mobile-section-menu[\s\S]*?Обнулить аналитику[\s\S]*?Выйти/);
+  // Сброс аналитики из кабинета убран 17.09.2026 — в меню остались разделы и выход.
+  assert.match(source, /analytics-mobile-section-menu[\s\S]*?Посты соц сетей[\s\S]*?Выйти/);
   assert.doesNotMatch(source, /sectionTotals|totals\[item\.id\]/);
   assert.match(source, /className="analytics-navigation-fresh"/);
   assert.match(styles, /\.analytics-actions, \.analytics-side-rail \{ display:none; \}/);
@@ -275,16 +276,35 @@ test("«сегодня» и «вчера» считаются по мински�
 
 test("график обзора получает отдельный разрешённый период", async () => {
   const calls = [];
-  const db = { query:async (sql, values) => { calls.push({ sql, values }); return { rows:[{ day:"2026-09-07", visitors:3 }] }; } };
+  const db = { query:async (sql, values) => { calls.push({ sql, values }); return { rows:[{ day:"2026-09-07", visits:3 }] }; } };
   const trend = await getAnalyticsTrend("90", { db });
   assert.equal(trend.period, "90");
   assert.equal(trend.days, 90);
-  assert.deepEqual(trend.daily, [{ day:"2026-09-07", visitors:3 }]);
+  assert.deepEqual(trend.daily, [{ day:"2026-09-07", visits:3 }]);
   assert.equal(calls.length, 1);
   assert.match(calls[0].sql, /created_at >= \$1 AND created_at < \$2/);
   assert.match(calls[0].sql, /nocount=1/, "старые служебные переходы должны исчезнуть из отчётов");
   assert.match(calls[0].sql, /AS yandex/);
   assert.match(calls[0].sql, /AS google/);
+});
+
+// Карточка «Заходы» и точка графика за тот же день должны совпадать, поэтому обе
+// цифры считаются одним правилом: заход, минские сутки и общий признак живого
+// человека без привязки к выбранному периоду.
+test("график считает заходы тем же правилом, что и карточка «Заходы»", async () => {
+  const calls = [];
+  const db = { query:async (sql, values) => { calls.push({ sql, values }); return { rows:[] }; } };
+  await getAnalyticsTrend("90", { db });
+  const sql = calls[0].sql;
+  assert.match(sql, /AS visits/);
+  assert.doesNotMatch(sql, /count\(DISTINCT visitor_id\)/, "график считает заходы, а не уникальных посетителей");
+  assert.match(sql, /interval '30 minutes'/);
+  assert.match(sql, /previous_day IS DISTINCT FROM day/);
+  assert.match(sql, /AT TIME ZONE 'Europe\/Minsk'/);
+  // Признак живого человека общий на всю историю: с окном по периоду один и тот же
+  // день давал в карточке и на графике разные числа.
+  assert.match(sql, /human_action AND path <> '\/analytics'/);
+  assert.doesNotMatch(sql, /created_at >= \$1 AND created_at < \$2 AND human_action/);
 });
 
 test("analytics tokens expire and reject tampering", () => {
@@ -582,8 +602,8 @@ test("время на странице человеком не делает — 
   assert.deepEqual(updates[1].values, ["v1", "s1", true]);
   // Посетителей раздел считает по действию, а не по одной лишь отметке «живой».
   const dashboardSql = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
-  assert.match(dashboardSql, /created_at \$\{compare\} \$1 AND human_action/);
-  assert.equal(/created_at \$\{compare\} \$1 AND human\)/.test(dashboardSql), false);
+  assert.match(dashboardSql, /WHERE human_action AND \$\{PUBLIC_EVENT\}/);
+  assert.equal(/WHERE human AND \$\{PUBLIC_EVENT\}/.test(dashboardSql), false);
   // Событие несёт признак действия с собой: вторая страница того же захода приходит
   // помеченной сразу, отдельного подтверждения на каждую не нужно.
   assert.equal(normalizeAnalyticsEvent({ eventId:"e3", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/", human:true, humanAction:true }).humanAction, true);

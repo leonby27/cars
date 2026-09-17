@@ -42,7 +42,10 @@ async function localFrame(photoUrl, out) {
   const match = String(photoUrl).match(/\/escimg\/.+$/);
   if (!match) return "";
   // На диске кадры лежат в том размере, в каком их сохранил импорт.
-  const stored = path.join(MEDIA_ROOT, "photo", match[0].replace(/\/\d+x\d+_(?:c\d+_)?(?=[^/]*$)/, "/600x0_c42_")) + ".webp";
+  // Адрес из карточки уже оканчивается на «.webp», и на диске имя такое же:
+  // дописывать окончание второй раз нельзя — файл не найдётся никогда.
+  const named = match[0].replace(/\/\d+x\d+_(?:c\d+_)?(?=[^/]*$)/, "/600x0_c42_");
+  const stored = path.join(MEDIA_ROOT, "photo", named.endsWith(".webp") ? named : `${named}.webp`);
   try {
     await fs.access(stored);
     await run("python3", [jpegScript, stored, out]);

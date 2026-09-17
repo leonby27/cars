@@ -2,12 +2,13 @@ import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, MagnifyingGlass, SignOut, Trash, Tray, UsersThree } from "./icons.jsx";
+import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, InstagramLogo, MagnifyingGlass, SignOut, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
 import { analyticsUpdatesUrl, sectionFreshCount, watchAnalyticsExit } from "./analytics-updates.js";
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
+import { carFrame, headlineSize, KINDS, resolvePlace, socialThemeQuery, socialTiles, tileHeadline } from "./social-themes.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
 // карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
@@ -112,26 +113,6 @@ function Login({ onSuccess }) {
         </form>
       </section>
     </main>
-  );
-}
-
-function ResetAnalyticsModal({ pending, error, onCancel, onConfirm }) {
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape" && !pending) onCancel();
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onCancel, pending]);
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onCancel()}>
-      <section className="analytics-reset-modal" role="dialog" aria-modal="true" aria-labelledby="analytics-reset-title">
-        <h2 id="analytics-reset-title">Обнулить всю аналитику?</h2>
-        <p>Будут безвозвратно удалены просмотры, клики, регистрации и заявки из аналитики. Аккаунты пользователей, заказы и каталог останутся без изменений.</p>
-        {error && <div className="analytics-error" role="alert">{error}</div>}
-        <div><button className="secondary" type="button" onClick={onCancel} disabled={pending}>Отмена</button><button className="analytics-reset-confirm" type="button" onClick={onConfirm} disabled={pending}>{pending ? "Обнуляем…" : "Да, обнулить"}</button></div>
-      </section>
-    </div>
   );
 }
 
@@ -755,6 +736,11 @@ const sections = [
   { id:"contact_interest", label:"Интерес к контактам", icon:ChatCircleText, ranged:true },
 ];
 
+// Витрина стиля соцсетей — не цифры, а заготовки записей, поэтому в боковой
+// колонке она стоит отдельной кнопкой под остальными, а не в общем списке разделов.
+// Периода у неё нет: кадры не зависят от того, какой отрезок времени выбран.
+const socialSection = { id:"social", label:"Посты соц сетей", icon:InstagramLogo, ranged:false };
+
 function AnalyticsNavigationItems({ section, updates, onChoose, mobile = false }) {
   return sections.map((item) => {
     const Icon = item.icon;
@@ -806,7 +792,7 @@ function MobileAnalyticsPeriodSelect({ value, onChange }) {
   </div>;
 }
 
-function MobileAnalyticsNavigation({ active, section, period, setPeriod, updates, onSection, onReset, logout }) {
+function MobileAnalyticsNavigation({ active, section, period, setPeriod, updates, onSection, logout }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
@@ -848,12 +834,174 @@ function MobileAnalyticsNavigation({ active, section, period, setPeriod, updates
       {open && <div className="analytics-mobile-section-menu" role="menu" aria-label="Разделы аналитики">
         <AnalyticsNavigationItems section={section} updates={updates} onChoose={chooseSection} mobile />
         <div className="analytics-mobile-menu-divider" role="separator" />
-        <button className="analytics-mobile-menu-danger" type="button" role="menuitem" onClick={() => chooseAction(onReset)}><Trash size={19} /> <span>Обнулить аналитику</span></button>
+        <button type="button" role="menuitem" className={section === "social" ? "active" : ""} aria-current={section === "social" ? "page" : undefined} onClick={() => chooseSection("social")}><InstagramLogo size={19} /> <span>{socialSection.label}</span></button>
         <button type="button" role="menuitem" onClick={() => chooseAction(logout)}><SignOut size={19} /> <span>Выйти</span></button>
       </div>}
     </div>
     {active.ranged && <MobileAnalyticsPeriodSelect value={period} onChange={setPeriod} />}
   </div>;
+}
+
+// Витрина стиля соцсетей: по каждой теме из плана — картинка так, как она встанет
+// в ленту, и каждая тема по три захода с разными машинами и ракурсами. На одной
+// плитке не видно, во что это складывается стеной, а ради стены раздел и сделан.
+//
+// Квадрат, обрезка по бокам и тёмная подложка здесь не «дизайн кабинета», а
+// повторение того, что делает подготовка кадров к публикации
+// (scripts/photo-to-social.py): увиденное в этой сетке и есть будущая запись.
+// Поэтому у сравнения двух моделей плитка из двух кадров со значком «vs» — такую
+// обложку собирает scripts/blog-duel-cover.py, — а у материала журнала стоит
+// собственная картинка статьи.
+//
+// Переключатель убирает подписи: без них видна чистая сетка с теми же отступами,
+// что в ленте, и сразу понятно, как записи смотрятся рядом друг с другом.
+
+// Разметка надписи на кадре: первое слово в отдельном элементе — его красит
+// .social-title > b в analytics.css, — остальной текст обычным текстовым узлом.
+function SocialHeadline({ text }) {
+  const breakAt = text.search(/\s/);
+  const lead = breakAt === -1 ? text : text.slice(0, breakAt);
+  const rest = breakAt === -1 ? "" : text.slice(breakAt);
+  return <><b>{lead}</b>{rest}</>;
+}
+
+// Слово в надписи не переносится никогда (это разобрали 17.09.2026: перенос
+// посередине слова недопустим ни при каких условиях). Значит, если слово шире
+// своей области, единственный способ вернуть его в кадр — уменьшить масштаб, а
+// готового числа для этого нет: реальная ширина зависит от шрифта и браузера.
+// headlineSize (src/social-themes.js) даёт только стартовую точку.
+//
+// Поэтому кегль меряется по-настоящему: без переноса слово не сжимается в свою
+// строку, а раздвигает элемент вширь — это видно по scrollWidth (истинная ширина
+// содержимого) против clientWidth (ширина, ограниченная max-width в CSS). Пока
+// первое больше второго, шаг за шагом понижаем множитель --social-title-scale,
+// на который эти же правила умножают кегль.
+function SocialTitle({ className, children }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.removeProperty("--social-title-scale");
+    let scale = 1;
+    while (el.scrollWidth > el.clientWidth + 1 && scale > 0.5) {
+      scale -= 0.05;
+      el.style.setProperty("--social-title-scale", scale.toFixed(2));
+    }
+  });
+  return <span ref={ref} className={className}>{children}</span>;
+}
+
+function SocialPostsSection({ active }) {
+  const [captions, setCaptions] = useState(true);
+  // Квадрат — то, что публикуется сейчас. Вертикальный 4:5 — самый узкий кадр,
+  // который сегодня принимает публикация в ленту (см. scripts/lib/social.mjs);
+  // Instagram-приложение с 2025 года умеет и более узкий 3:4, но публикацию под
+  // него ещё не проверяли. Переключатель — только чтобы сравнить оформление на
+  // обеих формах, ничего не публикует.
+  const [shape, setShape] = useState("square");
+  const [cars, setCars] = useState({});
+  const [state, setState] = useState("idle");
+  const tiles = useMemo(() => socialTiles(), []);
+  // Каждому запросу свой номер, и в состояние попадает только ответ последнего.
+  // Отменять запрос уборкой эффекта здесь нельзя: в отладочном режиме React
+  // проводит эффект дважды, уборка после первого прохода погасила бы и ответ —
+  // сетка так и оставалась висеть на «загружается».
+  const requestRef = useRef(0);
+  // Картинки грузятся, только когда раздел открыли: запросы к каталогу незачем
+  // делать всем, кто зашёл посмотреть цифры.
+  useEffect(() => {
+    if (!active) return undefined;
+    const request = requestRef.current + 1;
+    requestRef.current = request;
+    setState("loading");
+    const askCatalog = async (query) => {
+      try {
+        const response = await fetch(socialThemeQuery(query));
+        if (!response.ok) return null;
+        const payload = await response.json();
+        return payload?.items?.[0] || null;
+      } catch { return null; }
+    };
+    Promise.all(tiles.map(async ({ key, theme, pick }) => {
+      if (theme.kind === KINDS.cover) return [key, null];
+      if (theme.kind === KINDS.duel) return [key, await Promise.all(pick.sides.map((side) => askCatalog(side.query)))];
+      return [key, await askCatalog(pick.query)];
+    })).then((pairs) => {
+      if (requestRef.current !== request) return;
+      setCars(Object.fromEntries(pairs));
+      setState("ready");
+    });
+    return undefined;
+  }, [active, tiles]);
+  const frame = (car, angle) => (car ? vehiclePhotoHref(carFrame(car, angle), 1080) : "");
+  return (
+    <section className="analytics-panel">
+      <div className="analytics-panel-heading">
+        <div>
+          <h2>Посты соц сетей</h2>
+          <p>Так записи встанут в ленте. Пока это только картинки — на них отрабатывается оформление, которое потом наложит автопостинг</p>
+        </div>
+        <div className="social-toggles">
+          <div className="analytics-range" aria-label="Форма кадра">
+            <button type="button" className={shape === "square" ? "active" : ""} onClick={() => setShape("square")}>Квадрат</button>
+            <button type="button" className={shape === "vertical" ? "active" : ""} onClick={() => setShape("vertical")}>Вертикально</button>
+          </div>
+          <div className="analytics-range" aria-label="Показывать подписи к темам">
+            <button type="button" className={captions ? "active" : ""} onClick={() => setCaptions(true)}>С описанием</button>
+            <button type="button" className={captions ? "" : "active"} onClick={() => setCaptions(false)}>Без</button>
+          </div>
+        </div>
+      </div>
+      <div className={`social-grid${captions ? "" : " bare"}`}>
+        {tiles.map(({ key, theme, pick }) => {
+          const loaded = cars[key];
+          const waiting = state === "ready" ? "картинки нет" : "загружается";
+          // На кадре — первая строка будущей записи, а не название темы: витрина
+          // показывает то, что увидит читатель ленты.
+          const headline = tileHeadline(theme, pick, loaded);
+          // Место надписи закреплено за темой, кегль — длиной строки: длинная тем
+          // же размером расползлась бы. Центр — исключение: надпись в три строки и
+          // больше центром не читается (рвано с обеих сторон), поэтому такая уходит
+          // к левому краю, даже если у темы места «по центру».
+          const titleClass = `social-title at-${resolvePlace(theme.place, headline)} size-${headlineSize(headline)}`;
+          // Тень под текстом ложится с той стороны кадра, где стоит сама надпись —
+          // сверху или снизу, в зависимости от места темы. Форма (квадрат или
+          // вертикальный 4:5) — по переключателю сверху, одна на все плитки.
+          const frameClass = `social-frame edge-${theme.place.startsWith("top") ? "top" : "bottom"}${shape === "vertical" ? " shape-vertical" : ""}`;
+          return (
+            <figure className="social-tile" key={key}>
+              {theme.kind === KINDS.duel ? (
+                <div className={`${frameClass} is-duel`}>
+                  {headline ? <SocialTitle className={titleClass}><SocialHeadline text={headline} /></SocialTitle> : null}
+                  {(loaded || [null, null]).map((car, index) => (
+                    <span key={index}>{car ? <img src={frame(car, pick.sides[index].angle)} alt={car.title} loading="lazy" /> : null}</span>
+                  ))}
+                  <span className="social-duel-divider" aria-hidden="true" />
+                  <img className="social-mark" src="/logo-dark.svg?v=2" alt="" aria-hidden="true" />
+                </div>
+              ) : (
+                <div className={frameClass}>
+                  {headline ? <SocialTitle className={titleClass}><SocialHeadline text={headline} /></SocialTitle> : null}
+                  {theme.kind === KINDS.cover
+                    ? <img src={pick.cover} alt={theme.title} loading="lazy" />
+                    : loaded ? <img src={frame(loaded, pick.angle)} alt={loaded.title} loading="lazy" /> : <span className="social-frame-empty">{waiting}</span>}
+                  <img className="social-mark" src="/logo-dark.svg?v=2" alt="" aria-hidden="true" />
+                </div>
+              )}
+              {captions && (
+                <figcaption>
+                  <strong>{theme.title}</strong>
+                  <span>{theme.note}</span>
+                  {theme.kind === KINDS.car && loaded ? <a href={analyticsNoCountHref(carHref(loaded.id))} target="_blank" rel="noreferrer">{loaded.title}</a> : null}
+                  {theme.kind === KINDS.duel && Array.isArray(loaded) && loaded[0] && loaded[1] ? <span>{loaded[0].title} · {loaded[1].title}</span> : null}
+                </figcaption>
+              )}
+            </figure>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads }) {
@@ -890,24 +1038,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   // При входе и обновлении только получаем цифры, не отмечая открытый по умолчанию
   // «Обзор» прочитанным.
   useEffect(() => { loadUpdates(); }, [data, leads, loadUpdates]);
-  const [resetOpen, setResetOpen] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [resetError, setResetError] = useState("");
-  const active = sections.find((item) => item.id === section) || sections[0];
-  const openReset = () => { setResetError(""); setResetOpen(true); };
-  const resetAnalytics = async () => {
-    setResetting(true);
-    setResetError("");
-    try {
-      const response = await fetch("/api/analytics/events", { method:"DELETE", credentials:"same-origin" });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "reset_failed");
-      setResetOpen(false);
-      await reload();
-    } catch {
-      setResetError("Не удалось обнулить данные. Обновите страницу и попробуйте снова.");
-    } finally { setResetting(false); }
-  };
+  const active = [...sections, socialSection].find((item) => item.id === section) || sections[0];
   return (
     <main className="analytics-page">
       <header className="analytics-heading">
@@ -918,7 +1049,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
         </div>
       </header>
 
-      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} updates={updates} onSection={openSection} onReset={openReset} logout={logout} />
+      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} updates={updates} onSection={openSection} logout={logout} />
 
       <div className="analytics-layout">
         <div className="analytics-side-rail">
@@ -927,8 +1058,8 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
             <AnalyticsNavigationItems section={section} updates={updates} onChoose={openSection} />
           </nav>
         </aside>
-        <div className="analytics-sidebar-reset">
-          <button className="analytics-sidebar-danger" type="button" onClick={openReset}><Trash size={17} /> Обнулить аналитику</button>
+        <div className="analytics-sidebar-extra">
+          <button className={`analytics-sidebar-social${section === "social" ? " active" : ""}`} type="button" aria-current={section === "social" ? "page" : undefined} onClick={() => openSection("social")}><InstagramLogo size={17} /> {socialSection.label}</button>
         </div>
         </div>
 
@@ -940,9 +1071,9 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "contact_interest"}><ContactInterestSection data={data} fresh={contactFresh} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "social"}><SocialPostsSection active={section === "social"} /></div>
         </div>
       </div>
-      {resetOpen && <ResetAnalyticsModal pending={resetting} error={resetError} onCancel={() => setResetOpen(false)} onConfirm={resetAnalytics} />}
     </main>
   );
 }

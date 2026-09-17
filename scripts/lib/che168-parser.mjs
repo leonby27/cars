@@ -1,5 +1,5 @@
 import { repairVerifiedDrive, driveConflicts } from "../../src/vehicle-spec-integrity.js";
-import { canonicalImportBrand, canonicalImportModel } from "../../config/import-policy.mjs";
+import { canonicalImportBrand, canonicalImportModel, photoIdentity, uniquePhotos } from "../../config/import-policy.mjs";
 import { normalizeDrive } from "./guazi-parser.mjs";
 
 const numeric = (value) => {
@@ -292,6 +292,27 @@ export function normalizeChe168Energy(detail, specs) {
   return "ДВС";
 }
 
+// Снимки источник отдаёт пачками по разделам: кузов снаружи, салон, багажник и так
+// далее. Наш каталог хранит их одним списком, и деление терялось — а соцсетям нужно
+// знать, докуда в этом списке кузов: у одного объявления снаружи семь кадров, у
+// другого всего два, и «взять третий» наугад показывает в ленте руль.
+//
+// Название раздела в данных источника есть не всегда, поэтому сначала ищем его по
+// названию, а если названий нет — берём первую пачку: у источника она всегда кузов.
+// Считаем не сами кадры раздела, а сколько их подряд стоит в начале общего списка:
+// только так число остаётся верным после отсева повторов.
+const EXTERIOR_GROUP = /外观|exterior|appearance/i;
+const groupName = (group, index, raw) => String(raw?.[index]?.catename || raw?.[index]?.name || raw?.[index]?.title || "");
+
+export function countExteriorPhotos(pictureGroups, images, raw = []) {
+  if (!pictureGroups.length || !images.length) return 0;
+  const named = pictureGroups.findIndex((group, index) => EXTERIOR_GROUP.test(groupName(group, index, raw)));
+  const exterior = new Set(pictureGroups[named >= 0 ? named : 0].map(photoIdentity));
+  let count = 0;
+  while (count < images.length && exterior.has(photoIdentity(images[count]))) count += 1;
+  return count;
+}
+
 export function buildChe168Car(payload, { importedAt = new Date().toISOString(), usdToCny = 7.15, expectedLocale } = {}) {
   const detail = payload?.detail;
   if (!detail?.infoid) return null;
@@ -302,7 +323,9 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     || String(detail.carname || "").match(/\b(20\d{2})\b/)?.[1]);
   const sourcePriceUsd = numeric(detail.price);
   const mileage = numeric(detail.mileage);
-  const images = [...new Set((detail.catepiclist || []).flatMap((category) => category.list || []).filter(Boolean))];
+  const pictureGroups = (detail.catepiclist || []).map((group) => (group.list || []).filter(Boolean));
+  const images = uniquePhotos(pictureGroups.flat());
+  const exteriorPhotos = countExteriorPhotos(pictureGroups, images);
   const type = normalizeChe168Energy(detail, specs);
   if (!brand || !model || !year || !sourcePriceUsd || mileage === null || images.length < 2) return null;
 
@@ -378,6 +401,9 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
     technicalSpecs,
     image: images[0],
     images,
+    // Сколько первых снимков — кузов снаружи, а не салон. Нужно соцсетям: без этого
+    // числа ракурс выбирается наугад и в ленту попадает руль вместо машины.
+    exteriorPhotos,
     reportCompleteness: "incomplete",
     reportUrl: detail.report_url || null,
     certificationStatus: detail.certification_status ?? null,

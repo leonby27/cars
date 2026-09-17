@@ -7,6 +7,10 @@
 //   npm run social:post -- 59876786 --photos=6 сколько кадров брать (по умолчанию 8)
 //   npm run social:post -- 59876786 --tg=button вид записи в телеграме: album или button
 //   npm run social:post -- 59876786 --no-store  не класть кадры в хранилище GitHub
+//   npm run social:post -- 59876786 --square=fit  как обрезать: crop (по умолчанию,
+//                                              обрезать по бокам) или fit (кадр целиком и полосы фона)
+//   npm run social:post -- 59876786 --shape=vertical форма кадра: square (по умолчанию,
+//                                              1080×1080) или vertical (1080×1350, 4:5)
 //
 // Расписание и правила отбора машин здесь намеренно отсутствуют: пока запись
 // выбирает человек. Когда порядок будет решён, поверх этой команды встанет
@@ -21,7 +25,7 @@ import { estimateLandedCost, usdToByn } from "../src/pricing.js";
 import { buildPostText, carNumber, carPageUrl, pickPhotos } from "./lib/social-card.mjs";
 import { publishToInstagram, publishToTelegram, publishToThreads, refreshSocialTokens, remainingQuota } from "./lib/social.mjs";
 import { cleanupStalePhotos, mediaStoreReady, stageBuffers, unstagePhotos } from "./lib/social-media-store.mjs";
-import { dropFrames, prepareFrames } from "./lib/photo-local.mjs";
+import { dropFrames, FRAME_SHAPES, prepareFrames } from "./lib/photo-local.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -48,6 +52,14 @@ const networks = chosen.length ? chosen : ["threads", "instagram", "telegram"];
 // В телеграме кнопку можно повесить только под одиночным снимком: под альбомом
 // кнопок не бывает. Поэтому «album» — галерея со ссылкой в подписи, «button» —
 // один кадр и кнопка «Смотреть в каталоге» под ним.
+// Все кадры приводятся к одной форме: Instagram подгоняет галерею под первый
+// снимок, и разнобой пропорций он режет сам. Обрезка по бокам выбрана
+// 17.09.2026 — плотнее и без полос; «fit» вписывает кадр целиком и оставляет
+// полосы фона.
+const squareMode = option("square", process.env.SOCIAL_SQUARE_MODE || "crop") === "fit" ? "fit" : "crop";
+// Квадрат (умолчание) или вертикальный 4:5 — 18.09.2026 добавили второй, чтобы
+// сравнивать их в кабинете; какую форму публиковать взаправду, решит Сергей.
+const frameShape = FRAME_SHAPES[option("shape", process.env.SOCIAL_FRAME_SHAPE || "square")] ? option("shape", process.env.SOCIAL_FRAME_SHAPE || "square") : "square";
 const telegramStyle = option("tg", process.env.TELEGRAM_POST_STYLE || "album") === "button" ? "button" : "album";
 
 if (!carArg) {
@@ -100,13 +112,14 @@ if (dryRun) {
   process.exit(0);
 }
 
-// Кадры готовятся один раз и из одного места — нашего хранилища снимков. Дальше
+// Кадры готовятся один раз и одинаковыми — квадрат для всех сетей. Дальше
 // каждая сеть получает их так, как умеет: телеграм файлами, Threads и Instagram по
 // ссылке из хранилища GitHub (в Китай они ходить умеют, но незачем: кадр может быть
 // уже с нашим оформлением, а зависимость от чужой доступности лишняя).
 const framesDir = path.join(ROOT, "runtime", "social-frames", carNumber(car));
-const frames = await prepareFrames(sourcePhotos, { dir: framesDir, prefix: carNumber(car), log: console.log });
-console.log(`кадров подготовлено: ${frames.length}`);
+const frames = await prepareFrames(sourcePhotos, { dir: framesDir, prefix: carNumber(car), mode: squareMode, shape: frameShape, log: console.log });
+const [frameW, frameH] = FRAME_SHAPES[frameShape];
+console.log(`кадров подготовлено: ${frames.length} (${frameW}×${frameH}, режим ${squareMode})`);
 
 let staged = [];
 if (frames.length && !flag("no-store") && await mediaStoreReady()) {

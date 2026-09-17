@@ -366,23 +366,51 @@ export function normalizeAnalyticsRange(value, now = Date.now()) {
   return { period:String(days), days, from:new Date(now - days * 86_400_000), to:new Date(now) };
 }
 
+const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path !~* '(^|[?&])nocount=1(&|$)'";
+// Признак живого человека не ограничен периодом: он у посетителя один на всю историю.
+// Раньше отметку искали внутри выбранного окна, и один и тот же день давал разные
+// цифры в карточках (окно — сутки) и на графике (окно — 90 дней): человек, который
+// сегодня только читал, а мышью двигал на прошлой неделе, попадал в график и не
+// попадал в карточку. Отметка приходит вдогонку отдельным запросом и порядок записи
+// не гарантирован, поэтому достаточно одного такого события, а не каждого. Именно
+// действием, а не просто отметкой «живой»: одно лишь время на странице выжидает
+// обходчик, который ходит через домашние адреса и по адресу неотличим от людей.
+const LIVE_VISITOR = `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE human_action AND ${PUBLIC_EVENT})`;
+// Сутки везде минские: Беларусь круглый год живёт по UTC+3, а база хранит время
+// по Гринвичу — без перевода события с полуночи до трёх ночи попадали бы во вчера.
+const MINSK_DAY = "(created_at AT TIME ZONE 'Europe/Minsk')::date";
+// Новый заход начинается там, где между двумя шагами посетителя прошло больше
+// получаса либо сменились сутки. Граница суток нужна, чтобы дневная цифра графика
+// сходилась с карточкой «Заходы» за тот же день: карточка считает от минской полуночи.
+const VISIT_STARTS = "gap IS NULL OR gap > interval '30 minutes' OR previous_day IS DISTINCT FROM day";
+
 // График обзора живёт на своём периоде, независимо от среза карточек и таблиц.
 // Для него не запускаем весь тяжёлый отчёт: достаточно одной дневной выборки.
+// Считаем ровно то же, что карточка «Заходы»: заход, а не уникального посетителя, —
+// иначе за один и тот же день карточка и точка графика показывали бы разные числа.
+// Источник у захода один — тот, с которого он начался: внутри захода человек ходит
+// по сайту, и ссылка поисковика есть только у первого шага.
 export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
   const range = normalizeAnalyticsRange(rangeValue);
   const from = range.from.toISOString();
   const to = range.to.toISOString();
-  const result = await db.query(`SELECT created_at::date::text AS day,
-      count(DISTINCT visitor_id)::int AS visitors,
-      count(DISTINCT visitor_id) FILTER (
-        WHERE path ~* '(^|[?&])ysclid=' OR lower(coalesce(properties->>'entrySource','')) ~ '(^|\\.)yandex\\.'
+  const result = await db.query(`WITH steps AS (
+      SELECT ${MINSK_DAY} AS day, path, lower(coalesce(properties->>'entrySource','')) AS entry_source,
+        created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
+        lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
+      FROM analytics_events
+      WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+    )
+    SELECT day::text AS day,
+      count(*)::int AS visits,
+      count(*) FILTER (
+        WHERE path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.'
       )::int AS yandex,
-      count(DISTINCT visitor_id) FILTER (
-        WHERE lower(coalesce(properties->>'entrySource','')) ~ '(^|\\.)google\\.'
+      count(*) FILTER (
+        WHERE entry_source ~ '(^|\\.)google\\.'
       )::int AS google
-    FROM analytics_events
-    WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
-    GROUP BY created_at::date ORDER BY created_at::date`, [from, to]);
+    FROM steps WHERE ${VISIT_STARTS}
+    GROUP BY day ORDER BY day`, [from, to]);
   return {
     days:range.days,
     period:range.period,
@@ -392,18 +420,6 @@ export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
     daily:result.rows,
   };
 }
-
-// Посетителем считаем того, у кого хотя бы одно событие отмечено действием живого
-// человека. Именно «хотя бы одно», а не каждое: отметка приходит вдогонку, отдельным
-// запросом, и порядок записи не гарантирован — иначе первый заход человека остался бы
-// непризнанным из-за случайной очерёдности двух запросов. Именно действием, а не
-// просто отметкой «живой»: одно лишь время на странице подделывает обходчик, который
-// ходит через домашние адреса и по адресу не отличается от людей (26.08.2026).
-const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path !~* '(^|[?&])nocount=1(&|$)'";
-const humanVisitor = (compare = ">=") => `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at ${compare} $1 AND human_action AND ${PUBLIC_EVENT})`;
-// В разделе период ограничен с двух сторон, поэтому «живой посетитель» ищется
-// внутри тех же границ: иначе вчерашний день подхватывал бы сегодняшние отметки.
-const HUMAN_VISITOR = `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND human_action AND ${PUBLIC_EVENT})`;
 
 export async function getAnalyticsDashboard(rangeValue) {
   const range = normalizeAnalyticsRange(rangeValue);
@@ -417,40 +433,44 @@ export async function getAnalyticsDashboard(rangeValue) {
   // посетителей, заходы и просмотры карточек.
   const [summaryResult,visitsResult,actionsResult,dailyResult,catalogPagesResult,vehiclesResult,favoritesResult,registrationsResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
     pool.query(`SELECT
-      count(DISTINCT visitor_id) FILTER (WHERE ${HUMAN_VISITOR})::int AS visitors,
-      count(*) FILTER (WHERE event_name='page_view' AND ${HUMAN_VISITOR})::int AS page_views,
-      count(*) FILTER (WHERE event_name='vehicle_view' AND ${HUMAN_VISITOR})::int AS vehicle_views,
-      count(*) FILTER (WHERE event_name='availability_request_click' AND ${HUMAN_VISITOR})::int AS availability_requests,
-      count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_request_click' AND ${HUMAN_VISITOR})::int AS availability_request_people,
-      count(*) FILTER (WHERE event_name='article_promo_shown' AND ${HUMAN_VISITOR})::int AS promo_shown,
-      count(*) FILTER (WHERE event_name='article_promo_click' AND ${HUMAN_VISITOR})::int AS promo_clicks,
-      count(DISTINCT visitor_id) FILTER (WHERE event_name='article_promo_click' AND ${HUMAN_VISITOR})::int AS promo_click_people,
-      count(*) FILTER (WHERE event_name='contact_phone_reveal' AND ${HUMAN_VISITOR})::int AS contact_phone_views,
-      count(*) FILTER (WHERE event_name='contact_telegram_click' AND ${HUMAN_VISITOR})::int AS contact_telegram_clicks,
-      count(*) FILTER (WHERE event_name='contact_viber_click' AND ${HUMAN_VISITOR})::int AS contact_viber_clicks,
-      count(*) FILTER (WHERE event_name='contact_instagram_click' AND ${HUMAN_VISITOR})::int AS contact_instagram_clicks,
-      count(*) FILTER (WHERE event_name='contact_threads_click' AND ${HUMAN_VISITOR})::int AS contact_threads_clicks,
-      count(*) FILTER (WHERE event_name='service_contact_question_click' AND ${HUMAN_VISITOR})::int AS service_contact_question_clicks,
-      count(*) FILTER (WHERE event_name='service_contact_sales_click' AND ${HUMAN_VISITOR})::int AS service_contact_sales_clicks,
-      count(*) FILTER (WHERE event_name='service_contact_telegram_click' AND ${HUMAN_VISITOR})::int AS service_contact_telegram_clicks,
-      count(*) FILTER (WHERE event_name='service_contact_email_click' AND ${HUMAN_VISITOR})::int AS service_contact_email_clicks,
-      count(*) FILTER (WHERE event_name IN ('app_download_qr_modal_open','app_download_qr_deeplink_modal_open') AND ${HUMAN_VISITOR})::int AS app_download_qr_modal_opens,
-      count(*) FILTER (WHERE event_name='app_download_app_store_modal_open' AND ${HUMAN_VISITOR})::int AS app_download_app_store_modal_opens,
-      count(*) FILTER (WHERE event_name='app_download_google_play_modal_open' AND ${HUMAN_VISITOR})::int AS app_download_google_play_modal_opens,
-      count(*) FILTER (WHERE event_name='newsletter_subscribe_modal_open' AND ${HUMAN_VISITOR})::int AS newsletter_subscribe_modal_opens,
-      count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts', '/contacts/') AND ${HUMAN_VISITOR})::int AS contact_page_views,
-      count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/how-it-works', '/how-it-works/') AND ${HUMAN_VISITOR})::int AS about_page_views,
-      count(DISTINCT visitor_id) FILTER (WHERE NOT (${HUMAN_VISITOR}))::int AS robot_visits
+      count(DISTINCT visitor_id) FILTER (WHERE ${LIVE_VISITOR})::int AS visitors,
+      count(*) FILTER (WHERE event_name='page_view' AND ${LIVE_VISITOR})::int AS page_views,
+      count(*) FILTER (WHERE event_name='vehicle_view' AND ${LIVE_VISITOR})::int AS vehicle_views,
+      count(*) FILTER (WHERE event_name='availability_request_click' AND ${LIVE_VISITOR})::int AS availability_requests,
+      count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_request_click' AND ${LIVE_VISITOR})::int AS availability_request_people,
+      count(*) FILTER (WHERE event_name='article_promo_shown' AND ${LIVE_VISITOR})::int AS promo_shown,
+      count(*) FILTER (WHERE event_name='article_promo_click' AND ${LIVE_VISITOR})::int AS promo_clicks,
+      count(DISTINCT visitor_id) FILTER (WHERE event_name='article_promo_click' AND ${LIVE_VISITOR})::int AS promo_click_people,
+      count(*) FILTER (WHERE event_name='contact_phone_reveal' AND ${LIVE_VISITOR})::int AS contact_phone_views,
+      count(*) FILTER (WHERE event_name='contact_telegram_click' AND ${LIVE_VISITOR})::int AS contact_telegram_clicks,
+      count(*) FILTER (WHERE event_name='contact_viber_click' AND ${LIVE_VISITOR})::int AS contact_viber_clicks,
+      count(*) FILTER (WHERE event_name='contact_instagram_click' AND ${LIVE_VISITOR})::int AS contact_instagram_clicks,
+      count(*) FILTER (WHERE event_name='contact_threads_click' AND ${LIVE_VISITOR})::int AS contact_threads_clicks,
+      count(*) FILTER (WHERE event_name='service_contact_question_click' AND ${LIVE_VISITOR})::int AS service_contact_question_clicks,
+      count(*) FILTER (WHERE event_name='service_contact_sales_click' AND ${LIVE_VISITOR})::int AS service_contact_sales_clicks,
+      count(*) FILTER (WHERE event_name='service_contact_telegram_click' AND ${LIVE_VISITOR})::int AS service_contact_telegram_clicks,
+      count(*) FILTER (WHERE event_name='service_contact_email_click' AND ${LIVE_VISITOR})::int AS service_contact_email_clicks,
+      count(*) FILTER (WHERE event_name IN ('app_download_qr_modal_open','app_download_qr_deeplink_modal_open') AND ${LIVE_VISITOR})::int AS app_download_qr_modal_opens,
+      count(*) FILTER (WHERE event_name='app_download_app_store_modal_open' AND ${LIVE_VISITOR})::int AS app_download_app_store_modal_opens,
+      count(*) FILTER (WHERE event_name='app_download_google_play_modal_open' AND ${LIVE_VISITOR})::int AS app_download_google_play_modal_opens,
+      count(*) FILTER (WHERE event_name='newsletter_subscribe_modal_open' AND ${LIVE_VISITOR})::int AS newsletter_subscribe_modal_opens,
+      count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts', '/contacts/') AND ${LIVE_VISITOR})::int AS contact_page_views,
+      count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/how-it-works', '/how-it-works/') AND ${LIVE_VISITOR})::int AS about_page_views,
+      count(DISTINCT visitor_id) FILTER (WHERE NOT (${LIVE_VISITOR}))::int AS robot_visits
       FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}`, [from, to]),
     // «Заход» считаем по паузе, а не по вкладке: страница помнит номер захода, пока
     // вкладка открыта, поэтому три карточки, открытые в трёх вкладках, выглядели бы
     // тремя разными заходами, а вкладка, забытая на сутки, — одним. Новый заход
-    // начинается там, где между двумя шагами посетителя прошло больше получаса.
+    // начинается там, где между двумя шагами посетителя прошло больше получаса либо
+    // сменились минские сутки — теми же словами заход описан на графике, поэтому
+    // цифра карточки и точка графика за один и тот же день совпадают.
     pool.query(`WITH steps AS (
-        SELECT created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap
-        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
+        SELECT ${MINSK_DAY} AS day,
+          created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
+          lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
+        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
       )
-      SELECT count(*) FILTER (WHERE gap IS NULL OR gap > interval '30 minutes')::int AS visits FROM steps`, [from, to]),
+      SELECT count(*) FILTER (WHERE ${VISIT_STARTS})::int AS visits FROM steps`, [from, to]),
     pool.query(`SELECT
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int
         + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
@@ -460,12 +480,12 @@ export async function getAnalyticsDashboard(rangeValue) {
       (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS form_requests,
       (SELECT count(*) FROM customer_favorites WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int AS favorites,
       (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND calculation->>'requestType' = 'catalog_search' AND ${notStaffContact("contact")})::int AS custom_searches`, [from, to]),
-    pool.query(`SELECT created_at::date::text AS day,
+    pool.query(`SELECT ${MINSK_DAY}::text AS day,
       count(DISTINCT visitor_id)::int AS visitors,
       count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views,
       count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
-      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
-      GROUP BY created_at::date ORDER BY created_at::date`, [from, to]),
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+      GROUP BY ${MINSK_DAY} ORDER BY ${MINSK_DAY}`, [from, to]),
     pool.query(`SELECT path,
         count(*)::int AS views,
         count(DISTINCT visitor_id)::int AS viewers,
@@ -473,7 +493,7 @@ export async function getAnalyticsDashboard(rangeValue) {
       FROM analytics_events
       WHERE event_name='page_view' AND created_at >= $1 AND created_at < $2
         AND (split_part(path, '?', 1) = '/catalog' OR split_part(path, '?', 1) LIKE '/catalog/%')
-        AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
+        AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
       GROUP BY path
       ORDER BY max(created_at) DESC, count(*) DESC
       LIMIT 100`, [from, to]),
@@ -483,7 +503,7 @@ export async function getAnalyticsDashboard(rangeValue) {
           count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers,
           max(created_at) FILTER (WHERE event_name='vehicle_view') AS last_viewed,
           count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
-        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR} GROUP BY listing_id
+        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR} GROUP BY listing_id
       ), asks AS (
         SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${notStaffAccount("customer_id")} GROUP BY listing_id
       ), drafts AS (
@@ -532,7 +552,7 @@ export async function getAnalyticsDashboard(rangeValue) {
     // Регистрации считаем по аккаунтам, а не по событиям — тем же источником, из которого
     // берётся список ниже. Иначе счётчик и список расходятся: событий может не быть вовсе
     // (браузер не отправил, посетитель заблокировал), а аккаунт всё равно создан.
-    pool.query(`SELECT created_at::date::text AS day, count(*)::int AS registrations
+    pool.query(`SELECT ${MINSK_DAY}::text AS day, count(*)::int AS registrations
       FROM customer_accounts WHERE created_at >= $1 AND created_at < $2 AND NOT staff GROUP BY 1`, [from, to]),
     // Что вводят в строку поиска. Записывается только «отстоявшийся» запрос, но
     // человек мог сделать паузу посреди набора — тогда в одном сеансе окажутся
@@ -543,7 +563,7 @@ export async function getAnalyticsDashboard(rangeValue) {
           btrim(properties->>'query') AS query,
           nullif(properties->>'found','')::int AS found
         FROM analytics_events
-        WHERE event_name='search_query' AND created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
+        WHERE event_name='search_query' AND created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
           AND btrim(coalesce(properties->>'query','')) <> ''
       ), settled AS (
         SELECT * FROM asked a WHERE NOT EXISTS (
@@ -561,10 +581,10 @@ export async function getAnalyticsDashboard(rangeValue) {
         max(created_at) AS last_asked
       FROM settled GROUP BY query ORDER BY asked DESC, last_asked DESC LIMIT 60`, [from, to]),
     pool.query(`SELECT day, sum(availability_clicks)::int AS availability_clicks, sum(custom_searches)::int AS custom_searches FROM (
-        SELECT created_at::date::text AS day, count(*)::int AS availability_clicks, 0 AS custom_searches
+        SELECT ${MINSK_DAY}::text AS day, count(*)::int AS availability_clicks, 0 AS custom_searches
           FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")} GROUP BY 1
         UNION ALL
-        SELECT created_at::date::text AS day,
+        SELECT ${MINSK_DAY}::text AS day,
           count(*) FILTER (WHERE coalesce(calculation->>'requestType','') <> 'catalog_search')::int,
           count(*) FILTER (WHERE calculation->>'requestType' = 'catalog_search')::int
           FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND ${notStaffContact("contact")} GROUP BY 1
@@ -572,12 +592,13 @@ export async function getAnalyticsDashboard(rangeValue) {
     // Та же граница в 30 минут, что у верхнего счётчика «Заходы». Для каждого
     // захода показываем первый открытый адрес, источник и число просмотренных страниц.
     pool.query(`WITH ordered AS (
-        SELECT visitor_id, created_at, path, event_name, properties,
-          lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_at
+        SELECT visitor_id, created_at, path, event_name, properties, ${MINSK_DAY} AS day,
+          created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
+          lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
         FROM analytics_events
-        WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${HUMAN_VISITOR}
+        WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
       ), marked AS (
-        SELECT *, CASE WHEN previous_at IS NULL OR created_at - previous_at > interval '30 minutes' THEN 1 ELSE 0 END AS starts_visit
+        SELECT *, CASE WHEN ${VISIT_STARTS} THEN 1 ELSE 0 END AS starts_visit
         FROM ordered
       ), numbered AS (
         SELECT *, sum(starts_visit) OVER (PARTITION BY visitor_id ORDER BY created_at ROWS UNBOUNDED PRECEDING) AS visit_number
@@ -682,15 +703,15 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
     // плашку, а таблица и счётчик расходились бы.
     pool.query(`WITH steps AS (
         SELECT created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap
-        FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}
+        FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
       ) SELECT count(*) FILTER (WHERE gap IS NULL OR gap > interval '30 minutes')::int AS n FROM steps`, [since.overview]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events
       WHERE event_name='page_view' AND created_at > $1
         AND (split_part(path, '?', 1) = '/catalog' OR split_part(path, '?', 1) LIKE '/catalog/%')
-        AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicles]),
-    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicle_cars]),
-    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='favorite_added' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.vehicle_favorites]),
-    pool.query(`SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")} AND btrim(coalesce(properties->>'query','')) <> ''`, [since.searches]),
+        AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}`, [since.vehicles]),
+    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='vehicle_view' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}`, [since.vehicle_cars]),
+    pool.query(`SELECT count(*)::int AS n FROM analytics_events WHERE event_name='favorite_added' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}`, [since.vehicle_favorites]),
+    pool.query(`SELECT count(DISTINCT btrim(properties->>'query'))::int AS n FROM analytics_events WHERE event_name='search_query' AND created_at > $1 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR} AND btrim(coalesce(properties->>'query','')) <> ''`, [since.searches]),
     pool.query(`SELECT (SELECT count(*) FROM order_drafts WHERE created_at > $1 AND ${notStaffContact("contact")})::int
       + (SELECT count(*) FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")})::int AS n`, [since.leads]),
     pool.query(`SELECT count(*)::int AS n FROM customer_orders WHERE created_at > $1 AND ${notStaffAccount("customer_id")}`, [since.leads]),
@@ -711,7 +732,7 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
       count(*) FILTER (WHERE event_name='newsletter_subscribe_modal_open')::int AS newsletter_subscribe_modal_opens,
       count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts','/contacts/'))::int AS contact_page_views,
       count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/how-it-works','/how-it-works/'))::int AS about_page_views
-      FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${humanVisitor(">")}`, [since.contact_interest]),
+      FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}`, [since.contact_interest]),
   ]);
   const contactInterestDetails = contactInterest.rows[0];
   return {

@@ -382,7 +382,7 @@ export function isEligibleNewImport(car) {
 // байт в байт, ни одного ложного срабатывания. У трёх машин скачаны все снимки —
 // признак нашёл все повторы и ни разу не счёл разные кадры одинаковыми.
 const PHOTO_NAME = /autohomecar__([A-Za-z0-9_-]{30})/;
-const photoIdentity = (url) => {
+export const photoIdentity = (url) => {
   const name = String(url).split("/").pop()?.match(PHOTO_NAME)?.[1];
   // Снимок не из хранилища Che168 — сравниваем целый адрес.
   return name ? name.slice(16, 27) : String(url);

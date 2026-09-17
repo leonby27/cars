@@ -133,12 +133,6 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-login-card input { width:100%; height:52px; padding:0 15px; border:1px solid var(--line-strong); border-radius:calc(12px * var(--corner-scale)); background:var(--panel); color:var(--ink); }
 .analytics-login-card input:focus { outline:3px solid var(--focus-ring); border-color:var(--focus-ring); }
 .analytics-error { padding:12px 14px; border-radius:calc(10px * var(--corner-scale)); background:var(--accent-soft); color:var(--accent-dark); }
-.analytics-reset-modal { width:min(520px,calc(100% - 32px)); padding:28px; border:1px solid var(--line); border-radius:var(--analytics-block-radius,24px); background:var(--panel); box-shadow:0 24px 80px rgba(0,0,0,.22); }
-.analytics-reset-modal h2 { margin:0 0 10px; font-size:24px; }
-.analytics-reset-modal p { margin:0 0 22px; color:var(--muted); line-height:1.55; }
-.analytics-reset-modal > div:last-child { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
-.analytics-reset-confirm { padding:11px 16px; border:1px solid transparent; border-radius:calc(10px * var(--corner-scale)); background:var(--accent); color:#fff; font-weight:800; }
-.analytics-reset-confirm:disabled { opacity:.6; cursor:not-allowed; }
 html[data-theme="dark"] .analytics-kpis article, html[data-theme="dark"] .analytics-panel, html[data-theme="dark"] .analytics-login-card, html[data-theme="dark"] .analytics-range button.active { background:var(--panel); border-color:transparent; }
 @media (max-width:980px) { .analytics-heading { align-items:flex-start; flex-direction:column; } .analytics-kpis { grid-template-columns:repeat(2,1fr); } .analytics-two-column { grid-template-columns:1fr; } }
 @media (max-width:620px) { .analytics-figures { flex-direction:column; gap:15px; } .analytics-page { width:calc(100% - 28px); padding-block:22px 56px; } .analytics-kpis { grid-template-columns:1fr; } .analytics-actions { align-items:stretch; flex-direction:column; width:100%; } .analytics-range { justify-content:space-between; } .analytics-range button { flex:1; } .analytics-panel { padding:20px 16px; } .analytics-login-card { padding:26px 22px; } }
@@ -170,10 +164,12 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
 .analytics-kpi-split-count > span { color:var(--ink); }
 .analytics-kpi-split-count > i { color:var(--accent); font-size:18px; }
 .analytics-kpi-split-count > b { min-width:27px; height:24px; padding-inline:6px; font-size:17px; }
-.analytics-sidebar-reset { margin-top:12px; }
-.analytics-sidebar-danger { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }
-html[data-theme="light"] .analytics-sidebar-danger { border:1px solid var(--line); }
-.analytics-sidebar-danger:hover { background:var(--accent-soft); color:var(--accent-dark); }
+.analytics-sidebar-extra { margin-top:12px; }
+.analytics-sidebar-social { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }
+html[data-theme="light"] .analytics-sidebar-social { border:1px solid var(--line); }
+.analytics-sidebar-social:hover { color:var(--ink); }
+.analytics-sidebar-social.active { color:var(--ink); }
+.analytics-sidebar-social.active > svg { color:var(--accent); }
 .analytics-content { min-width:0; }
 .analytics-mobile-navigation { display:none; }
 /* Панели переключаются через hidden, а обёртка своей коробки не рисует. */
@@ -250,7 +246,6 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
   .analytics-mobile-section-menu button:hover { color:var(--ink); }
   .analytics-mobile-section-menu button:focus-visible, .analytics-mobile-section-trigger:focus-visible, .analytics-mobile-period-trigger:focus-visible, .analytics-mobile-period-menu button:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
   .analytics-mobile-menu-divider { height:1px; margin:4px 3px; background:var(--line); }
-  .analytics-mobile-section-menu button.analytics-mobile-menu-danger { color:var(--accent); }
   .analytics-mobile-period-select { position:relative; width:118px; flex:none; }
   .analytics-mobile-period-trigger { width:100%; display:flex; align-items:center; justify-content:space-between; gap:9px; padding:0 13px; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
   .analytics-mobile-period-trigger > b { margin-top:-4px; }
@@ -324,7 +319,8 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .analytics-chart-point { position:absolute; width:24px; height:24px; min-width:0; min-height:0; margin:0; padding:0; display:grid; place-items:center; border:0; background:transparent; color:var(--accent); transform:translate(-50%,-50%); cursor:pointer; border-radius:50%; corner-shape:round; }
 .analytics-chart-point.is-highlighted { color:var(--chart-highlight); }
 .analytics-chart-marker { display:block; width:10px; height:10px; box-sizing:border-box; border:2px solid currentColor; border-radius:50%; corner-shape:round; background:var(--panel); }
-.analytics-chart-source-point { position:absolute; width:8px; height:8px; border:2px solid currentColor; border-radius:50%; corner-shape:round; background:var(--panel); transform:translate(-50%,-50%); pointer-events:none; animation:analytics-chart-series-in .18s ease-out both; }
+.analytics-chart-source-point { animation:analytics-chart-series-in .18s ease-out both; }
+.analytics-chart-source-point .analytics-chart-marker { width:8px; height:8px; }
 .analytics-chart-source-point.is-yandex { color:var(--chart-yandex); }
 .analytics-chart-source-point.is-google { color:var(--chart-google); }
 .analytics-chart-point:hover, .analytics-chart-point:focus-visible { z-index:3; }
@@ -346,3 +342,134 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 @media (prefers-reduced-motion:reduce) {
   .analytics-tabpanel, .analytics-chart-swap, .analytics-chart-source, .analytics-chart-source-point { animation:none; }
 }
+
+/* Посты соц сетей: сетка квадратов, как в ленте. Тёмная подложка и обрезка кадра
+   по бокам повторяют то, что делает подготовка кадров к публикации, — раздел для
+   того и нужен, чтобы оформление проверялось на настоящем виде. Без подписей
+   отступы сжимаются до тех, что в ленте: так видно, как записи смотрятся рядом. */
+.social-toggles { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+.social-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+.social-grid.bare { gap:3px; }
+.social-tile { margin:0; display:grid; gap:8px; }
+.social-frame { position:relative; container-type:inline-size; aspect-ratio:1/1; overflow:hidden; border-radius:var(--analytics-block-radius); background:#17191c; }
+/* Вертикальный 4:5 (1080×1350) — переключатель формы над сеткой. Тот же кадр, что
+   собирает scripts/photo-to-social.py; здесь это только CSS-приближение через
+   object-fit:cover, без настоящей обрезки питоном — как и у квадрата. */
+.social-frame.shape-vertical { aspect-ratio:4/5; }
+.social-grid.bare .social-frame { border-radius:0; }
+.social-frame img { width:100%; height:100%; display:block; object-fit:cover; }
+/* Сравнение двух моделей: два кадра и значок «vs» между ними — та же обложка, что
+   собирается файлом для лент (scripts/blog-duel-cover.py). */
+.social-frame.is-duel { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
+.social-frame.is-duel > span:not(.social-title) { display:block; overflow:hidden; background:#101214; }
+/* Значок «vs» убран 17.09.2026 — вместо него простая полоса-разделитель между
+   кадрами, поверх шва между половинками (тот же 3px, что и grid-gap, только
+   видимый). */
+.social-frame.is-duel > .social-duel-divider { position:absolute; left:50%; top:0; bottom:0; width:2px; transform:translateX(-50%); background:rgb(255 255 255 / 55%); }
+/* Тень под фотографией: держит надпись читаемой на любом снимке, машина не всегда
+   темнее текста.
+   ::before — тонкая полоса в 50px снизу, чтобы край кадра не сливался со следующей
+   плиткой в ленте. Ставится только у тем с надписью сверху (:not(.edge-bottom)): у
+   тем с надписью снизу этот же край и так закрыт широкой тенью ::after, и вторая,
+   короткая, поверх неё была бы просто лишним слоем без всякого эффекта.
+   ::after — с той стороны кадра, где стоит сама надпись (edge-top/edge-bottom, класс
+   ставится по theme.place), на полкадра по высоте и заметно темнее: то место, где
+   буквам действительно нужен тёмный подклад. Оба лежат ниже текста и логотипа: у тех
+   явный z-index:1, а у теней он не задан, и по правилам отрисовки CSS непозиционированная
+   фотография рисуется первой, дальше эти два слоя по порядку в разметке, а слои с
+   z-index — поверх всех, независимо от порядка. */
+.social-frame:not(.edge-bottom)::before {
+  content:""; position:absolute; left:0; right:0; bottom:0; height:50px;
+  background:linear-gradient(to top, rgb(0 0 0 / 40%), rgb(0 0 0 / 0%));
+  pointer-events:none;
+}
+.social-frame::after {
+  content:""; position:absolute; left:0; right:0; height:50%; pointer-events:none;
+}
+.social-frame.edge-top::after { top:0; background:linear-gradient(to bottom, rgb(0 0 0 / 80%), rgb(0 0 0 / 0%)); }
+.social-frame.edge-bottom::after { bottom:0; background:linear-gradient(to top, rgb(0 0 0 / 80%), rgb(0 0 0 / 0%)); }
+/* Первая строка будущей записи поверх кадра.
+ *
+ * Область для текста одна на все записи: отступ от края со всех сторон. Снизу
+ * надпись поднята вдвое выше полосы логотипа — иначе она читалась как подпись к
+ * нему. Внутри области четыре места: левый край и середина, сверху и снизу. Место
+ * закреплено за темой, чтобы тема узнавалась в ленте с одного взгляда.
+ *
+ * Стиль один на все темы, без плашки под текстом (плашки были до 17.09.2026, потом
+ * решили убрать везде): первое слово фирменным красным (#ff485c — более яркий
+ * оттенок, обычный #ee1c25 на пёстром фото местами тонет), остальной текст белым.
+ * Первое слово — отдельный элемент (<b>), не строчная обёртка: обёртка нужна была
+ * только плашке, чтобы красить фон каждой строке отдельно. Цвета записаны числами,
+ * а не через переменные темы: плитка изображает картинку для ленты, одинаковую для
+ * всех, и не должна меняться от того, какая тема кабинета включена у смотрящего.
+ *
+ * Тень держит буквы читаемыми на пёстром снимке — своя, отдельно от теней самого
+ * кадра (.social-frame::before/::after): та размывает фотографию под текстом, эта
+ * обводит контур букв и нужна даже там, где фотография уже затемнена.
+ *
+ * Размер считается от ширины плитки (cqw), а не от экрана: в ленте на телефоне кадр
+ * занимает всю ширину, и надпись должна вырасти вместе с ним. Три кегля по длине
+ * строки — короткую видно через всю ленту, длинная тем же размером заняла бы
+ * полкадра; выбор в headlineSize (src/social-themes.js).
+ *
+ * Шрифт Montserrat, насыщенность 850 (переменный файл, см. src/fonts.css). Dela Gothic One и Ubuntu Mono примеряли 17.09.2026 и
+ * отложили; их файлы лежат рядом в src/fonts.css — примерить снова значит поменять
+ * здесь название шрифта и насыщенность.
+ */
+.social-frame { --social-safe:5%; --social-mark-strip:11%; }
+/* Слово не переносится нигде и никогда — 17.09.2026 разобрали, что перенос
+   посередине слова ломал буквы («Электромобил» / «ь»), и убрали его совсем. Значит,
+   если слово шире своей области, единственный выход — уменьшить масштаб, а не
+   резать буквы. Масштаб держит --social-title-scale: SocialTitle в
+   analytics-page.jsx меряет реальную ширину в браузере (scrollWidth против
+   clientWidth — без переноса слово раздвигает первую и не помещается во вторую) и
+   понижает переменную, пока надпись не влезет целиком. Кегль из headlineSize —
+   только стартовая точка для этого измерения, не гарантия сама по себе. */
+.social-title {
+  position:absolute; z-index:1; max-width:74%; text-align:left; color:#fff;
+  font-family:"Montserrat Display", "Manrope", sans-serif; font-weight:850;
+  line-height:1.05; letter-spacing:-.02em; pointer-events:none;
+  filter:drop-shadow(0 .05em .12em rgb(0 0 0 / 55%));
+}
+.social-title > b { color:#ff485c; font-weight:inherit; }
+.social-title.size-large { font-size:calc(11cqw * var(--social-title-scale, 1)); }
+.social-title.size-medium { font-size:calc(8.8cqw * var(--social-title-scale, 1)); }
+.social-title.size-small { font-size:calc(7.2cqw * var(--social-title-scale, 1)); }
+
+/* Место у правого края убрано 17.09.2026: коробка там прижималась к углу, но сама
+   сжималась по ширине текста и на глаз читалась как «где-то в середине», а не как
+   правый край, — путала, а не помогала узнавать тему. */
+/* Оба угла — левый верхний и левый нижний — держат один и тот же отступ от края по
+   обеим сторонам сразу (--social-safe, тот же, что и у мест по центру): раньше
+   нижний отступ считался от логотипа (--social-mark-strip) и был заметно больше
+   верхнего, из-за чего надпись у одного угла жалась к нему, а у другого — заметно
+   отступала. Логотип стоит в правом нижнем углу, а не под этой надписью, так что
+   поднимать её над ним незачем (решения Сергея 17.09.2026). */
+.social-title.at-top-left { left:var(--social-safe); top:var(--social-safe); }
+.social-title.at-bottom-left { left:var(--social-safe); bottom:var(--social-safe); }
+/* Середина края: ширину даём больше, иначе длинная строка ломается на три куска.
+   Центруем не сдвигом от левого края (`left:50%` + сдвиг назад), а распором в обе
+   стороны с автоматическими полями. Разница не косметическая: у прижатой к точке
+   коробки место для текста считается от этой точки до правого края, то есть ровно
+   половина кадра, и надпись ломалась на три строки, сколько ширины ей ни разреши. */
+.social-title.at-top-center, .social-title.at-bottom-center {
+  left:0; right:0; margin-inline:auto; width:max-content; max-width:78%; text-align:center;
+}
+.social-title.at-top-center { top:var(--social-safe); }
+.social-title.at-bottom-center { bottom:calc(var(--social-mark-strip) * 1.15); }
+
+/* Логотип в углу кадра. Белое начертание — то же, что в тёмной теме сайта.
+   Без тени: так решил Сергей 17.09.2026 — на светлом кузове буквы теряются, но
+   тень выглядела наклейкой. Размер в долях плитки: логотип должен остаться
+   одинаковым и в сетке кабинета, и в ленте на телефоне. */
+/* z-index:1 — иначе логотип красится ниже широкой тени у краёв: без явного номера
+   слоя оба они на одном уровне, и порядок решает место в разметке, где тень
+   (::after) стоит последней и рисуется поверх. */
+.social-frame > img.social-mark { position:absolute; z-index:1; right:3.2%; bottom:3.2%; width:21%; height:auto; pointer-events:none; }
+.social-frame-empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); font-size:13px; }
+.social-tile figcaption { display:grid; gap:2px; }
+.social-tile strong { font-size:14px; }
+.social-tile figcaption > span { color:var(--muted); font-size:13px; }
+.social-tile a { font-size:13px; }
+@media (max-width:1100px) { .social-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:620px) { .social-grid { gap:10px; } .social-grid.bare { gap:2px; } }

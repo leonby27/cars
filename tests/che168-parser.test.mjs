@@ -126,3 +126,44 @@ test("extracts the current paginated Che168 server list instead of stale JSON-LD
     pageIndex:5,
   });
 });
+
+// Источник отдаёт снимки пачками по разделам — кузов снаружи, салон, багажник, —
+// а каталог хранит их одним списком. Пока деление терялось, соцсети брали «третий
+// кадр» наугад и показывали в ленте руль вместо машины: у одного объявления снаружи
+// семь снимков, у другого всего два.
+test("запоминает, сколько первых снимков — кузов снаружи", () => {
+  const groups = (...counts) => counts.map((count, group) => ({
+    list:Array.from({ length:count }, (_, index) => `https://img/g${group}-${index}.jpg`),
+  }));
+  const built = (catepiclist) => buildChe168Car({ detail:{ ...detail, catepiclist }, specGroups:specs });
+
+  assert.equal(built(groups(4, 9, 2)).exteriorPhotos, 4);
+  assert.equal(built(groups(2, 11)).exteriorPhotos, 2);
+  // Разделов нет вовсе — снаружи весь список.
+  assert.equal(built(groups(6)).exteriorPhotos, 6);
+});
+
+test("раздел с кузовом узнаётся по названию, если источник его прислал", () => {
+  const car = buildChe168Car({
+    detail:{ ...detail, catepiclist:[
+      { catename:"外观", list:["https://img/a.jpg", "https://img/b.jpg", "https://img/c.jpg"] },
+      { catename:"内饰", list:["https://img/d.jpg"] },
+    ] },
+    specGroups:specs,
+  });
+  assert.equal(car.exteriorPhotos, 3);
+});
+
+// Повторы источник шлёт часто: один и тот же кадр стоит и в общем списке, и в
+// разделе. Число обязано считаться после отсева, иначе оно заедет в салон.
+test("повторяющиеся снимки не раздувают число кадров снаружи", () => {
+  const car = buildChe168Car({
+    detail:{ ...detail, catepiclist:[
+      { list:["https://img/1400x0_c42_autohomecar__AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA111.jpg", "https://img/600x0_c42_autohomecar__AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA111.jpg"] },
+      { list:["https://img/salon.jpg", "https://img/salon2.jpg"] },
+    ] },
+    specGroups:specs,
+  });
+  assert.equal(car.images.length, 3);
+  assert.equal(car.exteriorPhotos, 1);
+});
