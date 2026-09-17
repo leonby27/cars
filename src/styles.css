@@ -11169,9 +11169,7 @@ html[data-theme="dark"] #root .spec-search,
 .lead-modal.availability-paused-modal.social-unavailable-modal.app-unavailable-modal {
   width: min(460px, 100%);
 }
-.lead-modal.availability-paused-modal.social-unavailable-modal.orders-unavailable-modal {
-  width: min(460px, 100%);
-}
+
 .lead-modal.availability-paused-modal.social-unavailable-modal > h2 {
   margin-bottom: 0;
 }
@@ -11192,19 +11190,7 @@ html[data-theme="dark"] #root .spec-search,
   margin: 0 auto 14px;
   object-fit: contain;
 }
-.orders-unavailable-icon {
-  width: 80px;
-  height: 80px;
-  display: block;
-  margin: 0 auto 14px;
-  object-fit: contain;
-}
-.orders-unavailable-modal > h2 {
-  padding-inline: 0;
-  font-size: clamp(18px, 5.8vw, 28px);
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-}
+
 .app-unavailable-modal > h2 {
   padding-inline: 0;
   font-size: clamp(18px, 5.8vw, 28px);
@@ -16386,7 +16372,6 @@ html[data-theme="dark"] .blog-duel-table tbody td {
   letter-spacing: -0.6px;
 }
 
-
 /* Похожие статьи под материалом: те же карточки, что в журнале, три в ряд. */
 .blog-related {
   display: flex;
@@ -17873,8 +17858,6 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
 @media (max-width: 700px) {
   .purchase-timeline-cta { max-width: 608px; padding-left: 48px; }
 }
-
-
 
 .purchase-deck[data-measured="true"] {
   position: relative;

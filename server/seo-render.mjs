@@ -1,4 +1,5 @@
 import { LEGAL_DOCUMENTS } from "../src/legal-documents.js";
+import { COMPANY } from "../src/company-data.js";
 import { vehiclePhotoHref as photoHref } from "../src/photo-source.js";
 export { photoHref };
 // Отрисовка страниц для поисковиков. Модуль общий для двух мест: сборка
@@ -338,6 +339,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       url: routeUrl("/"),
       logo: `${base}/og.jpg`,
       areaServed: { "@type": "Country", name: "Беларусь" },
+      // Наши страницы в соцсетях: по ним поисковик связывает профили с сайтом, а не
+      // считает их чужими однофамильцами. Адреса — из карточки компании, чтобы не
+      // разъезжались с теми, что стоят в подвале.
+      sameAs: [COMPANY.telegramUrl, COMPANY.instagramUrl, COMPANY.threadsUrl].filter(Boolean),
     };
   }
 

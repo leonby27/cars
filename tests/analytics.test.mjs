@@ -410,11 +410,13 @@ test("интерес к контактам собран в отдельном р
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
   assert.match(page, /label:"Клиенты"[\s\S]{0,120}label:"Интерес к контактам"/);
-  for (const label of ["Просмотр телефона", "Клик по TG", "Клик по Viber", "Клик по Instagram", "О сервисе — задать вопрос", "О сервисе — отдел продаж", "О сервисе — Telegram", "О сервисе — почта", "Интерес к приложению — QR", "Интерес к App Store", "Интерес к Google Play", "Интерес к подписке", "Открытие страницы «Контакты»", "Открытие страницы «О сервисе»"]) {
+  for (const label of ["Просмотр телефона", "Клик по TG", "Клик по Viber", "Клик по Instagram", "О сервисе — задать вопрос", "О сервисе — Viber", "О сервисе — Telegram", "О сервисе — почта", "Интерес к приложению — QR", "Интерес к App Store", "Интерес к Google Play", "Интерес к подписке", "Открытие страницы «Контакты»", "Открытие страницы «О сервисе»"]) {
     assert.match(page, new RegExp(label));
   }
   assert.match(app, /trackEvent\("contact_phone_reveal"\)/);
-  assert.match(app, /trackEvent\(`contact_\$\{network\}_click`\)/);
+  for (const social of ["contact_telegram_click", "contact_viber_click", "contact_instagram_click", "contact_threads_click"]) {
+    assert.match(app, new RegExp(`trackEvent\\("${social}"\\)`));
+  }
   for (const eventName of ["service_contact_question_click", "service_contact_sales_click", "service_contact_telegram_click", "service_contact_email_click"]) {
     assert.match(app, new RegExp(eventName));
     assert.match(server, new RegExp(eventName));

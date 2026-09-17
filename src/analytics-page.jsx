@@ -715,7 +715,7 @@ function ContactInterestSection({ data, fresh = {} }) {
     ["Клик по Instagram", "contact_instagram_clicks", "Нажали Instagram"],
     ["Клик по Threads", "contact_threads_clicks", "Нажали Threads"],
     ["О сервисе — задать вопрос", "service_contact_question_clicks", "Нажали главную кнопку в блоке связи"],
-    ["О сервисе — отдел продаж", "service_contact_sales_clicks", "Выбрали карточку отдела продаж"],
+    ["О сервисе — Viber", "service_contact_sales_clicks", "Выбрали карточку Viber"],
     ["О сервисе — Telegram", "service_contact_telegram_clicks", "Выбрали карточку Telegram"],
     ["О сервисе — почта", "service_contact_email_clicks", "Выбрали карточку электронной почты"],
     ["Интерес к приложению — QR", "app_download_qr_modal_opens", "Открыли QR или перешли по нему"],

@@ -8810,10 +8810,16 @@ function ServiceCatalogShowcase({ navigate, cars, apiMode, total, favorites, tog
 }
 
 function ServiceContactCta() {
-  const [unavailableOpen, setUnavailableOpen] = useState(false);
-  const openUnavailable = (eventName) => {
-    trackEvent(eventName);
-    setUnavailableOpen(true);
+  // Номер не выставляем сразу: первое нажатие показывает его, второе — звонит. Так же
+  // устроена кнопка в шапке, и роботам, которые собирают телефоны со страниц, номер
+  // не достаётся просто так.
+  const [phoneRevealed, setPhoneRevealed] = useState(false);
+  const revealPhone = (event) => {
+    if (phoneRevealed) return;
+    event.preventDefault();
+    trackEvent("service_contact_question_click");
+    trackEvent("contact_phone_reveal");
+    setPhoneRevealed(true);
   };
 
   return (
@@ -8822,10 +8828,10 @@ function ServiceContactCta() {
         <div className="service-contact-cta-copy">
           <h2 id="service-contact-cta-title">Остались вопросы?</h2>
           <p>Поговорите с нашим экспертом. Ответим на вопросы и поможем выбрать подходящий автомобиль.</p>
-          <button className="primary service-contact-cta-button" type="button" onClick={() => openUnavailable("service_contact_question_click")}>
+          <a className="primary service-contact-cta-button" href={`tel:${COMPANY.phoneHref}`} onClick={revealPhone}>
             <Phone size={20} weight="fill" aria-hidden="true" />
-            Задать вопрос
-          </button>
+            {phoneRevealed ? COMPANY.phone : "Задать вопрос"}
+          </a>
         </div>
         <Illustration
           src="/services/contact-manager-black.png"
@@ -8837,11 +8843,11 @@ function ServiceContactCta() {
         />
       </section>
       <section className="service-contact-options page-width" aria-label="Способы связи">
-        <button className="service-contact-option" type="button" onClick={() => openUnavailable("service_contact_sales_click")}>
-          <span aria-hidden="true"><Phone size={26} weight="duotone" /></span>
-          <strong>Отдел продаж</strong>
-          <p>Поможем выбрать автомобиль и рассчитать стоимость до Минска.</p>
-        </button>
+        <a className="service-contact-option" href={COMPANY.viberUrl} onClick={() => trackEvent("service_contact_sales_click")}>
+          <span aria-hidden="true"><ViberLogo size={27} /></span>
+          <strong>Viber</strong>
+          <p>Напишите или позвоните — поможем выбрать автомобиль и посчитать цену до Минска.</p>
+        </a>
         <a className="service-contact-option" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("service_contact_telegram_click")}>
           <span aria-hidden="true"><TelegramLogo size={27} weight="duotone" /></span>
           <strong>Telegram</strong>
@@ -8853,12 +8859,6 @@ function ServiceContactCta() {
           <p>{COMPANY.email} — для документов, расчётов и деловых вопросов.</p>
         </a>
       </section>
-      {unavailableOpen && (
-        <SocialUnavailableModal
-          onClose={() => setUnavailableOpen(false)}
-          description="Сейчас мы временно не принимаем новые обращения. Совсем скоро вновь будем доступны — не теряйте нас! 🙏"
-        />
-      )}
     </>
   );
 }
@@ -11092,33 +11092,6 @@ function BlogDuelPage({ post, navigate, favorites, toggleFavorite }) {
   );
 }
 
-function SocialUnavailableModal({
-  onClose,
-  description = "Сейчас мы временно не принимаем новые заказы через соцсети. Совсем скоро вновь будем доступны — не теряйте нас! 🙏",
-}) {
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal orders-unavailable-modal" role="dialog" aria-modal="true" aria-labelledby="social-unavailable-title" aria-describedby="social-unavailable-description">
-        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
-        <img className="orders-unavailable-icon" src="/app-download/orders-stopwatch.png" width="80" height="80" alt="" aria-hidden="true" />
-        <h2 id="social-unavailable-title">Скоро вернёмся к вам</h2>
-        <p id="social-unavailable-description">{description}</p>
-        <div className="order-removal-actions availability-paused-actions">
-          <button className="primary" type="button" onClick={onClose} autoFocus>Понятно</button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function AppUnavailableModal({ onClose }) {
   useEffect(() => {
     const closeOnEscape = (event) => {
@@ -11186,7 +11159,6 @@ function FooterAppDownload({ onOpen }) {
 }
 
 function SiteFooter({ navigate }) {
-  const [socialUnavailableOpen, setSocialUnavailableOpen] = useState(false);
   const [appUnavailableOpen, setAppUnavailableOpen] = useState(false);
   const [newsletterSubscribedOpen, setNewsletterSubscribedOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState("");
@@ -11198,10 +11170,6 @@ function SiteFooter({ navigate }) {
       setAppUnavailableOpen(true);
     }
   }, []);
-  const openSocialUnavailable = (network) => {
-    trackEvent(`contact_${network}_click`);
-    setSocialUnavailableOpen(true);
-  };
   const openAppUnavailable = (source) => {
     trackEvent(`app_download_${source}_click`);
     trackEvent(`app_download_${source}_modal_open`);
@@ -11260,8 +11228,8 @@ function SiteFooter({ navigate }) {
           <div className="footer-socials">
             <a className="header-social-link is-telegram" aria-label="Telegram" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("contact_telegram_click")}><TelegramOfficialLogo size={36} weight="fill" /></a>
             <a className="header-social-link is-viber" aria-label="Viber" href={COMPANY.viberUrl} onClick={() => trackEvent("contact_viber_click")}><ViberLogo size={24} /></a>
-            <button type="button" className="header-social-link is-instagram" aria-label="Instagram" onClick={() => openSocialUnavailable("instagram")}><InstagramLogo size={25} weight="bold" /></button>
-            <button type="button" className="header-social-link is-threads" aria-label="Threads" onClick={() => openSocialUnavailable("threads")}><ThreadsLogo size={25} /></button>
+            <a className="header-social-link is-instagram" aria-label="Instagram" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("contact_instagram_click")}><InstagramLogo size={25} weight="bold" /></a>
+            <a className="header-social-link is-threads" aria-label="Threads" href={COMPANY.threadsUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("contact_threads_click")}><ThreadsLogo size={25} /></a>
           </div>
         </div>
         <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
@@ -11292,7 +11260,6 @@ function SiteFooter({ navigate }) {
         <div><a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a><a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">Условия использования</a></div>
       </div>
     </footer>
-    {socialUnavailableOpen && <SocialUnavailableModal onClose={() => setSocialUnavailableOpen(false)} />}
     {appUnavailableOpen && <AppUnavailableModal onClose={() => setAppUnavailableOpen(false)} />}
     {newsletterSubscribedOpen && <NewsletterSubscribedModal onClose={() => setNewsletterSubscribedOpen(false)} />}
     </>
