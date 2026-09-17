@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PHOTO_BROWSER_CACHE_VERSION, vehiclePhotoHref, retryVehiclePhoto } from "../src/photo-source.js";
+import { PHOTO_BROWSER_CACHE_VERSION, vehiclePhotoHref, retryVehiclePhoto, socialPhotoHref } from "../src/photo-source.js";
 import { createSeoRenderer } from "../server/seo-render.mjs";
 
 const source = "https://erscglobal2.autoimg.cn/escimg/auto/g34/1400x0_c42_car.jpg.webp";
@@ -26,6 +26,21 @@ test("Guazi использует наш API; обычные локальные �
   }
   for (const image of ["/photo/escimg/a.webp", "/logo.svg", "https://example.com/a.jpg", null])
     assert.equal(vehiclePhotoHref(image, 600), image);
+});
+
+test("для соцсетей адрес ведёт в хранилище источника, без webp и без версии", () => {
+  const expected = "https://erscglobal2.autoimg.cn/escimg/auto/g34/1080x0_car.jpg";
+  assert.equal(socialPhotoHref(source), expected);
+  assert.equal(socialPhotoHref(source.replace("https:", "")), expected);
+  assert.equal(socialPhotoHref("/photo/escimg/auto/g34/1400x0_c42_car.jpg.webp"), expected);
+  assert.equal(socialPhotoHref(source, { width: 1440 }), expected.replace("1080x0_", "1440x0_"));
+  assert.equal(
+    socialPhotoHref(source, { origin: "https://abcars.by" }),
+    "https://abcars.by/photo/escimg/auto/g34/1080x0_car.jpg",
+  );
+  // Чужие и нераспознанные адреса соцсетям не отдаём: пусть запись уйдёт без фото.
+  for (const other of ["https://example.com/a.jpg", "/logo.svg", "", null, undefined])
+    assert.equal(socialPhotoHref(other), "");
 });
 
 const mockImage = (src, srcset) => {

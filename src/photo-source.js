@@ -29,6 +29,27 @@ export function vehiclePhotoHref(source, width = 0, { mirrorOrigin = "", cacheVe
   } catch { return source; }
 }
 
+// Соцсети скачивают картинку сами и понимают только JPEG, поэтому для них тот же
+// кадр берётся без webp и без версии в адресе. По умолчанию адрес ведёт прямо в
+// хранилище Che168: загрузчик Meta не открывает соединения с нашим сервером (он
+// в российской сети), а китайское хранилище ему доступно. origin задаётся, если
+// картинку нужно отдать со своего домена. Ширина 1080 — то, что показывают ленты.
+export function socialPhotoHref(source, { origin = "", width = 1080 } = {}) {
+  if (!source) return "";
+  const sourceOrigin = "https://erscglobal2.autoimg.cn";
+  try {
+    const url = new URL(
+      source.startsWith("/photo/") ? `${sourceOrigin}${source.slice("/photo".length)}`
+        : source.startsWith("//") ? `https:${source}` : source,
+    );
+    if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return "";
+    const path = url.pathname.replace(/\.webp$/i, "").replace(/\/\d+x\d+_(?:c\d+_)?(?=[^/]*$)/, "/");
+    if (!/\.jpe?g$/i.test(path)) return "";
+    const sized = path.replace(/\/(?=[^/]*$)/, `/${width}x0_`);
+    return origin ? `${origin}/photo${sized}` : `https://${url.hostname}${sized}`;
+  } catch { return ""; }
+}
+
 // Сначала размер из объявления: он уже существует у источника, в отличие от
 // произвольной миниатюры. Затем оригинал и сохранённое превью. Каждый адрес
 // пробуем один раз; сбрасываем srcset, чтобы браузер не выбрал сломанную версию.
