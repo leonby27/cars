@@ -173,7 +173,7 @@ const inShift = (row) => {
 // файла нет.
 const FILTERS_FALLBACK = {
   chinese: { minPrice: 7, maxPrice: 100, minYear: 2021 },
-  other: { minPrice: 15, maxPrice: 100, minYear: 2022 },
+  other: { minPrice: 7, maxPrice: 100, minYear: 2022 },
   chineseBrands: [],
 };
 let filters = FILTERS_FALLBACK;
