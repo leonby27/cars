@@ -497,6 +497,28 @@ html[data-theme="dark"] .hero-search-clear {
 .search-results-bar .search-results-note {
   margin: 0;
 }
+/* Слова из поиска, которыми сужена выдача каталога: нажатие убирает их из отбора. */
+.catalog-text-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.catalog-text-chip:hover {
+  color: var(--text);
+}
+/* Слова запроса, по которым ничего не нашлось: строка под счётчиком. */
+.search-results-skip {
+  margin: -8px 0 16px;
+  color: var(--muted);
+  font-size: 15px;
+}
 @media (max-width: 640px) {
   .hero-search-field input {
     font-size: 16px;

@@ -593,6 +593,43 @@ export const splitModelSegments = (value) => {
   return segments;
 };
 
+// Название модели в куске запроса. Сначала пробуем кусок целиком, а если такого
+// названия в каталоге нет — ищем внутри него самый длинный набор слов подряд,
+// который совпадает с названием модели или с его началом. Так находится машина,
+// когда рядом с моделью написали комплектацию или версию: «byd yuan up surpassing
+// 430» — такой модели в каталоге нет, есть Yuan UP.
+//
+// Отбрасываем при этом только слова, которых справочник не знает вовсе. Иначе
+// «x5 mini» превратилось бы в поиск одного X5, хотя посетитель назвал две разные
+// вещи и честнее не найти ничего. Обрывок засчитываем только при совпадении с
+// начала названия (ранг 3 и выше) и от двух знаков — случайное «up» посреди
+// чужого названия иначе тянуло бы за собой пол-каталога.
+const isUnknownWord = (knownEntries, word) =>
+  word.length > 0 && !rankSearchEntries(knownEntries, word).some((entry) => entry.rank >= 3);
+const matchModelSegment = (models, segment, knownEntries = []) => {
+  const exact = rankSearchEntries(models, segment)
+    .slice(0, 12)
+    .map((entry) => entry.name);
+  if (exact.length) return { names:exact, ignored:[] };
+  const words = String(segment).split(" ").filter(Boolean);
+  for (let size = words.length - 1; size > 0; size -= 1) {
+    for (let at = 0; at + size <= words.length; at += 1) {
+      const part = words.slice(at, at + size).join(" ");
+      if (part.replace(/ /g, "").length < 2) continue;
+      const dropped = [...words.slice(0, at), ...words.slice(at + size)];
+      if (!dropped.every((word) => isUnknownWord(knownEntries, word))) continue;
+      const found = rankSearchEntries(models, part)
+        .filter((entry) => entry.rank >= 3)
+        .slice(0, 12)
+        .map((entry) => entry.name);
+      // Отброшенные слова не пропадают: их ищет свободный поиск по характеристикам
+      // и комплектации — «surpass» так и остаётся условием, просто уже не моделью.
+      if (found.length) return { names:found, ignored:dropped };
+    }
+  }
+  return { names:[], ignored:[] };
+};
+
 /**
  * Марка и модели из остатка запроса — того, что осталось после чисел, кузова,
  * привода и цвета. brandEntries и modelEntries — справочники каталога вида
@@ -600,8 +637,11 @@ export const splitModelSegments = (value) => {
  * Функция без React и сети, чтобы весь порядок разбора проверялся тестами.
  */
 export const resolveBrandAndModels = async (text, { brandEntries = [], modelEntries = [], modelsOfBrand }) => {
-  const empty = { brand: "", models: [], matched: false };
+  const empty = { brand: "", models: [], matched: false, ignored: [] };
   if (!text) return empty;
+  // Общий словарь названий каталога: по нему отличаем приписку про комплектацию
+  // от слова, которое само по себе что-то значит.
+  const knownEntries = [...brandEntries, ...modelEntries];
 
   // Полностью введённая марка: остаток текста ищем среди её моделей. Марку пишут
   // и первой («bmw ix3»), и после модели («ix3 bmw»), поэтому ищем её в любом месте.
@@ -611,21 +651,21 @@ export const resolveBrandAndModels = async (text, { brandEntries = [], modelEntr
   );
   if (brandHit) {
     const segments = splitModelSegments(brandHit.rest);
-    if (!segments.length) return { brand: brandHit.name, models: [], matched: true };
+    if (!segments.length) return { brand: brandHit.name, models: [], matched: true, ignored: [] };
     const models = (await modelsOfBrand?.(brandHit.name)) || [];
     const matchedModels = [];
+    const ignored = [];
     let missed = false;
     for (const segment of segments) {
-      const found = rankSearchEntries(models, segment)
-        .slice(0, 12)
-        .map((entry) => entry.name);
-      if (!found.length) {
+      const found = matchModelSegment(models, segment, knownEntries);
+      if (!found.names.length) {
         missed = true;
         break;
       }
-      for (const name of found) if (!matchedModels.includes(name)) matchedModels.push(name);
+      for (const name of found.names) if (!matchedModels.includes(name)) matchedModels.push(name);
+      for (const word of found.ignored) if (!ignored.includes(word)) ignored.push(word);
     }
-    if (!missed) return { brand: brandHit.name, models: matchedModels.slice(0, 12), matched: true };
+    if (!missed) return { brand: brandHit.name, models: matchedModels.slice(0, 12), matched: true, ignored };
     // Марку узнали, а кусок текста ни на одну её модель не похож — честнее
     // показать пустую выдачу, чем все машины марки. Но если марку написали не
     // первой, совпадение могло быть случайным («x5 mini»), и строку стоит
@@ -635,22 +675,22 @@ export const resolveBrandAndModels = async (text, { brandEntries = [], modelEntr
 
   // Марка целиком не совпала: недописанная марка важнее случайного совпадения модели.
   const brandMatches = rankSearchEntries(brandEntries, text);
-  if (brandMatches.length && brandMatches[0].rank >= 3) return { brand: brandMatches[0].name, models: [], matched: true };
+  if (brandMatches.length && brandMatches[0].rank >= 3) return { brand: brandMatches[0].name, models: [], matched: true, ignored: [] };
   const modelNames = [];
+  const modelIgnored = [];
   const textSegments = splitModelSegments(text);
   let allSegmentsMatched = textSegments.length > 0;
   for (const segment of textSegments) {
-    const found = rankSearchEntries(modelEntries, segment)
-      .slice(0, 12)
-      .map((entry) => entry.name);
-    if (!found.length) {
+    const found = matchModelSegment(modelEntries, segment, knownEntries);
+    if (!found.names.length) {
       allSegmentsMatched = false;
       break;
     }
-    for (const name of found) if (!modelNames.includes(name)) modelNames.push(name);
+    for (const name of found.names) if (!modelNames.includes(name)) modelNames.push(name);
+    for (const word of found.ignored) if (!modelIgnored.includes(word)) modelIgnored.push(word);
   }
-  if (allSegmentsMatched && modelNames.length) return { brand: "", models: modelNames.slice(0, 12), matched: true };
-  if (brandMatches.length) return { brand: brandMatches[0].name, models: [], matched: true };
+  if (allSegmentsMatched && modelNames.length) return { brand: "", models: modelNames.slice(0, 12), matched: true, ignored: modelIgnored };
+  if (brandMatches.length) return { brand: brandMatches[0].name, models: [], matched: true, ignored: [] };
   return empty;
 };
 

@@ -14,6 +14,7 @@ import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Arrow
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
+import { matchesSearchText, searchTextWords, searchWordStem } from "./car-search-text.js";
 import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
@@ -2471,13 +2472,14 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
 // в отдельном модуле (src/search-dictionary.js) — там их проверяют тесты.
 async function parseHeroSearch(query, context) {
   const parsed = await parseHeroSearchOnce(query, context);
-  if (parsed?.matched) return parsed;
-  // Ничего не нашлось — возможно, запрос набран не в той раскладке.
+  // Разбор по словарю важнее свободного поиска по карточкам: «pbrh» — это «зикр»
+  // в латинской раскладке, а не слово, которое надо искать в характеристиках.
+  if (parsed?.matched && !parsed.textOnly) return parsed;
   const swapped = swapKeyboardLayout(query);
   if (searchNormalize(swapped) === searchNormalize(query)) return parsed;
   const alt = await parseHeroSearchOnce(swapped, context);
   // Запоминаем исправленный текст — выдача покажет его рядом с запросом.
-  if (alt?.matched) return { ...alt, correctedQuery: swapped.trim() };
+  if (alt?.matched && !alt.textOnly) return { ...alt, correctedQuery: swapped.trim() };
   return parsed;
 }
 
@@ -2489,7 +2491,7 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
   if (!tokens.length && !ranges.hasRanges) return null;
   // Номер объявления (например, 59116012) — ищем эту конкретную машину.
   const idToken = tokens.find((token) => /^\d{6,}$/.test(token));
-  if (idToken) return { matched: true, listingId: idToken, brand: "", models: [], yearFrom: "", yearTo: "", drive: "", bodyType: "", powertrain: "", gearbox: "", fuel: "", colors: [], priceMinUsd: null, priceMaxUsd: null, mileageMin: null, mileageMax: null, accelMax: null, batteryMin: null, rangeMin: null, engineMin: null, engineMax: null, powerMin: null, powerMax: null, ...emptyExclusions() };
+  if (idToken) return { matched: true, listingId: idToken, query: "", brand: "", models: [], yearFrom: "", yearTo: "", drive: "", bodyType: "", powertrain: "", gearbox: "", fuel: "", colors: [], priceMinUsd: null, priceMaxUsd: null, mileageMin: null, mileageMax: null, accelMax: null, batteryMin: null, rangeMin: null, engineMin: null, engineMax: null, powerMin: null, powerMax: null, ...emptyExclusions() };
   const yearFrom = ranges.yearFrom;
   const yearTo = ranges.yearTo;
 
@@ -2544,7 +2546,7 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
   }
 
   const text = translateModelWords(translateBrandWords(words)).join(" ");
-  const result = { matched: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain, gearbox, fuel, colors, priceMinUsd: ranges.priceMinUsd, priceMaxUsd: ranges.priceMaxUsd, mileageMin: ranges.mileageMin, mileageMax: ranges.mileageMax, accelMax: ranges.accelMax, batteryMin: ranges.batteryMin, rangeMin: ranges.rangeMin, engineMin: ranges.engineMin, engineMax: ranges.engineMax, powerMin: ranges.powerMin, powerMax: ranges.powerMax, ...exclusions };
+  const result = { matched: false, query: "", textOnly: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain, gearbox, fuel, colors, priceMinUsd: ranges.priceMinUsd, priceMaxUsd: ranges.priceMaxUsd, mileageMin: ranges.mileageMin, mileageMax: ranges.mileageMax, accelMax: ranges.accelMax, batteryMin: ranges.batteryMin, rangeMin: ranges.rangeMin, engineMin: ranges.engineMin, engineMax: ranges.engineMax, powerMin: ranges.powerMin, powerMax: ranges.powerMax, ...exclusions };
   if (!text) {
     result.matched = Boolean(ranges.hasRanges || drive || bodyType || powertrain || gearbox || fuel || colors.length || hasExclusions(exclusions));
     return result;
@@ -2572,6 +2574,16 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
   result.brand = found.brand;
   result.models = found.models;
   result.matched = found.matched;
+  // Слова, не ставшие маркой или моделью, не пропадают: ими сужаем выдачу по
+  // комплектации и характеристикам («byd yuan up surpass»). Когда словарь не узнал
+  // вообще ничего, по карточкам ищется весь остаток строки — так находятся «lfp»,
+  // «catl», «215/65 r16» и названия версий, которых нет в списке моделей.
+  result.query = (found.ignored || []).join(" ");
+  if (!found.matched) {
+    result.query = text;
+    result.textOnly = true;
+    result.matched = true;
+  }
   return result;
 }
 
@@ -2580,6 +2592,9 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
 // и единственное число. Из-за смешения этих имён год из поиска раньше терялся.
 const heroCatalogHref = (parsed) => {
   const params = new URLSearchParams();
+  // Не «q»: этим именем каталог называет строку, которую надо ещё разобрать, —
+  // подстановка сюда разобранного текста зациклила бы страницу саму на себя.
+  if (parsed.query) params.set("text", parsed.query);
   if (parsed.powertrain) params.set("type", typeLabel(parsed.powertrain));
   if (parsed.brand) params.set("brand", parsed.brand);
   parsed.models.forEach((model) => params.append("model", model));
@@ -2780,6 +2795,7 @@ const matchesSavedFilters = (car, filters) =>
 
 const heroApiParams = (parsed) => {
   const params = new URLSearchParams();
+  if (parsed.query) params.set("text", parsed.query);
   if (parsed.powertrain) params.set("type", parsed.powertrain);
   if (parsed.brand) params.set("brand", parsed.brand);
   parsed.models.forEach((model) => params.append("model", model));
@@ -4545,6 +4561,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     apiQuery: restoredHero.apiQuery || null,
     all: null,
     corrected: null,
+    ignored: [],
   } : null));
   // Блок фильтров под поиском по умолчанию свёрнут на всех экранах
   // и открывается иконкой в строке поиска.
@@ -4562,7 +4579,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   // Номер попытки поиска: догрузка при прокрутке сверяется с ним, чтобы ответ
   // на старый запрос не подмешался к свежей выдаче.
   const heroSeq = useRef(0);
-  const emptyHeroResult = { items: [], total: 0, href: "/catalog", loading: false, loadingMore: false, hasMore: false, apiQuery: null, all: null, corrected: null };
+  const emptyHeroResult = { items: [], total: 0, href: "/catalog", loading: false, loadingMore: false, hasMore: false, apiQuery: null, all: null, corrected: null, ignored: [] };
   useEffect(() => {
     // После возврата из карточки не ищем заново, пока запрос и сортировка те же:
     // повторный поиск обрезал бы догруженную выдачу и сбил восстановленную позицию.
@@ -4620,14 +4637,19 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           if (cancelled) return;
           const found = catalog.items.map(normalizeImportedCar);
           const ordered = heroSort === "default" ? varietyOrder(found, seededRandom(`${heroShuffleSeed}:0`)) : found;
-          setHeroSearch({ ...emptyHeroResult, items: ordered, total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null });
+          setHeroSearch({ ...emptyHeroResult, items: ordered, total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null, ignored: catalog.ignoredWords || [] });
         } else {
           const modelSet = new Set(parsed.models);
           // Итог «до Минска» есть не у всех статических карточек — для фильтра
           // по цене досчитываем его так же, как это делает каталог.
           const landedUsd = (car) => Number(car.estimatedTotalUsd) || estimateLandedCost(car).totalUsd;
-          const matches = cars.filter(
+          // Свободный текст в запасном режиме отбирается здесь же, теми же правилами,
+          // что и на сервере: каждое слово должно найтись в карточке.
+          const words = searchTextWords(parsed.query);
+          const narrowed = Boolean(parsed.brand) || modelSet.size > 0;
+          const pick = (chosen) => cars.filter(
             (car) =>
+              matchesSearchText(car, chosen) &&
               (!parsed.brand || car.brand === parsed.brand) &&
               (!modelSet.size || modelSet.has(car.model)) &&
               (!parsed.yearFrom || Number(car.year) >= Number(parsed.yearFrom)) &&
@@ -4649,10 +4671,26 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
               (!parsed.fuel || fuelType(car) === parsed.fuel) &&
               matchesExclusions(car, parsed)
           );
+          let matches = pick(words);
+          let ignoredWords = [];
+          // Ничего не нашлось из-за приписки — отступаем теми же ступенями, что и
+          // сервер: слова по основе, затем по одному слову с конца долой.
+          if (!matches.length && words.length && narrowed) {
+            const stems = words.map(searchWordStem);
+            const ladder = stems.some((stem, at) => stem !== words[at]) ? [stems] : [];
+            for (let size = words.length - 1; size >= 0; size -= 1) ladder.push(stems.slice(0, size));
+            for (const attempt of ladder) {
+              matches = pick(attempt);
+              if (matches.length) {
+                ignoredWords = words.slice(attempt.length);
+                break;
+              }
+            }
+          }
           // Карточки из статического каталога не всегда несут готовый итог «до Минска» —
           // для сортировки по цене досчитываем его так же, как избранное.
           const sorted = heroSort === "default" ? varietyOrder(matches, seededRandom(heroShuffleSeed)) : sortCars(matches.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd })), heroSort);
-          setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null });
+          setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null, ignored: ignoredWords });
         }
       } catch {
         if (!cancelled) setHeroSearch({ ...emptyHeroResult });
@@ -4819,6 +4857,14 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             </div>
           </div>
         )}
+        {/* Часть запроса, по которой в карточках не нашлось ничего: поиск отступил
+            и показал остальное — молчать об этом нельзя, иначе выдача выглядит
+            ответом на весь запрос. */}
+        {searching && !searchEmpty && heroSearch.ignored?.length > 0 && (
+          <p className="search-results-skip">
+            {heroSearch.ignored.length === 1 ? "По слову" : "По словам"} {heroSearch.ignored.map((word) => `«${word}»`).join(", ")} ничего не нашлось — показали остальное.
+          </p>
+        )}
         {/* На широком экране подборка всегда плиткой. На телефоне (и в выдаче
             поиска на любом экране) вид выбирает посетитель: списочные карточки
             каталога или плитка — на телефоне по две карточки в ряд. */}
@@ -4945,6 +4991,7 @@ const emptyCatalogFilters = () => ({
   power: ANY_POWER,
   gearbox: ANY_GEARBOX,
   fuel: ANY_FUEL,
+  text: "",
   ...emptyExclusions(),
 });
 
@@ -5515,6 +5562,10 @@ function catalogFiltersFromParams(params) {
     power: powerBounds(rawPower) ? rawPower : ANY_POWER,
     gearbox: GEARBOX_TYPES.includes(rawGearbox) ? rawGearbox : ANY_GEARBOX,
     fuel: FUEL_TYPES.includes(rawFuel) ? rawFuel : ANY_FUEL,
+    // Свободный текст из поиска на главной: комплектация и характеристики, которых
+    // нет в выпадающих списках. В сохранённые поиски он не попадает — там набор
+    // полей фиксирован, и лишний ключ сломал бы сравнение «такой поиск уже есть».
+    text: (params.get("text") || "").trim(),
     ...exclusionsFromParams(params),
   };
 }
@@ -5739,7 +5790,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     () =>
       sortCars(
         cars
-          .filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.model, filters.model, ANY_MODEL) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) && matchesColorLabels(car.bodyColor, multiValues(filters.color, ANY_COLOR)) && matchesYears(car, filters.yearMin, filters.yearMax) && matchesMileageRange(car, filters.mileage) && matchesPriceRange(car, filters.priceMin, filters.priceMax) && matchesAdvancedFilters(car, filters) && matchesExclusions(car, filters))
+          .filter((car) => matchesSearchText(car, searchTextWords(filters.text)) && (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.model, filters.model, ANY_MODEL) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) && matchesColorLabels(car.bodyColor, multiValues(filters.color, ANY_COLOR)) && matchesYears(car, filters.yearMin, filters.yearMax) && matchesMileageRange(car, filters.mileage) && matchesPriceRange(car, filters.priceMin, filters.priceMax) && matchesAdvancedFilters(car, filters) && matchesExclusions(car, filters))
           .map((car) => ({
             ...car,
             estimatedTotalUsd: estimateLandedCost(car).totalUsd,
@@ -5788,6 +5839,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     appendPowerRange(query, filters.power);
     if ((filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX) query.set("gearbox", filters.gearbox);
     if ((filters.fuel || ANY_FUEL) !== ANY_FUEL) query.set("fuel", filters.fuel);
+    if (filters.text) query.set("text", filters.text);
     appendExclusions(query, filters, { api: true });
     appendYearRange(query, filters.yearMin, filters.yearMax);
     appendMileageRange(query, filters.mileage);
@@ -5987,6 +6039,14 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           <div className="result-tools">
             <div className="result-summary">
               <b>{knownResultCount == null ? "Загружаем" : `${knownResultCount} шт.`}</b>
+              {/* Слова из поиска, которых нет в выпадающих списках (комплектация,
+                  химия батареи, размер шин). Без этой пометки выдача была бы уже
+                  общей, а объяснения этому на странице не нашлось бы. */}
+              {Boolean(filters.text) && (
+                <button type="button" className="catalog-text-chip" onClick={() => updateFilters((old) => ({ ...old, text: "" }))} aria-label={`Убрать из отбора слова «${filters.text}»`}>
+                  «{filters.text}» <X size={14} />
+                </button>
+              )}
               {quickViewToggle}
             </div>
             <div className="result-controls">

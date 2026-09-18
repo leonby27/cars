@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { canonicalImportName, uniquePhotos } from "../config/import-policy.mjs";
 import { pool, withTransaction } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
+import { searchTextWords, searchWordStem } from "../src/car-search-text.js";
 import { normalizeBodyType } from "../src/body-types.js";
 import { carTitle } from "../src/car-title.js";
 import { DRIVE_TYPES, normalizeDrive, orderDrives, UNKNOWN_DRIVE } from "../src/drive-types.js";
@@ -92,6 +93,17 @@ const ENGINE_POWER_SQL = "NULLIF(v.specifications->>'enginePower','')::numeric";
 const GEARBOX_SQL = "v.specifications->>'gearbox'";
 const FUEL_SQL = "v.specifications->>'fuelType'";
 
+// Свободный текст запроса (параметр `text`: «surpass», «lfp», «215/65») ищется по
+// строке, в которую у каждого объявления сложены название, комплектация, город и все
+// характеристики машины (см. db/migrations/035_listing_search_text.sql). Разбор строки
+// на слова общий с браузером — в запасном режиме без сервера каталог отбирается теми
+// же правилами.
+export const searchTerms = searchTextWords;
+
+// В LIKE «%» и «_» — свои знаки, а в запросе это обычные символы: подчёркивание
+// в чужой комплектации не должно совпадать с любой буквой.
+const likeEscape = (word) => word.replace(/[\\%_]/g, "\\$&");
+
 export function buildCarFilters(searchParams) {
   const clauses = ["l.status='active'"];
   const values = [];
@@ -137,6 +149,9 @@ export function buildCarFilters(searchParams) {
   // Топливо есть только у машин с двигателем: у электромобиля его нет вовсе, и такой
   // отбор его честно не показывает.
   if (FUEL_TYPES.includes(searchParams.get("fuel"))) add(`${FUEL_SQL}=?`, searchParams.get("fuel"));
+  // Каждое слово свободного запроса обязано найтись: «song plus champion» — это все
+  // три слова разом, а не любое из них.
+  for (const word of searchTerms(searchParams.get("text"))) add("l.search_text LIKE ?", `%${likeEscape(word)}%`);
   // Исключения из строки поиска («зикр кроме 001», «электро кроме белых»).
   // COALESCE обязателен: без него машина с пустым кузовом или цветом выпадала бы
   // из выдачи — сравнение с NULL не истинно и не ложно.
@@ -220,7 +235,36 @@ export function catalogPaging(searchParams) {
 // остановиться, иначе прокрутка будет бесконечно просить страницы, которых не будет.
 export const catalogHasMore = (offset, count, total) => offset + count < Math.min(total, maxOffset);
 
+/**
+ * Свободный текст сужает выдачу, но не должен её обнулять. Запрос «byd yuan up
+ * surpassing 430» — марка, модель и приписка из чужого каталога, где «430» не
+ * существует вовсе, а комплектация в наших объявлениях называется «Surpass».
+ * Поэтому отбор отступает по ступеням: слова целиком → слова по основе → по одному
+ * слову с конца долой. Отброшенное уходит в ответ, чтобы страница честно сказала,
+ * что часть запроса пропущена.
+ *
+ * Отступать можно, только когда в отборе есть что-то кроме текста: иначе на любую
+ * белиберду мы показали бы весь каталог вместо честного «ничего не найдено».
+ */
 export async function listCars(searchParams) {
+  const words = searchTextWords(searchParams.get("text"));
+  const narrowed = Boolean(searchParams.get("brand")) || searchParams.getAll("model").length > 0;
+  const answer = await listCarsPage(searchParams);
+  if (answer.total || !words.length || !narrowed) return answer;
+  const stems = words.map(searchWordStem);
+  const ladder = stems.some((stem, at) => stem !== words[at]) ? [stems] : [];
+  for (let size = words.length - 1; size >= 0; size -= 1) ladder.push(stems.slice(0, size));
+  for (const attempt of ladder) {
+    const relaxed = new URLSearchParams(searchParams);
+    relaxed.delete("text");
+    if (attempt.length) relaxed.set("text", attempt.join(" "));
+    const retry = await listCarsPage(relaxed);
+    if (retry.total) return { ...retry, ignoredWords:words.slice(attempt.length) };
+  }
+  return answer;
+}
+
+async function listCarsPage(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
   const { limit, offset, beyondCap } = catalogPaging(searchParams);
   const order = buildCarOrder(searchParams);

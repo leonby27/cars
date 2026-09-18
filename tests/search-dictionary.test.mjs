@@ -187,32 +187,46 @@ const resolve = (query) =>
 const dictionaryText = (query) => parse(query).text;
 
 test("марку находим и когда она написана после модели", async () => {
-  assert.deepEqual(await resolve("bmw ix3"), { brand: "BMW", models: ["iX3"], matched: true });
+  assert.deepEqual(await resolve("bmw ix3"), { brand: "BMW", models: ["iX3"], matched: true, ignored: [] });
   // То же самое задом наперёд и по-русски: искали именно BMW iX3.
-  assert.deepEqual(await resolve("ix3 bmw"), { brand: "BMW", models: ["iX3"], matched: true });
-  assert.deepEqual(await resolve("ix3 бмв"), { brand: "BMW", models: ["iX3"], matched: true });
-  assert.deepEqual(await resolve("001 зикр"), { brand: "Zeekr", models: ["001"], matched: true });
-  assert.deepEqual(await resolve("l6 ли авто"), { brand: "Li Auto", models: ["L6"], matched: true });
+  assert.deepEqual(await resolve("ix3 bmw"), { brand: "BMW", models: ["iX3"], matched: true, ignored: [] });
+  assert.deepEqual(await resolve("ix3 бмв"), { brand: "BMW", models: ["iX3"], matched: true, ignored: [] });
+  assert.deepEqual(await resolve("001 зикр"), { brand: "Zeekr", models: ["001"], matched: true, ignored: [] });
+  assert.deepEqual(await resolve("l6 ли авто"), { brand: "Li Auto", models: ["L6"], matched: true, ignored: [] });
   // Перечисление моделей тоже переживает марку в конце: «x3» попутно находит и iX3,
   // как в обычном поиске по части названия.
-  assert.deepEqual(await resolve("x3 или x5 bmw"), { brand: "BMW", models: ["X3", "iX3", "X5"], matched: true });
+  assert.deepEqual(await resolve("x3 или x5 bmw"), { brand: "BMW", models: ["X3", "iX3", "X5"], matched: true, ignored: [] });
 });
 
 test("одна марка без модели и марка с чужой моделью", async () => {
-  assert.deepEqual(await resolve("bmw"), { brand: "BMW", models: [], matched: true });
+  assert.deepEqual(await resolve("bmw"), { brand: "BMW", models: [], matched: true, ignored: [] });
   // Марка первая, модель не её — пустая выдача честнее, чем все машины марки.
-  assert.deepEqual(await resolve("bmw coolray"), { brand: "", models: [], matched: false });
+  assert.deepEqual(await resolve("bmw coolray"), { brand: "", models: [], matched: false, ignored: [] });
   // Марка не первая: слово могло совпасть случайно, поэтому строку разбираем
   // заново целиком — «x5 mini» так и не находит ничего, а не все MINI подряд.
-  assert.deepEqual(await resolve("x5 mini"), { brand: "", models: [], matched: false });
+  assert.deepEqual(await resolve("x5 mini"), { brand: "", models: [], matched: false, ignored: [] });
+});
+
+test("приписка про комплектацию не мешает найти модель", async () => {
+  // Название версии из объявления источника («BYD Yuan UP Surpassing 430»)
+  // раньше обнуляло всю выдачу: такой модели в каталоге нет. Лишние слова,
+  // которых справочник не знает, теперь просто отбрасываются.
+  assert.deepEqual(await resolve("bmw x5 xdrive40i"), { brand: "BMW", models: ["X5"], matched: true, ignored: ["xdrive40i"] });
+  assert.deepEqual(await resolve("x5 xdrive40i"), { brand: "", models: ["X5"], matched: true, ignored: ["xdrive40i"] });
+  assert.deepEqual(await resolve("zeekr 001 we"), { brand: "Zeekr", models: ["001"], matched: true, ignored: ["we"] });
+  // Слово, которое справочник знает, отбрасывать нельзя: «x5 mini» — это две
+  // разные вещи, и пустая выдача по-прежнему честнее одного X5.
+  assert.deepEqual(await resolve("x5 mini"), { brand: "", models: [], matched: false, ignored: [] });
+  // Приписка не спасает, когда непонятен сам запрос.
+  assert.deepEqual(await resolve("фывфыв апрап"), { brand: "", models: [], matched: false, ignored: [] });
 });
 
 test("недописанная марка и модель без марки ищутся как раньше", async () => {
-  assert.deepEqual(await resolve("bm"), { brand: "BMW", models: [], matched: true });
-  assert.deepEqual(await resolve("зикр"), { brand: "Zeekr", models: [], matched: true });
-  assert.deepEqual(await resolve("coolray"), { brand: "", models: ["Coolray"], matched: true });
-  assert.deepEqual(await resolve("тесла модель 3"), { brand: "Tesla", models: ["Model 3"], matched: true });
-  assert.deepEqual(await resolve("фывфыв"), { brand: "", models: [], matched: false });
+  assert.deepEqual(await resolve("bm"), { brand: "BMW", models: [], matched: true, ignored: [] });
+  assert.deepEqual(await resolve("зикр"), { brand: "Zeekr", models: [], matched: true, ignored: [] });
+  assert.deepEqual(await resolve("coolray"), { brand: "", models: ["Coolray"], matched: true, ignored: [] });
+  assert.deepEqual(await resolve("тесла модель 3"), { brand: "Tesla", models: ["Model 3"], matched: true, ignored: [] });
+  assert.deepEqual(await resolve("фывфыв"), { brand: "", models: [], matched: false, ignored: [] });
 });
 
 test("марка в строке: самое длинное название и остаток на модель", () => {
