@@ -513,12 +513,6 @@ html[data-theme="dark"] .hero-search-clear {
 .catalog-text-chip:hover {
   color: var(--text);
 }
-/* Слова запроса, по которым ничего не нашлось: строка под счётчиком. */
-.search-results-skip {
-  margin: -8px 0 16px;
-  color: var(--muted);
-  font-size: 15px;
-}
 @media (max-width: 640px) {
   .hero-search-field input {
     font-size: 16px;
@@ -18044,9 +18038,13 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
   align-content: start;
   align-items: baseline;
   padding: 14px 16px 12px;
-  background: var(--header-control-bg);
-  border: 0;
+  /* Тот же материал, что у карточек правой колонки («Из чего складывается цена»):
+     фон, тонкая обводка и мягкая тень. Одного фона мало — на светлой теме подложка
+     страницы того же цвета, и без обводки плашки исчезли бы совсем. */
+  background: var(--panel);
+  border: 1px solid var(--line);
   border-radius: calc(14px * var(--corner-scale));
+  box-shadow: 0 14px 35px rgba(23, 25, 28, 0.06);
 }
 .fact-list--tiles .fact-row svg { align-self: center; }
 .fact-list--tiles .fact-row span,

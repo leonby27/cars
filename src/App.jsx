@@ -4561,7 +4561,6 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     apiQuery: restoredHero.apiQuery || null,
     all: null,
     corrected: null,
-    ignored: [],
   } : null));
   // Блок фильтров под поиском по умолчанию свёрнут на всех экранах
   // и открывается иконкой в строке поиска.
@@ -4579,7 +4578,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   // Номер попытки поиска: догрузка при прокрутке сверяется с ним, чтобы ответ
   // на старый запрос не подмешался к свежей выдаче.
   const heroSeq = useRef(0);
-  const emptyHeroResult = { items: [], total: 0, href: "/catalog", loading: false, loadingMore: false, hasMore: false, apiQuery: null, all: null, corrected: null, ignored: [] };
+  const emptyHeroResult = { items: [], total: 0, href: "/catalog", loading: false, loadingMore: false, hasMore: false, apiQuery: null, all: null, corrected: null };
   useEffect(() => {
     // После возврата из карточки не ищем заново, пока запрос и сортировка те же:
     // повторный поиск обрезал бы догруженную выдачу и сбил восстановленную позицию.
@@ -4637,7 +4636,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           if (cancelled) return;
           const found = catalog.items.map(normalizeImportedCar);
           const ordered = heroSort === "default" ? varietyOrder(found, seededRandom(`${heroShuffleSeed}:0`)) : found;
-          setHeroSearch({ ...emptyHeroResult, items: ordered, total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null, ignored: catalog.ignoredWords || [] });
+          setHeroSearch({ ...emptyHeroResult, items: ordered, total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null });
         } else {
           const modelSet = new Set(parsed.models);
           // Итог «до Минска» есть не у всех статических карточек — для фильтра
@@ -4646,7 +4645,6 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           // Свободный текст в запасном режиме отбирается здесь же, теми же правилами,
           // что и на сервере: каждое слово должно найтись в карточке.
           const words = searchTextWords(parsed.query);
-          const narrowed = Boolean(parsed.brand) || modelSet.size > 0;
           const pick = (chosen) => cars.filter(
             (car) =>
               matchesSearchText(car, chosen) &&
@@ -4672,25 +4670,16 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
               matchesExclusions(car, parsed)
           );
           let matches = pick(words);
-          let ignoredWords = [];
-          // Ничего не нашлось из-за приписки — отступаем теми же ступенями, что и
-          // сервер: слова по основе, затем по одному слову с конца долой.
-          if (!matches.length && words.length && narrowed) {
+          // Не нашлось — пробуем слова по основе, как и сервер. Слово, которого нет
+          // ни в одной карточке, выдачу обнуляет: подменять его похожим нельзя.
+          if (!matches.length && words.length) {
             const stems = words.map(searchWordStem);
-            const ladder = stems.some((stem, at) => stem !== words[at]) ? [stems] : [];
-            for (let size = words.length - 1; size >= 0; size -= 1) ladder.push(stems.slice(0, size));
-            for (const attempt of ladder) {
-              matches = pick(attempt);
-              if (matches.length) {
-                ignoredWords = words.slice(attempt.length);
-                break;
-              }
-            }
+            if (stems.some((stem, at) => stem !== words[at])) matches = pick(stems);
           }
           // Карточки из статического каталога не всегда несут готовый итог «до Минска» —
           // для сортировки по цене досчитываем его так же, как избранное.
           const sorted = heroSort === "default" ? varietyOrder(matches, seededRandom(heroShuffleSeed)) : sortCars(matches.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd })), heroSort);
-          setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null, ignored: ignoredWords });
+          setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null });
         }
       } catch {
         if (!cancelled) setHeroSearch({ ...emptyHeroResult });
@@ -4856,14 +4845,6 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
               </AppLink>
             </div>
           </div>
-        )}
-        {/* Часть запроса, по которой в карточках не нашлось ничего: поиск отступил
-            и показал остальное — молчать об этом нельзя, иначе выдача выглядит
-            ответом на весь запрос. */}
-        {searching && !searchEmpty && heroSearch.ignored?.length > 0 && (
-          <p className="search-results-skip">
-            {heroSearch.ignored.length === 1 ? "По слову" : "По словам"} {heroSearch.ignored.map((word) => `«${word}»`).join(", ")} ничего не нашлось — показали остальное.
-          </p>
         )}
         {/* На широком экране подборка всегда плиткой. На телефоне (и в выдаче
             поиска на любом экране) вид выбирает посетитель: списочные карточки

@@ -236,32 +236,22 @@ export function catalogPaging(searchParams) {
 export const catalogHasMore = (offset, count, total) => offset + count < Math.min(total, maxOffset);
 
 /**
- * Свободный текст сужает выдачу, но не должен её обнулять. Запрос «byd yuan up
- * surpassing 430» — марка, модель и приписка из чужого каталога, где «430» не
- * существует вовсе, а комплектация в наших объявлениях называется «Surpass».
- * Поэтому отбор отступает по ступеням: слова целиком → слова по основе → по одному
- * слову с конца долой. Отброшенное уходит в ответ, чтобы страница честно сказала,
- * что часть запроса пропущена.
- *
- * Отступать можно, только когда в отборе есть что-то кроме текста: иначе на любую
- * белиберду мы показали бы весь каталог вместо честного «ничего не найдено».
+ * Слово из запроса, которого нет ни в одной карточке, обнуляет выдачу — и так и
+ * надо: показать вместо него что-то похожее значит выдать чужой ответ за нужный.
+ * Единственная поблажка — написание: у источника одна и та же комплектация
+ * называется «Surpass» в объявлении и «Surpassing» в чужом каталоге, откуда
+ * запрос копируют, поэтому вторым заходом слова ищутся по основе.
  */
 export async function listCars(searchParams) {
   const words = searchTextWords(searchParams.get("text"));
-  const narrowed = Boolean(searchParams.get("brand")) || searchParams.getAll("model").length > 0;
   const answer = await listCarsPage(searchParams);
-  if (answer.total || !words.length || !narrowed) return answer;
+  if (answer.total || !words.length) return answer;
   const stems = words.map(searchWordStem);
-  const ladder = stems.some((stem, at) => stem !== words[at]) ? [stems] : [];
-  for (let size = words.length - 1; size >= 0; size -= 1) ladder.push(stems.slice(0, size));
-  for (const attempt of ladder) {
-    const relaxed = new URLSearchParams(searchParams);
-    relaxed.delete("text");
-    if (attempt.length) relaxed.set("text", attempt.join(" "));
-    const retry = await listCarsPage(relaxed);
-    if (retry.total) return { ...retry, ignoredWords:words.slice(attempt.length) };
-  }
-  return answer;
+  if (!stems.some((stem, at) => stem !== words[at])) return answer;
+  const relaxed = new URLSearchParams(searchParams);
+  relaxed.set("text", stems.join(" "));
+  const retry = await listCarsPage(relaxed);
+  return retry.total ? retry : answer;
 }
 
 async function listCarsPage(searchParams) {
