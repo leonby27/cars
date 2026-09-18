@@ -8,7 +8,7 @@ import { brandCatalogGuide, createOrderDraft, getCar, getCatalogMeta, getModelFa
 import { priceRating } from "./price-rating.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
-import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, isBotAgent, isDatacenterAddress, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
@@ -143,6 +143,9 @@ const isStaffVisit = async (request) => {
 export async function handleApiRequest(request, response) {
   if (request.method === "OPTIONS") return json(response, 204, null);
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+  // Отмечаем, что с этого адреса к нам обратились. Сами сообщения счётчика не в счёт:
+  // иначе бот, который только их и шлёт, подтверждал бы сам себя (см. noteSiteRequest).
+  if (!url.pathname.startsWith("/api/analytics/")) noteSiteRequest(clientAddress(request));
   try {
     if (request.method === "POST" && url.pathname === "/api/analytics/events") {
       const limit = await checkRateLimit("analyticsEvents", [clientAddress(request)]);
@@ -152,6 +155,9 @@ export async function handleApiRequest(request, response) {
       // подделать событие. Для страницы сайта разницы нет — она ответ не читает.
       if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, recorded:false });
       if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, recorded:false });
+      // Сообщение от того, кто сайт не открывал, — подделка: страница, которая его
+      // шлёт, сама приходит с нашего сервера.
+      if (!hasRecentSiteRequest(clientAddress(request))) return json(response, 202, { ok:true, recorded:false });
       // Свой человек, вошедший в кабинет служебным аккаунтом, статистику не наполняет:
       // метку «не считать» браузер помнит не везде, а вход — надёжный признак своего.
       if (await isStaffVisit(request)) return json(response, 202, { ok:true, recorded:false });
@@ -166,6 +172,7 @@ export async function handleApiRequest(request, response) {
       const body = await readJson(request);
       if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0 });
       if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0 });
+      if (!hasRecentSiteRequest(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0 });
       if (await isStaffVisit(request)) return json(response, 202, { ok:true, confirmed:0 });
       const result = await confirmHumanVisit(body);
       return result.error ? json(response, 400, result) : json(response, 202, result);

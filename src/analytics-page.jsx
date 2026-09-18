@@ -369,39 +369,75 @@ function PromoSection({ summary }) {
   );
 }
 
+/* Разбор источника захода: из чего складывается строка «Источник» в таблице и по чему
+   работает переключатель над ней.
+ *
+ * Раньше в коде было два разных места — короткий список для переключателя (Яндекс и
+ * Google) и длинный для подписи. Из-за этого нельзя было отобрать заходы из ChatGPT
+ * или телеграма, хотя в таблице они подписаны. Теперь список один, и переключатель
+ * строится по нему.
+ *
+ * Порядок важен: сначала длинные правила (ya.ru у Яндекса), потом общие.
+ */
+const SOURCE_RULES = [
+  ["yandex", "Яндекс", /(^|\.)yandex\.|^ya\.ru$/],
+  ["google", "Google", /(^|\.)google\./],
+  // ChatGPT приходит либо реферером chatgpt.com, либо меткой utm_source в адресе —
+  // её подставляет сам чат-бот, и она же попадает в источник захода.
+  ["chatgpt", "ChatGPT", /^chatgpt$|(^|\.)(chatgpt\.com|chat\.openai\.com|openai\.com)$/],
+  ["perplexity", "Perplexity", /^perplexity$|(^|\.)perplexity\.ai$/],
+  ["bing", "Bing", /(^|\.)bing\.com$/],
+  ["duckduckgo", "DuckDuckGo", /(^|\.)duckduckgo\.com$/],
+  ["telegram", "Telegram", /^(t\.me|telegram)$|(^|\.)telegram\.(me|org)$/],
+  ["instagram", "Instagram", /^instagram$|(^|\.)instagram\.com$/],
+  ["threads", "Threads", /^threads$|(^|\.)threads\.(net|com)$/],
+  ["facebook", "Facebook", /(^|\.)facebook\.com$/],
+  ["x", "X (Twitter)", /^t\.co$|(^|\.)x\.com$/],
+  ["vk", "ВКонтакте", /^vk$|(^|\.)vk\.com$/],
+  ["av", "av.by", /(^|\.)av\.by$/],
+  ["onliner", "Onliner", /(^|\.)onliner\.by$/],
+];
+
+// Значения, которые счётчик пишет вместо имени площадки.
+const SOURCE_WORDS = { direct:"Прямой заход", internal:"Переход по сайту", unknown:"Неизвестный источник" };
+
 const visitSourceKey = (value, landingPath = "") => {
   if (hasYandexClickId(landingPath)) return "yandex";
   const source = String(value || "").toLowerCase();
-  if (/(^|\.)google\./.test(source)) return "google";
-  if (/(^|\.)yandex\./.test(source)) return "yandex";
-  return "other";
+  if (!source) return "unknown";
+  if (SOURCE_WORDS[source]) return source;
+  const rule = SOURCE_RULES.find(([, , pattern]) => pattern.test(source));
+  return rule ? rule[0] : "other";
 };
+
+/** Подпись ключа источника: «Яндекс», «ChatGPT», «Прямой заход». */
+const sourceKeyLabel = (key) => SOURCE_WORDS[key] || SOURCE_RULES.find(([id]) => id === key)?.[1] || "";
 
 const visitSourceLabel = (value, landingPath = "") => {
   // У старых заходов источник ещё не сохранялся, но ysclid в странице входа
   // позволяет восстановить переход из Яндекса и для уже накопленной истории.
   const sourceKey = visitSourceKey(value, landingPath);
-  if (sourceKey === "yandex") return "Яндекс";
-  if (sourceKey === "google") return "Google";
-  const source = String(value || "").toLowerCase();
-  if (!source) return "Не определён";
-  if (source === "direct") return "Прямой заход";
-  if (source === "internal") return "Переход по сайту";
-  if (source === "unknown") return "Неизвестный источник";
-  if (/(^|\.)bing\.com$/.test(source)) return "Bing";
-  if (/(^|\.)duckduckgo\.com$/.test(source)) return "DuckDuckGo";
-  if (/(^|\.)instagram\.com$/.test(source)) return "Instagram";
-  if (/(^|\.)facebook\.com$/.test(source)) return "Facebook";
-  if (source === "t.co" || /(^|\.)x\.com$/.test(source)) return "X (Twitter)";
-  if (/(^|\.)vk\.com$/.test(source)) return "ВКонтакте";
-  if (source === "t.me" || /(^|\.)telegram\.(me|org)$/.test(source)) return "Telegram";
-  return source;
+  if (sourceKey === "unknown" && !String(value || "").trim()) return "Не определён";
+  // Площадку, которой нет в списке, показываем как есть: доменом.
+  return sourceKeyLabel(sourceKey) || String(value || "").toLowerCase();
 };
+
+/* Знак ChatGPT. У Google и Яндекса логотип в этой таблице — просто буква в фирменном
+   цвете, а у ChatGPT узнаваема именно фигура, буквы у него нет. Рисуем её текущим
+   цветом текста: в светлой теме чёрная, в тёмной белая — так знак и выглядит у самого
+   ChatGPT, и подгонять два цвета руками не нужно. */
+const CHATGPT_MARK = "m297.06 130.97c7.26-21.79 4.76-45.66-6.85-65.48-17.46-30.4-52.56-46.04-86.84-38.68-15.25-17.18-37.16-26.95-60.13-26.81-35.04-.08-66.13 22.48-76.91 55.82-22.51 4.61-41.94 18.7-53.31 38.67-17.59 30.32-13.58 68.54 9.92 94.54-7.26 21.79-4.76 45.66 6.85 65.48 17.46 30.4 52.56 46.04 86.84 38.68 15.24 17.18 37.16 26.95 60.13 26.8 35.06.09 66.16-22.49 76.94-55.86 22.51-4.61 41.94-18.7 53.31-38.67 17.57-30.32 13.55-68.51-9.94-94.51zm-120.28 168.11c-14.03.02-27.62-4.89-38.39-13.88.49-.26 1.34-.73 1.89-1.07l63.72-36.8c3.26-1.85 5.26-5.32 5.24-9.07v-89.83l26.93 15.55c.29.14.48.42.52.74v74.39c-.04 33.08-26.83 59.9-59.91 59.97zm-128.84-55.03c-7.03-12.14-9.56-26.37-7.15-40.18.47.28 1.3.79 1.89 1.13l63.72 36.8c3.23 1.89 7.23 1.89 10.47 0l77.79-44.92v31.1c.02.32-.13.63-.38.83l-64.41 37.19c-28.69 16.52-65.33 6.7-81.92-21.95zm-16.77-139.09c7-12.16 18.05-21.46 31.21-26.29 0 .55-.03 1.52-.03 2.2v73.61c-.02 3.74 1.98 7.21 5.23 9.06l77.79 44.91-26.93 15.55c-.27.18-.61.21-.91.08l-64.42-37.22c-28.63-16.58-38.45-53.21-21.95-81.89zm221.26 51.49-77.79-44.92 26.93-15.54c.27-.18.61-.21.91-.08l64.42 37.19c28.68 16.57 38.51 53.26 21.94 81.94-7.01 12.14-18.05 21.44-31.2 26.28v-75.81c.03-3.74-1.96-7.2-5.2-9.06zm26.8-40.34c-.47-.29-1.3-.79-1.89-1.13l-63.72-36.8c-3.23-1.89-7.23-1.89-10.47 0l-77.79 44.92v-31.1c-.02-.32.13-.63.38-.83l64.41-37.16c28.69-16.55 65.37-6.7 81.91 22 6.99 12.12 9.52 26.31 7.15 40.1zm-168.51 55.43-26.94-15.55c-.29-.14-.48-.42-.52-.74v-74.39c.02-33.12 26.89-59.96 60.01-59.94 14.01 0 27.57 4.92 38.34 13.88-.49.26-1.33.73-1.89 1.07l-63.72 36.8c-3.26 1.85-5.26 5.31-5.24 9.06l-.04 89.79zm14.63-31.54 34.65-20.01 34.65 20v40.01l-34.65 20-34.65-20z";
 
 function VisitSource({ visit }) {
   const sourceKey = visitSourceKey(visit.source, visit.landingPath);
+  const logo = sourceKey === "google" ? "G" : sourceKey === "yandex" ? "Я" : null;
   return <span className="analytics-visit-source">
-    {sourceKey !== "other" && <i className={`analytics-source-logo is-${sourceKey}`} aria-hidden="true">{sourceKey === "google" ? "G" : "Я"}</i>}
+    {sourceKey === "chatgpt" && (
+      <i className="analytics-source-logo is-chatgpt" aria-hidden="true">
+        <svg viewBox="0 0 320 320" width="17" height="17" fill="currentColor"><path d={CHATGPT_MARK} /></svg>
+      </i>
+    )}
+    {logo && <i className={`analytics-source-logo is-${sourceKey}`} aria-hidden="true">{logo}</i>}
     <span>{visitSourceLabel(visit.source, visit.landingPath)}</span>
   </span>;
 }
@@ -482,18 +518,56 @@ function VisitsSection({ visits, total, unread }) {
   // Свежие строки идут первыми, но номер — место захода во всей хронологии:
   // самый старый начинается с 1, каждый следующий получает номер больше.
   const newestNumber = Math.max(visits.length, Number(total) || 0);
+  // Кнопки переключателя собираем по тем источникам, которые за выбранный период
+  // правда были: список площадок длинный, и половина кнопок всегда вела бы в пустую
+  // таблицу. Порядок — по числу заходов, чтобы главное стояло слева. Число прямо на
+  // кнопке: иначе ради одной цифры пришлось бы щёлкать по каждому источнику.
+  // Каналы, за которыми следим отдельно; всё прочее (прямые заходы, Bing, DuckDuckGo,
+  // чужие сайты) собирается в «Остальное».
+  //
+  // Порядок задан списком, а не числом заходов: иначе кнопки переставлялись бы местами
+  // при каждой смене периода и нужную приходилось бы искать глазами заново. А вот
+  // пустые каналы не показываем совсем — ряд кнопок с нулями занимал всю ширину
+  // панели и не давал ничего, кроме шума.
+  const NAMED_SOURCES = ["yandex", "google", "chatgpt", "threads", "instagram", "telegram"];
+  const sourceButtons = useMemo(() => {
+    const counts = new Map();
+    for (const visit of visits) {
+      const key = visitSourceKey(visit.source, visit.landingPath);
+      const bucket = NAMED_SOURCES.includes(key) ? key : "rest";
+      counts.set(bucket, (counts.get(bucket) || 0) + 1);
+    }
+    const present = [...NAMED_SOURCES, "rest"]
+      .map((key) => [key, key === "rest" ? "Остальное" : sourceKeyLabel(key), counts.get(key) || 0])
+      .filter(([, , count]) => count > 0);
+    // Один-единственный источник — выбирать не из чего, «Все» и он же дадут одну и ту
+    // же таблицу. Тогда переключателя не показываем вовсе.
+    return present.length > 1 ? [["all", "Все", visits.length], ...present] : [];
+  }, [visits]);
+  // Выбранный источник мог пропасть при смене периода — возвращаемся ко «Всем», иначе
+  // таблица осталась бы пустой без видимой причины.
+  useEffect(() => {
+    if (sourceFilter !== "all" && !sourceButtons.some(([key]) => key === sourceFilter)) setSourceFilter("all");
+  }, [sourceButtons, sourceFilter]);
   const filteredVisits = visits
     .map((visit, index) => ({ visit, index }))
-    .filter(({ visit }) => sourceFilter === "all" || visitSourceKey(visit.source, visit.landingPath) === sourceFilter);
+    .filter(({ visit }) => {
+      if (sourceFilter === "all") return true;
+      const key = visitSourceKey(visit.source, visit.landingPath);
+      return sourceFilter === "rest" ? !NAMED_SOURCES.includes(key) : key === sourceFilter;
+    });
   return (
     <section className="analytics-panel analytics-visits-panel">
       <div className="analytics-visits-heading">
         <h2>Заходы</h2>
         <div className="analytics-visits-toolbar">
-          <div className="analytics-range analytics-visits-filter" aria-label="Источник заходов">
-            {[["all", "Все"], ["yandex", "Яндекс"], ["google", "Google"]].map(([id, label]) => <button key={id} type="button" className={sourceFilter === id ? "active" : ""} onClick={() => setSourceFilter(id)}>{label}</button>)}
-          </div>
-          {sourceFilter !== "all" && <span className="analytics-visits-filter-count" title="Заходов по выбранному источнику">{formatNumber(filteredVisits.length)}</span>}
+          {sourceButtons.length > 0 && <div className="analytics-range analytics-visits-filter" aria-label="Источник заходов">
+            {sourceButtons.map(([id, label, count]) => (
+              <button key={id} type="button" className={sourceFilter === id ? "active" : ""} onClick={() => setSourceFilter(id)}>
+                {label}<b>{formatNumber(count)}</b>
+              </button>
+            ))}
+          </div>}
         </div>
       </div>
       <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Просмотров</th><th>Дата</th></tr></thead>
@@ -958,12 +1032,14 @@ function SocialPostsSection({ active }) {
         </div>
       </div>
       <div className={`social-grid${captions ? "" : " bare"}`}>
-        {tiles.map(({ key, theme, pick }) => {
+        {tiles.map(({ key, theme, pick, round }) => {
           const loaded = cars[key];
           const waiting = state === "ready" ? "картинки нет" : "загружается";
           // На кадре — первая строка будущей записи, а не название темы: витрина
-          // показывает то, что увидит читатель ленты.
-          const headline = tileHeadline(theme, pick, loaded);
+          // показывает то, что увидит читатель ленты. У темы с постоянным текстом
+          // формулировка своя на каждый круг: одна и та же фраза из круга в круг
+          // превращает ленту в бланк.
+          const headline = tileHeadline(theme, pick, loaded, round);
           // Место надписи закреплено за темой, кегль — длиной строки: длинная тем
           // же размером расползлась бы. Центр — исключение: надпись в три строки и
           // больше центром не читается (рвано с обеих сторон), поэтому такая уходит

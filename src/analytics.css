@@ -87,8 +87,16 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-visits-heading { min-height:34px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
 .analytics-visits-heading h2 { margin-bottom:0; }
 .analytics-visits-toolbar { display:flex; align-items:center; gap:10px; }
-.analytics-visits-filter { min-height:34px; box-sizing:border-box; padding:3px; }
-.analytics-visits-filter button { min-height:26px; padding:4px 9px; }
+/* Переключатель источников заходов. Кнопок теперь столько, сколько источников было за
+   период, поэтому полоса умеет переноситься на вторую строку: на телефоне десять
+   кнопок в один ряд не встанут, а горизонтальная прокрутка внутри панели прячет
+   половину списка. */
+.analytics-visits-filter { min-height:34px; box-sizing:border-box; padding:3px; flex-wrap:wrap; gap:2px; }
+.analytics-visits-filter button { min-height:26px; padding:4px 9px; display:inline-flex; align-items:center; gap:6px; }
+/* Число заходов на самой кнопке: приглушённое, чтобы читалось как сноска к названию,
+   а не спорило с ним. У выбранной кнопки цвет наследуется от неё. */
+.analytics-visits-filter button b { color:var(--muted); font-weight:800; font-variant-numeric:tabular-nums; }
+.analytics-visits-filter button.active b { color:inherit; opacity:.75; }
 .analytics-visits-filter-count { min-width:20px; color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums; }
 .analytics-visits-table th:first-child, .analytics-visits-table td:first-child { width:72px; }
 .analytics-visits-table th:nth-child(3), .analytics-visits-table td:nth-child(3) { width:52px; }
@@ -108,6 +116,10 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-source-logo { width:20px; height:20px; display:inline-grid; flex:none; place-items:center; font:900 17px/1 Arial,sans-serif; font-style:normal; }
 .analytics-source-logo.is-yandex { color:#fc3f1d; }
 .analytics-source-logo.is-google { background:conic-gradient(from -35deg,#4285f4 0 28%,#34a853 28% 46%,#fbbc05 46% 64%,#ea4335 64% 80%,#4285f4 80%); background-clip:text; -webkit-background-clip:text; color:transparent; }
+/* Знак ChatGPT — фигура, а не буква, поэтому вместо шрифта здесь svg. Цвет берём
+   у текста: в светлой теме знак чёрный, в тёмной белый, как и у самого ChatGPT. */
+.analytics-source-logo.is-chatgpt { color:var(--text); }
+.analytics-source-logo.is-chatgpt svg { display:block; }
 .analytics-visit-source-unknown { color:var(--muted); }
 .analytics-panel table { width:100%; border-collapse:collapse; text-align:left; }
 .analytics-panel th, .analytics-panel td { padding:15px 12px; border-bottom:1px solid var(--line); vertical-align:top; }

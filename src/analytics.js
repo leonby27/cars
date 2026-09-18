@@ -44,10 +44,29 @@ export const withoutYandexClickId = (value = "/") => {
   } catch { return original; }
 };
 
+// Метка источника в самом адресе (`?utm_source=chatgpt.com`). Нужна там, где Referer
+// не приходит вовсе: ChatGPT его не передаёт, а метку ставит — и без этой проверки
+// живой переход из чат-бота падал в «прямые заходы». 18.09.2026 так терялась лучшая
+// сессия дня: 34 минуты и 32 страницы числились заходом без источника.
+// Читаем только utm_source: остальные utm-поля говорят про рекламную кампанию,
+// а не про то, откуда пришёл человек.
+const utmSource = (landingPath = "") => {
+  const query = String(landingPath || "").split("?")[1];
+  if (!query) return "";
+  try {
+    const value = new URLSearchParams(query).get("utm_source") || "";
+    return value.trim().toLowerCase().replace(/^www\./, "").slice(0, 160);
+  } catch { return ""; }
+};
+
 export const analyticsEntrySource = (referrer = "", ownHostname = "", landingPath = "") => {
   // Яндекс добавляет ysclid к части органических переходов. Он надёжнее Referer,
   // который браузер или настройка приватности могут вовсе не прислать.
   if (hasYandexClickId(landingPath)) return "yandex.ru";
+  // Метка в адресе важнее Referer: её ставит сама площадка, с которой пришёл человек,
+  // а Referer по дороге теряется или подменяется на промежуточную страницу.
+  const tagged = utmSource(landingPath);
+  if (tagged) return tagged;
   if (!String(referrer || "").trim()) return "direct";
   try {
     const hostname = new URL(referrer).hostname.toLowerCase().replace(/^www\./, "");

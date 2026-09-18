@@ -36,14 +36,37 @@ test("nocount исключает служебный переход, но не о
   }), { ignored:true });
 });
 
-test("таблица заходов показывает источники и фильтр Google/Яндекс", async () => {
+// Переключатель над таблицей заходов строится по тем источникам, которые за период
+// правда были, и у каждого стоит число. Раньше кнопок было три жёстко заданных
+// (Все/Яндекс/Google), и отобрать заходы из ChatGPT или телеграма было нечем, хотя
+// в самой таблице они подписаны.
+test("в переключателе заходов только источники с заходами и числа у каждого", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
-  assert.match(source, /\[\["all", "Все"\], \["yandex", "Яндекс"\], \["google", "Google"\]\]/);
-  assert.match(source, /sourceFilter !== "all" && <span className="analytics-visits-filter-count"/);
+  assert.doesNotMatch(source, /\[\["all", "Все"\], \["yandex", "Яндекс"\], \["google", "Google"\]\]/);
+  assert.match(source, /const sourceButtons = useMemo/);
+  // Набор кнопок задан списком и не пляшет от данных: Яндекс, Google, ChatGPT,
+  // Threads, Instagram, Telegram и «Остальное» — всё прочее, включая прямые заходы.
+  assert.match(source, /const NAMED_SOURCES = \["yandex", "google", "chatgpt", "threads", "instagram", "telegram"\]/);
+  assert.match(source, /key === "rest" \? "Остальное" : sourceKeyLabel\(key\)/);
+  assert.match(source, /sourceFilter === "rest" \? !NAMED_SOURCES\.includes\(key\) : key === sourceFilter/);
+  // Пустые источники в переключателе не показываем, а при единственном источнике
+  // переключателя нет вовсе: выбирать не из чего.
+  assert.match(source, /\.filter\(\(\[, , count\]\) => count > 0\)/);
+  assert.match(source, /present\.length > 1 \? \[\["all", "Все", visits\.length\], \.\.\.present\] : \[\]/);
+  // Число стоит на самой кнопке.
+  assert.match(source, /\{label\}<b>\{formatNumber\(count\)\}<\/b>/);
+  assert.match(styles, /\.analytics-visits-filter button b/);
+  // Список источников один и тот же для подписи в таблице и для кнопок.
+  for (const key of ["yandex", "google", "chatgpt", "telegram", "instagram", "bing"]) {
+    assert.match(source, new RegExp(`\\["${key}", "`), `${key} должен быть в списке источников`);
+  }
   assert.match(source, /analytics-source-logo is-\$\{sourceKey\}/);
   assert.match(styles, /\.analytics-source-logo\.is-yandex/);
   assert.match(styles, /\.analytics-source-logo\.is-google/);
+  // Знак ChatGPT — фигура, а не буква, поэтому у него свой блок разметки и стиль.
+  assert.match(source, /analytics-source-logo is-chatgpt/);
+  assert.match(styles, /\.analytics-source-logo\.is-chatgpt/);
 });
 
 test("автоматически открытый обзор не гасит счётчик новых посещений", () => {
@@ -211,6 +234,15 @@ test("источник захода хранится без полного ад�
   assert.equal(analyticsEntrySource("https://abcars.by/catalog?q=zeekr", "abcars.by"), "internal");
   assert.equal(analyticsEntrySource("https://www.google.com/search?q=электромобиль", "abcars.by"), "google.com");
   assert.equal(analyticsEntrySource("not a url", "abcars.by"), "unknown");
+  // Метка в адресе важнее реферера: ChatGPT реферер не передаёт вовсе, и без этой
+  // проверки живой переход из чат-бота числился бы прямым заходом.
+  assert.equal(analyticsEntrySource("", "abcars.by", "/catalog?utm_source=chatgpt.com"), "chatgpt.com");
+  assert.equal(analyticsEntrySource("", "abcars.by", "/?utm_source=Telegram&utm_medium=post"), "telegram");
+  assert.equal(analyticsEntrySource("https://t.me/abcars_by/68", "abcars.by", "/?utm_source=telegram"), "telegram");
+  // Метка Яндекса всё же сильнее: она отмечает сам клик по выдаче.
+  assert.equal(analyticsEntrySource("", "abcars.by", "/blog/x?ysclid=abc&utm_source=chatgpt.com"), "yandex.ru");
+  // Адрес без метки читается как раньше.
+  assert.equal(analyticsEntrySource("", "abcars.by", "/catalog?brand=BYD"), "direct");
   const event = normalizeAnalyticsEvent({
     eventId:"entry-1", visitorId:"v1", sessionId:"s1", eventName:"page_view", path:"/catalog",
     properties:{ entrySource:" Google.COM ", referrer:"https://google.com/search?q=private" },
@@ -761,4 +793,35 @@ test("в таблице заходов есть колонка типа устр
   assert.match(server, /properties->>'device'/);
   assert.match(server, /device:row\.device \|\| "", platform:row\.platform \|\| ""/);
   assert.match(server, /properties->>'platform'/);
+});
+
+// Сообщение счётчика принимаем только от того, кто сайт правда открывал: до 18.09.2026
+// его принимали от кого угодно, и около дюжины адресов в день дописывали себе просмотры
+// карточек, ни разу не запросив ни страницы. Проверка мягкая — «заходил ли этот адрес
+// вообще», а не «запрашивал ли именно эту страницу»: сайт перерисовывает себя сам, и
+// строгая проверка выбросила бы живые переходы внутри сайта.
+test("счётчик верит сообщению только после настоящего захода", async () => {
+  const { noteSiteRequest, hasRecentSiteRequest } = await import("../server/analytics.mjs");
+  // Отсчитываем от времени сильно позже запуска: первые полчаса проверка намеренно
+  // никого не режет — память о заходах живёт в процессе и после выкладки пуста.
+  const later = Date.now() + 60 * 60 * 1000;
+  assert.equal(hasRecentSiteRequest("203.0.113.7", later), false);
+  noteSiteRequest("203.0.113.7", later);
+  assert.equal(hasRecentSiteRequest("203.0.113.7", later + 60 * 1000), true);
+  // Через полчаса заход забывается.
+  assert.equal(hasRecentSiteRequest("203.0.113.7", later + 31 * 60 * 1000), false);
+  // Чужой адрес по-прежнему неизвестен.
+  assert.equal(hasRecentSiteRequest("203.0.113.8", later + 60 * 1000), false);
+  // Адреса нет вовсе — считаем заход настоящим: потерять живого обиднее.
+  assert.equal(hasRecentSiteRequest("", later), true);
+  assert.equal(hasRecentSiteRequest("unknown", later), true);
+  // Сразу после запуска проверка молчит.
+  assert.equal(hasRecentSiteRequest("203.0.113.9", Date.now()), true);
+});
+
+test("сообщения самого счётчика не подтверждают заход", async () => {
+  const handler = await readFile(new URL("../server/handler.mjs", import.meta.url), "utf8");
+  assert.match(handler, /if \(!url\.pathname\.startsWith\("\/api\/analytics\/"\)\) noteSiteRequest\(clientAddress\(request\)\)/);
+  // Проверка стоит в обоих обработчиках счётчика: и у событий, и у подтверждения живого.
+  assert.equal((handler.match(/if \(!hasRecentSiteRequest\(clientAddress\(request\)\)\)/g) || []).length, 2);
 });
