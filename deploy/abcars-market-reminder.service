@@ -1,0 +1,18 @@
+# Квартальное напоминание обновить сравнение цен с белорусским рынком.
+# Сбор цен идёт только с домашней сети (av.by блокирует адреса дата-центров),
+# поэтому сервер лишь напоминает. Ставится на сервер так:
+#   install -m755 /srv/abcars/deploy/abcars-market-reminder.sh /usr/local/bin/
+#   install -m644 /srv/abcars/deploy/abcars-market-reminder.* /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now abcars-market-reminder.timer
+[Unit]
+Description=Напоминание обновить сравнение цен с белорусским рынком
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/abcars-market-reminder.sh
+TimeoutStartSec=120
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-market-reminder

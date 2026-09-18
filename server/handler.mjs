@@ -4,7 +4,8 @@ import { gzip } from "node:zlib";
 import { promisify } from "node:util";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionAccount, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
-import { brandCatalogGuide, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelSummary, soldListingVisible } from "./repository.mjs";
+import { brandCatalogGuide, brandStock, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelPriceMedians, modelSummary, soldListingVisible } from "./repository.mjs";
+import { marketComparison } from "./market-compare-data.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
@@ -470,6 +471,13 @@ export async function handleApiRequest(request, response) {
     if (request.method === "GET" && url.pathname === "/api/brand-guide") {
       const guide = await brandCatalogGuide(url.searchParams.get("brand"));
       return guide ? json(response, 200, guide, metaCache) : json(response, 404, { error:"brand_not_found" });
+    }
+    // Сравнение цен с белорусским рынком: свод чужих объявлений лежит файлом в
+    // репозитории (его собирают руками, см. scripts/market-belarus.mjs), а наши цены
+    // берутся из базы в момент запроса — чтобы страница не показывала цифры вчерашней
+    // сборки, когда курс уже другой.
+    if (request.method === "GET" && url.pathname === "/api/market/compare") {
+      return json(response, 200, await marketComparison(modelPriceMedians, brandStock), metaCache);
     }
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")), metaCache);
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.

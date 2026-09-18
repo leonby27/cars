@@ -226,9 +226,8 @@ test("страницы-инструменты собираются с живым
   assert.match(quota, /Квота для граждан выбрана полностью 5 сентября/);
   assert.match(quota, /История сводок таможни/);
   for (const [file, heading] of [
-    ["customs/index.html", "Растаможка авто из Китая"],
+    ["customs/index.html", "Калькулятор растаможки"],
     ["delivery-cost/index.html", "Сколько стоит привезти авто из Китая"],
-    ["calculator/index.html", "Калькулятор растаможки"],
   ]) {
     const html = await read(file);
     assert.match(html, new RegExp(heading));
@@ -239,7 +238,7 @@ test("страницы-инструменты собираются с живым
   }
   // Год в заголовке: запросы про растаможку и квоту почти всегда задают с годом.
   const year = String(new Date().getFullYear());
-  for (const file of ["ev-quota/index.html", "customs/index.html", "delivery-cost/index.html", "calculator/index.html"]) {
+  for (const file of ["ev-quota/index.html", "customs/index.html", "delivery-cost/index.html"]) {
     const html = await read(file);
     const title = html.match(/<title>([^<]*)<\/title>/)[1];
     assert.ok(title.includes(year), `${file}: в заголовке нет года — ${title}`);
@@ -249,14 +248,25 @@ test("страницы-инструменты собираются с живым
     // страницу, а страница квоты только свежестью и ценна.
     assert.match(html, /"@type":"WebPage"[^<]*"dateModified":"\d{4}-\d{2}-\d{2}"/);
   }
-  // На странице калькулятора форму рисует скрипт: посчитанные суммы поисковику даёт
-  // таблица примеров, без неё страница расчёта приходит в поиск без единой цифры.
-  const calculator = await read("calculator/index.html");
-  assert.match(calculator, /Примеры расчёта/);
+  // Форму калькулятора рисует скрипт, поисковик её не запускает. Поэтому в разметке
+  // страницы должны быть и поля формы обычной разметкой, и посчитанные суммы: иначе
+  // по запросу «калькулятор растаможки» мы предлагаем поисковику страницу, на которой
+  // калькулятора нет.
+  const calculator = await read("customs/index.html");
+  assert.match(calculator, /<form>/);
+  assert.match(calculator, /<label for="calc-field-1">Тип двигателя<\/label>/);
+  assert.match(calculator, /<option>Гибрид с генератором<\/option>/);
+  assert.match(calculator, /Сколько стоит растаможка/);
   assert.match(calculator, /<td>≈ [\d\s  ]+ \$<\/td>/);
-  // Все четыре попадают в карту сайта — с датой обновления.
+  // Таблицы ставок: у сильнейших конкурентов это главный материал страницы.
+  assert.match(calculator, /Машина старше трёх лет/);
+  assert.match(calculator, /за 1 см³/);
+  // Страницы, которых больше нет, не должны собираться: калькулятор слит с растаможкой.
+  await assert.rejects(read("calculator/index.html"));
+  // Все три попадают в карту сайта — с датой обновления.
   const pagesXml = await read(`sitemap-${sitemapToken}-pages.xml`);
-  for (const path of ["/ev-quota", "/customs", "/delivery-cost", "/calculator"]) {
+  assert.ok(!pagesXml.includes("/calculator<"), "в карте сайта остался адрес слитой страницы");
+  for (const path of ["/ev-quota", "/customs", "/delivery-cost"]) {
     assert.match(pagesXml, new RegExp(`<loc>https://abcars\\.by${path}</loc><lastmod>\\d{4}-\\d{2}-\\d{2}</lastmod>`));
   }
 });
@@ -268,7 +278,7 @@ test("на страницы-инструменты ведёт подвал ка�
   const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
   for (const file of ["index.html", "faq/index.html", "contacts/index.html"]) {
     const html = await read(file);
-    for (const path of ["/ev-quota", "/customs", "/delivery-cost", "/calculator", "/contacts", "/catalog"]) {
+    for (const path of ["/ev-quota", "/customs", "/delivery-cost", "/contacts", "/catalog"]) {
       assert.match(html, new RegExp(`href="${path}"`), `${file}: нет ссылки на ${path}`);
     }
   }
@@ -302,7 +312,7 @@ test("на главной есть разметка сайта, поиска и 
   assert.match(home, /"query-input":"required name=search_term_string"/);
   assert.match(home, /"@type":"FAQPage"/);
   assert.match(home, /С чего начинается покупка\?/);
-  for (const path of ["/catalog", "/how-it-works", "/calculator", "/delivery-cost", "/customs"]) {
+  for (const path of ["/catalog", "/how-it-works", "/delivery-cost", "/customs"]) {
     assert.match(home, new RegExp(`<a class="article-inline-link" href="${path}">`), `в FAQ главной нет фирменной текстовой ссылки на ${path}`);
   }
   assert.doesNotMatch(home, /\[каталога б\/у автомобилей из Китая\]\(\/catalog\)/);
@@ -347,15 +357,14 @@ test("на главной есть ссылки на все разделы ка�
 });
 
 test("с информационных страниц и расчётов ведут ссылки в каталог", async () => {
-  // Пять самых содержательных страниц сайта (от 1 100 до 1 800 слов) были тупиками:
+  // Самые содержательные страницы сайта (от 1 100 до 1 800 слов) были тупиками:
   // ни одной ссылки в каталог, только меню и подвал. Вес с них никуда не переносился,
   // а человеку после «на электромобиль пошлины нет» некуда было нажать.
   const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
   const pages = [
-    ["customs/index.html", "Растаможка по типам машин"],
+    ["customs/index.html", "Посчитать на конкретной машине"],
     ["ev-quota/index.html", "Что можно ввезти по квоте"],
     ["delivery-cost/index.html", "Машины, для которых считаем доставку"],
-    ["calculator/index.html", "Посчитать на конкретной машине"],
     ["faq/index.html", "Ответы, которые видно в каталоге"],
     ["how-it-works/index.html", "С чего начать выбор"],
     ["contacts/index.html", "Пока мы отвечаем"],

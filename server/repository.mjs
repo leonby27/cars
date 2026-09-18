@@ -2,6 +2,7 @@ import { repairVerifiedDrive, driveConflicts } from "../src/vehicle-spec-integri
 import crypto from "node:crypto";
 import { canonicalImportName, uniquePhotos } from "../config/import-policy.mjs";
 import { pool, withTransaction } from "./db.mjs";
+import { notifyLead } from "./lead-notify.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { searchTextWords, searchWordStem } from "../src/car-search-text.js";
 import { normalizeBodyType } from "../src/body-types.js";
@@ -547,6 +548,31 @@ export async function brandStock() {
   return value;
 }
 
+/**
+ * Середина цены под ключ по каждому набору «модель + год выпуска» — для страницы
+ * сравнения с белорусским рынком.
+ *
+ * Почему медиана, а не «от такой-то суммы»: самая дешёвая машина модели — это почти
+ * всегда битая или с огромным пробегом, и сравнивать её с белорусским рынком нечестно
+ * в нашу пользу. Медиана показывает, сколько стоит обычная такая машина.
+ *
+ * Цену берём из `estimated_total_usd` — того же столбца, по которому каталог сортирует
+ * по цене. Он пересчитывается командой `db:estimates` при выкладке, поэтому после
+ * правки правил расчёта страницу сравнения нужно пересобирать вместе с ней.
+ *
+ * Годы от 2020: раньше мы не возим, и в белорусском своде их тоже нет.
+ */
+export async function modelPriceMedians() {
+  const { rows } = await pool.query(`SELECT v.brand, v.model, v.model_year AS year, count(*)::int AS count,
+      percentile_cont(0.5) WITHIN GROUP (ORDER BY l.estimated_total_usd)::int AS median,
+      percentile_cont(0.1) WITHIN GROUP (ORDER BY l.estimated_total_usd)::int AS low
+    FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+    WHERE l.status='active' AND l.estimated_total_usd IS NOT NULL AND v.model_year >= 2020
+    GROUP BY v.brand, v.model, v.model_year
+    HAVING count(*) >= 3`);
+  return rows;
+}
+
 // Кузов и тип двигателя каждой модели с числом машин — одним запросом на весь каталог
 // (около семисот строк).
 //
@@ -658,6 +684,18 @@ export async function getModelFacts() {
 
 export async function createOrderDraft({ listingId, name = null, contact, calculation = {} }) {
   const result = await pool.query("INSERT INTO order_drafts (listing_id, customer_name, contact, calculation) VALUES ($1,$2,$3,$4) RETURNING id, listing_id, status, created_at", [listingId,name,contact,JSON.stringify(calculation)]);
+  // Сообщение в телеграм уходит своим ходом: посетитель получает ответ сразу, не
+  // дожидаясь доставки.
+  notifyLead({
+    kind:calculation.requestType === "catalog_search" ? "custom_search" : calculation.requestType === "availability_check" ? "availability" : "listing_draft",
+    source:"site",
+    name,
+    contact,
+    methods:Array.isArray(calculation.contactMethods) ? calculation.contactMethods : [],
+    listingId,
+    comment:calculation.preferences || "",
+    filters:calculation.catalogFilters || null,
+  });
   await pool.query(`INSERT INTO crawl_jobs (source, listing_id, job_type, url, priority)
     SELECT source, id, 'refresh_listing', source_url, 100 FROM listings WHERE id=$1
     ON CONFLICT (job_type, listing_id) WHERE status IN ('queued','running') DO UPDATE SET priority=GREATEST(crawl_jobs.priority,100), available_at=LEAST(crawl_jobs.available_at,now())`, [listingId]);

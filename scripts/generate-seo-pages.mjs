@@ -5,11 +5,17 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
-import { CATALOG_LANDINGS, catalogPageCount, landingApiParams, landingsForCar } from "../src/catalog-landings.js";
-import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, toolPageStats, toolUpdatedLabel } from "../src/tool-pages.js";
+import { CATALOG_LANDINGS, brandLandingPath, catalogPageCount, landingApiParams, landingsForCar } from "../src/catalog-landings.js";
+import { TOOL_PAGES, calcParamNames, calculatorFields, customsExample, deliveryStages, dutyRateTables, toolPageStats, toolUpdatedLabel } from "../src/tool-pages.js";
 // Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
 // отдельным файлом, а сборке нужны целиком — склеиваем запись с её текстами.
 import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
+// Справочник марок для страницы «Марки из Китая»: те же данные, что у приложения.
+import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "../src/china-brands.js";
+// Расчёт реального запаса хода: те же поправки, что в форме у человека.
+import { rangeFields, rangeTable, ratedToWinterTable } from "../src/range-estimate.js";
+// Сравнение с белорусским рынком: правила отбора и подписи — в одном месте с приложением.
+import { brandCoverage, compareRows, compareSummary, compareTable, coverageNote } from "../src/market-compare.js";
 import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
 // Цена подборки «от такой-то суммы» считается тем же расчётом, что показывает
 // карточка машины: иначе в журнале стояла бы одна сумма, а в каталоге другая.
@@ -122,6 +128,13 @@ if (vehiclePages && !hasCatalog) console.warn(`Каталог ${path.relative(ro
 const catalog = vehiclePages && hasCatalog ? JSON.parse(readFileSync(catalogPath, "utf8")) : {};
 const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id).map((car) => ({ ...car, drive:normalizeDrive(car.drive) }));
 
+// Свод цен белорусского рынка. Его собирает `npm run market` с домашней сети (площадка
+// блокирует адреса дата-центров), файл лежит в репозитории и приезжает на сервер
+// обычной выкладкой. Нет файла — страница сравнения просто не собирается: пустая
+// таблица «сравнили и ничего не нашли» хуже её отсутствия.
+const marketPath = process.env.SEO_MARKET ? path.resolve(process.env.SEO_MARKET) : path.join(root, "data", "market-belarus.json");
+const marketBelarus = existsSync(marketPath) ? JSON.parse(readFileSync(marketPath, "utf8")) : null;
+
 // Общей страницы каталога здесь нет: её, как и разделы, отдаёт сервер. Файлами она
 // собиралась вхолостую — на хостинге дампа каталога нет, и в странице не оставалось ни
 // одной ссылки на машину. Готовый файл вдобавок перекрыл бы правило переадресации, и
@@ -201,7 +214,7 @@ const PATHWAYS = {
   "/how-it-works/": {
     heading: "С чего начать выбор",
     intro: "Порядок покупки одинаковый для любой машины, а вот пошлина, сроки и итоговая сумма зависят от того, что вы выбрали.",
-    links: ["electric", "hybrid", "petrol", "suv", "sedan", "/calculator", "/catalog"],
+    links: ["electric", "hybrid", "petrol", "suv", "sedan", "/customs", "/catalog"],
   },
   "/faq/": {
     heading: "Ответы, которые видно в каталоге",
@@ -214,8 +227,8 @@ const PATHWAYS = {
     links: ["electric", "hybrid", "petrol", "byd", "tesla", "volkswagen", "mercedes-benz", "/catalog"],
   },
   "/customs/": {
-    heading: "Растаможка по типам машин",
-    intro: "Сумма зависит от того, что у машины под капотом и сколько ей лет: электромобиль, гибрид и бензиновая машина считаются по разным правилам. Каталог уже разделён по этому признаку.",
+    heading: "Посчитать на конкретной машине",
+    intro: "Расчёт получается точнее, когда есть объявление: год, тип двигателя, объём мотора и цену берём из него. Электромобиль, гибрид и бензиновая машина считаются по разным правилам, и каталог уже разделён по этому признаку.",
     links: ["electric", "hybrid", "petrol", "petrol-suv", "petrol-sedan", "under-30000", "/catalog"],
   },
   "/ev-quota/": {
@@ -227,11 +240,6 @@ const PATHWAYS = {
     heading: "Машины, для которых считаем доставку",
     intro: "Сама доставка почти не зависит от машины, а итоговая сумма — зависит. Подборки собраны по конечной цене.",
     links: ["under-15000", "under-20000", "under-25000", "under-40000", "petrol-under-25000", "petrol-under-40000", "/catalog"],
-  },
-  "/calculator/": {
-    heading: "Посчитать на конкретной машине",
-    intro: "Расчёт получается точнее, когда есть объявление: год, тип двигателя, объём мотора и цену продавца берём из него.",
-    links: ["electric", "hybrid", "petrol", "under-30000", "petrol-under-30000", "byd", "/customs", "/catalog"],
   },
 };
 
@@ -264,6 +272,73 @@ function pathwayFor(route) {
 // Текст страницы-инструмента. Цифры берутся из тех же данных, что и расчёт в карточке,
 // поэтому страница не расходится с каталогом. Вложенные блоки разделов — списки, врезки
 // и карточки сравнения — здесь тоже текст: иначе поисковик увидел бы меньше, чем человек.
+/**
+ * Сколько машин марки в каталоге — для справочника марок.
+ *
+ * Числа берём оттуда же, откуда их берут разделы каталога: при сборке на сервере это
+ * база (`live.stock` по адресу раздела), а при сборке с дампом — сам дамп. Своего
+ * запроса страница не делает, иначе справочник и раздел марки показывали бы разные
+ * числа. Отдельной функцией, а не строкой внутри `toolArticle`: там своя переменная
+ * `live` — кусок разметки, — и обращение к живому каталогу оттуда молча ломалось бы.
+ */
+/**
+ * Форма расчёта обычной разметкой: поля, варианты и подписи. Форму на странице рисует
+ * скрипт, а поисковик скриптов не запускает — без этого по запросу «калькулятор» мы
+ * предлагали ему страницу, на которой, с его точки зрения, калькулятора нет. Описание
+ * полей берётся из того же места, что и сама форма.
+ */
+function formHtml(fields, prefix) {
+  return fields
+    .map((item, index) => {
+      const id = `${prefix}-field-${index + 1}`;
+      const control = item.options
+        ? `<select id="${id}">${item.options.map((option) => `<option>${escapeHtml(option)}</option>`).join("")}</select>`
+        : `<input id="${id}" type="${item.input === "checkbox" ? "checkbox" : "number"}" />`;
+      return `<p><label for="${id}">${escapeHtml(item.label)}</label> ${control}${item.hint ? ` <small>${escapeHtml(item.hint)}</small>` : ""}</p>`;
+    })
+    .join("");
+}
+
+/**
+ * Строки сравнения с белорусским рынком. Считаются один раз: их берут и страница для
+ * поисковика, и файл, который читает приложение, — два расчёта разошлись бы.
+ */
+// Сколько строк сравнения попадает в готовую разметку. Все 400+ раздували бы страницу
+// до сотни килобайт ради робота, который и так видит, из чего она собрана. Человек
+// в браузере получает таблицу целиком — с поиском и фильтром по маркам.
+const STATIC_COMPARE_ROWS = 150;
+let marketCompareCache = null;
+function marketCompare() {
+  if (marketCompareCache) return marketCompareCache;
+  // Тот же набор строк, что видит человек: приложение берёт сравнение целиком, и
+  // урезанная таблица для поисковика давала бы другие итоговые числа на одной и
+  // той же странице.
+  const rows = compareRows({ ours: live.prices || [], market: marketBelarus, limit: 1000 });
+  // Сравнение молча пустым быть не должно: если свод собран, а строк нет, значит
+  // сборка не достала цены каталога (нет `SEO_CARS_FROM_DB=1` или база недоступна),
+  // и страница уйдёт на сайт без главного блока.
+  if (marketBelarus && !rows.length) {
+    console.warn(`Сравнение с белорусским рынком не собрано: свод есть (${marketBelarus.offers || 0} предложений), а цен каталога ${live.prices?.length ? "не хватило для совпадений" : "нет — сборка читала не базу"}.`);
+  }
+  // Марки каталога с числом машин — чтобы назвать и те, по которым сравнивать не с чем.
+  const ourBrands = [...new Set(CATALOG_LANDINGS.filter((landing) => landing.brand).map((landing) => landing.brand))]
+    .map((brand) => [brand, catalogBrandCount(brand)]);
+  marketCompareCache = {
+    rows,
+    summary: compareSummary(rows),
+    collectedAt: marketBelarus?.collectedAt || null,
+    brands: brandCoverage({ ourBrands, rows, market: marketBelarus }),
+  };
+  return marketCompareCache;
+}
+
+function catalogBrandCount(brand) {
+  const landing = brandLandingPath(brand);
+  const fromDatabase = landing ? live.stock.get(landing) : null;
+  if (Number.isFinite(fromDatabase)) return fromDatabase;
+  return cars.reduce((total, car) => total + (car.brand === brand ? 1 : 0), 0);
+}
+
 function toolArticle(tool) {
   const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
   const extras = (section) =>
@@ -285,17 +360,16 @@ function toolArticle(tool) {
       section.figure ? blogFigureHtml(section.figure) : "",
       section.callout ? `<p><strong>${escapeHtml(section.callout.title)}.</strong> ${linkifyText(section.callout.text, hrefRoute)}</p>` : "",
     ].join("");
-  const sections = tool.sections
-    .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}${extras(section)}</section>`)
-    .join("");
+  const sectionBlocks = tool.sections
+    .map((section) => `<section><h2>${escapeHtml(section.title)}</h2>${paragraphs(section.paragraphs)}${extras(section)}</section>`);
   // Полоса главных цифр: у человека это плитки под вступлением, здесь — строки списка.
   const stats = toolPageStats(tool.kind);
   const numbers = stats.length
     ? `<ul>${stats.map((stat) => `<li><strong>${escapeHtml(stat.value)}</strong> — ${escapeHtml(stat.label)}</li>`).join("")}</ul>`
     : "";
   // Таблица собирается из тех же функций, что и в приложении: одна цифра — одно место.
-  const table = (data) =>
-    `<section><h2>${escapeHtml(data.title)}</h2><table><thead><tr>${data.columns
+  const table = (data, heading = "h2") =>
+    `<section><${heading}>${escapeHtml(data.title)}</${heading}><table><thead><tr>${data.columns
       .map((column) => `<th scope="col">${escapeHtml(column)}</th>`)
       .join("")}</tr></thead><tbody>${data.rows
       .map((row) => `<tr>${row.map((cell, index) => (index === 0 ? `<th scope="row">${escapeHtml(cell)}</th>` : `<td>${escapeHtml(cell)}</td>`)).join("")}</tr>`)
@@ -316,12 +390,79 @@ function toolArticle(tool) {
       .map(([date, personal, business]) => `<tr><th scope="row">${escapeHtml(date)}</th><td>${personal === null ? "не названо" : number(personal)}</td><td>${business === null ? "не названо" : number(business)}</td></tr>`)
       .join("")}</tbody></table><p>Источник — сводки Государственного таможенного комитета. Квота ${EV_QUOTA.year} года вступила в силу ${escapeHtml(EV_QUOTA.startedOn)}.</p></section>`;
   }
-  if (tool.kind === "customs") live = table(customsExample());
+  // Форму калькулятора рисует скрипт, а поисковик скриптов не запускает: до этой
+  // правки по запросу «калькулятор растаможки» мы предлагали ему страницу, на
+  // которой калькулятора нет. Поэтому здесь та же форма собирается обычной
+  // разметкой — поля, варианты ответов и подписи, — а следом идут посчитанные
+  // суммы и таблицы ставок. Поля берутся из одного описания с приложением.
+  if (tool.kind === "customs") {
+    // Заголовка над формой нет: страница и так называется калькулятором, второй
+    // такой же заголовок сразу под первым был лишним. Дату курса называем здесь —
+    // отдельной строки «ставки и курсы на такое-то число» на этой странице больше
+    // нет, а поисковику и пересказывающему нас чат-боту дата нужна.
+    live = `<section><form>${formHtml(calculatorFields(), "calc")}</form><p>Расчёт покажет ввозную пошлину, НДС, утилизационный и таможенный сборы отдельными строками и сумму платежа целиком — в белорусских рублях и в долларах, по курсу Национального банка на ${escapeHtml(PRICING.rateDate)}.</p></section>`;
+    // Дальше — ровно тот же порядок, что у человека в раскрывающихся пунктах:
+    // «что считает калькулятор», готовые суммы, ставки, разделы. Порядок и состав
+    // блоков у человека и у поисковика должны совпадать, иначе это две разные
+    // страницы. Разница только в обёртке: у человека всё свёрнуто, потому что за
+    // страницей приходят посчитать, а не читать.
+    sectionBlocks.unshift(
+      table(customsExample()),
+      `<section><h2>Ставки пошлины: полные таблицы</h2>${dutyRateTables().map((item) => table(item, "h3")).join("")}</section>`,
+    );
+  }
+  const sections = sectionBlocks.join("");
   if (tool.kind === "cost") live = table(deliveryStages());
-  // У калькулятора живая часть — форма, а её рисует скрипт. Поисковику вместо неё
-  // отдаём готовые расчёты той же механикой: иначе страница расчёта приходит в поиск
-  // без единой посчитанной суммы.
-  if (tool.kind === "calculator") live = table(calculatorExamples());
+  // Сравнение с белорусским рынком: таблица «модель, там, у нас, разница» и вывод.
+  if (tool.kind === "market") {
+    const { rows, summary, collectedAt, brands } = marketCompare();
+    // Марки, по которым сравнения нет, называем прямо: у человека своя марка, и
+    // молчание о ней он прочитает как «не возят».
+    const thin = brands.filter((item) => !item.matched);
+    const thinBlock = thin.length
+      ? `<section><h2>Марки, по которым сравнивать не с чем</h2><dl>${thin
+        .map((item) => `<dt>${escapeHtml(item.brand)}</dt><dd>${number(item.cars)} ${plural(item.cars, "машина", "машины", "машин")} в каталоге — ${escapeHtml(coverageNote(item))}</dd>`)
+        .join("")}</dl><p>Это не пробел в данных: таких машин на белорусском рынке почти нет в продаже, и сравнивать их не с чем. Привезти из Китая — единственный способ такую купить.</p></section>`
+      : "";
+    live = rows.length
+      ? `<section><h2>Что это значит коротко</h2><p>Сравнили ${number(summary.models)} ${plural(summary.models, "набор", "набора", "наборов")} «модель и год выпуска», по которым предложения есть и в Беларуси, и у нас. Дешевле привезти из Китая ${number(summary.cheaper)} из них: там разница около ${summary.medianPercent}%. По остальным ${number(summary.dearer)} выгоднее купить машину, которая уже в Беларуси.${summary.bestSaving ? ` Больше всего выигрывает ${escapeHtml(`${summary.bestSaving.brand} ${summary.bestSaving.model}`)} ${summary.bestSaving.year} года: около ${number(summary.bestSaving.diff)} $.` : ""}</p></section>`
+        + table(compareTable(rows.slice(0, STATIC_COMPARE_ROWS), {
+          collectedAt,
+          hidden: Math.max(0, rows.length - STATIC_COMPARE_ROWS),
+        }))
+        + thinBlock
+      : thinBlock;
+  }
+  // Запас хода: форма, готовая таблица «паспорт → зима» и разбор по температурам.
+  // Числа считает тот же модуль, что и форму у человека (src/range-estimate.js).
+  if (tool.kind === "range") {
+    live = `<section><h2>Посчитать реальный запас хода</h2><form>${formHtml(rangeFields(), "range")}</form><p>Расчёт переводит паспортную цифру в реальную: приводит цикл измерения к честному, отнимает потери на мороз и скорость, учитывает химию батареи, тепловой насос и возраст машины.</p></section>`
+      + table(ratedToWinterTable())
+      + table(rangeTable({ rated: 500 }));
+  }
+  // Справочник марок. Для человека это карточки со значками, здесь — две таблицы:
+  // поисковику нужны текст и ссылки, а значки идут теми же файлами, что в каталоге.
+  // Числа считаем по тому же дампу, из которого собираются разделы, поэтому «в
+  // каталоге 112 машин» в справочнике и в разделе марки — одно и то же число.
+  if (tool.kind === "brands") {
+    // Числа берём оттуда же, откуда их берут разделы каталога: на сервере это база
+    // (`live.stock`), а при сборке с дампом — сам дамп. Своего запроса страница не
+    // делает, иначе справочник и раздел марки показывали бы разные числа.
+    const brandRow = (item) => {
+      const landing = brandLandingPath(item.brand);
+      const count = catalogBrandCount(item.brand);
+      const title = landing && count
+        ? `<a href="${escapeHtml(hrefRoute(`${landing}/`))}">${escapeHtml(item.brand)}</a>`
+        : escapeHtml(item.brand);
+      const logo = `<img src="${escapeHtml(hrefRoute(`/brands/${item.logo}.svg`))}" alt="Значок ${escapeHtml(item.brand)}" width="40" height="40" loading="lazy" />`;
+      const say = item.say ? `${escapeHtml(item.say)}${item.chinese ? ` · ${escapeHtml(item.chinese)}` : ""}` : "—";
+      const group = item.group || (item.partner ? `В Китае — вместе с ${item.partner}` : "");
+      return `<tr><td>${logo}</td><th scope="row">${title}</th><td>${say}</td><td>${escapeHtml(group)}${item.since ? `, с ${item.since} года` : ""}</td><td>${escapeHtml(item.about)}</td><td>${count ? `${number(count)} ${plural(count, "машина", "машины", "машин")}` : "нет"}</td></tr>`;
+    };
+    const head = "<thead><tr><th scope=\"col\">Значок</th><th scope=\"col\">Марка</th><th scope=\"col\">Как читается</th><th scope=\"col\">Кому принадлежит</th><th scope=\"col\">Чем занимается</th><th scope=\"col\">В каталоге</th></tr></thead>";
+    live = `<section><h2>Китайские марки</h2><table>${head}<tbody>${CHINA_BRANDS.map(brandRow).join("")}</tbody></table></section>`
+      + `<section><h2>Привычные марки, которые делают в Китае</h2><table>${head}<tbody>${CHINA_MADE_FOREIGN.map(brandRow).join("")}</tbody></table></section>`;
+  }
   // Частые вопросы: в странице это обычный текст, разметку FAQPage добавляем отдельно.
   const faq = tool.faq?.length
     ? `<section><h2>Частые вопросы</h2>${tool.faq.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
@@ -335,8 +476,15 @@ function toolArticle(tool) {
   // цифрой, и первый вопрос к цифре всегда «на когда». Та же строка стоит у человека
   // под заголовком, текст берётся из одного места (src/tool-pages.js).
   const updatedLabel = toolUpdatedLabel(tool);
-  const updated = updatedLabel ? `<p class="seo-updated">${escapeHtml(updatedLabel)}.</p>` : "";
-  return `${updated}${paragraphs(tool.intro)}${numbers}${live}${sections}${faq}${links}<p>${escapeHtml(tool.disclaimer)}</p>`;
+  // На калькуляторе отдельной строки с датой нет: курс с датой назван прямо под формой.
+  const updated = updatedLabel && tool.kind !== "customs" ? `<p class="seo-updated">${escapeHtml(updatedLabel)}.</p>` : "";
+  // У калькулятора вступление и полоса ставок перенесены внутрь свёрнутых пунктов:
+  // наверху страницы остаётся только форма.
+  const lead = tool.kind === "customs" || tool.kind === "market" ? "" : `${paragraphs(tool.intro)}${numbers}`;
+  // На сравнении цен вступление стоит под таблицей — так же, как у человека на
+  // странице: сначала цифры, объяснение следом.
+  const afterLive = tool.kind === "market" ? paragraphs(tool.intro) : "";
+  return `${updated}${lead}${live}${afterLive}${sections}${faq}${links}<p>${escapeHtml(tool.disclaimer)}</p>`;
 }
 
 function infoArticle(route) {
@@ -1034,7 +1182,7 @@ async function readLiveCatalog() {
     }
     return counts;
   };
-  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], activeCars: 0, catalogRefreshedAt: null, listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map() };
+  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], activeCars: 0, catalogRefreshedAt: null, listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map(), prices: [] };
   if (cars.length) {
     return {
       showcase: cars.slice(0, showcaseSize),
@@ -1045,6 +1193,7 @@ async function readLiveCatalog() {
       stock: new Map(),
       collections: new Map(),
       changed: new Map(),
+      prices: [],
     };
   }
   if (!carsFromDatabase) {
@@ -1054,7 +1203,7 @@ async function readLiveCatalog() {
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
-    const { getModelFacts, listCars, modelSummary, sectionStats } = await import("../server/repository.mjs");
+    const { getModelFacts, listCars, modelPriceMedians, modelSummary, sectionStats } = await import("../server/repository.mjs");
     // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
     // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
     // модель займёт весь блок.
@@ -1185,6 +1334,9 @@ async function readLiveCatalog() {
       listPages,
       stock,
       changed,
+      // Середина цены под ключ по каждому набору «модель + год»: нужна странице
+      // сравнения с белорусским рынком.
+      prices: await modelPriceMedians(),
     };
   } catch (error) {
     console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);
@@ -1297,6 +1449,10 @@ const robots = allowIndexing
       // а склеенный с общим каталогом адрес до этого переброса не дошёл бы. Остальные
       // параметры своей страницы не имеют, поэтому их по-прежнему склеиваем.
       "Clean-param: sort&model&color&drive&yearFrom&yearTo&priceFrom&priceTo&mileage&owners&battery&range&accel&tire&torque&condition&q /catalog",
+      // Поля калькулятора: по ссылке на конкретный расчёт открывается та же страница
+      // с теми же текстами, и в выдаче она должна быть одна, а не по адресу на каждую
+      // введённую цену.
+      `Clean-param: ${calcParamNames().join("&")} /customs`,
       "",
       // Оптовые обходчики каталогов: сервер грузят как настоящая толпа, а взамен не
       // дают ничего — ни выдачи, ни посетителей. Поисковиков (Google, Яндекс, Bing,

@@ -13,6 +13,7 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "rates": "node scripts/update-rates.mjs",
+    "market": "node scripts/market-belarus.mjs",
     "quota": "node scripts/update-ev-quota.mjs",
     "ranges": "node scripts/update-datacenter-ranges.mjs",
     "warm": "node scripts/warm-photos.mjs",
