@@ -93,3 +93,18 @@ test("подтверждение подписки сохраняет свобо�
   assert.match(styles, /newsletter-subscribed-modal\s*\{[^}]*width:\s*min\(460px, 100%\)/s);
   assert.match(styles, /lead-modal > \.newsletter-subscribed-unsubscribe\s*\{[^}]*font-size:\s*14px/s);
 });
+
+test("подписка и блок приложения стоят строкой ниже колонок ссылок", async () => {
+  const [app, styles] = await Promise.all([
+    readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
+  ]);
+  // Блок с приложением — самостоятельный элемент сетки, а не часть колонки с логотипом:
+  // иначе он снова начнёт зависеть от её высоты.
+  assert.match(app, /<\/div>\s*<FooterAppDownload onOpen=\{openAppUnavailable\} \/>/);
+  assert.match(styles, /\.footer-newsletter\s*\{[^}]*grid-row:\s*2/s);
+  assert.match(styles, /\.footer-app-download\s*\{[^}]*grid-row:\s*2/s);
+  // Ручные сдвиги наезжали на колонки, когда в них добавлялись пункты.
+  assert.doesNotMatch(styles, /\.footer-newsletter\s*\{[^}]*margin-top:\s*-/s);
+  assert.doesNotMatch(styles, /\.footer-app-download\s*\{[^}]*transform:\s*translateY/s);
+});

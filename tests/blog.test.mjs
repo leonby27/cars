@@ -361,7 +361,7 @@ test("проценты пишутся со знаком, а ноль — без"
 
 // Ссылки внутри текста разбираются везде, где текст показывается: в абзацах, списках,
 // врезках, шагах и ответах на вопросы. В разметке для поисковика ссылок быть не должно
-// — там нужен чистый текст, иначе в выдаче появится «[калькулятор](/calculator)».
+// — там нужен чистый текст, иначе в выдаче появится «[калькулятор](/customs)».
 test("ссылки в текстах статей не остаются разметкой", () => {
   const links = /\[[^\]]+\]\(\/[a-z0-9/_-]+\)/i;
   for (const [slug, text] of Object.entries(BLOG_TEXTS)) {
@@ -369,7 +369,7 @@ test("ссылки в текстах статей не остаются разм
       assert.ok(!links.test(plainInlineText(item.a)), `в ответе материала ${slug} ссылка осталась разметкой для поисковика`);
     }
   }
-  assert.equal(plainInlineText("Считает [калькулятор](/calculator) сам."), "Считает калькулятор сам.");
+  assert.equal(plainInlineText("Считает [калькулятор](/customs) сам."), "Считает калькулятор сам.");
 });
 
 // Каждая статья обязана нести хотя бы одну картинку: либо фотографии настоящих машин
@@ -451,10 +451,10 @@ test("у материалов расписания нет пометки «че�
 // вкладке. Заодно проверяем, что чужая схема адреса ссылкой не становится.
 test("ссылка на первоисточник в абзаце уходит с nofollow", () => {
   const hrefRoute = (path) => `/base${path}`;
-  const html = linkifyText("Ставка стоит в [решении ЕЭК](https://docs.eaeunion.org/docs/ru-ru/1), а посчитать можно в [калькуляторе](/calculator).", hrefRoute);
+  const html = linkifyText("Ставка стоит в [решении ЕЭК](https://docs.eaeunion.org/docs/ru-ru/1), а посчитать можно в [калькуляторе](/customs).", hrefRoute);
   assert.match(html, /<a class="article-inline-link" href="https:\/\/docs\.eaeunion\.org\/docs\/ru-ru\/1" target="_blank" rel="nofollow noreferrer">решении ЕЭК<\/a>/);
   // Своя ссылка остаётся своей: тот же корень, без nofollow.
-  assert.match(html, /<a class="article-inline-link" href="\/base\/calculator">калькуляторе<\/a>/);
+  assert.match(html, /<a class="article-inline-link" href="\/base\/customs">калькуляторе<\/a>/);
   // Небезопасная схема не разбирается как ссылка — остаётся текстом.
   assert.equal(splitInlineLinks("[тык](javascript:alert(1))").length, 1);
   assert.equal(splitInlineLinks("[тык](http://example.by)").length, 1);

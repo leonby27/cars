@@ -169,7 +169,6 @@ test("в текстах нет ссылок на материалы, котор�
 test("внутренние ссылки в текстах ведут на существующие адреса", () => {
   const known = new Set([
     "/catalog",
-    "/calculator",
     "/customs",
     "/delivery-cost",
     "/ev-quota",
