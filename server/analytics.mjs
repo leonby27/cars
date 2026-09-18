@@ -421,6 +421,45 @@ export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
   };
 }
 
+// Сорок заходов — это много или мало, видно только рядом с обычным днём, поэтому
+// под цифрой «Заходы» показываем тот же отрезок суток вчера и среднее за неделю до
+// этого. Сравниваем именно отрезок: в полдень сегодняшние сорок заходов сопоставимы
+// с вчерашними к полудню, а не с полными вчерашними сутками, — иначе до самого
+// вечера сегодняшний день всегда выглядел бы провальным. Заход считается теми же
+// словами, что и в карточке и на графике, чтобы числа сходились между собой.
+const VISITS_BENCHMARK_DAYS = 7;
+
+export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now() } = {}) {
+  const range = typeof rangeValue === "string" ? normalizeAnalyticsRange(rangeValue, now) : rangeValue;
+  // У многодневных срезов «в это время» смысла не имеет: там карточка показывает
+  // среднее за день внутри самого периода, и сравнивать не с чем.
+  if (range.days !== 1) return { visits_previous:null, visits_average:null, visits_benchmark_days:0 };
+  const seconds = Math.max(1, Math.min(86_400, Math.round((range.to.getTime() - range.from.getTime()) / 1000)));
+  const windowFrom = new Date(range.from.getTime() - VISITS_BENCHMARK_DAYS * 86_400_000);
+  const result = await db.query(`WITH steps AS (
+      SELECT ${MINSK_DAY} AS day,
+        extract(epoch FROM (created_at AT TIME ZONE 'Europe/Minsk')::time) AS second_of_day,
+        created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
+        lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
+      FROM analytics_events
+      WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+    )
+    SELECT day::text AS day, count(*)::int AS visits
+    FROM steps WHERE (${VISIT_STARTS}) AND second_of_day < $3
+    GROUP BY day`, [windowFrom.toISOString(), range.from.toISOString(), seconds]);
+  const byDay = new Map(result.rows.map((row) => [row.day, Number(row.visits) || 0]));
+  // День без единого события в выборку не попадёт, но в среднем должен считаться
+  // нулём, а не выпадать: иначе неделя простоя подняла бы «в среднем» вместо того,
+  // чтобы опустить.
+  const dayKey = (back) => new Date(range.from.getTime() - back * 86_400_000 + MINSK_OFFSET_MS).toISOString().slice(0, 10);
+  const sample = Array.from({ length:VISITS_BENCHMARK_DAYS }, (_, index) => byDay.get(dayKey(index + 1)) || 0);
+  return {
+    visits_previous:sample[0],
+    visits_average:Math.round(sample.reduce((total, value) => total + value, 0) / sample.length),
+    visits_benchmark_days:VISITS_BENCHMARK_DAYS,
+  };
+}
+
 export async function getAnalyticsDashboard(rangeValue) {
   const range = normalizeAnalyticsRange(rangeValue);
   const { days, period } = range;
@@ -431,7 +470,7 @@ export async function getAnalyticsDashboard(rangeValue) {
   // вкладка, закрытая страница) и его может подделать кто угодно, а строка в таблице
   // появляется только от настоящего действия. Из событий берём лишь то, чего в базе нет:
   // посетителей, заходы и просмотры карточек.
-  const [summaryResult,visitsResult,actionsResult,dailyResult,catalogPagesResult,vehiclesResult,favoritesResult,registrationsResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
+  const [summaryResult,visitsResult,benchmark,actionsResult,dailyResult,catalogPagesResult,vehiclesResult,favoritesResult,registrationsResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id) FILTER (WHERE ${LIVE_VISITOR})::int AS visitors,
       count(*) FILTER (WHERE event_name='page_view' AND ${LIVE_VISITOR})::int AS page_views,
@@ -471,6 +510,7 @@ export async function getAnalyticsDashboard(rangeValue) {
         FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
       )
       SELECT count(*) FILTER (WHERE ${VISIT_STARTS})::int AS visits FROM steps`, [from, to]),
+    getVisitsBenchmark(range),
     pool.query(`SELECT
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int
         + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
@@ -648,7 +688,7 @@ export async function getAnalyticsDashboard(rangeValue) {
     from,
     to,
     generatedAt:new Date().toISOString(),
-    summary:{ ...summaryResult.rows[0], ...visitsResult.rows[0], ...actionsResult.rows[0], registrations },
+    summary:{ ...summaryResult.rows[0], ...visitsResult.rows[0], ...benchmark, ...actionsResult.rows[0], registrations },
     daily,
     catalogPages:catalogPagesResult.rows.map((row) => ({ path:row.path, views:row.views, viewers:row.viewers, lastViewedAt:row.last_viewed })),
     vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, availabilityRequests:row.availability_requests, favorites:row.favorites, lastViewedAt:row.last_viewed })),

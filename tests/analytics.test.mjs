@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ANALYTICS_SECTIONS, analyticsCookie, confirmHumanVisit, deviceKindFromHeaders, devicePlatformFromHeaders, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, analyticsCookie, confirmHumanVisit, deviceKindFromHeaders, devicePlatformFromHeaders, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, getVisitsBenchmark, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { analyticsEntrySource, hasYandexClickId, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm, withoutYandexClickId } from "../src/analytics.js";
 import { formatVisitDate } from "../src/analytics-format.js";
 import { analyticsNoCountHref } from "../src/analytics-links.js";
@@ -99,7 +99,7 @@ test("названия и состав разделов аналитики со�
   assert.match(source, /label:"Запросы и позиции"/);
   assert.doesNotMatch(source, />Визиты из поисковых систем</);
   assert.doesNotMatch(source, />Последние действия</);
-  assert.match(source, /\$\{formatNumber\(summary\.visitors\)\} уник\./);
+  assert.match(source, /\$\{average\(summary\.vehicle_views, summary\.visitors\)\} на посетителя/);
   assert.match(source, /item\.lastViewedAt \? formatVisitDate\(item\.lastViewedAt\)/);
 });
 
@@ -164,8 +164,10 @@ test("счётчики отделяют просмотренное от ново
   // Карточка «Просмотры авто» считает просмотры карточек машин (vehicle_cars),
   // а не открытия страниц каталога: у тех свой счётчик.
   assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicle_cars\]/);
-  assert.match(source, /\["Машины в кабинете"[^\n]*updates\.cabinet_orders\]/);
   assert.match(source, /\["Регистрации"[^\n]*updates\.customers\]/);
+  // Карточка «Машины в кабинете» убрана 18.09.2026: те же цифры показывает раздел
+  // «Заявки», а в обзоре она держала нулевую колонку.
+  assert.doesNotMatch(source, /"Машины в кабинете"/);
   assert.match(server, /cabinet_orders:cabinetOrders\.rows\[0\]\.n/);
   // В боковом меню у «Каталога» три вкладки со своими счётчиками, и пункт меню
   // показывает их сумму — иначе новые просмотры авто видно только внутри раздела.
@@ -305,6 +307,43 @@ test("график считает заходы тем же правилом, ч�
   // день давал в карточке и на графике разные числа.
   assert.match(sql, /human_action AND path <> '\/analytics'/);
   assert.doesNotMatch(sql, /created_at >= \$1 AND created_at < \$2 AND human_action/);
+});
+
+// Под карточкой «Заходы» вместо счёта роботов стоит сравнение с обычным днём:
+// вчера к этому же часу и среднее за неделю до этого. Сравнивать надо именно
+// отрезок суток — иначе полдня сегодняшних заходов меряется полными сутками вчера.
+test("«Заходы» сравниваются с тем же отрезком суток в прошлые дни", async () => {
+  const calls = [];
+  const db = { query:async (sql, values) => { calls.push({ sql, values }); return { rows:[{ day:"2026-09-17", visits:10 }] }; } };
+  const now = Date.UTC(2026, 8, 18, 9, 0, 0); // полдень по Минску
+  const benchmark = await getVisitsBenchmark("today", { db, now });
+  const [sql, values] = [calls[0].sql, calls[0].values];
+  assert.match(sql, /second_of_day < \$3/);
+  assert.equal(values[2], 12 * 3600, "срез идёт до текущего минского времени");
+  assert.equal(new Date(values[1]).toISOString(), "2026-09-17T21:00:00.000Z", "правая граница — минская полночь");
+  assert.equal(new Date(values[0]).toISOString(), "2026-09-10T21:00:00.000Z", "берём семь предыдущих суток");
+  assert.match(sql, /interval '30 minutes'/);
+  assert.match(sql, /previous_day IS DISTINCT FROM day/);
+  assert.equal(benchmark.visits_previous, 10);
+  // Дни без событий считаются нулями, иначе среднее держалось бы на единственном дне.
+  assert.equal(benchmark.visits_average, Math.round(10 / 7));
+  // У «вчера» сравнение идёт по полным суткам.
+  calls.length = 0;
+  await getVisitsBenchmark("yesterday", { db, now });
+  assert.equal(calls[0].values[2], 86_400);
+  // У многодневных срезов сравнивать не с чем — запроса нет вовсе.
+  calls.length = 0;
+  const wide = await getVisitsBenchmark("30", { db, now });
+  assert.equal(calls.length, 0);
+  assert.equal(wide.visits_previous, null);
+});
+
+test("подпись «Заходов» читается словами, а не счётом роботов", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(source, /const when = period === "yesterday" \? "За сутки" : "В это время"/);
+  assert.match(source, /\$\{when\}: \$\{before\} — \$\{formatNumber\(previous\)\}, в среднем — /);
+  assert.doesNotMatch(source, /без действий/);
+  assert.doesNotMatch(source, /robot_visits/);
 });
 
 test("analytics tokens expire and reject tampering", () => {

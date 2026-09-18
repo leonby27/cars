@@ -274,6 +274,17 @@ function AnalyticsSplitCount({ total = 0, fresh = 0, className = "" }) {
   </span>;
 }
 
+// Под «Заходами» цифра сама по себе ничего не говорит, поэтому подписью идёт тот же
+// отрезок суток вчера и среднее за неделю до этого. У многодневных срезов сравнивать
+// не с чем — там показываем, сколько заходов приходится на день внутри периода.
+const visitsNote = (summary, period, days) => {
+  const previous = summary.visits_previous;
+  if (previous === null || previous === undefined) return `В среднем ${average(summary.visits, days)} в день`;
+  const before = period === "yesterday" ? "позавчера" : "вчера";
+  const when = period === "yesterday" ? "За сутки" : "В это время";
+  return `${when}: ${before} — ${formatNumber(previous)}, в среднем — ${formatNumber(summary.visits_average)}`;
+};
+
 function OverviewSection({ data, period, updates = {} }) {
   const summary = data.summary || {};
   const [trendPeriod, setTrendPeriod] = usePersistedChoice("analytics:trend-period", trendPeriodIds, "90");
@@ -305,26 +316,20 @@ function OverviewSection({ data, period, updates = {} }) {
   // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
   // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
   const cards = [
-    // Роботов в число посетителей не берём, но и не скрываем: заход, на котором никто
-    // не двинул мышью, не прокрутил и не нажал ни одной клавиши, считается отдельно —
-    // так видно, сколько на сайт приходит машинного трафика. Просто время на странице
-    // человеком не считается: его выжидает обходчик, чтобы сойти за посетителя.
+    // Заход, на котором никто не двинул мышью, не прокрутил и не нажал ни одной
+    // клавиши, в счёт не идёт: это машинный обход. Просто время на странице человеком
+    // не считается — его выжидает обходчик, чтобы сойти за посетителя. Отдельной
+    // цифрой такие заходы больше не выводим (решение владельца 18.09.2026): под
+    // «Заходами» полезнее сравнение с обычным днём, чем счёт роботов.
     // Заход — не вкладка: человек, вернувшийся вечером, считается вторым заходом, а
     // три карточки, открытые в трёх вкладках подряд, остаются одним.
-    ["Заходы", summary.visits, `${formatNumber(summary.visitors)} уник.${Number(summary.robot_visits) ? ` +${formatNumber(summary.robot_visits)} без действий` : ""}`, updates.overview],
+    ["Заходы", summary.visits, visitsNote(summary, period, data.days), updates.overview],
     ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, updates.vehicle_cars],
-    // Машины, добавленные в кабинет: человек нажал в карточке «Уточнить актуальность»,
-    // вошёл в кабинет и там завёлся заказ. Считаем по самим заказам, а не по нажатию:
-    // нажатие бывает и у тех, кто ушёл на входе. Рядом мелким — заявки, оставленные
-    // формой, минуя кабинет. Кнопка «Уточнить актуальность» внутри самого заказа
-    // отдельной цифрой больше не выводится (решение владельца 06.09.2026): пока
-    // проверка объявлений приостановлена, эта цифра ничего не решала.
-    ["Машины в кабинете", summary.cabinet_orders, `${percent(summary.cabinet_orders, summary.vehicle_views)} от просмотров авто${summary.form_requests ? ` · ещё ${formatNumber(summary.form_requests)} заявок с форм` : ""}${summary.custom_searches ? ` · ${formatNumber(summary.custom_searches)} на подбор` : ""}`, updates.cabinet_orders],
     ["Регистрации", summary.registrations, `${formatNumber(summary.favorites)} добавлений в избранное`, updates.customers],
   ];
   return (
     <>
-      <section className="analytics-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh]) => <article key={label}><span>{label}</span><strong>{Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className="analytics-kpi-split-count" /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
+      <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh]) => <article key={label}><span>{label}</span><strong>{Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className="analytics-kpi-split-count" /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
       <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
           <h2>График посещений</h2>
