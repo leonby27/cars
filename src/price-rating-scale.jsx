@@ -10,6 +10,7 @@ import {
   priceRatingAssessment,
   priceRatingBasisNote,
   priceRatingBatteryNote,
+  PRICE_RATING_DAMAGE_WARNING_SHOWN,
   priceRatingDamageWarning,
   priceRatingLimits,
   priceRatingMileageNote,
@@ -55,8 +56,9 @@ export function PriceRatingScale({ rating, priceUsd, mileage, battery, quotaPric
   const text = [priceNote?.text, batteryNote?.text, mileageNote?.text].filter(Boolean).join(" ");
   const hint = [priceRatingBasisNote(rating), priceRatingLimits(rating)].filter(Boolean).join(" ");
   // Слишком дешёвая машина — не только удача: об этом честнее сказать прямо в блоке
-  // о цене, а не оставлять человека радоваться зелёной шкале.
-  const damageWarning = priceRatingDamageWarning(assessment);
+  // о цене, а не оставлять человека радоваться зелёной шкале. Пока показ выключен,
+  // см. PRICE_RATING_DAMAGE_WARNING_SHOWN.
+  const damageWarning = PRICE_RATING_DAMAGE_WARNING_SHOWN ? priceRatingDamageWarning(assessment) : null;
   return (
     <PriceRatingCard className={`is-${verdict.tone}`} title={hint || undefined}>
       <div className="price-rating-heading">

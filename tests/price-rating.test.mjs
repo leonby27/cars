@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   chooseComparables,
   expectedPrice,
@@ -14,6 +15,7 @@ import {
   priceRatingBar,
   priceRatingBasisNote,
   priceRatingBatteryNote,
+  PRICE_RATING_DAMAGE_WARNING_SHOWN,
   priceRatingDamageWarning,
   priceRatingLimits,
   priceRatingMileageNote,
@@ -368,6 +370,13 @@ test("год сравнения виден в тексте цены, включ�
     "Такие машины 2023 года стоят в среднем 30 000 $ — эта на 3 000 $ дешевле.");
 });
 
+
+// Предупреждение снято с карточки 18.09.2026: расчёт остался, показ выключен.
+test("предупреждение о ремонте не рисуется, пока показ выключен", async () => {
+  const source = await readFile(new URL("../src/price-rating-scale.jsx", import.meta.url), "utf8");
+  assert.equal(PRICE_RATING_DAMAGE_WARNING_SHOWN, false);
+  assert.match(source, /PRICE_RATING_DAMAGE_WARNING_SHOWN \? priceRatingDamageWarning\(assessment\) : null/);
+});
 
 test("о возможном ремонте предупреждаем только в левой половине первого деления", () => {
   const rating = { count:9, sameYear:true, mileageMedian:60_000 };

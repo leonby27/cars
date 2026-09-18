@@ -10636,6 +10636,20 @@ html[data-theme="dark"] #root .spec-search,
   line-height: 1.45;
   text-align: center;
 }
+/* Ссылки в согласии — не призыв нажать, а сноска: своего цвета у них нет, только
+   подчёркивание, а при наведении текст просто становится ярче. Без этого правила
+   браузер красил их по-своему — фиолетовым цветом посещённой ссылки. */
+.availability-lead-modal .availability-lead-legal a,
+.availability-lead-modal .availability-lead-legal a:visited {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 2px;
+}
+.availability-lead-modal .availability-lead-legal a:hover,
+.auth-modal .auth-consent a:hover {
+  color: var(--ink);
+}
 .auth-registration-reveal {
   display: grid;
   grid-template-rows: 0fr;
