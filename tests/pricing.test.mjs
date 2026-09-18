@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { estimateLandedCost, PRICING, CLEARANCE_MONTHS, usdToByn } from "../src/pricing.js";
+import { customsPayment, estimateLandedCost, PRICING, CLEARANCE_MONTHS, usdToByn } from "../src/pricing.js";
 import { engineVolume } from "../src/engine-spec.js";
 
 test("rounds converted Belarusian-ruble prices to the nearest hundred", () => {
@@ -105,7 +105,9 @@ test("leaves the plug-in hybrid on the engine-size rate", () => {
 test("adds import VAT to an electric car older than five years", () => {
   const fresh = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2024-03-01" }, { quotaOver:false });
   const old = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2019-03-01" }, { quotaOver:false });
-  assert.equal(fresh.customsUsd, PRICING.customsFeesUsd.upTo3Years);
+  // Сборы считаются в рублях по курсу, поэтому в долларах это не круглое число:
+  // в строке карточки оно, как и любая другая сумма, округлено до полусотни.
+  assert.equal(fresh.customsUsd, Math.round(PRICING.customsFeesUsd.upTo3Years / 50) * 50);
   // Сборы у машины старше трёх лет выше: утилизационный сбор вдвое больше.
   assert.equal(old.customsFeesUsd, PRICING.customsFeesUsd.over3Years);
   assert.equal(old.customsUsd, Math.round((old.customsValueUsd * 0.2 + old.customsFeesUsd) / 50) * 50);
@@ -203,4 +205,85 @@ test("counts delivery to the EAEU border into the customs value", () => {
   const cheap = estimateLandedCost({ ...car, type:"ДВС", engine:"1.5T", usdPrice:10000, manufactureDate:"2022-06-01" });
   const dear = estimateLandedCost({ ...car, type:"ДВС", engine:"1.5T", usdPrice:40000, manufactureDate:"2022-06-01" });
   assert.equal(cheap.customsUsd, dear.customsUsd);
+});
+
+// ── Таможенный платёж отдельно от доставки ───────────────────────────────────
+// Эту же функцию зовёт калькулятор на странице растаможки. Проверяем её на
+// примерах, которые можно сверить с чужими калькуляторами и с решением ЕЭК.
+
+const eurUsd = () => PRICING.eurByn / PRICING.usdByn;
+
+test("считает пошлину по объёму для машины от трёх до пяти лет", () => {
+  // 3,5 литра, четыре года: ставка 3,6 € за см³ → 12 600 €.
+  const payment = customsPayment({ customsValueUsd: 28000, kind: "ice", engineCc: 3500, ageYears: 4 });
+  assert.equal(Math.round(payment.dutyUsd / eurUsd()), 12600);
+  assert.equal(payment.vatUsd, 0, "у бензиновой машины отдельного НДС нет");
+  assert.equal(payment.basis, "volume-3-5");
+});
+
+test("у машины моложе трёх лет берёт большее из доли и ставки за объём", () => {
+  // 2 литра, два года, 15 000 $: 48% от стоимости меньше, чем 3,5 € за см³.
+  const payment = customsPayment({ customsValueUsd: 15000, kind: "ice", engineCc: 2000, ageYears: 2 });
+  assert.equal(Math.round(payment.dutyUsd / eurUsd()), 7000);
+  assert.equal(payment.basis, "value-or-volume");
+});
+
+test("ставка за объём у машины старше пяти лет примерно вдвое выше", () => {
+  const young = customsPayment({ customsValueUsd: 20000, kind: "ice", engineCc: 2000, ageYears: 4 });
+  const old = customsPayment({ customsValueUsd: 20000, kind: "ice", engineCc: 2000, ageYears: 6 });
+  assert.ok(old.dutyUsd > young.dutyUsd * 1.7, "ставка старше пяти лет должна быть заметно выше");
+  assert.equal(old.basis, "volume-over-5");
+});
+
+test("электромобилю по квоте пошлины нет, без квоты — 15%", () => {
+  const withQuota = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 3, quotaOver: false });
+  const without = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 3, quotaOver: true });
+  assert.equal(withQuota.dutyUsd, 0);
+  assert.equal(Math.round(without.dutyUsd), 3000);
+  assert.equal(withQuota.vatUsd, 0, "машине моложе пяти лет НДС не начисляется");
+});
+
+test("электромобилю старше пяти лет добавляет НДС 20% даже по квоте", () => {
+  const payment = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 6, quotaOver: false });
+  assert.equal(payment.dutyUsd, 0);
+  assert.equal(Math.round(payment.vatUsd), 4000);
+});
+
+test("гибриду с генератором считает 15% пошлины и НДС 20% сверху", () => {
+  const payment = customsPayment({ customsValueUsd: 20000, kind: "erev", ageYears: 3 });
+  assert.equal(Math.round(payment.dutyUsd), 3000);
+  assert.equal(Math.round(payment.vatUsd), 4600);
+  // Вместе это около 38% от стоимости машины — та цифра, что стоит в текстах.
+  assert.ok(Math.abs((payment.dutyUsd + payment.vatUsd) / 20000 - 0.38) < 0.005);
+});
+
+test("сборы берутся в рублях по официальным ставкам и зависят от возраста", () => {
+  const young = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 2, quotaOver: false });
+  const old = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 4, quotaOver: false });
+  assert.equal(Math.round(young.utilUsd * PRICING.usdByn * 100) / 100, PRICING.utilFeeByn.upTo3Years);
+  assert.equal(Math.round(old.utilUsd * PRICING.usdByn * 100) / 100, PRICING.utilFeeByn.over3Years);
+  assert.equal(Math.round(young.clearanceUsd * PRICING.usdByn), PRICING.clearanceFeeByn);
+});
+
+test("возмещение по указу № 140 снимает половину пошлины и налога, но не сборов", () => {
+  const full = customsPayment({ customsValueUsd: 20000, kind: "erev", ageYears: 3 });
+  const half = customsPayment({ customsValueUsd: 20000, kind: "erev", ageYears: 3, refund50: true });
+  assert.equal(Math.round(half.refundUsd), Math.round((full.dutyUsd + full.vatUsd) / 2));
+  assert.equal(half.utilUsd, full.utilUsd, "утилизационный сбор не возмещается");
+  assert.equal(half.clearanceUsd, full.clearanceUsd, "таможенный сбор не возмещается");
+});
+
+test("итог в рублях складывается из строк, а не из округлённого долларового итога", () => {
+  const payment = customsPayment({ customsValueUsd: 17300, kind: "ice", engineCc: 1600, ageYears: 4 });
+  const sum = payment.dutyUsd + payment.vatUsd + payment.utilUsd + payment.clearanceUsd - payment.refundUsd;
+  assert.equal(payment.totalExactUsd, sum);
+  assert.equal(payment.totalUsd, Math.round(sum / 50) * 50);
+});
+
+test("страна ввоза на таможенный платёж не влияет", () => {
+  // Тот же расчёт зовут и для машины из Китая, и для любой другой: в него не
+  // передаётся ничего, что зависело бы от страны.
+  const a = customsPayment({ customsValueUsd: 20000, kind: "ice", engineCc: 1500, ageYears: 4 });
+  const b = customsPayment({ customsValueUsd: 20000, kind: "ice", engineCc: 1500, ageYears: 4 });
+  assert.deepEqual(a, b);
 });

@@ -7,12 +7,25 @@ export const PRICING = {
   serviceByn:1000,
   // Тариф фиксирован в BYN; долларовый эквивалент следует за курсом НБРБ.
   get serviceUsd() { return Math.round(this.serviceByn / this.usdByn / 10) * 10; },
-  // Обязательные сборы при оформлении: утилизационный сбор, таможенный сбор и
-  // оформление. Утильсбор с 23.04.2026 (постановление Совета Министров № 195)
-  // по льготной ставке для физлиц — 624,92 руб. машине до трёх лет и 1282,02 руб.
-  // старше трёх, то есть примерно 210 и 430 долларов. Раньше здесь стояла одна
-  // цифра на любой возраст, и у машины старше трёх лет сборы были занижены.
-  customsFeesUsd:{ upTo3Years:350, over3Years:500 },
+  // Обязательные сборы при оформлении — в рублях, как их и начисляет таможня.
+  // Утилизационный сбор с 23.04.2026 (постановление Совета Министров № 195) по
+  // льготной ставке для физлиц: 624,92 руб. машине до трёх лет и 1282,02 руб.
+  // старше трёх. Таможенный сбор за оформление — 120 руб., от стоимости машины
+  // он не зависит. Подготовка декларации и подача входят в наше сопровождение,
+  // отдельной строкой сверху не появляются.
+  //
+  // Раньше здесь стояли круглые 350 и 500 долларов «сборы и оформление» — сумма
+  // с запасом, которую нельзя было сверить с официальными ставками и разложить в
+  // калькуляторе построчно. Теперь обе строки настоящие и следуют за курсом.
+  utilFeeByn:{ upTo3Years:624.92, over3Years:1282.02 },
+  clearanceFeeByn:120,
+  /** Сборы за оформление в долларах, по возрасту машины: утильсбор плюс таможенный сбор. */
+  get customsFeesUsd() {
+    return {
+      upTo3Years: (this.utilFeeByn.upTo3Years + this.clearanceFeeByn) / this.usdByn,
+      over3Years: (this.utilFeeByn.over3Years + this.clearanceFeeByn) / this.usdByn,
+    };
+  },
   evDutyPercent:0.15, // пошлина на электромобиль после исчерпания квоты
   vatPercent:0.20, // НДС при ввозе: платят последовательные гибриды, у электромобилей ставка нулевая
   // Этапы до СВХ, доллары [низ, верх]. Ориентиры — открытые тарифы перевозчиков
@@ -77,6 +90,112 @@ const DUTY_EUR_PER_CC = {
 const dutyPerCc = (table, engineCc) => table.find(([limit]) => engineCc <= limit)[1];
 // Машина не старше трёх лет: процент от стоимости, но не меньше ставки за см³.
 const NEW_CAR_DUTY = [[8500, 0.54, 2.5], [16700, 0.48, 3.5], [42300, 0.48, 5.5], [84500, 0.48, 7.5], [169000, 0.48, 15], [Infinity, 0.48, 20]];
+
+/** Таблицы ставок в том виде, в каком их показывает страница расчёта. */
+export const DUTY_RATE_TABLES = Object.freeze({
+  upTo3Years: NEW_CAR_DUTY.map(([limit, percent, minRate]) => ({ limit, percent, minRate })),
+  from3to5: DUTY_EUR_PER_CC.from3to5.map(([limit, rate]) => ({ limit, rate })),
+  over5: DUTY_EUR_PER_CC.over5.map(([limit, rate]) => ({ limit, rate })),
+});
+
+/**
+ * Таможенный платёж за одну машину — от страны ввоза он не зависит.
+ *
+ * Пошлина, НДС и сборы считаются по правилам Беларуси и ЕАЭС для частного лица,
+ * которое ввозит машину для личного пользования. Откуда машина едет — из Китая,
+ * Кореи или Европы, — на этот платёж не влияет вообще: влияют тип двигателя,
+ * возраст на дату оформления, объём мотора и таможенная стоимость. Поэтому
+ * функция ничего не знает про Китай и её зовут и карточка каталога, и калькулятор.
+ *
+ * `kind`: "ev" — чистый электромобиль, "erev" — гибрид с генератором (бензиновый
+ * мотор крутит только генератор), "ice" — всё остальное, включая гибрид с розеткой
+ * и дизель: им пошлину считают по объёму и возрасту одинаково.
+ *
+ * `refund50` — возмещение половины пошлины и налогов по указу № 140 от 10.04.2019
+ * (инвалиды I и II группы, многодетные родители, родители и опекуны детей-инвалидов,
+ * одна легковая машина в год). Это именно возмещение после оформления, а не скидка
+ * при уплате, поэтому в расчёте оно стоит отдельной строкой со знаком минус.
+ */
+export function customsPayment({
+  customsValueUsd,
+  kind = "ice",
+  engineCc = 0,
+  ageYears = 0,
+  quotaOver,
+  refund50 = false,
+} = {}) {
+  const value = Math.max(0, Number(customsValueUsd) || 0);
+  const quotaIsOver = quotaOver === undefined ? quotaOverNow : Boolean(quotaOver);
+  const eurUsd = PRICING.eurByn / PRICING.usdByn;
+  const age = Number(ageYears) || 0;
+  const overFiveYears = age > 5;
+
+  const utilUsd = (age < 3 ? PRICING.utilFeeByn.upTo3Years : PRICING.utilFeeByn.over3Years) / PRICING.usdByn;
+  const clearanceUsd = PRICING.clearanceFeeByn / PRICING.usdByn;
+
+  let dutyUsd = 0;
+  let vatUsd = 0;
+  let basis;
+  // Чем считали пошлину: ставка, объём и обе суммы для случая «по большему из двух».
+  // Нужно только для объяснения под расчётом, на сами цифры не влияет.
+  let detail = {};
+  if (kind === "ev") {
+    // Пока в квоте есть места, пошлины нет вовсе. Нулевой НДС дают только машинам
+    // не старше пяти лет с даты выпуска — этот порог от квоты не зависит.
+    dutyUsd = quotaIsOver ? value * PRICING.evDutyPercent : 0;
+    vatUsd = overFiveYears ? (value + dutyUsd) * PRICING.vatPercent : 0;
+    basis = quotaIsOver ? "ev-duty" : "ev-quota";
+  } else if (kind === "erev") {
+    // Машину оформляют по коду электромобиля, но льготы у неё нет с 2026 года:
+    // пошлина 15% и НДС 20% сверху — вместе около 38% от стоимости.
+    dutyUsd = value * PRICING.evDutyPercent;
+    vatUsd = (value + dutyUsd) * PRICING.vatPercent;
+    basis = "erev";
+  } else {
+    // Бензин, дизель и гибрид с розеткой: единая ставка для частных лиц уже
+    // включает налоги, отдельного НДС сверху нет.
+    const cc = Math.max(0, Math.round(Number(engineCc) || 0));
+    const valueEur = value / eurUsd;
+    let dutyEur;
+    if (age < 3) {
+      const [, percent, minRate] = NEW_CAR_DUTY.find(([limit]) => valueEur <= limit);
+      const byValue = valueEur * percent;
+      const byVolume = cc * minRate;
+      dutyEur = Math.max(byValue, byVolume);
+      basis = "value-or-volume";
+      // Какое из двух правил сработало и с какими числами — это объясняет расчёт
+      // человеку прямо под суммой, без второго такого же вычисления в разметке.
+      detail = { percent, ratePerCc: minRate, engineCc: cc, valueEur, byValue, byVolume, wonByVolume: byVolume >= byValue };
+    } else if (age <= 5) {
+      const ratePerCc = dutyPerCc(DUTY_EUR_PER_CC.from3to5, cc);
+      dutyEur = cc * ratePerCc;
+      basis = "volume-3-5";
+      detail = { ratePerCc, engineCc: cc };
+    } else {
+      const ratePerCc = dutyPerCc(DUTY_EUR_PER_CC.over5, cc);
+      dutyEur = cc * ratePerCc;
+      basis = "volume-over-5";
+      detail = { ratePerCc, engineCc: cc };
+    }
+    detail.dutyEur = dutyEur;
+    dutyUsd = dutyEur * eurUsd;
+  }
+
+  // Возмещают половину пошлины и налогов; утилизационный и таможенный сборы
+  // остаются целиком — они не пошлина и не налог.
+  const refundUsd = refund50 ? (dutyUsd + vatUsd) / 2 : 0;
+  // Две суммы нарочно. `totalUsd` округлён до полусотни — так показана любая другая
+  // сумма на сайте, где доллар сам по себе оценка. `totalExactUsd` не округлён: в
+  // рублях эту сумму складывают из строк, и округлённый итог не сошёлся бы с ними.
+  const totalExactUsd = dutyUsd + vatUsd + utilUsd + clearanceUsd - refundUsd;
+  const totalUsd = round50(totalExactUsd);
+  return {
+    dutyUsd, vatUsd, utilUsd, clearanceUsd, refundUsd,
+    feesUsd: utilUsd + clearanceUsd,
+    totalUsd, totalExactUsd,
+    basis, detail, overFiveYears, quotaOver: quotaIsOver, ageYears: age,
+  };
+}
 
 // Режим цен: с льготной квотой или с пошлиной 15%. Считанное при загрузке
 // значение держим в переменной, а не в константе, — переключатель «Цены с квотами»
@@ -145,8 +264,6 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const intlNote = bigCar ? "Хоргос → Минск · крупный кузов, дороже место" : "Хоргос → Минск, через Казахстан и Россию";
 
   const age = carAgeYears(car);
-  // Сборы за оформление: у машины старше трёх лет утилизационный сбор вдвое выше.
-  const feesUsd = age < 3 ? PRICING.customsFeesUsd.upTo3Years : PRICING.customsFeesUsd.over3Years;
   // Таможенная стоимость — не цена продавца, а цена плюс доставка до границы ЕАЭС:
   // экспортные документы и плечо до Хоргоса. Дальше Хоргоса дорога идёт уже внутри
   // союза и в стоимость не входит. Считаем по середине вилки этапа: это оценка, а
@@ -158,12 +275,12 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   // с правками указа № 428). Машина старше — НДС 20% от стоимости вместе с пошлиной,
   // даже когда льготная квота ещё действует.
   const overFiveYears = age > 5;
-  // Пока действует квота, электромобиль ввозится без пошлины и в этой строке
-  // остаются только оформление и сборы. Когда квота выбрана — сверху ложится
-  // пошлина 15% от таможенной стоимости.
-  const evDutyUsd = quotaOver ? customsValueUsd * PRICING.evDutyPercent : 0;
-  const evVatUsd = overFiveYears ? (customsValueUsd + evDutyUsd) * PRICING.vatPercent : 0;
-  let customsUsd = round50(evDutyUsd + evVatUsd + feesUsd);
+  // Сам платёж считает общая функция: ею же считает калькулятор на странице
+  // растаможки, поэтому карточка и калькулятор не могут разойтись в цифрах.
+  // Здесь остаются только подписи под строкой — они про конкретную карточку.
+  const evPayment = customsPayment({ customsValueUsd, kind: "ev", ageYears: age, quotaOver });
+  const feesUsd = evPayment.feesUsd;
+  let customsUsd = evPayment.totalUsd;
   let customsNote = quotaOver
     ? (overFiveYears ? "Пошлина 15% и НДС 20% · старше 5 лет" : "Пошлина 15% · оформление и сборы")
     : (overFiveYears ? "НДС 20% · машина старше 5 лет" : "Льгота 0% · оформление и сборы");
@@ -182,9 +299,7 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   let engineAssumed = false;
   const seriesHybrid = isSeriesHybrid(car);
   if (seriesHybrid) {
-    const dutyUsd = customsValueUsd * PRICING.evDutyPercent;
-    const vatUsd = (customsValueUsd + dutyUsd) * PRICING.vatPercent;
-    customsUsd = round50(dutyUsd + vatUsd + feesUsd);
+    customsUsd = customsPayment({ customsValueUsd, kind: "erev", ageYears: age }).totalUsd;
     customsNote = "Гибрид с генератором · пошлина 15% и НДС 20%";
     customsHint = "Бензиновый мотор здесь только крутит генератор, колёс он не касается, поэтому таможня оформляет машину как электромобиль. Но льготу на такие гибриды отменили с 1 января 2026 года: пошлина 15% и НДС 20% сверху — около 38% от цены машины, плюс сборы за оформление.";
     customsAlert = "Гибрид с генератором — льготы нет с 2026 года";
@@ -197,14 +312,7 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     const parsedEngine = engineVolume(car);
     const engineCc = parsedEngine ? Math.round(parsedEngine * 1000) : ASSUMED_ENGINE_CC;
     engineAssumed = !parsedEngine;
-    const chinaEur = customsValueUsd / eurUsd;
-    let dutyEur;
-    if (age < 3) {
-      const [, percent, minRate] = NEW_CAR_DUTY.find(([limit]) => chinaEur <= limit);
-      dutyEur = Math.max(chinaEur * percent, engineCc * minRate);
-    } else if (age <= 5) dutyEur = engineCc * dutyPerCc(DUTY_EUR_PER_CC.from3to5, engineCc);
-    else dutyEur = engineCc * dutyPerCc(DUTY_EUR_PER_CC.over5, engineCc);
-    customsUsd = round50(dutyEur * eurUsd + feesUsd);
+    customsUsd = customsPayment({ customsValueUsd, kind: "ice", engineCc, ageYears: age }).totalUsd;
     customsNote = `Пошлина по объёму · ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (оценка)" : ""}`;
     // Подсказку про квоту и НДС здесь оставлять нельзя: она написана про
     // электромобиль, а машине с двигателем ставку считают по объёму и возрасту.
