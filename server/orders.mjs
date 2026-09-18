@@ -1,5 +1,6 @@
 import { pool } from "./db.mjs";
 import { getSessionAccount } from "./auth.mjs";
+import { notifyLead } from "./lead-notify.mjs";
 
 const orderSelect = `SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,o.availability_confirmed_at,
   o.contact_name,o.contact_phone,o.contact_methods,o.contact_saved_at,o.contact_consent_at,
@@ -136,7 +137,23 @@ export async function updateCustomerOrder(request, orderId, action, values = {})
       const existing = await getOrder(account.id, orderId);
       return existing ? { error:"order_action_unavailable", order:existing } : { error:"order_not_found" };
     }
-    return { order:await getOrder(account.id, orderId) };
+    const order = await getOrder(account.id, orderId);
+    // Заявка из кабинета уходит в телеграм тем же сообщением, что и заявка с формы:
+    // менеджеру всё равно, откуда её оставили.
+    notifyLead({
+      kind:"availability",
+      source:"account",
+      staff:account.staff === true,
+      orderNumber:order.orderNumber,
+      name:order.contactName || account.name,
+      contact:order.contactPhone || account.phone,
+      methods:order.contactMethods,
+      telegram:account.telegram,
+      email:account.email,
+      listingId:order.listingId,
+      comment,
+    });
+    return { order };
   }
   const transition = actionUpdates[action];
   if (!transition) return { error:"invalid_order_action" };
