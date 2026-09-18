@@ -77,6 +77,40 @@ export const TOOL_PAGES = Object.freeze([
 
 const BY_PATH = new Map(TOOL_PAGES.map((page) => [page.path, page]));
 
+const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+
+/**
+ * Дата под заголовком страницы-расчёта: «данные на такое-то число».
+ *
+ * Зачем видимая дата, когда в разметке уже есть `dateModified`: за этими страницами
+ * приходят именно за цифрой — сколько осталось квоты, сколько стоит растаможка. И
+ * человек, и пересказывающий нас чат-бот первым делом спрашивают, на когда цифра.
+ * Без даты свежий расчёт выглядит так же, как забытый год назад.
+ *
+ * Дата настоящая, а не день сборки. У квоты это день последней сводки таможни — той
+ * самой, откуда взят остаток. У остальных страниц суммы в рублях считаются по курсу
+ * Нацбанка, и его дата (`PRICING.rateDate`) и есть честный ответ «на когда». Ставки
+ * пошлин меняются раз в годы, курс — каждую ночь, поэтому по курсу и датируем.
+ */
+export function toolUpdatedLabel(tool) {
+  const day = (value) => {
+    const date = value instanceof Date ? value : null;
+    if (!date || Number.isNaN(date.getTime())) return null;
+    return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+  };
+  if (tool?.kind === "quota") {
+    // Год здесь обязателен, хотя в шапке сайта сводка подписана без него: эту строку
+    // цитируют вместе с цифрой остатка, и «на 5 сентября» без года ничего не значит.
+    const label = day(new Date(evQuotaState({ audience: "personal" }).asOfMs));
+    return label ? `Данные на ${label}` : null;
+  }
+  // rateDate приходит из pricing.js в виде «18.09.2026».
+  const parts = String(PRICING.rateDate || "").split(".");
+  if (parts.length !== 3) return null;
+  const parsed = day(new Date(Date.UTC(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]))));
+  return parsed ? `Ставки и курсы на ${parsed}` : null;
+}
+
 /** Страница-инструмент по адресу или null. */
 export const findToolPage = (path) => BY_PATH.get(String(path || "").replace(/\/+$/, "")) || null;
 

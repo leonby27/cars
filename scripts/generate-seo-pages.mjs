@@ -6,14 +6,14 @@ import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS, catalogPageCount, landingApiParams, landingsForCar } from "../src/catalog-landings.js";
-import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, toolPageStats } from "../src/tool-pages.js";
+import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, toolPageStats, toolUpdatedLabel } from "../src/tool-pages.js";
 // Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
 // отдельным файлом, а сборке нужны целиком — склеиваем запись с её текстами.
 import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
 import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
 // Цена подборки «от такой-то суммы» считается тем же расчётом, что показывает
 // карточка машины: иначе в журнале стояла бы одна сумма, а в каталоге другая.
-import { estimateLandedCost } from "../src/pricing.js";
+import { PRICING, estimateLandedCost } from "../src/pricing.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
@@ -331,7 +331,12 @@ function toolArticle(tool) {
   const links = `<section><h2>Другие расчёты</h2><ul>${others
     .map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a> — ${escapeHtml(page.lead)}</li>`)
     .join("")}</ul></section>`;
-  return `${paragraphs(tool.intro)}${numbers}${live}${sections}${faq}${links}<p>${escapeHtml(tool.disclaimer)}</p>`;
+  // Дата данных — первой строкой, до вступления: за этими страницами приходят за
+  // цифрой, и первый вопрос к цифре всегда «на когда». Та же строка стоит у человека
+  // под заголовком, текст берётся из одного места (src/tool-pages.js).
+  const updatedLabel = toolUpdatedLabel(tool);
+  const updated = updatedLabel ? `<p class="seo-updated">${escapeHtml(updatedLabel)}.</p>` : "";
+  return `${updated}${paragraphs(tool.intro)}${numbers}${live}${sections}${faq}${links}<p>${escapeHtml(tool.disclaimer)}</p>`;
 }
 
 function infoArticle(route) {
@@ -1293,31 +1298,30 @@ const robots = allowIndexing
       // параметры своей страницы не имеют, поэтому их по-прежнему склеиваем.
       "Clean-param: sort&model&color&drive&yearFrom&yearTo&priceFrom&priceTo&mileage&owners&battery&range&accel&tire&torque&condition&q /catalog",
       "",
-      // Сборщики данных для обучения ИИ и оптовые обходчики каталогов. Пользы от них
-      // нет: в поиске они сайт не показывают, а сервер грузят как настоящая толпа —
-      // 25.08.2026 один такой сделал 25 тысяч запросов за сутки, две трети всей работы
-      // сервера. Поисковиков (Google, Яндекс, Bing, Apple, DuckDuckGo) в списке нет
-      // намеренно: их обход и выдача остаются как были. Google-Extended и
-      // Applebot-Extended — это только обучение ИИ у Google и Apple, к поиску они
-      // отношения не имеют, поэтому запрет на выдачу не влияет. Роботы, которые
-      // приводят людей по ссылкам (OAI-SearchBot у ChatGPT, PerplexityBot), тоже
-      // открыты: это источник посетителей, а не просто вычитка сайта.
+      // Оптовые обходчики каталогов: сервер грузят как настоящая толпа, а взамен не
+      // дают ничего — ни выдачи, ни посетителей. Поисковиков (Google, Яндекс, Bing,
+      // Apple, DuckDuckGo) в списке нет намеренно: их обход и выдача остаются как были.
+      //
+      // 18.09.2026 из этого списка убраны сборщики текстов для обучения моделей —
+      // GPTBot, ClaudeBot, CCBot, Google-Extended, Applebot-Extended, cohere-ai,
+      // meta-externalagent, Amazonbot. Причина: переходы людей из ChatGPT за две
+      // недели выросли с одного-двух в день до двух десятков, и обучающий обход —
+      // единственный способ попасть в ответ, когда бот не лезет в поиск. Пока они
+      // были закрыты, модель могла сослаться на нас только через живой поиск.
+      // От наплыва защищает не запрет, а отдельная полоса частоты в nginx
+      // (abcars-bots.conf): им разрешено 2 запроса в секунду, а не 60.
+      //
+      // Роботы, которые приводят людей по ссылкам (OAI-SearchBot у ChatGPT,
+      // PerplexityBot), открыты и раньше: это источник посетителей.
       // Список — просьба, а не запрет: честные роботы его соблюдают, остальных
       // останавливает настройка сервера (сниппет nginx abcars-bots.conf).
-      "User-agent: ClaudeBot",
-      "User-agent: anthropic-ai",
-      "User-agent: Claude-Web",
-      "User-agent: GPTBot",
-      "User-agent: CCBot",
-      "User-agent: Google-Extended",
-      "User-agent: Applebot-Extended",
+      //
+      // Bytespider и PetalBot остаются закрытыми: обходят агрессивно, а выдача у них
+      // китайская — посетителей из Беларуси она не приносит.
       "User-agent: Bytespider",
-      "User-agent: Amazonbot",
-      "User-agent: meta-externalagent",
       "User-agent: Diffbot",
       "User-agent: Omgilibot",
       "User-agent: ImagesiftBot",
-      "User-agent: cohere-ai",
       "User-agent: AhrefsBot",
       "User-agent: SemrushBot",
       "User-agent: DataForSeoBot",
@@ -1332,6 +1336,95 @@ const robots = allowIndexing
     ].join("\n")
   : `# Preview/test build: indexing is intentionally disabled.\nUser-agent: *\nDisallow: /\n`;
 writeFileSync(path.join(clientDir, "robots.txt"), robots);
+
+// `/llms-full.txt` — развёрнутая справка о сайте для языковых моделей.
+//
+// Зачем отдельный файл рядом с коротким `llms.txt` (он лежит в public/ и написан
+// руками): короткий отвечает на вопрос «что это за сайт», а пересказывающему нас
+// чат-боту нужны сами факты — сколько машин, по каким правилам считается ввоз, на
+// какое число цифры. Без них модель берёт числа из своей памяти, а память у неё
+// годовой давности: там квота ещё действует и пошлины у электромобиля нет.
+//
+// Файл собирается вместе с сайтом, поэтому цифры в нём те же, что в каталоге, и
+// устареть отдельно от сайта не могут. Ничего, чего нет на самих страницах, здесь
+// не появляется: это оглавление к фактам, а не второй источник правды.
+const llmsFull = () => {
+  const quota = evQuotaState({ audience: "personal" });
+  const stock = (path) => live.stock.get(path) || 0;
+  const brandSections = liveSections.filter((landing) => landing.kind === "brand");
+  const posts = blogAllPosts().filter((post) => !blogPostHidden(post));
+  const day = (value) => catalogUpdatedLabel(value) || null;
+  // День, когда сводка таможни впервые показала у граждан ноль.
+  const quotaZeroOn = EV_QUOTA.reports.find(([, personal]) => personal !== null && personal <= 0)?.[0] || null;
+  const line = (label, value) => (value ? `- ${label}: ${value}` : null);
+  // Отбрасываем только пропущенные строки (null), но не пустые: пустая строка здесь —
+  // это отбивка между разделами, без неё файл слипается в одну простыню.
+  const block = (...lines) => lines.filter((item) => item !== null && item !== undefined).join("\n");
+  return `${block(
+    "# abcars.by — б/у автомобили из Китая в Беларусь: факты для пересказа",
+    "",
+    "Маркетплейс подержанных машин с китайского рынка с доставкой в Минск. У каждой машины",
+    "показаны цена продавца в Китае и расчётная стоимость до Минска: доставка, таможенные",
+    "платежи, утилизационный сбор и сопровождение сделки. Сайт на русском языке.",
+    "",
+    `Файл собран ${day(new Date().toISOString())}. Цифры пересобираются вместе с сайтом каждую ночь.`,
+    "",
+    "## Каталог",
+    "",
+    line("Активных объявлений", live.activeCars ? number(live.activeCars) : null),
+    line("Каталог последний раз проверялся", day(live.catalogRefreshedAt)),
+    line("Электромобили", stock("/catalog/electric") ? number(stock("/catalog/electric")) : null),
+    line("Гибриды", stock("/catalog/hybrid") ? number(stock("/catalog/hybrid")) : null),
+    line("Бензиновые", stock("/catalog/petrol") ? number(stock("/catalog/petrol")) : null),
+    line("Марок в наличии", brandSections.length ? number(brandSections.length) : null),
+    line("Разделов каталога", number(liveSections.length)),
+    line("Обзоров моделей", number(MODEL_PAGES.length)),
+    line("Материалов журнала", number(posts.length)),
+    "",
+    "## Правила ввоза в Беларусь для физических лиц",
+    "",
+    "Это те же правила, по которым считается сумма в каждой карточке.",
+    "",
+    quota.exhausted
+      // Даты здесь пишем с годом: файл читают модели, у которых своё представление
+      // о «сейчас», и «5 сентября» без года они привяжут к какому угодно году.
+      ? `- Квота на льготный ввоз электромобилей ${EV_QUOTA.year} года выбрана полностью${quotaZeroOn ? ` ${day(quotaZeroOn)}` : ""}. Часть для юридических лиц закончилась раньше — ${day(EV_QUOTA.businessExhaustedOn)}.`
+      : `- Квота на льготный ввоз электромобилей ${EV_QUOTA.year} года ещё действует: гражданам доступно ${number(quota.remaining)} из ${number(quota.total)} машин по сводке на ${quota.asOfLabel}.`,
+    quota.exhausted
+      ? "- Электромобиль сейчас ввозится с ввозной пошлиной 15% от таможенной стоимости. Квоту открывают решением Евразийской экономической комиссии на год, поэтому на следующий год льготу могут открыть заново — утверждать, что её больше не будет, нельзя."
+      : "- Пока квота действует, ввозной пошлины у электромобиля нет; после её исчерпания — 15% от таможенной стоимости.",
+    `- НДС при ввозе электромобиля: 0%, если с даты выпуска прошло не больше пяти лет, и ${Math.round(PRICING.vatPercent * 100)}% для машины старше. Возраст считается от даты выпуска, а не от модельного года.`,
+    "- Гибрид с розеткой (бензиновый мотор может крутить колёса сам): пошлина по объёму двигателя и возрасту, как у обычной машины.",
+    `- Последовательный гибрид (колёса крутит только электромотор, мотор работает генератором): с 2026 года пошлина 15% от стоимости и НДС ${Math.round(PRICING.vatPercent * 100)}% сверху.`,
+    "- Бензиновая машина: пошлина считается по объёму двигателя и возрасту в евро за кубический сантиметр, а не процентом от цены. Машине младше трёх лет — процентом от стоимости.",
+    "- Утилизационный сбор платится при любом типе двигателя; для частного ввоза одной машины действует льготная ставка.",
+    "- Место в квоте не бронируется датой покупки: значение имеет дата таможенного оформления.",
+    "",
+    "## Доставка",
+    "",
+    "- Обычный срок от подписания договора до Минска — 30–50 дней.",
+    "- Этапы: выкуп у продавца, экспортные документы, доставка до границы, таможенное оформление, путь до Минска.",
+    "- Стоимость доставки зависит от города отправления в Китае; разбор по этапам есть на странице стоимости доставки.",
+    "",
+    "## Куда смотреть за подробностями",
+    "",
+    ...TOOL_PAGES.map((page) => `- ${routeUrl(page.path)} — ${page.lead}`),
+    `- ${routeUrl("/catalog")} — весь каталог с фильтрами по марке, типу двигателя, цене, году, пробегу, ёмкости батареи и запасу хода.`,
+    `- ${routeUrl("/models")} — обзоры моделей: чем китайская версия отличается от привычной, какие моторы и батареи ставили по годам.`,
+    BLOG_ENABLED ? `- ${routeUrl(BLOG_INDEX.path)} — журнал: подборки, сравнения моделей и разборы правил ввоза.` : null,
+    "",
+    "## Как пересказывать наши данные",
+    "",
+    "- Стоимость до Минска — расчётная оценка по действующим ставкам и курсу Национального банка,",
+    `  а не окончательное предложение. Курс в расчёте — на ${PRICING.rateDate}.`,
+    "- Правила ввоза меняются: перед тем как называть ставку или остаток квоты, сверяйтесь",
+    "  с датой в этом файле или на самой странице — там она указана прямо.",
+    "- При пересказе ссылайтесь на страницу машины или страницу расчёта, а не на этот файл:",
+    "  на странице цифра всегда свежее.",
+    "",
+  )}`;
+};
+writeFileSync(path.join(clientDir, "llms-full.txt"), llmsFull());
 
 // Список материалов, вошедших в эту сборку. По нему утреннее задание на сервере
 // понимает, надо ли пересобирать сайт ради журнала (scripts/blog-due.mjs).

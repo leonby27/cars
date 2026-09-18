@@ -20,6 +20,7 @@ import { cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS } from "../config/import-policy.mjs";
 import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
+import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
@@ -45,7 +46,7 @@ import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
 import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EXAMPLE } from "./service-copy.js";
 import { InspectionReport } from "./inspection-report.jsx";
-import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats } from "./tool-pages.js";
+import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
@@ -6352,6 +6353,37 @@ function CatalogLandingFaq({ landing, total, guide = null, navigate }) {
   );
 }
 
+/* Частые вопросы в карточке машины. Те же плашки, что у разделов каталога и обзоров,
+   но ответы считаются по этой машине: итог до Минска с разбивкой, платежи на таможне
+   по её типу двигателя и возрасту, что смотрят при проверке (src/car-faq.js). Блок
+   стоит в конце левой колонки — после характеристик и «О модели», перед ссылками в
+   каталог: человек к этому месту уже прочитал карточку, и дальше у него остаются
+   ровно эти вопросы. У проданной машины блока нет, его отсекает сам carFaq. */
+function VehicleFaq({ car, navigate }) {
+  const faq = carFaq(car, estimateLandedCost(car));
+  if (!faq.length) return null;
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faq.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: plainInlineText(item.a) },
+    })),
+  };
+  return (
+    <div className="catalog-landing-faq">
+      <h3>{carFaqTitle(car)}</h3>
+      <HomeFaqList
+        className="catalog-landing-faq-list"
+        items={faq.map((item) => ({ question: item.q, answer: item.a }))}
+        navigate={navigate}
+      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+    </div>
+  );
+}
+
 function GalleryModal({ car, images, initialIndex, onClose }) {
   const imageRefs = useRef([]);
   const thumbRefs = useRef([]);
@@ -7796,6 +7828,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           )}
           <TechnicalSpecs car={car} />
           {modelPage && <ModelIntroCard modelPage={modelPage} car={car} navigate={navigate} />}
+          <VehicleFaq car={car} navigate={navigate} />
           {/* Куда идти за объяснением сметы — в самом низу карточки, строками с
               иконками. Раньше эти ссылки стояли внутри разбора цены и терялись в
               нём; человек, который дочитал страницу, дальше либо считает другую
@@ -9260,6 +9293,7 @@ function ContactsPage({ navigate, theme }) {
    страница для поисковика: два места писали бы по-разному. */
 function ToolPage({ tool, navigate }) {
   const stats = toolPageStats(tool.kind);
+  const updatedLabel = toolUpdatedLabel(tool);
   // Тексты страницы лежат отдельным файлом (см. src/tool-page-text-load.js).
   // По прямой ссылке они уже загружены до запуска приложения (src/main.jsx);
   // при переходе внутри сайта доезжают за долю секунды, и до этого страница
@@ -9304,6 +9338,10 @@ function ToolPage({ tool, navigate }) {
               )}
               <h1>{tool.h1}</h1>
               <p>{tool.lead}</p>
+              {/* На когда цифры. Ставим у заголовка, а не в подвале: за этими
+                  страницами приходят именно за числом, и первый вопрос к нему —
+                  насколько оно свежее. Текст общий с версией для поисковика. */}
+              {updatedLabel ? <p className="tool-page-updated">{updatedLabel}</p> : null}
             </div>
           </section>
           <article className="model-page-article">

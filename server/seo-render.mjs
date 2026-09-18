@@ -16,6 +16,7 @@ import { carTitleDetails } from "../src/car-title.js";
 import { brandNotice } from "../src/brand-notice.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
+import { carFaq, carFaqTitle } from "../src/car-faq.js";
 import { brandLandingPath, landingHeading } from "../src/catalog-landings.js";
 import { brandGuideConfig, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, ZEEKR_BUDGETS } from "../src/brand-guide.js";
 
@@ -522,7 +523,13 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const sectionBlock = sections.length
       ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${relatedBlock}${sectionBlock}</main>${footer()}`;
+    // Частые вопросы про эту машину: числа в ответах — её собственные (см. src/car-faq.js).
+    // У проданной машины блока нет: её страница живёт только ради прямых ссылок.
+    const questions = carFaq(car, landed);
+    const faqBlock = questions.length
+      ? `<section><h2>${escapeHtml(carFaqTitle(car))}</h2>${questions.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
+      : "";
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${faqBlock}${relatedBlock}${sectionBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({
@@ -536,7 +543,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         image: schemaPhoto,
         type: "product",
         indexable,
-        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [titleText, route]]), schema],
+        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [titleText, route]]), schema, ...(questions.length ? [faqSchema(questions)] : [])],
       }),
     };
   }

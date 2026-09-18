@@ -13670,6 +13670,17 @@ html[data-theme="dark"] .model-page-back:hover {
   line-height: 30px;
   letter-spacing: 0;
 }
+/* «Данные на такое-то число» под аннотацией страницы-расчёта. Мельче и приглушённее
+   аннотации: это сноска к цифрам, а не часть обещания страницы. Правило идёт после
+   общего и по весу его перекрывает — иначе строка встала бы тем же кеглем 21px. */
+.model-page-hero-copy > p.tool-page-updated {
+  margin: 12px 0 0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted);
+}
 .model-page-hero .info-actions .primary,
 .model-page-hero .info-actions .secondary {
   padding: 0 20px;

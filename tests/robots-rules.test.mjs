@@ -158,17 +158,27 @@ test("на тестовой сборке закрыто всё", async () => {
   assert.equal(allowed(rules, "/cars/59372753"), false);
 });
 
-// Роботов, которые вычитывают сайт для обучения ИИ и для оптовых SEO-сервисов, мы
-// закрыли: пользы от них нет, а сервер они грузят как настоящая толпа. Поисковики
-// при этом обязаны остаться открытыми — иначе сайт выпадет из выдачи.
-test("поисковики открыты, а сборщики данных для ИИ закрыты", async () => {
+// Поисковики и роботы чат-ботов открыты, оптовые обходчики закрыты.
+//
+// 18.09.2026 сборщики текстов для обучения моделей (GPTBot, ClaudeBot, CCBot и
+// прочие) переведены из закрытых в открытые: переходы людей из ChatGPT растут, а
+// обучающий обход — единственный путь попасть в ответ, когда бот не идёт в поиск.
+// Тест держит границу с той стороны, где она осталась: Bytespider, PetalBot и
+// SEO-сервисы по-прежнему закрыты, личные разделы закрыты для всех.
+test("поисковики и роботы чат-ботов открыты, оптовые обходчики закрыты", async () => {
   const rules = await robots({ SEO_ALLOW_INDEXING: "1" });
-  for (const agent of ["Googlebot", "Googlebot-Image", "Google-InspectionTool", "YandexBot", "Bingbot", "Applebot", "DuckDuckBot", "OAI-SearchBot", "PerplexityBot"]) {
+  const welcome = [
+    "Googlebot", "Googlebot-Image", "Google-InspectionTool", "YandexBot", "Bingbot", "Applebot", "DuckDuckBot",
+    "OAI-SearchBot", "PerplexityBot",
+    // Обучающие обходчики моделей — открыты с 18.09.2026.
+    "GPTBot", "ClaudeBot", "CCBot", "Google-Extended", "Applebot-Extended", "cohere-ai", "meta-externalagent", "Amazonbot",
+  ];
+  for (const agent of welcome) {
     assert.equal(allowed(rules, "/", agent), true, `${agent} должен видеть главную`);
     assert.equal(allowed(rules, "/cars/59372753", agent), true, `${agent} должен видеть карточку машины`);
     assert.equal(allowed(rules, "/catalog/byd", agent), true, `${agent} должен видеть раздел каталога`);
   }
-  for (const agent of ["ClaudeBot", "GPTBot", "CCBot", "Bytespider", "AhrefsBot", "SemrushBot", "MJ12bot", "DataForSeoBot"]) {
+  for (const agent of ["Bytespider", "PetalBot", "AhrefsBot", "SemrushBot", "MJ12bot", "DataForSeoBot"]) {
     assert.equal(allowed(rules, "/", agent), false, `${agent} должен быть закрыт`);
     assert.equal(allowed(rules, "/cars/59372753", agent), false, `${agent} должен быть закрыт`);
   }
@@ -180,6 +190,6 @@ test("поисковики открыты, а сборщики данных дл
   const rules = await robots({ SEO_ALLOW_INDEXING: "1" });
   for (const url of ["/api/cars", "/api/cars?limit=99&offset=99", "/api/cars/58806987", "/api/cars/summary?brand=BYD", "/api/catalog/meta", "/api/catalog/meta?brand=BYD", "/api/model-facts?model=Han", "/api/brand-guide?brand=Zeekr&version=3"]) {
     for (const agent of ["Googlebot", "Google-InspectionTool", "YandexBot", "Bingbot"]) assert.equal(allowed(rules, url, agent), true, `${agent}: ${url}`);
-    assert.equal(allowed(rules, url, "GPTBot"), false);
+    assert.equal(allowed(rules, url, "Bytespider"), false);
   }
 });

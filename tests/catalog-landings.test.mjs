@@ -5,6 +5,7 @@ import { EXCLUDED_BRANDS, IMPORT_BRANDS, MAINSTREAM_IMPORT_BRANDS } from "../con
 import { visibleLandings } from "../server/catalog-page.mjs";
 import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
+import { isEvQuotaExhausted } from "../src/ev-quota.js";
 
 const shell = `<!doctype html>
 <html lang="ru">
@@ -360,8 +361,17 @@ test("вопросы раздела зависят от типа двигате�
 
   const electric = render().landingPage({ landing: findCatalogLanding("/catalog/electric"), cars, total: 21209 }).html;
   assert.match(electric, /Какие платежи ждут электромобиль на таможне\?/);
-  // Обещания «пошлины нет навсегда» в ответе быть не должно: квота заканчивается.
-  assert.match(electric, /когда квота закончится, добавится пошлина 15%/);
+  // Ответ про пошлину пишется по факту, а не одной формулировкой на оба случая.
+  // Пока квота есть — нулевая ставка и предупреждение, что она кончится; когда
+  // выбрана — действующие 15% и оговорка, что льготу могут открыть на следующий год.
+  // Чего быть не должно ни в одном случае — «пошлины нет» без срока: после
+  // обнуления квоты это читалось бы как действующая льгота.
+  assert.match(
+    electric,
+    isEvQuotaExhausted()
+      ? /выбрана [^«]*?поэтому сейчас электромобиль растамаживается с пошлиной 15%/
+      : /когда квота закончится, добавится пошлина 15%/,
+  );
 
   // У марки тип двигателя разный, поэтому вопрос общий — про то, от чего зависит сумма.
   const brand = render().landingPage({ landing: findCatalogLanding("/catalog/haval"), cars, total: 2142 }).html;
