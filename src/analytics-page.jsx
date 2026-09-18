@@ -199,7 +199,7 @@ function LeadsSection({ leads, loading, error, unavailable, reload, period }) {
       <section className="analytics-panel">
         <div className="analytics-panel-heading">
           <div><h2>Заявки клиентов</h2><p>Автомобиль, контакты и комментарий — всё, что нужно, чтобы перезвонить</p></div>
-          <button className="analytics-reset-button" type="button" onClick={reload} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button>
+          <button className="analytics-reset-button" type="button" onClick={() => reload()} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button>
         </div>
         <div className="lead-toolbar">
           <div className="analytics-range" aria-label="Тип заявки">
@@ -277,6 +277,16 @@ function AnalyticsSplitCount({ total = 0, fresh = 0, className = "" }) {
 // Под «Заходами» цифра сама по себе ничего не говорит, поэтому подписью идёт тот же
 // отрезок суток вчера и среднее за неделю до этого. У многодневных срезов сравнивать
 // не с чем — там показываем, сколько заходов приходится на день внутри периода.
+// График показывает либо заходы, либо просмотры карточек: рост просмотров говорит о
+// том, доходят ли посетители до самих машин, а не только до статей.
+// Как часто открытая страница сама перечитывает цифры. Минута — компромисс: заявка
+// и так приходит в телеграм сразу, а здесь важнее, чтобы вкладка, открытая с утра, к
+// вечеру не показывала утренние числа.
+const ANALYTICS_REFRESH_MS = 60_000;
+
+const trendMetrics = [["visits", "Посещения"], ["views", "Просмотры"]];
+const trendMetricIds = trendMetrics.map(([id]) => id);
+
 const visitsNote = (summary, period, days) => {
   const previous = summary.visits_previous;
   if (previous === null || previous === undefined) return `В среднем ${average(summary.visits, days)} в день`;
@@ -292,10 +302,14 @@ function OverviewSection({ data, period, updates = {} }) {
   const [trendLoading, setTrendLoading] = useState(true);
   const [trendError, setTrendError] = useState("");
   const trendCache = useRef(new Map());
+  const [trendMetric, setTrendMetric] = usePersistedChoice("analytics:trend-metric", trendMetricIds, "visits");
   const [showYandex, setShowYandex] = usePersistedChoice("analytics:trend-yandex", ["0", "1"], "0");
   const [showGoogle, setShowGoogle] = usePersistedChoice("analytics:trend-google", ["0", "1"], "0");
   const daily = trendData?.daily || [];
   const enabledSources = [showYandex === "1" ? "yandex" : "", showGoogle === "1" ? "google" : ""].filter(Boolean);
+  // Кроме смены периода график перезапрашивается и на каждом круге самообновления
+  // страницы: `generatedAt` у свежего среза другой. Пока летит новый ответ, на экране
+  // остаётся прежний график — мигания нет.
   useEffect(() => {
     const controller = new AbortController();
     const cached = trendCache.current.get(trendPeriod);
@@ -312,7 +326,7 @@ function OverviewSection({ data, period, updates = {} }) {
       .catch((error) => { if (error.name !== "AbortError") setTrendError("Не удалось загрузить график."); })
       .finally(() => { if (!controller.signal.aborted) setTrendLoading(false); });
     return () => controller.abort();
-  }, [trendPeriod]);
+  }, [trendPeriod, data.generatedAt]);
   // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
   // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
   const cards = [
@@ -332,14 +346,19 @@ function OverviewSection({ data, period, updates = {} }) {
       <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh]) => <article key={label}><span>{label}</span><strong>{Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className="analytics-kpi-split-count" /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
       <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
-          <h2>График посещений</h2>
+          <h2>График</h2>
+          <div className="analytics-range analytics-trend-tabs" aria-label="Что показывать на графике">
+            {trendMetrics.map(([id, label]) => <button key={id} type="button" className={trendMetric === id ? "active" : ""} onClick={() => setTrendMetric(id)}>{label}</button>)}
+          </div>
           <div className="analytics-trend-controls">
             <TrendPeriodSelect value={trendPeriod} onChange={setTrendPeriod} />
-            <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
-            <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
+            {trendMetric === "visits" && <>
+              <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
+              <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
+            </>}
           </div>
         </div>
-        {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
+        {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} metric={trendMetric} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
       </section>
       <PromoSection summary={summary} />
       <VisitsSection visits={data.visits || []} total={summary.visits} unread={updates.overview} />
@@ -790,7 +809,7 @@ function ContactInterestSection({ data, fresh = {} }) {
       {cards.map(([label, key, note]) => {
         const value = Number(summary[key]) || 0;
         const newAmount = Math.max(0, Number(fresh[key]) || 0);
-        return <article key={key}><span>{label}</span><strong className="analytics-contact-value">{formatNumber(value)}{newAmount ? <b className="analytics-contact-fresh" title={`Нового с прошлого просмотра (независимо от выбранного периода): ${formatNumber(newAmount)}`}>+{formatNumber(newAmount)}</b> : null}</strong><p>{note}</p></article>;
+        return <article key={key} className={value ? undefined : 'analytics-kpi-zero'}><span>{label}</span><strong className="analytics-contact-value">{formatNumber(value)}{newAmount ? <b className="analytics-contact-fresh" title={`Нового с прошлого просмотра (независимо от выбранного периода): ${formatNumber(newAmount)}`}>+{formatNumber(newAmount)}</b> : null}</strong><p>{note}</p></article>;
       })}
     </section>
   );
@@ -1175,9 +1194,8 @@ export function AnalyticsPage() {
   const dashboardRequest = useRef(0);
   const periodRef = useRef(period);
   periodRef.current = period;
-  const loadLeads = async () => {
-    setLeadsLoading(true);
-    setLeadsError("");
+  const loadLeads = async ({ silent = false } = {}) => {
+    if (!silent) { setLeadsLoading(true); setLeadsError(""); }
     try {
       const response = await fetch("/api/analytics/leads", { cache:"no-store", credentials:"same-origin" });
       if (response.status === 401) { setAuthenticated(false); return; }
@@ -1185,17 +1203,22 @@ export function AnalyticsPage() {
       if (!response.ok) throw new Error(payload.error || "load_failed");
       setLeads(Array.isArray(payload.leads) ? payload.leads : []);
       setLeadsUnavailable(payload.unavailable === true);
+      setLeadsError("");
     } catch {
-      setLeadsError("Не удалось загрузить заявки. Попробуйте обновить список.");
-    } finally { setLeadsLoading(false); }
+      // Круг самообновления молчит о неудаче: список на экране остаётся прежним, а
+      // следующая попытка через минуту заберёт те же заявки.
+      if (!silent) setLeadsError("Не удалось загрузить заявки. Попробуйте обновить список.");
+    } finally { if (!silent) setLeadsLoading(false); }
   };
-  const load = async (requestedPeriod = period) => {
+  const load = async (requestedPeriod = period, { silent = false } = {}) => {
     const targetPeriod = typeof requestedPeriod === "string" ? requestedPeriod : period;
     const request = ++dashboardRequest.current;
     const cached = dashboardCache.current.get(targetPeriod);
     if (cached && periodRef.current === targetPeriod) setData(cached);
-    setLoading(!cached && !data);
-    setError("");
+    if (!silent) {
+      setLoading(!cached && !data);
+      setError("");
+    }
     try {
       const response = await fetch(`/api/analytics/dashboard?period=${encodeURIComponent(targetPeriod)}`, { cache:"no-store", credentials:"same-origin" });
       if (response.status === 401) {
@@ -1210,10 +1233,34 @@ export function AnalyticsPage() {
         setAuthenticated(true);
       }
     } catch (loadError) {
-      if (request === dashboardRequest.current) setError(loadError.message === "analytics_storage_unavailable" ? "Хранилище аналитики ещё не подключено." : "Не удалось загрузить аналитику. Попробуйте ещё раз.");
-    } finally { if (request === dashboardRequest.current) setLoading(false); }
+      if (!silent && request === dashboardRequest.current) setError(loadError.message === "analytics_storage_unavailable" ? "Хранилище аналитики ещё не подключено." : "Не удалось загрузить аналитику. Попробуйте ещё раз.");
+    } finally { if (!silent && request === dashboardRequest.current) setLoading(false); }
   };
   useEffect(() => { load(); }, [period]);
+  // Цифры на открытой странице устаревали: страница брала их один раз при заходе, и
+  // новая заявка, просмотр или регистрация появлялись только после обновления руками.
+  // Раз в минуту перечитываем весь срез молча — карточки, таблицы, график, заявки и
+  // красные счётчики разделов (их пересчитывает сам раздел, как только приходит новый
+  // срез). Ни полос загрузки, ни сообщений об ошибке: пропущенный круг ничего не
+  // ломает, следующий заберёт те же цифры.
+  const refresh = useRef(() => {});
+  refresh.current = () => {
+    load(periodRef.current, { silent:true });
+    loadLeads({ silent:true });
+  };
+  useEffect(() => {
+    if (!authenticated) return undefined;
+    // В фоновой вкладке не ходим на сервер вовсе: смысла в этом нет, а браузер всё
+    // равно растягивает таймеры. Возвращение к вкладке — повод обновиться сразу, не
+    // дожидаясь своей минуты: за время в фоне цифры могли уйти далеко.
+    const tick = () => { if (document.visibilityState === "visible") refresh.current(); };
+    const timer = window.setInterval(tick, ANALYTICS_REFRESH_MS);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [authenticated]);
   const selectPeriod = (nextPeriod) => {
     const cached = dashboardCache.current.get(nextPeriod);
     if (cached) setData(cached);

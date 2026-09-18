@@ -443,26 +443,31 @@ const VISIT_STARTS = "gap IS NULL OR gap > interval '30 minutes' OR previous_day
 // иначе за один и тот же день карточка и точка графика показывали бы разные числа.
 // Источник у захода один — тот, с которого он начался: внутри захода человек ходит
 // по сайту, и ссылка поисковика есть только у первого шага.
+// Рядом с заходами день отдаёт и просмотры карточек: график умеет показывать обе
+// величины, а считать их вторым запросом смысла нет. Заходы — это только первые шаги
+// захода, поэтому они отбираются условием в самом счётчике, а не в WHERE: иначе
+// просмотры внутри захода выпали бы из выборки вместе с остальными шагами.
 export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
   const range = normalizeAnalyticsRange(rangeValue);
   const from = range.from.toISOString();
   const to = range.to.toISOString();
   const result = await db.query(`WITH steps AS (
-      SELECT ${MINSK_DAY} AS day, path, lower(coalesce(properties->>'entrySource','')) AS entry_source,
+      SELECT ${MINSK_DAY} AS day, path, event_name, lower(coalesce(properties->>'entrySource','')) AS entry_source,
         created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
         lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
       FROM analytics_events
       WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
     )
     SELECT day::text AS day,
-      count(*)::int AS visits,
+      count(*) FILTER (WHERE ${VISIT_STARTS})::int AS visits,
       count(*) FILTER (
-        WHERE path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.'
+        WHERE (${VISIT_STARTS}) AND (path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.')
       )::int AS yandex,
       count(*) FILTER (
-        WHERE entry_source ~ '(^|\\.)google\\.'
-      )::int AS google
-    FROM steps WHERE ${VISIT_STARTS}
+        WHERE (${VISIT_STARTS}) AND entry_source ~ '(^|\\.)google\\.'
+      )::int AS google,
+      count(*) FILTER (WHERE event_name = 'vehicle_view')::int AS views
+    FROM steps
     GROUP BY day ORDER BY day`, [from, to]);
   return {
     days:range.days,

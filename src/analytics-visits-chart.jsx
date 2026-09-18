@@ -1,16 +1,24 @@
 import { visitsChart } from "./analytics-chart.js";
 
 const dateLabel = day => new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "Europe/Minsk" }).format(new Date(day));
+// Одна и та же картинка показывает заходы или просмотры карточек — меняются только
+// подписи: на оси, в подсказке и в описании для чтения с экрана.
+const METRICS = {
+  visits:{ axis:"Заходы", chart:"График заходов по дням", point:"заходов", tooltip:"Заходов" },
+  views:{ axis:"Просмотры авто", chart:"График просмотров авто по дням", point:"просмотров авто", tooltip:"Просмотров" },
+};
 
-export function AnalyticsVisitsChart({ daily, period, now, sources = [] }) {
-  const { points, ticks, single } = visitsChart(daily, period, now);
+export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric = "visits" }) {
+  const labels = METRICS[metric] || METRICS.visits;
+  const { points, ticks, single } = visitsChart(daily, period, now, metric);
   const labelStep = Math.max(1, Math.ceil(points.length / 8));
-  const sourceLines = [
+  // Разбивка по поисковикам есть только у заходов: просмотр наследует источник захода.
+  const sourceLines = metric === "visits" ? [
     { id:"yandex", y:"yandexY", label:"Яндекс" },
     { id:"google", y:"googleY", label:"Google" },
-  ].filter((item) => sources.includes(item.id));
-  return <div className="analytics-line-chart" aria-label="График заходов по дням">
-    <div className="analytics-chart-axis-title">Заходы</div>
+  ].filter((item) => sources.includes(item.id)) : [];
+  return <div className="analytics-line-chart" aria-label={labels.chart}>
+    <div className="analytics-chart-axis-title">{labels.axis}</div>
     <div className="analytics-chart-body">
       <div className="analytics-chart-axis" aria-hidden="true">{ticks.map(tick => <span key={tick.value} style={{ top: `${tick.y}%` }}>{tick.value}</span>)}</div>
       <div className="analytics-chart-plot">
@@ -20,9 +28,9 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [] }) {
           {sourceLines.map((source) => <polyline key={source.id} className={`analytics-chart-line analytics-chart-source is-${source.id}`} points={points.map(point => `${point.x},${point[source.y]}`).join(" ")} />)}
           {!single && points.slice(1).map((point, index) => points[index].selected && point.selected ? <line key={point.day} className="analytics-chart-line analytics-chart-selected" x1={points[index].x} y1={points[index].y} x2={point.x} y2={point.y} /> : null)}
         </svg>
-        {points.map(point => <button key={point.day} type="button" className={`analytics-chart-point${point.selected ? " is-highlighted" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${dateLabel(point.day)}: заходов — ${point.visits}`}>
+        {points.map(point => <button key={point.day} type="button" className={`analytics-chart-point${point.selected ? " is-highlighted" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${dateLabel(point.day)}: ${labels.point} — ${point.value}`}>
           <span className="analytics-chart-marker" />
-          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{dateLabel(point.day)}<strong>Заходов: {point.visits}</strong></span>
+          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{dateLabel(point.day)}<strong>{labels.tooltip}: {point.value}</strong></span>
         </button>)}
         {sourceLines.flatMap((source) => points.map((point) => <button key={`${source.id}-${point.day}`} type="button" className={`analytics-chart-point analytics-chart-source-point is-${source.id}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${dateLabel(point.day)}: заходов из ${source.label} — ${point[source.id]}`}>
           <span className="analytics-chart-marker" />

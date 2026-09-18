@@ -42,3 +42,19 @@ test("линии Яндекса и Google используют общую шка
   assert.ok(points[0].googleY > points[0].yandexY);
   assert.ok(ticks.at(-1).value >= 20);
 });
+
+// Переключатель графика меняет саму величину: в режиме просмотров шкала считается по
+// просмотрам, иначе редкий день с большим числом заходов прижимал бы линию к нулю.
+test("режим просмотров рисует просмотры и масштабируется по ним", () => {
+  const days = [
+    { day:"2026-09-07", visits:12, yandex:8, google:3, views:40 },
+    { day:"2026-09-08", visits:20, yandex:11, google:6, views:118 },
+  ];
+  const views = visitsChart(days, "7", now, "views");
+  assert.deepEqual(views.points.map(point => point.value), [40, 118]);
+  assert.ok(views.ticks.at(-1).value >= 118);
+  assert.ok(views.points[1].y < views.points[0].y);
+  const visits = visitsChart(days, "7", now);
+  assert.deepEqual(visits.points.map(point => point.value), [12, 20]);
+  assert.ok(visits.ticks.at(-1).value < 118, "шкала заходов не должна тянуться до просмотров");
+});

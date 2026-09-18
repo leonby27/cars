@@ -27,6 +27,7 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-kpis span { color:var(--muted); font-weight:700; }
 .analytics-kpis strong { display:block; margin:7px 0 6px; font-size:30px; letter-spacing:-1px; }
 .analytics-kpis p { margin:0; margin-top:auto; color:var(--muted); line-height:1.4; }
+.analytics-kpis article.analytics-kpi-zero strong { color:var(--muted); }
 /* Три цифры внутри обычной панели — тем же набором, что в блоке автооценки. */
 .analytics-figures { display:flex; gap:22px; margin:0; }
 .analytics-collapse-trigger + .analytics-figures { margin-top:16px; }
@@ -51,6 +52,8 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-collapse-trigger:focus-visible { outline:3px solid var(--focus-ring); outline-offset:4px; border-radius:6px; }
 .analytics-trend-heading { display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:16px; }
 .analytics-trend-heading h2 { margin:0; font-size:19px; }
+.analytics-trend-tabs { flex:none; padding:3px; }
+.analytics-trend-tabs button { padding:5px 12px; font-size:14px; cursor:pointer; }
 .analytics-trend-controls { display:flex; flex:1; align-items:center; flex-wrap:wrap; gap:14px; }
 .analytics-trend-period { position:relative; display:block; }
 .analytics-trend-period-trigger { min-height:34px; display:flex; align-items:center; gap:10px; padding:0 11px; border:1px solid var(--line); border-radius:calc(9px * var(--corner-scale)); background:var(--panel-soft); color:var(--ink); font:inherit; font-weight:700; cursor:pointer; }
@@ -302,6 +305,7 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
   .analytics-search-traffic > .analytics-panel > .analytics-panel-heading > .secondary { min-height:36px; height:36px; padding-inline:14px; font-size:13px; }
   .analytics-trend-heading { align-items:stretch; gap:10px; }
   .analytics-trend-heading h2 { width:100%; font-size:17px; white-space:nowrap; }
+  .analytics-trend-tabs { width:100%; flex:none; box-sizing:border-box; }
   .analytics-trend-controls { width:100%; flex:none; flex-wrap:nowrap; gap:14px; }
   .analytics-trend-period { margin-right:auto; }
   .analytics-trend-period-trigger { min-height:32px; gap:7px; padding-inline:9px; font-size:14px; }
