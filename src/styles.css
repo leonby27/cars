@@ -18039,12 +18039,18 @@ html[data-theme="dark"] .purchase-verification-art .purchase-verification-dark {
   align-items: baseline;
   padding: 14px 16px 12px;
   /* Тот же материал, что у карточек правой колонки («Из чего складывается цена»):
-     фон, тонкая обводка и мягкая тень. Одного фона мало — на светлой теме подложка
-     страницы того же цвета, и без обводки плашки исчезли бы совсем. */
+     фон, обводка и мягкая тень. На светлой теме обводка обязательна — подложка
+     страницы там того же цвета, и без неё плашки исчезли бы совсем. */
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: calc(14px * var(--corner-scale));
   box-shadow: 0 14px 35px rgba(23, 25, 28, 0.06);
+}
+/* На тёмной теме подложка страницы заметно темнее панели, плашки отделяются одним
+   фоном — обводка там лишняя. Цвет, а не сама рамка: ширина остаётся прежней, иначе
+   плашки поехали бы на один пиксель при переключении темы. */
+:root[data-theme="dark"] .fact-list--tiles .fact-row {
+  border-color: transparent;
 }
 .fact-list--tiles .fact-row svg { align-self: center; }
 .fact-list--tiles .fact-row span,
