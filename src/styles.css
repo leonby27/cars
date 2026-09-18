@@ -4425,9 +4425,18 @@ html[data-theme="dark"] #root .load-more {
 .footer-contacts .header-social-link:hover {
   filter: none;
 }
-@media (min-width: 981px) {
+/* Блок с приложением и подписка стоят во второй строке сетки — под всеми
+   колонками ссылок. Раньше их двигали вручную (сдвиг вниз и отрицательный
+   отступ сверху), и каждый новый пункт в колонке «Расчёты» наезжал на них. */
+@media (min-width: 841px) {
+  .footer-main {
+    row-gap: 24px;
+  }
   .footer-app-download {
-    transform: translateY(55px);
+    grid-column: 1;
+    grid-row: 2;
+    align-self: end;
+    margin-bottom: 0;
   }
 }
 .footer-socials a:not(.header-social-link) {
@@ -4500,15 +4509,31 @@ html[data-theme="dark"] #root .load-more {
 }
 .footer-newsletter {
   grid-column: 2 / -1;
+  grid-row: 2;
   display: grid;
   grid-template-columns: minmax(370px, 0.98fr) minmax(270px, 1.02fr);
   gap: 18px;
   align-items: start;
   align-self: start;
-  margin-top: -104px;
   padding: 16px;
   border-radius: calc(20px * var(--corner-scale));
   background: var(--panel-soft);
+}
+/* Блок с приложением выше плашки подписки, поэтому подписку прижимаем к низу
+   строки — нижние края обоих блоков идут по одной линии. */
+@media (min-width: 841px) {
+  .footer-newsletter {
+    align-self: end;
+  }
+}
+/* Когда текст и поле стоят рядом, высоту плашки задаёт картинка конверта (64px),
+   а поле ниже (56px). Центрируем содержимое и уменьшаем отступ сверху и снизу,
+   чтобы вокруг поля со всех сторон было одинаковое расстояние. */
+@media (min-width: 1061px) {
+  .footer-newsletter {
+    align-items: center;
+    padding: 12px 16px;
+  }
 }
 .footer-newsletter-title {
   display: flex;
@@ -9810,7 +9835,6 @@ html[data-theme="dark"] #root .spec-search,
   .footer-newsletter {
     grid-template-columns: 1fr;
     gap: 14px;
-    margin-top: -60px;
   }
   .footer-contacts {
     grid-column: auto;
@@ -9831,7 +9855,6 @@ html[data-theme="dark"] #root .spec-search,
   .footer-newsletter {
     grid-template-columns: 1fr;
     gap: 14px;
-    margin-top: -60px;
   }
 }
 
@@ -9842,11 +9865,18 @@ html[data-theme="dark"] #root .spec-search,
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .footer-brand,
+  .footer-app-download,
   .footer-newsletter {
     grid-column: 1 / -1;
+    grid-row: auto;
   }
-  .footer-newsletter {
-    margin-top: 0;
+}
+
+/* На узких экранах блок с приложением идёт отдельной строкой сетки, поэтому
+   нижний отступ у описания под логотипом больше не нужен. */
+@media (max-width: 840px) {
+  .footer-brand p {
+    margin-bottom: 0;
   }
 }
 
@@ -9924,14 +9954,16 @@ html[data-theme="dark"] #root .spec-search,
     padding-bottom: 40px;
   }
   .footer-brand,
+  .footer-app-download,
   .footer-navigation,
   .footer-tools,
   .footer-contacts {
     grid-column: 1 / -1;
+    grid-row: auto;
   }
   .footer-newsletter {
     grid-column: 1 / -1;
-    margin-top: 0;
+    grid-row: auto;
     padding: 16px;
   }
   .footer-newsletter-title strong {
@@ -14201,6 +14233,78 @@ html[data-theme="dark"] .model-page-ways .catalog-landing-links a {
   display: grid;
   gap: 10px;
 }
+/* Содержимое раскрывающегося пункта на странице растаможки: таблицы, списки и
+   врезки, а не один абзац. Поля повторяют отступы ответа в вопросах. */
+.tool-disclosure-body {
+  padding: 0 20px 22px;
+}
+/* Таблицы внутри свёрнутого пункта: заголовок таблицы стоит над ней и набран
+   как подзаголовок, подпись под таблицей — как обычная подпись. */
+.tool-disclosure-table + .tool-disclosure-table {
+  margin-top: 28px;
+}
+.tool-disclosure-table figcaption.tool-disclosure-table-title {
+  order: -1;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.3px;
+}
+/* Подложка таблицы — на шаг от подложки пункта, как и у остальных вложенных блоков. */
+.tool-disclosure-body .article-table-scroll {
+  background: var(--panel);
+}
+html[data-theme="dark"] .tool-disclosure-body .article-table-scroll {
+  background: var(--surface);
+}
+/* Абзацы внутри пункта равняются по тому же левому краю, что карточки и заголовок
+   пункта. Без этого они наследуют поля ответа из обычных вопросов — там абзац один
+   и стоит с отступом, а здесь рядом с ним таблицы, и текст уезжал вправо. */
+.tool-disclosure-body p {
+  margin-left: 0;
+  margin-right: 0;
+}
+/* Приписка под таблицей: отступ больше, чем между карточками, иначе она липнет
+   к последней карточке и читается как её часть. */
+.tool-disclosure-body p.model-page-versions-note {
+  margin: 32px 0 0;
+}
+/* Плашки внутри пункта: карточки таблиц, пункты списков и карточки сравнения. Их
+   обычный тон — ровно тот же, что у самого пункта, и на нём они пропадали: в
+   светлой теме серое на сером, в тёмной — почти неразличимо. Берём шаг в другую
+   сторону, как всегда делаем для вложенных блоков: на светлой подложке белое,
+   на тёмной — темнее пункта. Рамок не добавляем. */
+.tool-disclosure-body .model-page-versions-cards > div,
+.tool-disclosure-body .model-page-points > div,
+.tool-disclosure-body .model-page-compare > div {
+  background: var(--panel);
+}
+html[data-theme="dark"] .tool-disclosure-body .model-page-versions-cards > div,
+html[data-theme="dark"] .tool-disclosure-body .model-page-points > div,
+html[data-theme="dark"] .tool-disclosure-body .model-page-compare > div {
+  background: var(--surface);
+}
+/* Врезка внутри пункта: свой цветной тон у неё сохраняется, но в тёмной теме он
+   замешан на --panel, который почти совпал с фоном пункта. */
+html[data-theme="dark"] .tool-disclosure-body .model-page-callout {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+.tool-disclosure-body > section + section {
+  margin-top: 28px;
+}
+.tool-disclosure-body h3 {
+  margin: 0 0 12px;
+  font-size: 19px;
+  line-height: 1.25;
+  letter-spacing: -0.3px;
+}
+/* Внутри пункта карточки таблицы и так стоят на своей подложке — вторая рамка
+   вокруг них не нужна, а верхнее поле первого блока уже дала кнопка пункта. */
+.tool-disclosure-body > section:first-child > *:first-child {
+  margin-top: 0;
+}
 /* Плашки внутри — как карточки сравнения: серые на белой подложке в светлой теме и
    светлее подложки в тёмной. */
 .model-page-faq .home-faq-item {
@@ -14210,13 +14314,17 @@ html[data-theme="dark"] .model-page-ways .catalog-landing-links a {
 html[data-theme="dark"] .model-page-faq .home-faq-item {
   background: var(--model-nested-bg);
 }
-/* Ответ — обычный текст статьи: тот же шрифт с засечками, размер и цвет. */
+/* Ответ — тот же шрифт с засечками и цвет, что у текста статьи, но на ступень
+   мельче. Раньше здесь стояли те же 21 точка, что в самой статье: внутри
+   раскрытого вопроса такой текст читался как отдельная статья, а не как ответ,
+   и раскрытый пункт занимал пол-экрана. Правило одно на все аккордеоны сайта —
+   обзоры моделей, страницы расчётов и материалы журнала. */
 .model-page-faq .home-faq-item p {
   max-width: none;
   color: var(--ink);
   font-family: var(--font-article);
-  font-size: 21px;
-  line-height: 30px;
+  font-size: 18px;
+  line-height: 27px;
   letter-spacing: 0;
 }
 /* Хлебные крошки над заголовком обзора: своё верхнее поле им не нужно — его уже
@@ -14871,6 +14979,642 @@ html[data-theme="dark"] .cost-calculator-total > small {
   white-space: nowrap;
 }
 
+/* Цена с валютой занимает всю ширину формы: в одну колонку поле и три кнопки
+   валют не помещаются. */
+.cost-calculator-price {
+  grid-column: 1 / -1;
+}
+/* Цена и валюта — одна строка: поле тянется, кнопки валют стоят справа от него. */
+.cost-calculator-field > .cost-calculator-price-row {
+  color: var(--ink);
+  font-size: inherit;
+  font-weight: inherit;
+}
+.cost-calculator-price-row {
+  display: flex;
+  gap: 8px;
+}
+.cost-calculator-price-row input[type="number"] {
+  flex: 1;
+  min-width: 0;
+}
+.cost-calculator-currency {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: calc(11px * var(--corner-scale));
+  background: var(--panel);
+}
+html[data-theme="dark"] .cost-calculator-currency {
+  background: #353a43;
+}
+.cost-calculator-currency button {
+  min-width: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(8px * var(--corner-scale));
+  background: transparent;
+  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cost-calculator-currency button.active {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+/* Второй итог — сумма до Минска. Он такой же плашкой, но спокойнее по цвету:
+   главный ответ страницы один, и это таможенный платёж. */
+.cost-calculator-total-second {
+  background: var(--panel);
+}
+.cost-calculator-total-second > span,
+.cost-calculator-total-second > strong {
+  color: var(--ink);
+}
+html[data-theme="dark"] .cost-calculator-total-second {
+  background: #353a43;
+}
+/* Пояснение вместо блока доставки, когда машина едет не из Китая. */
+.cost-calculator-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 16px 20px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+html[data-theme="dark"] .cost-calculator-note {
+  background: #353a43;
+}
+
+/* «Поделиться расчётом»: во всю ширину под сметой. Считать и не иметь возможности
+   переслать посчитанное — полдела; ссылка восстанавливает те же поля. Подложка,
+   а не обводка, как у остальных блоков страницы. */
+/* Разбор под расчётом: почему вышла такая сумма. Мелкий приглушённый текст на всю
+   ширину результата — это сноска к цифрам, а не ещё один блок. */
+/* Правило точнее общего «абзац внутри раздела статьи»: иначе сноска набирается
+   тем же шрифтом с засечками в 21 точку, что и текст обзоров. */
+.cost-calculator p.cost-calculator-why {
+  grid-column: 1 / -1;
+  max-width: none;
+  margin: 0;
+  color: var(--muted);
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+.cost-calculator-share {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cost-calculator-share > button,
+.cost-calculator-share > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--panel);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.cost-calculator-share > button:hover,
+.cost-calculator-share > a:hover {
+  background: var(--panel-soft);
+}
+html[data-theme="dark"] .cost-calculator-share > button,
+html[data-theme="dark"] .cost-calculator-share > a {
+  background: #353a43;
+}
+html[data-theme="dark"] .cost-calculator-share > button:hover,
+html[data-theme="dark"] .cost-calculator-share > a:hover {
+  background: #3d434d;
+}
+
+/* Таблица сравнения цен с белорусским рынком: поиск, фильтр по марке и сортировка.
+   Единственная настоящая таблица среди страниц расчётов — строк около двух сотен, и
+   карточками в них было бы не найти свою машину. Подложка вместо обводки, как везде;
+   узкие экраны прокручивают таблицу вбок, а не ломают её переносами. */
+/* Внутри блока сравнения один шаг отступа — 24 точки: между подписью страницы и
+   поиском, между таблицей и кнопкой «показать ещё», между таблицей марок и текстом.
+   До этого шаги были 98, 14, 10, 14, 32 и 134 — страница выглядела собранной
+   из случайных кусков. */
+.market-compare {
+  /* Свой отступ сверху не нужен: расстояние до заголовка задаёт общий ритм страницы
+     (38 точек между блоками), а лишние 24 сверху этот ритм ломали. */
+  margin: 0;
+  font-family: "Manrope", system-ui, sans-serif;
+}
+.market-compare-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.market-compare-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 0 14px;
+  height: 44px;
+  border-radius: calc(12px * var(--corner-scale));
+  /* Та же подложка, что у шапки таблицы и кнопки «показать ещё»: var(--panel) в
+     светлой теме — белый, то есть цвет страницы, и поле пропадало. */
+  background: var(--panel-soft);
+  color: var(--muted);
+}
+html[data-theme="dark"] .market-compare-search {
+  background: #353a43;
+}
+.market-compare-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+#root .market-compare-brand {
+  flex: 0 1 220px;
+  height: 44px;
+}
+/* На телефоне поиск и список марок идут в две строки во всю ширину: узкий список
+   рядом с широким полем выглядел обрезком, а места для двух колонок там всё равно
+   нет. */
+@media (max-width: 700px) {
+  .market-compare-search,
+  #root .market-compare-brand {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+.market-compare-count {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* Прокрутка вбок на узких экранах: таблица из пяти столбцов в 360 точек не влезает
+   никакими переносами, а ломать её на карточки — снова терять сравнимость строк. */
+.market-compare-scroll {
+  overflow-x: auto;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--panel);
+  /* Только в светлой теме: там подложка таблицы совпадает с фоном страницы, и без
+     обводки не видно, где таблица начинается. В тёмной теме подложка светлее фона,
+     и рамка там лишняя. */
+  border: 1px solid var(--line);
+}
+html[data-theme="dark"] .market-compare-scroll {
+  border-color: transparent;
+}
+html[data-theme="dark"] .market-compare-scroll {
+  background: #353a43;
+}
+html[data-theme="dark"] .market-compare-table thead th {
+  background: #2b3038;
+  box-shadow: inset 0 -1px 0 rgb(255 255 255 / 8%);
+}
+.market-compare-table {
+  width: 100%;
+  /* Ширины столбцов заданы раз и навсегда: иначе колонка названий забирает место у
+     цифр — длинные имена вроде «Mercedes-Benz GLC» растягивают её как хотят. На узком
+     экране таблица не сжимается до нечитаемого, а прокручивается вбок. */
+  table-layout: fixed;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.market-compare-table th:first-child {
+  width: 32%;
+}
+.market-compare-table th,
+.market-compare-table td {
+  padding: 12px;
+  text-align: right;
+  vertical-align: top;
+}
+/* Крайние ячейки отодвигаем от края подложки: у неё скруглённые углы, и текст,
+   прижатый вплотную, выглядел обрезанным. */
+.market-compare-table th:first-child,
+.market-compare-table td:first-child {
+  padding-left: 20px;
+}
+.market-compare-table th:last-child,
+.market-compare-table td:last-child {
+  padding-right: 20px;
+}
+.market-compare-table td {
+  white-space: nowrap;
+}
+.market-compare-table tbody th {
+  min-width: 150px;
+}
+/* Шапка таблицы отделена от строк: своя подложка потемнее и линия под ней. Без этого
+   первая строка данных читалась как продолжение заголовков.
+   Прописные буквы убраны: их получал только первый заголовок — остальные сидят внутри
+   кнопок сортировки, а у кнопок в оформлении сайта прописные сняты, — и шапка
+   выглядела набранной двумя разными шрифтами. */
+.market-compare-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  /* Свой фон обязателен: прозрачная «липкая» шапка при прокрутке наезжала бы
+     на строки таблицы. */
+  background: var(--panel-soft);
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 8%);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.market-compare-table thead th button {
+  width: 100%;
+  padding: 16px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+}
+/* У ячеек шапки своих отступов нет — их задаёт кнопка сортировки. Кроме первой:
+   заголовок «Модель и год» кнопкой не является, и без собственных отступов он
+   упирался в скруглённый край подложки и выглядел обрезанным. */
+/* Первый заголовок теперь тоже кнопка сортировки: отступы у него задаёт она, и
+   выравнивание у неё по левому краю — как у названий моделей под ним. */
+.market-compare-table thead th:first-child button {
+  padding-left: 20px;
+  text-align: left;
+}
+/* В таблице марок заголовки не сортируют, поэтому кнопок в них нет — отступы задаём
+   самим ячейкам, иначе её шапка вдвое ниже шапки основной таблицы. */
+.market-compare-thin .market-compare-table thead th {
+  padding: 16px 12px;
+}
+.market-compare-thin .market-compare-table thead th:first-child {
+  padding-left: 20px;
+}
+.market-compare-thin .market-compare-table thead th:last-child {
+  padding-right: 20px;
+}
+.market-compare-table thead th:last-child button {
+  padding-right: 20px;
+}
+.market-compare-table thead th:first-child,
+.market-compare-table tbody th {
+  text-align: left;
+}
+/* Верхняя строка ячейки — одинаковая во всех столбцах: название модели, обе цены и
+   разница. Разный кегль в соседних колонках читался как разная важность. */
+.market-compare-table tbody th,
+.market-compare-table tbody td {
+  font-size: 15px;
+  font-weight: 600;
+}
+/* Подпись под верхней строкой: год, число машин. Правило бьёт только по вложенному
+   span, а не по любому: обёртка с названием модели — тоже span, и раньше название
+   уезжало в этот же мелкий приглушённый кегль. */
+.market-compare-sub,
+.market-compare-table tbody td > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.market-compare-table tbody tr + tr th,
+.market-compare-table tbody tr + tr td {
+  border-top: 1px solid rgb(0 0 0 / 6%);
+}
+html[data-theme="dark"] .market-compare-table tbody tr + tr th,
+html[data-theme="dark"] .market-compare-table tbody tr + tr td {
+  border-top-color: rgb(255 255 255 / 8%);
+}
+/* Марка выбрана, а сравнивать не с чем — и марки, которых нет на местном рынке. */
+.market-compare-empty {
+  margin: 0 0 14px;
+  padding: 14px 18px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+html[data-theme="dark"] .market-compare-empty {
+  background: #353a43;
+}
+.market-compare-thin {
+  margin: 24px 0 0;
+}
+.market-compare-thin h3 {
+  margin: 0 0 18px;
+  font-size: 17px;
+}
+/* Один шаг между блоками — 24 точки. Собственные поля абзацев обнуляем: иначе к
+   заданному отступу добавляются их margin, и шаг гуляет от 24 до 60. */
+/* Селектор нарочно длиннее обычного: у подписи в статье есть своё правило с
+   отступом 32, и без этой добавки оно перебивало общий шаг. */
+.model-page-article .market-compare p.model-page-versions-note {
+  margin: 24px 0 0;
+}
+/* Своего отступа у вступления нет: расстояние до таблицы задаёт шаг между блоками
+   статьи — тот же, что между заголовком страницы и таблицей. Свой margin складывался
+   с ним, и шаг выходил в полтора раза больше остальных. */
+.model-page-intro.market-compare-intro {
+  margin-top: 0;
+}
+.market-compare-intro > p:first-child {
+  margin-top: 0;
+}
+.market-compare-intro > p:last-child {
+  margin-bottom: 0;
+}
+
+/* Строка модели — кнопка: раскрывает годы. Сама кнопка невидима, чтобы таблица
+   оставалась таблицей, а не набором элементов управления. */
+.market-compare-name {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+span.market-compare-name {
+  cursor: default;
+}
+.market-compare-name-text {
+  display: block;
+  /* min-width обязателен: без него содержимое гибкого блока не даёт себя сжать,
+     и многоточие не появляется никогда. */
+  min-width: 0;
+  overflow: hidden;
+}
+.market-compare-model {
+  display: block;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* По наведению название краснеет и ведёт в каталог: у строки модели — без фильтра
+   по году, у раскрытого года — с ним. */
+a.market-compare-model:hover {
+  color: var(--accent);
+}
+html[data-theme="dark"] a.market-compare-model:hover {
+  color: var(--accent-dark);
+}
+.market-compare-caret {
+  flex: none;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+/* Строка без годов: отступ ровно на стрелку, чтобы название стояло в одном столбце
+   с остальными, а не уезжало влево. */
+.market-compare-name-flat {
+  padding-left: 25px;
+}
+.market-compare-caret.open {
+  transform: rotate(90deg);
+}
+/* Модель с одним годом: стрелка на месте ради ровного столбца, но приглушена —
+   видно, что нажимать нечего. */
+.market-compare-caret.dim {
+  opacity: 0.2;
+}
+span.market-compare-name {
+  cursor: default;
+}
+/* Раскрытая модель и её годы держатся вместе: у шапки группы фон чуть светлее,
+   у годов — отступ и приглушённый текст. */
+.market-compare-open th,
+.market-compare-open td {
+  background: rgb(0 0 0 / 3%);
+}
+html[data-theme="dark"] .market-compare-open th,
+html[data-theme="dark"] .market-compare-open td {
+  background: rgb(255 255 255 / 4%);
+}
+.market-compare-row {
+  cursor: pointer;
+}
+.market-compare-row.market-compare-single {
+  cursor: default;
+}
+/* «Показать ещё»: во всю ширину под таблицей, той же подложкой, что и строки, —
+   кнопка продолжает список, а не начинает новый блок. */
+.market-compare-more {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px;
+  border: 0;
+  border-radius: calc(12px * var(--corner-scale));
+  /* Подложка та же, что у шапки таблицы: в светлой теме var(--panel) — это белый,
+     то есть цвет страницы, и кнопка пропадала совсем. */
+  background: var(--panel-soft);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.market-compare-more:hover {
+  background: color-mix(in srgb, var(--panel-soft) 94%, #000000);
+}
+html[data-theme="dark"] .market-compare-more {
+  background: #353a43;
+}
+html[data-theme="dark"] .market-compare-more:hover {
+  background: #3d434d;
+}
+/* Заглушка пустого поиска в таблице: те же поля, что у заглушки на главной, но без
+   рамки — она стоит внутри блока сравнения, а не на голой странице. */
+.market-compare-empty-state {
+  padding: 48px 24px;
+  border: 0;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--panel);
+}
+html[data-theme="dark"] .market-compare-empty-state {
+  background: #353a43;
+}
+.market-compare-empty-state h3 {
+  margin: 10px 0 6px;
+  font-size: 19px;
+}
+.market-compare-empty-state p {
+  margin: 0 auto;
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+/* Вступление под таблицей: тот же шаг, что и между остальными блоками. */
+.market-compare-intro {
+  margin-top: 24px;
+}
+.market-compare-intro p:last-child {
+  margin-bottom: 0;
+}
+/* Подсветка строки под курсором: по строке нажимают, и она должна отзываться.
+   Стоит после правил раскрытой группы, чтобы перекрывать их фон. */
+.market-compare-table tbody tr:not(.market-compare-single):hover > th,
+.market-compare-table tbody tr:not(.market-compare-single):hover > td {
+  background: rgb(0 0 0 / 5%);
+}
+html[data-theme="dark"] .market-compare-table tbody tr:not(.market-compare-single):hover > th,
+html[data-theme="dark"] .market-compare-table tbody tr:not(.market-compare-single):hover > td {
+  background: rgb(255 255 255 / 7%);
+}
+.market-compare-year th,
+.market-compare-year td {
+  /* Внутри года нет второй строки, поэтому содержимое ставим по центру: прижатое
+     к верху, оно висело в воздухе рядом с двухстрочными строками моделей. */
+  vertical-align: middle;
+}
+.market-compare-year th {
+  font-weight: 500;
+}
+/* Год встаёт ровно под названием модели: отступ задаём той же величиной, что и у
+   строк без стрелки, — шириной стрелки и зазором за ней. Ставим его на содержимое
+   ячейки, а не на саму ячейку: у ячейки свой отступ от края подложки, и правило
+   для первого столбца всё равно оказывалось сильнее. */
+.market-compare-year .market-compare-name {
+  padding-left: 25px;
+}
+.market-compare-year td {
+  color: var(--muted);
+}
+.market-compare-year .market-compare-win {
+  color: var(--green);
+}
+html[data-theme="dark"] .market-compare-year .market-compare-win {
+  color: #6ddc92;
+}
+.market-compare-year + .market-compare-year th,
+.market-compare-year + .market-compare-year td {
+  border-top-color: transparent;
+}
+
+.market-compare-win {
+  color: var(--green);
+}
+.market-compare-lose {
+  color: var(--muted-contrast, var(--muted));
+}
+/* Значок с объяснением, почему местная цена ниже. Стоит внутри строки с разницей и
+   не должен её разрывать: поэтому inline, без фона и без рамки — иначе браузер
+   рисует обычную серую кнопку. */
+.market-compare-hint {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  vertical-align: -3px;
+  cursor: help;
+}
+.market-compare-hint:hover {
+  color: var(--ink);
+}
+html[data-theme="dark"] .market-compare-win {
+  color: #6ddc92;
+}
+
+/* Справочник марок: карточки на подложках, по три-четыре в ряд. Значок берётся тот же,
+   что в каталоге, поэтому своих правил для картинки здесь нет — только сетка. */
+.brand-directory {
+  margin: 0 0 28px;
+}
+.brand-directory h2 {
+  margin: 0 0 18px;
+  font-size: 27px;
+  letter-spacing: -0.01em;
+}
+.brand-directory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.brand-directory-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--panel);
+  color: inherit;
+  text-decoration: none;
+  font-family: "Manrope", system-ui, sans-serif;
+}
+html[data-theme="dark"] .brand-directory-card {
+  background: #353a43;
+}
+a.brand-directory-card:hover {
+  background: var(--panel-soft);
+}
+html[data-theme="dark"] a.brand-directory-card:hover {
+  background: #3d434d;
+}
+.brand-directory-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+}
+.brand-directory-say,
+.brand-directory-group {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.brand-directory-card p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.brand-directory-count {
+  margin-top: auto;
+  padding-top: 8px;
+  color: var(--muted-contrast, var(--muted));
+  font-size: 13px;
+  font-weight: 700;
+}
+
 /* Переходы к остальным расчётам: три карточки-ссылки. Подложку блока задаёт то же
    правило, что у блока вопросов, — оно выше. */
 .tool-page-links h2 {
@@ -14881,7 +15625,9 @@ html[data-theme="dark"] .cost-calculator-total > small {
 }
 .tool-page-links-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Карточек столько, сколько других расчётов: после слияния растаможки с
+     калькулятором их две, а не три. Жёсткие три колонки оставляли пустое место. */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
 }
 .tool-page-links-list > a {
@@ -17181,6 +17927,41 @@ html[data-theme="dark"] .blog-filter-item.current:hover {
   color: inherit;
 }
 
+/* «Показать все разделы». Стоит последней строкой того же списка и набрана тише
+   пунктов: это не ещё один раздел, а переключатель длины меню. Подложки в спокойном
+   состоянии у неё нет, иначе строка спорит с выбранным разделом. */
+.blog-filter-more {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 0;
+  border-radius: calc(10px * var(--corner-scale));
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 110ms ease, color 110ms ease;
+}
+.blog-filter-more svg {
+  flex: none;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.blog-filter-more[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.blog-filter-more:hover {
+  background: var(--panel);
+  color: var(--ink);
+}
+html[data-theme="dark"] .blog-filter-more:hover {
+  background: color-mix(in srgb, var(--ink) 14%, var(--header-control-bg));
+}
+
 /* Расчёты — не фильтры журнала, поэтому отдельным блоком и обычными кнопками. */
 .blog-sidebar-tools {
   display: flex;
@@ -17264,6 +18045,15 @@ html[data-theme="dark"] .blog-tool-button.current:hover {
   max-width: 780px;
   margin: 24px auto 0;
 }
+/* Блок про сервис — сетка из текста и картинки, и ограничить его содержимое той же
+   меркой через `max-width` у детей нельзя: развалится раскладка в две колонки.
+   Поэтому ту же колонку 780 точек ему даёт поле по краям. На узком экране поле
+   не может стать меньше обычного. На обзорах моделей блок стоит иначе — шире
+   текста, — и это правило его не касается: оно действует только на страницах
+   расчётов (растаможка, доставка, квота). */
+.tool-page-aside .model-page-promo {
+  padding-inline: max(40px, calc((100% - 780px) / 2));
+}
 html[data-theme="dark"] .blog-tool-button:hover {
   background: color-mix(in srgb, var(--ink) 14%, var(--header-control-bg));
 }
@@ -17337,13 +18127,17 @@ html[data-theme="dark"] .blog-tool-button:hover {
      в строке, и абзац растягивается на пол-экрана. Размер один на все тексты
      с засечками — обзоры моделей, расчёты, разделы каталога и журнал. */
   :is(.model-page-intro, .model-page-article, .model-page-faq, .catalog-landing-article) p,
-  .model-page-faq .home-faq-item p,
   .model-page-article > section > p:not(.model-page-versions-note),
   /* Приписка под таблицей версий читается как обычный текст статьи, значит и мельче
      становится вместе с ним. */
   .model-page-article p.model-page-versions-note {
     font-size: 18px;
     line-height: 25px;
+  }
+  /* Ответ в раскрытом вопросе и на телефоне остаётся на ступень мельче текста. */
+  .model-page-faq .home-faq-item p {
+    font-size: 16px;
+    line-height: 24px;
   }
   /* На телефоне у подложки статьи нет тени, но поля ей нужны настоящие: с отступом
      в пару точек текст прилипал к её краю. В светлой теме край материала показывает

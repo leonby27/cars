@@ -24,7 +24,7 @@ import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
+import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
 import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -47,8 +47,11 @@ import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
 import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EXAMPLE } from "./service-copy.js";
 import { InspectionReport } from "./inspection-report.jsx";
-import { TOOL_PAGES, calculatorExamples, customsExample, deliveryStages, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
+import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
+import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
+import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeTable, realRange } from "./range-estimate.js";
+import { REBUILT_HINT, compareSummary, compareTable, coverageNote, groupCompareRows, hasRebuiltHint } from "./market-compare.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
@@ -1746,6 +1749,38 @@ function HomeFaqItem({ item, open, onToggle, navigate = null }) {
   );
 }
 
+/* Раскрывающиеся пункты с любым содержимым внутри, а не только абзацем ответа.
+   Нужны странице растаможки: за ней приходят посчитать, а не читать, поэтому всё,
+   кроме калькулятора, свёрнуто. Текст при этом остаётся в разметке страницы —
+   поисковик его видит, просто человек не листает через него до формы. */
+function ToolDisclosures({ title, titleId, items }) {
+  const [openIndex, setOpenIndex] = useState(null);
+  if (!items.length) return null;
+  return (
+    <section className="model-page-faq page-width" aria-labelledby={titleId}>
+      <h2 id={titleId}>{title}</h2>
+      <div className="model-page-faq-list">
+        {items.map((item, index) => (
+          <article key={item.title} className={`home-faq-item${openIndex === index ? " open" : ""}`}>
+            <button type="button" aria-expanded={openIndex === index} onClick={() => setOpenIndex((current) => (current === index ? null : index))}>
+              <span>{item.title}</span>
+              <CaretDown size={20} weight="bold" aria-hidden="true" />
+            </button>
+            {/* Три слоя, а не два: поля содержимого обязаны лежать на внутреннем
+                блоке. На том, который схлопывается, они остаются видимыми даже при
+                нулевой высоте — под каждым закрытым пунктом висела лишняя полоска. */}
+            <div className="animated-disclosure" aria-hidden={openIndex !== index}>
+              <div>
+                <div className="tool-disclosure-body">{item.content}</div>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function HomeFaqList({ items, navigate = null, className = "home-faq-list" }) {
   const [openIndex, setOpenIndex] = useState(null);
   return (
@@ -3347,7 +3382,7 @@ function ArticleFaq({ faq, title, navigate = null }) {
       "@type": "Question",
       name: item.q,
       // В разметке — чистый текст: поисковик показывает его как есть, и
-      // «[калькулятор](/calculator)» выглядел бы в выдаче ошибкой.
+      // «[калькулятор](/customs)» выглядел бы в выдаче ошибкой.
       acceptedAnswer: { "@type": "Answer", text: plainInlineText(item.a) },
     })),
   };
@@ -3525,7 +3560,9 @@ function ModelPageCatalog({ modelPage, carsState, filters, navigate, favorites, 
 function ModelPageSection({ section, navigate }) {
   return (
     <section>
-      <h2>{section.title}</h2>
+      {/* Заголовка может не быть: внутри раскрывающегося пункта его роль играет
+          кнопка самого пункта, и второй такой же заголовок был бы повтором. */}
+      {section.title ? <h2>{section.title}</h2> : null}
       {section.paragraphs.map((text) => (
         <p key={text}>{renderInlineText(text, navigate)}</p>
       ))}
@@ -6377,7 +6414,7 @@ function CatalogLandingFaq({ landing, total, guide = null, navigate }) {
       "@type": "Question",
       name: item.q,
       // В разметке — чистый текст: поисковик показывает его как есть, и
-      // «[калькулятор](/calculator)» выглядел бы в выдаче ошибкой.
+      // «[калькулятор](/customs)» выглядел бы в выдаче ошибкой.
       acceptedAnswer: { "@type": "Answer", text: plainInlineText(item.a) },
     })),
   };
@@ -7886,8 +7923,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           )}
           <div className="detail-tools-footer">
             <nav className="detail-tool-links" aria-label="Страницы расчётов">
-              <AppLink href="/customs" navigate={navigate}><Scales size={21} /><span>Как считается растаможка</span><CaretRight size={17} weight="bold" /></AppLink>
-              <AppLink href="/calculator" navigate={navigate}><Calculator size={21} /><span>Посчитать другую машину</span><CaretRight size={17} weight="bold" /></AppLink>
+              <AppLink href="/customs" navigate={navigate}><Calculator size={21} /><span>Калькулятор растаможки</span><CaretRight size={17} weight="bold" /></AppLink>
+              <AppLink href="/delivery-cost" navigate={navigate}><RoadHorizon size={21} /><span>Из чего складывается цена</span><CaretRight size={17} weight="bold" /></AppLink>
               {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
             </nav>
             <p className="detail-source-note">Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</p>
@@ -8394,8 +8431,8 @@ function OrderDraft({ car, navigate }) {
                 вела только ссылка в подвале: человек, который смотрит строку «таможня
                 и сборы», упирался в цифру без продолжения. */}
             <p className="order-tool-links">
-              <AppLink href="/customs" navigate={navigate}>Как считается таможня</AppLink>
-              <AppLink href="/calculator" navigate={navigate}>Посчитать другую машину</AppLink>
+              <AppLink href="/customs" navigate={navigate}>Посчитать другую машину</AppLink>
+              <AppLink href="/delivery-cost" navigate={navigate}>Из чего складывается цена</AppLink>
               {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}>Остаток квоты</AppLink>}
             </p>
           </section>
@@ -9349,6 +9386,25 @@ function ToolPage({ tool, navigate }) {
   const splitAt = Math.ceil(texts.sections.length / 2);
   const firstSections = texts.sections.slice(0, splitAt);
   const restSections = texts.sections.slice(splitAt);
+  // Страница растаможки живёт по другим правилам, чем квота и доставка: за ней
+  // приходят посчитать. Поэтому калькулятор стоит сразу под заголовком, а текст
+  // свёрнут в раскрывающиеся пункты — он в разметке страницы, но не мешает добраться
+  // до формы. Пунктов ровно столько, сколько запросов они закрывают: вступление,
+  // «чего нет в расчёте» и разбор указа № 140 убраны — их никто не ищет, а места
+  // в списке они занимали столько же, сколько ставки пошлины.
+  const isCalculator = tool.kind === "customs";
+  const isMarket = tool.kind === "market";
+  const calculatorDetails = !isCalculator ? [] : [
+    { title: customsExample().title, content: <ToolPageDataTable table={{ ...customsExample(), title: null }} /> },
+    {
+      title: "Ставки пошлины: полные таблицы",
+      content: dutyRateTables().map((table) => <ToolPageDataTable key={table.title} table={table} />),
+    },
+    ...texts.sections.map((section) => ({
+      title: section.title,
+      content: <ModelPageSection section={{ ...section, title: null }} navigate={navigate} />,
+    })),
+  ];
   // Шаг назад работает, только если на страницу пришли с другой страницы сайта. По
   // прямой ссылке из поиска возвращаться некуда — ведём на главную.
   const goBack = () => (window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : navigate("/"));
@@ -9382,57 +9438,96 @@ function ToolPage({ tool, navigate }) {
               {/* На когда цифры. Ставим у заголовка, а не в подвале: за этими
                   страницами приходят именно за числом, и первый вопрос к нему —
                   насколько оно свежее. Текст общий с версией для поисковика. */}
-              {updatedLabel ? <p className="tool-page-updated">{updatedLabel}</p> : null}
+              {/* На калькуляторе этой строки нет: там курс с датой стоит прямо
+                  в расчёте, под суммой платежа, и вторая дата была бы повтором. */}
+              {updatedLabel && !isCalculator ? <p className="tool-page-updated">{updatedLabel}</p> : null}
             </div>
           </section>
-          <article className="model-page-article">
-            <div className="model-page-intro">
-              {texts.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
-            </div>
-            {/* Полоса главных цифр сразу под вступлением: то, за чем приходят, видно
-                не вчитываясь. У калькулятора её нет — там сразу форма. */}
-            {stats.length > 0 && (
-              <div className="model-page-numbers">
-                {stats.map((stat) => (
-                  <div key={stat.label}>
-                    <strong>{stat.value}</strong>
-                    <span>{stat.label}</span>
-                  </div>
-                ))}
+          {/* Вступление и полоса ставок — только на квоте и доставке. На странице
+              растаможки их нет: там сразу форма, а весь текст свёрнут ниже. */}
+          {/* На сравнении цен этого блока нет вовсе: вступление уехало под таблицу, а
+              полосы цифр у страницы нет — пустая обёртка добавляла к отступу лишние
+              38 точек, и таблица отрывалась от заголовка. */}
+          {!isCalculator && !isMarket && (
+            <article className="model-page-article">
+              {true && (
+                <div className="model-page-intro">
+                  {texts.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
+                </div>
+              )}
+              {stats.length > 0 && (
+                <div className="model-page-numbers">
+                  {stats.map((stat) => (
+                    <div key={stat.label}>
+                      <strong>{stat.value}</strong>
+                      <span>{stat.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          )}
+          {/* На калькуляторе форма стоит в одной подложке с заголовком: между ними
+              нечего читать, а две подложки подряд читались как пропущенный кусок. */}
+          {isCalculator && (
+            <article className="model-page-article">
+              <CustomsCalculator />
+            </article>
+          )}
+          {/* Сравнение — в одной подложке с заголовком, как форма калькулятора: две
+              подложки подряд с пустым промежутком читались как разрыв страницы. */}
+          {isMarket && (
+            <article className="model-page-article">
+              <MarketCompare navigate={navigate} />
+              {/* Вступление здесь же, а не в своей подложке: под таблицей оно
+                  продолжает разговор, а отдельным блоком читалось как новый раздел. */}
+              <div className="model-page-intro market-compare-intro">
+                {texts.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
               </div>
-            )}
-          </article>
+            </article>
+          )}
         </div>
-        {/* Сам инструмент — отдельным блоком: за живой цифрой квоты, примером платежа
-            и расчётом сюда и приходят, объяснения читают уже потом. */}
-        <div className="model-page-body page-width">
-          <article className="model-page-article">
-            {tool.kind === "quota" && <QuotaFigures />}
-            {tool.kind === "customs" && <ToolPageTable table={customsExample()} />}
-            {tool.kind === "cost" && <ToolPageTable table={deliveryStages()} />}
-            {tool.kind === "calculator" && <LandedCostCalculator />}
-            {/* Готовые расчёты сразу под формой. Форму рисует скрипт, и до этой
-                таблицы на странице калькулятора не было ни одной посчитанной суммы,
-                которую видел бы поисковик: он читал рассказ о калькуляторе, а не
-                расчёт. Человеку она тоже к месту — цену прикидывают до того, как
-                начинают перебирать поля. */}
-            {tool.kind === "calculator" && <ToolPageTable table={calculatorExamples()} />}
-          </article>
-        </div>
-        <div className="model-page-body page-width">
-          <article className="model-page-article">
-            {firstSections.map((section) => <ModelPageSection key={section.title} section={section} navigate={navigate} />)}
-          </article>
-        </div>
-        <ModelPagePromo navigate={navigate} />
-        {restSections.length > 0 && (
+        {/* Сам инструмент — отдельным блоком: за живой цифрой квоты и расчётом сюда
+            и приходят, объяснения читают уже потом. У калькулятора растаможки этого
+            блока нет: его форма стоит выше, в одной подложке с заголовком, а пустая
+            подложка здесь читалась бы как не загрузившийся кусок страницы. */}
+        {/* У сравнения цен этого блока нет: его таблица стоит выше, в одной подложке
+            с заголовком, а пустая подложка здесь читалась бы как не загрузившийся
+            кусок страницы. */}
+        {!isCalculator && !isMarket && (
           <div className="model-page-body page-width">
             <article className="model-page-article">
-              {restSections.map((section) => <ModelPageSection key={section.title} section={section} navigate={navigate} />)}
+              {tool.kind === "quota" && <QuotaFigures />}
+              {tool.kind === "cost" && <ToolPageTable table={deliveryStages()} />}
+              {tool.kind === "brands" && <ChinaBrandsDirectory navigate={navigate} />}
+              {tool.kind === "range" && <RangeCalculator />}
             </article>
           </div>
         )}
-        <ArticleFaq faq={texts.faq} title="Частые вопросы" />
+        {isCalculator ? (
+          <>
+            <ToolDisclosures title="Как считается растаможка" titleId="tool-page-details-title" items={calculatorDetails} />
+            <ArticleFaq faq={texts.faq} title="Частые вопросы" />
+            <ModelPagePromo navigate={navigate} />
+          </>
+        ) : (
+          <>
+            <div className="model-page-body page-width">
+              <article className="model-page-article">
+                {firstSections.map((section) => <ModelPageSection key={section.title} section={section} navigate={navigate} />)}
+              </article>
+            </div>
+            <ModelPagePromo navigate={navigate} />
+            {restSections.length > 0 && (
+              <div className="model-page-body page-width">
+                <article className="model-page-article">
+                  {restSections.map((section) => <ModelPageSection key={section.title} section={section} navigate={navigate} />)}
+                </article>
+              </div>
+            )}
+            <ArticleFaq faq={texts.faq} title="Частые вопросы" />
+          </>
+        )}
       </div>
   );
   if (!withAside) {
@@ -9474,10 +9569,40 @@ function ToolPage({ tool, navigate }) {
 /* Таблица-карточки: первая ячейка строки становится заголовком, остальные читаются
    как «свойство — значение». Так же показаны версии в обзорах моделей: настоящая
    таблица на телефоне уезжала в боковую прокрутку. */
-function ToolPageTable({ table }) {
+/* Та же таблица, но настоящей таблицей, а не карточками. Карточки хороши, когда их
+   три-четыре и в каждой пара строк; ставки пошлины — это шесть почти одинаковых
+   строк, и карточками они растягивались на три экрана. В свёрнутых пунктах на
+   странице растаможки берём именно этот вид: он и компактнее, и совпадает с тем,
+   что видит поисковик, — там эти же данные всегда были таблицей. */
+function ToolPageDataTable({ table }) {
+  return (
+    <figure className="article-table tool-disclosure-table">
+      {table.title ? <figcaption className="tool-disclosure-table-title">{table.title}</figcaption> : null}
+      <div className="article-table-scroll">
+        <table>
+          <thead>
+            <tr>{table.columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row) => (
+              <tr key={row[0]}>
+                {row.map((cell, index) => (index ? <td key={cell + index}>{cell}</td> : <th key={cell} scope="row">{cell}</th>))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {table.note ? <figcaption>{table.note}</figcaption> : null}
+    </figure>
+  );
+}
+
+function ToolPageTable({ table, heading: Heading = "h2" }) {
   return (
     <section className="model-page-versions">
-      <h2>{table.title}</h2>
+      {/* Заголовка может не быть: внутри раскрывающегося пункта его роль играет
+          кнопка пункта. А когда таблиц в пункте несколько, у них заголовок помельче. */}
+      {table.title ? <Heading>{table.title}</Heading> : null}
       <div className="model-page-versions-cards">
         {table.rows.map((row) => (
           <div key={row[0]}>
@@ -9493,7 +9618,6 @@ function ToolPageTable({ table }) {
           </div>
         ))}
       </div>
-      <p className="model-page-versions-note">{table.note}</p>
     </section>
   );
 }
@@ -9610,113 +9734,737 @@ function QuotaFigures() {
   );
 }
 
-// Варианты ответов калькулятора. Списки отдельно от разметки: те же значения нужны
-// и в расчёте, и в подписях, а город приходит кодом, а не названием.
-// Четыре типа двигателя. У гибрида с генератором (Li Auto, AITO и другие, где
-// бензиновый мотор не связан с колёсами) таможня считает не по объёму двигателя,
-// а от стоимости машины. Бензин и дизель считаются одинаково — по объёму и
-// возрасту, поэтому отдельного пункта под дизель не нужно.
-const CALC_KINDS = ["Электромобиль", "Гибрид с розеткой", "Гибрид с генератором", "Бензин или дизель"];
-const CALC_YEARS = ["2026", "2025", "2024", "2023", "2022", "2021", "2020"];
-// Объёмы до 4,4 л: у бензиновых машин каталога встречаются и такие моторы, а
-// ставка за кубический сантиметр растёт ступенями до трёх литров и выше.
-const CALC_ENGINES = ["1,0", "1,4", "1,5", "1,6", "1,8", "2,0", "2,5", "3,0", "3,5", "4,4"];
-const CALC_CITIES = [["guangzhou", "Гуанчжоу"], ["shanghai", "Шанхай"], ["beijing", "Пекин"], ["chengdu", "Чэнду"], ["urumqi", "Урумчи"], ["haerbin", "Харбин"]];
+/* Калькулятор растаможки. Две части в одном блоке: сверху — таможенный платёж,
+   он считается по правилам Беларуси и от страны ввоза не зависит; ниже, если
+   машина едет из Китая, — во сколько она обойдётся в Минске со всеми этапами.
 
-/* Калькулятор: собирает из ответов «машину» и считает её тем же расчётом, что и
-   карточка каталога. Отдельной механики расчёта здесь нет — иначе калькулятор и
-   каталог разошлись бы в цифрах. Поля, итог и разбивка по этапам — три вложенных
-   блока: итог читают первым, этапы лежат рядом.
+   Обе части считает код из src/pricing.js — тот же, что и цену в карточке
+   каталога. Своей механики расчёта здесь нет: иначе калькулятор и каталог
+   разошлись бы в цифрах при первой же правке ставок.
 
-   Списки выбора — те же, что в фильтрах каталога: свой вид у выпадающего списка на
-   одной странице сразу выбивался бы из сайта. */
-function LandedCostCalculator() {
-  const [priceUsd, setPriceUsd] = useState("20000");
-  const [kind, setKind] = useState(CALC_KINDS[0]);
-  const [year, setYear] = useState("2023");
-  const [engine, setEngine] = useState("1,5");
-  const [sellerCity, setSellerCity] = useState(CALC_CITIES[0][1]);
-  const [bigCar, setBigCar] = useState(false);
-  const price = Number(priceUsd) || 0;
-  const byGenerator = kind === "Гибрид с генератором";
-  const type = kind === "Электромобиль" ? "Электромобиль" : kind === "Бензин или дизель" ? "ДВС" : "Гибрид";
-  const city = (CALC_CITIES.find(([, label]) => label === sellerCity) || CALC_CITIES[0])[0];
-  // Объём двигателя расчёт узнаёт по строке вида «1.5L»: без буквы он считал бы любую
-  // машину полуторалитровой, и выбор объёма в калькуляторе ничего бы не менял.
-  const engineSpec = type === "Электромобиль" || byGenerator ? "" : `${engine.replace(",", ".")}L`;
-  const estimate = price > 0
-    ? estimateLandedCost({ source: "Che168", usdPrice: price, chinaPrice: 0, type, sourceFuelType: byGenerator ? "Range Extender" : null, year: Number(year) || 2023, engine: engineSpec, city, curbWeight: bigCar ? 2300 : 1500 })
+   Списки выбора — те же, что в фильтрах каталога: свой вид у выпадающего списка
+   на одной странице сразу выбивался бы из сайта. */
+function CustomsCalculator() {
+  // Расчёт из чужой ссылки. Читаем адрес один раз при первом появлении формы:
+  // дальше поля живут своей жизнью, и подмешивать в них адрес на каждом шаге
+  // значило бы отменять то, что человек только что выбрал.
+  const shared = useMemo(() => calcStateFromSearch(window.location.search), []);
+  const [kind, setKind] = useState(() => (CALC_KINDS.find((item) => item.id === shared.kind) || CALC_KINDS[3]).name);
+  const [priceValue, setPriceValue] = useState(() => String(shared.price ?? 20000));
+  const [currency, setCurrency] = useState(() => shared.currency || CALC_CURRENCIES[0].id);
+  const [engineCc, setEngineCc] = useState(() => String(shared.engineCc ?? 1500));
+  const [year, setYear] = useState(() => shared.year || String(new Date().getFullYear() - 3));
+  const [refund50, setRefund50] = useState(() => Boolean(shared.refund50));
+  const [copied, setCopied] = useState(false);
+
+  const kindItem = CALC_KINDS.find((item) => item.name === kind) || CALC_KINDS[0];
+  const years = calcYears();
+  // Цена приходит в той валюте, которую выбрал человек, а расчёт живёт в долларах.
+  const toUsd = { usd: 1, eur: PRICING.eurByn / PRICING.usdByn, byn: 1 / PRICING.usdByn }[currency];
+  const priceUsd = Math.max(0, (Number(String(priceValue).replace(/\s/g, "")) || 0) * toUsd);
+  const cc = Math.max(0, Math.round(Number(engineCc) || 0));
+
+  // Возраст на дату оформления расчёт умеет считать сам — ему нужен год выпуска.
+  const ageYears = carAgeYears({ year: Number(year) || Number(years[3]) });
+  // Таможенная стоимость — то, что человек ввёл. Доставку до границы союза в неё
+  // здесь не добавляем: у нас не спрашивают ни страну, ни город, а это калькулятор
+  // растаможки, а не доставки. В карточке машины доставка до границы в стоимость
+  // входит, поэтому строка таможни там чуть больше при той же цене продавца.
+  const payment = priceUsd > 0
+    ? customsPayment({
+      customsValueUsd: priceUsd,
+      kind: kindItem.id === "phev" ? "ice" : kindItem.id,
+      engineCc: cc,
+      ageYears,
+      refund50,
+    })
     : null;
-  const rows = estimate
+
+  const byn = (usd) => `${number(Math.round(usd * PRICING.usdByn))} р.`;
+  const usd = (value) => `${number(Math.round(value))} $`;
+  const rows = payment
     ? [
-        ["Автомобиль у продавца", estimate.chinaUsd, null],
-        ["Выкуп и перевод денег", null, [estimate.buyoutLow, estimate.buyoutHigh]],
-        ["Документы и плечо в Китае", null, [estimate.chinaLegLow, estimate.chinaLegHigh]],
-        ["Автовоз до Минска", null, [estimate.intlLow, estimate.intlHigh]],
-        ["Таможня и оформление", null, [estimate.customsLow, estimate.customsHigh]],
-        ["Склад в Минске", null, [estimate.svhLow, estimate.svhHigh]],
-        ["Наши услуги", estimate.serviceUsd, null],
-      ]
+      ["Ввозная пошлина", payment.dutyUsd],
+      payment.vatUsd ? ["НДС 20%", payment.vatUsd] : null,
+      ["Утилизационный сбор", payment.utilUsd],
+      ["Таможенный сбор", payment.clearanceUsd],
+      payment.refundUsd ? ["Возмещение по указу № 140", -payment.refundUsd] : null,
+    ].filter(Boolean)
     : [];
+  // Почему вышла такая сумма. Пишем разбор под расчётом мелким текстом: без него
+  // человек видит цифру и не понимает, откуда она, а при бензиновой машине от трёх
+  // до пяти лет ещё и меняет цену, не видит разницы и решает, что калькулятор сломан.
+  // Слова берём из того же расчёта — правило, ставка и числа приходят из него, а не
+  // пишутся здесь заново.
+  const eur = (value) => `${number(Math.round(value))} €`;
+  const rate = (value) => `${String(value).replace(".", ",")} €`;
+  const whyDuty = () => {
+    const d = payment?.detail || {};
+    const cc = number(d.engineCc || 0);
+    if (payment?.basis === "ev-quota") return "Электромобиль ввозится по квоте без ввозной пошлины — в платеже остаются только сборы.";
+    if (payment?.basis === "ev-duty") return `Квота на беспошлинный ввоз электромобилей выбрана, поэтому начисляется пошлина 15% от стоимости машины — ${byn(payment.dutyUsd)}`;
+    if (payment?.basis === "erev") return "Бензиновый мотор здесь крутит только генератор, и машину оформляют по коду электромобиля. Но льготы у неё нет с 2026 года: пошлина 15% от стоимости и НДС 20% сверху — вместе около 38% цены.";
+    if (payment?.basis === "value-or-volume") {
+      return d.wonByVolume
+        ? `Машине меньше трёх лет, поэтому пошлину считают по большему из двух: доля от стоимости (${Math.round(d.percent * 100)}% — ${eur(d.byValue)}) или ставка за объём (${cc} см³ × ${rate(d.ratePerCc)} — ${eur(d.byVolume)}). Больше вышла ставка за объём.`
+        : `Машине меньше трёх лет, поэтому пошлину считают по большему из двух: доля от стоимости (${Math.round(d.percent * 100)}% — ${eur(d.byValue)}) или ставка за объём (${cc} см³ × ${rate(d.ratePerCc)} — ${eur(d.byVolume)}). Больше вышла доля от стоимости.`;
+    }
+    if (payment?.basis === "volume-3-5") {
+      return `Машине от трёх до пяти лет, а на этой ступени пошлину считают только по объёму двигателя: ${cc} см³ × ${rate(d.ratePerCc)} = ${eur(d.dutyEur)}. Цена машины на пошлину не влияет — впишите другую, и сумма не изменится.`;
+    }
+    if (payment?.basis === "volume-over-5") {
+      return `Машине больше пяти лет, а на этой ступени ставка за кубический сантиметр примерно вдвое выше: ${cc} см³ × ${rate(d.ratePerCc)} = ${eur(d.dutyEur)}. Цена машины на пошлину не влияет.`;
+    }
+    return "";
+  };
+  const whyRest = () => {
+    const parts = [];
+    // У гибрида с генератором про НДС уже сказано в разборе пошлины — второй раз не пишем.
+    if (payment?.vatUsd && payment.basis !== "erev") {
+      parts.push("Сверху идёт НДС 20%: нулевую ставку дают только машинам не старше пяти лет с даты выпуска.");
+    }
+    parts.push(`Утилизационный сбор — ${payment?.ageYears < 3 ? "624,92" : "1 282,02"} р. по льготной ставке для частного ввоза, таможенный сбор за оформление — 120 р.`);
+    if (payment?.refundUsd) parts.push("Половина пошлины и налога возвращается по заявлению уже после оформления — на таможне вносится полная сумма.");
+    return parts.join(" ");
+  };
+
+  // Ссылка ровно на этот расчёт. Её же держим в адресной строке: скопированное
+  // из браузера должно совпадать с тем, что даёт кнопка. Заменяем адрес, а не
+  // добавляем новый, — иначе кнопка «назад» перебирала бы каждую введённую цифру.
+  const shareSearch = calcShareSearch({
+    kind: kindItem.id,
+    price: String(priceValue).replace(/\s/g, ""),
+    currency,
+    engineCc: cc,
+    year,
+    refund50,
+  });
+  useEffect(() => {
+    if (!window.history?.replaceState) return;
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${shareSearch ? `?${shareSearch}` : ""}`);
+  }, [shareSearch]);
+  const shareUrl = `${window.location.origin}${appHref("/customs")}${shareSearch ? `?${shareSearch}` : ""}`;
+  const copyShareLink = async () => {
+    const done = await copyToClipboard(shareUrl);
+    if (!done) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
   return (
-    <section className="cost-calculator">
-      <h2>Посчитать</h2>
+    // Подпись блока — для тех, кто идёт по странице голосом: на экране её роль
+    // играет заголовок страницы прямо над формой.
+    <section className="cost-calculator" aria-label="Калькулятор растаможки">
       <div className="cost-calculator-form">
-        <label className="cost-calculator-field">
-          <span>Цена у продавца, $</span>
-          <input type="number" inputMode="numeric" min="1000" step="500" value={priceUsd} onChange={(event) => setPriceUsd(event.target.value)} />
-        </label>
-        {/* У списков подпись — обычный текст, а не <label>: нажимать в этой строке
-            нечего, выбор открывает сама кнопка списка. */}
         <div className="cost-calculator-field">
           <span>Тип двигателя</span>
-          <SelectField className="cost-calculator-select" label="Тип двигателя" value={kind} options={CALC_KINDS} onChange={setKind} />
+          <SelectField className="cost-calculator-select" label="Тип двигателя" value={kind} options={CALC_KINDS.map((item) => item.name)} onChange={setKind} />
         </div>
-        <div className="cost-calculator-field">
-          <span>Год выпуска</span>
-          <SelectField className="cost-calculator-select" label="Год выпуска" value={year} options={CALC_YEARS} onChange={setYear} />
+        {/* Цена и валюта — одно поле: платят на таможне в рублях, а объявления
+            приходят в долларах и евро, и пересчитывать в уме никто не будет. */}
+        {/* Не <label>: внутри стоят кнопки выбора валюты, а кнопка внутри подписи
+            к полю уводила бы нажатие в поле ввода. */}
+        <div className="cost-calculator-field cost-calculator-price">
+          <span id="calc-price-label">Цена машины</span>
+          <span className="cost-calculator-price-row">
+            <input type="number" inputMode="numeric" min="500" step="500" aria-labelledby="calc-price-label" value={priceValue} onChange={(event) => setPriceValue(event.target.value)} />
+            <span className="cost-calculator-currency" role="group" aria-label="Валюта цены">
+              {CALC_CURRENCIES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={currency === item.id ? "active" : ""}
+                  aria-pressed={currency === item.id}
+                  aria-label={item.label}
+                  onClick={() => setCurrency(item.id)}
+                >
+                  {item.name}
+                </button>
+              ))}
+            </span>
+          </span>
         </div>
-        {type !== "Электромобиль" && !byGenerator && (
-          <div className="cost-calculator-field">
-            <span>Объём двигателя</span>
-            <SelectField className="cost-calculator-select" label="Объём двигателя" value={engine} options={CALC_ENGINES} onChange={setEngine} formatOption={(item) => `${item} л`} />
-          </div>
+        {/* Объём — в кубических сантиметрах, как он записан в документах машины и
+            как его спрашивает таможня. У электромобиля и гибрида с генератором
+            пошлина считается от стоимости, и поле не нужно вовсе. */}
+        {kindItem.volume && (
+          <label className="cost-calculator-field">
+            <span>Объём двигателя, см³</span>
+            <input type="number" inputMode="numeric" min="600" max="8000" step="100" value={engineCc} onChange={(event) => setEngineCc(event.target.value)} />
+          </label>
         )}
         <div className="cost-calculator-field">
-          <span>Город продавца</span>
-          <SelectField className="cost-calculator-select" label="Город продавца" value={sellerCity} options={CALC_CITIES.map(([, label]) => label)} onChange={setSellerCity} />
+          <span>Год выпуска</span>
+          <SelectField className="cost-calculator-select" label="Год выпуска" value={year} options={years} onChange={setYear} />
         </div>
-        {/* Крупный кузов — такой же переключатель, как «Быстрый просмотр» и «Цены
-            с квотами»: обычная галочка была единственной на сайте. */}
+        {/* Переключатели — такие же, как «Быстрый просмотр» и «Цены с квотами»:
+            обычная галочка была бы единственной на сайте. */}
         <label className="quick-view-toggle cost-calculator-toggle">
-          <input type="checkbox" role="switch" checked={bigCar} onChange={(event) => setBigCar(event.target.checked)} />
-          <span className="quick-view-toggle-track" aria-hidden="true">
-            <i />
-          </span>
-          <span className="quick-view-toggle-label">Крупный кузов: длиннее 4,95 м или тяжелее 2,3 т</span>
+          <input type="checkbox" role="switch" checked={refund50} onChange={(event) => setRefund50(event.target.checked)} />
+          <span className="quick-view-toggle-track" aria-hidden="true"><i /></span>
+          <span className="quick-view-toggle-label">Возмещение 50% по указу № 140: инвалиды I и II группы, многодетные, родители детей-инвалидов</span>
         </label>
       </div>
-      {estimate ? (
+      {payment ? (
         <div className="cost-calculator-result">
           <div className="cost-calculator-total">
-            <span>Итого до Минска</span>
-            <strong>{number(estimate.totalLow)}–{number(estimate.totalHigh)} $</strong>
-            <small>Ориентир — около {number(estimate.totalUsd)} $. {estimate.customsNote}.</small>
+            <span>Таможенный платёж</span>
+            <strong>{byn(payment.totalExactUsd)}</strong>
+            <small>
+              Это {usd(payment.totalUsd)} по курсу Национального банка на {PRICING.rateDate}. Платить нужно в рублях.
+              {payment.refundUsd ? ` На таможне вносится ${byn(payment.totalExactUsd + payment.refundUsd)}, половина пошлины и налогов возвращается позже.` : ""}
+            </small>
           </div>
           <dl className="cost-calculator-rows">
-            {rows.map(([label, single, range]) => (
+            {rows.map(([label, value]) => (
               <div key={label}>
                 <dt>{label}</dt>
-                <dd>{single !== null ? `${number(single)} $` : `${number(range[0])}–${number(range[1])} $`}</dd>
+                <dd>{value < 0 ? `− ${byn(-value)}` : byn(value)}</dd>
               </div>
             ))}
           </dl>
+          {/* Расчёт нужно уметь переслать: без этого по ссылке из чата открывалась
+              бы пустая форма, и разговор начинался бы заново. Ссылка на Telegram
+              обычная, без их скриптов на странице. */}
+          <p className="cost-calculator-why">
+            {whyDuty()} {whyRest()}
+          </p>
+          <div className="cost-calculator-share">
+            <button type="button" className="cost-calculator-share-copy" onClick={copyShareLink}>
+              <LinkSimple size={17} />
+              <span>{copied ? "Ссылка скопирована" : "Поделиться расчётом"}</span>
+            </button>
+          </div>
         </div>
       ) : (
-        <p>Укажите цену у продавца, чтобы увидеть расчёт.</p>
+        <p>Укажите цену машины, чтобы увидеть расчёт.</p>
       )}
     </section>
   );
+}
+
+/* Справочник марок на странице «Марки из Китая».
+
+   Зачем живые числа: справочник, в котором рядом с маркой стоит «112 машин», сам себя
+   и проверяет — если марка кончилась, это видно, а не написано задним числом. Числа
+   берём из того же справочника фильтров, который заполняет панель каталога, поэтому
+   отдельного запроса к серверу страница не делает: ответ уже загружен или в пути.
+
+   Значок рисуем тем же BrandMark, что и в каталоге: свои картинки на этой странице
+   разошлись бы с каталогом при первой же замене логотипа. */
+const brandCountsFromMeta = (meta) => new Map((meta?.brands || []).map((item) => [item.brand, item.count]));
+
+function ChinaBrandsDirectory({ navigate }) {
+  const [counts, setCounts] = useState(() => brandCountsFromMeta(bootCatalogMeta("")));
+  useEffect(() => {
+    let alive = true;
+    requestCatalogMeta("")
+      .then((meta) => {
+        if (alive) setCounts(brandCountsFromMeta(meta));
+      })
+      .catch(() => null);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return (
+    <>
+      <section className="brand-directory">
+        <h2>Китайские марки</h2>
+        <div className="brand-directory-grid">
+          {CHINA_BRANDS.map((item) => (
+            <BrandDirectoryCard key={item.brand} item={item} count={counts.get(item.brand) || 0} navigate={navigate} />
+          ))}
+        </div>
+      </section>
+      <section className="brand-directory">
+        <h2>Привычные марки, которые делают в Китае</h2>
+        <div className="brand-directory-grid">
+          {CHINA_MADE_FOREIGN.map((item) => (
+            <BrandDirectoryCard
+              key={item.brand}
+              item={{ ...item, group: `В Китае — вместе с ${item.partner}` }}
+              count={counts.get(item.brand) || 0}
+              navigate={navigate}
+            />
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* Сравнение с белорусским рынком.
+
+   Считать это в браузере не из чего: цены нашего каталога живут в базе, а свод чужих
+   объявлений собирается руками с домашней сети. Поэтому сравнение собирает сервер
+   (`/api/market/compare`) по тем же правилам, что и версия для поисковика.
+
+   Ответа может не быть: свод не собран или база недоступна. Тогда блок молча исчезает,
+   а страница остаётся текстовой — пустая таблица «сравнили и ничего не нашли» хуже
+   её отсутствия. */
+function MarketCompare({ navigate }) {
+  const [data, setData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch(`${import.meta.env.BASE_URL}api/market/compare`)
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("сравнение недоступно"))))
+      .then((value) => {
+        if (alive) setData(value);
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (failed) return null;
+  if (!data) return <p className="cost-calculator-note">Считаем разницу…</p>;
+  const rows = data.rows || [];
+  if (!rows.length) return null;
+  // Итоговой плашки здесь нет намеренно: всё то же самое видно в самой таблице, а
+  // цветной блок над ней только отодвигал её вниз. В версии для поисковика сводка
+  // осталась — там таблицу не полистаешь.
+  return (
+    <section className="cost-calculator">
+      <MarketCompareTable rows={rows} brands={data.brands || []} collectedAt={data.collectedAt} navigate={navigate} />
+    </section>
+  );
+}
+
+/* Таблица сравнения: поиск, фильтр по марке и сортировка по столбцам.
+
+   Здесь именно таблица, а не карточки, как на остальных страницах расчётов. Причина в
+   размере: наборов «модель + год», где есть предложения с обеих сторон, около двух
+   сотен, и карточками это превращается в бесконечную ленту, по которой нельзя ни найти
+   свою машину, ни сравнить строки между собой. Столбцы же читаются глазом сразу.
+
+   Сортировка по умолчанию — по числу наших машин: сверху то, где у нас настоящий
+   выбор, а не три случайных объявления. Нажатие на заголовок переключает столбец, а
+   повторное — направление. */
+const MARKET_SORTS = Object.freeze([
+  // У названия сортировка буквенная, у остальных числовая: отсюда два вида правила.
+  { id: "model", label: "Модель авто", text: (row) => `${row.brand} ${row.model}` },
+  { id: "theirMedian", label: "В Беларуси", value: (row) => row.theirMedian },
+  { id: "ourMedian", label: "У нас в каталоге", value: (row) => row.ourMedian },
+  { id: "diffPercent", label: "Разница", value: (row) => row.diffPercent },
+]);
+// По какому столбцу таблица отсортирована при первом открытии: по разнице, сверху
+// самое выгодное. За этим на страницу и приходят — «где выгоднее всего привезти», а
+// не «каких машин у нас больше».
+const MARKET_DEFAULT_SORT = { id: "diffPercent", desc: true, value: (row) => row.diffPercent };
+// Сколько строк показываем сразу и сколько добавляет кнопка.
+const MARKET_PAGE_SIZE = 20;
+
+function MarketCompareTable({ rows, brands: coverage, collectedAt, navigate }) {
+  const [query, setQuery] = useState("");
+  const [brand, setBrand] = useState("Все марки");
+  const [sort, setSort] = useState(MARKET_DEFAULT_SORT);
+  // Показываем по двадцать строк. Двести с лишним сразу — это экран, по которому
+  // невозможно идти глазом, и лишний вес страницы на телефоне.
+  const [shown, setShown] = useState(MARKET_PAGE_SIZE);
+  // В списке все марки каталога, а не только те, где сравнение получилось. Человек
+  // ищет свою машину: если её марки в списке нет, он прочитает это как «не возят»,
+  // хотя дело в белорусском рынке, а не в нас.
+  const brands = useMemo(
+    () => ["Все марки", ...coverage.map((item) => item.brand).sort((left, right) => left.localeCompare(right, "ru"))],
+    [coverage],
+  );
+  const chosen = coverage.find((item) => item.brand === brand) || null;
+  const thin = useMemo(() => coverage.filter((item) => !item.matched), [coverage]);
+  // Раскрытые модели. Пока ничего не раскрыто, таблица показывает по строке на модель
+  // с разбегом лет; нажатие на строку показывает годы по отдельности.
+  const [opened, setOpened] = useState(() => new Set());
+  const toggleModel = (key) => setOpened((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+  const table = compareTable(rows, { collectedAt });
+  const visible = useMemo(() => {
+    // Ищем по марке и модели вместе: человек пишет «byd han», а не выбирает марку
+    // отдельно. Регистр и лишние пробелы значения не имеют, год тоже ищется.
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const sorter = MARKET_SORTS.find((item) => item.id === sort.id) || MARKET_DEFAULT_SORT;
+    const picked = rows
+      .filter((row) => brand === "Все марки" || row.brand === brand)
+      .filter((row) => {
+        if (!words.length) return true;
+        const haystack = `${row.brand} ${row.model} ${row.year}`.toLowerCase();
+        return words.every((word) => haystack.includes(word));
+      });
+    // Сравниваем всегда «по возрастанию», а направление переворачиваем одним местом:
+    // так числовой и буквенный столбцы не расходятся в поведении.
+    const ascending = sorter.text
+      ? (left, right) => sorter.text(left).localeCompare(sorter.text(right), "ru")
+      : (left, right) => sorter.value(left) - sorter.value(right);
+    return groupCompareRows(picked).sort((left, right) => ascending(left, right) * (sort.desc ? -1 : 1));
+  }, [rows, query, brand, sort]);
+  // Когда ищут словом, годы показываем сразу: человек уже сузил выдачу сам, и лишнее
+  // нажатие здесь только мешает.
+  const searching = query.trim().length > 0;
+  // Любая смена отбора возвращает список к первым двадцати: иначе после поиска
+  // «byd» на экране оставалось бы столько строк, сколько человек открыл до него.
+  useEffect(() => setShown(MARKET_PAGE_SIZE), [query, brand, sort]);
+  const page = visible.slice(0, shown);
+  const money = (value) => `${number(Math.round(value))} $`;
+  // Числовой столбец при первом нажатии показывает сначала большие значения, а
+  // название — от А до Я: иначе список моделей открывался бы с конца алфавита.
+  const toggleSort = (id) => setSort((current) => (current.id === id ? { id, desc: !current.desc } : { id, desc: id !== "model" }));
+
+  return (
+    <div className="market-compare">
+      <div className="market-compare-controls">
+        <label className="market-compare-search">
+          <MagnifyingGlass size={18} />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Марка или модель"
+            aria-label="Поиск по марке и модели"
+          />
+        </label>
+        <SelectField className="market-compare-brand" label="Марка" value={brand} options={brands} onChange={setBrand} />
+
+      </div>
+      {/* Марка выбрана, а сравнивать не с чем: объясняем чем именно, а не оставляем
+          пустое место. Это как раз те марки, которых в Беларуси почти нет, — довод
+          в нашу пользу, а не пробел в данных. */}
+      {chosen && !chosen.matched && (
+        <p className="market-compare-empty">
+          {chosen.brand}: в каталоге {number(chosen.cars)} {pluralRu(chosen.cars, "машина", "машины", "машин")}, но {coverageNote(chosen)}.
+          {chosen.offers === 0 ? " Такую машину в Беларуси попросту не купить с рук — её нужно везти." : ""}
+        </p>
+      )}
+      {/* Заглушка та же, что в поиске на главной: значок, заголовок и подсказка,
+          что делать дальше. Голая строчка «ничего не найдено» рядом с фильтром
+          читалась как ошибка страницы. */}
+      {visible.length === 0 && (
+        <div className="empty-state market-compare-empty-state">
+          <MagnifyingGlass size={26} />
+          <h3>Ничего не найдено</h3>
+          <p>
+            {brand === "Все марки"
+              ? "Попробуйте другое написание модели или выберите марку из списка."
+              : `По марке ${brand} с таким запросом ничего нет. Уберите слово из поиска или выберите другую марку.`}
+          </p>
+        </div>
+      )}
+      {visible.length > 0 && (
+        <div className="market-compare-scroll">
+          <table className="market-compare-table">
+            <thead>
+              <tr>
+                {MARKET_SORTS.map((item) => (
+                  <th key={item.id} scope="col" aria-sort={sort.id === item.id ? (sort.desc ? "descending" : "ascending") : "none"}>
+                    <button type="button" onClick={() => toggleSort(item.id)}>
+                      {item.label}
+                      {sort.id === item.id ? <span aria-hidden="true">{sort.desc ? " ↓" : " ↑"}</span> : null}
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {page.map((group) => {
+                const open = searching || opened.has(group.key);
+                // У модели с единственным годом раскрывать нечего: строка не
+                // нажимается и не подсвечивается, а стрелка остаётся приглушённой —
+                // только чтобы столбец названий не разъезжался.
+                const single = group.years.length === 1;
+                const nameInside = (
+                  <>
+                    <CaretRight size={15} weight="bold" className={`market-compare-caret${open && !single ? " open" : ""}${single ? " dim" : ""}`} />
+                    <span className="market-compare-name-text">
+                      {/* Длинное название не переносится на вторую строку, а
+                          обрезается многоточием: строки таблицы должны быть одной
+                          высоты, иначе колонки цифр разъезжаются. */}
+                      <AppLink
+                        className="market-compare-model"
+                        href={`/catalog?brand=${encodeURIComponent(group.brand)}&model=${encodeURIComponent(group.model)}`}
+                        navigate={navigate}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {group.brand} {group.model}
+                      </AppLink>
+                      <span className="market-compare-sub">
+                        {group.yearFrom === group.yearTo ? group.yearFrom : `${group.yearFrom}–${group.yearTo}`}
+                        {group.longVersion ? " · длиннобазная" : ""}
+                      </span>
+                    </span>
+                  </>
+                );
+                return (
+                  <Fragment key={group.key}>
+                    {/* Нажимается вся строка, а не только название: попасть в неё
+                        проще, и так ведут себя раскрывающиеся списки на сайте. Кнопка
+                        внутри остаётся ради клавиатуры и читалок экрана, и своё
+                        нажатие она дальше не пускает — иначе строка переключилась бы
+                        дважды и осталась бы закрытой. */}
+                    <tr
+                      className={`market-compare-row${single ? " market-compare-single" : ""}${open && !single ? " market-compare-open" : ""}`}
+                      onClick={single ? undefined : () => toggleModel(group.key)}
+                    >
+                      <th scope="row">
+                        {single ? (
+                          <span className="market-compare-name">{nameInside}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="market-compare-name"
+                            aria-expanded={open}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleModel(group.key);
+                            }}
+                          >
+                            {nameInside}
+                          </button>
+                        )}
+                      </th>
+                      <td>
+                        {money(group.theirMedian)}
+                        <span>{number(group.theirCount)} {pluralRu(group.theirCount, "машина", "машины", "машин")}</span>
+                      </td>
+                      <td>
+                        {money(group.ourMedian)}
+                        <span>{number(group.ourCount)} {pluralRu(group.ourCount, "машина", "машины", "машин")}</span>
+                      </td>
+                      {/* Разница — единственная колонка с цветом: ради неё страницу и
+                          открывают. Слово рядом с цифрой дублирует цвет, чтобы строка
+                          читалась и без него. У модели с несколькими годами это
+                          середина по годам, и «в среднем» здесь не фигура речи. */}
+                      {/* В процентах, а не в деньгах: строки разных моделей так
+                          сравнимы между собой — «дешевле на 3 000 $» у машины за
+                          двадцать тысяч и за шестьдесят означает совсем разное. */}
+                      <td className={group.diff > 0 ? "market-compare-win" : "market-compare-lose"}>
+                        {`${group.diff > 0 ? "Дешевле" : "Дороже"} на ${Math.abs(group.diffPercent)}%`}
+                        {/* Там, где местная цена ниже, у немецких, японских и
+                            американских марок этому обычно есть причина, и молчать
+                            о ней нечестно: значок открывает объяснение. */}
+                        {hasRebuiltHint(group) && (
+                          <button type="button" className="market-compare-hint" aria-label="Почему в Беларуси дешевле">
+                            <Info size={16} />
+                            <ActionTooltip text={REBUILT_HINT} tapToOpen />
+                          </button>
+                        )}
+                        <span>выгодно в {group.cheaperYears} из {group.years.length}</span>
+                      </td>
+                    </tr>
+                    {open && !single && group.years.map((row) => (
+                      <tr key={`${group.key}|${row.year}`} className="market-compare-year">
+                        <th scope="row">
+                          <span className="market-compare-name">
+                            <AppLink
+                              className="market-compare-model"
+                              href={`/catalog?brand=${encodeURIComponent(row.brand)}&model=${encodeURIComponent(row.model)}&yearFrom=${row.year}&yearTo=${row.year}`}
+                              navigate={navigate}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {row.year}
+                            </AppLink>
+                          </span>
+                        </th>
+                        <td>
+                          {money(row.theirMedian)}
+                          <span>{number(row.theirCount)} {pluralRu(row.theirCount, "машина", "машины", "машин")}</span>
+                        </td>
+                        <td>
+                          {money(row.ourMedian)}
+                          <span>{number(row.ourCount)} {pluralRu(row.ourCount, "машина", "машины", "машин")}</span>
+                        </td>
+                        <td className={row.diff > 0 ? "market-compare-win" : "market-compare-lose"}>
+                          {row.diff > 0 ? `Дешевле на ${row.diffPercent}%` : `Дороже на ${-row.diffPercent}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {visible.length > shown && (
+        <button type="button" className="market-compare-more" onClick={() => setShown((current) => current + MARKET_PAGE_SIZE)}>
+          Показать ещё {Math.min(MARKET_PAGE_SIZE, visible.length - shown)} из {number(visible.length - shown)}
+        </button>
+      )}
+      {/* Полный список марок без сравнения — под таблицей, чтобы страница отвечала
+          и тем, кто пришёл за маркой, которой на местном рынке нет. */}
+      {/* Подпись относится к таблице сравнения, поэтому стоит сразу под ней, а не
+          после списка марок — иначе читается как объяснение к нему. */}
+      <p className="model-page-versions-note">{table.note}</p>
+      {brand === "Все марки" && !searching && thin.length > 0 && (
+        <div className="market-compare-thin">
+          <h3>Марки, по которым сравнивать не с чем</h3>
+          {/* Той же таблицей, что и сравнение: два разных вида списка на одной
+              странице читаются как два разных раздела. Объяснения словами убраны —
+              всё видно по цифрам: машины у нас есть, в Беларуси их нет. */}
+          <div className="market-compare-scroll">
+            <table className="market-compare-table">
+              <thead>
+                <tr>
+                  <th scope="col">Марка</th>
+                  <th scope="col">В Беларуси</th>
+                  <th scope="col">У нас в каталоге</th>
+                </tr>
+              </thead>
+              <tbody>
+                {thin.map((item) => (
+                  <tr key={item.brand}>
+                    <th scope="row">
+                      <span className="market-compare-name-text">
+                        <AppLink
+                          className="market-compare-model"
+                          href={brandLandingPath(item.brand) || `/catalog?brand=${encodeURIComponent(item.brand)}`}
+                          navigate={navigate}
+                        >
+                          {item.brand}
+                        </AppLink>
+                      </span>
+                    </th>
+                    <td>{item.offers ? `${number(item.offers)} ${pluralRu(item.offers, "машина", "машины", "машин")}` : "не нашлось"}</td>
+                    <td>{number(item.cars)} {pluralRu(item.cars, "машина", "машины", "машин")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Калькулятор реального запаса хода. Форма и вид результата те же, что у калькулятора
+   растаможки: это соседние страницы одного списка, и своя механика у каждой сбивала бы
+   с толку. Сам расчёт живёт в src/range-estimate.js — там же написано, откуда взяты
+   поправки и почему это оценка, а не замер. */
+function RangeCalculator() {
+  const [rated, setRated] = useState("500");
+  const [cycle, setCycle] = useState(RANGE_CYCLES[0].name);
+  const [celsius, setCelsius] = useState("-10");
+  const [mode, setMode] = useState(RANGE_MODES[1].name);
+  const [chemistry, setChemistry] = useState(RANGE_CHEMISTRY[0].name);
+  const [ageYears, setAgeYears] = useState("3");
+  const [heatPump, setHeatPump] = useState(false);
+
+  const cycleItem = RANGE_CYCLES.find((item) => item.name === cycle) || RANGE_CYCLES[0];
+  const modeItem = RANGE_MODES.find((item) => item.name === mode) || RANGE_MODES[1];
+  const chemistryItem = RANGE_CHEMISTRY.find((item) => item.name === chemistry) || RANGE_CHEMISTRY[0];
+  const ratedKm = Math.max(0, Number(String(rated).replace(/\s/g, "")) || 0);
+  const input = {
+    rated: ratedKm,
+    cycle: cycleItem.id,
+    celsius: Number(celsius) || 0,
+    mode: modeItem.id,
+    chemistry: chemistryItem.id,
+    ageYears: Number(ageYears) || 0,
+    heatPump,
+  };
+  const result = realRange(input);
+  const summer = realRange({ ...input, celsius: 20, mode: "mixed" });
+  const table = rangeTable(input);
+
+  return (
+    <section className="cost-calculator">
+      <h2>Посчитать реальный запас хода</h2>
+      <div className="cost-calculator-form">
+        <label className="cost-calculator-field">
+          <span>Паспортный запас хода, км</span>
+          <input type="number" inputMode="numeric" min="50" max="1500" step="10" value={rated} onChange={(event) => setRated(event.target.value)} />
+        </label>
+        <div className="cost-calculator-field">
+          <span>По какому циклу измерен</span>
+          <SelectField className="cost-calculator-select" label="Цикл измерения" value={cycle} options={RANGE_CYCLES.map((item) => item.name)} onChange={setCycle} />
+        </div>
+        {/* Температуру спрашиваем числом, а не списком: между −5 и −25 разница в треть
+            запаса хода, и «зима» одним пунктом ничего бы не сказала. */}
+        <label className="cost-calculator-field">
+          <span>Температура за окном, °C</span>
+          <input type="number" inputMode="numeric" min="-30" max="40" step="1" value={celsius} onChange={(event) => setCelsius(event.target.value)} />
+        </label>
+        <div className="cost-calculator-field">
+          <span>Как ездите</span>
+          <SelectField className="cost-calculator-select" label="Режим движения" value={mode} options={RANGE_MODES.map((item) => item.name)} onChange={setMode} />
+        </div>
+        <div className="cost-calculator-field">
+          <span>Батарея</span>
+          <SelectField className="cost-calculator-select" label="Химия батареи" value={chemistry} options={RANGE_CHEMISTRY.map((item) => item.name)} onChange={setChemistry} />
+        </div>
+        <label className="cost-calculator-field">
+          <span>Возраст машины, лет</span>
+          <input type="number" inputMode="numeric" min="0" max="15" step="1" value={ageYears} onChange={(event) => setAgeYears(event.target.value)} />
+        </label>
+        <label className="quick-view-toggle cost-calculator-toggle">
+          <input type="checkbox" role="switch" checked={heatPump} onChange={(event) => setHeatPump(event.target.checked)} />
+          <span className="quick-view-toggle-track" aria-hidden="true"><i /></span>
+          <span className="quick-view-toggle-label">Есть тепловой насос: в холода он экономит около десятой части запаса хода</span>
+        </label>
+      </div>
+      {ratedKm > 0 ? (
+        <div className="cost-calculator-result">
+          <div className="cost-calculator-total">
+            <span>Проедет на самом деле</span>
+            <strong>{number(result.km)} км</strong>
+            <small>
+              Из паспортных {number(ratedKm)} км это {Math.round((result.km / ratedKm) * 100)}%. В тёплую погоду в смешанном режиме — около {number(summer.km)} км.
+            </small>
+          </div>
+          <dl className="cost-calculator-rows">
+            <div>
+              <dt>Цикл измерения</dt>
+              <dd>−{Math.round((1 - result.parts.cycle) * 100)}%</dd>
+            </div>
+            <div>
+              <dt>Погода</dt>
+              <dd>{result.parts.temperature >= 1 ? "без потерь" : `−${Math.round((1 - result.parts.temperature) * 100)}%`}</dd>
+            </div>
+            <div>
+              <dt>Скорость</dt>
+              <dd>{result.parts.mode >= 1 ? `+${Math.round((result.parts.mode - 1) * 100)}%` : `−${Math.round((1 - result.parts.mode) * 100)}%`}</dd>
+            </div>
+            <div>
+              <dt>Возраст батареи</dt>
+              <dd>{result.parts.age >= 1 ? "без потерь" : `−${Math.round((1 - result.parts.age) * 100)}%`}</dd>
+            </div>
+          </dl>
+          <p className="cost-calculator-note">{table.note}</p>
+        </div>
+      ) : (
+        <p>Укажите паспортный запас хода, чтобы увидеть расчёт.</p>
+      )}
+      <ToolPageTable table={table} />
+    </section>
+  );
+}
+
+function BrandDirectoryCard({ item, count, navigate }) {
+  const path = brandLandingPath(item.brand);
+  const inner = (
+    <>
+      <span className="brand-directory-head">
+        <BrandMark brand={item.brand} />
+        <b>{item.brand}</b>
+      </span>
+      {item.say ? <span className="brand-directory-say">{item.say}{item.chinese ? ` · ${item.chinese}` : ""}</span> : null}
+      <span className="brand-directory-group">{item.group}{item.since ? `, с ${item.since} года` : ""}</span>
+      <p>{item.about}</p>
+      <span className="brand-directory-count">
+        {count > 0 ? `${number(count)} ${pluralRu(count, "машина", "машины", "машин")} в каталоге` : "Сейчас в каталоге нет"}
+      </span>
+    </>
+  );
+  // Ссылкой делаем только ту карточку, за которой есть что показать: раздел без
+  // единой машины — это тупик, а не переход.
+  return path && count > 0
+    ? <AppLink className="brand-directory-card" href={path} navigate={navigate}>{inner}</AppLink>
+    : <div className="brand-directory-card">{inner}</div>;
 }
 
 function LegalPage({ kind }) {
@@ -10124,9 +10872,12 @@ function HomeCollections({ navigate }) {
  */
 // Значки страниц-расчётов. Держим их здесь, а не в описании страниц: `tool-pages.js`
 // читает и сервер, а там разметки нет.
-const TOOL_PAGE_ICONS = { "/ev-quota": Lightning, "/customs": ClipboardText, "/delivery-cost": RoadHorizon, "/calculator": Calculator };
+const TOOL_PAGE_ICONS = { "/ev-quota": Lightning, "/customs": Calculator, "/delivery-cost": RoadHorizon, "/china-brands": SquaresFour, "/range": BatteryHigh, "/price-belarus": Scales };
 // Значки пунктов бокового меню — по слугу из `src/blog-posts.js`. Значки заведены и для
 // разделов, которых пока нет: их пункты появятся вместе с первым материалом.
+/** Сколько разделов видно до нажатия «Показать все разделы» (кроме «Все материалы»). */
+const BLOG_SIDEBAR_SHORT_LIST = 3;
+
 const BLOG_FILTER_ICONS = {
   all: List,
   electric: Lightning,
@@ -10151,8 +10902,21 @@ const BLOG_FILTER_ICONS = {
  * блоком и выглядят обычными кнопками со значками.
  */
 function BlogSidebar({ navigate, filter = null, onFilter = null, currentPath = null }) {
-  const items = blogSidebarItems();
+  const [allSections, setAllSections] = useState(false);
+  // Пустые разделы не показываем: пункт, за которым ничего нет, только сбивает.
+  // Они появятся сами, как только в разделе выйдет первый материал.
+  const items = blogSidebarItems().filter((item) => item.count > 0);
   const chosen = (item) => (filter ? filter.kind === item.kind && filter.slug === item.slug : item.kind === "all");
+  // Сразу видны «Все материалы» и три самых больших раздела. Остальные — по нажатию:
+  // десяток пунктов подряд читается как оглавление сайта и отодвигает сами материалы
+  // вниз, а выбирают почти всегда из первых строк. Выбранный раздел показываем всегда,
+  // даже если он не попал в тройку, — иначе отметка выбора пропадает из меню.
+  const sections = items.filter((item) => item.kind !== "all");
+  const biggest = [...sections].sort((a, b) => b.count - a.count).slice(0, BLOG_SIDEBAR_SHORT_LIST);
+  const visible = allSections
+    ? items
+    : items.filter((item) => item.kind === "all" || biggest.includes(item) || chosen(item));
+  const hidden = items.length - visible.length;
   // Где меню ведёт себя как обычная навигация: на главной журнала (её признак —
   // onFilter, разделы там переключаются на месте, в любом состоянии фильтра) и на
   // самих страницах расчётов (их признак — currentPath). Там расчёты и каталог
@@ -10162,10 +10926,7 @@ function BlogSidebar({ navigate, filter = null, onFilter = null, currentPath = n
   return (
     <aside className="blog-sidebar" aria-label="Разделы журнала">
       <nav className="blog-sidebar-filters">
-        {items
-          // Пустые разделы не показываем: пункт, за которым ничего нет, только сбивает.
-          // Они появятся сами, как только в разделе выйдет первый материал.
-          .filter((item) => item.count > 0)
+        {visible
           .map((item) => {
             const Icon = BLOG_FILTER_ICONS[item.slug] || List;
             const inside = (
@@ -10196,6 +10957,17 @@ function BlogSidebar({ navigate, filter = null, onFilter = null, currentPath = n
               </AppLink>
             );
           })}
+        {hidden > 0 || allSections ? (
+          <button
+            type="button"
+            className="blog-filter-more"
+            onClick={() => setAllSections((open) => !open)}
+            aria-expanded={allSections}
+          >
+            <span>{allSections ? "Свернуть разделы" : "Показать все разделы"}</span>
+            <CaretDown size={16} weight="bold" aria-hidden="true" />
+          </button>
+        ) : null}
       </nav>
       <nav className="blog-sidebar-tools">
         {TOOL_PAGES.map((tool) => {
@@ -11241,8 +12013,8 @@ function SiteFooter({ navigate }) {
         <div className="footer-brand">
           <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="abcars.by — на главную"><SiteLogo /></AppLink>
           <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
-          <FooterAppDownload onOpen={openAppUnavailable} />
         </div>
+        <FooterAppDownload onOpen={openAppUnavailable} />
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<a href={"/how-it-works#faq"}>Вопросы и ответы</a></div>
         <div className="footer-column footer-tools"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
         <div className="footer-column footer-contacts">
