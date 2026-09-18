@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { carFrame, EXTERIOR_FRAMES, exteriorFrames, headlineSize, HEADLINE_SIZES, KINDS, PLACES, resolvePlace, SOCIAL_THEMES, socialThemeQuery, socialTiles, THEME_ROUNDS, tileHeadline, typeset } from "../src/social-themes.js";
+import { carFrame, DUEL_HEADLINES, EXTERIOR_FRAMES, exteriorFrames, headlineSize, headlineVariant, HEADLINE_SIZES, KINDS, PLACES, resolvePlace, SOCIAL_THEMES, socialThemeQuery, socialTiles, THEME_ROUNDS, tileHeadline, typeset } from "../src/social-themes.js";
 
 const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
@@ -163,7 +163,7 @@ test("логотип стоит в углу каждой плитки и не р
 test("заголовок темы лежит на кадре и растёт вместе с плиткой", () => {
   assert.equal(page.match(/className=\{titleClass\}/g)?.length, 2, "надписи нет у одного из видов плиток");
   assert.match(page, /const titleClass = `social-title at-\$\{resolvePlace\(theme\.place, headline\)\} size-\$\{headlineSize\(headline\)\}`/);
-  assert.match(page, /const headline = tileHeadline\(theme, pick, loaded\)/);
+  assert.match(page, /const headline = tileHeadline\(theme, pick, loaded, round\)/);
   assert.match(styles, /\.social-frame \{[^}]*container-type:inline-size/);
   assert.match(styles, /\.social-title \{[\s\S]*?color:#fff/);
   assert.match(styles, /\.social-title\.size-[a-z]+ \{ font-size:calc\([\d.]+cqw \* var\(--social-title-scale, 1\)\)/);
@@ -219,9 +219,9 @@ test("заголовки набраны примеряемым шрифтом, �
 // должно — на картинке они выглядят мусором.
 test("на кадре стоит первая строка записи, и в ней нет значков", () => {
   const car = { brand:"Zeekr", model:"001", year:2022, type:"Электромобиль", chinaPrice:180_000, usdPrice:25_000, battery:86 };
-  const lines = socialTiles().map(({ theme, pick }) => {
+  const lines = socialTiles().map(({ theme, pick, round }) => {
     const loaded = theme.kind === KINDS.duel ? [car, { brand:"BMW", model:"i5", year:2024 }] : theme.kind === KINDS.cover ? null : car;
-    return tileHeadline(theme, pick, loaded);
+    return tileHeadline(theme, pick, loaded, round);
   });
   assert.equal(lines.filter(Boolean).length, lines.length, "у какой-то плитки нет первой строки");
   // Значки, которыми начинаются строки записи: на картинку они не переносятся.
@@ -236,14 +236,43 @@ test("на кадре стоит первая строка записи, и в �
   assert.equal(tileHeadline(core, core.picks[0], null), "");
 });
 
-// Формулировки не должны повторяться: одинаковый текст на соседних плитках — это
-// та же лента-бланк, от которой уводили разные места для надписи.
-test("у заходов одной темы формулировки разные, где это задумано", () => {
-  for (const id of ["price_question", "budget", "blog"]) {
-    const theme = SOCIAL_THEMES.find((item) => item.id === id);
-    const lines = theme.picks.map((pick) => tileHeadline(theme, pick, null));
-    assert.equal(new Set(lines).size, lines.length, `у темы ${id} заходы говорят одно и то же`);
+// Формулировки не должны повторяться: одинаковый текст круг за кругом — это та же
+// лента-бланк, от которой уводили разные места для надписи. У каждой темы с
+// постоянным текстом формулировка своя на каждый круг.
+test("у кругов одной темы формулировки разные", () => {
+  const rounds = [...Array(THEME_ROUNDS).keys()];
+  for (const theme of SOCIAL_THEMES) {
+    // Темы, где надпись собирается из самой машины (цена под ключ, сравнение),
+    // проверяются отдельно: без загруженной машины строки у них пустые.
+    if (!theme.headlines && !theme.picks.every((pick) => pick.headline)) continue;
+    const lines = rounds.map((round) => tileHeadline(theme, theme.picks[round % theme.picks.length], null, round));
+    assert.equal(new Set(lines).size, lines.length, `у темы ${theme.id} круги говорят одно и то же: ${lines.join(" / ")}`);
   }
+  // Сравнение двух моделей тоже не повторяет один и тот же вопрос дословно.
+  const duel = SOCIAL_THEMES.find((theme) => theme.id === "duel");
+  const pair = [{ brand:"BMW", model:"i5" }, { brand:"BYD", model:"Han L" }];
+  const duelLines = rounds.map((round) => tileHeadline(duel, duel.picks[0], pair, round));
+  assert.ok(new Set(duelLines).size > 1, `сравнение спрашивает одно и то же: ${duelLines.join(" / ")}`);
+  assert.ok(DUEL_HEADLINES.length >= 2, "у сравнения всего одна формулировка");
+});
+
+// Список идёт по кругу: круг за пределами списка возвращается к его началу, а не
+// к пустоте — иначе на четвёртом круге кадр остался бы без надписи.
+test("варианты идут по кругу и не кончаются", () => {
+  assert.equal(headlineVariant(["а", "б"], 0), "а");
+  assert.equal(headlineVariant(["а", "б"], 3), "б");
+  const fresh = SOCIAL_THEMES.find((theme) => theme.id === "fresh");
+  assert.equal(tileHeadline(fresh, fresh.picks[0], null, THEME_ROUNDS), tileHeadline(fresh, fresh.picks[0], null, 0));
+});
+
+// Длинная надпись уезжает на мелкий кегль и на три строки, а из центра её вдобавок
+// выносит к краю: варианты должны быть в основном короткими.
+test("варианты заголовков короткие", () => {
+  const fixed = SOCIAL_THEMES.flatMap((theme) => [...(theme.headlines || []), ...theme.picks.map((pick) => pick.headline).filter(Boolean)]);
+  assert.ok(fixed.length >= 12, `постоянных формулировок слишком мало: ${fixed.length}`);
+  for (const line of fixed) assert.ok(line.length <= 40, `формулировка «${line}» длиннее 40 знаков`);
+  const short = fixed.filter((line) => headlineSize(line) === "large");
+  assert.ok(short.length >= fixed.length / 3, `коротких формулировок всего ${short.length} из ${fixed.length}`);
 });
 
 // Стиль надписи один на все темы (решение Сергея 17.09.2026: плашки под текстом

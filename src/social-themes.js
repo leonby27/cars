@@ -48,36 +48,62 @@ export const EXTERIOR_FRAMES = 2;
 //
 // Модели взяты из костяка плана и все разные: на однотипных кадрах оформление не
 // проверишь. Проверено 17.09.2026 — машины есть по каждой строке.
+// У тем с постоянной надписью формулировка не одна. Тема в ленте возвращается
+// круг за кругом, и одна и та же фраза на каждом круге превращает ленту в бланк:
+// читатель перестаёт её замечать, а поисковые выжимки и пересказы повторяются.
+// Вариантов столько же, сколько кругов, выбирает их номер круга — тема узнаётся
+// по месту надписи и смыслу, а сами слова каждый раз новые.
+//
+// Варианты держим короткими: длинная фраза уезжает на мелкий кегль и на три
+// строки, а из центра её вдобавок выносит к левому краю (resolvePlace).
 export const SOCIAL_THEMES = [
   { id:"core", kind:KINDS.car, title:"Машина из костяка", note:"Самая низкая цена по модели", place:"top-left", picks:[
     { angle:0, query:{ brand:"Zeekr", model:"001", sort:"price" } },
     { angle:1, query:{ brand:"BYD", model:"Qin L", sort:"price" } },
     { angle:2, query:{ brand:"BMW", model:"iX3", sort:"price" } },
   ] },
-  { id:"optimal", kind:KINDS.car, title:"Оптимальная по параметрам", note:"Не старьё и не переплата", place:"top-center", headline:"Оптимальное сочетание цены и состояния", picks:[
+  { id:"optimal", kind:KINDS.car, title:"Оптимальная по параметрам", note:"Не старьё и не переплата", place:"top-center", headlines:[
+    "Золотая середина",
+    "Топ за свои деньги",
+    "Оптимальное сочетание цены и состояния",
+  ], picks:[
     { angle:3, query:{ brand:"Geely", model:"EX5", sort:"price" } },
     { angle:0, query:{ brand:"Deepal", model:"S07", sort:"price" } },
     { angle:1, query:{ brand:"Mercedes-Benz", model:"EQB", sort:"price" } },
   ] },
-  { id:"price_question", kind:KINDS.car, title:"Как вам цена?", note:"Вопрос читателю — ради комментариев", place:"top-left", picks:[
-    { angle:1, headline:"Как вам цена за такое состояние?", query:{ brand:"BYD", model:"Seagull", sort:"price" } },
-    { angle:2, headline:"Брать или искать дальше?", query:{ brand:"Geely", model:"EX2", sort:"price" } },
-    { angle:3, headline:"Дорого или нормально?", query:{ brand:"Zeekr", model:"7X", sort:"price" } },
+  { id:"price_question", kind:KINDS.car, title:"Как вам цена?", note:"Вопрос читателю — ради комментариев", place:"top-left", headlines:[
+    "Как вам цена?",
+    "Брать или искать дальше?",
+    "Дорого или нормально?",
+  ], picks:[
+    { angle:1, query:{ brand:"BYD", model:"Seagull", sort:"price" } },
+    { angle:2, query:{ brand:"Geely", model:"EX2", sort:"price" } },
+    { angle:3, query:{ brand:"Zeekr", model:"7X", sort:"price" } },
   ] },
-  { id:"price_drops", kind:KINDS.car, title:"Топ-5 упавших цен", note:"Раз в неделю, после обновления каталога", place:"bottom-left", headline:"Подешевели за неделю", picks:[
+  { id:"price_drops", kind:KINDS.car, title:"Топ-5 упавших цен", note:"Раз в неделю, после обновления каталога", place:"bottom-left", headlines:[
+    "Упали в цене",
+    "Подешевели за неделю",
+    "Цены пошли вниз",
+  ], picks:[
     { angle:2, query:{ brand:"BMW", model:"i3", sort:"price" } },
     { angle:3, query:{ brand:"BYD", model:"Yuan UP", sort:"price" } },
     { angle:0, query:{ brand:"Deepal", model:"SL03", sort:"price" } },
   ] },
-  { id:"fresh", kind:KINDS.car, title:"Новинки каталога", note:"Что появилось в последнем обновлении", place:"bottom-center", headline:"Новое в каталоге", picks:[
+  { id:"fresh", kind:KINDS.car, title:"Новинки каталога", note:"Что появилось в последнем обновлении", place:"bottom-center", headlines:[
+    "Новое в каталоге",
+    "Свежее пополнение",
+    "Новинки недели",
+  ], picks:[
     { angle:3, query:{ brand:"Xiaomi", model:"SU7", sort:"newest" } },
     { angle:0, query:{ brand:"Zeekr", model:"007GT", sort:"newest" } },
     { angle:1, query:{ brand:"Geely", model:"Galaxy Starship 7", sort:"newest" } },
   ] },
+  // Потолок цены у каждого захода свой, поэтому надпись стоит у самого захода, а не
+  // в общем списке темы: варианты различаются и словами, и суммой.
   { id:"budget", kind:KINDS.car, title:"Подборка по бюджету", note:"Пять машин под заданный потолок", place:"bottom-center", picks:[
     { angle:0, headline:"Пять машин до 25 000$", query:{ brand:"Deepal", model:"L07", sort:"price" } },
-    { angle:1, headline:"Пять машин до 15 000$", query:{ brand:"BYD", model:"Yuan Pro", sort:"price" } },
-    { angle:2, headline:"Пять машин до 35 000$", query:{ brand:"Geely", model:"Okavango", sort:"price" } },
+    { angle:1, headline:"Что есть до 15 000$", query:{ brand:"BYD", model:"Yuan Pro", sort:"price" } },
+    { angle:2, headline:"Уложиться в 35 000$", query:{ brand:"Geely", model:"Okavango", sort:"price" } },
   ] },
   { id:"duel", kind:KINDS.duel, title:"Сравнение двух моделей", note:"Две стороны и значок «vs» между ними", place:"top-center", picks:[
     { sides:[{ angle:0, query:{ brand:"Xiaomi", model:"YU7", sort:"price" } }, { angle:0, query:{ brand:"Mercedes-Benz", model:"EQE", sort:"price" } }] },
@@ -91,6 +117,16 @@ export const SOCIAL_THEMES = [
   ] },
 ];
 
+// Сравнение двух моделей тоже не повторяется дословно: вопрос «или» чередуется с
+// коротким противопоставлением. Названия моделей подставляются на месте.
+export const DUEL_HEADLINES = [
+  (left, right) => `${left} или ${right}?`,
+  (left, right) => `${left} против ${right}`,
+];
+
+/** Вариант из списка по номеру круга — список идёт по кругу вместе с лентой. */
+export const headlineVariant = (list, round = 0) => list[((round % list.length) + list.length) % list.length];
+
 // Сколько раз каждая тема повторяется в витрине.
 export const THEME_ROUNDS = 3;
 
@@ -103,7 +139,7 @@ export function socialTiles(themes = SOCIAL_THEMES, rounds = THEME_ROUNDS) {
   for (let round = 0; round < rounds; round += 1) {
     for (const theme of themes) {
       const pick = theme.picks[round % theme.picks.length];
-      tiles.push({ key:`${theme.id}-${round}`, theme, pick });
+      tiles.push({ key:`${theme.id}-${round}`, theme, pick, round });
     }
   }
   return tiles;
@@ -181,12 +217,13 @@ export function resolvePlace(place, text) {
   return lines >= 3 ? place.replace("center", "left") : place;
 }
 
-export function tileHeadline(theme, pick, loaded) {
+export function tileHeadline(theme, pick, loaded, round = 0) {
   if (theme.kind === KINDS.duel) {
     const [left, right] = Array.isArray(loaded) ? loaded : [];
-    return left && right ? typeset(`${modelName(left)} или ${modelName(right)}?`) : "";
+    return left && right ? typeset(headlineVariant(DUEL_HEADLINES, round)(modelName(left), modelName(right))) : "";
   }
-  if (pick.headline || theme.headline) return typeset(pick.headline || theme.headline);
+  const fixed = pick.headline || (theme.headlines ? headlineVariant(theme.headlines, round) : "");
+  if (fixed) return typeset(fixed);
   if (!loaded) return "";
   // Та же первая строка, что уходит в запись: машина, год и цена под ключ.
   const price = priceUsd(loaded);
