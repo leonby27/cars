@@ -27,7 +27,7 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-kpis span { color:var(--muted); font-weight:700; }
 .analytics-kpis strong { display:block; margin:7px 0 6px; font-size:30px; letter-spacing:-1px; }
 .analytics-kpis p { margin:0; margin-top:auto; color:var(--muted); line-height:1.4; }
-.analytics-kpis article.analytics-kpi-zero strong { color:var(--muted); }
+.analytics-kpis article.analytics-kpi-zero strong { color:var(--muted); opacity:.5; }
 /* Три цифры внутри обычной панели — тем же набором, что в блоке автооценки. */
 .analytics-figures { display:flex; gap:22px; margin:0; }
 .analytics-collapse-trigger + .analytics-figures { margin-top:16px; }
