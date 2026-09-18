@@ -54,7 +54,21 @@ test("сбой базы не закрывает вход всем сразу", a
 });
 
 test("адрес посетителя берётся из заголовка прокси, а не из адреса прокси", () => {
-  assert.equal(clientAddress({ headers:{ "x-forwarded-for":"203.0.113.9, 70.41.3.18" }, socket:{ remoteAddress:"10.0.0.1" } }), "203.0.113.9");
+  // Наш nginx ставит оба заголовка: x-real-ip он перезаписывает сам, поэтому он главнее.
+  assert.equal(clientAddress({ headers:{ "x-real-ip":"70.41.3.18", "x-forwarded-for":"203.0.113.9, 70.41.3.18" }, socket:{ remoteAddress:"10.0.0.1" } }), "70.41.3.18");
+  assert.equal(clientAddress({ headers:{ "x-real-ip":"203.0.113.9" }, socket:{ remoteAddress:"10.0.0.1" } }), "203.0.113.9");
   assert.equal(clientAddress({ headers:{}, socket:{ remoteAddress:"10.0.0.1" } }), "10.0.0.1");
   assert.equal(clientAddress({ headers:{} }), "unknown");
+});
+
+// Список в x-forwarded-for начинается с того, что прислал сам посетитель: nginx лишь
+// дописывает в конец настоящий адрес. Брать оттуда первое значение — значит позволить
+// назваться кем угодно и обойти счётчик попыток.
+test("подделанный посетителем адрес в списке не считается своим", () => {
+  const forged = { headers:{ "x-forwarded-for":"1.1.1.1, 203.0.113.9" }, socket:{ remoteAddress:"10.0.0.1" } };
+  assert.equal(clientAddress(forged), "203.0.113.9");
+  // Даже если поддельных значений несколько — берём последнее, дописанное нашим nginx.
+  assert.equal(clientAddress({ headers:{ "x-forwarded-for":"1.1.1.1, 2.2.2.2, 203.0.113.9" } }), "203.0.113.9");
+  // И свой x-real-ip посетитель подделать не может: nginx его перезаписывает.
+  assert.equal(clientAddress({ headers:{ "x-real-ip":"203.0.113.9", "x-forwarded-for":"1.1.1.1" } }), "203.0.113.9");
 });

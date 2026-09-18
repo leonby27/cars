@@ -10,11 +10,22 @@ import { pool } from "./db.mjs";
 // предел попыток в нём. Первая попытка открывает окно, следующая за окном — начинает
 // новое.
 
-// Адрес посетителя за прокси Vercel приходит в `x-forwarded-for`; первым в списке
-// стоит сам посетитель. Локально заголовка нет, берём адрес соединения.
+// Адрес посетителя. Верить можно только тому, что проставил наш собственный nginx:
+// `x-real-ip` он всегда перезаписывает адресом соединения, поэтому подделать его
+// снаружи нельзя. А вот `x-forwarded-for` — это список, куда nginx ДОПИСЫВАЕТ
+// настоящий адрес в конец, оставляя впереди всё, что прислал сам посетитель.
+// Пока брался первый элемент, любой мог назваться новым адресом на каждом запросе и
+// обойти все ограничения по числу попыток — подбор пароля к разделу статистики,
+// поток регистраций, заявок и подписок (18.09.2026).
+//
+// Поэтому: сначала `x-real-ip`, затем ПОСЛЕДНИЙ элемент `x-forwarded-for` (его дописал
+// ближайший к нам прокси), и только потом адрес соединения — так работает локальная
+// разработка, где заголовков нет вовсе.
 export function clientAddress(request) {
-  const forwarded = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  return forwarded || String(request.headers["x-real-ip"] || "").trim() || request.socket?.remoteAddress || "unknown";
+  const real = String(request.headers["x-real-ip"] || "").trim();
+  if (real) return real;
+  const chain = String(request.headers["x-forwarded-for"] || "").split(",").map((part) => part.trim()).filter(Boolean);
+  return chain[chain.length - 1] || request.socket?.remoteAddress || "unknown";
 }
 
 export async function consumeRateLimit(bucket, { limit, windowSeconds }) {
