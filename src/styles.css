@@ -15287,12 +15287,80 @@ html[data-theme="dark"] .customs-calc-currency {
   font-size: 13px;
   font-weight: 600;
 }
-.customs-calc-total > strong {
+/* Сумма и валюта стоят в одну строку: валюта здесь — не подпись, а выбор.
+   Правило ниже перебивает общее «подпись внутри плашки — мелкая и серая»: строка
+   с суммой тоже прямой потомок плашки, но она не подпись. */
+.customs-calc-total > .customs-calc-sum {
+  color: var(--ink);
+  font-size: inherit;
+  font-weight: inherit;
+}
+.customs-calc-sum {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 6px 0 8px;
+}
+.customs-calc-sum > strong {
   font-size: clamp(26px, 3.4vw, 34px);
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -1.2px;
+}
+/* Валюта платежа — наш обычный список, только без плашки: на месте подписи стоит
+   сам знак валюты нашим красным, рядом треугольник, по нажатию открывается тот же
+   выпадающий список, что в фильтрах каталога. Пока валюту здесь не выбрали, она
+   повторяет ту, в которой вписана цена машины. */
+#root .customs-calc-money-select,
+#root .customs-calc-money-select.open,
+html body #root .customs-calc-money-select.open,
+html[data-theme="dark"] body #root .customs-calc-money-select.open {
+  position: relative;
+  display: inline-block;
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: calc(8px * var(--corner-scale));
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+#root .customs-calc-money-select .select-trigger {
+  position: static;
+  width: auto;
+  height: auto;
+  gap: 8px;
+  padding: 0;
+  color: var(--accent-dark);
+  font-size: clamp(22px, 2.8vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  cursor: pointer;
+}
+#root .customs-calc-money-select .select-trigger b {
+  font: inherit;
+  letter-spacing: inherit;
+}
+/* Вместо «галочки» фильтров — сплошной треугольник: рядом с крупной цифрой тонкая
+   стрелка терялась. Поворачивается, когда список открыт. */
+#root .customs-calc-money-select .select-trigger svg {
+  display: none;
+}
+#root .customs-calc-money-select .select-trigger::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border-right: 7px solid transparent;
+  border-left: 7px solid transparent;
+  border-top: 8px solid currentColor;
+  transition: transform var(--motion-medium) var(--motion-ease);
+}
+#root .customs-calc-money-select.open .select-trigger::after {
+  transform: rotate(180deg);
+}
+#root .customs-calc-money-select .select-menu {
+  min-width: 120px;
 }
 .customs-calc-total > small {
   color: var(--muted);

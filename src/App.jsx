@@ -9764,6 +9764,10 @@ function CustomsCalculator() {
   const [engineCc, setEngineCc] = useState(() => String(shared.engineCc ?? 1500));
   const [year, setYear] = useState(() => shared.year || String(new Date().getFullYear() - 3));
   const [refund50, setRefund50] = useState(() => Boolean(shared.refund50));
+  // Валюта, в которой показан платёж. Пусто — значит «как у цены машины»: человек
+  // вписал цену в долларах и, скорее всего, хочет видеть в них же ответ. Как только
+  // он выберет валюту у самой суммы, она перестаёт следовать за ценой.
+  const [resultCurrency, setResultCurrency] = useState(null);
   const [copied, setCopied] = useState(false);
 
   const kindItem = CALC_KINDS.find((item) => item.name === kind) || CALC_KINDS[0];
@@ -9795,16 +9799,18 @@ function CustomsCalculator() {
   // наоборот. Расчёт при этом как жил в долларах, так и живёт: меняется только
   // подпись под цифрой. Платят на таможне всё равно в рублях, и об этом сказано
   // прямо под суммой.
-  const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn }[currency] || 1;
+  const outCurrency = resultCurrency || currency;
+  const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn }[outCurrency] || 1;
   // Знак берём тот же, что написан на кнопке валюты: нажал BYN — и в цифрах стоит
   // BYN, а не «р.». В связном тексте ниже рубли остаются рублями: там это слово,
   // а не обозначение валюты в колонке цифр.
-  const sign = { usd: "$", eur: "€", byn: "BYN" }[currency] || "$";
-  const money = (value) => `${number(Math.round(value * fromUsd))} ${sign}`;
+  const sign = { usd: "$", eur: "€", byn: "BYN" }[outCurrency] || "$";
+  const amount = (value) => number(Math.round(value * fromUsd));
+  const money = (value) => `${amount(value)} ${sign}`;
   // Вторая строка — та же сумма в другой валюте. Рублёвую цифру показываем всем,
   // кто считает не в рублях: её и вносят на таможне. Тем, кто уже выбрал рубли,
   // показываем доллары — привычную валюту объявлений.
-  const alt = currency === "byn" ? usd(payment ? payment.totalUsd : 0) : byn(payment ? payment.totalExactUsd : 0);
+  const alt = outCurrency === "byn" ? usd(payment ? payment.totalUsd : 0) : byn(payment ? payment.totalExactUsd : 0);
   const rows = payment
     ? [
       ["Ввозная пошлина", payment.dutyUsd],
@@ -9953,7 +9959,26 @@ function CustomsCalculator() {
           <div className="customs-calc-summary">
             <div className="customs-calc-total">
               <span>Таможенный платёж</span>
-              <strong>{money(payment.totalExactUsd)}</strong>
+              {/* Валюта у самой суммы — это список: подпись рядом с числом сама
+                  предлагает посмотреть платёж в другой валюте, а не только в той,
+                  в которой вписана цена машины. */}
+              <span className="customs-calc-sum">
+                <strong>{amount(payment.totalExactUsd)}</strong>
+                <SelectField
+                  className="customs-calc-money-select"
+                  label="Валюта расчёта"
+                  value={(CALC_CURRENCIES.find((item) => item.id === outCurrency) || CALC_CURRENCIES[0]).name}
+                  options={CALC_CURRENCIES.map((item) => item.name)}
+                  onChange={(name) => {
+                    // Выбрали ту же валюту, что и у цены машины, — связь возвращается:
+                    // дальше сумма снова следует за ценой, а не застывает в своей
+                    // валюте. Иначе после пары переключений туда-обратно смена валюты
+                    // у цены переставала бы что-либо менять в ответе.
+                    const picked = (CALC_CURRENCIES.find((item) => item.name === name) || CALC_CURRENCIES[0]).id;
+                    setResultCurrency(picked === currency ? null : picked);
+                  }}
+                />
+              </span>
               <small>
                 Это {alt} по курсу Национального банка на {PRICING.rateDate}. Платить нужно в рублях.
               </small>
