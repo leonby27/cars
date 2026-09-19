@@ -50,7 +50,7 @@ import { InspectionReport } from "./inspection-report.jsx";
 import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
-import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeTable, realRange } from "./range-estimate.js";
+import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
 import { REBUILT_HINT, compareSummary, compareTable, coverageNote, groupCompareRows, hasRebuiltHint } from "./market-compare.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
@@ -1753,7 +1753,7 @@ function HomeFaqItem({ item, open, onToggle, navigate = null }) {
    Нужны странице растаможки: за ней приходят посчитать, а не читать, поэтому всё,
    кроме калькулятора, свёрнуто. Текст при этом остаётся в разметке страницы —
    поисковик его видит, просто человек не листает через него до формы. */
-function ToolDisclosures({ title, titleId, items }) {
+function ToolDisclosures({ title, titleId, items, faq = null }) {
   const [openIndex, setOpenIndex] = useState(null);
   if (!items.length) return null;
   return (
@@ -1777,6 +1777,9 @@ function ToolDisclosures({ title, titleId, items }) {
           </article>
         ))}
       </div>
+      {/* Когда в пунктах есть настоящие вопросы, отдаём поисковику их разметку —
+          ту же, что у обычного блока «Частые вопросы». */}
+      {faq?.length ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageSchema(faq)) }} /> : null}
     </section>
   );
 }
@@ -3373,19 +3376,24 @@ function ArticleSources({ sources }) {
   );
 }
 
+/* Разметка вопросов-ответов для поисковика. Её собирают оба блока с пунктами:
+   обычный «Частые вопросы» и тот, в котором вопросы идут вперемешку с разделами
+   страницы расчёта. */
+const faqPageSchema = (faq) => ({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faq.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    // В разметке — чистый текст: поисковик показывает его как есть, и
+    // «[калькулятор](/customs)» выглядел бы в выдаче ошибкой.
+    acceptedAnswer: { "@type": "Answer", text: plainInlineText(item.a) },
+  })),
+});
+
 function ArticleFaq({ faq, title, navigate = null }) {
   if (!faq?.length) return null;
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: faq.map((item) => ({
-      "@type": "Question",
-      name: item.q,
-      // В разметке — чистый текст: поисковик показывает его как есть, и
-      // «[калькулятор](/customs)» выглядел бы в выдаче ошибкой.
-      acceptedAnswer: { "@type": "Answer", text: plainInlineText(item.a) },
-    })),
-  };
+  const schema = faqPageSchema(faq);
   return (
     <section className="model-page-faq page-width" aria-labelledby="model-page-faq-title">
       <h2 id="model-page-faq-title">{title}</h2>
@@ -9369,6 +9377,16 @@ function ContactsPage({ navigate, theme }) {
 
    Тексты, разделы и живые цифры лежат в src/tool-pages.js, оттуда же их берёт
    страница для поисковика: два места писали бы по-разному. */
+/* Значки у заголовков страниц расчёта. Картинка узнаётся быстрее названия, а справа
+   от заголовка всё равно пустое поле. Две рисовки ведут себя по-разному: у
+   калькулятора значок крупнее плитки и уходит за её правый нижний угол, как в полосе
+   «почему мы» на главной, а высокая батарея так обрезалась бы пополам — она стоит
+   внутри плитки целиком. */
+const TOOL_HERO_ICONS = Object.freeze({
+  customs: { src: "/services/customs-calculator.png", width: 224, height: 224 },
+  range: { src: "/services/battery-check.png", width: 512, height: 512, fit: "inside" },
+});
+
 function ToolPage({ tool, navigate }) {
   const stats = toolPageStats(tool.kind);
   const updatedLabel = toolUpdatedLabel(tool);
@@ -9393,7 +9411,12 @@ function ToolPage({ tool, navigate }) {
   // «чего нет в расчёте» и разбор указа № 140 убраны — их никто не ищет, а места
   // в списке они занимали столько же, сколько ставки пошлины.
   const isCalculator = tool.kind === "customs";
+  const heroIcon = TOOL_HERO_ICONS[tool.kind];
   const isMarket = tool.kind === "market";
+  // Расчёт запаса хода живёт по тем же правилам, что и растаможка: за страницей
+  // приходят посчитать, поэтому форма стоит сразу под заголовком, а текст свёрнут
+  // в пункты под ней — он в разметке страницы, но не отодвигает форму вниз.
+  const isFormPage = isCalculator || tool.kind === "range";
   const calculatorDetails = !isCalculator ? [] : [
     { title: customsExample().title, content: <ToolPageDataTable table={{ ...customsExample(), title: null }} /> },
     {
@@ -9403,6 +9426,19 @@ function ToolPage({ tool, navigate }) {
     ...texts.sections.map((section) => ({
       title: section.title,
       content: <ModelPageSection section={{ ...section, title: null }} navigate={navigate} />,
+    })),
+  ];
+  // На расчёте запаса хода разделы и вопросы стоят одним списком «Частые вопросы»:
+  // два блока подряд с одинаковыми пунктами читались как повтор, а вопросов там
+  // всего пять. На растаможке они разведены — в верхнем блоке таблицы ставок.
+  const rangeDetails = isCalculator ? [] : [
+    ...texts.sections.map((section) => ({
+      title: section.title,
+      content: <ModelPageSection section={{ ...section, title: null }} navigate={navigate} />,
+    })),
+    ...texts.faq.map((item) => ({
+      title: item.q,
+      content: <p>{renderInlineText(item.a, navigate)}</p>,
     })),
   ];
   // Шаг назад работает, только если на страницу пришли с другой страницы сайта. По
@@ -9440,15 +9476,15 @@ function ToolPage({ tool, navigate }) {
                   насколько оно свежее. Текст общий с версией для поисковика. */}
               {/* На калькуляторе этой строки нет: там курс с датой стоит прямо
                   в расчёте, под суммой платежа, и вторая дата была бы повтором. */}
-              {updatedLabel && !isCalculator ? <p className="tool-page-updated">{updatedLabel}</p> : null}
+              {updatedLabel && !isFormPage ? <p className="tool-page-updated">{updatedLabel}</p> : null}
             </div>
             {/* Значок у заголовка калькулятора: справа от заголовка оставалось
                 пустое поле, а страница расчёта среди прочих узнаётся по картинке
                 быстрее, чем по названию. Плитка та же, что в полосе «почему мы»
                 на главной. Картинка украшает и в озвучку экрана не идёт. */}
-            {isCalculator && (
-              <span className="tool-page-hero-icon" aria-hidden="true">
-                <Illustration src="/services/customs-calculator.png" width="224" height="224" alt="" aria-hidden="true" />
+            {heroIcon && (
+              <span className={`tool-page-hero-icon${heroIcon.fit ? ` tool-page-hero-icon-${heroIcon.fit}` : ""}`} aria-hidden="true">
+                <Illustration src={heroIcon.src} width={heroIcon.width} height={heroIcon.height} alt="" aria-hidden="true" />
               </span>
             )}
           </section>
@@ -9457,7 +9493,7 @@ function ToolPage({ tool, navigate }) {
           {/* На сравнении цен этого блока нет вовсе: вступление уехало под таблицу, а
               полосы цифр у страницы нет — пустая обёртка добавляла к отступу лишние
               38 точек, и таблица отрывалась от заголовка. */}
-          {!isCalculator && !isMarket && (
+          {!isFormPage && !isMarket && (
             <article className="model-page-article">
               {true && (
                 <div className="model-page-intro">
@@ -9478,9 +9514,9 @@ function ToolPage({ tool, navigate }) {
           )}
           {/* На калькуляторе форма стоит в одной подложке с заголовком: между ними
               нечего читать, а две подложки подряд читались как пропущенный кусок. */}
-          {isCalculator && (
+          {isFormPage && (
             <article className="model-page-article">
-              <CustomsCalculator />
+              {isCalculator ? <CustomsCalculator /> : <RangeCalculator />}
             </article>
           )}
           {/* Сравнение — в одной подложке с заголовком, как форма калькулятора: две
@@ -9503,20 +9539,25 @@ function ToolPage({ tool, navigate }) {
         {/* У сравнения цен этого блока нет: его таблица стоит выше, в одной подложке
             с заголовком, а пустая подложка здесь читалась бы как не загрузившийся
             кусок страницы. */}
-        {!isCalculator && !isMarket && (
+        {!isFormPage && !isMarket && (
           <div className="model-page-body page-width">
             <article className="model-page-article">
               {tool.kind === "quota" && <QuotaFigures />}
               {tool.kind === "cost" && <ToolPageTable table={deliveryStages()} />}
               {tool.kind === "brands" && <ChinaBrandsDirectory navigate={navigate} />}
-              {tool.kind === "range" && <RangeCalculator />}
             </article>
           </div>
         )}
-        {isCalculator ? (
+        {isFormPage ? (
           <>
-            <ToolDisclosures title="Как считается растаможка" titleId="tool-page-details-title" items={calculatorDetails} />
-            <ArticleFaq faq={texts.faq} title="Частые вопросы" />
+            {isCalculator ? (
+              <>
+                <ToolDisclosures title="Как считается растаможка" titleId="tool-page-details-title" items={calculatorDetails} />
+                <ArticleFaq faq={texts.faq} title="Частые вопросы" />
+              </>
+            ) : (
+              <ToolDisclosures title="Частые вопросы" titleId="tool-page-details-title" items={rangeDetails} faq={texts.faq} />
+            )}
             <ModelPagePromo navigate={navigate} />
           </>
         ) : (
@@ -9882,40 +9923,40 @@ function CustomsCalculator() {
   return (
     // Подпись блока — для тех, кто идёт по странице голосом: на экране её роль
     // играет заголовок страницы прямо над формой.
-    <section className="customs-calc" aria-label="Калькулятор растаможки">
+    <section className="tool-calc" aria-label="Калькулятор растаможки">
       {/* Слева поля, справа ответ: меняешь год или объём и тут же видишь, как
           изменился платёж, а не листаешь к нему вниз. */}
-      <div className="customs-calc-fields">
+      <div className="tool-calc-fields">
         {/* Каждое поле — одна плашка: подпись мелким сверху, значение крупным
             под ней, а справа, за тонкой чертой, единица измерения или валюта.
             Так подпись не отрывается от поля и не съедает отдельную строку. */}
         {/* У списков подпись лежит поверх плашки, а сам список растянут на всю
             её площадь: нажатие в любую точку плашки должно открывать список, а
             не попадать мимо в пустое место рядом со значением. */}
-        <div className="customs-calc-field customs-calc-field-select">
-          <span className="customs-calc-label">Тип двигателя</span>
-          <SelectField className="customs-calc-select" label="Тип двигателя" value={kind} options={CALC_KINDS.map((item) => item.name)} onChange={setKind} />
+        <div className="tool-calc-field tool-calc-field-select">
+          <span className="tool-calc-label">Тип двигателя</span>
+          <SelectField className="tool-calc-select" label="Тип двигателя" value={kind} options={CALC_KINDS.map((item) => item.name)} onChange={setKind} />
         </div>
         {/* Год выпуска идёт сразу за типом двигателя: вдвоём они решают, по какому
             правилу считать пошлину, и только потом спрашиваем цифры машины. */}
-        <div className="customs-calc-field customs-calc-field-select">
-          <span className="customs-calc-label">Год выпуска</span>
-          <SelectField className="customs-calc-select" label="Год выпуска" value={year} options={years} onChange={setYear} />
+        <div className="tool-calc-field tool-calc-field-select">
+          <span className="tool-calc-label">Год выпуска</span>
+          <SelectField className="tool-calc-select" label="Год выпуска" value={year} options={years} onChange={setYear} />
         </div>
         {/* Цена и валюта — одно поле: платят на таможне в рублях, а объявления
             приходят в долларах и евро, и пересчитывать в уме никто не будет. */}
         {/* Не <label>: внутри стоят кнопки выбора валюты, а кнопка внутри подписи
             к полю уводила бы нажатие в поле ввода. */}
-        <div className="customs-calc-field">
+        <div className="tool-calc-field">
           {/* Подпись и поле — внутри <label>: тогда курсор встаёт в поле от нажатия
               в любую точку левой половины плашки, а не только по самой цифре.
               Кнопки валют стоят снаружи этой подписи, иначе нажатие на валюту
               уводило бы курсор в поле цены. */}
-          <label className="customs-calc-main">
-            <span className="customs-calc-label">Цена машины</span>
-            <input className="customs-calc-input" type="number" inputMode="numeric" min="500" step="500" value={priceValue} onChange={(event) => setPriceValue(event.target.value)} />
+          <label className="tool-calc-main">
+            <span className="tool-calc-label">Цена машины</span>
+            <input className="tool-calc-input" type="number" inputMode="numeric" min="500" step="500" value={priceValue} onChange={(event) => setPriceValue(event.target.value)} />
           </label>
-          <span className="customs-calc-unit customs-calc-currency" role="group" aria-label="Валюта цены">
+          <span className="tool-calc-unit tool-calc-currency" role="group" aria-label="Валюта цены">
             {CALC_CURRENCIES.map((item) => (
               <button
                 key={item.id}
@@ -9934,38 +9975,38 @@ function CustomsCalculator() {
             как его спрашивает таможня. У электромобиля и гибрида с генератором
             пошлина считается от стоимости, и поле не нужно вовсе. */}
         {kindItem.volume && (
-          <div className="customs-calc-field">
-            <label className="customs-calc-main">
-              <span className="customs-calc-label">Объём двигателя</span>
+          <div className="tool-calc-field">
+            <label className="tool-calc-main">
+              <span className="tool-calc-label">Объём двигателя</span>
               {/* Единицы стоят справа за чертой и в подпись не попадают, поэтому
                   для чтения с экрана называем поле целиком. */}
-              <input className="customs-calc-input" type="number" inputMode="numeric" min="600" max="8000" step="100" aria-label="Объём двигателя, см³" value={engineCc} onChange={(event) => setEngineCc(event.target.value)} />
+              <input className="tool-calc-input" type="number" inputMode="numeric" min="600" max="8000" step="100" aria-label="Объём двигателя, см³" value={engineCc} onChange={(event) => setEngineCc(event.target.value)} />
             </label>
-            <span className="customs-calc-unit customs-calc-unit-text">см³</span>
+            <span className="tool-calc-unit tool-calc-unit-text">см³</span>
           </div>
         )}
         {/* Переключатели — такие же, как «Быстрый просмотр» и «Цены с квотами»:
             обычная галочка была бы единственной на сайте. */}
-        <label className="quick-view-toggle customs-calc-toggle">
+        <label className="quick-view-toggle tool-calc-toggle">
           <input type="checkbox" role="switch" checked={refund50} onChange={(event) => setRefund50(event.target.checked)} />
           <span className="quick-view-toggle-track" aria-hidden="true"><i /></span>
           <span className="quick-view-toggle-label">Возмещение 50% по указу № 140</span>
         </label>
       </div>
       {payment ? (
-        <div className="customs-calc-result">
+        <div className="tool-calc-result">
           {/* Сумма и разбивка по сборам — одна плашка: это один ответ, просто
               сначала итог, а под ним из чего он сложился. */}
-          <div className="customs-calc-summary">
-            <div className="customs-calc-total">
+          <div className="tool-calc-summary">
+            <div className="tool-calc-total">
               <span>Таможенный платёж</span>
               {/* Валюта у самой суммы — это список: подпись рядом с числом сама
                   предлагает посмотреть платёж в другой валюте, а не только в той,
                   в которой вписана цена машины. */}
-              <span className="customs-calc-sum">
+              <span className="tool-calc-sum">
                 <strong>{amount(payment.totalExactUsd)}</strong>
                 <SelectField
-                  className="customs-calc-money-select"
+                  className="tool-calc-money-select"
                   label="Валюта расчёта"
                   value={(CALC_CURRENCIES.find((item) => item.id === outCurrency) || CALC_CURRENCIES[0]).name}
                   options={CALC_CURRENCIES.map((item) => item.name)}
@@ -9983,7 +10024,7 @@ function CustomsCalculator() {
                 Это {alt} по курсу Национального банка на {PRICING.rateDate}. Платить нужно в рублях.
               </small>
             </div>
-            <dl className="customs-calc-rows">
+            <dl className="tool-calc-rows">
               {rows.map(([label, value]) => (
                 <div key={label}>
                   <dt>{label}</dt>
@@ -9994,17 +10035,17 @@ function CustomsCalculator() {
             {/* Расчёт нужно уметь переслать: без этого по ссылке из чата открывалась
                 бы пустая форма, и разговор начинался бы заново. Кнопка стоит в самой
                 плашке расчёта — это действие над тем, что в ней написано. */}
-            <button type="button" className={`primary customs-calc-share${copied ? " copied" : ""}`} onClick={copyShareLink}>
+            <button type="button" className={`primary tool-calc-share${copied ? " copied" : ""}`} onClick={copyShareLink}>
               <LinkSimple size={17} />
               <span>{copied ? "Ссылка скопирована" : "Поделиться расчётом"}</span>
             </button>
           </div>
-          <p className="customs-calc-why">
+          <p className="tool-calc-why">
             {whyDuty()} {whyRest()}
           </p>
         </div>
       ) : (
-        <p className="customs-calc-empty">Укажите цену машины, чтобы увидеть расчёт.</p>
+        <p className="tool-calc-empty">Укажите цену машины, чтобы увидеть расчёт.</p>
       )}
     </section>
   );
@@ -10413,13 +10454,27 @@ function MarketCompareTable({ rows, brands: coverage, collectedAt, navigate }) {
    с толку. Сам расчёт живёт в src/range-estimate.js — там же написано, откуда взяты
    поправки и почему это оценка, а не замер. */
 function RangeCalculator() {
-  const [rated, setRated] = useState("500");
-  const [cycle, setCycle] = useState(RANGE_CYCLES[0].name);
-  const [celsius, setCelsius] = useState("-10");
-  const [mode, setMode] = useState(RANGE_MODES[1].name);
-  const [chemistry, setChemistry] = useState(RANGE_CHEMISTRY[0].name);
-  const [ageYears, setAgeYears] = useState("3");
-  const [heatPump, setHeatPump] = useState(false);
+  // Расчёт из чужой ссылки. Читаем адрес один раз при первом появлении формы:
+  // дальше поля живут своей жизнью, и подмешивать в них адрес на каждом шаге
+  // значило бы отменять то, что человек только что выбрал.
+  const shared = useMemo(() => rangeStateFromSearch(window.location.search), []);
+  const byId = (list, id, fallback) => (list.find((item) => item.id === id) || fallback).name;
+  const [rated, setRated] = useState(() => String(shared.rated ?? 500));
+  const [cycle, setCycle] = useState(() => byId(RANGE_CYCLES, shared.cycle, RANGE_CYCLES[0]));
+  const [celsius, setCelsius] = useState(() => String(shared.celsius ?? 20));
+  const [mode, setMode] = useState(() => byId(RANGE_MODES, shared.mode, RANGE_MODES[1]));
+  const [chemistry, setChemistry] = useState(() => byId(RANGE_CHEMISTRY, shared.chemistry, RANGE_CHEMISTRY[0]));
+  // Спрашиваем год выпуска, а не возраст: год человек знает из объявления, а
+  // «сколько машине лет» приходится считать в уме — и половина считает не так.
+  // Возраст выводим сами, он же уходит в ссылку на расчёт.
+  const years = calcYears();
+  const [year, setYear] = useState(() => {
+    const fromShare = shared.ageYears == null ? null : String(Number(years[0]) - shared.ageYears);
+    return years.includes(fromShare) ? fromShare : years[0];
+  });
+  const ageYears = Math.max(0, Number(years[0]) - Number(year));
+  const [heatPump, setHeatPump] = useState(() => Boolean(shared.heatPump));
+  const [copied, setCopied] = useState(false);
 
   const cycleItem = RANGE_CYCLES.find((item) => item.name === cycle) || RANGE_CYCLES[0];
   const modeItem = RANGE_MODES.find((item) => item.name === mode) || RANGE_MODES[1];
@@ -10431,82 +10486,143 @@ function RangeCalculator() {
     celsius: Number(celsius) || 0,
     mode: modeItem.id,
     chemistry: chemistryItem.id,
-    ageYears: Number(ageYears) || 0,
+    ageYears,
     heatPump,
   };
   const result = realRange(input);
   const summer = realRange({ ...input, celsius: 20, mode: "mixed" });
+  // Из готовой таблицы берём только сноску под расчётом: сама таблица «паспорт →
+  // зима» с экрана убрана — она повторяла то, что человек только что посчитал сам.
+  // В версии для поисковика таблица осталась: скриптов он не запускает и цифры
+  // видит только готовыми.
   const table = rangeTable(input);
 
+  // Ссылка ровно на этот расчёт. Её же держим в адресной строке: скопированное
+  // из браузера должно совпадать с тем, что даёт кнопка. Заменяем адрес, а не
+  // добавляем новый, — иначе кнопка «назад» перебирала бы каждую введённую цифру.
+  const shareSearch = rangeShareSearch({
+    rated: ratedKm,
+    cycle: cycleItem.id,
+    celsius: input.celsius,
+    mode: modeItem.id,
+    chemistry: chemistryItem.id,
+    ageYears: input.ageYears,
+    heatPump,
+  });
+  useEffect(() => {
+    if (!window.history?.replaceState) return;
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${shareSearch ? `?${shareSearch}` : ""}`);
+  }, [shareSearch]);
+  const shareUrl = `${window.location.origin}${appHref("/range")}${shareSearch ? `?${shareSearch}` : ""}`;
+  const copyShareLink = async () => {
+    const done = await copyToClipboard(shareUrl);
+    if (!done) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
   return (
-    <section className="cost-calculator">
-      <h2>Посчитать реальный запас хода</h2>
-      <div className="cost-calculator-form">
-        <label className="cost-calculator-field">
-          <span>Паспортный запас хода, км</span>
-          <input type="number" inputMode="numeric" min="50" max="1500" step="10" value={rated} onChange={(event) => setRated(event.target.value)} />
-        </label>
-        <div className="cost-calculator-field">
-          <span>По какому циклу измерен</span>
-          <SelectField className="cost-calculator-select" label="Цикл измерения" value={cycle} options={RANGE_CYCLES.map((item) => item.name)} onChange={setCycle} />
+    <section className="tool-calc tool-calc-range">
+      {/* Слева поля, справа ответ — как в калькуляторе растаможки: меняешь мороз или
+          режим и тут же видишь, сколько останется, а не листаешь вниз. */}
+      <div className="tool-calc-fields">
+        {/* Погода — первой: от неё в ответе меняется больше, чем от всего остального
+            вместе, и подбирают её чаще всего. Плашка залита радугой от мороза к жаре,
+            цвет гаснет правее выбранного градуса, тянуть можно за любое место шкалы.
+            Клавиатурой она работает так же — стрелками по одному градусу. */}
+        {/* Доля шкалы, пройденная ползунком: по ней обрезается приглушённая половина.
+            Считаем здесь, а не в стилях, — там текущего значения нет. */}
+        <div className="tool-calc-field tool-calc-field-temp" style={{ "--temp-pct": (Math.min(40, Math.max(-40, Number(celsius) || 0)) + 40) / 80 }}>
+          <span className="tool-calc-main">
+            <span className="tool-calc-label" id="range-temp-label">Температура за окном</span>
+            <span className="tool-calc-temp-value">{Number(celsius) > 0 ? `+${Number(celsius)}` : Number(celsius)} °C</span>
+          </span>
+          <input
+            className="tool-calc-temp-range"
+            type="range"
+            min="-40"
+            max="40"
+            step="1"
+            aria-labelledby="range-temp-label"
+            value={Number(celsius) || 0}
+            onChange={(event) => setCelsius(event.target.value)}
+          />
         </div>
-        {/* Температуру спрашиваем числом, а не списком: между −5 и −25 разница в треть
-            запаса хода, и «зима» одним пунктом ничего бы не сказала. */}
-        <label className="cost-calculator-field">
-          <span>Температура за окном, °C</span>
-          <input type="number" inputMode="numeric" min="-30" max="40" step="1" value={celsius} onChange={(event) => setCelsius(event.target.value)} />
-        </label>
-        <div className="cost-calculator-field">
-          <span>Как ездите</span>
-          <SelectField className="cost-calculator-select" label="Режим движения" value={mode} options={RANGE_MODES.map((item) => item.name)} onChange={setMode} />
+        {/* Паспортная цифра и цикл, по которому её мерили, — в одном ряду: порознь
+            они занимали две строки, а вопрос это один. Каждое поле — плашка: подпись
+            мелким сверху, значение крупным под ней, а справа за тонкой чертой
+            единица измерения. */}
+        <div className="tool-calc-row">
+          <div className="tool-calc-field">
+            <label className="tool-calc-main">
+              <span className="tool-calc-label">Паспортный запас хода</span>
+              <input className="tool-calc-input" type="number" inputMode="numeric" min="50" max="1500" step="10" aria-label="Паспортный запас хода, км" value={rated} onChange={(event) => setRated(event.target.value)} />
+            </label>
+            <span className="tool-calc-unit tool-calc-unit-text">км</span>
+          </div>
+          <div className="tool-calc-field tool-calc-field-select">
+            <span className="tool-calc-label">Цикл</span>
+            <SelectField className="tool-calc-select" label="Цикл измерения" value={cycle} options={RANGE_CYCLES.map((item) => item.name)} onChange={setCycle} />
+          </div>
         </div>
-        <div className="cost-calculator-field">
-          <span>Батарея</span>
-          <SelectField className="cost-calculator-select" label="Химия батареи" value={chemistry} options={RANGE_CHEMISTRY.map((item) => item.name)} onChange={setChemistry} />
+        <div className="tool-calc-field tool-calc-field-select">
+          <span className="tool-calc-label">Как ездите</span>
+          <SelectField className="tool-calc-select" label="Режим движения" value={mode} options={RANGE_MODES.map((item) => item.name)} onChange={setMode} />
         </div>
-        <label className="cost-calculator-field">
-          <span>Возраст машины, лет</span>
-          <input type="number" inputMode="numeric" min="0" max="15" step="1" value={ageYears} onChange={(event) => setAgeYears(event.target.value)} />
-        </label>
-        <label className="quick-view-toggle cost-calculator-toggle">
+        <div className="tool-calc-field tool-calc-field-select">
+          <span className="tool-calc-label">Батарея</span>
+          <SelectField className="tool-calc-select" label="Химия батареи" value={chemistry} options={RANGE_CHEMISTRY.map((item) => item.name)} onChange={setChemistry} />
+        </div>
+        <div className="tool-calc-field tool-calc-field-select">
+          <span className="tool-calc-label">Год выпуска</span>
+          <SelectField className="tool-calc-select" label="Год выпуска" value={year} options={years} onChange={setYear} />
+        </div>
+        <label className="quick-view-toggle tool-calc-toggle">
           <input type="checkbox" role="switch" checked={heatPump} onChange={(event) => setHeatPump(event.target.checked)} />
           <span className="quick-view-toggle-track" aria-hidden="true"><i /></span>
-          <span className="quick-view-toggle-label">Есть тепловой насос: в холода он экономит около десятой части запаса хода</span>
+          <span className="quick-view-toggle-label">Есть тепловой насос</span>
         </label>
       </div>
       {ratedKm > 0 ? (
-        <div className="cost-calculator-result">
-          <div className="cost-calculator-total">
-            <span>Проедет на самом деле</span>
-            <strong>{number(result.km)} км</strong>
-            <small>
-              Из паспортных {number(ratedKm)} км это {Math.round((result.km / ratedKm) * 100)}%. В тёплую погоду в смешанном режиме — около {number(summer.km)} км.
-            </small>
+        <div className="tool-calc-result">
+          {/* Ответ и разбор по причинам — одна плашка: сначала сколько проедет, под
+              чертой из чего сложилась потеря. */}
+          <div className="tool-calc-summary">
+            <div className="tool-calc-total">
+              <span>Проедет на самом деле</span>
+              <span className="tool-calc-sum"><strong>{number(result.km)} км</strong></span>
+              <small>
+                Из паспортных {number(ratedKm)} км это {Math.round((result.km / ratedKm) * 100)}%. В тёплую погоду в смешанном режиме — около {number(summer.km)} км.
+              </small>
+            </div>
+            <dl className="tool-calc-rows">
+              <div>
+                <dt>Цикл измерения</dt>
+                <dd>−{Math.round((1 - result.parts.cycle) * 100)}%</dd>
+              </div>
+              <div>
+                <dt>Погода</dt>
+                <dd>{result.parts.temperature >= 1 ? "без потерь" : `−${Math.round((1 - result.parts.temperature) * 100)}%`}</dd>
+              </div>
+              <div>
+                <dt>Скорость</dt>
+                <dd>{result.parts.mode >= 1 ? `+${Math.round((result.parts.mode - 1) * 100)}%` : `−${Math.round((1 - result.parts.mode) * 100)}%`}</dd>
+              </div>
+              <div>
+                <dt>Возраст батареи</dt>
+                <dd>{result.parts.age >= 1 ? "без потерь" : `−${Math.round((1 - result.parts.age) * 100)}%`}</dd>
+              </div>
+            </dl>
+            <button type="button" className={`primary tool-calc-share${copied ? " copied" : ""}`} onClick={copyShareLink}>
+              <LinkSimple size={17} />
+              <span>{copied ? "Ссылка скопирована" : "Поделиться расчётом"}</span>
+            </button>
           </div>
-          <dl className="cost-calculator-rows">
-            <div>
-              <dt>Цикл измерения</dt>
-              <dd>−{Math.round((1 - result.parts.cycle) * 100)}%</dd>
-            </div>
-            <div>
-              <dt>Погода</dt>
-              <dd>{result.parts.temperature >= 1 ? "без потерь" : `−${Math.round((1 - result.parts.temperature) * 100)}%`}</dd>
-            </div>
-            <div>
-              <dt>Скорость</dt>
-              <dd>{result.parts.mode >= 1 ? `+${Math.round((result.parts.mode - 1) * 100)}%` : `−${Math.round((1 - result.parts.mode) * 100)}%`}</dd>
-            </div>
-            <div>
-              <dt>Возраст батареи</dt>
-              <dd>{result.parts.age >= 1 ? "без потерь" : `−${Math.round((1 - result.parts.age) * 100)}%`}</dd>
-            </div>
-          </dl>
-          <p className="cost-calculator-note">{table.note}</p>
+          <p className="tool-calc-why">{table.note}</p>
         </div>
       ) : (
-        <p>Укажите паспортный запас хода, чтобы увидеть расчёт.</p>
+        <p className="tool-calc-empty">Укажите паспортный запас хода, чтобы увидеть расчёт.</p>
       )}
-      <ToolPageTable table={table} />
     </section>
   );
 }

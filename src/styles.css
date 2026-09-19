@@ -13778,6 +13778,29 @@ html[data-theme="dark"] .tool-page-hero-icon {
   max-width: none;
   object-fit: contain;
 }
+/* Высокие рисовки внутри плитки не сдвигаем: у батареи от сдвига срезало бы
+   половину. Она стоит по центру и целиком. */
+.tool-page-hero-icon-inside {
+  display: grid;
+  place-items: center;
+}
+/* Батарейка нарисована узкой и с большими полями, поэтому её приближаем: в плитку
+   попадает корпус во всю высоту, а колпачок сверху и подставка снизу срезаются её
+   краями — так значок читается, а не теряется точкой посередине. */
+.tool-page-hero-icon-inside img {
+  /* По горизонтали — ровно по середине, отступом, а не выравниванием сетки: картинка
+     шире плитки, а выравнивание по центру браузер в таком случае прижимает к левому
+     краю, чтобы не обрезать начало. По вертикали картинка стоит от верха: так видно
+     колпачок батарейки, а срезается её низ. */
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 240px;
+  height: 240px;
+  margin: 0 0 0 -120px;
+  max-width: none;
+  object-fit: contain;
+}
 /* На телефоне картинка уступает место заголовку: она украшение, а заголовок —
    то, за чем пришли. */
 @media (max-width: 700px) {
@@ -14734,25 +14757,19 @@ html[data-theme="dark"] .model-page-promo {
 .tool-live-main,
 .tool-live-side,
 .tool-live-months,
-.tool-live-table,
-.cost-calculator-form,
-.cost-calculator-rows {
+.tool-live-table {
   border-radius: calc(14px * var(--corner-scale));
   background: var(--surface);
 }
 html[data-theme="dark"] .tool-live-main,
 html[data-theme="dark"] .tool-live-side,
 html[data-theme="dark"] .tool-live-months,
-html[data-theme="dark"] .tool-live-table,
-html[data-theme="dark"] .cost-calculator-form,
-html[data-theme="dark"] .cost-calculator-rows {
+html[data-theme="dark"] .tool-live-table {
   background: var(--model-nested-bg);
 }
 /* Цифры в этих плашках стоят столбиком друг под другом, поэтому у всех одинаковая
    ширина знака: иначе колонки разъезжаются. */
-.tool-live,
-.cost-calculator-form,
-.cost-calculator-result {
+.tool-live {
   font-variant-numeric: tabular-nums;
 }
 
@@ -14904,142 +14921,7 @@ html[data-theme="dark"] .tool-live-bar {
   font-weight: 600;
 }
 
-/* Калькулятор: форма отдельной плашкой, под ней итог и разбивка по этапам.
-   Ровно две колонки: при автоподборе ширины поля вставали то по три, то по четыре,
-   и последнее оставалось одно в ряду. Переключатель «крупный кузов» идёт следующим
-   в том же потоке и занимает свободное место в последнем ряду. */
-.cost-calculator-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin: 18px 0 14px;
-  padding: 20px;
-  font-family: "Manrope", system-ui, sans-serif;
-}
-.cost-calculator-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.cost-calculator-field > span {
-  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
-  font-size: 14px;
-  font-weight: 600;
-}
-/* Поле ввода и список выбора — одного вида и одной высоты. Подложка ещё на шаг
-   светлее плашки формы: в светлой теме белая, в тёмной — заметно светлее серого. */
-.cost-calculator-field input[type="number"],
-#root .cost-calculator-select {
-  height: 50px;
-  border: 0;
-  border-radius: calc(11px * var(--corner-scale));
-  background: var(--panel);
-}
-html[data-theme="dark"] .cost-calculator-field input[type="number"],
-html[data-theme="dark"] body #root .cost-calculator-select,
-html[data-theme="dark"] body #root .cost-calculator-select.open {
-  background: #353a43;
-}
-.cost-calculator-field input[type="number"] {
-  padding: 0 16px;
-  color: var(--ink);
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  /* Стрелки-«крутилки» браузера в этом поле не нужны: рядом стоят списки выбора,
-     и поле цены должно читаться так же, а не как счётчик. */
-  appearance: textfield;
-}
-.cost-calculator-field input[type="number"]::-webkit-inner-spin-button,
-.cost-calculator-field input[type="number"]::-webkit-outer-spin-button {
-  margin: 0;
-  appearance: none;
-}
-/* Переключатель встаёт по центру своей ячейки — так он на одной линии с полями. */
-.cost-calculator-toggle {
-  align-self: center;
-}
-.cost-calculator-toggle .quick-view-toggle-label {
-  font-size: 15px;
-  line-height: 1.35;
-}
 
-/* Итог слева, этапы справа: сумму читают первой, разбивку — если она понадобилась. */
-.cost-calculator-result {
-  display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
-  gap: 14px;
-  font-family: "Manrope", system-ui, sans-serif;
-}
-/* Единственная плашка на странице с цветным фоном: это ответ на вопрос, с которым
-   пришли на страницу. */
-.cost-calculator-total {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 22px 24px;
-  border-radius: calc(14px * var(--corner-scale));
-  background: var(--accent-soft);
-}
-.cost-calculator-total > span {
-  color: var(--accent-dark);
-  font-size: 14px;
-  font-weight: 700;
-}
-.cost-calculator-total > strong {
-  margin: 6px 0 8px;
-  color: var(--accent-dark);
-  font-size: clamp(26px, 3.4vw, 34px);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -1.2px;
-}
-.cost-calculator-total > small {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-html[data-theme="dark"] .cost-calculator-total > small {
-  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
-}
-.cost-calculator-rows {
-  display: grid;
-  align-content: center;
-  gap: 10px;
-  margin: 0;
-  padding: 18px 20px;
-}
-.cost-calculator-rows > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.cost-calculator-rows dt {
-  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
-  font-size: 14px;
-  font-weight: 500;
-}
-.cost-calculator-rows dd {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  text-align: right;
-  white-space: nowrap;
-}
-
-/* Второй итог — сумма до Минска. Он такой же плашкой, но спокойнее по цвету:
-   главный ответ страницы один, и это таможенный платёж. */
-.cost-calculator-total-second {
-  background: var(--panel);
-}
-.cost-calculator-total-second > span,
-.cost-calculator-total-second > strong {
-  color: var(--ink);
-}
-html[data-theme="dark"] .cost-calculator-total-second {
-  background: #353a43;
-}
 /* Пояснение вместо блока доставки, когда машина едет не из Китая. */
 .cost-calculator-note {
   grid-column: 1 / -1;
@@ -15056,18 +14938,16 @@ html[data-theme="dark"] .cost-calculator-note {
 }
 
 
-/* ===================== Калькулятор растаможки =====================
+/* ===================== Расчёты на страницах инструментов =====================
 
-   Одна карточка: сверху поля, внизу полосой итог и единственное действие —
-   «Поделиться расчётом». Поля собраны в плашки, где подпись стоит мелким шрифтом
-   над значением, а единица измерения или валюта — справа за тонкой чертой. Так
-   подпись не отрывается от поля, не съедает отдельную строку над ним, и в ряд
-   помещается втрое больше полей, чем при подписях сверху.
+   Общая вёрстка калькулятора растаможки и расчёта реального запаса хода: слева
+   поля, справа ответ. Поля собраны в плашки, где подпись стоит мелким шрифтом над
+   значением, а единица измерения или валюта — справа за тонкой чертой. Так подпись
+   не отрывается от поля и не съедает отдельную строку над ним.
 
-   Свои имена классов, а не общие cost-calculator-*: те остались у расчёта запаса
-   хода и сравнения цен, а здесь вёрстка другая, и общие правила её только ломали
-   бы. */
-.customs-calc {
+   Ответ — одна плашка: сверху главное число, под чертой разбивка, из чего оно
+   сложилось. Под плашкой мелкая сноска с разбором. */
+.tool-calc {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   align-items: start;
@@ -15077,16 +14957,22 @@ html[data-theme="dark"] .cost-calculator-note {
   /* Цифры сборов стоят столбиком, поэтому у всех одинаковая ширина знака. */
   font-variant-numeric: tabular-nums;
 }
+/* Заголовок расчёта идёт во всю ширину раздела: в две колонки встают только поля
+   и ответ. На странице растаможки заголовка нет — там его роль играет название
+   страницы прямо над формой. */
+.tool-calc > h2 {
+  grid-column: 1 / -1;
+}
 /* Поля идут друг под другом во всю ширину колонки. Своей подложки у столбца нет:
    поля уже отделены фоном, и плашка под плашкой давала рамку в рамке. */
-.customs-calc-fields {
+.tool-calc-fields {
   display: grid;
   /* Отступ подобран так, чтобы в обычном состоянии низ последнего поля совпадал
      с низом плашки расчёта справа: четыре поля по 70 точек и три промежутка по
      девять дают почти ту же высоту, что сумма, сборы и кнопка. */
   gap: 9px;
 }
-.customs-calc-field {
+.tool-calc-field {
   position: relative;
   display: flex;
   align-items: stretch;
@@ -15097,13 +14983,13 @@ html[data-theme="dark"] .cost-calculator-note {
 }
 /* Подсветка — на всей плашке, а не на строке значения внутри неё: с клавиатуры
    должно быть видно, в каком поле сейчас курсор. */
-.customs-calc-field:has(:focus-visible),
-.customs-calc-field:has(.custom-select.open) {
+.tool-calc-field:has(:focus-visible),
+.tool-calc-field:has(.custom-select.open) {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 34%, transparent);
 }
 /* Левая половина плашки — подпись и значение. Это <label>, поэтому нажатие в
    любую её точку, а не только по цифре, ставит курсор в поле. */
-.customs-calc-main {
+.tool-calc-main {
   min-width: 0;
   flex: 1;
   display: flex;
@@ -15113,13 +14999,13 @@ html[data-theme="dark"] .cost-calculator-note {
   padding: 13px 16px 14px;
   cursor: text;
 }
-.customs-calc-label {
+.tool-calc-label {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
 }
-.customs-calc-input {
+.tool-calc-input {
   width: 100%;
   height: 26px;
   padding: 0;
@@ -15134,11 +15020,11 @@ html[data-theme="dark"] .cost-calculator-note {
      значение, а не как счётчик. */
   appearance: textfield;
 }
-.customs-calc-input:focus {
+.tool-calc-input:focus {
   outline: none;
 }
-.customs-calc-input::-webkit-inner-spin-button,
-.customs-calc-input::-webkit-outer-spin-button {
+.tool-calc-input::-webkit-inner-spin-button,
+.tool-calc-input::-webkit-outer-spin-button {
   margin: 0;
   appearance: none;
 }
@@ -15146,7 +15032,7 @@ html[data-theme="dark"] .cost-calculator-note {
    растянут на всю площадь плашки. Иначе нажималась бы только строка значения, и
    промах в сантиметр от текста ничего не открывал. Своей подложки и своих полей
    у списка здесь нет — их даёт плашка. */
-.customs-calc-field-select > .customs-calc-label {
+.tool-calc-field-select > .tool-calc-label {
   position: absolute;
   z-index: 1;
   top: 14px;
@@ -15156,10 +15042,10 @@ html[data-theme="dark"] .cost-calculator-note {
 /* Открытый список общими правилами закрашивается своей подложкой — здесь она бы
    легла поверх плашки и стёрла подпись над значением. Перебиваем её и для светлой,
    и для тёмной темы: подпись должна оставаться на месте и с открытым списком. */
-#root .customs-calc-select,
-#root .customs-calc-select.open,
-html body #root .customs-calc-select.open,
-html[data-theme="dark"] body #root .customs-calc-select.open {
+#root .tool-calc-select,
+#root .tool-calc-select.open,
+html body #root .tool-calc-select.open,
+html[data-theme="dark"] body #root .tool-calc-select.open {
   position: absolute;
   inset: 0;
   height: auto;
@@ -15172,40 +15058,40 @@ html[data-theme="dark"] body #root .customs-calc-select.open {
 }
 /* Значение и стрелка стоят на той же строке, что и цифры в соседних полях, —
    кнопка при этом занимает всю плашку целиком. */
-#root .customs-calc-select .select-trigger {
+#root .tool-calc-select .select-trigger {
   align-items: flex-end;
   padding: 0 16px 14px;
 }
-#root .customs-calc-select .select-trigger b {
+#root .tool-calc-select .select-trigger b {
   font-size: 19px;
   font-weight: 700;
 }
 /* Стрелка стоит по центру плашки, а не на строке значения: у соседних полей
    справа так же — валюта и единицы измерения выровнены по середине. Поворот при
    открытии задаём здесь же, иначе общее правило перебило бы положение. */
-#root .customs-calc-select .select-trigger > svg:last-child {
+#root .tool-calc-select .select-trigger > svg:last-child {
   position: absolute;
   right: 20px;
   top: calc(50% - 8px);
 }
-#root .customs-calc-select.open .select-trigger > svg:last-child {
+#root .tool-calc-select.open .select-trigger > svg:last-child {
   transform: rotate(180deg);
 }
 /* Своей обводки у кнопки нет: подсветку с клавиатуры рисует плашка вокруг, и
    две рамки одна в другой выглядели бы ошибкой. */
-#root .customs-calc-select .select-trigger:focus-visible {
+#root .tool-calc-select .select-trigger:focus-visible {
   outline: none;
 }
 /* Правая часть плашки: единица измерения или валюта. Отделена волоском, как в
    документах таможни, где значение и единица стоят в одной графе. */
-.customs-calc-unit {
+.tool-calc-unit {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
 }
 /* Единицы измерения — это часть значения, поэтому их отделяет волосок, как в
    графе документа. */
-.customs-calc-unit-text {
+.tool-calc-unit-text {
   padding: 0 16px;
   border-left: 1px solid color-mix(in srgb, var(--ink) 11%, transparent);
   color: var(--muted);
@@ -15215,7 +15101,7 @@ html[data-theme="dark"] body #root .customs-calc-select.open {
 /* Валюта — не подпись к значению, а выбор из трёх, поэтому это отдельная
    плашка-переключатель со своей подложкой. Черта рядом с ней была лишней:
    получалось две границы подряд. */
-.customs-calc-currency {
+.tool-calc-currency {
   align-self: center;
   gap: 2px;
   /* Отступ справа равен отступам сверху и снизу: плашка переключателя ростом
@@ -15227,10 +15113,10 @@ html[data-theme="dark"] body #root .customs-calc-select.open {
      белая, в тёмной та же, что у подложки текста (см. .model-page-body). */
   background: var(--panel);
 }
-html[data-theme="dark"] .customs-calc-currency {
+html[data-theme="dark"] .tool-calc-currency {
   background: var(--header-control-bg);
 }
-.customs-calc-currency button {
+.tool-calc-currency button {
   min-width: 40px;
   height: 36px;
   padding: 0 8px;
@@ -15244,32 +15130,141 @@ html[data-theme="dark"] .customs-calc-currency {
   cursor: pointer;
 }
 /* Выбранная валюта — инверсией к подложке: красный на странице занят суммой. */
-.customs-calc-currency button.active {
+.tool-calc-currency button.active {
   background: var(--ink);
   color: var(--panel);
+}
+/* Температура — не поле ввода, а шкала: градус здесь подбирают на глаз («а если
+   похолодает?»), и тянуть шкалу быстрее, чем стирать и набирать число. Плашка залита
+   радугой от морозного синего к жаркому красному; до выбранного градуса цвет полный,
+   дальше — приглушённый, так что граница сама показывает, где стоишь. Тянуть можно за
+   любое место шкалы, отдельного кружка нет.
+
+   Под цветом — обычный ползунок браузера во всю плашку, только невидимый: с ним
+   работают стрелки на клавиатуре и чтение с экрана, а ширина бегунка сведена к нулю,
+   чтобы граница цвета шла ровно под курсором. */
+.tool-calc-field-temp {
+  position: relative;
+  background: linear-gradient(90deg, #6d28d9 0%, #3730a3 12%, #1d4ed8 26%, #0ea5e9 40%, #22c55e 56%, #eab308 70%, #f97316 86%, #ef4444 100%);
+}
+/* Правее выбранного градуса цвет гаснет: тот же переход, только притемнённый и
+   обесцвеченный. Обрезаем его по выбранной доле шкалы. */
+.tool-calc-field-temp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(16, 19, 25, 0.62), rgba(16, 19, 25, 0.62)),
+    linear-gradient(90deg, #6d28d9 0%, #3730a3 12%, #1d4ed8 26%, #0ea5e9 40%, #22c55e 56%, #eab308 70%, #f97316 86%, #ef4444 100%);
+  filter: saturate(0.4);
+  clip-path: inset(0 0 0 calc(var(--temp-pct, 0.5) * 100%));
+  pointer-events: none;
+}
+.tool-calc-field-temp .tool-calc-main {
+  position: relative;
+  z-index: 1;
+}
+/* Шкала остаётся яркой, а подпись и значение держатся на ней размытой тенью: она
+   тёмным ореолом отделяет белые буквы от жёлтого и салатового, где без неё они
+   слились бы с фоном. */
+.tool-calc-field-temp .tool-calc-label,
+.tool-calc-temp-value {
+  color: #ffffff;
+  text-shadow:
+    0 2px 16px rgba(10, 13, 18, 0.85),
+    0 0 9px rgba(10, 13, 18, 0.65);
+}
+.tool-calc-temp-value {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 26px;
+}
+.tool-calc-temp-range {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: ew-resize;
+}
+.tool-calc-temp-range:focus {
+  outline: none;
+}
+.tool-calc-temp-range::-webkit-slider-runnable-track {
+  height: 100%;
+  background: none;
+}
+.tool-calc-temp-range::-moz-range-track {
+  height: 100%;
+  background: none;
+}
+/* Бегунок нулевой ширины и невидимый: границу цвета рисует сама плашка, а нулевая
+   ширина нужна, чтобы значение считалось ровно от положения курсора, без обычного
+   для ползунков зазора по краям. Оба написания и прозрачность нарочно: Safari иначе
+   рисует поверх свой белый прямоугольник. */
+.tool-calc-temp-range::-webkit-slider-thumb {
+  width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+  opacity: 0;
+  cursor: ew-resize;
+}
+.tool-calc-temp-range::-moz-range-thumb {
+  width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+/* Два поля в одном ряду: паспортная цифра пошире, цикл поуже — в нём всего четыре
+   коротких сокращения. На телефоне встают друг под друга. */
+.tool-calc-row {
+  display: grid;
+  /* Циклу хватает 130 точек: в нём четыре коротких сокращения и стрелка. Всё
+     остальное забирает паспортная цифра — иначе её подпись переносилась на две
+     строки и плашка становилась выше соседней. */
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: 9px;
+}
+@media (max-width: 520px) {
+  .tool-calc-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 /* Переключатель льготы стоит под полями, с небольшим отступом: он не поле
    ввода, и прижимать его вплотную незачем. */
 /* Переключатель начинается по той же вертикали, что подписи и значения внутри
    плашек: иначе он выпирает влево из общего строя. */
-.customs-calc-toggle {
+.tool-calc-toggle {
   margin-top: 4px;
   padding-left: 16px;
   gap: 12px;
 }
-.customs-calc-toggle .quick-view-toggle-label {
+.tool-calc-toggle .quick-view-toggle-label {
   font-size: 15px;
   line-height: 1.35;
 }
 /* Справа всё идёт столбиком: итог со сборами, разбор и кнопка ссылки. */
-.customs-calc-result {
+.tool-calc-result {
   display: grid;
   gap: 14px;
 }
 /* Итог и разбивка по сборам — одна плашка со спокойной подложкой, как у прочих
    блоков страницы. Внутри их делит тонкая черта: без неё сумма и столбик цифр
    слипаются в один кусок. */
-.customs-calc-summary {
+.tool-calc-summary {
   /* Сетка, а не простой блок: кнопка внизу — тег <button>, а он по своей природе
      сжимается по содержимому, и растянуть его во всю ширину плашки можно только
      так. */
@@ -15277,12 +15272,12 @@ html[data-theme="dark"] .customs-calc-currency {
   border-radius: calc(16px * var(--corner-scale));
   background: var(--filter-field-bg);
 }
-.customs-calc-total {
+.tool-calc-total {
   display: flex;
   flex-direction: column;
   padding: 22px 24px 18px;
 }
-.customs-calc-total > span {
+.tool-calc-total > span {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
@@ -15290,18 +15285,18 @@ html[data-theme="dark"] .customs-calc-currency {
 /* Сумма и валюта стоят в одну строку: валюта здесь — не подпись, а выбор.
    Правило ниже перебивает общее «подпись внутри плашки — мелкая и серая»: строка
    с суммой тоже прямой потомок плашки, но она не подпись. */
-.customs-calc-total > .customs-calc-sum {
+.tool-calc-total > .tool-calc-sum {
   color: var(--ink);
   font-size: inherit;
   font-weight: inherit;
 }
-.customs-calc-sum {
+.tool-calc-sum {
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 6px 0 8px;
 }
-.customs-calc-sum > strong {
+.tool-calc-sum > strong {
   font-size: clamp(26px, 3.4vw, 34px);
   font-weight: 800;
   line-height: 1.05;
@@ -15311,10 +15306,10 @@ html[data-theme="dark"] .customs-calc-currency {
    сам знак валюты нашим красным, рядом треугольник, по нажатию открывается тот же
    выпадающий список, что в фильтрах каталога. Пока валюту здесь не выбрали, она
    повторяет ту, в которой вписана цена машины. */
-#root .customs-calc-money-select,
-#root .customs-calc-money-select.open,
-html body #root .customs-calc-money-select.open,
-html[data-theme="dark"] body #root .customs-calc-money-select.open {
+#root .tool-calc-money-select,
+#root .tool-calc-money-select.open,
+html body #root .tool-calc-money-select.open,
+html[data-theme="dark"] body #root .tool-calc-money-select.open {
   position: relative;
   display: inline-block;
   width: auto;
@@ -15326,7 +15321,7 @@ html[data-theme="dark"] body #root .customs-calc-money-select.open {
   box-shadow: none;
   overflow: visible;
 }
-#root .customs-calc-money-select .select-trigger {
+#root .tool-calc-money-select .select-trigger {
   position: static;
   width: auto;
   height: auto;
@@ -15338,16 +15333,16 @@ html[data-theme="dark"] body #root .customs-calc-money-select.open {
   letter-spacing: -0.8px;
   cursor: pointer;
 }
-#root .customs-calc-money-select .select-trigger b {
+#root .tool-calc-money-select .select-trigger b {
   font: inherit;
   letter-spacing: inherit;
 }
 /* Вместо «галочки» фильтров — сплошной треугольник: рядом с крупной цифрой тонкая
    стрелка терялась. Поворачивается, когда список открыт. */
-#root .customs-calc-money-select .select-trigger svg {
+#root .tool-calc-money-select .select-trigger svg {
   display: none;
 }
-#root .customs-calc-money-select .select-trigger::after {
+#root .tool-calc-money-select .select-trigger::after {
   content: "";
   width: 0;
   height: 0;
@@ -15356,38 +15351,38 @@ html[data-theme="dark"] body #root .customs-calc-money-select.open {
   border-top: 8px solid currentColor;
   transition: transform var(--motion-medium) var(--motion-ease);
 }
-#root .customs-calc-money-select.open .select-trigger::after {
+#root .tool-calc-money-select.open .select-trigger::after {
   transform: rotate(180deg);
 }
-#root .customs-calc-money-select .select-menu {
+#root .tool-calc-money-select .select-menu {
   min-width: 120px;
 }
-.customs-calc-total > small {
+.tool-calc-total > small {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
 }
 /* Сборов три-четыре строки, и держать их врастяжку незачем: столбик читается
    одним взглядом, когда строки стоят плотно. */
-.customs-calc-rows {
+.tool-calc-rows {
   display: grid;
   gap: 4px;
   margin: 0;
   padding: 14px 24px 16px;
   border-top: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
 }
-.customs-calc-rows > div {
+.tool-calc-rows > div {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
 }
-.customs-calc-rows dt {
+.tool-calc-rows dt {
   color: var(--muted);
   font-size: 14px;
   font-weight: 500;
 }
-.customs-calc-rows dd {
+.tool-calc-rows dd {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
@@ -15400,16 +15395,16 @@ html[data-theme="dark"] body #root .customs-calc-money-select.open {
    отступами, что у строк сборов над ней. */
 /* Ссылка скопирована — это уже не предложение действия, а ответ на него, поэтому
    жёлтый гаснет до спокойной подложки. */
-.customs-calc-share.copied,
-.customs-calc-share.copied:hover {
+.tool-calc-share.copied,
+.tool-calc-share.copied:hover {
   background: var(--panel);
   color: var(--ink);
 }
-html[data-theme="dark"] .customs-calc-share.copied,
-html[data-theme="dark"] .customs-calc-share.copied:hover {
+html[data-theme="dark"] .tool-calc-share.copied,
+html[data-theme="dark"] .tool-calc-share.copied:hover {
   background: var(--header-control-bg);
 }
-.customs-calc-share {
+.tool-calc-share {
   display: flex;
   min-height: 44px;
   margin: 4px 24px 20px;
@@ -15417,7 +15412,7 @@ html[data-theme="dark"] .customs-calc-share.copied:hover {
   border-radius: calc(14px * var(--corner-scale));
   cursor: pointer;
 }
-.customs-calc p.customs-calc-empty {
+.tool-calc p.tool-calc-empty {
   margin: 0;
   color: var(--muted);
   font-family: "Manrope", system-ui, sans-serif;
@@ -15426,7 +15421,7 @@ html[data-theme="dark"] .customs-calc-share.copied:hover {
 /* Разбор под карточкой: почему вышла такая сумма. Мелкая сноска к цифрам, а не
    ещё один блок, — и правило точнее общего «абзац внутри раздела», иначе текст
    набирается шрифтом обзоров с засечками в 21 точку. */
-.customs-calc p.customs-calc-why {
+.tool-calc p.tool-calc-why {
   max-width: none;
   margin: 0 2px;
   color: var(--muted);
@@ -15438,19 +15433,19 @@ html[data-theme="dark"] .customs-calc-share.copied:hover {
 /* Ниже этой ширины поля и итог рядом уже тесные: раздел становится одним
    столбцом, а на телефоне поджимаются и отступы внутри плашек. */
 @media (max-width: 1000px) {
-  .customs-calc {
+  .tool-calc {
     grid-template-columns: minmax(0, 1fr);
     gap: 18px;
   }
 }
 @media (max-width: 700px) {
-  .customs-calc-total {
+  .tool-calc-total {
     padding: 18px 18px 14px;
   }
-  .customs-calc-rows {
+  .tool-calc-rows {
     padding: 14px 18px 16px;
   }
-  .customs-calc-share {
+  .tool-calc-share {
     margin: 2px 18px 18px;
   }
 }
@@ -16048,8 +16043,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 @media (max-width: 860px) {
   /* На узком экране пары «цифра — расшифровка» и колонки итога встают друг под
      друга: рядом они становятся слишком тесными. */
-  .tool-live-figure,
-  .cost-calculator-result {
+  .tool-live-figure {
     grid-template-columns: minmax(0, 1fr);
   }
   .tool-live-months ul {
@@ -16066,19 +16060,12 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   .tool-page-links h2 {
     font-size: 23px;
   }
-  /* На телефоне поля калькулятора идут в одну колонку. */
-  .cost-calculator-form {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .tool-live-main,
-  .cost-calculator-total {
+  .tool-live-main {
     padding: 18px;
   }
   .tool-live-side,
   .tool-live-months,
-  .tool-live-table,
-  .cost-calculator-form,
-  .cost-calculator-rows {
+  .tool-live-table {
     padding: 16px 18px;
   }
   /* Таблица сводок на телефоне: три колонки цифр в 320 точек не влезают, поэтому

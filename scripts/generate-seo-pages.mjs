@@ -7,6 +7,7 @@ import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS, brandLandingPath, catalogPageCount, landingApiParams, landingsForCar } from "../src/catalog-landings.js";
 import { TOOL_PAGES, calcParamNames, calculatorFields, customsExample, deliveryStages, dutyRateTables, toolPageStats, toolUpdatedLabel } from "../src/tool-pages.js";
+import { rangeParamNames } from "../src/range-estimate.js";
 // Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
 // отдельным файлом, а сборке нужны целиком — склеиваем запись с её текстами.
 import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
@@ -476,11 +477,13 @@ function toolArticle(tool) {
   // цифрой, и первый вопрос к цифре всегда «на когда». Та же строка стоит у человека
   // под заголовком, текст берётся из одного места (src/tool-pages.js).
   const updatedLabel = toolUpdatedLabel(tool);
-  // На калькуляторе отдельной строки с датой нет: курс с датой назван прямо под формой.
-  const updated = updatedLabel && tool.kind !== "customs" ? `<p class="seo-updated">${escapeHtml(updatedLabel)}.</p>` : "";
-  // У калькулятора вступление и полоса ставок перенесены внутрь свёрнутых пунктов:
+  // На страницах-расчётах отдельной строки с датой нет: у растаможки курс с датой
+  // назван прямо под формой, а у запаса хода ставок и курсов нет вовсе.
+  const formPage = tool.kind === "customs" || tool.kind === "range";
+  const updated = updatedLabel && !formPage ? `<p class="seo-updated">${escapeHtml(updatedLabel)}.</p>` : "";
+  // У расчётов вступление и полоса ставок перенесены внутрь свёрнутых пунктов:
   // наверху страницы остаётся только форма.
-  const lead = tool.kind === "customs" || tool.kind === "market" ? "" : `${paragraphs(tool.intro)}${numbers}`;
+  const lead = formPage || tool.kind === "market" ? "" : `${paragraphs(tool.intro)}${numbers}`;
   // На сравнении цен вступление стоит под таблицей — так же, как у человека на
   // странице: сначала цифры, объяснение следом.
   const afterLive = tool.kind === "market" ? paragraphs(tool.intro) : "";
@@ -1453,6 +1456,7 @@ const robots = allowIndexing
       // с теми же текстами, и в выдаче она должна быть одна, а не по адресу на каждую
       // введённую цену.
       `Clean-param: ${calcParamNames().join("&")} /customs`,
+      `Clean-param: ${rangeParamNames().join("&")} /range`,
       "",
       // Оптовые обходчики каталогов: сервер грузят как настоящая толпа, а взамен не
       // дают ничего — ни выдачи, ни посетителей. Поисковиков (Google, Яндекс, Bing,

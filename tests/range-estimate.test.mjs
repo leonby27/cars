@@ -53,7 +53,7 @@ test("возраст батареи снижает запас, но не бес�
 });
 
 test("температурная кривая не уходит за края", () => {
-  assert.equal(temperatureFactor(-100), temperatureFactor(-30));
+  assert.equal(temperatureFactor(-100), temperatureFactor(-40));
   assert.equal(temperatureFactor(100), temperatureFactor(40));
   assert.equal(temperatureFactor(20), 1);
 });
