@@ -9442,6 +9442,15 @@ function ToolPage({ tool, navigate }) {
                   в расчёте, под суммой платежа, и вторая дата была бы повтором. */}
               {updatedLabel && !isCalculator ? <p className="tool-page-updated">{updatedLabel}</p> : null}
             </div>
+            {/* Значок у заголовка калькулятора: справа от заголовка оставалось
+                пустое поле, а страница расчёта среди прочих узнаётся по картинке
+                быстрее, чем по названию. Плитка та же, что в полосе «почему мы»
+                на главной. Картинка украшает и в озвучку экрана не идёт. */}
+            {isCalculator && (
+              <span className="tool-page-hero-icon" aria-hidden="true">
+                <Illustration src="/services/customs-calculator.png" width="224" height="224" alt="" aria-hidden="true" />
+              </span>
+            )}
           </section>
           {/* Вступление и полоса ставок — только на квоте и доставке. На странице
               растаможки их нет: там сразу форма, а весь текст свёрнут ниже. */}
@@ -9552,12 +9561,12 @@ function ToolPage({ tool, navigate }) {
       </div>
       <BlogMasthead navigate={navigate} />
       <div className="blog-layout">
-        {/* Всё содержимое страницы лежит в колонке сетки, включая переходы к другим
-            расчётам и оговорку: иначе они тянулись бы во всю ширину страницы и не
-            совпадали бы по краям с текстом выше. */}
+        {/* Всё содержимое страницы лежит в колонке сетки, включая оговорку: иначе
+            она тянулась бы во всю ширину страницы и не совпадала бы по краям с
+            текстом выше. Блока «Другие расчёты» здесь нет: те же ссылки стоят в
+            боковой колонке, и внизу они были вторым списком того же самого. */}
         <div className="blog-main">
           {reading}
-          <ToolPageLinks tool={tool} navigate={navigate} />
           <p className="model-page-disclaimer">{texts.disclaimer}</p>
         </div>
         <BlogSidebar navigate={navigate} currentPath={tool.path} />
@@ -9766,10 +9775,9 @@ function CustomsCalculator() {
 
   // Возраст на дату оформления расчёт умеет считать сам — ему нужен год выпуска.
   const ageYears = carAgeYears({ year: Number(year) || Number(years[3]) });
-  // Таможенная стоимость — то, что человек ввёл. Доставку до границы союза в неё
-  // здесь не добавляем: у нас не спрашивают ни страну, ни город, а это калькулятор
-  // растаможки, а не доставки. В карточке машины доставка до границы в стоимость
-  // входит, поэтому строка таможни там чуть больше при той же цене продавца.
+  // Таможенная стоимость — то, что человек ввёл, и ничего сверх того: по статье 267
+  // Таможенного кодекса ЕАЭС расходы на перевозку и страхование в стоимость товара
+  // для личного пользования не входят. Так же считает и карточка каталога.
   const payment = priceUsd > 0
     ? customsPayment({
       customsValueUsd: priceUsd,
@@ -9782,6 +9790,21 @@ function CustomsCalculator() {
 
   const byn = (usd) => `${number(Math.round(usd * PRICING.usdByn))} р.`;
   const usd = (value) => `${number(Math.round(value))} $`;
+  // Платёж показываем в той валюте, в какой вписана цена машины: тот, кто считает
+  // в долларах, не должен переводить рубли в уме, а тот, кто считает в рублях, —
+  // наоборот. Расчёт при этом как жил в долларах, так и живёт: меняется только
+  // подпись под цифрой. Платят на таможне всё равно в рублях, и об этом сказано
+  // прямо под суммой.
+  const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn }[currency] || 1;
+  // Знак берём тот же, что написан на кнопке валюты: нажал BYN — и в цифрах стоит
+  // BYN, а не «р.». В связном тексте ниже рубли остаются рублями: там это слово,
+  // а не обозначение валюты в колонке цифр.
+  const sign = { usd: "$", eur: "€", byn: "BYN" }[currency] || "$";
+  const money = (value) => `${number(Math.round(value * fromUsd))} ${sign}`;
+  // Вторая строка — та же сумма в другой валюте. Рублёвую цифру показываем всем,
+  // кто считает не в рублях: её и вносят на таможне. Тем, кто уже выбрал рубли,
+  // показываем доллары — привычную валюту объявлений.
+  const alt = currency === "byn" ? usd(payment ? payment.totalUsd : 0) : byn(payment ? payment.totalExactUsd : 0);
   const rows = payment
     ? [
       ["Ввозная пошлина", payment.dutyUsd],
@@ -9802,7 +9825,7 @@ function CustomsCalculator() {
     const d = payment?.detail || {};
     const cc = number(d.engineCc || 0);
     if (payment?.basis === "ev-quota") return "Электромобиль ввозится по квоте без ввозной пошлины — в платеже остаются только сборы.";
-    if (payment?.basis === "ev-duty") return `Квота на беспошлинный ввоз электромобилей выбрана, поэтому начисляется пошлина 15% от стоимости машины — ${byn(payment.dutyUsd)}`;
+    if (payment?.basis === "ev-duty") return `Квота на беспошлинный ввоз электромобилей выбрана, поэтому начисляется пошлина 15% от стоимости машины — ${money(payment.dutyUsd)}`;
     if (payment?.basis === "erev") return "Бензиновый мотор здесь крутит только генератор, и машину оформляют по коду электромобиля. Но льготы у неё нет с 2026 года: пошлина 15% от стоимости и НДС 20% сверху — вместе около 38% цены.";
     if (payment?.basis === "value-or-volume") {
       return d.wonByVolume
@@ -9824,7 +9847,6 @@ function CustomsCalculator() {
       parts.push("Сверху идёт НДС 20%: нулевую ставку дают только машинам не старше пяти лет с даты выпуска.");
     }
     parts.push(`Утилизационный сбор — ${payment?.ageYears < 3 ? "624,92" : "1 282,02"} р. по льготной ставке для частного ввоза, таможенный сбор за оформление — 120 р.`);
-    if (payment?.refundUsd) parts.push("Половина пошлины и налога возвращается по заявлению уже после оформления — на таможне вносится полная сумма.");
     return parts.join(" ");
   };
 
@@ -9854,90 +9876,110 @@ function CustomsCalculator() {
   return (
     // Подпись блока — для тех, кто идёт по странице голосом: на экране её роль
     // играет заголовок страницы прямо над формой.
-    <section className="cost-calculator" aria-label="Калькулятор растаможки">
-      <div className="cost-calculator-form">
-        <div className="cost-calculator-field">
-          <span>Тип двигателя</span>
-          <SelectField className="cost-calculator-select" label="Тип двигателя" value={kind} options={CALC_KINDS.map((item) => item.name)} onChange={setKind} />
+    <section className="customs-calc" aria-label="Калькулятор растаможки">
+      {/* Слева поля, справа ответ: меняешь год или объём и тут же видишь, как
+          изменился платёж, а не листаешь к нему вниз. */}
+      <div className="customs-calc-fields">
+        {/* Каждое поле — одна плашка: подпись мелким сверху, значение крупным
+            под ней, а справа, за тонкой чертой, единица измерения или валюта.
+            Так подпись не отрывается от поля и не съедает отдельную строку. */}
+        {/* У списков подпись лежит поверх плашки, а сам список растянут на всю
+            её площадь: нажатие в любую точку плашки должно открывать список, а
+            не попадать мимо в пустое место рядом со значением. */}
+        <div className="customs-calc-field customs-calc-field-select">
+          <span className="customs-calc-label">Тип двигателя</span>
+          <SelectField className="customs-calc-select" label="Тип двигателя" value={kind} options={CALC_KINDS.map((item) => item.name)} onChange={setKind} />
+        </div>
+        {/* Год выпуска идёт сразу за типом двигателя: вдвоём они решают, по какому
+            правилу считать пошлину, и только потом спрашиваем цифры машины. */}
+        <div className="customs-calc-field customs-calc-field-select">
+          <span className="customs-calc-label">Год выпуска</span>
+          <SelectField className="customs-calc-select" label="Год выпуска" value={year} options={years} onChange={setYear} />
         </div>
         {/* Цена и валюта — одно поле: платят на таможне в рублях, а объявления
             приходят в долларах и евро, и пересчитывать в уме никто не будет. */}
         {/* Не <label>: внутри стоят кнопки выбора валюты, а кнопка внутри подписи
             к полю уводила бы нажатие в поле ввода. */}
-        <div className="cost-calculator-field cost-calculator-price">
-          <span id="calc-price-label">Цена машины</span>
-          <span className="cost-calculator-price-row">
-            <input type="number" inputMode="numeric" min="500" step="500" aria-labelledby="calc-price-label" value={priceValue} onChange={(event) => setPriceValue(event.target.value)} />
-            <span className="cost-calculator-currency" role="group" aria-label="Валюта цены">
-              {CALC_CURRENCIES.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={currency === item.id ? "active" : ""}
-                  aria-pressed={currency === item.id}
-                  aria-label={item.label}
-                  onClick={() => setCurrency(item.id)}
-                >
-                  {item.name}
-                </button>
-              ))}
-            </span>
+        <div className="customs-calc-field">
+          {/* Подпись и поле — внутри <label>: тогда курсор встаёт в поле от нажатия
+              в любую точку левой половины плашки, а не только по самой цифре.
+              Кнопки валют стоят снаружи этой подписи, иначе нажатие на валюту
+              уводило бы курсор в поле цены. */}
+          <label className="customs-calc-main">
+            <span className="customs-calc-label">Цена машины</span>
+            <input className="customs-calc-input" type="number" inputMode="numeric" min="500" step="500" value={priceValue} onChange={(event) => setPriceValue(event.target.value)} />
+          </label>
+          <span className="customs-calc-unit customs-calc-currency" role="group" aria-label="Валюта цены">
+            {CALC_CURRENCIES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={currency === item.id ? "active" : ""}
+                aria-pressed={currency === item.id}
+                aria-label={item.label}
+                onClick={() => setCurrency(item.id)}
+              >
+                {item.name}
+              </button>
+            ))}
           </span>
         </div>
         {/* Объём — в кубических сантиметрах, как он записан в документах машины и
             как его спрашивает таможня. У электромобиля и гибрида с генератором
             пошлина считается от стоимости, и поле не нужно вовсе. */}
         {kindItem.volume && (
-          <label className="cost-calculator-field">
-            <span>Объём двигателя, см³</span>
-            <input type="number" inputMode="numeric" min="600" max="8000" step="100" value={engineCc} onChange={(event) => setEngineCc(event.target.value)} />
-          </label>
+          <div className="customs-calc-field">
+            <label className="customs-calc-main">
+              <span className="customs-calc-label">Объём двигателя</span>
+              {/* Единицы стоят справа за чертой и в подпись не попадают, поэтому
+                  для чтения с экрана называем поле целиком. */}
+              <input className="customs-calc-input" type="number" inputMode="numeric" min="600" max="8000" step="100" aria-label="Объём двигателя, см³" value={engineCc} onChange={(event) => setEngineCc(event.target.value)} />
+            </label>
+            <span className="customs-calc-unit customs-calc-unit-text">см³</span>
+          </div>
         )}
-        <div className="cost-calculator-field">
-          <span>Год выпуска</span>
-          <SelectField className="cost-calculator-select" label="Год выпуска" value={year} options={years} onChange={setYear} />
-        </div>
         {/* Переключатели — такие же, как «Быстрый просмотр» и «Цены с квотами»:
             обычная галочка была бы единственной на сайте. */}
-        <label className="quick-view-toggle cost-calculator-toggle">
+        <label className="quick-view-toggle customs-calc-toggle">
           <input type="checkbox" role="switch" checked={refund50} onChange={(event) => setRefund50(event.target.checked)} />
           <span className="quick-view-toggle-track" aria-hidden="true"><i /></span>
-          <span className="quick-view-toggle-label">Возмещение 50% по указу № 140: инвалиды I и II группы, многодетные, родители детей-инвалидов</span>
+          <span className="quick-view-toggle-label">Возмещение 50% по указу № 140</span>
         </label>
       </div>
       {payment ? (
-        <div className="cost-calculator-result">
-          <div className="cost-calculator-total">
-            <span>Таможенный платёж</span>
-            <strong>{byn(payment.totalExactUsd)}</strong>
-            <small>
-              Это {usd(payment.totalUsd)} по курсу Национального банка на {PRICING.rateDate}. Платить нужно в рублях.
-              {payment.refundUsd ? ` На таможне вносится ${byn(payment.totalExactUsd + payment.refundUsd)}, половина пошлины и налогов возвращается позже.` : ""}
-            </small>
-          </div>
-          <dl className="cost-calculator-rows">
-            {rows.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value < 0 ? `− ${byn(-value)}` : byn(value)}</dd>
-              </div>
-            ))}
-          </dl>
-          {/* Расчёт нужно уметь переслать: без этого по ссылке из чата открывалась
-              бы пустая форма, и разговор начинался бы заново. Ссылка на Telegram
-              обычная, без их скриптов на странице. */}
-          <p className="cost-calculator-why">
-            {whyDuty()} {whyRest()}
-          </p>
-          <div className="cost-calculator-share">
-            <button type="button" className="cost-calculator-share-copy" onClick={copyShareLink}>
+        <div className="customs-calc-result">
+          {/* Сумма и разбивка по сборам — одна плашка: это один ответ, просто
+              сначала итог, а под ним из чего он сложился. */}
+          <div className="customs-calc-summary">
+            <div className="customs-calc-total">
+              <span>Таможенный платёж</span>
+              <strong>{money(payment.totalExactUsd)}</strong>
+              <small>
+                Это {alt} по курсу Национального банка на {PRICING.rateDate}. Платить нужно в рублях.
+              </small>
+            </div>
+            <dl className="customs-calc-rows">
+              {rows.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value < 0 ? `− ${money(-value)}` : money(value)}</dd>
+                </div>
+              ))}
+            </dl>
+            {/* Расчёт нужно уметь переслать: без этого по ссылке из чата открывалась
+                бы пустая форма, и разговор начинался бы заново. Кнопка стоит в самой
+                плашке расчёта — это действие над тем, что в ней написано. */}
+            <button type="button" className={`primary customs-calc-share${copied ? " copied" : ""}`} onClick={copyShareLink}>
               <LinkSimple size={17} />
               <span>{copied ? "Ссылка скопирована" : "Поделиться расчётом"}</span>
             </button>
           </div>
+          <p className="customs-calc-why">
+            {whyDuty()} {whyRest()}
+          </p>
         </div>
       ) : (
-        <p>Укажите цену машины, чтобы увидеть расчёт.</p>
+        <p className="customs-calc-empty">Укажите цену машины, чтобы увидеть расчёт.</p>
       )}
     </section>
   );

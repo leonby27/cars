@@ -13737,6 +13737,54 @@ html[data-theme="dark"] .model-page-back:hover {
 .model-page-hero .info-actions .secondary {
   color: var(--ink);
 }
+/* Заголовок страницы расчёта с картинкой: текст слева, плитка со значком справа.
+   Правило включается только там, где эта плитка есть, — у обзоров моделей и
+   остальных разделов шапка остаётся прежней. */
+.model-page-hero:has(.tool-page-hero-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+/* Плитка ровно такая же, как в полосе «почему мы» на главной: тот же размер, то
+   же скругление и то же положение картинки внутри — она крупнее плитки и слегка
+   обрезается её краями. Цифры повторяют .trust-strip намеренно, чтобы значок
+   выглядел одинаково в обоих местах. */
+.tool-page-hero-icon {
+  position: relative;
+  flex: 0 0 auto;
+  width: 124px;
+  height: 124px;
+  overflow: hidden;
+  border-radius: calc(25px * var(--corner-scale));
+  /* На тон отличается от подложки страницы: в светлой теме та белая, в тёмной —
+     тёмно-серая, поэтому цвета разные. */
+  background: var(--surface);
+}
+html[data-theme="dark"] .tool-page-hero-icon {
+  background: var(--filter-field-bg);
+}
+/* Не «плитка > картинка»: настоящий прямой потомок здесь — обёртка <picture>. */
+/* Значок крупнее плитки и сдвинут вниз-вправо, поэтому правый нижний угол
+   картинки уходит за край и срезается — так же, как в полосе «почему мы» на
+   главной. Отсюда и `overflow: hidden` у плашки. */
+.tool-page-hero-icon img {
+  position: absolute;
+  top: 19px;
+  left: -4px;
+  display: block;
+  width: 134px;
+  height: 134px;
+  max-width: none;
+  object-fit: contain;
+}
+/* На телефоне картинка уступает место заголовку: она украшение, а заголовок —
+   то, за чем пришли. */
+@media (max-width: 700px) {
+  .tool-page-hero-icon {
+    display: none;
+  }
+}
 .model-page-article {
   display: flex;
   flex-direction: column;
@@ -14915,6 +14963,7 @@ html[data-theme="dark"] body #root .cost-calculator-select.open {
   font-size: 15px;
   line-height: 1.35;
 }
+
 /* Итог слева, этапы справа: сумму читают первой, разбивку — если она понадобилась. */
 .cost-calculator-result {
   display: grid;
@@ -14979,51 +15028,6 @@ html[data-theme="dark"] .cost-calculator-total > small {
   white-space: nowrap;
 }
 
-/* Цена с валютой занимает всю ширину формы: в одну колонку поле и три кнопки
-   валют не помещаются. */
-.cost-calculator-price {
-  grid-column: 1 / -1;
-}
-/* Цена и валюта — одна строка: поле тянется, кнопки валют стоят справа от него. */
-.cost-calculator-field > .cost-calculator-price-row {
-  color: var(--ink);
-  font-size: inherit;
-  font-weight: inherit;
-}
-.cost-calculator-price-row {
-  display: flex;
-  gap: 8px;
-}
-.cost-calculator-price-row input[type="number"] {
-  flex: 1;
-  min-width: 0;
-}
-.cost-calculator-currency {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: calc(11px * var(--corner-scale));
-  background: var(--panel);
-}
-html[data-theme="dark"] .cost-calculator-currency {
-  background: #353a43;
-}
-.cost-calculator-currency button {
-  min-width: 44px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: calc(8px * var(--corner-scale));
-  background: transparent;
-  color: color-mix(in srgb, var(--ink) 45%, var(--muted));
-  font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.cost-calculator-currency button.active {
-  background: var(--accent-soft);
-  color: var(--accent-dark);
-}
 /* Второй итог — сумма до Минска. Он такой же плашкой, но спокойнее по цвету:
    главный ответ страницы один, и это таможенный платёж. */
 .cost-calculator-total-second {
@@ -15051,57 +15055,336 @@ html[data-theme="dark"] .cost-calculator-note {
   background: #353a43;
 }
 
-/* «Поделиться расчётом»: во всю ширину под сметой. Считать и не иметь возможности
-   переслать посчитанное — полдела; ссылка восстанавливает те же поля. Подложка,
-   а не обводка, как у остальных блоков страницы. */
-/* Разбор под расчётом: почему вышла такая сумма. Мелкий приглушённый текст на всю
-   ширину результата — это сноска к цифрам, а не ещё один блок. */
-/* Правило точнее общего «абзац внутри раздела статьи»: иначе сноска набирается
-   тем же шрифтом с засечками в 21 точку, что и текст обзоров. */
-.cost-calculator p.cost-calculator-why {
-  grid-column: 1 / -1;
-  max-width: none;
+
+/* ===================== Калькулятор растаможки =====================
+
+   Одна карточка: сверху поля, внизу полосой итог и единственное действие —
+   «Поделиться расчётом». Поля собраны в плашки, где подпись стоит мелким шрифтом
+   над значением, а единица измерения или валюта — справа за тонкой чертой. Так
+   подпись не отрывается от поля, не съедает отдельную строку над ним, и в ряд
+   помещается втрое больше полей, чем при подписях сверху.
+
+   Свои имена классов, а не общие cost-calculator-*: те остались у расчёта запаса
+   хода и сравнения цен, а здесь вёрстка другая, и общие правила её только ломали
+   бы. */
+.customs-calc {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 28px;
+  margin: 18px 0 14px;
+  font-family: "Manrope", system-ui, sans-serif;
+  /* Цифры сборов стоят столбиком, поэтому у всех одинаковая ширина знака. */
+  font-variant-numeric: tabular-nums;
+}
+/* Поля идут друг под другом во всю ширину колонки. Своей подложки у столбца нет:
+   поля уже отделены фоном, и плашка под плашкой давала рамку в рамке. */
+.customs-calc-fields {
+  display: grid;
+  /* Отступ подобран так, чтобы в обычном состоянии низ последнего поля совпадал
+     с низом плашки расчёта справа: четыре поля по 70 точек и три промежутка по
+     девять дают почти ту же высоту, что сумма, сборы и кнопка. */
+  gap: 9px;
+}
+.customs-calc-field {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-height: 70px;
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--filter-field-bg);
+  transition: box-shadow var(--motion-fast) ease;
+}
+/* Подсветка — на всей плашке, а не на строке значения внутри неё: с клавиатуры
+   должно быть видно, в каком поле сейчас курсор. */
+.customs-calc-field:has(:focus-visible),
+.customs-calc-field:has(.custom-select.open) {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 34%, transparent);
+}
+/* Левая половина плашки — подпись и значение. Это <label>, поэтому нажатие в
+   любую её точку, а не только по цифре, ставит курсор в поле. */
+.customs-calc-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 13px 16px 14px;
+  cursor: text;
+}
+.customs-calc-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.customs-calc-input {
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 26px;
+  /* Стрелки-«крутилки» браузера тут не нужны: поле должно читаться как
+     значение, а не как счётчик. */
+  appearance: textfield;
+}
+.customs-calc-input:focus {
+  outline: none;
+}
+.customs-calc-input::-webkit-inner-spin-button,
+.customs-calc-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+/* Плашка со списком: подпись лежит поверх неё и нажатий не ловит, а сам список
+   растянут на всю площадь плашки. Иначе нажималась бы только строка значения, и
+   промах в сантиметр от текста ничего не открывал. Своей подложки и своих полей
+   у списка здесь нет — их даёт плашка. */
+.customs-calc-field-select > .customs-calc-label {
+  position: absolute;
+  z-index: 1;
+  top: 14px;
+  left: 16px;
+  pointer-events: none;
+}
+/* Открытый список общими правилами закрашивается своей подложкой — здесь она бы
+   легла поверх плашки и стёрла подпись над значением. Перебиваем её и для светлой,
+   и для тёмной темы: подпись должна оставаться на месте и с открытым списком. */
+#root .customs-calc-select,
+#root .customs-calc-select.open,
+html body #root .customs-calc-select.open,
+html[data-theme="dark"] body #root .customs-calc-select.open {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+/* Значение и стрелка стоят на той же строке, что и цифры в соседних полях, —
+   кнопка при этом занимает всю плашку целиком. */
+#root .customs-calc-select .select-trigger {
+  align-items: flex-end;
+  padding: 0 16px 14px;
+}
+#root .customs-calc-select .select-trigger b {
+  font-size: 19px;
+  font-weight: 700;
+}
+/* Стрелка стоит по центру плашки, а не на строке значения: у соседних полей
+   справа так же — валюта и единицы измерения выровнены по середине. Поворот при
+   открытии задаём здесь же, иначе общее правило перебило бы положение. */
+#root .customs-calc-select .select-trigger > svg:last-child {
+  position: absolute;
+  right: 20px;
+  top: calc(50% - 8px);
+}
+#root .customs-calc-select.open .select-trigger > svg:last-child {
+  transform: rotate(180deg);
+}
+/* Своей обводки у кнопки нет: подсветку с клавиатуры рисует плашка вокруг, и
+   две рамки одна в другой выглядели бы ошибкой. */
+#root .customs-calc-select .select-trigger:focus-visible {
+  outline: none;
+}
+/* Правая часть плашки: единица измерения или валюта. Отделена волоском, как в
+   документах таможни, где значение и единица стоят в одной графе. */
+.customs-calc-unit {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+/* Единицы измерения — это часть значения, поэтому их отделяет волосок, как в
+   графе документа. */
+.customs-calc-unit-text {
+  padding: 0 16px;
+  border-left: 1px solid color-mix(in srgb, var(--ink) 11%, transparent);
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
+}
+/* Валюта — не подпись к значению, а выбор из трёх, поэтому это отдельная
+   плашка-переключатель со своей подложкой. Черта рядом с ней была лишней:
+   получалось две границы подряд. */
+.customs-calc-currency {
+  align-self: center;
+  gap: 2px;
+  /* Отступ справа равен отступам сверху и снизу: плашка переключателя ростом
+     44 точки в поле высотой 70 оставляет по 13 точек над и под собой. */
+  margin-right: 13px;
+  padding: 4px;
+  border-radius: calc(12px * var(--corner-scale));
+  /* Подложка — в цвет блока страницы, на котором лежит поле: в светлой теме
+     белая, в тёмной та же, что у подложки текста (см. .model-page-body). */
+  background: var(--panel);
+}
+html[data-theme="dark"] .customs-calc-currency {
+  background: var(--header-control-bg);
+}
+.customs-calc-currency button {
+  min-width: 40px;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: calc(10px * var(--corner-scale));
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+/* Выбранная валюта — инверсией к подложке: красный на странице занят суммой. */
+.customs-calc-currency button.active {
+  background: var(--ink);
+  color: var(--panel);
+}
+/* Переключатель льготы стоит под полями, с небольшим отступом: он не поле
+   ввода, и прижимать его вплотную незачем. */
+/* Переключатель начинается по той же вертикали, что подписи и значения внутри
+   плашек: иначе он выпирает влево из общего строя. */
+.customs-calc-toggle {
+  margin-top: 4px;
+  padding-left: 16px;
+  gap: 12px;
+}
+.customs-calc-toggle .quick-view-toggle-label {
+  font-size: 15px;
+  line-height: 1.35;
+}
+/* Справа всё идёт столбиком: итог со сборами, разбор и кнопка ссылки. */
+.customs-calc-result {
+  display: grid;
+  gap: 14px;
+}
+/* Итог и разбивка по сборам — одна плашка со спокойной подложкой, как у прочих
+   блоков страницы. Внутри их делит тонкая черта: без неё сумма и столбик цифр
+   слипаются в один кусок. */
+.customs-calc-summary {
+  /* Сетка, а не простой блок: кнопка внизу — тег <button>, а он по своей природе
+     сжимается по содержимому, и растянуть его во всю ширину плашки можно только
+     так. */
+  display: grid;
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--filter-field-bg);
+}
+.customs-calc-total {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 24px 18px;
+}
+.customs-calc-total > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.customs-calc-total > strong {
+  margin: 6px 0 8px;
+  font-size: clamp(26px, 3.4vw, 34px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -1.2px;
+}
+.customs-calc-total > small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+/* Сборов три-четыре строки, и держать их врастяжку незачем: столбик читается
+   одним взглядом, когда строки стоят плотно. */
+.customs-calc-rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 14px 24px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.customs-calc-rows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.customs-calc-rows dt {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.customs-calc-rows dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+/* «Поделиться расчётом» — единственное действие на странице, поэтому кнопка
+   основная, жёлтая: та же, что «Оставить заявку» в карточке машины. */
+/* Кнопка растянута во всю ширину расчёта, но внутри его полей — теми же
+   отступами, что у строк сборов над ней. */
+/* Ссылка скопирована — это уже не предложение действия, а ответ на него, поэтому
+   жёлтый гаснет до спокойной подложки. */
+.customs-calc-share.copied,
+.customs-calc-share.copied:hover {
+  background: var(--panel);
+  color: var(--ink);
+}
+html[data-theme="dark"] .customs-calc-share.copied,
+html[data-theme="dark"] .customs-calc-share.copied:hover {
+  background: var(--header-control-bg);
+}
+.customs-calc-share {
+  display: flex;
+  min-height: 44px;
+  margin: 4px 24px 20px;
+  padding: 0 22px;
+  border-radius: calc(14px * var(--corner-scale));
+  cursor: pointer;
+}
+.customs-calc p.customs-calc-empty {
   margin: 0;
   color: var(--muted);
   font-family: "Manrope", system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 15px;
+}
+/* Разбор под карточкой: почему вышла такая сумма. Мелкая сноска к цифрам, а не
+   ещё один блок, — и правило точнее общего «абзац внутри раздела», иначе текст
+   набирается шрифтом обзоров с засечками в 21 точку. */
+.customs-calc p.customs-calc-why {
+  max-width: none;
+  margin: 0 2px;
+  color: var(--muted);
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
   letter-spacing: 0;
 }
-.cost-calculator-share {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+/* Ниже этой ширины поля и итог рядом уже тесные: раздел становится одним
+   столбцом, а на телефоне поджимаются и отступы внутри плашек. */
+@media (max-width: 1000px) {
+  .customs-calc {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
 }
-.cost-calculator-share > button,
-.cost-calculator-share > a {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
-  border: 0;
-  border-radius: calc(12px * var(--corner-scale));
-  background: var(--panel);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.cost-calculator-share > button:hover,
-.cost-calculator-share > a:hover {
-  background: var(--panel-soft);
-}
-html[data-theme="dark"] .cost-calculator-share > button,
-html[data-theme="dark"] .cost-calculator-share > a {
-  background: #353a43;
-}
-html[data-theme="dark"] .cost-calculator-share > button:hover,
-html[data-theme="dark"] .cost-calculator-share > a:hover {
-  background: #3d434d;
+@media (max-width: 700px) {
+  .customs-calc-total {
+    padding: 18px 18px 14px;
+  }
+  .customs-calc-rows {
+    padding: 14px 18px 16px;
+  }
+  .customs-calc-share {
+    margin: 2px 18px 18px;
+  }
 }
 
 /* Таблица сравнения цен с белорусским рынком: поиск, фильтр по марке и сортировка.
@@ -18043,7 +18326,12 @@ html[data-theme="dark"] .blog-tool-button.current:hover {
 .tool-page-aside .model-page-disclaimer {
   width: 100%;
   max-width: 780px;
-  margin: 24px auto 0;
+  /* Отступ сверху втрое меньше прежнего: оговорка — сноска ко всей странице, а не
+     отдельный её блок. Колонка страницы сама разводит свои блоки на 34 точки,
+     поэтому лишнее снимаем отрицательным полем: 34 − 15 = 19 вместо 58. */
+  margin: -15px auto 0;
+  font-weight: 400;
+  opacity: 0.5;
 }
 /* Блок про сервис — сетка из текста и картинки, и ограничить его содержимое той же
    меркой через `max-width` у детей нельзя: развалится раскладка в две колонки.

@@ -37,8 +37,9 @@ test("charges the 15% duty once the quota is gone", () => {
   const car = { chinaPrice:100000, year:2024, type:"Электромобиль" };
   const free = estimateLandedCost(car, { quotaOver:false });
   const dutied = estimateLandedCost(car, { quotaOver:true });
-  // Пошлина считается от таможенной стоимости — цены плюс доставки до границы ЕАЭС.
-  assert.ok(dutied.customsValueUsd > dutied.chinaUsd);
+  // Пошлина считается от таможенной стоимости, а это цена машины по документам
+  // продавца: доставка в неё не входит (статья 267 Таможенного кодекса ЕАЭС).
+  assert.equal(dutied.customsValueUsd, dutied.chinaUsd);
   assert.equal(dutied.customsUsd, Math.round((dutied.customsValueUsd * 0.15 + free.customsUsd) / 50) * 50);
   assert.equal(dutied.customsNote, "Пошлина 15% · оформление и сборы");
   assert.equal(dutied.customsAlert, "Без квоты на льготный ввоз");
@@ -195,11 +196,14 @@ test("counts the age at the expected clearance date, not at today", () => {
   assert.ok(pastEdge.customsUsd > beforeEdge.customsUsd * 1.7);
 });
 
-test("counts delivery to the EAEU border into the customs value", () => {
+test("keeps delivery out of the customs value", () => {
   const car = { chinaPrice:100000, usdPrice:20000, source:"Che168", type:"Электромобиль", city:"guangzhou", year:2024 };
   const price = estimateLandedCost(car, { quotaOver:true });
-  // Стоимость для процентов — цена плюс середина вилки этапа до Хоргоса.
-  assert.equal(price.customsValueUsd, price.chinaUsd + (price.chinaLegLow + price.chinaLegHigh) / 2);
+  // Стоимость для процентов — только цена машины. Расходы на перевозку и страховку
+  // в стоимость товара для личного пользования не включаются, поэтому плечо до
+  // Хоргоса в ней не участвует, хотя в цене «под ключ» оно есть.
+  assert.equal(price.customsValueUsd, price.chinaUsd);
+  assert.ok(price.chinaLegLow > 0);
   // Ставка за кубический сантиметр от стоимости не зависит: у машины с двигателем
   // от трёх до пяти лет платёж одинаков при любой цене.
   const cheap = estimateLandedCost({ ...car, type:"ДВС", engine:"1.5T", usdPrice:10000, manufactureDate:"2022-06-01" });
