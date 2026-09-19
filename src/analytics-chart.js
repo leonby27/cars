@@ -19,9 +19,13 @@ export function visitsChart(daily, period, now = new Date(), metric = "visits") 
     const yandex = Number(item.yandex) || 0;
     const google = Number(item.google) || 0;
     const views = Number(item.views) || 0;
+    // «В это время» показываем только у прошедших дней: у сегодняшнего оно совпадает
+    // с итогом дня, и строка в подсказке была бы пустой по смыслу.
+    const toNow = Number(metric === "views" ? item.views_to_now : item.visits_to_now);
     return {
       ...item, visits, yandex, google, views,
       value: metric === "views" ? views : visits,
+      valueToNow: item.day === today || !Number.isFinite(toNow) ? null : toNow,
       x: daily.length > 1 ? index / (daily.length - 1) * 100 : 50,
       y:chartY(metric === "views" ? views : visits),
       yandexY:chartY(yandex),

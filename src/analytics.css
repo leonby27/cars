@@ -346,6 +346,7 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .analytics-chart-point:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .analytics-chart-tooltip { display:none; position:absolute; z-index:4; bottom:calc(100% + 4px); left:50%; transform:translateX(-50%); padding:9px 12px; border-radius:9px; background:var(--ink); color:var(--panel); box-shadow:0 4px 16px #0002; font-size:13px; line-height:1.5; white-space:nowrap; text-align:left; pointer-events:none; }
 .analytics-chart-tooltip strong { display:block; }
+.analytics-chart-tooltip-note { display:block; opacity:.7; }
 .analytics-chart-tooltip[data-edge="left"] { left:0; transform:none; }
 .analytics-chart-tooltip[data-edge="right"] { left:auto; right:0; transform:none; }
 .analytics-chart-point:hover .analytics-chart-tooltip, .analytics-chart-point:focus-visible .analytics-chart-tooltip { display:block; }

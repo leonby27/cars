@@ -58,3 +58,20 @@ test("режим просмотров рисует просмотры и мас�
   assert.deepEqual(visits.points.map(point => point.value), [12, 20]);
   assert.ok(visits.ticks.at(-1).value < 118, "шкала заходов не должна тянуться до просмотров");
 });
+
+// В подсказке рядом с итогом дня стоит «в это время»: полные прошедшие сутки не
+// сравнить с сегодняшним недожитым днём. У самого сегодня эта строка не нужна —
+// там она повторяла бы итог.
+test("подсказка знает, сколько набралось к текущему часу", () => {
+  const days = [
+    { day:"2026-09-07", visits:12, views:40, visits_to_now:5, views_to_now:18 },
+    { day:"2026-09-08", visits:20, views:118, visits_to_now:20, views_to_now:118 },
+  ];
+  const visits = visitsChart(days, "7", now);
+  assert.deepEqual(visits.points.map(point => point.valueToNow), [5, null]);
+  const views = visitsChart(days, "7", now, "views");
+  assert.deepEqual(views.points.map(point => point.valueToNow), [18, null]);
+  // День без этой цифры (старый ответ сервера) строку просто не показывает.
+  const legacy = visitsChart([{ day:"2026-09-07", visits:12 }], "7", now);
+  assert.equal(legacy.points[0].valueToNow, null);
+});

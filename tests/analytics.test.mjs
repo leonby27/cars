@@ -109,6 +109,17 @@ test("источники графика выключены по умолчани
   assert.match(chart, /analytics-chart-source is-\$\{source\.id\}/);
 });
 
+// Всплеск заходов почти всегда объясняется днём недели, поэтому дата на графике
+// без него не читается: и в подсказке, и в подписях под осью стоит «13 сент., чт».
+test("на графике у даты есть день недели", async () => {
+  const chart = await readFile(new URL("../src/analytics-visits-chart.jsx", import.meta.url), "utf8");
+  assert.match(chart, /weekday: "short", timeZone: "Europe\/Minsk"/);
+  assert.match(chart, /pointLabel = day => `\$\{dateLabel\(day\)\}, \$\{weekdayLabel\(day\)\}`/);
+  // Голая дата без дня недели не должна остаться ни в подсказках, ни на оси.
+  assert.doesNotMatch(chart, /\{dateLabel\(point\.day\)\}/);
+  assert.equal(new Intl.DateTimeFormat("ru-RU", { weekday:"short", timeZone:"Europe/Minsk" }).format(new Date("2026-09-13")), "вс");
+});
+
 test("аналитика переключается без очистки уже показанных данных", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   assert.doesNotMatch(source, /setReport\(null\)/);
@@ -334,6 +345,22 @@ test("график получает и просмотры карточек по 
   // заходов должен жить в счётчике, а не отсекать строки целиком.
   assert.match(sql, /count\(\*\) FILTER \(WHERE gap IS NULL/);
   assert.doesNotMatch(sql, /FROM steps WHERE/);
+});
+
+// Рядом с итогом дня подсказка графика показывает, сколько набралось к текущему часу:
+// полные прошедшие сутки не сравнить с сегодняшним недожитым днём. Отсечка одна на
+// весь запрос — секунды от минской полуночи.
+test("график отдаёт по каждому дню счёт к текущему времени суток", async () => {
+  const calls = [];
+  const db = { query:async (sql, values) => { calls.push({ sql, values }); return { rows:[] }; } };
+  await getAnalyticsTrend("90", { db, now:Date.parse("2026-09-12T09:30:00Z") });
+  const sql = calls[0].sql;
+  assert.match(sql, /AS visits_to_now/);
+  assert.match(sql, /AS views_to_now/);
+  assert.match(sql, /second_of_day < \$3/);
+  assert.match(sql, /extract\(epoch FROM \(created_at AT TIME ZONE 'Europe\/Minsk'\)::time\)/);
+  // 12:30 по Минску — половина первого дня.
+  assert.equal(calls[0].values[2], 45_000);
 });
 
 // Карточка «Заходы» и точка графика за тот же день должны совпадать, поэтому обе

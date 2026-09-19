@@ -447,12 +447,17 @@ const VISIT_STARTS = "gap IS NULL OR gap > interval '30 minutes' OR previous_day
 // величины, а считать их вторым запросом смысла нет. Заходы — это только первые шаги
 // захода, поэтому они отбираются условием в самом счётчике, а не в WHERE: иначе
 // просмотры внутри захода выпали бы из выборки вместе с остальными шагами.
-export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
+export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now() } = {}) {
   const range = normalizeAnalyticsRange(rangeValue);
   const from = range.from.toISOString();
   const to = range.to.toISOString();
+  // Рядом с итогом дня подсказка показывает, сколько набралось к текущему часу —
+  // полные вчерашние сутки не сравнить с сегодняшним недожитым днём. Отсечка одна
+  // на весь график: сколько секунд прошло с минской полуночи прямо сейчас.
+  const secondOfDay = Math.floor(((now + MINSK_OFFSET_MS) % 86_400_000) / 1000);
   const result = await db.query(`WITH steps AS (
       SELECT ${MINSK_DAY} AS day, path, event_name, lower(coalesce(properties->>'entrySource','')) AS entry_source,
+        extract(epoch FROM (created_at AT TIME ZONE 'Europe/Minsk')::time) AS second_of_day,
         created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
         lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
       FROM analytics_events
@@ -466,9 +471,11 @@ export async function getAnalyticsTrend(rangeValue, { db = pool } = {}) {
       count(*) FILTER (
         WHERE (${VISIT_STARTS}) AND entry_source ~ '(^|\\.)google\\.'
       )::int AS google,
-      count(*) FILTER (WHERE event_name = 'vehicle_view')::int AS views
+      count(*) FILTER (WHERE event_name = 'vehicle_view')::int AS views,
+      count(*) FILTER (WHERE (${VISIT_STARTS}) AND second_of_day < $3)::int AS visits_to_now,
+      count(*) FILTER (WHERE event_name = 'vehicle_view' AND second_of_day < $3)::int AS views_to_now
     FROM steps
-    GROUP BY day ORDER BY day`, [from, to]);
+    GROUP BY day ORDER BY day`, [from, to, secondOfDay]);
   return {
     days:range.days,
     period:range.period,
