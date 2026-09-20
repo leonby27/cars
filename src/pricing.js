@@ -3,7 +3,7 @@ import { engineVolume } from "./engine-spec.js";
 import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
-  usdByn:3.0279, cnyBynPer10:4.5214, eurByn:3.4736, rateDate:"19.09.2026",
+  usdByn:3.0279, cnyBynPer10:4.5214, eurByn:3.4736, rateDate:"20.09.2026",
   serviceByn:1000,
   // Тариф фиксирован в BYN; долларовый эквивалент следует за курсом НБРБ.
   get serviceUsd() { return Math.round(this.serviceByn / this.usdByn / 10) * 10; },
