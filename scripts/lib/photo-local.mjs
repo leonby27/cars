@@ -24,6 +24,7 @@ import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { socialPhotoHref } from "../../src/photo-source.js";
+import { resolvePillowPython } from "./python-pillow.mjs";
 
 const run = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -43,6 +44,8 @@ export const FRAME_SHAPES = Object.freeze({ square:[1080, 1080], vertical:[1080,
 const SOURCE_WIDTH = 1440;
 // Источник отвечает не всегда; ждать дольше незачем — на диске лежит запасной кадр.
 const SOURCE_TIMEOUT_MS = 20_000;
+let pythonPromise;
+const pillowPython = () => (pythonPromise ||= resolvePillowPython());
 
 /**
  * Путь кадра на диске по его адресу у источника. Пусто, если такого файла нет.
@@ -67,7 +70,7 @@ export async function localJpeg(photoUrl, out) {
   const stored = await storedFrame(photoUrl);
   if (!stored) return "";
   try {
-    await run("python3", [jpegScript, stored, out]);
+    await run(await pillowPython(), [jpegScript, stored, out]);
     return out;
   } catch { return ""; }
 }
@@ -117,7 +120,7 @@ export async function prepareFrames(photos, { dir, prefix = "frame", mode = "cro
       continue;
     }
     try {
-      await run("python3", [socialScript, source, out, mode, shape]);
+      await run(await pillowPython(), [socialScript, source, out, mode, shape]);
       files.push(out);
     } catch (error) {
       log(`кадр ${index + 1} не привести к нужной форме (${String(error.message).slice(0, 120)})`);

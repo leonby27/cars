@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { resolvePillowPython } from "./lib/python-pillow.mjs";
 import { weekKey } from "./lib/social-week.mjs";
 
 const run = promisify(execFile);
@@ -18,7 +19,7 @@ const packageDir = path.join(runtimeRoot, week);
 const manifestFile = path.join(packageDir, "manifest.json");
 const uploadDir = path.join(packageDir, "upload");
 const socialFrame = path.join(ROOT, "scripts", "photo-to-social.py");
-const python = process.env.CODEX_PYTHON || "python3";
+const python = await resolvePillowPython();
 
 const manifest = JSON.parse(await fs.readFile(manifestFile, "utf8"));
 if (manifest.week !== week || !Array.isArray(manifest.posts) || !manifest.posts.length) throw new Error("Недельный манифест повреждён");

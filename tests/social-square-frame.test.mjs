@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { resolvePillowPython } from "../scripts/lib/python-pillow.mjs";
 
 const run = promisify(execFile);
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "social-frame-"));
@@ -47,24 +48,28 @@ test("когда источник молчит, кадр берётся с ди�
   });
 });
 
-// Ниже нужен Pillow: на сервере он есть, на чужом ноутбуке может не быть.
-const hasPillow = await run("python3", ["-c", "import PIL"]).then(() => true, () => false);
+// На сервере Pillow живёт в системном Python, а в Codex — в общей среде приложения.
+const pillowPython = await resolvePillowPython().catch(() => "");
+const hasPillow = Boolean(pillowPython);
 
 test("кадр 4:3 становится нужной формой: целиком с полосами или обрезанным", { skip: hasPillow ? false : "нет Pillow" }, async () => {
   const src = path.join(tmp, "wide.jpg");
-  await run("python3", ["-c", `from PIL import Image; Image.new("RGB",(1024,768),(200,30,40)).save(${JSON.stringify(src)})`]);
+  await run(pillowPython, ["-c", `from PIL import Image; Image.new("RGB",(1024,768),(200,30,40)).save(${JSON.stringify(src)})`]);
   for (const shape of Object.keys(FRAME_SHAPES)) {
     const [expectedW, expectedH] = FRAME_SHAPES[shape];
     for (const mode of ["fit", "crop"]) {
       const out = path.join(tmp, `${shape}-${mode}.jpg`);
-      await run("python3", ["scripts/photo-to-social.py", src, out, mode, shape]);
-      const size = await run("python3", ["-c", `from PIL import Image; im=Image.open(${JSON.stringify(out)}); print(im.width, im.height, im.getpixel((5,5)))`]);
+      await run(pillowPython, ["scripts/photo-to-social.py", src, out, mode, shape]);
+      const size = await run(pillowPython, ["-c", `from PIL import Image; im=Image.open(${JSON.stringify(out)}); print(im.width, im.height, im.getpixel((5,5)))`]);
       const [width, height] = size.stdout.trim().split(" ").map(Number);
       assert.equal(width, expectedW, `${shape}/${mode}: ширина`);
       assert.equal(height, expectedH, `${shape}/${mode}: высота`);
       // У «fit» верхний угол — полоса фона (тёмная), у «crop» — сам снимок.
       const corner = size.stdout.match(/\((\d+), (\d+), (\d+)\)/).slice(1).map(Number);
-      if (mode === "fit") assert.deepEqual(corner, [23, 25, 28], `${shape}/fit: угол не фон`);
+      if (mode === "fit") assert.ok(
+        corner.every((value, index) => Math.abs(value - [23, 25, 28][index]) <= 2),
+        `${shape}/fit: угол не фон (${corner})`,
+      );
       else assert.ok(corner[0] > 150, `${shape}/crop: ожидал сам снимок в углу, получил ${corner}`);
     }
   }

@@ -28,12 +28,23 @@ import {
   socialLandedPrice,
 } from "../scripts/lib/social-blocks.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
+import { pillowPythonCandidates, resolvePillowPython } from "../scripts/lib/python-pillow.mjs";
 
 test("недельный ключ всегда указывает на понедельник", () => {
   const saturday = new Date("2026-09-19T12:00:00+03:00");
   assert.equal(weekKey(saturday), "2026-09-14");
   assert.equal(weekKey(new Date("2026-09-21T09:00:00+03:00")), "2026-09-21");
   assert.equal(mondayOf(saturday).getDay(), 1);
+});
+
+test("финализация сама выбирает Python с Pillow для расписания Codex", async () => {
+  const candidates = pillowPythonCandidates({ env:{ CODEX_PYTHON:"chosen-python" }, home:"/tmp/example-home" });
+  assert.equal(candidates[0], "chosen-python");
+  assert.ok(candidates.some((candidate) => candidate.endsWith("/codex-primary-runtime/dependencies/python/bin/python3")));
+  assert.equal(await resolvePillowPython({
+    candidates:["without-pillow", "with-pillow"],
+    probe:async (candidate) => candidate === "with-pillow",
+  }), "with-pillow");
 });
 
 test("в воскресенье готовится следующая неделя, в остальные дни — текущая", () => {
