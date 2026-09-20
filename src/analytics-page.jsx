@@ -8,6 +8,7 @@ import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
 import { analyticsUpdatesUrl, sectionFreshCount, watchAnalyticsExit } from "./analytics-updates.js";
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
+import { socialGeneration } from "./social-generations.js";
 import { carFrame, headlineSize, KINDS, resolvePlace, socialThemeQuery, socialTiles, tileHeadline } from "./social-themes.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
@@ -990,13 +991,9 @@ function SocialTitle({ className, children }) {
 }
 
 function SocialPostsSection({ active }) {
-  const [captions, setCaptions] = useState(true);
-  // Квадрат — то, что публикуется сейчас. Вертикальный 4:5 — самый узкий кадр,
-  // который сегодня принимает публикация в ленту (см. scripts/lib/social.mjs);
-  // Instagram-приложение с 2025 года умеет и более узкий 3:4, но публикацию под
-  // него ещё не проверяли. Переключатель — только чтобы сравнить оформление на
-  // обеих формах, ничего не публикует.
-  const [shape, setShape] = useState("square");
+  // «Исходник» и «Генерация» используют одну сетку, но разные готовые изображения:
+  // так композиции можно сравнивать попарно без скачков раскладки.
+  const [version, setVersion] = useState("source");
   const [cars, setCars] = useState({});
   const [state, setState] = useState("idle");
   const tiles = useMemo(() => socialTiles(), []);
@@ -1039,20 +1036,16 @@ function SocialPostsSection({ active }) {
           <h2>Посты соц сетей</h2>
           <p>Так записи встанут в ленте. Пока это только картинки — на них отрабатывается оформление, которое потом наложит автопостинг</p>
         </div>
-        <div className="social-toggles">
-          <div className="analytics-range" aria-label="Форма кадра">
-            <button type="button" className={shape === "square" ? "active" : ""} onClick={() => setShape("square")}>Квадрат</button>
-            <button type="button" className={shape === "vertical" ? "active" : ""} onClick={() => setShape("vertical")}>Вертикально</button>
-          </div>
-          <div className="analytics-range" aria-label="Показывать подписи к темам">
-            <button type="button" className={captions ? "active" : ""} onClick={() => setCaptions(true)}>С описанием</button>
-            <button type="button" className={captions ? "" : "active"} onClick={() => setCaptions(false)}>Без</button>
-          </div>
+        <div className="analytics-range" aria-label="Версия постов">
+          <button type="button" className={version === "source" ? "active" : ""} onClick={() => setVersion("source")}>Исходник</button>
+          <button type="button" className={version === "generation" ? "active" : ""} onClick={() => setVersion("generation")}>Генерация</button>
         </div>
       </div>
-      <div className={`social-grid${captions ? "" : " bare"}`}>
+      <div className="social-grid bare" data-version={version}>
         {tiles.map(({ key, theme, pick, round }) => {
           const loaded = cars[key];
+          const generation = socialGeneration(key);
+          const preparedImage = version === "generation" ? generation?.image : generation?.source;
           const waiting = state === "ready" ? "картинки нет" : "загружается";
           // На кадре — первая строка будущей записи, а не название темы: витрина
           // показывает то, что увидит читатель ленты. У темы с постоянным текстом
@@ -1065,19 +1058,22 @@ function SocialPostsSection({ active }) {
           // к левому краю, даже если у темы места «по центру».
           const titleClass = `social-title at-${resolvePlace(theme.place, headline)} size-${headlineSize(headline)}`;
           // Тень под текстом ложится с той стороны кадра, где стоит сама надпись —
-          // сверху или снизу, в зависимости от места темы. Форма (квадрат или
-          // вертикальный 4:5) — по переключателю сверху, одна на все плитки.
-          const frameClass = `social-frame edge-${theme.place.startsWith("top") ? "top" : "bottom"}${shape === "vertical" ? " shape-vertical" : ""}`;
+          // сверху или снизу, в зависимости от места темы. Все плитки всегда
+          // вертикальные 4:5 — это единственный формат этого раздела.
+          const frameClass = `social-frame edge-${theme.place.startsWith("top") ? "top" : "bottom"}`;
           return (
             <figure className="social-tile" key={key}>
-              {theme.kind === KINDS.duel ? (
+              {preparedImage ? (
+                <div className="social-frame social-frame-generated">
+                  <img src={preparedImage} alt="" loading="lazy" />
+                </div>
+              ) : theme.kind === KINDS.duel ? (
                 <div className={`${frameClass} is-duel`}>
                   {headline ? <SocialTitle className={titleClass}><SocialHeadline text={headline} /></SocialTitle> : null}
                   {(loaded || [null, null]).map((car, index) => (
                     <span key={index}>{car ? <img src={frame(car, pick.sides[index].angle)} alt={car.title} loading="lazy" /> : null}</span>
                   ))}
                   <span className="social-duel-divider" aria-hidden="true" />
-                  <img className="social-mark" src="/logo-dark.svg?v=2" alt="" aria-hidden="true" />
                 </div>
               ) : (
                 <div className={frameClass}>
@@ -1085,16 +1081,7 @@ function SocialPostsSection({ active }) {
                   {theme.kind === KINDS.cover
                     ? <img src={pick.cover} alt={theme.title} loading="lazy" />
                     : loaded ? <img src={frame(loaded, pick.angle)} alt={loaded.title} loading="lazy" /> : <span className="social-frame-empty">{waiting}</span>}
-                  <img className="social-mark" src="/logo-dark.svg?v=2" alt="" aria-hidden="true" />
                 </div>
-              )}
-              {captions && (
-                <figcaption>
-                  <strong>{theme.title}</strong>
-                  <span>{theme.note}</span>
-                  {theme.kind === KINDS.car && loaded ? <a href={analyticsNoCountHref(carHref(loaded.id))} target="_blank" rel="noreferrer">{loaded.title}</a> : null}
-                  {theme.kind === KINDS.duel && Array.isArray(loaded) && loaded[0] && loaded[1] ? <span>{loaded[0].title} · {loaded[1].title}</span> : null}
-                </figcaption>
               )}
             </figure>
           );

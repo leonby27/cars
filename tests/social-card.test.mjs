@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildPostText, carNumber, carPageUrl, pickPhotos } from "../scripts/lib/social-card.mjs";
+import {
+  CATALOG_FOOTER,
+  buildPostText,
+  carNumber,
+  carPageUrl,
+  pickPhotos,
+  withCatalogFooter,
+} from "../scripts/lib/social-card.mjs";
 
 // Intl разделяет тысячи неразрывным пробелом — в ленте это правильно, а в тесте
 // мешает читать ожидаемую строку, поэтому сравниваем по обычным пробелам.
@@ -94,4 +101,11 @@ test("кадры собираются без повторов, в JPEG и не �
 test("номер машины берётся и из внешнего поля, и из нашего кода", () => {
   assert.equal(carNumber(electric), "59876786");
   assert.equal(carNumber({ id: "che168-12345" }), "12345");
+});
+
+test("Threads и Telegram получают подпись каталога только когда ссылки на сайт ещё нет", () => {
+  assert.equal(withCatalogFooter("Короткий текст", "threads"), `Короткий текст\n\n${CATALOG_FOOTER}`);
+  assert.equal(withCatalogFooter("Короткий текст", "telegram"), `Короткий текст\n\n${CATALOG_FOOTER}`);
+  assert.equal(withCatalogFooter("Смотрите abcars.by/cars/123", "threads"), "Смотрите abcars.by/cars/123");
+  assert.equal(withCatalogFooter("Короткий текст", "instagram"), "Короткий текст");
 });

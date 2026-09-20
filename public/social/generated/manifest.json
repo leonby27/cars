@@ -1,0 +1,122 @@
+[
+  {
+    "key": "core-0",
+    "image": "/social/generated/core-0.png",
+    "prompt": 1
+  },
+  {
+    "key": "optimal-0",
+    "image": "/social/generated/optimal-0.png",
+    "prompt": 1
+  },
+  {
+    "key": "price_question-0",
+    "image": "/social/generated/price_question-0.png",
+    "prompt": 3
+  },
+  {
+    "key": "price_drops-0",
+    "image": "/social/generated/price_drops-0.png",
+    "prompt": 1
+  },
+  {
+    "key": "fresh-0",
+    "image": "/social/generated/fresh-0.png",
+    "prompt": 3
+  },
+  {
+    "key": "budget-0",
+    "image": "/social/generated/budget-0.png",
+    "prompt": 3
+  },
+  {
+    "key": "duel-0",
+    "image": "/social/generated/duel-0.png",
+    "prompt": 2
+  },
+  {
+    "key": "blog-0",
+    "image": "/social/generated/blog-0.png",
+    "prompt": 1
+  },
+  {
+    "key": "core-1",
+    "image": "/social/generated/core-1.png",
+    "prompt": 1
+  },
+  {
+    "key": "optimal-1",
+    "image": "/social/generated/optimal-1.png",
+    "prompt": 3
+  },
+  {
+    "key": "price_question-1",
+    "image": "/social/generated/price_question-1.png",
+    "prompt": 1
+  },
+  {
+    "key": "price_drops-1",
+    "image": "/social/generated/price_drops-1.png",
+    "prompt": 2
+  },
+  {
+    "key": "fresh-1",
+    "image": "/social/generated/fresh-1.png",
+    "prompt": 3
+  },
+  {
+    "key": "budget-1",
+    "image": "/social/generated/budget-1.png",
+    "prompt": 1
+  },
+  {
+    "key": "duel-1",
+    "image": "/social/generated/duel-1.png",
+    "prompt": 2
+  },
+  {
+    "key": "blog-1",
+    "image": "/social/generated/blog-1.png",
+    "prompt": 1
+  },
+  {
+    "key": "core-2",
+    "image": "/social/generated/core-2.png",
+    "prompt": 2
+  },
+  {
+    "key": "optimal-2",
+    "image": "/social/generated/optimal-2.png",
+    "prompt": 2
+  },
+  {
+    "key": "price_question-2",
+    "image": "/social/generated/price_question-2.png",
+    "prompt": 3
+  },
+  {
+    "key": "price_drops-2",
+    "image": "/social/generated/price_drops-2.png",
+    "prompt": 2
+  },
+  {
+    "key": "fresh-2",
+    "image": "/social/generated/fresh-2.png",
+    "prompt": 1
+  },
+  {
+    "key": "budget-2",
+    "image": "/social/generated/budget-2.png",
+    "prompt": 2
+  },
+  {
+    "key": "duel-2",
+    "image": "/social/generated/duel-2.png",
+    "prompt": 1
+  },
+  {
+    "key": "blog-2",
+    "image": "/social/generated/blog-2.png",
+    "prompt": 3
+  }
+]

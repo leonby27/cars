@@ -1,0 +1,12 @@
+# Каждые 15 минут проверяем, наступило ли время очередной записи. Persistent=true
+# догоняет проверку после перезапуска сервера; повторов не будет благодаря памяти
+# публикаций в runtime/social-week-published.json.
+[Unit]
+Description=Расписание публикаций abcars.by в соцсетях
+
+[Timer]
+OnCalendar=*-*-* *:0/15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

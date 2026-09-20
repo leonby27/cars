@@ -9,10 +9,9 @@
 //  - в конце записи — призыв написать в Директ;
 //  - цена всегда «под ключ», в долларах и рублях.
 //
-// Цену не берём из базы напрямую: её считает estimateLandedCost по тем же правилам,
-// что и карточка на сайте. В базе лежит сохранённая оценка, но она может отстать от
-// правил расчёта, если их меняли, а пересчёт ещё не прогоняли.
-import { pool } from "../../server/db.mjs";
+// Источник недельного набора — живой production-каталог, а не локальная копия БД.
+// Иначе уже проданная машина может остаться локально active и попасть в публикацию.
+// Цену считаем заново по полям production API и всегда без квоты (15% пошлина).
 import { carTitle } from "../../src/car-title.js";
 import { estimateLandedCost, usdToByn } from "../../src/pricing.js";
 import { BLOG_POSTS } from "../../src/blog-posts.js";
@@ -38,24 +37,25 @@ export const CORE_MODELS = [
 
 const money = (usd) => `${new Intl.NumberFormat("ru-RU").format(Math.round(usd))}$`;
 const number = (value) => new Intl.NumberFormat("ru-RU").format(Math.round(Number(value) || 0));
+const CATALOG_ORIGIN = String(process.env.SOCIAL_CATALOG_ORIGIN || "https://abcars.by").replace(/\/$/, "");
+const PAGE_SIZE = 100;
+const liveModelCache = new Map();
 
 // Призыв, которым заканчивается каждая запись. В телеграме это личные сообщения,
 // в Instagram — Директ; слово выбирается по сети.
 const callToAction = (network) =>
   network === "telegram" ? "✍️ Пишите в личные сообщения — проверим, на месте ли машина" : "✍️ Пишите в Директ — проверим, на месте ли машина";
 
-// Машина в том виде, в каком её ждут сборщик текста и расчёт цены.
-const CAR_FIELDS = `
-  l.external_id, v.brand, v.model, v.model_year as year, l.mileage_km as mileage,
-  v.battery_kwh as battery, v.electric_range_km as range, v.powertrain, v.specifications,
-  l.city, l.source, l.price_cny as "chinaPrice", l.estimated_total_usd as stored_usd,
-  (l.source_payload->>'usdPrice')::numeric as usd_price,
-  l.previous_price_usd, l.price_changed_at, l.listed_at, l.imported_at, l.title
-`;
-
-function shape(row) {
+export function shapeSocialCar(row) {
+  // Калькулятор использует не только цену и год. Дата первой регистрации меняет
+  // возрастную ставку, габариты и масса — стоимость автовоза, а тип топлива и
+  // коробка отличают последовательный гибрид. Всё это лежит в source_payload.
+  // Раньше соцсети получали урезанный объект и могли расходиться с каталогом на
+  // несколько тысяч долларов.
+  const raw = row.source_payload || {};
   const specs = row.specifications || {};
   return {
+    ...raw,
     externalId: String(row.external_id),
     id: `che168-${row.external_id}`,
     brand: row.brand,
@@ -68,10 +68,11 @@ function shape(row) {
     engine: specs.engine || null,
     horsepower: specs.enginePower ? Number(specs.enginePower) : null,
     bodyType: specs.bodyType || null,
-    dimensions: specs.dimensions || null,
-    curbWeight: specs.curbWeight ? Number(specs.curbWeight) : null,
+    dimensions: specs.dimensions || raw.dimensions || null,
+    curbWeight: Number(specs.curbWeight || raw.curbWeight) || null,
     city: row.city,
     source: row.source,
+    firstRegistration: row.first_registration || raw.firstRegistration || null,
     chinaPrice: Number(row.chinaPrice) || 0,
     // Цена источника в долларах: без неё расчёт пошёл бы через юани туда-обратно
     // и завысил бы цену примерно на семь процентов.
@@ -83,31 +84,78 @@ function shape(row) {
 }
 
 async function photosFor(car, limit = 8) {
-  const { rows } = await pool.query(
-    `select m.url from listing_media m
-     join listings l on l.id = m.listing_id
-     where l.external_id = $1 order by m.position limit $2`,
-    [car.externalId, limit + 4],
-  );
-  const sources = rows.map((row) => row.url);
-  return pickPhotos({ ...car, images: sources }, { limit });
+  return pickPhotos(car, { limit });
 }
 
+// До появления новых квот в 2027 году соцсети всегда показывают обычную цену
+// с 15% пошлиной. Это намеренно не зависит от переключателя на сайте.
+export const SOCIAL_QUOTA_OVER = true;
+export const socialLandedPrice = (car) => estimateLandedCost(car, { quotaOver:SOCIAL_QUOTA_OVER });
+
 const priced = (car) => {
-  const totalUsd = estimateLandedCost(car).totalUsd;
+  const totalUsd = socialLandedPrice(car).totalUsd;
   return { ...car, totalUsd, totalByn: usdToByn(totalUsd) };
 };
 
+export const isLiveAvailable = (car) =>
+  car?.available !== false && car?.statusTone !== "red" && car?.status !== "Продано" && Array.isArray(car?.images) && car.images.length > 0;
+
+const normalizeLiveCar = (car) => ({
+  ...car,
+  externalId:String(car.externalId || String(car.id || "").replace(/^che168-/, "")),
+  range:Number(car.range ?? car.electricRange ?? car.combinedRange) || null,
+  battery:Number(car.battery) || null,
+  mileage:Number(car.mileage) || 0,
+  year:Number(car.year) || 0,
+  chinaPrice:Number(car.chinaPrice) || 0,
+  usdPrice:Number(car.usdPrice ?? car.sourcePriceUsd) || null,
+  previousPriceUsd:Number(car.previousPriceUsd) || null,
+});
+
+async function fetchLiveModel(brand, model) {
+  const key = `${brand}\u0000${model}`;
+  if (liveModelCache.has(key)) return liveModelCache.get(key);
+  const request = (async () => {
+    const cars = [];
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const query = new URLSearchParams({ brand, model, sort:"price_asc", limit:String(PAGE_SIZE), offset:String(offset) });
+      const response = await fetch(`${CATALOG_ORIGIN}/api/cars?${query}`, { signal:AbortSignal.timeout(30_000) });
+      if (!response.ok) throw new Error(`Каталог ${brand} ${model}: HTTP ${response.status}`);
+      const page = await response.json();
+      if (!Array.isArray(page.items)) throw new Error(`Каталог ${brand} ${model}: неверный ответ API`);
+      cars.push(...page.items.filter(isLiveAvailable).map(normalizeLiveCar));
+      if (!page.hasMore || !page.items.length) break;
+    }
+    return cars.map(priced).sort((left, right) =>
+      left.totalUsd - right.totalUsd || String(left.externalId).localeCompare(String(right.externalId)));
+  })();
+  liveModelCache.set(key, request);
+  try {
+    return await request;
+  } catch (error) {
+    liveModelCache.delete(key);
+    throw error;
+  }
+}
+
+async function listingsForModels(models) {
+  // Не открываем десятки соединений одновременно: production API — источник истины,
+  // но недельный сборщик не должен создавать на нём всплеск нагрузки.
+  const result = [];
+  const queue = [...models];
+  const workers = Array.from({ length:Math.min(6, queue.length) }, async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      result.push(...await fetchLiveModel(item.brand, item.model));
+    }
+  });
+  await Promise.all(workers);
+  return result;
+}
+
 // Машины одной модели: живые объявления с фотографиями и посчитанной ценой.
 async function modelListings(brand, model) {
-  const { rows } = await pool.query(
-    `select ${CAR_FIELDS} from listings l
-     join vehicles v on v.id = l.vehicle_id
-     where l.status = 'active' and v.brand = $1 and v.model = $2 and l.estimated_total_usd > 0
-       and exists (select 1 from listing_media m where m.listing_id = l.id)`,
-    [brand, model],
-  );
-  return rows.map(shape).map(priced).sort((left, right) => left.totalUsd - right.totalUsd);
+  return fetchLiveModel(brand, model);
 }
 
 // В списке одна модель встречается один раз: пять одинаковых Seagull подряд выглядят
@@ -188,25 +236,16 @@ const listLine = (car, index, { extra = "", numbered = false } = {}) =>
 
 /** Блок 4. Машины костяка, у которых сильнее всего упала цена. */
 export async function biggestDrops({ models, network = "telegram", limit = 5 }) {
-  const pairs = models.map(({ brand, model }) => [brand, model]);
-  const { rows } = await pool.query(
-    `select ${CAR_FIELDS} from listings l
-     join vehicles v on v.id = l.vehicle_id
-     where l.status = 'active' and l.estimated_total_usd > 0
-       and l.previous_price_usd is not null
-       and (v.brand, v.model) in (${pairs.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(", ")})
-       and exists (select 1 from listing_media m where m.listing_id = l.id)`,
-    pairs.flat(),
-  );
+  const listings = await listingsForModels(models);
   // previous_price_usd — прошлая цена у источника, а не под ключ. Чтобы показать
   // честное падение, старую цену прогоняем через тот же расчёт под ключ.
-  const cars = oneCarPerModel(rows.map(shape).map(priced)
+  const cars = oneCarPerModel(listings
     .map((car) => {
-      const before = car.previousPriceUsd ? estimateLandedCost({ ...car, usdPrice: car.previousPriceUsd }).totalUsd : 0;
+      const before = car.previousPriceUsd ? socialLandedPrice({ ...car, usdPrice: car.previousPriceUsd }).totalUsd : 0;
       return { ...car, drop: before - car.totalUsd };
     })
     .filter((car) => car.drop > 0)
-    .sort((left, right) => right.drop - left.drop)).slice(0, limit);
+    .sort((left, right) => right.drop - left.drop || String(left.externalId).localeCompare(String(right.externalId)))).slice(0, limit);
   if (!cars.length) return null;
 
   const lines = cars.map((car, index) => listLine(car, index, { extra: ` (−${money(car.drop)})` }));
@@ -220,17 +259,10 @@ export async function biggestDrops({ models, network = "telegram", limit = 5 }) 
 
 /** Блок 5. Машины костяка, появившиеся в каталоге последними. */
 export async function freshArrivals({ models, network = "telegram", limit = 5 }) {
-  const pairs = models.map(({ brand, model }) => [brand, model]);
-  const { rows } = await pool.query(
-    `select ${CAR_FIELDS} from listings l
-     join vehicles v on v.id = l.vehicle_id
-     where l.status = 'active' and l.estimated_total_usd > 0
-       and (v.brand, v.model) in (${pairs.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(", ")})
-       and exists (select 1 from listing_media m where m.listing_id = l.id)
-     order by l.imported_at desc limit ${limit * 6}`,
-    pairs.flat(),
-  );
-  const cars = oneCarPerModel(rows.map(shape).map(priced)).slice(0, limit);
+  const listings = await listingsForModels(models);
+  const timestamp = (car) => new Date(car.firstSeenAt || car.importedAt || 0).getTime() || 0;
+  const cars = oneCarPerModel(listings.sort((left, right) =>
+    timestamp(right) - timestamp(left) || String(right.externalId).localeCompare(String(left.externalId)))).slice(0, limit);
   if (!cars.length) return null;
   return {
     block: "fresh",
@@ -242,17 +274,15 @@ export async function freshArrivals({ models, network = "telegram", limit = 5 })
 
 /** Блок 6. Подборка под потолок цены: сначала модели костяка, потом остальные. */
 export async function budgetPick({ models, capUsd, network = "telegram", limit = 5 }) {
-  const pairs = models.map(({ brand, model }) => [brand, model]);
-  const { rows } = await pool.query(
-    `select distinct on (v.brand, v.model) ${CAR_FIELDS}
-     from listings l join vehicles v on v.id = l.vehicle_id
-     where l.status = 'active' and l.estimated_total_usd > 0 and l.estimated_total_usd <= $1
-       and (v.brand, v.model) in (${pairs.map((_, i) => `($${i * 2 + 2}, $${i * 2 + 3})`).join(", ")})
-       and exists (select 1 from listing_media m where m.listing_id = l.id)
-     order by v.brand, v.model, l.estimated_total_usd`,
-    [capUsd, ...pairs.flat()],
-  );
-  const cars = rows.map(shape).map(priced).sort((left, right) => right.totalUsd - left.totalUsd).slice(0, limit);
+  const listings = await listingsForModels(models);
+  // Потолок проверяем по свежему расчёту, а не по сохранённой цене из БД. Сначала
+  // берём самую дешёвую актуальную машину каждой модели, затем показываем пять,
+  // которые ближе всего к указанному бюджету.
+  const cars = oneCarPerModel(listings
+    .filter((car) => car.totalUsd <= capUsd)
+    .sort((left, right) => left.totalUsd - right.totalUsd || String(left.externalId).localeCompare(String(right.externalId))))
+    .sort((left, right) => right.totalUsd - left.totalUsd || String(left.externalId).localeCompare(String(right.externalId)))
+    .slice(0, limit);
   if (!cars.length) return null;
   return {
     block: "budget",
@@ -324,4 +354,4 @@ export function blogPost({ slug, network = "telegram", site = "abcars.by" }) {
   return { block: "blog", slug, cars: [], cover, photos: cover ? [cover] : [], text: `${text}${tags}` };
 }
 
-export const closeBlocks = () => pool.end();
+export const closeBlocks = async () => {};

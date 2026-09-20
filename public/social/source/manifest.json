@@ -1,0 +1,194 @@
+[
+  {
+    "key": "core-0",
+    "theme": "core",
+    "headline": "Zeekr 001, 2022 22 700$ под ключ",
+    "source": "/social/source/core-0.png",
+    "generated": "/social/generated/core-0.png",
+    "prompt": 1
+  },
+  {
+    "key": "optimal-0",
+    "theme": "optimal",
+    "headline": "Золотая середина",
+    "source": "/social/source/optimal-0.png",
+    "generated": "/social/generated/optimal-0.png",
+    "prompt": 1
+  },
+  {
+    "key": "price_question-0",
+    "theme": "price_question",
+    "headline": "Как вам цена?",
+    "source": "/social/source/price_question-0.png",
+    "generated": "/social/generated/price_question-0.png",
+    "prompt": 3
+  },
+  {
+    "key": "price_drops-0",
+    "theme": "price_drops",
+    "headline": "Упали в цене",
+    "source": "/social/source/price_drops-0.png",
+    "generated": "/social/generated/price_drops-0.png",
+    "prompt": 1
+  },
+  {
+    "key": "fresh-0",
+    "theme": "fresh",
+    "headline": "Новое в каталоге",
+    "source": "/social/source/fresh-0.png",
+    "generated": "/social/generated/fresh-0.png",
+    "prompt": 3
+  },
+  {
+    "key": "budget-0",
+    "theme": "budget",
+    "headline": "Пять машин до 25 000$",
+    "source": "/social/source/budget-0.png",
+    "generated": "/social/generated/budget-0.png",
+    "prompt": 3
+  },
+  {
+    "key": "duel-0",
+    "theme": "duel",
+    "headline": "Xiaomi YU7 или Mercedes-Benz EQE?",
+    "source": "/social/source/duel-0.png",
+    "generated": "/social/generated/duel-0.png",
+    "prompt": 2
+  },
+  {
+    "key": "blog-0",
+    "theme": "blog",
+    "headline": "Какой китайский кроссовер выбрать",
+    "source": "/social/source/blog-0.png",
+    "generated": "/social/generated/blog-0.png",
+    "prompt": 1
+  },
+  {
+    "key": "core-1",
+    "theme": "core",
+    "headline": "BYD Qin L, 2024 15 950$ под ключ",
+    "source": "/social/source/core-1.png",
+    "generated": "/social/generated/core-1.png",
+    "prompt": 1
+  },
+  {
+    "key": "optimal-1",
+    "theme": "optimal",
+    "headline": "Топ за свои деньги",
+    "source": "/social/source/optimal-1.png",
+    "generated": "/social/generated/optimal-1.png",
+    "prompt": 3
+  },
+  {
+    "key": "price_question-1",
+    "theme": "price_question",
+    "headline": "Брать или искать дальше?",
+    "source": "/social/source/price_question-1.png",
+    "generated": "/social/generated/price_question-1.png",
+    "prompt": 1
+  },
+  {
+    "key": "price_drops-1",
+    "theme": "price_drops",
+    "headline": "Подешевели за неделю",
+    "source": "/social/source/price_drops-1.png",
+    "generated": "/social/generated/price_drops-1.png",
+    "prompt": 2
+  },
+  {
+    "key": "fresh-1",
+    "theme": "fresh",
+    "headline": "Свежее пополнение",
+    "source": "/social/source/fresh-1.png",
+    "generated": "/social/generated/fresh-1.png",
+    "prompt": 3
+  },
+  {
+    "key": "budget-1",
+    "theme": "budget",
+    "headline": "Что есть до 15 000$",
+    "source": "/social/source/budget-1.png",
+    "generated": "/social/generated/budget-1.png",
+    "prompt": 1
+  },
+  {
+    "key": "duel-1",
+    "theme": "duel",
+    "headline": "BMW i5 против BYD Han L",
+    "source": "/social/source/duel-1.png",
+    "generated": "/social/generated/duel-1.png",
+    "prompt": 2
+  },
+  {
+    "key": "blog-1",
+    "theme": "blog",
+    "headline": "Электромобиль зимой в Беларуси",
+    "source": "/social/source/blog-1.png",
+    "generated": "/social/generated/blog-1.png",
+    "prompt": 1
+  },
+  {
+    "key": "core-2",
+    "theme": "core",
+    "headline": "BMW iX3, 2022 22 350$ под ключ",
+    "source": "/social/source/core-2.png",
+    "generated": "/social/generated/core-2.png",
+    "prompt": 2
+  },
+  {
+    "key": "optimal-2",
+    "theme": "optimal",
+    "headline": "Оптимальное сочетание цены и состояния",
+    "source": "/social/source/optimal-2.png",
+    "generated": "/social/generated/optimal-2.png",
+    "prompt": 2
+  },
+  {
+    "key": "price_question-2",
+    "theme": "price_question",
+    "headline": "Дорого или нормально?",
+    "source": "/social/source/price_question-2.png",
+    "generated": "/social/generated/price_question-2.png",
+    "prompt": 3
+  },
+  {
+    "key": "price_drops-2",
+    "theme": "price_drops",
+    "headline": "Цены пошли вниз",
+    "source": "/social/source/price_drops-2.png",
+    "generated": "/social/generated/price_drops-2.png",
+    "prompt": 2
+  },
+  {
+    "key": "fresh-2",
+    "theme": "fresh",
+    "headline": "Новинки недели",
+    "source": "/social/source/fresh-2.png",
+    "generated": "/social/generated/fresh-2.png",
+    "prompt": 1
+  },
+  {
+    "key": "budget-2",
+    "theme": "budget",
+    "headline": "Уложиться в 35 000$",
+    "source": "/social/source/budget-2.png",
+    "generated": "/social/generated/budget-2.png",
+    "prompt": 2
+  },
+  {
+    "key": "duel-2",
+    "theme": "duel",
+    "headline": "Deepal S05 или Geely Monjaro?",
+    "source": "/social/source/duel-2.png",
+    "generated": "/social/generated/duel-2.png",
+    "prompt": 1
+  },
+  {
+    "key": "blog-2",
+    "theme": "blog",
+    "headline": "Где заряжаться в Беларуси",
+    "source": "/social/source/blog-2.png",
+    "generated": "/social/generated/blog-2.png",
+    "prompt": 3
+  }
+]

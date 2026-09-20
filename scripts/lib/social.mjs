@@ -155,10 +155,11 @@ async function waitForThreads(id, token, { tries = 12 } = {}) {
   return true;
 }
 
-export async function publishToThreads({ text, photos = [], config, log = console.log }) {
+export async function publishToThreads({ text, photos = [], allowTextOnly = false, config, log = console.log }) {
   const { userId, token } = config.threads;
   if (!userId || !token) throw new Error("нет ключа доступа к Threads");
   const usable = photos.slice(0, 20);
+  if (!usable.length && !allowTextOnly) throw new Error("Threads: публикация без картинки запрещена");
   let creationId;
 
   if (!usable.length) {
@@ -169,7 +170,12 @@ export async function publishToThreads({ text, photos = [], config, log = consol
     const children = [];
     for (const image of usable) {
       try {
-        children.push(await threadsContainer({ userId, token, form: { media_type: "IMAGE", is_carousel_item: "true", image_url: image } }));
+        const child = await threadsContainer({ userId, token, form: { media_type: "IMAGE", is_carousel_item: "true", image_url: image } });
+        // Threads может вернуть id раньше, чем отдельный кадр карусели станет
+        // пригоден для родительского контейнера. Без ожидания большие серии
+        // периодически падают с «Недействительные объекты кольцевой галереи».
+        await waitForThreads(child, token);
+        children.push(child);
       } catch (error) {
         log(`Threads: кадр не принят (${error.message}), пропускаю`);
       }
@@ -184,6 +190,14 @@ export async function publishToThreads({ text, photos = [], config, log = consol
   const published = await callApi(`${THREADS_API}/${userId}/threads_publish`, { method: "POST", form: { creation_id: creationId, access_token: token } });
   const info = await callApi(`${THREADS_API}/${published.id}?${query({ fields: "permalink", access_token: token })}`).catch(() => ({}));
   return { id: published.id, url: info.permalink || "" };
+}
+
+// Threads разрешает удалить опубликованную запись по её media id. Тестовый
+// недельный прогон сохраняет этот id и использует его после проверки владельцем.
+export async function deleteThreadsPost(id, { config }) {
+  const { token } = config.threads;
+  if (!token) throw new Error("нет ключа доступа к Threads");
+  return callApi(`${THREADS_API}/${id}?${query({ access_token: token })}`, { method:"DELETE" });
 }
 
 // ── Instagram ────────────────────────────────────────────────────────────────
@@ -216,7 +230,11 @@ export async function publishToInstagram({ caption, photos = [], config, log = c
   const children = [];
   for (const image of photos.slice(0, 10)) {
     try {
-      children.push(await instagramContainer({ userId, token, form: { is_carousel_item: "true", image_url: image } }));
+      const child = await instagramContainer({ userId, token, form: { is_carousel_item:"true", image_url:image } });
+      // Как и Threads, Instagram иногда возвращает id кадра до окончания его
+      // обработки. Родительскую карусель создаём только из готовых объектов.
+      await waitForInstagram(child, token);
+      children.push(child);
     } catch (error) {
       log(`Instagram: кадр не принят (${error.message}), пропускаю`);
     }
@@ -386,22 +404,29 @@ const channelLink = (message) => {
   return name ? `https://t.me/${name}/${message.message_id}` : "";
 };
 
-export async function publishToTelegram({ text, photos = [], files = [], buttonUrl = "", config, log = console.log }) {
+export async function publishToTelegram({ text, photos = [], files = [], buttonUrl = "", allowTextOnly = false, config, log = console.log }) {
   const { token, channel } = config.telegram;
   if (!token || !channel) throw new Error("нет бота или канала для телеграма");
+  if (!files.length && !photos.length && !allowTextOnly) throw new Error("Телеграм: публикация без картинки запрещена");
 
   // Кадры уходят файлами: по ссылке телеграм не берёт ни наши картинки, ни одиночный
   // снимок из китайского хранилища. Кнопку можно прицепить только к одиночному кадру.
   if (files.length) {
     const single = files.length === 1 || buttonUrl;
-    const message = single
+    const result = single
       ? await telegramUploadPhoto(token, {
           chatId: channel, filePath: files[0], caption: text,
           markup: buttonUrl ? { inline_keyboard: [[{ text: "Смотреть в каталоге", url: buttonUrl }]] } : undefined,
         })
-      : (await telegramUploadAlbum(token, { chatId: channel, filePaths: files.slice(0, 10), caption: text }))[0];
+      : await telegramUploadAlbum(token, { chatId: channel, filePaths: files.slice(0, 10), caption: text });
     log(`Телеграм: ${single ? "картинка отправлена файлом" : `альбом из ${Math.min(files.length, 10)} файлов`}`);
-    return { id: message.message_id, url: channelLink(message), frames: single ? 1 : Math.min(files.length, 10) };
+    const messages = Array.isArray(result) ? result : [result];
+    return {
+      id: messages[0].message_id,
+      ids: messages.map((item) => item.message_id),
+      url: channelLink(messages[0]),
+      frames: messages.length,
+    };
   }
 
   const usable = photos.slice(0, 10);
@@ -412,7 +437,7 @@ export async function publishToTelegram({ text, photos = [], files = [], buttonU
     const message = usable.length
       ? await telegramApi(token, "sendPhoto", { chat_id: channel, photo: usable[0], caption: text, parse_mode: "HTML", reply_markup: markup })
       : await telegramApi(token, "sendMessage", { chat_id: channel, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: markup });
-    return { id: message.message_id, url: channelLink(message), frames: usable.length };
+    return { id: message.message_id, ids:[message.message_id], url: channelLink(message), frames: usable.length };
   }
 
   const media = usable.map((photo, index) => ({
@@ -423,11 +448,11 @@ export async function publishToTelegram({ text, photos = [], files = [], buttonU
   const messages = await telegramApi(token, "sendMediaGroup", { chat_id: channel, media });
   const first = Array.isArray(messages) ? messages[0] : messages;
   log(`Телеграм: альбом из ${usable.length} кадров`);
-  return { id: first.message_id, url: channelLink(first), frames: usable.length };
+  return { id: first.message_id, ids:messages.map((message) => message.message_id), url: channelLink(first), frames: usable.length };
 }
 
 // Запись в телеграме можно убрать — этим пользуется проверка, чтобы не оставлять
-// в канале пробные публикации. У Instagram и Threads такой возможности нет.
+// в канале пробные публикации.
 export async function deleteTelegramPost(messageId, { config }) {
   const { token, channel } = config.telegram;
   return telegramApi(token, "deleteMessage", { chat_id: channel, message_id: messageId });

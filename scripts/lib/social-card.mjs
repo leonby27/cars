@@ -65,6 +65,16 @@ export const carNumber = (car) => String(car?.externalId || String(car?.id || ""
 
 const escapeHtml = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+export const CATALOG_FOOTER = "Каталог авто с пробегом из Китая — abcars.by";
+
+// В Threads и Telegram запись без адреса сайта должна всё равно вести человека
+// к каталогу. Если ссылка или адрес уже есть, второй раз подпись не добавляем.
+export function withCatalogFooter(text, network) {
+  const value = String(text || "").trimEnd();
+  if (!["threads", "telegram"].includes(network) || /(?:https?:\/\/)?(?:www\.)?abcars\.by\b/i.test(value)) return value;
+  return `${value}\n\n${CATALOG_FOOTER}`;
+}
+
 export function carPageUrl(car, site = "abcars.by") {
   return `https://${site}/cars/${carNumber(car)}`;
 }

@@ -5,10 +5,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { SOCIAL_GENERATIONS } from "../src/social-generations.js";
 import { carFrame, DUEL_HEADLINES, EXTERIOR_FRAMES, exteriorFrames, headlineSize, headlineVariant, HEADLINE_SIZES, KINDS, PLACES, resolvePlace, SOCIAL_THEMES, socialThemeQuery, socialTiles, THEME_ROUNDS, tileHeadline, typeset } from "../src/social-themes.js";
 
 const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+const generations = await readFile(new URL("../src/social-generations.js", import.meta.url), "utf8");
+const generationPreparation = await readFile(new URL("../scripts/prepare-social-generation.mjs", import.meta.url), "utf8");
 const square = await readFile(new URL("../scripts/photo-to-social.py", import.meta.url), "utf8");
 
 test("у каждой темы есть название, вид картинки и по заходу на каждый круг", () => {
@@ -99,14 +102,13 @@ test("ответ каталога не теряется на повторном 
   assert.doesNotMatch(page.slice(page.indexOf("function SocialPostsSection")), /let alive = true;/);
 });
 
-test("сетка показывает обрезанные квадраты, а без подписей — отступы как в ленте", () => {
+test("сетка всегда показывает вертикальные кадры без подписей", () => {
   assert.match(styles, /\.social-grid \{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
-  assert.match(styles, /\.social-frame \{[^}]*aspect-ratio:1\/1/);
+  assert.match(styles, /\.social-frame \{[^}]*aspect-ratio:4\/5/);
   assert.match(styles, /\.social-frame img \{[^}]*object-fit:cover/);
   assert.match(styles, /\.social-grid\.bare \{ gap:3px; \}/);
-  assert.match(page, /social-grid\$\{captions \? "" : " bare"\}/);
-  // Подписи рисуются только когда их попросили.
-  assert.match(page, /\{captions && \(\s*<figcaption>/);
+  assert.match(page, /className="social-grid bare"/);
+  assert.doesNotMatch(page.slice(page.indexOf("function SocialPostsSection"), page.indexOf("function Dashboard")), /<figcaption>/);
 });
 
 test("у сравнения плитка из двух кадров рядом", () => {
@@ -141,27 +143,16 @@ test("число кадров снаружи доезжает из импорт�
   assert.equal(withoutDetailPayload(rowToCar(row)).exteriorPhotos, 3);
 });
 
-// Логотип в углу — первый настоящий элемент оформления: витрина для того и нужна,
-// чтобы увидеть его на реальных кадрах. Он обязан быть на каждой плитке, включая
-// сравнение и обложку журнала, и не должен растянуться на весь квадрат: общее
-// правило кадра задаёт картинкам размер во всю плитку с обрезкой.
-test("логотип стоит в углу каждой плитки и не растягивается на весь кадр", () => {
-  assert.equal(page.match(/className="social-mark"/g)?.length, 2, "логотипа нет у одного из видов плиток");
-  assert.match(page, /social-mark" src="\/logo-dark\.svg/);
-  assert.match(styles, /\.social-frame > img\.social-mark \{[^}]*position:absolute/);
-  assert.match(styles, /\.social-frame > img\.social-mark \{[^}]*right:[\d.]+%/);
-  assert.match(styles, /\.social-frame > img\.social-mark \{[^}]*bottom:[\d.]+%/);
-  assert.match(styles, /\.social-frame > img\.social-mark \{[^}]*width:[\d.]+%/);
-  // Логотип обязан быть выше обеих теней, а не просто удачно нарисован последним:
-  // без явного номера слоя порядок в разметке решил бы иначе для разных мест.
-  assert.match(styles, /\.social-frame > img\.social-mark \{[^}]*z-index:1/);
+test("на плитки соцсетей не накладывается логотип", () => {
+  assert.doesNotMatch(page, /className="social-mark"/);
+  assert.doesNotMatch(styles, /\.social-frame > img\.social-mark/);
 });
 
-// Заголовок темы поверх кадра — второй элемент оформления после логотипа.
+// Заголовок темы поверх кадра — основной элемент оформления.
 // Размер меряется шириной плитки, а не экрана: в ленте на телефоне кадр занимает
 // всю ширину, и надпись обязана вырасти вместе с ним.
 test("заголовок темы лежит на кадре и растёт вместе с плиткой", () => {
-  assert.equal(page.match(/className=\{titleClass\}/g)?.length, 2, "надписи нет у одного из видов плиток");
+  assert.equal(page.match(/className=\{titleClass\}/g)?.length, 2, "надписи нет у одного из видов исходных плиток");
   assert.match(page, /const titleClass = `social-title at-\$\{resolvePlace\(theme\.place, headline\)\} size-\$\{headlineSize\(headline\)\}`/);
   assert.match(page, /const headline = tileHeadline\(theme, pick, loaded, round\)/);
   assert.match(styles, /\.social-frame \{[^}]*container-type:inline-size/);
@@ -184,13 +175,10 @@ test("у каждой темы своё место для заголовка, и
     assert.equal(count, perPlace, `место ${place} досталось ${count} темам вместо ${perPlace}`);
   }
   for (const place of PLACES) assert.match(styles, new RegExp(`\\.social-title\\.at-${place}[,\\s{]`), `место ${place} не описано в стилях`);
-  // Область одна на все записи: общий отступ по краям и своя полоса под логотип.
-  assert.match(styles, /\.social-frame \{ --social-safe:\d+%; --social-mark-strip:\d+%; \}/);
-  // Левый нижний угол — тот же маленький отступ, что и у левого верхнего: логотип
-  // стоит в правом нижнем углу и этой надписи не мешает. Центр остаётся приподнят
-  // над логотипом отдельно (его коробка шире и ближе к нему).
+  // Область одна на все записи: одинаковый безопасный отступ по краям.
+  assert.match(styles, /\.social-frame \{ --social-safe:\d+%; \}/);
   assert.match(styles, /\.social-title\.at-bottom-left \{[^}]*bottom:var\(--social-safe\)/);
-  assert.match(styles, /\.social-title\.at-bottom-center \{[^}]*bottom:calc\(var\(--social-mark-strip\) \* [\d.]+\)/);
+  assert.match(styles, /\.social-title\.at-bottom-center \{[^}]*bottom:var\(--social-safe\)/);
 });
 
 // Шрифт лежит на нашем домене: подключение с Google Fonts когда-то давало прыжок
@@ -228,7 +216,9 @@ test("на кадре стоит первая строка записи, и в �
   for (const line of lines) assert.doesNotMatch(line, /\p{Extended_Pictographic}/u, `в строке «${line}» остался значок`);
   // Запись об одной машине начинается с самой машины и цены под ключ.
   const core = SOCIAL_THEMES.find((theme) => theme.id === "core");
-  assert.match(tileHeadline(core, core.picks[0], car), /^Zeekr 001, 2022 — [\d\s\u00a0]+\$[\s\u00a0]под[\s\u00a0]ключ$/);
+  const carHeadline = tileHeadline(core, core.picks[0], car);
+  assert.match(carHeadline, /^Zeekr 001, 2022 [\d\s\u00a0]+\$[\s\u00a0]под[\s\u00a0]ключ$/);
+  assert.doesNotMatch(carHeadline, /\s[—–-]\s/, "между годом и ценой осталось тире");
   // Сравнение спрашивает про обе модели сразу.
   const duel = SOCIAL_THEMES.find((theme) => theme.id === "duel");
   assert.equal(tileHeadline(duel, duel.picks[0], [car, { brand:"BMW", model:"i5" }]), typeset("Zeekr 001 или BMW i5?"));
@@ -318,7 +308,7 @@ test("цены, единицы и короткие слова не разрыв�
 // Длинная надпись тем же кеглем занимает полкадра — размеров три, выбирает длина.
 test("кегль надписи падает с её длиной", () => {
   assert.equal(headlineSize("Подешевели за неделю"), "large");
-  assert.equal(headlineSize("Zeekr 001, 2022 — 21 400$ под ключ"), "medium");
+  assert.equal(headlineSize("Zeekr 001, 2022 21 400$ под ключ"), "medium");
   assert.equal(headlineSize("Оптимальное сочетание цены и состояния"), "small");
   const sizes = HEADLINE_SIZES.map((size) => Number(styles.match(new RegExp(`\\.social-title\\.size-${size} \\{ font-size:calc\\(([\\d.]+)cqw`))?.[1]));
   for (const size of sizes) assert.ok(size > 0, "какой-то кегль не описан в стилях");
@@ -345,7 +335,7 @@ test("первое слово надписи отрезается верно, в
 // с той стороны кадра, где стоит сама надпись, — иначе на светлом небе буквы
 // потеряются ровно там, где их и нужно прочесть.
 test("тень под текстом ложится с той стороны кадра, где стоит надпись", () => {
-  assert.match(page, /const frameClass = `social-frame edge-\$\{theme\.place\.startsWith\("top"\) \? "top" : "bottom"\}\$\{shape === "vertical" \? " shape-vertical" : ""\}`/);
+  assert.match(page, /const frameClass = `social-frame edge-\$\{theme\.place\.startsWith\("top"\) \? "top" : "bottom"\}`/);
   // Тонкая тень снизу — только там, где надпись сверху: у тем с надписью снизу этот
   // же край уже закрыт широкой тенью, и вторая, короткая, поверх нею была бы лишней.
   assert.match(styles, /\.social-frame:not\(\.edge-bottom\)::before \{[^}]*bottom:0; height:50px/);
@@ -397,14 +387,42 @@ test("вместо значка «vs» — простой разделитель
   assert.doesNotMatch(styles, /is-duel > b \{/);
 });
 
-// Переключатель формы над сеткой — только для сравнения, публикацию не трогает.
-// Вертикальная форма (4:5, 1080×1350) — самый узкий кадр, который сегодня
-// принимает публикация в ленту (см. scripts/lib/social.mjs); это подтверждено
-// собственными замерами, а не только описанием формата Instagram.
-test("переключатель показывает квадрат и вертикальный 4:5, оба CSS-приближением", () => {
-  assert.match(page, /const \[shape, setShape\] = useState\("square"\)/);
-  assert.match(page, /shape === "vertical" \? " shape-vertical" : ""/);
-  assert.match(styles, /\.social-frame\.shape-vertical \{ aspect-ratio:4\/5; \}/);
-  // 1080×1350 = 4:5 — именно то число, что фактически проверено на сервере.
+test("переключатель исходника и генерации использует одну сетку", () => {
+  const section = page.slice(page.indexOf("function SocialPostsSection"), page.indexOf("function Dashboard"));
+  assert.match(page, /const \[version, setVersion\] = useState\("source"\)/);
+  assert.match(page, />Исходник<\/button>/);
+  assert.match(page, />Генерация<\/button>/);
+  assert.match(page, /className="social-grid bare" data-version=\{version\}/);
+  assert.doesNotMatch(section, /Квадрат|Вертикально|С описанием/);
+  // 1080×1350 = 4:5 — единственная форма кадра в разделе.
   assert.equal(1080 / 1350, 4 / 5);
+});
+
+test("генерации подключаются отдельно по ключу и не перезаписывают исходники", () => {
+  assert.match(page, /const generation = socialGeneration\(key\)/);
+  assert.match(page, /version === "generation" \? generation\?\.image : generation\?\.source/);
+  assert.match(page, /preparedImage \? \(\s*<div className="social-frame social-frame-generated">/);
+  assert.match(page, /<img src=\{preparedImage\} alt="" loading="lazy" \/>/);
+  assert.match(generations, /source:`\/social\/source\/\$\{key\}\.png`/);
+  assert.equal(Object.keys(SOCIAL_GENERATIONS).length, socialTiles().length);
+  assert.deepEqual(new Set(Object.keys(SOCIAL_GENERATIONS)), new Set(socialTiles().map(({ key }) => key)));
+  for (const generation of Object.values(SOCIAL_GENERATIONS)) {
+    assert.match(generation.image, /^\/social\/generated\/[a-z0-9_-]+\.png$/);
+    assert.ok(generation.prompt === 1 || generation.prompt === 2 || generation.prompt === 3);
+  }
+  assert.match(generations, /prompt:1/);
+  assert.match(generations, /prompt:2/);
+  assert.match(generations, /prompt:3/);
+  const counts = Object.values(SOCIAL_GENERATIONS).reduce((result, generation) => {
+    result[generation.prompt] = (result[generation.prompt] || 0) + 1;
+    return result;
+  }, {});
+  assert.deepEqual(counts, { 1:10, 2:7, 3:7 });
+  assert.match(generations, /готовая карточка целиком/);
+  assert.match(styles, /\.social-frame-generated::before, \.social-frame-generated::after \{ content:none; \}/);
+});
+
+test("новые карточки делятся между промтами в пропорции 50 / 25 / 25", () => {
+  assert.match(generationPreparation, /const promptPool = Object\.freeze\(\[1, 1, 2, 3\]\)/);
+  assert.match(generationPreparation, /promptPool\[crypto\.randomInt\(promptPool\.length\)\]/);
 });

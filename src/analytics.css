@@ -363,21 +363,20 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
   .analytics-tabpanel, .analytics-chart-swap, .analytics-chart-source, .analytics-chart-source-point { animation:none; }
 }
 
-/* Посты соц сетей: сетка квадратов, как в ленте. Тёмная подложка и обрезка кадра
-   по бокам повторяют то, что делает подготовка кадров к публикации, — раздел для
-   того и нужен, чтобы оформление проверялось на настоящем виде. Без подписей
-   отступы сжимаются до тех, что в ленте: так видно, как записи смотрятся рядом. */
-.social-toggles { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+/* Посты соц сетей: вертикальная сетка 4:5 без подписей, как в ленте. Тёмная
+   подложка и обрезка кадра повторяют подготовку кадров к публикации. */
 .social-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 .social-grid.bare { gap:3px; }
-.social-tile { margin:0; display:grid; gap:8px; }
-.social-frame { position:relative; container-type:inline-size; aspect-ratio:1/1; overflow:hidden; border-radius:var(--analytics-block-radius); background:#17191c; }
-/* Вертикальный 4:5 (1080×1350) — переключатель формы над сеткой. Тот же кадр, что
-   собирает scripts/photo-to-social.py; здесь это только CSS-приближение через
-   object-fit:cover, без настоящей обрезки питоном — как и у квадрата. */
-.social-frame.shape-vertical { aspect-ratio:4/5; }
+.social-tile { margin:0; }
+/* Вертикальный 4:5 (1080×1350) — единственная форма в разделе. Тот же кадр, что
+   собирает scripts/photo-to-social.py; здесь это CSS-приближение через
+   object-fit:cover, без настоящей обрезки питоном. */
+.social-frame { position:relative; container-type:inline-size; aspect-ratio:4/5; overflow:hidden; border-radius:var(--analytics-block-radius); background:#17191c; }
 .social-grid.bare .social-frame { border-radius:0; }
 .social-frame img { width:100%; height:100%; display:block; object-fit:cover; }
+/* Генератор получает и возвращает готовую карточку целиком, уже вместе с текстом,
+   переносами и тенями. Поверх результата ничего повторно не накладываем. */
+.social-frame-generated::before, .social-frame-generated::after { content:none; }
 /* Сравнение двух моделей: два кадра и значок «vs» между ними — та же обложка, что
    собирается файлом для лент (scripts/blog-duel-cover.py). */
 .social-frame.is-duel { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
@@ -394,10 +393,10 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
    короткая, поверх неё была бы просто лишним слоем без всякого эффекта.
    ::after — с той стороны кадра, где стоит сама надпись (edge-top/edge-bottom, класс
    ставится по theme.place), на полкадра по высоте и заметно темнее: то место, где
-   буквам действительно нужен тёмный подклад. Оба лежат ниже текста и логотипа: у тех
-   явный z-index:1, а у теней он не задан, и по правилам отрисовки CSS непозиционированная
-   фотография рисуется первой, дальше эти два слоя по порядку в разметке, а слои с
-   z-index — поверх всех, независимо от порядка. */
+   буквам действительно нужен тёмный подклад. Оба лежат ниже текста: у него явный
+   z-index:1, а у теней он не задан, и по правилам отрисовки CSS непозиционированная
+   фотография рисуется первой, дальше эти два слоя по порядку в разметке, а текст —
+   поверх них. */
 .social-frame:not(.edge-bottom)::before {
   content:""; position:absolute; left:0; right:0; bottom:0; height:50px;
   background:linear-gradient(to top, rgb(0 0 0 / 40%), rgb(0 0 0 / 0%));
@@ -410,10 +409,9 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .social-frame.edge-bottom::after { bottom:0; background:linear-gradient(to top, rgb(0 0 0 / 80%), rgb(0 0 0 / 0%)); }
 /* Первая строка будущей записи поверх кадра.
  *
- * Область для текста одна на все записи: отступ от края со всех сторон. Снизу
- * надпись поднята вдвое выше полосы логотипа — иначе она читалась как подпись к
- * нему. Внутри области четыре места: левый край и середина, сверху и снизу. Место
- * закреплено за темой, чтобы тема узнавалась в ленте с одного взгляда.
+ * Область для текста одна на все записи: одинаковый отступ от края со всех сторон.
+ * Внутри области четыре места: левый край и середина, сверху и снизу. Место закреплено
+ * за темой, чтобы тема узнавалась в ленте с одного взгляда.
  *
  * Стиль один на все темы, без плашки под текстом (плашки были до 17.09.2026, потом
  * решили убрать везде): первое слово фирменным красным (#ff485c — более яркий
@@ -436,7 +434,7 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
  * отложили; их файлы лежат рядом в src/fonts.css — примерить снова значит поменять
  * здесь название шрифта и насыщенность.
  */
-.social-frame { --social-safe:5%; --social-mark-strip:11%; }
+.social-frame { --social-safe:5%; }
 /* Слово не переносится нигде и никогда — 17.09.2026 разобрали, что перенос
    посередине слова ломал буквы («Электромобил» / «ь»), и убрали его совсем. Значит,
    если слово шире своей области, единственный выход — уменьшить масштаб, а не
@@ -459,12 +457,7 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 /* Место у правого края убрано 17.09.2026: коробка там прижималась к углу, но сама
    сжималась по ширине текста и на глаз читалась как «где-то в середине», а не как
    правый край, — путала, а не помогала узнавать тему. */
-/* Оба угла — левый верхний и левый нижний — держат один и тот же отступ от края по
-   обеим сторонам сразу (--social-safe, тот же, что и у мест по центру): раньше
-   нижний отступ считался от логотипа (--social-mark-strip) и был заметно больше
-   верхнего, из-за чего надпись у одного угла жалась к нему, а у другого — заметно
-   отступала. Логотип стоит в правом нижнем углу, а не под этой надписью, так что
-   поднимать её над ним незачем (решения Сергея 17.09.2026). */
+/* Все места держат один и тот же безопасный отступ от края. */
 .social-title.at-top-left { left:var(--social-safe); top:var(--social-safe); }
 .social-title.at-bottom-left { left:var(--social-safe); bottom:var(--social-safe); }
 /* Середина края: ширину даём больше, иначе длинная строка ломается на три куска.
@@ -476,20 +469,7 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
   left:0; right:0; margin-inline:auto; width:max-content; max-width:78%; text-align:center;
 }
 .social-title.at-top-center { top:var(--social-safe); }
-.social-title.at-bottom-center { bottom:calc(var(--social-mark-strip) * 1.15); }
-
-/* Логотип в углу кадра. Белое начертание — то же, что в тёмной теме сайта.
-   Без тени: так решил Сергей 17.09.2026 — на светлом кузове буквы теряются, но
-   тень выглядела наклейкой. Размер в долях плитки: логотип должен остаться
-   одинаковым и в сетке кабинета, и в ленте на телефоне. */
-/* z-index:1 — иначе логотип красится ниже широкой тени у краёв: без явного номера
-   слоя оба они на одном уровне, и порядок решает место в разметке, где тень
-   (::after) стоит последней и рисуется поверх. */
-.social-frame > img.social-mark { position:absolute; z-index:1; right:3.2%; bottom:3.2%; width:21%; height:auto; pointer-events:none; }
+.social-title.at-bottom-center { bottom:var(--social-safe); }
 .social-frame-empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); font-size:13px; }
-.social-tile figcaption { display:grid; gap:2px; }
-.social-tile strong { font-size:14px; }
-.social-tile figcaption > span { color:var(--muted); font-size:13px; }
-.social-tile a { font-size:13px; }
 @media (max-width:1100px) { .social-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:620px) { .social-grid { gap:10px; } .social-grid.bare { gap:2px; } }
