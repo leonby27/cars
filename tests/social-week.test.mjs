@@ -1,14 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  COVER_HEADLINE_VARIANTS,
   THREADS_FILE_SLOTS,
   COVER_PLACES,
   hasRequiredVisual,
   assignUniqueWeeklyCovers,
   coverHeadlineSize,
   coverPlaces,
+  coverTopicHeadline,
   coverSourcePhotos,
   galleryPhotosAfterCover,
+  journalSlotsForWeek,
   mondayOf,
   nextThreadPosts,
   parseThreadsFile,
@@ -166,4 +169,40 @@ test("размер заголовка зависит от длины темы", 
   assert.equal(coverHeadlineSize("Новинки недели"), "large");
   assert.equal(coverHeadlineSize("5 машин до 25 000$"), "large");
   assert.equal(coverHeadlineSize("Оптимальное сочетание цены и состояния"), "small");
+});
+
+test("тематические заголовки идут по кругу без соседних повторов", () => {
+  for (const [rubric, variants] of Object.entries(COVER_HEADLINE_VARIANTS)) {
+    const headlines = Array.from({ length:variants.length + 1 }, (_, occurrence) => coverTopicHeadline(rubric, { occurrence }));
+    assert.deepEqual(headlines.slice(0, variants.length), [...variants]);
+    assert.ok(headlines.every((headline, index) => index === 0 || headline !== headlines[index - 1]), rubric);
+  }
+});
+
+test("обложка подборки называет тему, а не выбранную машину", () => {
+  assert.equal(coverTopicHeadline("budget", { occurrence:0, count:5, capUsd:25_000 }), "5 машин до 25 000$");
+  assert.equal(coverTopicHeadline("budget", { occurrence:1, count:5, capUsd:25_000 }), "Что есть до 25 000$");
+  assert.equal(coverTopicHeadline("cheapest", { single:"Zeekr 001 · 22 700$" }), "Zeekr 001 · 22 700$");
+});
+
+test("сравнения чередуют формулировку, сохраняя обе модели", () => {
+  assert.equal(coverTopicHeadline("duel", { occurrence:0, left:"BMW i5", right:"BYD Han L" }), "BMW i5 или BYD Han L?");
+  assert.equal(coverTopicHeadline("duel", { occurrence:1, left:"BMW i5", right:"BYD Han L" }), "BMW i5 против BYD Han L");
+});
+
+test("готовый материал журнала занимает свой будний слот, но не добавляет шестой", () => {
+  const posts = [
+    { slug:"monday", published:"2026-09-21" },
+    { slug:"tuesday-b", published:"2026-09-22" },
+    { slug:"tuesday-a", published:"2026-09-22" },
+    { slug:"without-copy", published:"2026-09-23" },
+    { slug:"weekend", published:"2026-09-27" },
+  ];
+  const slots = journalSlotsForWeek(posts, {
+    monday:{}, "tuesday-a":{}, "tuesday-b":{}, weekend:{},
+  }, new Date("2026-09-21T00:00:00+03:00"));
+  assert.deepEqual(slots.map(({ dayIndex, post }) => [dayIndex, post.slug]), [
+    [0, "monday"],
+    [1, "tuesday-a"],
+  ]);
 });

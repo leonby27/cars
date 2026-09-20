@@ -92,6 +92,79 @@ export function coverHeadlineSize(headline) {
   return "small";
 }
 
+export const COVER_HEADLINE_VARIANTS = Object.freeze({
+  "best-value": Object.freeze([
+    "Золотая середина",
+    "Топ за свои деньги",
+    "Оптимальное сочетание цены и состояния",
+  ]),
+  question: Object.freeze([
+    "Как вам цена?",
+    "Брать или искать дальше?",
+    "Дорого или нормально?",
+  ]),
+  drops: Object.freeze([
+    "Упали в цене",
+    "Подешевели за неделю",
+    "Цены пошли вниз",
+  ]),
+  fresh: Object.freeze([
+    "Новое в каталоге",
+    "Свежее пополнение",
+    "Новинки недели",
+  ]),
+});
+
+const variant = (items, index) => items[((Number(index) || 0) % items.length + items.length) % items.length];
+const money = (value) => `${new Intl.NumberFormat("ru-RU").format(Math.round(Number(value) || 0))}$`;
+
+// Заголовок описывает тему всей публикации. Машина, выбранная уникальной обложкой,
+// влияет только на фотографию и не может переименовать подборку в объявление о себе.
+export function coverTopicHeadline(rubric, {
+  occurrence = 0,
+  single = "",
+  count = 5,
+  capUsd = 0,
+  left = "",
+  right = "",
+  article = "",
+} = {}) {
+  if (rubric === "cheapest") return String(single);
+  if (rubric === "blog") return String(article);
+  if (COVER_HEADLINE_VARIANTS[rubric]) return variant(COVER_HEADLINE_VARIANTS[rubric], occurrence);
+  if (rubric === "budget") return variant([
+    `${count} машин до ${money(capUsd)}`,
+    `Что есть до ${money(capUsd)}`,
+    `Уложиться в ${money(capUsd)}`,
+  ], occurrence);
+  if (rubric === "duel") return variant([
+    `${left} или ${right}?`,
+    `${left} против ${right}`,
+  ], occurrence);
+  throw new Error(`Нет заголовка для рубрики ${rubric || "unknown"}`);
+}
+
+// Не больше одного материала журнала на будний слот. Берём только материалы с
+// готовой выжимкой: отсутствие текста не должно ни создавать пустую запись, ни
+// ломать остальные четыре-пять автомобильных рубрик недели.
+export function journalSlotsForWeek(posts, socialBySlug, monday) {
+  const dates = Array.from({ length:5 }, (_, dayOffset) => {
+    const date = new Date(monday);
+    date.setDate(date.getDate() + dayOffset);
+    return dateKey(date);
+  });
+  const occupied = new Set();
+  return [...(posts || [])]
+    .filter((post) => dates.includes(post?.published) && socialBySlug?.[post?.slug])
+    .sort((left, right) => String(left.published).localeCompare(String(right.published)) || String(left.slug).localeCompare(String(right.slug)))
+    .flatMap((post) => {
+      const dayIndex = dates.indexOf(post.published);
+      if (dayIndex < 0 || occupied.has(dayIndex)) return [];
+      occupied.add(dayIndex);
+      return [{ dayIndex, post }];
+    });
+}
+
 export function parseThreadsFile(text) {
   return String(text || "")
     .split(/\r?\n/)
