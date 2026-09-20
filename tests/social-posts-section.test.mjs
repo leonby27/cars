@@ -176,9 +176,9 @@ test("у каждой темы своё место для заголовка, и
   }
   for (const place of PLACES) assert.match(styles, new RegExp(`\\.social-title\\.at-${place}[,\\s{]`), `место ${place} не описано в стилях`);
   // Область одна на все записи: одинаковый безопасный отступ по краям.
-  assert.match(styles, /\.social-frame \{ --social-safe:\d+%; \}/);
-  assert.match(styles, /\.social-title\.at-bottom-left \{[^}]*bottom:var\(--social-safe\)/);
-  assert.match(styles, /\.social-title\.at-bottom-center \{[^}]*bottom:var\(--social-safe\)/);
+  assert.match(styles, /\.social-frame \{ --social-safe-x:10%; --social-safe-y:10%; \}/);
+  assert.match(styles, /\.social-title\.at-bottom-left \{[^}]*left:var\(--social-safe-x\)[^}]*bottom:var\(--social-safe-y\)/);
+  assert.match(styles, /\.social-title\.at-bottom-center \{[^}]*bottom:var\(--social-safe-y\)/);
 });
 
 // Шрифт лежит на нашем домене: подключение с Google Fonts когда-то давало прыжок
@@ -301,6 +301,10 @@ test("цены, единицы и короткие слова не разрыв�
   assert.equal(typeset("Пять машин до 25 000 $"), `Пять машин до${nbsp}25${nbsp}000${nbsp}$`);
   assert.equal(typeset("Пробег 150 000 км"), `Пробег 150${nbsp}000${nbsp}км`);
   assert.equal(typeset("Где заряжаться в Беларуси"), `Где заряжаться в${nbsp}Беларуси`);
+  assert.equal(typeset("Авто без пробега после доставки"), `Авто без${nbsp}пробега после${nbsp}доставки`);
+  assert.equal(typeset("Выбор между Zeekr и BYD"), `Выбор между${nbsp}Zeekr и${nbsp}BYD`);
+  assert.equal(typeset("Машина из-за границы"), `Машина из-за${nbsp}границы`);
+  assert.equal(typeset("Новое и в каталоге"), `Новое и${nbsp}в${nbsp}каталоге`);
   // Обычные слова длиннее двух букв никуда не приклеиваются.
   assert.equal(typeset("Новое в каталоге за неделю"), `Новое в${nbsp}каталоге за${nbsp}неделю`);
 });

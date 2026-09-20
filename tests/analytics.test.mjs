@@ -208,11 +208,11 @@ test("счётчики отделяют просмотренное от ново
   assert.match(source, /const fresh = sectionFreshCount\(updates, item\.id\)/);
 });
 
-test("раздел каталога первым показывает просмотренные страницы каталога", async () => {
+test("в разделе каталога вкладка авто стоит первой", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
   const worker = await readFile(new URL("../worker/analytics.js", import.meta.url), "utf8");
-  assert.match(source, /const vehicleModes = \[\s*\{ id:"catalog", label:"Каталог" \}/);
+  assert.match(source, /const vehicleModes = \[\s*\{ id:"cars", label:"Авто" \},\s*\{ id:"catalog", label:"Каталог" \}/);
   assert.match(source, /useState\("catalog"\)/);
   assert.match(source, /id:"vehicles", label:"Каталог"/);
   assert.match(source, /data\.catalogPages/);

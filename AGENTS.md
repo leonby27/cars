@@ -1,5 +1,7 @@
 # Prototype Instructions
 
+Public email preference (owner decision, 2026-09-20): use `abcarsby@gmail.com` everywhere visitors or search engines can see the company email. Never restore `hello@abcars.by`.
+
 Service reviews visibility (owner decision, 2026-09-16): temporarily hide the complete reviews section on «О сервисе» in both local and production versions using `REVIEWS_ENABLED`. Preserve its content for later re-enabling. This supersedes the earlier published-reviews visibility preference.
 
 Service-fee row visibility (owner decision, 2026-09-16): temporarily hide the «Услуги abcars.by» row in the vehicle price breakdown and order estimate. Keep the service fee included in landed-price totals.
@@ -490,7 +492,7 @@ Action-button tooltip preference: the round "Копировать ссылку" 
 
 Share-action preference: no share icon anywhere in the interface, including the vehicle-page action row.
 
-Real contact details — checklist for when the owner supplies them (rule set 2026-08-23): `src/company-data.js` currently holds placeholders (legal name "ООО «Евкарс»", address "Минск, ул. Тимирязева, 65Б", commented-out phone, `hello@abcars.by`) and the file says to replace every value before publication. The site is live and indexed, so these values are now public claims — never put a placeholder address or phone into structured data, a schema block, or a page that search engines read. When Sergey provides the real name, address, phone and hours, do all of this in one pass:
+Real contact details — checklist for when the owner supplies them (rule set 2026-08-23, contact update 2026-09-20): `src/company-data.js` is the single source of public contact details and currently uses `abcarsby@gmail.com`. The site is live and indexed, so these values are public claims — never put a placeholder address, phone or email into structured data, a schema block, or a page that search engines read. When Sergey provides changed legal details, address, phone or hours, do all of this in one pass:
 
 1. Fill `src/company-data.js` (legalName, address, hours, email, phone + phoneHref, telegram, viber) and delete the "Demo company details" warning comment. Uncomment the phone in the contacts page and the footer.
 2. Replace `organizationSchema()` in `server/seo-render.mjs` with an **AutoDealer** (subtype of LocalBusiness) carrying `name`, `legalName`, `url`, `logo`, `image`, `telephone`, `email`, `address` as a `PostalAddress` (streetAddress / addressLocality "Минск" / addressCountry "BY" / postalCode), `openingHoursSpecification` from the real hours, `geo` as `GeoCoordinates` with the real coordinates (the contacts page already embeds a Yandex map at 53.922078, 27.512217 — verify it matches the real office before reusing), `areaServed` Беларусь, `priceRange`, and `sameAs` for the real Telegram/Viber/social profiles. Emit it on **every** page, not only the home page — a local business block is expected site-wide.

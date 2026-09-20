@@ -409,7 +409,8 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .social-frame.edge-bottom::after { bottom:0; background:linear-gradient(to top, rgb(0 0 0 / 80%), rgb(0 0 0 / 0%)); }
 /* Первая строка будущей записи поверх кадра.
  *
- * Область для текста одна на все записи: одинаковый отступ от края со всех сторон.
+ * Область для текста одна на все записи: по горизонтали отступ 5%, а сверху и
+ * снизу — удвоенные 10%, чтобы надпись не прижималась к краю вертикального кадра.
  * Внутри области четыре места: левый край и середина, сверху и снизу. Место закреплено
  * за темой, чтобы тема узнавалась в ленте с одного взгляда.
  *
@@ -434,7 +435,7 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
  * отложили; их файлы лежат рядом в src/fonts.css — примерить снова значит поменять
  * здесь название шрифта и насыщенность.
  */
-.social-frame { --social-safe:5%; }
+.social-frame { --social-safe-x:10%; --social-safe-y:10%; }
 /* Слово не переносится нигде и никогда — 17.09.2026 разобрали, что перенос
    посередине слова ломал буквы («Электромобил» / «ь»), и убрали его совсем. Значит,
    если слово шире своей области, единственный выход — уменьшить масштаб, а не
@@ -457,9 +458,9 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 /* Место у правого края убрано 17.09.2026: коробка там прижималась к углу, но сама
    сжималась по ширине текста и на глаз читалась как «где-то в середине», а не как
    правый край, — путала, а не помогала узнавать тему. */
-/* Все места держат один и тот же безопасный отступ от края. */
-.social-title.at-top-left { left:var(--social-safe); top:var(--social-safe); }
-.social-title.at-bottom-left { left:var(--social-safe); bottom:var(--social-safe); }
+/* Вертикальный безопасный отступ вдвое больше горизонтального. */
+.social-title.at-top-left { left:var(--social-safe-x); top:var(--social-safe-y); }
+.social-title.at-bottom-left { left:var(--social-safe-x); bottom:var(--social-safe-y); }
 /* Середина края: ширину даём больше, иначе длинная строка ломается на три куска.
    Центруем не сдвигом от левого края (`left:50%` + сдвиг назад), а распором в обе
    стороны с автоматическими полями. Разница не косметическая: у прижатой к точке
@@ -468,8 +469,8 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .social-title.at-top-center, .social-title.at-bottom-center {
   left:0; right:0; margin-inline:auto; width:max-content; max-width:78%; text-align:center;
 }
-.social-title.at-top-center { top:var(--social-safe); }
-.social-title.at-bottom-center { bottom:var(--social-safe); }
+.social-title.at-top-center { top:var(--social-safe-y); }
+.social-title.at-bottom-center { bottom:var(--social-safe-y); }
 .social-frame-empty { position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); font-size:13px; }
 @media (max-width:1100px) { .social-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:620px) { .social-grid { gap:10px; } .social-grid.bare { gap:2px; } }

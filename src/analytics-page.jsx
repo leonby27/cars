@@ -597,8 +597,8 @@ function VisitsSection({ visits, total, unread }) {
 }
 
 const vehicleModes = [
-  { id:"catalog", label:"Каталог" },
   { id:"cars", label:"Авто" },
+  { id:"catalog", label:"Каталог" },
   { id:"models", label:"Модели" },
   { id:"favorites", label:"Избранное" },
 ];

@@ -10,6 +10,7 @@ import { chromium } from "playwright";
 import { BLOG_POSTS } from "../src/blog-posts.js";
 import { BLOG_SOCIAL } from "../src/blog-social.js";
 import { carTitle } from "../src/car-title.js";
+import { typeset } from "../src/social-themes.js";
 import { blogCover, dropCover } from "./lib/blog-cover.mjs";
 import { withCatalogFooter } from "./lib/social-card.mjs";
 import {
@@ -208,17 +209,20 @@ const css = `
   h1.size-large { font-size:104px }
   h1.size-medium { font-size:86px }
   h1.size-small { font-size:70px }
-  h1.at-top-left { top:54px; left:54px }
-  h1.at-bottom-left { bottom:54px; left:54px }
+  h1.at-top-left { top:108px; left:108px }
+  h1.at-bottom-left { bottom:108px; left:108px }
   h1.at-top-center, h1.at-bottom-center { left:0; right:0; margin-inline:auto; text-align:center }
-  h1.at-top-center { top:54px }
-  h1.at-bottom-center { bottom:54px }
+  h1.at-top-center { top:108px }
+  h1.at-bottom-center { bottom:108px }
   h1 b { color:#ff485c }
 `;
 
 const headlineHtml = (headline) => {
-  const [first, ...rest] = String(headline).split(/\s+/);
-  return `<b>${escapeHtml(first)}</b>${rest.length ? ` ${escapeHtml(rest.join(" "))}` : ""}`;
+  const value = typeset(headline);
+  const breakAt = value.search(/\s/);
+  const first = breakAt === -1 ? value : value.slice(0, breakAt);
+  const rest = breakAt === -1 ? "" : value.slice(breakAt);
+  return `<b>${escapeHtml(first)}</b>${escapeHtml(rest)}`;
 };
 await fs.mkdir(sourceDir, { recursive:true });
 await fs.mkdir(generatedDir, { recursive:true });

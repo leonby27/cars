@@ -7,6 +7,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { socialPhotoHref } from "../src/photo-source.js";
+import { SOCIAL_GENERATIONS } from "../src/social-generations.js";
 import { carFrame, headlineSize, KINDS, resolvePlace, socialThemeQuery, socialTiles, tileHeadline } from "../src/social-themes.js";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -20,6 +21,7 @@ const productionOrigin = "https://abcars.by";
 // social-generation-prompt-3.txt.
 const promptPool = Object.freeze([1, 1, 2, 3]);
 const randomPrompt = () => promptPool[crypto.randomInt(promptPool.length)];
+const promptFor = (key) => SOCIAL_GENERATIONS[key]?.prompt || randomPrompt();
 
 const escapeHtml = (value) => String(value ?? "")
   .replace(/&/g, "&amp;")
@@ -57,7 +59,7 @@ const cardCss = `
   @font-face { font-family:"Montserrat Display"; font-style:normal; font-weight:100 900; src:url("${fontUrl("montserrat-var-cyrillic.woff2")}") format("woff2"); }
   * { box-sizing:border-box; }
   html, body { margin:0; width:1080px; height:1350px; overflow:hidden; background:#17191c; }
-  .social-frame { --social-safe:5%; position:relative; container-type:inline-size; width:1080px; height:1350px; overflow:hidden; background:#17191c; }
+  .social-frame { --social-safe-x:10%; --social-safe-y:10%; position:relative; container-type:inline-size; width:1080px; height:1350px; overflow:hidden; background:#17191c; }
   .social-frame img { width:100%; height:100%; display:block; object-fit:cover; }
   .social-frame.is-duel { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
   .social-frame.is-duel > span:not(.social-title) { display:block; overflow:hidden; background:#101214; }
@@ -71,11 +73,11 @@ const cardCss = `
   .social-title.size-large { font-size:calc(11cqw * var(--social-title-scale, 1)); }
   .social-title.size-medium { font-size:calc(8.8cqw * var(--social-title-scale, 1)); }
   .social-title.size-small { font-size:calc(7.2cqw * var(--social-title-scale, 1)); }
-  .social-title.at-top-left { left:var(--social-safe); top:var(--social-safe); }
-  .social-title.at-bottom-left { left:var(--social-safe); bottom:var(--social-safe); }
+  .social-title.at-top-left { left:var(--social-safe-x); top:var(--social-safe-y); }
+  .social-title.at-bottom-left { left:var(--social-safe-x); bottom:var(--social-safe-y); }
   .social-title.at-top-center, .social-title.at-bottom-center { left:0; right:0; margin-inline:auto; width:max-content; max-width:78%; text-align:center; }
-  .social-title.at-top-center { top:var(--social-safe); }
-  .social-title.at-bottom-center { bottom:var(--social-safe); }
+  .social-title.at-top-center { top:var(--social-safe-y); }
+  .social-title.at-bottom-center { bottom:var(--social-safe-y); }
 `;
 
 const htmlFor = ({ theme, pick, headline, loaded }) => {
@@ -138,7 +140,7 @@ const plan = prepared.map(({ key, theme, headline }) => ({
   headline,
   source:`/social/source/${key}.png`,
   generated:`/social/generated/${key}.png`,
-  prompt:randomPrompt(),
+  prompt:promptFor(key),
 }));
 await fs.writeFile(path.join(sourceDir, "manifest.json"), `${JSON.stringify(plan, null, 2)}\n`);
 await fs.writeFile(path.join(generatedDir, "manifest.json"), `${JSON.stringify(plan.map(({ key, generated, prompt }) => ({ key, image:generated, prompt })), null, 2)}\n`);
