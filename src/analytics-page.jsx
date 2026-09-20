@@ -606,7 +606,7 @@ const vehicleModes = [
 const modelTitle = (title) => String(title || "").replace(/\s+\d{4}\s*$/, "").trim() || title || "—";
 
 function VehiclesSection({ data, updates, markViewed }) {
-  const [mode, setMode] = useState("catalog");
+  const [mode, setMode] = useState("cars");
   // Во всех представлениях сначала показываем то, что смотрели последним.
   const [sort, setSort] = useState({ column:"lastViewed", desc:true });
   const [visible, setVisible] = useState(20);
@@ -1114,9 +1114,10 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   const openSection = (id) => {
     if (id === "contact_interest") setContactFresh(updates.contact_interest_details || {});
     setSection(id);
+    const viewedId = id === "vehicles" ? "vehicle_cars" : id;
     // Цифру гасим сразу, не дожидаясь ответа сервера.
-    setUpdates((current) => ({ ...current, [id]:0, ...(id === "contact_interest" ? { contact_interest_details:{} } : {}) }));
-    loadUpdates(id);
+    setUpdates((current) => ({ ...current, [viewedId]:0, ...(id === "contact_interest" ? { contact_interest_details:{} } : {}) }));
+    loadUpdates(viewedId);
   };
   const markViewed = (id) => {
     setUpdates((current) => ({ ...current, [id]:0 }));
@@ -1153,7 +1154,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} updates={updates} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} period={period} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "vehicles"}><VehiclesSection data={data} updates={updates} markViewed={markViewed} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} updates={updates} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
