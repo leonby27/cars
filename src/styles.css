@@ -13778,6 +13778,14 @@ html[data-theme="dark"] .tool-page-hero-icon {
   max-width: none;
   object-fit: contain;
 }
+/* Весы имеют плотный квадратный силуэт, поэтому оставляем вокруг них немного
+   воздуха внутри той же плитки. */
+.tool-page-hero-icon-compact img {
+  top: 10px;
+  left: 10px;
+  width: 104px;
+  height: 104px;
+}
 /* Высокие рисовки внутри плитки не сдвигаем: у батареи от сдвига срезало бы
    половину. Она стоит по центру и целиком. */
 .tool-page-hero-icon-inside {

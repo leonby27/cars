@@ -669,3 +669,5 @@ Belarus price-page low-price cleanup (owner decision, 2026-09-21): exclude Belar
 Belarus price-page hero (owner decision, 2026-09-21): keep the heading and lead as compact as the range-calculator hero and show the supplied gold price-comparison scales in the same right-side clipped tile used by other calculator pages. Hide this decorative tile on phones with the shared tool-page rule.
 
 Belarus price-page cards (owner decision, 2026-09-21): in the default «Все типы» view show only one card per brand/model, choosing the powertrain with the largest catalog sample while keeping powertrain statistics separate and available through the engine-type filter. In each market price row, place a muted regular-weight `·` plus the numeric listing count immediately after the source label, with no noun.
+
+Belarus price-page title revision (owner decision, 2026-09-21): use the exact heading «Где дешевле купить авто: в Китае или Беларуси». Use the revised symmetrical gold scales illustration supplied at 23:08, centered at 104 × 104 px inside the existing 124 × 124 px calculator tile so it reads slightly smaller without changing the tile or hero layout.

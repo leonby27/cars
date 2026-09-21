@@ -1,3 +1,58 @@
+## Design QA — price-page title and scales revision
+
+- Source visual truth: `/Users/user/Downloads/ChatGPT Image 21 сент. 2026 г., 23_08_16.png`
+- Implementation screenshot: `/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/implementation-price-belarus-title.png`
+- Route: `http://127.0.0.1:5173/price-belarus`
+- Browser: Codex in-app browser
+- Viewport and implementation pixels: 1280 × 720 CSS px at 1× density
+- Source pixels: 1254 × 1254 RGBA
+- Density normalization: the source is a transparent square asset rather than a page mockup, so it was compared directly with its rendered tile crop; the implementation screenshot is 1:1 with the CSS viewport.
+- State: dark desktop page, default search and filters.
+
+### Full-view comparison evidence
+
+The requested heading renders as «Где дешевле купить авто: в Китае или Беларуси» in two balanced lines. The hero height, lead, search controls, filter row, sidebar and first comparison card remain unchanged.
+
+### Focused region comparison evidence
+
+The attached scales asset is used directly and centered at 104 × 104 CSS px inside the existing 124 × 124 px tile. Its full silhouette remains visible, with more surrounding space than the previous 134 px treatment and no transparency halo or unintended crop.
+
+### Required fidelity surfaces
+
+- Fonts and typography: the existing product font, heading weight, line height and letter spacing are preserved; the non-breaking space keeps «в Китае» together.
+- Spacing and layout rhythm: only the illustration's internal rendered size changed; the tile and surrounding hero spacing are unchanged.
+- Colors and visual tokens: the existing dark hero and tile tokens are preserved.
+- Image quality and asset fidelity: the exact supplied RGBA asset is exported as 512 px PNG, WebP and AVIF and remains sharp at the rendered size.
+- Copy and content: the heading matches the requested wording exactly; all other copy remains unchanged.
+
+### Findings
+
+No actionable P0/P1/P2 mismatch remains in the tested desktop state.
+
+### Comparison history
+
+- Earlier finding: the previous scales illustration and title no longer matched the owner's requested revision.
+- Fix: replaced all responsive image variants, introduced a compact 104 px fit for the market hero only, and updated the heading.
+- Post-fix evidence: `implementation-price-belarus-title.png`; the new asset is fully visible and smaller within the unchanged tile.
+
+### Implementation checklist
+
+- [x] Exact revised heading.
+- [x] Exact supplied illustration.
+- [x] Slightly smaller illustration in the existing tile.
+- [x] Browser rendering and console checked.
+
+### Follow-up polish
+
+No P3 follow-up is required for this scoped revision.
+
+- Primary interactions tested: page load and existing search/filter controls remain present and accessible.
+- Console errors checked: no runtime errors were reported; only Vite connection messages and the React DevTools development notice were present.
+
+final result: passed
+
+---
+
 **Comparison Metadata**
 
 - Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-4c5ae275-58d1-4ebf-a90d-c3ece6f6091b.png`

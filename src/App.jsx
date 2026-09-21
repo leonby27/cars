@@ -9415,7 +9415,7 @@ function ContactsPage({ navigate, theme }) {
 const TOOL_HERO_ICONS = Object.freeze({
   customs: { src: "/services/customs-calculator.png", width: 224, height: 224 },
   range: { src: "/services/battery-check.png", width: 512, height: 512, fit: "inside" },
-  market: { src: "/services/price-comparison.png", width: 512, height: 512 },
+  market: { src: "/services/price-comparison.png", width: 512, height: 512, fit: "compact" },
 });
 
 function ToolPage({ tool, navigate }) {
