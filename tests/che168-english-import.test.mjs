@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildChe168Car, deriveChe168SpecFields, extractChe168DetailPayload } from "../scripts/lib/che168-parser.mjs";
+import { buildChe168Car, deriveChe168SpecFields, extractChe168DetailPayload, normalizeChe168Energy } from "../scripts/lib/che168-parser.mjs";
 import { translateTechnicalSpecs, translateSpecValue } from "../src/spec-translations.js";
 import { normalizeDrive } from "../src/drive-types.js";
 import { engineVolume, enginePower, gearboxType } from "../src/engine-spec.js";
@@ -22,6 +22,27 @@ const expected = [
   [58228037, "ДВС", "Передний", 194, null, null, null, 1526, 1.5, "Вариатор"],
   [58497574, "ДВС", "Задний", 184, null, null, null, null, 1.5, "Автомат"],
 ];
+
+test("точный тип топлива важнее ошибочной подписи серии", () => {
+  const detail = {
+    fuelname:"Pure Electric",
+    carname:"BYD Song PLUS PHEV",
+    specname:"2024 Glory Edition EV 520km Premium",
+  };
+  assert.equal(normalizeChe168Energy(detail, []), "Электромобиль");
+  assert.equal(normalizeChe168Energy({ ...detail, fuelname:"Plug-in Hybrid", specname:"2024 DM-i 110km" }, []), "Гибрид");
+});
+
+test("электрический Song PLUS из серии PHEV сохраняется как Song PLUS EV", () => {
+  const payload = structuredClone(payloads.find(({ detail }) => detail.fuelname === "Pure Electric"));
+  payload.detail.brandname = "BYD";
+  payload.detail.seriesname = "Song PLUS PHEV";
+  payload.detail.carname = "BYD Song PLUS PHEV";
+  payload.detail.specname = "2024 Glory Edition EV 520km Premium";
+  const car = buildChe168Car(payload, options);
+  assert.equal(car.type, "Электромобиль");
+  assert.equal(car.model, "Song PLUS EV");
+});
 
 test("real English responses retain drivetrain, engine, battery and range across powertrains", () => {
   for (const [id, type, drive, horsepower, battery, electricRange, combinedRange, curbWeight, volume, gearbox] of expected) {

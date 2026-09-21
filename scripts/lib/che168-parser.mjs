@@ -1,5 +1,5 @@
 import { repairVerifiedDrive, driveConflicts } from "../../src/vehicle-spec-integrity.js";
-import { canonicalImportBrand, canonicalImportModel, photoIdentity, uniquePhotos } from "../../config/import-policy.mjs";
+import { canonicalImportBrand, canonicalImportModel, canonicalImportName, photoIdentity, uniquePhotos } from "../../config/import-policy.mjs";
 import { normalizeDrive } from "./guazi-parser.mjs";
 
 const numeric = (value) => {
@@ -257,7 +257,7 @@ const SOURCE_BRAND_PREFIXES = new Map([
   ["Lynk & Co", ["LYNK&CO", "Lynk & Co", "Lynk Co"]],
 ]);
 
-function cleanModel(value, brand, details) {
+function cleanModel(value, brand, details, powertrain) {
   let model = String(value || "").trim();
   const prefixes = [...(SOURCE_BRAND_PREFIXES.get(brand) || []), brand]
     .filter(Boolean)
@@ -266,7 +266,8 @@ function cleanModel(value, brand, details) {
     const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     model = model.replace(new RegExp(`^${escaped}\\s+`, "i"), "").trim();
   }
-  return canonicalImportModel(brand, model, details);
+  const canonical = canonicalImportModel(brand, model, details);
+  return canonicalImportName(brand, canonical, powertrain, details).model;
 }
 
 export function normalizeChe168Energy(detail, specs) {
@@ -275,21 +276,25 @@ export function normalizeChe168Energy(detail, specs) {
   // вместо Pure Electric, Range Extender, Energy Type. Пока условия были только
   // английскими, 1 547 электромобилей и гибридов записались как бензиновые — а от
   // типа зависит пошлина, то есть цена под ключ на карточке.
-  const energy = [
+  const structured = [
     detail.fuelname,
     specValue(specs, [/^Energy Type$/i, /^Тип топлива$/i, /^Тип энергии$/i]),
-    detail.carname,
-    detail.specname,
   ]
     .filter(Boolean)
     .join(" ");
+  const trim = String(detail.specname || "");
+  const series = String(detail.carname || "");
+  const classify = (energy) => {
+    if (!energy) return null;
+    if (/mild hybrid|48V|MHEV|轻混|мягк\w* гибрид/i.test(energy)) return "ДВС";
+    if (/PHEV|plug[- ]in|range extender|hybrid|DM-[ip]|增程|混动|гибрид\w*|подключаем\w*|продлённый запас хода|продленный запас хода|увеличенным запасом хода|электропривод/i.test(energy)) return "Гибрид";
+    if (/Pure Electric|Battery Electric|BEV|(^|[^A-Z])EV([^A-Z]|$)|электромобил\w*|чист\w* электро|электрическ\w*/i.test(energy)) return "Электромобиль";
+    return null;
+  };
   // Мягкий гибрид (48 В) — это бензиновая машина, которую нельзя зарядить, а
   // источник всё равно пишет «Бензин+48V мягкая гибридная система». Если ловить
   // просто «гибрид», она уедет к подключаемым, поэтому отсекаем её первой.
-  if (/mild hybrid|48V|MHEV|轻混|мягк\w* гибрид/i.test(energy)) return "ДВС";
-  if (/PHEV|plug[- ]in|range extender|hybrid|DM-[ip]|增程|混动|гибрид\w*|подключаем\w*|продлённый запас хода|продленный запас хода|увеличенным запасом хода|электропривод/i.test(energy)) return "Гибрид";
-  if (/Pure Electric|Battery Electric|BEV|электромобил\w*|чист\w* электро|электрическ\w*/i.test(energy)) return "Электромобиль";
-  return "ДВС";
+  return classify(structured) || classify(trim) || classify(series) || "ДВС";
 }
 
 // Снимки источник отдаёт пачками по разделам: кузов снаружи, салон, багажник и так
@@ -318,7 +323,8 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
   if (!detail?.infoid) return null;
   const specs = flattenedSpecs(payload.specGroups);
   const brand = canonicalImportBrand(detail.brandname);
-  const model = cleanModel(detail.seriesname, brand, { rawModel:detail.specname });
+  const type = normalizeChe168Energy(detail, specs);
+  const model = cleanModel(detail.seriesname, brand, { rawModel:detail.specname }, type);
   const year = numeric(String(detail.specname || "").match(/\b(20\d{2})\b/)?.[1]
     || String(detail.carname || "").match(/\b(20\d{2})\b/)?.[1]);
   const sourcePriceUsd = numeric(detail.price);
@@ -326,7 +332,6 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
   const pictureGroups = (detail.catepiclist || []).map((group) => (group.list || []).filter(Boolean));
   const images = uniquePhotos(pictureGroups.flat());
   const exteriorPhotos = countExteriorPhotos(pictureGroups, images);
-  const type = normalizeChe168Energy(detail, specs);
   if (!brand || !model || !year || !sourcePriceUsd || mileage === null || images.length < 2) return null;
 
   const {

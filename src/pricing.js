@@ -4,7 +4,7 @@ import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
   usdByn:3.0234, cnyBynPer10:4.5191, eurByn:3.4716, rateDate:"21.09.2026",
-  serviceByn:1000,
+  serviceByn:2000,
   // Тариф фиксирован в BYN; долларовый эквивалент следует за курсом НБРБ.
   get serviceUsd() { return Math.round(this.serviceByn / this.usdByn / 10) * 10; },
   // Обязательные сборы при оформлении — в рублях, как их и начисляет таможня.

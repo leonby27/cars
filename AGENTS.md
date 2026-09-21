@@ -6,7 +6,7 @@ Public email preference (owner decision, 2026-09-20): use `abcarsby@gmail.com` e
 
 Service reviews visibility (owner decision, 2026-09-16): temporarily hide the complete reviews section on «О сервисе» in both local and production versions using `REVIEWS_ENABLED`. Preserve its content for later re-enabling. This supersedes the earlier published-reviews visibility preference.
 
-Service-fee row visibility (owner decision, 2026-09-16): temporarily hide the «Услуги abcars.by» row in the vehicle price breakdown and order estimate. Keep the service fee included in landed-price totals.
+Service-fee row visibility (owner decision, updated 2026-09-21): show the «Услуги abcars.by» row in both the vehicle price breakdown and the preliminary order estimate. Keep the service fee included in landed-price totals exactly once.
 
 Mobile vehicle-page section order (owner decision, 2026-09-16): place «Из чего складывается цена» above the «О модели» card on mobile (up to 700px), after the vehicle facts and technical specifications. Preserve the desktop layout.
 
@@ -93,7 +93,7 @@ Vehicle estimate density preference: in the detail sidebar, lead the estimate wi
 
 Belarusian-ruble price preference (owner decision, 2026-09-10): after converting displayed prices from dollars at the current rate, round every BYN amount to the nearest 100 rubles. Keep the underlying dollar estimates and calculations unchanged.
 
-Service fee (owner decision, corrected 2026-09-16): fix «Услуги abcars.by» at 1000 BYN. Derive its USD equivalent from the shared NBRB rate and round to the nearest ten dollars without decimal digits (for example, $330), including vehicle estimates, quick view, the calculator and delivery cost pages. Include the reduced fee in landed-price totals.
+Service fee (owner decision, updated 2026-09-21): fix «Услуги abcars.by» at 2000 BYN everywhere. Derive its USD equivalent from the shared NBRB rate and round to the nearest ten dollars without decimal digits (currently $660), including vehicle estimates, quick view, the calculator and delivery cost pages. Include the fee in landed-price totals exactly once.
 
 Russian typography preference: prevent short Russian prepositions and conjunctions from hanging at the ends of lines throughout the rendered interface, including dynamic content. Keep the shared typography processor enabled instead of relying only on manually inserted non-breaking spaces.
 
@@ -661,3 +661,7 @@ Belarus price-page mobile cards (owner decision, latest correction 2026-09-21): 
 Belarus price-page mobile sorting (owner decision, 2026-09-21): replace the visible mobile sort label with a compact sorting-icon button beside the search field. Keep its dropdown and accessible label; show a small red status dot only when the selected sorting differs from the default «Сначала выгодные».
 
 Belarus price-page mobile filter sheets (owner decision, 2026-09-21): open sorting and every filter in a bottom action sheet on phones, matching the catalog interaction, so no dropdown can escape or resize the horizontally scrollable filter row. Keep the price-range action sheet as two separate adjacent «От» and «До» selects.
+
+Belarus price-page model identity (owner decision, 2026-09-21): compare the same model only within the same powertrain. Use the Belarus listing's structured engine type to separate petrol/diesel, hybrid and electric samples even when the marketplace uses one model name for several versions. Treat equivalent suffixes such as `DM-i`/`DM` and `PHEV`, or `EV`/no suffix, as naming differences only after the powertrain agrees. Keep BYD Song PLUS EV separate from Song PLUS DM-i in imports, stored listings, filters and price comparisons; Che168's misleading `Song PLUS PHEV` series label must not override a `Pure Electric` fuel type or an explicit EV trim.
+
+Belarus price-page low-price cleanup (owner decision, 2026-09-21): exclude Belarus listings explicitly marked as accident-damaged or for parts before calculating market statistics. Within each comparable brand/model/year/powertrain/mileage bucket, exclude the isolated low-price tail when a gap of at least $10,000 separates it from the following listings. Use only the cleaned sample for count, minimum, mean and median so deposits, broken cars and obvious anomalous prices do not define the market comparison.

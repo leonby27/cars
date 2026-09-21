@@ -60,6 +60,7 @@ if [ -z "$before_rev" ] || [ -z "$after_rev" ]; then
   pricing_changed=1
 elif [ "$before_rev" != "$after_rev" ] && git diff --name-only "$before_rev" "$after_rev" -- \
   src/pricing.js src/china-logistics.js src/engine-spec.js src/ev-quota.js \
+  config/import-policy.mjs config/model-names-by.mjs scripts/lib/che168-parser.mjs \
   scripts/backfill-estimates.mjs | grep -q .; then
   pricing_changed=1
 fi

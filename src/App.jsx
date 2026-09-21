@@ -8017,6 +8017,10 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 <PriceLabel label="Растаможка и сборы" description={price.customsHint || price.customsNote} />
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
+              <div>
+                <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
+                <strong>{money(price.serviceUsd, currency)}</strong>
+              </div>
               {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
             </div>
             <div className="price-assumption">
@@ -8446,6 +8450,10 @@ function OrderDraft({ car, navigate }) {
               <div>
                 <PriceLabel label="Таможня и сборы" description={price.customsHint || price.customsNote} />
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
+              </div>
+              <div>
+                <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
+                <b>{money(price.serviceUsd, currency)}</b>
               </div>
               {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
             </div>

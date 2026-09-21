@@ -119,6 +119,12 @@ test("«New Energy» превращается в PHEV, а электромоби
   assert.deepEqual(canonicalImportName("BYD", "Tang", "Гибрид"), { brand: "BYD", model: "Tang DM-i" });
   assert.deepEqual(canonicalImportName("BYD", "Tang", "ДВС"), { brand: "BYD", model: "Tang" });
   assert.deepEqual(canonicalImportName("BYD", "Seal 06 New Energy", "Электромобиль"), { brand: "BYD", model: "Seal 06 EV" });
+  assert.deepEqual(canonicalImportName("BYD", "Song PLUS PHEV", "Гибрид"), { brand: "BYD", model: "Song PLUS DM-i" });
+  assert.deepEqual(canonicalImportName("BYD", "Song PLUS PHEV", "Электромобиль"), { brand: "BYD", model: "Song PLUS EV" });
+  assert.deepEqual(canonicalImportName("BYD", "Song PLUS DM-i", "Электромобиль"), { brand: "BYD", model: "Song PLUS EV" });
+  assert.deepEqual(canonicalImportName("Geely", "Emgrand New Energy", "Электромобиль"), { brand: "Geely", model: "Emgrand EV" });
+  assert.deepEqual(canonicalImportName("Geely", "Emgrand PHEV", "Электромобиль"), { brand: "Geely", model: "Emgrand EV" });
+  assert.deepEqual(canonicalImportName("Chery", "Tiggo 8 PRO EV", "Гибрид"), { brand: "Chery", model: "Tiggo 8 PRO PHEV" });
 });
 
 test("allows the Belarus import brands including Leapmotor", () => {

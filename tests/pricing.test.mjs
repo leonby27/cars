@@ -8,15 +8,15 @@ test("rounds converted Belarusian-ruble prices to the nearest hundred", () => {
   assert.equal(usdToByn(123451 / PRICING.usdByn), 123500);
 });
 
-test("keeps the service fee at 1000 BYN when exchange rates change", () => {
+test("keeps the service fee at 2000 BYN when exchange rates change", () => {
   const originalRate = PRICING.usdByn;
   try {
-    for (const [rate, expectedUsd] of [[3.026, 330], [3.1, 320], [2.8, 360], [2.5, 400]]) {
+    for (const [rate, expectedUsd] of [[3.026, 660], [3.1, 650], [2.8, 710], [2.5, 800]]) {
       PRICING.usdByn = rate;
       const price = estimateLandedCost({ source:"Che168", usdPrice:10000, year:2024, type:"Электромобиль" }, { quotaOver:false });
-      assert.equal(PRICING.serviceByn, 1000);
+      assert.equal(PRICING.serviceByn, 2000);
       assert.equal(price.serviceUsd, expectedUsd);
-      assert.equal(usdToByn(price.serviceUsd), 1000);
+      assert.equal(usdToByn(price.serviceUsd), 2000);
       const otherCosts = price.chinaUsd + price.buyoutLow + price.chinaLegLow + price.intlLow + price.svhLow + price.customsLow;
       assert.equal(price.totalLow, Math.round((otherCosts + expectedUsd) / 50) * 50);
     }
@@ -110,7 +110,7 @@ test("adds import VAT to an electric car older than five years", () => {
   // в строке карточки оно, как и любая другая сумма, округлено до полусотни.
   assert.equal(fresh.customsUsd, Math.round(PRICING.customsFeesUsd.upTo3Years / 50) * 50);
   // Сборы у машины старше трёх лет выше: утилизационный сбор вдвое больше.
-  assert.equal(old.customsFeesUsd, PRICING.customsFeesUsd.over3Years);
+  assert.ok(Math.abs(old.customsFeesUsd - PRICING.customsFeesUsd.over3Years) < 1e-9);
   assert.equal(old.customsUsd, Math.round((old.customsValueUsd * 0.2 + old.customsFeesUsd) / 50) * 50);
   assert.equal(old.customsAlertTone, "warn");
   assert.match(old.customsNote, /старше 5 лет/);

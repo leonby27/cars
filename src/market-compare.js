@@ -9,7 +9,7 @@
 //     (см. scripts/market-belarus.mjs); чужие объявления мы не храним и не показываем,
 //     только «сколько предложений и какая середина цены». В текстах на сайте площадку
 //     по имени не называем: она нам ничего не должна, а лишнее внимание ей ни к чему;
-//   • наша — середина цены под ключ по нашему же каталогу (`modelPriceMedians`
+//   • наша — статистика цены под ключ по нашему же каталогу (`modelPriceStats`
 //     в server/repository.mjs).
 //
 // Три правила, без которых сравнение было бы враньём:
@@ -18,7 +18,7 @@
 //    значит: у нас машины 2021–2023, а на площадке могут стоять только свежие.
 // 2. Сравниваем середины, а не «от». Самая дешёвая машина модели — почти всегда битая
 //    или с огромным пробегом; сравнение «от» и «от» всегда выходило бы в нашу пользу.
-// 3. Набор меньше трёх предложений не берём вовсе: по двум объявлениям середины нет.
+// 3. Набор меньше пяти предложений не берём вовсе: малая выборка слишком случайна.
 //
 // Год выбираем тот, где на белорусском рынке больше всего предложений: это и самый
 // представительный срез, и самый полезный человеку.
@@ -26,11 +26,27 @@
 /** Название модели без регистра, пробелов и знаков: «Song PLUS DM-i» → «songplusdmi». */
 export const normalizeModel = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9а-яё]/gi, "");
 
+/** Тип двигателя из поля белорусского объявления. */
+export const marketPowertrain = (value) => {
+  const text = String(value || "").toLowerCase();
+  if (text.includes("электро")) return "Электромобиль";
+  if (text.includes("гибрид")) return "Гибрид";
+  if (text.includes("бензин") || text.includes("дизель")) return "ДВС";
+  return null;
+};
+
 // Хвосты, которыми площадки помечают версию силовой установки. У нас и у них они
 // пишутся по-разному («Song PLUS DM-i» против «Song Plus DM»), но означают одно и то
 // же, поэтому при сравнении отбрасываем — иначе одна и та же машина не нашлась бы.
-const POWERTRAIN_SUFFIX = /(dmi|dmp|dm|phev|hev|ev|bev|i)$/;
+const POWERTRAIN_SUFFIX = /(dmi|dmp|dm|phev|hev|ev|bev)$/;
 const baseModel = (name) => normalizeModel(name).replace(POWERTRAIN_SUFFIX, "");
+
+const modelPowertrain = (name) => {
+  const model = normalizeModel(name);
+  if (/(dmi|dmp|dm|phev|hev)$/.test(model)) return "Гибрид";
+  if (/(ev|bev)$/.test(model)) return "Электромобиль";
+  return null;
+};
 
 // Марки, у которых буква «L» в конце названия означает удлинённый кузов для Китая:
 // Audi A6L, BMW 3 Li, Mercedes E L. В Беларуси такие машины продаются под обычным
@@ -119,18 +135,23 @@ export function compareRows({ ours = [], market = null, limit = 40 } = {}) {
 const mileageKey = (value) => value == null ? "all" : String(value);
 
 /** Индекс нового свода: модель + год + предел пробега → пять показателей цены. */
-function detailedMarketIndex(brands) {
+function detailedMarketIndex(market) {
   const index = new Map();
-  for (const [brand, models] of Object.entries(brands || {})) {
+  const version = Number(market?.version) || 1;
+  for (const [brand, models] of Object.entries(market?.brands || {})) {
     for (const [model, years] of Object.entries(models || {})) {
-      for (const [year, limits] of Object.entries(years || {})) {
-        for (const [limit, stats] of Object.entries(limits || {})) {
+      for (const [year, yearData] of Object.entries(years || {})) {
+        const powertrains = version >= 2
+          ? Object.entries(yearData || {})
+          : [[modelPowertrain(model), yearData]];
+        for (const [powertrain, limits] of powertrains) for (const [limit, stats] of Object.entries(limits || {})) {
           const put = (modelKey) => {
-            const full = `${brand}|${modelKey}|${year}|${limit}`;
+            const full = `${brand}|${modelKey}|${powertrain || ""}|${year}|${limit}`;
             const known = index.get(full);
-            if (!known || Number(known.count) < Number(stats.count)) index.set(full, { ...stats, brand, model, year:Number(year) });
+            if (!known || Number(known.count) < Number(stats.count)) index.set(full, { ...stats, brand, model, powertrain, year:Number(year) });
           };
           put(normalizeModel(model));
+          put(baseModel(model));
         }
       }
     }
@@ -144,14 +165,19 @@ function detailedMarketIndex(brands) {
  * ответ, а модель из нашего каталога не должна исчезать из поиска.
  */
 export function compareDetailedRows({ ours = [], market = null, limit = 10_000 } = {}) {
-  const index = detailedMarketIndex(market?.brands);
+  const index = detailedMarketIndex(market);
   const rows = [];
   for (const row of ours) {
     if (!row?.brand || !row?.model || !row?.year || !row?.count) continue;
     const limitKey = mileageKey(row.mileageMax);
     const long = isLongVersion(row.brand, row.model);
-    const theirs = index.get(`${row.brand}|${normalizeModel(row.model)}|${row.year}|${limitKey}`)
-      || (long ? index.get(`${row.brand}|${shortModel(row.model)}|${row.year}|${limitKey}`) : null);
+    const match = (model, powertrain = row.type) => index.get(`${row.brand}|${model}|${powertrain || ""}|${row.year}|${limitKey}`);
+    const theirs = match(normalizeModel(row.model))
+      || match(baseModel(row.model))
+      || (long ? match(shortModel(row.model)) : null)
+      // Старые локальные своды не хранили тип двигателя. Оставляем их читаемыми,
+      // но новый свод всегда сравнивает только одинаковые силовые установки.
+      || (Number(market?.version) < 2 ? match(normalizeModel(row.model), modelPowertrain(row.model)) || match(baseModel(row.model), modelPowertrain(row.model)) : null);
     const priceStats = (stats) => stats ? {
       count:Number(stats.count),
       min:Number(stats.min),
@@ -242,7 +268,7 @@ export function compareTable(rows, { collectedAt = null, hidden = 0 } = {}) {
       `${money(row.ourMedian)} · ${cars(row.ourCount)}`,
       row.diff > 0 ? `дешевле на ${money(row.diff)} (${row.diffPercent}%)` : `дороже на ${money(-row.diff)} (${-row.diffPercent}%)`,
     ]),
-    note: `Цены белорусского рынка — середина по открытым объявлениям белорусских площадок${date ? ` на ${date}` : ""}; наша цена — середина итоговой суммы до Минска по машинам того же года в нашем каталоге. Сравниваются только наборы, где с обеих сторон не меньше трёх предложений. Пометка «длиннобазная версия» означает, что в Китае машина длиннее европейской, хотя в Беларуси её продают под тем же именем. Наша сумма — ориентир до договора, а не окончательная цена.${hidden ? ` В этой таблице показаны первые ${new Intl.NumberFormat("ru-RU").format(rows.length)} строк, ещё ${new Intl.NumberFormat("ru-RU").format(hidden)} доступны на самой странице через поиск и фильтр по маркам.` : ""}`,
+    note: `Цены белорусского рынка — середина по открытым объявлениям белорусских площадок${date ? ` на ${date}` : ""}; наша цена — середина итоговой суммы до Минска по машинам того же года в нашем каталоге. Сравниваются только наборы, где с обеих сторон не меньше пяти предложений. Пометка «длиннобазная версия» означает, что в Китае машина длиннее европейской, хотя в Беларуси её продают под тем же именем. Наша сумма — ориентир до договора, а не окончательная цена.${hidden ? ` В этой таблице показаны первые ${new Intl.NumberFormat("ru-RU").format(rows.length)} строк, ещё ${new Intl.NumberFormat("ru-RU").format(hidden)} доступны на самой странице через поиск и фильтр по маркам.` : ""}`,
   };
 }
 
@@ -263,7 +289,15 @@ export function brandCoverage({ ourBrands = [], rows = [], market = null } = {})
   const offers = new Map();
   for (const [brand, buckets] of Object.entries(market?.brands || {})) {
     let total = 0;
-    for (const [key, stats] of Object.entries(buckets)) if (key.endsWith("|")) total += stats.count || 0;
+    if (Number(market?.version) >= 2) {
+      for (const years of Object.values(buckets || {})) {
+        for (const powertrains of Object.values(years || {})) {
+          for (const limits of Object.values(powertrains || {})) total += Number(limits?.all?.count) || 0;
+        }
+      }
+    } else {
+      for (const [key, stats] of Object.entries(buckets)) if (key.endsWith("|")) total += stats.count || 0;
+    }
     offers.set(brand, total);
   }
   return [...ourBrands]
@@ -277,7 +311,7 @@ export function coverageNote(item) {
   if (item.matched) return null;
   if (!item.offers) return "в белорусских объявлениях таких машин не нашлось";
   if (item.offers < 10) return `в Беларуси всего ${item.offers} ${item.offers === 1 ? "предложение" : item.offers < 5 ? "предложения" : "предложений"} — сравнивать не с чем`;
-  return "предложения есть, но ни по одной модели и году не набралось трёх машин с обеих сторон";
+  return "предложения есть, но ни по одной модели и году не набралось пяти машин с обеих сторон";
 }
 
 /**

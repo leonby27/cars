@@ -193,6 +193,33 @@ test("в списке марок остаются и те, по которым �
   assert.equal(names[0], "NIO");
 });
 
+test("в типизированном своде предложения марки считаются один раз", () => {
+  const coverage = brandCoverage({
+    ourBrands:[["BYD", 12]],
+    rows:[],
+    market:{
+      version:2,
+      brands:{
+        BYD:{
+          "Song Plus EV":{
+            2024:{
+              "Электромобиль":{
+                all:{ count:7, median:30_000, min:25_000, max:35_000 },
+                100000:{ count:5, median:31_000, min:27_000, max:35_000 },
+              },
+            },
+          },
+          "Song Plus DM":{
+            2024:{ "Гибрид":{ all:{ count:4, median:28_000, min:26_000, max:30_000 } } },
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(coverage, [{ brand:"BYD", cars:12, matched:0, offers:11 }]);
+});
+
 test("причина отсутствия сравнения называется прямо", () => {
   const rows = compareRows({ ours, market });
   const coverage = brandCoverage({ ourBrands: [["NIO", 2252], ["BYD", 800]], rows, market });
@@ -252,9 +279,12 @@ test("в сводной строке цена — середина по года
 
 test("подробное сравнение сохраняет год, пробег и все показатели цены", () => {
   const detailed = {
+    version:2,
     brands:{ BYD:{ Han:{ 2023:{
-      100000:{ count:5, min:25000, mean:30000, median:29500, max:36000 },
-      all:{ count:7, min:22000, mean:29000, median:28500, max:36000 },
+      "Электромобиль":{
+        100000:{ count:5, min:25000, mean:30000, median:29500, max:36000 },
+        all:{ count:7, min:22000, mean:29000, median:28500, max:36000 },
+      },
     } } } },
   };
   const rows = compareDetailedRows({
@@ -277,7 +307,7 @@ test("подробное сравнение сохраняет год, проб�
 });
 
 test("подробная статистика сохраняет нашу версию, но не подмешивает рынок другой силовой установки", () => {
-  const detailed = { brands:{ BYD:{ "Song Plus EV":{ 2024:{ all:{ count:8, min:20000, mean:23000, median:22500, max:27000 } } } } } };
+  const detailed = { version:2, brands:{ BYD:{ "Song Plus EV":{ 2024:{ "Электромобиль":{ all:{ count:8, min:20000, mean:23000, median:22500, max:27000 } } } } } } };
   const rows = compareDetailedRows({
     market:detailed,
     ours:[{ brand:"BYD", model:"Song PLUS DM-i", type:"Гибрид", year:2024, mileageMax:null, count:20, min:21000, mean:24000, median:23500, max:29000 }],
@@ -285,6 +315,27 @@ test("подробная статистика сохраняет нашу вер
   assert.equal(rows.length, 1);
   assert.equal(rows[0].type, "Гибрид");
   assert.equal(rows[0].belarus, null);
+});
+
+test("разные названия версии сопоставляются только внутри одного типа двигателя", () => {
+  const detailed = { version:2, brands:{ BYD:{
+    "Song Plus DM":{ 2024:{ "Гибрид":{ all:{ count:7, min:21000, mean:23000, median:22500, max:25000 } } } },
+    "Song Plus EV":{ 2024:{ "Электромобиль":{ all:{ count:9, min:22000, mean:25000, median:24500, max:29000 } } } },
+  } } };
+  const rows = compareDetailedRows({ market:detailed, ours:[
+    { brand:"BYD", model:"Song PLUS DM-i", type:"Гибрид", year:2024, mileageMax:null, count:20, min:18000, mean:21000, median:20500, max:24000 },
+    { brand:"BYD", model:"Song PLUS EV", type:"Электромобиль", year:2024, mileageMax:null, count:15, min:19000, mean:22000, median:21500, max:26000 },
+  ] });
+  assert.equal(rows[0].belarus.median, 22500);
+  assert.equal(rows[1].belarus.median, 24500);
+});
+
+test("старый свод распознаёт PHEV как гибрид, а не как EV", () => {
+  const detailed = { brands:{ Volvo:{ "XC60 PHEV":{ 2023:{ all:{ count:6, min:40_000, mean:44_000, median:43_500, max:48_000 } } } } } };
+  const rows = compareDetailedRows({ market:detailed, ours:[
+    { brand:"Volvo", model:"XC60 PHEV", type:"Гибрид", year:2023, mileageMax:null, count:8, min:35_000, mean:38_000, median:37_500, max:42_000 },
+  ] });
+  assert.equal(rows[0].belarus.median, 43_500);
 });
 
 test("модель без белорусских объявлений остаётся карточкой с нашей ценой", () => {

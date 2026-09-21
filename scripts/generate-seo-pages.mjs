@@ -16,7 +16,7 @@ import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "../src/china-brands.js";
 // Расчёт реального запаса хода: те же поправки, что в форме у человека.
 import { rangeFields, rangeTable, ratedToWinterTable } from "../src/range-estimate.js";
 // Сравнение с белорусским рынком: правила отбора и подписи — в одном месте с приложением.
-import { brandCoverage, compareRows, compareSummary, compareTable, coverageNote } from "../src/market-compare.js";
+import { brandCoverage, compareDetailedRows, compareSummary, compareTable, coverageNote } from "../src/market-compare.js";
 import { EV_QUOTA, evQuotaState } from "../src/ev-quota.js";
 // Цена подборки «от такой-то суммы» считается тем же расчётом, что показывает
 // карточка машины: иначе в журнале стояла бы одна сумма, а в каталоге другая.
@@ -133,7 +133,7 @@ const cars = (catalog.cars || catalog.items || []).filter((car) => car && car.id
 // блокирует адреса дата-центров), файл лежит в репозитории и приезжает на сервер
 // обычной выкладкой. Нет файла — страница сравнения просто не собирается: пустая
 // таблица «сравнили и ничего не нашли» хуже её отсутствия.
-const marketPath = process.env.SEO_MARKET ? path.resolve(process.env.SEO_MARKET) : path.join(root, "data", "market-belarus.json");
+const marketPath = process.env.SEO_MARKET ? path.resolve(process.env.SEO_MARKET) : path.join(root, "data", "market-belarus-detailed.json");
 const marketBelarus = existsSync(marketPath) ? JSON.parse(readFileSync(marketPath, "utf8")) : null;
 
 // Общей страницы каталога здесь нет: её, как и разделы, отдаёт сервер. Файлами она
@@ -314,12 +314,25 @@ function marketCompare() {
   // Тот же набор строк, что видит человек: приложение берёт сравнение целиком, и
   // урезанная таблица для поисковика давала бы другие итоговые числа на одной и
   // той же странице.
-  const rows = compareRows({ ours: live.prices || [], market: marketBelarus, limit: 1000 });
+  const rows = compareDetailedRows({ ours: live.priceStats || [], market: marketBelarus, limit: 100_000 })
+    .filter((row) => row.mileageMax == null && row.ours?.count >= 5 && row.belarus?.count >= 5)
+    .map((row) => ({
+      ...row,
+      ourMedian:Math.round(row.ours.median),
+      ourCount:row.ours.count,
+      theirMedian:Math.round(row.belarus.median),
+      theirLow:Math.round(row.belarus.min),
+      theirCount:row.belarus.count,
+      diff:Math.round(row.belarus.median - row.ours.median),
+      diffPercent:Math.round(((row.belarus.median - row.ours.median) / row.belarus.median) * 100),
+    }))
+    .sort((left, right) => right.ourCount - left.ourCount)
+    .slice(0, 1000);
   // Сравнение молча пустым быть не должно: если свод собран, а строк нет, значит
   // сборка не достала цены каталога (нет `SEO_CARS_FROM_DB=1` или база недоступна),
   // и страница уйдёт на сайт без главного блока.
   if (marketBelarus && !rows.length) {
-    console.warn(`Сравнение с белорусским рынком не собрано: свод есть (${marketBelarus.offers || 0} предложений), а цен каталога ${live.prices?.length ? "не хватило для совпадений" : "нет — сборка читала не базу"}.`);
+    console.warn(`Сравнение с белорусским рынком не собрано: свод есть (${marketBelarus.listings || 0} объявлений), а цен каталога ${live.priceStats?.length ? "не хватило для совпадений" : "нет — сборка читала не базу"}.`);
   }
   // Марки каталога с числом машин — чтобы назвать и те, по которым сравнивать не с чем.
   const ourBrands = [...new Set(CATALOG_LANDINGS.filter((landing) => landing.brand).map((landing) => landing.brand))]
@@ -1185,7 +1198,7 @@ async function readLiveCatalog() {
     }
     return counts;
   };
-  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], activeCars: 0, catalogRefreshedAt: null, listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map(), prices: [] };
+  const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], activeCars: 0, catalogRefreshedAt: null, listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map(), priceStats: [] };
   if (cars.length) {
     return {
       showcase: cars.slice(0, showcaseSize),
@@ -1196,7 +1209,7 @@ async function readLiveCatalog() {
       stock: new Map(),
       collections: new Map(),
       changed: new Map(),
-      prices: [],
+      priceStats: [],
     };
   }
   if (!carsFromDatabase) {
@@ -1206,7 +1219,7 @@ async function readLiveCatalog() {
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
-    const { getModelFacts, listCars, modelPriceMedians, modelSummary, sectionStats } = await import("../server/repository.mjs");
+    const { getModelFacts, listCars, modelPriceStats, modelSummary, sectionStats } = await import("../server/repository.mjs");
     // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
     // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
     // модель займёт весь блок.
@@ -1337,9 +1350,9 @@ async function readLiveCatalog() {
       listPages,
       stock,
       changed,
-      // Середина цены под ключ по каждому набору «модель + год»: нужна странице
-      // сравнения с белорусским рынком.
-      prices: await modelPriceMedians(),
+      // Полная статистика по модели, году, типу двигателя и пробегу нужна той же
+      // странице сравнения, чтобы её серверная разметка совпадала с приложением.
+      priceStats: await modelPriceStats(),
     };
   } catch (error) {
     console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);

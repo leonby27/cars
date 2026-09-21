@@ -58,6 +58,7 @@ export const MODEL_RENAMES = Object.freeze([
   { brand: "Chery", model: "Tiggo 5x", toModel: "Tiggo 4 Pro", zh: "瑞虎5x", pinyin: "Ruihu 5x" },
   { brand: "Chery", model: "Tiggo 7 PLUS", toModel: "Tiggo 7 Pro Max", zh: "瑞虎7 PLUS", pinyin: "Ruihu 7 PLUS" },
   { brand: "Chery", model: "Tiggo 8 PLUS", toModel: "Tiggo 8 Pro Max", zh: "瑞虎8 PLUS", pinyin: "Ruihu 8 PLUS" },
+  { brand: "Chery", model: "Tiggo 8 PRO EV", toModel: "Tiggo 8 PRO EV", byPowertrain: { "Гибрид": "Tiggo 8 PRO PHEV" } },
   { brand: "Changan", model: "Ruicheng CC", toModel: "Raeton CC", zh: "锐程CC", pinyin: "Ruicheng CC" },
   { brand: "Jetour", model: "Dasheng", toModel: "Dashing", zh: "大圣", pinyin: "Dasheng" },
   { brand: "Jetour", model: "Traveler", toModel: "T2", zh: "旅行者", pinyin: "Lüxingzhe" },
@@ -153,7 +154,11 @@ export const MODEL_RENAMES = Object.freeze([
   // «New Energy» превращается в DM-i, а не в PHEV.
   { brand: "BYD", model: "Song Pro New Energy", toModel: "Song Pro DM-i", zh: "宋Pro新能源", pinyin: "Song Pro Xinnengyuan" },
   { brand: "BYD", model: "Song MAX New Energy", toModel: "Song MAX DM-i", zh: "宋MAX新能源", pinyin: "Song MAX Xinnengyuan" },
-  { brand: "BYD", model: "Song PLUS PHEV", toModel: "Song PLUS DM-i", zh: "宋PLUS新能源", pinyin: "Song PLUS Xinnengyuan" },
+  { brand: "BYD", model: "Song PLUS PHEV", toModel: "Song PLUS DM-i", byPowertrain: { "Электромобиль": "Song PLUS EV" }, zh: "宋PLUS新能源", pinyin: "Song PLUS Xinnengyuan" },
+  // У источника электрический Song PLUS ошибочно лежит в серии с подписью PHEV.
+  // Точная комплектация и тип топлива при этом честно говорят Pure Electric / EV.
+  // Повторное правило чинит и новые записи, и чтение уже сохранённых карточек.
+  { brand: "BYD", model: "Song PLUS DM-i", toModel: "Song PLUS DM-i", byPowertrain: { "Электромобиль": "Song PLUS EV" } },
   { brand: "BYD", model: "Qin New Energy", toModel: "Qin EV", zh: "秦新能源", pinyin: "Qin Xinnengyuan", note: "под этим именем едут только электромобили" },
   // Здесь под одним китайским именем едут и гибриды, и электромобили: ни PHEV, ни EV
   // одно на всех не подходит, а убрать приставку нельзя — рядом стоит бензиновый Tang.
@@ -171,7 +176,7 @@ export const MODEL_RENAMES = Object.freeze([
   // Написания источника, которых сейчас в живом каталоге нет, но они уже приходили
   // раньше. Держим здесь, чтобы вернувшаяся машина не завелась под китайским именем.
   { brand: "BYD", model: "Song New Energy", toModel: "Song EV", zh: "宋新能源", pinyin: "Song Xinnengyuan" },
-  { brand: "BYD", model: "Song PLUS New Energy", toModel: "Song PLUS EV", zh: "宋PLUS新能源", pinyin: "Song PLUS Xinnengyuan" },
+  { brand: "BYD", model: "Song PLUS New Energy", toModel: "Song PLUS DM-i", byPowertrain: { "Электромобиль": "Song PLUS EV" }, zh: "宋PLUS新能源", pinyin: "Song PLUS Xinnengyuan" },
   { brand: "Changan", model: "Eado New Energy", toModel: "Eado EV", zh: "逸动新能源", pinyin: "Yidong Xinnengyuan" },
   { brand: "Volvo", model: "XC40 New Energy", toModel: "XC40 EV", zh: "XC40新能源", pinyin: "XC40 Xinnengyuan" },
 
@@ -210,7 +215,8 @@ export const MODEL_RENAMES = Object.freeze([
   // ---- Geely: китайские имена уже переведены у бензиновых версий, гибридные идут следом
   { brand: "Geely", model: "Bin Yue New Energy", toModel: "Coolray PHEV", zh: "缤越新能源", pinyin: "Binyue Xinnengyuan" },
   { brand: "Geely", model: "Borui PHEV", toModel: "Emgrand GT PHEV", zh: "博瑞新能源", pinyin: "Borui Xinnengyuan" },
-  { brand: "Geely", model: "Emgrand New Energy", toModel: "Emgrand PHEV", zh: "帝豪新能源" },
+  { brand: "Geely", model: "Emgrand New Energy", toModel: "Emgrand PHEV", byPowertrain: { "Электромобиль": "Emgrand EV" }, zh: "帝豪新能源" },
+  { brand: "Geely", model: "Emgrand PHEV", toModel: "Emgrand PHEV", byPowertrain: { "Электромобиль": "Emgrand EV" } },
   { brand: "Geely", model: "Emgrand L HiP", toModel: "Emgrand L PHEV", zh: "帝豪L雷神Hi·P" },
   { brand: "Geely", model: "Emgrand GSe", toModel: "Emgrand GS EV", zh: "帝豪GSe" },
   { brand: "Geely", model: "Jiaji New Energy", toModel: "Jiaji PHEV", zh: "嘉际新能源", pinyin: "Jiaji Xinnengyuan" },
