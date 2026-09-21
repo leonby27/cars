@@ -15478,33 +15478,16 @@ html[data-theme="dark"] .tool-calc-share.copied:hover {
   margin: 0;
   font-family: "Manrope", system-ui, sans-serif;
 }
-.market-compare-skeleton {
+.market-card-list-skeleton {
   pointer-events: none;
 }
-.market-compare-skeleton .skeleton-line {
+.market-card-list-skeleton .skeleton-line {
   background: linear-gradient(90deg, var(--panel-soft) 30%, var(--header-control-bg) 50%, var(--panel-soft) 70%);
   background-size: 300% 100%;
 }
-.market-skeleton-search,
-.market-skeleton-sort {
-  width: 100%;
-  height: 44px;
-  border-radius: calc(12px * var(--corner-scale));
+.market-card-list-skeleton-items {
+  display: contents;
 }
-.market-skeleton-filter-row {
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-.market-skeleton-chip {
-  flex: 0 0 112px;
-  height: 34px;
-  border-radius: 999px;
-}
-.market-skeleton-chip-brand { flex-basis: 98px; }
-.market-skeleton-chip-type { flex-basis: 104px; }
-.market-skeleton-chip-mileage { flex-basis: 146px; }
-.market-skeleton-chip-price { flex-basis: 116px; }
-.market-skeleton-chip-basis { flex-basis: 164px; }
 .market-card-skeleton {
   min-height: 154px;
 }
@@ -16516,12 +16499,6 @@ html[data-theme="dark"] .market-card-difference.cheaper {
   }
   .market-card-skeleton {
     min-height: 0;
-  }
-  .market-skeleton-filter-row {
-    padding-bottom: 4px;
-  }
-  .market-skeleton-chip {
-    height: 38px;
   }
   .market-skeleton-data {
     min-height: 112px;

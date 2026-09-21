@@ -7,15 +7,17 @@ const [app, styles] = await Promise.all([
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
 ]);
 
-test("до загрузки сравнения показывается доступный скелетон", () => {
-  assert.match(app, /if \(!data\)[\s\S]*?<MarketCompareSkeleton \/>/);
-  assert.match(app, /className="market-compare market-compare-skeleton"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-busy="true"/);
+test("фильтры показываются сразу, а скелетон занимает только место карточек", () => {
+  assert.match(app, /<MarketCompareCards cards=\{cards\} navigate=\{navigate\} loading=\{!data\} \/>/);
+  assert.match(app, /\{loading && <MarketCompareSkeleton \/>\}/);
+  assert.match(app, /className="market-card-list market-card-list-skeleton"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-busy="true"/);
   assert.match(app, /Загружаем сравнение цен/);
   assert.match(app, /MARKET_SKELETON_CARDS\.map/);
+  assert.doesNotMatch(app, /market-skeleton-search/);
+  assert.doesNotMatch(app, /MARKET_SKELETON_CHIPS/);
 });
 
-test("скелетон повторяет геометрию фильтров и карточек", () => {
-  assert.match(styles, /\.market-skeleton-search,[\s\S]*?height:\s*44px/);
+test("скелетон повторяет геометрию карточек", () => {
   assert.match(styles, /\.market-card-skeleton[\s\S]*?min-height:\s*154px/);
   assert.match(styles, /\.market-skeleton-photo[\s\S]*?height:\s*124px/);
   assert.match(styles, /@media \(max-width: 700px\)[\s\S]*?\.market-card-skeleton/);

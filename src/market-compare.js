@@ -26,6 +26,17 @@
 /** Название модели без регистра, пробелов и знаков: «Song PLUS DM-i» → «songplusdmi». */
 export const normalizeModel = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9а-яё]/gi, "");
 
+/** Ссылка из карточки сравнения в каталог с тем же точным годом. */
+export function comparisonCatalogHref(card, year = null) {
+  const params = new URLSearchParams({ brand:String(card?.brand || ""), model:String(card?.model || "") });
+  const exactYear = Number(year);
+  if (Number.isInteger(exactYear) && exactYear >= 1900 && exactYear <= 2099) {
+    params.set("yearFrom", String(exactYear));
+    params.set("yearTo", String(exactYear));
+  }
+  return `/catalog?${params}`;
+}
+
 /** Тип двигателя из поля белорусского объявления. */
 export const marketPowertrain = (value) => {
   const text = String(value || "").toLowerCase();

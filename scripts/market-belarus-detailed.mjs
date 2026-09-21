@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
+import { canonicalImportName } from "../config/import-policy.mjs";
 import { marketPowertrain } from "../src/market-compare.js";
 import { isDamagedMarketListing, withoutLowPriceOutliers } from "../src/market-price-cleanup.js";
 
@@ -11,6 +12,7 @@ const manifestPath = path.join(path.dirname(source), "manifest.json");
 const target = path.join(root, "data", "market-belarus-detailed.json");
 const mileageLimits = [20_000, 50_000, 100_000, 150_000, 200_000, null];
 const buckets = new Map();
+const nameMerges = new Map();
 let listings = 0;
 
 const keyFor = (brand, model, year, powertrain, mileageMax) => JSON.stringify([brand, model, year, powertrain, mileageMax]);
@@ -24,10 +26,15 @@ for await (const line of stream) {
   const year = Number(row.year);
   const powertrain = marketPowertrain(row.properties?.engine_type);
   if (!row.eligible || row.isNew || row.onOrder || isDamagedMarketListing(row) || !row.brand || !row.model || !powertrain || !Number.isFinite(price) || price <= 0 || !Number.isFinite(mileage) || mileage < 0 || !Number.isInteger(year)) continue;
+  const canonical = canonicalImportName(row.brand, row.model, powertrain);
+  if (canonical.brand !== row.brand || canonical.model !== row.model) {
+    const mergeKey = JSON.stringify([row.brand, row.model, canonical.brand, canonical.model, powertrain]);
+    nameMerges.set(mergeKey, (nameMerges.get(mergeKey) || 0) + 1);
+  }
   listings += 1;
   for (const mileageMax of mileageLimits) {
     if (mileageMax !== null && mileage > mileageMax) continue;
-    const key = keyFor(row.brand, row.model, year, powertrain, mileageMax);
+    const key = keyFor(canonical.brand, canonical.model, year, powertrain, mileageMax);
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(price);
   }
@@ -57,11 +64,15 @@ for (const [key, values] of buckets) {
 
 const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) : {};
 const output = {
-  version: 2,
+  version: 3,
   collectedAt: manifest.lastObservationAt || manifest.exportedAt || new Date().toISOString(),
-  scope: "Used roadworthy passenger-car listings without New or On order badges; isolated low-price outliers removed",
+  scope: "Used roadworthy passenger-car listings without New or On order badges; regional and Chinese brand/model aliases merged before isolated low-price outliers are removed",
   mileageLimits,
   listings,
+  modelNameMerges: [...nameMerges].map(([key, count]) => {
+    const [sourceBrand, sourceModel, brand, model, powertrain] = JSON.parse(key);
+    return { sourceBrand, sourceModel, brand, model, powertrain, count };
+  }).sort((a, b) => b.count - a.count || a.brand.localeCompare(b.brand) || a.model.localeCompare(b.model)),
   brands,
 };
 fs.writeFileSync(target, `${JSON.stringify(output)}\n`);

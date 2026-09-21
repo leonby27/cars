@@ -27,6 +27,7 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { canonicalImportName } from "../config/import-policy.mjs";
 import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,15 +138,20 @@ async function collectBrand(brandName, brandId) {
 }
 
 /** Свод по наборам «модель + год» и по модели целиком. */
-function summarize(rows) {
+function summarize(rows, brand) {
   const byBucket = new Map();
   const push = (key, row) => {
     if (!byBucket.has(key)) byBucket.set(key, []);
     byBucket.get(key).push(row);
   };
   for (const row of rows) {
-    push(`${row.model}|${row.year}`, row);
-    push(`${row.model}|`, row);
+    const canonical = canonicalImportName(brand, row.model);
+    // Этот старый сборщик хранит свод внутри заранее выбранной марки. Склеиваем
+    // здесь только имена моделей этой же марки, чтобы межбрендовое переименование
+    // (например Chery → Jaecoo) не оказалось под неверным ключом.
+    const normalized = { ...row, model:canonical.brand === brand ? canonical.model : row.model };
+    push(`${normalized.model}|${normalized.year}`, normalized);
+    push(`${normalized.model}|`, normalized);
   }
   const out = {};
   for (const [key, list] of byBucket) {
@@ -188,7 +194,7 @@ const market = {};
 let total = 0;
 for (const [brand, id] of resolved) {
   const rows = await collectBrand(brand, id);
-  const summary = summarize(rows);
+  const summary = summarize(rows, brand);
   if (Object.keys(summary).length) market[brand] = summary;
   total += rows.length;
   process.stderr.write(`${brand}: ${rows.length} предложений, ${Object.keys(summary).length} наборов\n`);

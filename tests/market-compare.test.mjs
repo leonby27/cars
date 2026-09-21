@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateComparisonPrices, bestComparisonYear, brandCoverage, collapseSameModelCards, compareDetailedRows, compareRows, compareSummary, compareTable, comparisonOwnPrices, comparisonYearDifference, coverageNote, groupCompareRows, groupDetailedRows, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint, normalizeModel } from "../src/market-compare.js";
+import { aggregateComparisonPrices, bestComparisonYear, brandCoverage, collapseSameModelCards, compareDetailedRows, compareRows, compareSummary, compareTable, comparisonCatalogHref, comparisonOwnPrices, comparisonYearDifference, coverageNote, groupCompareRows, groupDetailedRows, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint, normalizeModel } from "../src/market-compare.js";
 
 // Сравнение цен — это публичное утверждение «у нас дешевле на столько-то». Ошибка
 // в нём дороже любой другой, поэтому проверяем не вид таблицы, а правила отбора:
@@ -29,6 +29,20 @@ const ours = [
   { brand: "Geely", model: "Preface", year: 2021, count: 90, median: 15000 },
   { brand: "NIO", model: "ET5", year: 2022, count: 70, median: 26000 },
 ];
+
+test("ссылка из сравнения передаёт в каталог выбранный год", () => {
+  const exact = new URL(comparisonCatalogHref({ brand:"BMW", model:"i5" }, 2024), "https://abcars.by");
+  assert.equal(exact.pathname, "/catalog");
+  assert.deepEqual(Object.fromEntries(exact.searchParams), {
+    brand:"BMW", model:"i5", yearFrom:"2024", yearTo:"2024",
+  });
+
+  const allYears = new URL(comparisonCatalogHref({ brand:"BMW", model:"i5" }), "https://abcars.by");
+  assert.equal(allYears.searchParams.get("brand"), "BMW");
+  assert.equal(allYears.searchParams.get("model"), "i5");
+  assert.equal(allYears.searchParams.has("yearFrom"), false);
+  assert.equal(allYears.searchParams.has("yearTo"), false);
+});
 
 test("подсказка о восстановлении зависит от модели и года, а не только от марки", () => {
   assert.equal(hasRebuiltHint({ brand:"BMW", model:"X3", year:2022, diff:-5 }), true);

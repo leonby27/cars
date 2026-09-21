@@ -199,6 +199,11 @@ const BRAND_ALIASES = new Map([
   ["voyah auto", "Voyah"],
   ["xiaomi auto", "Xiaomi"],
   ["xiaomi", "Xiaomi"],
+  // В справочнике av.by Deepal всё ещё подписан старым именем Shenlan.
+  // Это одна марка, поэтому рыночная статистика и каталог должны сходиться
+  // под экспортным названием Deepal.
+  ["shenlan (deepal)", "Deepal"],
+  ["shenlan", "Deepal"],
   ["nio", "NIO"],
   ["lynk co", "Lynk & Co"],
   ["lynk & co", "Lynk & Co"],
@@ -257,6 +262,8 @@ const MODEL_PREFIX_STRIPS = new Map([
 const IMPORT_SUFFIX = /\s*\((?:import|imported)\)\s*$/i;
 
 const MODEL_ALIASES = new Map([
+  // av.by показывает старое и новое имя Deepal одновременно. В каталоге это S07.
+  ["deepal|s07 (s7)", "S07"],
   // BMW splits its M performance trims into separate series; the catalog files
   // them under the base model. XM and i8 have no base model and stay as is.
   ["bmw|m5 new energy", "5 Series New Energy"],

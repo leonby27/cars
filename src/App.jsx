@@ -49,7 +49,7 @@ import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EX
 import { InspectionReport } from "./inspection-report.jsx";
 import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
-import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, collapseSameModelCards, comparisonOwnPrices, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint } from "./market-compare.js";
+import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, collapseSameModelCards, comparisonCatalogHref, comparisonOwnPrices, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint } from "./market-compare.js";
 import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
 import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
@@ -10168,39 +10168,24 @@ function MarketCompare({ navigate }) {
     };
   }, []);
   if (failed) return null;
-  if (!data) {
-    return (
-      <section className="cost-calculator">
-        <MarketCompareSkeleton />
-      </section>
-    );
-  }
-  const cards = data.cards || [];
-  if (!cards.length) return null;
+  const cards = data?.cards || [];
+  if (data && !cards.length) return null;
   return (
     <section className="cost-calculator">
-      <MarketCompareCards cards={cards} navigate={navigate} />
+      <MarketCompareCards cards={cards} navigate={navigate} loading={!data} />
     </section>
   );
 }
 
 const MARKET_SKELETON_CARDS = ["a", "b", "c"];
-const MARKET_SKELETON_CHIPS = ["brand", "type", "mileage", "price", "basis"];
 
-/* До ответа API сохраняем геометрию настоящих фильтров и карточек. Так FAQ не
-   подпрыгивает вверх, а человек сразу понимает, что сравнение ещё загружается. */
+/* Фильтры известны до ответа API и рисуются сразу. Скелетон нужен только на месте
+   карточек: он сохраняет высоту списка и не выдаёт готовые контролы за загрузку. */
 function MarketCompareSkeleton() {
   return (
-    <div className="market-compare market-compare-skeleton" role="status" aria-live="polite" aria-busy="true">
+    <div className="market-card-list market-card-list-skeleton" role="status" aria-live="polite" aria-busy="true">
       <span className="visually-hidden">Загружаем сравнение цен</span>
-      <div className="market-compare-controls" aria-hidden="true">
-        <div className="skeleton-line market-skeleton-search" />
-        <div className="skeleton-line market-skeleton-sort" />
-      </div>
-      <div className="market-compare-filter-row market-skeleton-filter-row" aria-hidden="true">
-        {MARKET_SKELETON_CHIPS.map((key) => <div key={key} className={`skeleton-line market-skeleton-chip market-skeleton-chip-${key}`} />)}
-      </div>
-      <div className="market-card-list" aria-hidden="true">
+      <div aria-hidden="true" className="market-card-list-skeleton-items">
         {MARKET_SKELETON_CARDS.map((key) => (
           <article key={key} className="market-card market-card-skeleton skeleton-card">
             <div className="market-card-photo skeleton-line market-skeleton-photo" />
@@ -10361,7 +10346,7 @@ function MarketModelCard({ card, navigate, mileageOption, priceOption, quotaPric
       </div>
       <div className="market-card-identity">
         <span className="market-card-brand">{card.brand}</span>
-        <AppLink href={`/catalog?brand=${encodeURIComponent(card.brand)}&model=${encodeURIComponent(card.model)}`} navigate={navigate}>
+        <AppLink href={comparisonCatalogHref(card, selectedYear?.year)} navigate={navigate}>
           {card.model}
         </AppLink>
         {card.longVersion && <span className="market-card-version">Длиннобазная версия</span>}
@@ -10387,7 +10372,7 @@ function MarketModelCard({ card, navigate, mileageOption, priceOption, quotaPric
   );
 }
 
-function MarketCompareCards({ cards, navigate }) {
+function MarketCompareCards({ cards, navigate, loading = false }) {
   const quotaPricingOn = useQuotaPricing()?.on !== false;
   const narrow = useNarrowViewport();
   const [query, setQuery] = useState("");
@@ -10546,7 +10531,8 @@ function MarketCompareCards({ cards, navigate }) {
         </FilterSheet>,
         document.body,
       )}
-      {visible.length === 0 && (
+      {loading && <MarketCompareSkeleton />}
+      {!loading && visible.length === 0 && (
         <div className="empty-state market-compare-empty-state">
           <MagnifyingGlass size={26} />
           <h3>Ничего не найдено</h3>
@@ -10561,8 +10547,8 @@ function MarketCompareCards({ cards, navigate }) {
           </p>
         </div>
       )}
-      {visible.length > 0 && <div className="market-card-list">{page.map((card) => <MarketModelCard key={card.key} card={card} navigate={navigate} mileageOption={mileageOption} priceOption={priceOption} quotaPricingOn={quotaPricingOn} />)}</div>}
-      {visible.length > shown && (
+      {!loading && visible.length > 0 && <div className="market-card-list">{page.map((card) => <MarketModelCard key={card.key} card={card} navigate={navigate} mileageOption={mileageOption} priceOption={priceOption} quotaPricingOn={quotaPricingOn} />)}</div>}
+      {!loading && visible.length > shown && (
         <button type="button" className="market-compare-more" onClick={() => setShown((current) => current + MARKET_PAGE_SIZE)}>
           Показать ещё {Math.min(MARKET_PAGE_SIZE, visible.length - shown)}
         </button>

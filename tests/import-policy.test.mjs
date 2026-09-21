@@ -18,6 +18,8 @@ import { normalizeChe168Energy } from "../scripts/lib/che168-parser.mjs";
 test("normalizes source brand variants used by the import policy", () => {
   assert.equal(canonicalImportBrand("Hima"), "AITO");
   assert.equal(canonicalImportBrand("Xiaomi Auto"), "Xiaomi");
+  assert.equal(canonicalImportBrand("Shenlan (Deepal)"), "Deepal");
+  assert.equal(canonicalImportBrand("Shenlan"), "Deepal");
   assert.equal(canonicalImportBrand("Nio"), "NIO");
   assert.equal(canonicalImportBrand("Lync Co"), "Lynk & Co");
   assert.equal(canonicalImportBrand("ZEEKR"), "Zeekr");
@@ -125,6 +127,13 @@ test("«New Energy» превращается в PHEV, а электромоби
   assert.deepEqual(canonicalImportName("Geely", "Emgrand New Energy", "Электромобиль"), { brand: "Geely", model: "Emgrand EV" });
   assert.deepEqual(canonicalImportName("Geely", "Emgrand PHEV", "Электромобиль"), { brand: "Geely", model: "Emgrand EV" });
   assert.deepEqual(canonicalImportName("Chery", "Tiggo 8 PRO EV", "Гибрид"), { brand: "Chery", model: "Tiggo 8 PRO PHEV" });
+});
+
+test("двойное региональное имя Deepal S07 не создаёт отдельную модель", () => {
+  assert.deepEqual(canonicalImportName("Shenlan (Deepal)", "S07 (S7)", "Гибрид"), {
+    brand:"Deepal",
+    model:"S07",
+  });
 });
 
 test("allows the Belarus import brands including Leapmotor", () => {
