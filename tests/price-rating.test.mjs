@@ -42,9 +42,10 @@ const car = (fields = {}) => ({
 });
 
 // Запись набора в том виде, в каком её держит память сервера.
-const peer = (id, price, { year = 2020, mileage = 60_000, trim = "530li leading m sport package", battery = 0 } = {}) => ({
+const peer = (id, price, { year = 2020, mileage = 60_000, trim = "530li leading m sport package", battery = 0, type = "ДВС" } = {}) => ({
   id,
   year,
+  type,
   trim,
   battery,
   mileage,
@@ -127,9 +128,9 @@ test("батарея сужает набор у электромобиля и н
   const electric = car({ type:"Электромобиль", engine:null, battery:100, description:"2020 Long Range" });
   const rows = [
     // Такая же батарея — в набор идут.
-    ...[1, 2, 3, 4, 5].map((n) => peer(`same${n}`, 40_000 + n * 500, { battery:100, trim:"long range" })),
+    ...[1, 2, 3, 4, 5].map((n) => peer(`same${n}`, 40_000 + n * 500, { battery:100, trim:"long range", type:"Электромобиль" })),
     // Пакет вдвое меньше — не идут, хотя комплектация записана так же.
-    ...[1, 2, 3].map((n) => peer(`small${n}`, 30_000 + n * 100, { battery:60, trim:"long range" })),
+    ...[1, 2, 3].map((n) => peer(`small${n}`, 30_000 + n * 100, { battery:60, trim:"long range", type:"Электромобиль" })),
   ];
   const chosen = chooseComparables(electric, rows);
   assert.equal(chosen.sameBattery, true);
@@ -145,12 +146,55 @@ test("батарей мало — условие снимается, и это �
   const electric = car({ type:"Электромобиль", engine:null, battery:100, description:"2020 Long Range" });
   // Такой же батареи в наличии всего три — набор собирается без этого условия.
   const rows = [
-    ...[1, 2, 3].map((n) => peer(`same${n}`, 40_000 + n * 500, { battery:100, trim:"long range" })),
-    ...[1, 2, 3, 4].map((n) => peer(`small${n}`, 30_000 + n * 100, { battery:60, trim:"long range", mileage:61_000 })),
+    ...[1, 2, 3].map((n) => peer(`same${n}`, 40_000 + n * 500, { battery:100, trim:"long range", type:"Электромобиль" })),
+    ...[1, 2, 3, 4].map((n) => peer(`small${n}`, 30_000 + n * 100, { battery:60, trim:"long range", mileage:61_000, type:"Электромобиль" })),
   ];
   const chosen = chooseComparables(electric, rows);
   assert.equal(chosen.sameBattery, false);
   assert.equal(chosen.items.length, 7);
+});
+
+test("гибриды не сравниваются с электрическими версиями той же модели", () => {
+  const hybrid = car({
+    id:"che168-59064131",
+    brand:"Mazda",
+    model:"EZ-6",
+    year:2024,
+    type:"Гибрид",
+    battery:28.4,
+    mileage:18_000,
+    description:"2024 Extended Range 200",
+  });
+  const rows = [
+    ...[1, 2, 3, 4, 5].map((n) => peer(`hybrid-${n}`, 24_000 + n * 200, {
+      year:2024,
+      type:"Гибрид",
+      battery:28.4,
+      mileage:20_000,
+      trim:"extended range 200",
+    })),
+    ...[1, 2, 3, 4, 5, 6, 7].map((n) => peer(`electric-${n}`, 30_000 + n * 500, {
+      year:2024,
+      type:"Электромобиль",
+      battery:68.8,
+      mileage:25_000,
+      trim:"pure electric 600",
+    })),
+  ];
+  const chosen = chooseComparables(hybrid, rows);
+  assert.equal(chosen.items.length, 5);
+  assert.ok(chosen.items.every((item) => item.type === "Гибрид"));
+  assert.equal(priceRatingFrom(hybrid, rows).batteryMedian, 28.4);
+});
+
+test("шкала не показывается, если своего типа меньше пяти, даже при множестве других версий", () => {
+  const hybrid = car({ type:"Гибрид", battery:28.4 });
+  const rows = [
+    ...[1, 2, 3, 4].map((n) => peer(`hybrid-${n}`, 24_000 + n * 200, { type:"Гибрид", battery:28.4 })),
+    ...[1, 2, 3, 4, 5, 6].map((n) => peer(`electric-${n}`, 30_000 + n * 500, { type:"Электромобиль", battery:68.8 })),
+  ];
+  assert.equal(chooseComparables(hybrid, rows), null);
+  assert.equal(priceRatingFrom(hybrid, rows), null);
 });
 
 test("меньше пяти машин для сравнения — шкалы нет", () => {
@@ -354,7 +398,7 @@ test("подсказка честно говорит, чего в наборе �
 
 test("режим цен с квотой считается заранее для обоих состояний", () => {
   const electric = car({ type:"Электромобиль", engine:null, chinaPrice:400_000 });
-  const rows = five().map((item) => ({ ...item, priceQuotaOff:item.priceQuotaOn * 1.15 }));
+  const rows = five({ type:"Электромобиль" }).map((item) => ({ ...item, priceQuotaOff:item.priceQuotaOn * 1.15 }));
   const rating = priceRatingFrom(electric, rows);
   assert.ok(rating.quotaOff.medianUsd > rating.quotaOn.medianUsd);
   assert.equal(rating.quotaOn.medianUsd, 30_500);
