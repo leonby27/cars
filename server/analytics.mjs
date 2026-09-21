@@ -964,3 +964,23 @@ export async function getAnalyticsLeads() {
   const leads = [...drafts, ...orders].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)).slice(0, LEADS_LIMIT);
   return { generatedAt:new Date().toISOString(), leads };
 }
+
+// В общем списке ID несёт источник: draft-123 — форма сайта, order-123 — заказ
+// из личного кабинета. Таблицу никогда не принимаем от клиента напрямую: она
+// выбирается только из этого закрытого соответствия.
+export function parseAnalyticsLeadId(value) {
+  const match = String(value || "").match(/^(draft|order)-([1-9]\d*)$/);
+  if (!match) return null;
+  const id = Number(match[2]);
+  if (!Number.isSafeInteger(id)) return null;
+  return { source:match[1], id };
+}
+
+export async function deleteAnalyticsLead(value) {
+  const lead = parseAnalyticsLeadId(value);
+  if (!lead) return { error:"invalid_lead_id" };
+  const table = lead.source === "draft" ? "order_drafts" : "customer_orders";
+  const result = await pool.query(`DELETE FROM ${table} WHERE id=$1 RETURNING id`, [lead.id]);
+  if (!result.rowCount) return { error:"lead_not_found" };
+  return { ok:true, id:`${lead.source}-${result.rows[0].id}` };
+}

@@ -141,3 +141,62 @@ No visual severity finding is possible without an implementation capture. The pr
 final result: blocked
 
 Blocker: browser-based image-to-code QA was intentionally left to the owner.
+
+---
+
+# Design QA — SEO positions table controls
+
+- Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-a6d29887-8c99-4cff-891e-14a00412808c.png`
+- Source dimensions: 2036 × 830 px
+- Implementation evidence: inline Codex in-app Browser capture from `http://localhost:5173/analytics` (the browser surface did not expose a filesystem path)
+- Viewport: 1280 × 720 CSS px at device pixel ratio 2, dark theme, «SEO позиции», 30-day period
+- Tested states: «Только с позициями» disabled and enabled
+
+## Full-view comparison evidence
+
+The rendered SEO panel matches the requested annotated layout: the explanatory paragraph is absent, the table headers contain only «Яндекс» and «Google», and the «Только с позициями» control occupies the top-right area of the panel heading. Existing table spacing, dark surfaces, typography and column alignment remain intact.
+
+## Focused region comparison evidence
+
+The panel header and table header are fully legible in the full-view capture, so a separate crop was not required. With the switch enabled, the visible result set changes from 120 keyword rows to 12 ranked rows, and empty semantic groups are omitted.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing Manrope hierarchy and weights are preserved; removed helper copy no longer creates an extra text block.
+- Spacing and layout rhythm: the switch is vertically aligned with the heading on desktop and remains compact at the mobile breakpoint.
+- Colors and visual tokens: the control uses the existing surface, line, accent, focus-ring and text tokens.
+- Image quality and asset fidelity: this UI contains no image assets; no substitutions were introduced.
+- Copy and content: the control label is exactly «Только с позициями»; the removed explanatory paragraph and «позиция · динамика» sublabels are absent.
+
+## Findings
+
+No actionable P0, P1 or P2 visual mismatches remain.
+
+## Interaction and responsive checks
+
+- Disabled state shows all 120 semantic-core rows.
+- Enabled state shows 12 rows with a Yandex or Google position; no unranked row remains visible.
+- Semantic group headers with no visible results are hidden.
+- The headers are exactly «Запрос», «Wordstat / мес.», «Яндекс», «Google».
+- No browser console errors were detected in a clean analytics tab.
+- The focused SEO tests and production build pass.
+
+## Comparison history
+
+- Earlier state: long helper paragraph, duplicated header sublabels and no ranked-only filter.
+- Fix: removed the marked copy, simplified the engine headers and added an accessible ranked-only switch with responsive styling.
+- Post-fix evidence: inline in-app Browser desktop and mobile captures confirm the requested state without overflow or alignment regressions.
+
+## Implementation checklist
+
+- [x] Remove the explanatory paragraph.
+- [x] Remove the «позиция · динамика» sublabels.
+- [x] Add the «Только с позициями» switch.
+- [x] Filter both engines and hide empty groups.
+- [x] Verify desktop, mobile, browser console, tests and production build.
+
+## Follow-up polish
+
+No additional polish is required for this scoped change.
+
+final result: passed

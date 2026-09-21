@@ -48,14 +48,14 @@ Google OAuth (альтернатива): включить Search Console API в 
 
 ## Включение на действующем сервере
 
-После разрешённого развёртывания и настройки доступов:
+После настройки доступов:
 
 1. Применить новую недеструктивную миграцию `031_search_traffic.sql` установленным механизмом миграций.
 2. Один раз запустить `node scripts/sync-search-traffic.mjs` в `/srv/abcars`.
-3. Установить `deploy/abcars-search-traffic.service` и `.timer` в `/etc/systemd/system/`, выполнить `systemctl daemon-reload` и `systemctl enable --now abcars-search-traffic.timer`.
+3. Обычная выкладка сама устанавливает `deploy/abcars-search-traffic.service` и `.timer`, включает таймер и запускает обновление без ожидания. Для установки вручную: скопировать оба файла в `/etc/systemd/system/`, выполнить `systemctl daemon-reload` и `systemctl enable --now abcars-search-traffic.timer`.
 4. Проверить состояние таймера и сводку. Запущенные одновременно сборщики блокируются advisory lock, снимки сохраняются в транзакции.
 
-Публикация сайта сама по себе не устанавливает новый systemd-таймер; этот шаг обязателен при развёртывании на Timeweb. PostgreSQL — действующее производственное хранилище; расписание производственного сбора обслуживает серверный таймер.
+PostgreSQL — действующее производственное хранилище; расписание производственного сбора обслуживает серверный таймер.
 
 Проверки: `node --test tests/search-traffic.test.mjs tests/analytics.test.mjs tests/metrika.test.mjs`, `npm run build`, `npm run test:worker`.
 

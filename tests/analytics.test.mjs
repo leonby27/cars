@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ANALYTICS_SECTIONS, analyticsCookie, confirmHumanVisit, deviceKindFromHeaders, devicePlatformFromHeaders, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, getVisitsBenchmark, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
+import { ANALYTICS_SECTIONS, analyticsCookie, confirmHumanVisit, deviceKindFromHeaders, devicePlatformFromHeaders, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsTrend, getVisitsBenchmark, hasNoCountMarker, isBotAgent, isDatacenterAddress, isInternalAnalyticsPath, normalizeAnalyticsDays, normalizeAnalyticsEvent, normalizeAnalyticsRange, notStaffAccount, notStaffContact, parseAnalyticsLeadId, recordAnalyticsEvent, seenMoment, siteHost, verifyAnalyticsToken } from "../server/analytics.mjs";
 import { analyticsEntrySource, hasYandexClickId, HUMAN_DWELL_MS, HUMAN_SIGNALS, isAnalyticsPath, isLocalVisit, isRepeatEvent, isSkippedVisit, postHumanConfirm, withoutYandexClickId } from "../src/analytics.js";
 import { formatVisitDate } from "../src/analytics-format.js";
 import { analyticsNoCountHref } from "../src/analytics-links.js";
@@ -130,7 +130,9 @@ test("аналитика переключается без очистки уже
 
 test("названия и состав разделов аналитики соответствуют экрану", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
-  assert.match(source, /label:"Запросы и позиции"/);
+  assert.doesNotMatch(source, /label:"Запросы и позиции"/);
+  assert.match(source, /id:"overview", label:"Обзор", icon:SquaresFour/);
+  assert.match(source, /id:"searches", label:"Умный поиск"/);
   assert.doesNotMatch(source, />Визиты из поисковых систем</);
   assert.doesNotMatch(source, />Последние действия</);
   assert.match(source, /\$\{average\(summary\.vehicle_views, summary\.visitors\)\} на посетителя/);
@@ -221,6 +223,22 @@ test("в разделе каталога вкладка авто стоит пе
   assert.match(server, /catalogPages:catalogPagesResult\.rows/);
   assert.match(server, /event_name='page_view'[\s\S]{0,220}split_part\(path, '\?', 1\) = '\/catalog'/);
   assert.match(worker, /catalogPages:\(catalogPages\.results \|\| \[\]\)/);
+});
+
+test("заявка удаляется только после подтверждения и по безопасному ID", async () => {
+  const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
+  assert.deepEqual(parseAnalyticsLeadId("draft-12"), { source:"draft", id:12 });
+  assert.deepEqual(parseAnalyticsLeadId("order-34"), { source:"order", id:34 });
+  for (const invalid of ["", "draft-0", "draft--1", "orders-1", "order-1 OR 1=1", "draft-9007199254740992"]) {
+    assert.equal(parseAnalyticsLeadId(invalid), null);
+  }
+  assert.match(source, /aria-label="Удалить заявку"/);
+  assert.match(source, /Удалить заявку\?/);
+  assert.match(source, /method:"DELETE"/);
+  assert.match(source, /setLeads\(\(current\) => current\.filter\(\(lead\) => lead\.id !== leadId\)\)/);
+  assert.match(styles, /\.lead-delete-button/);
+  assert.match(styles, /\.lead-delete-confirm/);
 });
 
 test("analytics events are allowlisted and drop personal data", () => {

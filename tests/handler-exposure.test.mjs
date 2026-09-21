@@ -86,3 +86,55 @@ test("список заявок закрыт паролем аналитики",
     else process.env.ANALYTICS_PASSWORD = previousPassword;
   }
 });
+
+const requestLeadDelete = async (id, headers = {}) => {
+  const previousQuery = pool.query;
+  const queries = [];
+  pool.query = async (sql, values) => {
+    queries.push({ sql:String(sql), values });
+    return { rowCount:1, rows:[{ id:Number(values[0]) }] };
+  };
+  let status = 0;
+  let body = "";
+  const response = {
+    req:{ headers:{} },
+    writeHead(code) { status = code; return this; },
+    end(chunk) { body = chunk ? chunk.toString("utf8") : ""; return this; },
+  };
+  try {
+    await handleApiRequest({ method:"DELETE", url:`/api/analytics/leads/${id}`, headers:{ host:"example.test", ...headers } }, response);
+  } finally {
+    pool.query = previousQuery;
+  }
+  return { status, payload:JSON.parse(body), queries };
+};
+
+test("удаление заявки закрыто паролем и выбирает таблицу по безопасному префиксу", async () => {
+  const previousPassword = process.env.ANALYTICS_PASSWORD;
+  process.env.ANALYTICS_PASSWORD = "test-password";
+  const cookie = `abcars_analytics=${encodeURIComponent(createAnalyticsToken())}`;
+  try {
+    const anonymous = await requestLeadDelete("draft-12");
+    assert.equal(anonymous.status, 401);
+    assert.equal(anonymous.queries.length, 0);
+
+    const draft = await requestLeadDelete("draft-12", { cookie });
+    assert.equal(draft.status, 200);
+    assert.equal(draft.payload.id, "draft-12");
+    assert.match(draft.queries[0].sql, /^DELETE FROM order_drafts WHERE id=\$1 RETURNING id$/);
+    assert.deepEqual(draft.queries[0].values, [12]);
+
+    const order = await requestLeadDelete("order-34", { cookie });
+    assert.equal(order.status, 200);
+    assert.equal(order.payload.id, "order-34");
+    assert.match(order.queries[0].sql, /^DELETE FROM customer_orders WHERE id=\$1 RETURNING id$/);
+    assert.deepEqual(order.queries[0].values, [34]);
+
+    const invalid = await requestLeadDelete("order-1%20OR%201=1", { cookie });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.queries.length, 0);
+  } finally {
+    if (previousPassword === undefined) delete process.env.ANALYTICS_PASSWORD;
+    else process.env.ANALYTICS_PASSWORD = previousPassword;
+  }
+});

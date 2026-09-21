@@ -93,6 +93,19 @@ systemctl restart abcars
 find /var/cache/nginx/abcars -type f -delete
 systemctl reload nginx
 
+# Поисковые позиции берутся не из живой выдачи, а из Search Console и Яндекс
+# Вебмастера. Таймер перечитывает опубликованные ими сутки каждые шесть часов.
+# Устанавливаем его при каждой выкладке: так новый сервер или восстановленная
+# машина не останутся со старым архивом из-за забытого ручного шага.
+if install -m644 deploy/abcars-search-traffic.service deploy/abcars-search-traffic.timer /etc/systemd/system/ \
+  && systemctl daemon-reload \
+  && systemctl enable --now abcars-search-traffic.timer; then
+  systemctl start --no-block abcars-search-traffic.service \
+    || echo "поисковые отчёты обновятся по следующему запуску таймера"
+else
+  echo "таймер поисковых отчётов не установился — сайт работает, но позиции могут устареть"
+fi
+
 # Прогрев больше не задерживает завершение выкладки. Его отдельная служба сразу
 # наполнит кэш в фоне; systemd сохранит результат и журнал, даже если SSH закрыт.
 systemctl start --no-block abcars-warm-api.service \

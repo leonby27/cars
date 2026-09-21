@@ -9,7 +9,7 @@ import { marketComparison } from "./market-compare-data.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
-import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
@@ -205,6 +205,13 @@ export async function handleApiRequest(request, response) {
     if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
       return json(response, 200, await getAnalyticsLeads());
+    }
+    const analyticsLeadDelete = request.method === "DELETE" && url.pathname.match(/^\/api\/analytics\/leads\/([^/]+)$/);
+    if (analyticsLeadDelete) {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      const result = await deleteAnalyticsLead(analyticsLeadDelete[1]);
+      const status = result.error === "lead_not_found" ? 404 : result.error ? 400 : 200;
+      return json(response, status, result);
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/updates") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });

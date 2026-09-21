@@ -1,8 +1,8 @@
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, InstagramLogo, MagnifyingGlass, SignOut, Tray, UsersThree } from "./icons.jsx";
+import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, InstagramLogo, MagnifyingGlass, SignOut, SquaresFour, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
@@ -10,6 +10,7 @@ import { analyticsUpdatesUrl, sectionFreshCount, watchAnalyticsExit } from "./an
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
 import { socialGeneration } from "./social-generations.js";
 import { carFrame, headlineSize, KINDS, resolvePlace, socialThemeQuery, socialTiles, tileHeadline } from "./social-themes.js";
+import { buildSeoPositionRows } from "./seo-keywords.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
 // карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
@@ -133,7 +134,9 @@ function LeadCar({ car }) {
   );
 }
 
-function LeadCard({ lead }) {
+function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const phoneHref = lead.customer.phone ? `tel:${lead.customer.phone.replace(/[^+\d]/g, "")}` : "";
   const methods = (lead.customer.methods || []).map((method) => contactMethodLabels[method] || method).join(", ");
   const stages = lead.stages
@@ -144,8 +147,26 @@ function LeadCard({ lead }) {
     <article className={`lead-card tone-${stageTone(lead)}`}>
       <header className="lead-card-head">
         <span className={`lead-kind kind-${lead.kind}`}>{leadKindLabels[lead.kind] || "Заявка"}</span>
-        <time dateTime={lead.createdAt}>{formatLeadDate(lead.createdAt)}</time>
+        <div className="lead-card-actions">
+          <time dateTime={lead.createdAt}>{formatLeadDate(lead.createdAt)}</time>
+          {confirmDelete ? (
+            <div className="lead-delete-confirm" role="group" aria-label="Подтверждение удаления заявки">
+              <span>Удалить заявку?</span>
+              <button type="button" onClick={() => { setConfirmDelete(false); setDeleteError(""); }} disabled={deleting}>Отмена</button>
+              <button className="danger" type="button" onClick={async () => {
+                setDeleteError("");
+                try { await onDelete(lead.id); }
+                catch { setDeleteError("Не удалось удалить заявку. Попробуйте ещё раз."); }
+              }} disabled={deleting}>{deleting ? "Удаляем…" : "Удалить"}</button>
+            </div>
+          ) : (
+            <button className="lead-delete-button" type="button" aria-label="Удалить заявку" title="Удалить заявку" onClick={() => setConfirmDelete(true)} disabled={deleteBlocked}>
+              <Trash size={18} />
+            </button>
+          )}
+        </div>
       </header>
+      {deleteError && <div className="analytics-error lead-delete-error" role="alert">{deleteError}</div>}
       <LeadCar car={lead.car} />
       <dl className="lead-facts">
         <div><dt>Клиент</dt><dd>{lead.customer.name || "Имя не указано"}</dd></div>
@@ -167,9 +188,10 @@ function LeadCard({ lead }) {
   );
 }
 
-function LeadsSection({ leads, loading, error, unavailable, reload, period }) {
+function LeadsSection({ leads, loading, error, unavailable, reload, removeLead, period }) {
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   // Период берём общий, из шапки: заявки — такой же раздел аналитики, как остальные,
   // и свой переключатель тут был бы лишним.
   const periodLeads = useMemo(() => filterLeadsByPeriod(leads, period), [leads, period]);
@@ -189,6 +211,11 @@ function LeadsSection({ leads, loading, error, unavailable, reload, period }) {
     });
   }, [periodLeads, kind, query]);
   const lastLead = periodLeads[0];
+  const deleteLead = async (id) => {
+    setDeletingId(id);
+    try { await removeLead(id); }
+    finally { setDeletingId(""); }
+  };
   return (
     <>
       <section className="analytics-kpis" aria-label="Заявки в цифрах">
@@ -212,7 +239,7 @@ function LeadsSection({ leads, loading, error, unavailable, reload, period }) {
         </div>
         {error && <div className="analytics-error" role="alert">{error}</div>}
         {filtered.length ? (
-          <div className="lead-list">{filtered.map((lead) => <LeadCard key={lead.id} lead={lead} />)}</div>
+          <div className="lead-list">{filtered.map((lead) => <LeadCard key={lead.id} lead={lead} onDelete={deleteLead} deleting={deletingId === lead.id} deleteBlocked={Boolean(deletingId) && deletingId !== lead.id} />)}</div>
         ) : (
           <p className="analytics-empty">{unavailable ? "Заявки хранятся на основном сайте — на этой копии их нет." : !leads.length ? "Заявок пока не было. Как только клиент оставит контакты, они появятся здесь." : periodLeads.length ? "По этому условию заявок нет." : "За выбранный период заявок нет."}</p>
         )}
@@ -729,36 +756,44 @@ function SearchLandingLink({ value }) {
   return path || 'Страница не определена';
 }
 
-function SearchTrafficSection({ period }) {
+const searchTrafficReportCache = new Map();
+const searchTrafficReportRequests = new Map();
+
+function requestSearchTrafficReport(period) {
+  if (searchTrafficReportCache.has(period)) return Promise.resolve(searchTrafficReportCache.get(period));
+  if (searchTrafficReportRequests.has(period)) return searchTrafficReportRequests.get(period);
+  const request = fetch(`/api/analytics/search-traffic?period=${encodeURIComponent(period)}`, { credentials:'same-origin', cache:'no-store' })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(response.status === 401 ? 'Время входа истекло. Обновите страницу и войдите снова.' : 'Не удалось загрузить сводку. Попробуйте ещё раз.');
+      const report = await response.json();
+      searchTrafficReportCache.set(period, report);
+      return report;
+    })
+    .finally(() => searchTrafficReportRequests.delete(period));
+  searchTrafficReportRequests.set(period, request);
+  return request;
+}
+
+function useSearchTrafficReport(period) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const reportCache = useRef(new Map());
-  const [queryEngine, setQueryEngine] = useState('google');
-  const [pageEngine, setPageEngine] = useState('all');
   useEffect(() => {
-    const controller = new AbortController();
-    const cached = reportCache.current.get(period);
+    let active = true;
+    const cached = searchTrafficReportCache.get(period);
     if (cached) setReport(cached);
     setLoading(!cached && !report);
     setError('');
-    (async () => {
-      try {
-        const response = await fetch(`/api/analytics/search-traffic?period=${encodeURIComponent(period)}`, { credentials:'same-origin', cache:'no-store', signal:controller.signal });
-        if (!response.ok) throw new Error(response.status === 401 ? 'Время входа истекло. Обновите страницу и войдите снова.' : 'Не удалось загрузить сводку. Попробуйте ещё раз.');
-        const result = await response.json();
-        if (!controller.signal.aborted) {
-          reportCache.current.set(period, result);
-          setReport(result);
-        }
-      } catch (failure) {
-        if (!controller.signal.aborted) setError(failure.message);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    })();
-    return () => controller.abort();
+    requestSearchTrafficReport(period).then((result) => { if (active) setReport(result); }).catch((failure) => { if (active) setError(failure.message); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [period]);
+  return { report, loading, error };
+}
+
+function SearchTrafficSection({ period }) {
+  const { report, loading, error } = useSearchTrafficReport(period);
+  const [queryEngine, setQueryEngine] = useState('google');
+  const [pageEngine, setPageEngine] = useState('all');
   const google = report?.google;
   const yandex = report?.yandex;
   const pages = [google, yandex].flatMap((source, index) => (source?.pages || []).map((row) => ({ ...row, engine:index === 0 ? 'google' : 'yandex' }))).sort((a, b) => b.count - a.count);
@@ -773,6 +808,75 @@ function SearchTrafficSection({ period }) {
       <div className="analytics-range" aria-label="Поисковик для страниц входа">{[['all', 'Все'], ['google', 'Google'], ['yandex', 'Яндекс']].map(([key, label]) => <button type="button" key={key} className={pageEngine === key ? 'active' : ''} onClick={() => setPageEngine(key)}>{label}</button>)}</div>
       <SearchTrafficTable title="Страницы входа из поиска" rows={pageRows.slice(0, 1000)} status={pageEngine === 'all' ? (google?.status === 'ready' || yandex?.status === 'ready' ? 'ready' : google?.status) : report[pageEngine]?.status} pages />
     </>}
+  </div>;
+}
+
+function SeoPositionValue({ row, status }) {
+  if (status !== 'ready' || row?.position == null) return <span className="analytics-seo-position-empty">—</span>;
+  const change = row.positionChange;
+  const roundedChange = change == null ? null : Math.round(change);
+  const changeClass = roundedChange == null || roundedChange === 0 ? '' : roundedChange > 0 ? ' is-improved' : ' is-worsened';
+  const changeLabel = roundedChange === 0 ? 'без изменений' : `${roundedChange > 0 ? '↑' : '↓'} ${Math.abs(roundedChange).toLocaleString('ru-RU')}`;
+  return <div className="analytics-seo-position">
+    <strong>{Math.round(row.position).toLocaleString('ru-RU')}</strong>
+    {roundedChange != null && <span className={`analytics-position-change${changeClass}`} title={`Ранее: ${Math.round(row.previousPosition).toLocaleString('ru-RU')}`}>{changeLabel}</span>}
+  </div>;
+}
+
+const SEO_POSITION_REPORT_PERIOD = '30';
+const seoPositionColumns = [
+  { id:'query', label:'Запрос', value:(row) => row.query, desc:false },
+  { id:'wordstatMonthly', label:'Wordstat / мес.', value:(row) => row.wordstatMonthly, desc:true },
+  { id:'yandex', label:'Яндекс', value:(row) => row.yandex?.position, desc:false },
+  { id:'google', label:'Google', value:(row) => row.google?.position, desc:false },
+];
+
+function SeoPositionsSection() {
+  const { report, loading, error } = useSearchTrafficReport(SEO_POSITION_REPORT_PERIOD);
+  const rows = useMemo(() => buildSeoPositionRows(report), [report]);
+  const [grouped, setGrouped] = useState(false);
+  const [onlyRanked, setOnlyRanked] = useState(true);
+  const [sort, setSort] = useState({ id:'wordstatMonthly', desc:true });
+  const selectSort = (id) => {
+    const column = seoPositionColumns.find((item) => item.id === id) || seoPositionColumns[0];
+    setSort((current) => current.id === id ? { id, desc:!current.desc } : { id, desc:column.desc });
+  };
+  const chooseSortColumn = (id) => {
+    const column = seoPositionColumns.find((item) => item.id === id) || seoPositionColumns[0];
+    setSort({ id:column.id, desc:column.desc });
+  };
+  const visibleRows = useMemo(() => {
+    const filtered = onlyRanked ? rows.filter((row) => row.yandex?.position != null || row.google?.position != null) : rows;
+    const column = seoPositionColumns.find((item) => item.id === sort.id) || seoPositionColumns[0];
+    const groupOrder = new Map(rows.map((row) => row.group).filter((group, index, groups) => groups.indexOf(group) === index).map((group, index) => [group, index]));
+    return [...filtered].sort((left, right) => {
+      if (grouped && left.group !== right.group) return groupOrder.get(left.group) - groupOrder.get(right.group);
+      const a = column.value(left); const b = column.value(right);
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      const compared = typeof a === 'string' ? a.localeCompare(String(b), 'ru') : Number(a) - Number(b);
+      return compared * (sort.desc ? -1 : 1);
+    });
+  }, [rows, grouped, onlyRanked, sort]);
+  return <div className="analytics-search-traffic analytics-seo-positions" aria-busy={loading}>
+    <section className="analytics-panel">
+      <div className="analytics-panel-heading analytics-seo-heading">
+        <h2>Семантическое ядро</h2>
+        <div className="analytics-seo-switches">
+          <label className="analytics-switch"><span>Делить по категориям</span><input type="checkbox" checked={grouped} onChange={(event) => setGrouped(event.target.checked)} /></label>
+          <label className="analytics-switch"><span>Только с позициями</span><input type="checkbox" checked={onlyRanked} onChange={(event) => setOnlyRanked(event.target.checked)} /></label>
+        </div>
+      </div>
+      {!report && <p className="analytics-empty" role={error ? "alert" : "status"}>{error || 'Загружаем SEO-позиции…'}</p>}
+      {report && <><div className="analytics-seo-mobile-sort"><label>Сортировка<select value={sort.id} onChange={(event) => chooseSortColumn(event.target.value)}>{seoPositionColumns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}</select></label><button type="button" onClick={() => setSort((current) => ({ ...current, desc:!current.desc }))}>{sort.desc ? 'По убыванию ↓' : 'По возрастанию ↑'}</button></div><div className="analytics-table-wrap"><table className="analytics-seo-table"><thead><tr>{seoPositionColumns.map((column) => <th key={column.id} aria-sort={sort.id === column.id ? (sort.desc ? 'descending' : 'ascending') : 'none'}><button type="button" className={`analytics-sort${sort.id === column.id ? ' active' : ''}`} onClick={() => selectSort(column.id)}>{column.label}<span aria-hidden="true">{sort.id === column.id ? (sort.desc ? '↓' : '↑') : '↕'}</span></button></th>)}</tr></thead><tbody>
+        {visibleRows.map((row, index) => <Fragment key={`${row.group}-${row.query}-${index}`}>
+          {grouped && (index === 0 || visibleRows[index - 1].group !== row.group) && <tr className="analytics-seo-group"><th colSpan="4">{row.group}</th></tr>}
+          <tr><td>{row.query}</td><td>{formatNumber(row.wordstatMonthly)}</td><td><SeoPositionValue row={row.yandex} status={report.yandex?.status} /></td><td><SeoPositionValue row={row.google} status={report.google?.status} /></td></tr>
+        </Fragment>)}
+        {!visibleRows.length && <tr><td colSpan="4">Актуальных позиций по запросам ядра пока нет.</td></tr>}
+      </tbody></table></div></>}
+    </section>
   </div>;
 }
 
@@ -826,11 +930,11 @@ const analyticsPeriods = [
 ];
 
 const sections = [
-  { id:"overview", label:"Обзор", icon:ChartLineUp, ranged:true },
-  { id:"search-traffic", label:"Запросы и позиции", icon:MagnifyingGlass, ranged:true },
+  { id:"overview", label:"Обзор", icon:SquaresFour, ranged:true },
+  { id:"seo-positions", label:"SEO позиции", icon:ChartLineUp, ranged:false },
   { id:"vehicles", label:"Каталог", icon:CarProfile, ranged:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:true },
-  { id:"searches", label:"Поиск", icon:MagnifyingGlass, ranged:true },
+  { id:"searches", label:"Умный поиск", icon:MagnifyingGlass, ranged:true },
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
   { id:"contact_interest", label:"Интерес к контактам", icon:ChatCircleText, ranged:true },
 ];
@@ -1091,7 +1195,7 @@ function SocialPostsSection({ active }) {
   );
 }
 
-function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads }) {
+function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads, removeLead }) {
   const [section, setSection] = useState("overview");
   // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
   // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
@@ -1113,6 +1217,11 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
   // заметить новое. Сохраняем его при закрытии страницы или явном нажатии.
   const openSection = (id) => {
     if (id === "contact_interest") setContactFresh(updates.contact_interest_details || {});
+    // Search Console и Вебмастер публикуют статистику с задержкой, поэтому
+    // «сегодня» и «вчера» почти всегда выглядят пустыми. При первом переходе в
+    // поисковые отчёты открываем устойчивый 30-дневный срез; выбранные вручную
+    // 7/30/90 дней дальше не переопределяем.
+    if (id === "search-traffic" && (period === "today" || period === "yesterday")) setPeriod("30");
     setSection(id);
     const viewedId = id === "vehicles" ? "vehicle_cars" : id;
     // Цифру гасим сразу, не дожидаясь ответа сервера.
@@ -1153,10 +1262,11 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
 
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} updates={updates} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} period={period} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} removeLead={removeLead} period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} updates={updates} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "seo-positions"}><SeoPositionsSection /></div>
           <div className="analytics-tabpanel" hidden={section !== "customers"}><CustomersSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "contact_interest"}><ContactInterestSection data={data} fresh={contactFresh} /></div>
           <div className="analytics-tabpanel" hidden={section !== "social"}><SocialPostsSection active={section === "social"} /></div>
@@ -1254,6 +1364,20 @@ export function AnalyticsPage() {
     if (cached) setData(cached);
     setPeriod(nextPeriod);
   };
+  const removeLead = async (leadId) => {
+    const response = await fetch(`/api/analytics/leads/${encodeURIComponent(leadId)}`, { method:"DELETE", credentials:"same-origin" });
+    if (response.status === 401) {
+      setAuthenticated(false);
+      throw new Error("unauthorized");
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "delete_failed");
+    setLeads((current) => current.filter((lead) => lead.id !== leadId));
+    // Удаление меняет показатели заявок в текущем срезе. Старый кэш больше нельзя
+    // показывать при переключении периода — перечитываем цифры с сервера.
+    dashboardCache.current.clear();
+    await load(periodRef.current, { silent:true });
+  };
   // Заявки живут отдельно от счётчиков: они не зависят от выбранного периода, поэтому
   // переключение периода их не перезапрашивает.
   useEffect(() => { if (authenticated) loadLeads(); }, [authenticated]);
@@ -1266,5 +1390,5 @@ export function AnalyticsPage() {
   if (authenticated === false) return <Login onSuccess={load} />;
   if (error && !data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика недоступна</h1><p>{error}</p><button className="primary" type="button" onClick={load}>Повторить</button></section></main>;
   if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
-  return <Dashboard data={data} period={period} setPeriod={selectPeriod} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} />;
+  return <Dashboard data={data} period={period} setPeriod={selectPeriod} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} removeLead={removeLead} />;
 }
