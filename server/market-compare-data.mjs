@@ -14,10 +14,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { brandCoverage, compareRows, compareSummary } from "../src/market-compare.js";
+import { compareDetailedRows, groupDetailedRows } from "../src/market-compare.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const marketPath = path.join(root, "data", "market-belarus.json");
+const marketPath = path.join(root, "data", "market-belarus-detailed.json");
 
 const TTL_MS = 10 * 60 * 1000;
 let cache = { at: 0, value: null };
@@ -41,19 +41,15 @@ async function readMarket() {
  *   чтобы показать и те марки, по которым сравнивать не с чем: человек ищет свою
  *   машину, и её отсутствие в списке он прочитает как «не возят».
  */
-export async function marketComparison(medians, stock) {
+export async function marketComparison(stats, _stock) {
   const now = Date.now();
   if (cache.value && now - cache.at < TTL_MS) return cache.value;
   const market = await readMarket();
   if (!market) {
-    cache = { at: now, value: { rows: [], summary: null, collectedAt: null, brands: [] } };
+    cache = { at: now, value: { cards: [], collectedAt: null, mileageLimits: [] } };
     return cache.value;
   }
-  // Без ограничения: страница показывает таблицу с поиском и фильтром по маркам,
-  // и обрезать её до полусотни строк значило бы прятать половину рынка. Строк
-  // получается около двух сотен — это десятки килобайт, не проблема.
-  const rows = compareRows({ ours: await medians(), market, limit: 1000 });
-  const brands = brandCoverage({ ourBrands: await stock(), rows, market });
-  cache = { at: now, value: { rows, summary: compareSummary(rows), collectedAt: market.collectedAt || null, brands } };
+  const cards = groupDetailedRows(compareDetailedRows({ ours: await stats(), market }));
+  cache = { at: now, value: { cards, collectedAt: market.collectedAt || null, mileageLimits:market.mileageLimits || [] } };
   return cache.value;
 }

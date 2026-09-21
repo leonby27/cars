@@ -116,6 +116,91 @@ export function compareRows({ ours = [], market = null, limit = 40 } = {}) {
     .slice(0, limit);
 }
 
+const mileageKey = (value) => value == null ? "all" : String(value);
+
+/** Индекс нового свода: модель + год + предел пробега → пять показателей цены. */
+function detailedMarketIndex(brands) {
+  const index = new Map();
+  for (const [brand, models] of Object.entries(brands || {})) {
+    for (const [model, years] of Object.entries(models || {})) {
+      for (const [year, limits] of Object.entries(years || {})) {
+        for (const [limit, stats] of Object.entries(limits || {})) {
+          const put = (modelKey) => {
+            const full = `${brand}|${modelKey}|${year}|${limit}`;
+            const known = index.get(full);
+            if (!known || Number(known.count) < Number(stats.count)) index.set(full, { ...stats, brand, model, year:Number(year) });
+          };
+          put(normalizeModel(model));
+        }
+      }
+    }
+  }
+  return index;
+}
+
+/**
+ * Сопоставляет полную статистику нашего каталога и рынка Беларуси. Карточку
+ * сохраняем и без белорусской строки: отсутствие местных данных — тоже полезный
+ * ответ, а модель из нашего каталога не должна исчезать из поиска.
+ */
+export function compareDetailedRows({ ours = [], market = null, limit = 10_000 } = {}) {
+  const index = detailedMarketIndex(market?.brands);
+  const rows = [];
+  for (const row of ours) {
+    if (!row?.brand || !row?.model || !row?.year || !row?.count) continue;
+    const limitKey = mileageKey(row.mileageMax);
+    const long = isLongVersion(row.brand, row.model);
+    const theirs = index.get(`${row.brand}|${normalizeModel(row.model)}|${row.year}|${limitKey}`)
+      || (long ? index.get(`${row.brand}|${shortModel(row.model)}|${row.year}|${limitKey}`) : null);
+    const priceStats = (stats) => stats ? {
+      count:Number(stats.count),
+      min:Number(stats.min),
+      mean:Number(stats.mean),
+      median:Number(stats.median),
+      max:Number(stats.max),
+    } : null;
+    rows.push({
+      brand:row.brand,
+      model:row.model,
+      type:row.type || null,
+      year:Number(row.year),
+      mileageMax:row.mileageMax == null ? null : Number(row.mileageMax),
+      image:row.image || null,
+      longVersion:Boolean(theirs) && long && normalizeModel(row.model) !== normalizeModel(theirs.model),
+      ours:{
+        ...priceStats(row),
+        ...(row.quotaOn ? { quotaOn:priceStats(row.quotaOn) } : {}),
+        ...(row.quotaOff ? { quotaOff:priceStats(row.quotaOff) } : {}),
+      },
+      belarus:theirs?.count ? priceStats(theirs) : null,
+    });
+  }
+  return rows.slice(0, limit);
+}
+
+/** Модельная карточка с годами и наборами статистики для каждого предела пробега. */
+export function groupDetailedRows(rows = []) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = `${row.brand}|${row.model}|${row.type || ""}`;
+    if (!groups.has(key)) groups.set(key, { key, brand:row.brand, model:row.model, type:row.type || null, image:row.image || null, longVersion:false, years:new Map(), rank:0 });
+    const group = groups.get(key);
+    if (!group.image && row.image) group.image = row.image;
+    group.longVersion ||= Boolean(row.longVersion);
+    if (!group.years.has(row.year)) group.years.set(row.year, { year:row.year, image:row.image || null, prices:{} });
+    const year = group.years.get(row.year);
+    if (!year.image && row.image) year.image = row.image;
+    year.prices[mileageKey(row.mileageMax)] = { ours:row.ours, belarus:row.belarus };
+    if (row.mileageMax == null) group.rank += row.ours.count;
+  }
+  return [...groups.values()]
+    .map((group) => {
+      const years = [...group.years.values()].sort((left, right) => right.year - left.year);
+      return { ...group, image:years.find((year) => year.image)?.image || group.image, years };
+    })
+    .sort((left, right) => right.rank - left.rank || `${left.brand} ${left.model}`.localeCompare(`${right.brand} ${right.model}`, "ru"));
+}
+
 /** Короткий вывод под таблицей: на скольких моделях дешевле и насколько. */
 export function compareSummary(rows) {
   if (!rows.length) return null;
@@ -247,31 +332,165 @@ export function groupCompareRows(rows = []) {
 }
 
 /**
- * Марки, у которых низкая цена на местном рынке чаще всего объясняется не рынком,
- * а происхождением машины.
+ * Модели, для которых американское происхождение действительно правдоподобно.
  *
- * Немецкие, японские и американские машины в Беларусь много лет везли с американских
- * аукционов — в том числе битые, и восстанавливали уже здесь. Такая машина стоит
- * дешевле целой, и в своде объявлений она стоит рядом с обычной: отличить их по цене
- * невозможно, а объяснить разницу человеку нужно. Китайских марок в этом списке нет:
- * их в США не покупали и оттуда не возили.
- *
- * Список закрытый и по происхождению марки, а не по стране сборки: Buick и Lincoln
- * делают в Китае, но на местном рынке это машины из Америки.
+ * Раньше правило смотрело только на родину марки и поэтому ошибалось в обе стороны:
+ * помечало китайские Audi A6L и Honda XR-V, которых в США не продавали, но пропускало
+ * массовые американские Hyundai, Kia и Volvo. В сентябре 2026 года сверили белорусские
+ * предложения импорта из США, реальные покупки с аукционов на получателя Belarus и
+ * модельные ряды североамериканского рынка. Пометку теперь получает только конкретная
+ * модель, которая продавалась там; закрытый список намеренно консервативный.
  */
-const REBUILT_MARKET_BRANDS = new Set([
-  // Немецкие
-  "Volkswagen", "Audi", "BMW", "Mercedes-Benz", "Porsche", "MINI", "Skoda", "smart", "Opel",
-  // Японские
-  "Toyota", "Honda", "Nissan", "Mazda", "Mitsubishi", "Subaru", "Lexus", "Infiniti", "Suzuki",
-  // Американские
-  "Ford", "Chevrolet", "Jeep", "Buick", "Cadillac", "Chrysler", "Dodge", "GMC", "Lincoln", "Tesla",
+const REBUILT_US_MARKET_MODELS = new Map(Object.entries({
+  Acura: ["ILX", "Integra", "MDX", "RDX", "RLX", "TLX", "ZDX"],
+  "Alfa Romeo": ["Giulia", "Stelvio", "Tonale"],
+  Audi: ["A3", "A4", "A5", "A6", "A7", "A8", "e-tron", "e-tron GT", "Q3", "Q4 e-tron", "Q5", "Q7", "Q8", "RS 3", "RS 5", "RS 6", "RS 7", "S3", "S4", "S5", "S6", "S7", "S8", "SQ5", "SQ7", "SQ8"],
+  BMW: ["2 Series", "3 Series", "4 Series", "5 Series", "6 Series", "7 Series", "8 Series", "i3", "i4", "i5", "i7", "iX", "M2", "M3", "M4", "M5", "M8", "X1", "X2", "X3", "X3 M", "X4", "X4 M", "X5", "X5 M", "X6", "X6 M", "X7", "XM", "Z4"],
+  Buick: ["Enclave", "Encore", "Encore GX", "Envision", "Envista", "LaCrosse", "Regal", "Verano"],
+  Cadillac: ["ATS", "CT4", "CT5", "CT6", "CTS", "Escalade", "Lyriq", "Optiq", "XT4", "XT5", "XT6"],
+  Chevrolet: ["Blazer", "Bolt", "Colorado", "Corvette", "Equinox", "Malibu", "Silverado", "Suburban", "Tahoe", "Trailblazer", "Traverse", "Trax"],
+  Chrysler: ["200", "300", "Pacifica", "Voyager"],
+  Dodge: ["Challenger", "Charger", "Dart", "Durango", "Hornet", "Journey"],
+  Ford: ["Bronco", "Bronco Sport", "Edge", "Escape", "Expedition", "Explorer", "F-150", "Focus", "Maverick", "Mustang", "Mustang Mach-E", "Ranger", "Transit"],
+  Genesis: ["G70", "G80", "G90", "GV60", "GV70", "GV80"],
+  GMC: ["Acadia", "Canyon", "Hummer EV", "Sierra", "Terrain", "Yukon"],
+  Honda: ["Accord", "Civic", "CR-V", "HR-V", "Odyssey", "Passport", "Pilot", "Prologue", "Ridgeline"],
+  Hyundai: ["Elantra", "Ioniq 5", "Ioniq 6", "Kona", "Nexo", "Palisade", "Santa Cruz", "Santa Fe", "Sonata", "Tucson", "Venue"],
+  Infiniti: ["Q50", "Q60", "Q70", "QX30", "QX50", "QX55", "QX60", "QX80"],
+  Jaguar: ["E-PACE", "F-PACE", "F-TYPE", "I-PACE", "XE", "XF", "XJ"],
+  Jeep: ["Cherokee", "Compass", "Gladiator", "Grand Cherokee", "Renegade", "Wagoneer", "Wrangler"],
+  Kia: ["Carnival", "EV6", "EV9", "Forte", "K4", "K5", "Niro", "Rio", "Seltos", "Sorento", "Soul", "Sportage", "Stinger", "Telluride"],
+  "Land Rover": ["Defender", "Discovery", "Discovery Sport", "Range Rover", "Range Rover Evoque", "Range Rover Sport", "Range Rover Velar"],
+  Lexus: ["ES", "GS", "GX", "IS", "LC", "LS", "LX", "NX", "RC", "RX", "RZ", "TX", "UX"],
+  Lincoln: ["Aviator", "Corsair", "MKC", "MKT", "MKX", "MKZ", "Nautilus", "Navigator"],
+  Maserati: ["Ghibli", "Grecale", "Levante", "MC20", "Quattroporte"],
+  Mazda: ["CX-30", "CX-5", "CX-50", "CX-70", "CX-9", "CX-90", "Mazda3", "MX-5"],
+  "Mercedes-Benz": ["A-Class", "AMG GT", "C-Class", "CLA", "CLA AMG", "CLS", "E-Class", "EQB", "EQE", "EQE AMG", "EQE SUV", "EQS", "EQS AMG", "EQS SUV", "G-Class", "GLA", "GLA AMG", "GLB", "GLB AMG", "GLC", "GLC AMG", "GLC Coupe", "GLC Coupe AMG", "GLE", "GLE AMG", "GLE Coupe", "GLE Coupe AMG", "GLS", "S-Class"],
+  MINI: ["Clubman", "Cooper", "Countryman"],
+  Mitsubishi: ["Eclipse Cross", "Mirage", "Outlander"],
+  Nissan: ["Altima", "Ariya", "Armada", "Frontier", "Kicks", "Leaf", "Murano", "Pathfinder", "Rogue", "Sentra", "Titan", "Versa", "Z"],
+  Porsche: ["718", "911", "Cayenne", "Macan", "Panamera", "Taycan"],
+  Subaru: ["Ascent", "BRZ", "Crosstrek", "Forester", "Impreza", "Legacy", "Outback", "Solterra", "WRX"],
+  Tesla: ["Cybertruck", "Model 3", "Model S", "Model X", "Model Y"],
+  Toyota: ["4Runner", "86", "bZ4X", "Camry", "Corolla", "Corolla Cross", "Crown", "GR86", "Grand Highlander", "Highlander", "Land Cruiser", "Prius", "RAV4", "Sequoia", "Sienna", "Supra", "Tacoma", "Tundra", "Venza"],
+  Volkswagen: ["Arteon", "Atlas", "Golf", "Golf GTI", "Golf R", "ID.4", "Jetta", "Passat", "Taos", "Tiguan"],
+  Volvo: ["C40", "EX30", "EX40", "EX90", "S60", "S90", "V60", "V90", "XC40", "XC60", "XC90"],
+}).map(([brand, models]) => [brand, new Set(models.map(normalizeModel))]));
+
+// Одинаковое имя иногда носит другая региональная машина. Год закрывает известные
+// коллизии: китайский BMW i3 после 2021-го, новые Buick LaCrosse/Verano и поздний
+// Ford Focus уже не имеют отношения к американскому рынку.
+const REBUILT_US_MODEL_YEARS = new Map([
+  ["BMW|i3", { to:2021 }],
+  ["Buick|lacrosse", { to:2019 }],
+  ["Buick|verano", { to:2017 }],
+  ["Ford|focus", { to:2018 }],
+  ["Kia|carnival", { from:2022 }],
+  ["Volkswagen|passat", { to:2022 }],
 ]);
 
-/** Нужна ли у строки пометка про восстановленные машины на местном рынке. */
-export const hasRebuiltHint = (row) => Boolean(row) && row.diff < 0 && REBUILT_MARKET_BRANDS.has(row.brand);
+/** Нужна ли у конкретной модели пометка про возможное восстановление после аукциона. */
+export const hasRebuiltHint = (row) => {
+  if (!row || row.diff >= 0) return false;
+  const model = normalizeModel(row.model);
+  if (!model || !REBUILT_US_MARKET_MODELS.get(row.brand)?.has(model)) return false;
+  const bounds = REBUILT_US_MODEL_YEARS.get(`${row.brand}|${model}`);
+  if (!bounds) return true;
+  const year = Number(row.year);
+  if (!Number.isFinite(year)) return false;
+  return (bounds.from == null || year >= bounds.from) && (bounds.to == null || year <= bounds.to);
+};
 
 /** Текст этой пометки. Один на всё приложение, чтобы не расходился по страницам. */
 // Про отчёт об осмотре здесь молчим намеренно: он платный, и в подсказке про чужие
 // цены выглядел бы обещанием, которого мы не даём.
-export const REBUILT_HINT = "Эту марку в Беларуси часто продают восстановленной после аварии: такие машины везли с американских аукционов. Отсюда и такая разница.";
+export const REBUILT_HINT = "На белорусском рынке у этой модели встречаются машины из США после восстановления. Поэтому низкая цена может быть связана с историей конкретного автомобиля — проверьте VIN и фотографии до ремонта.";
+
+export const MIN_MARKET_COMPARISON_CARS = 5;
+
+/** Цену стороны показываем только по выборке, достаточной для сравнения. */
+export const hasEnoughMarketSample = (stats) => (
+  Number(stats?.count) >= MIN_MARKET_COMPARISON_CARS
+);
+
+/** Слабая выборка не должна превращаться в публичное утверждение о разнице цен. */
+export const hasEnoughComparisonSample = (prices) => (
+  hasEnoughMarketSample(prices?.ours)
+  && hasEnoughMarketSample(prices?.belarus)
+);
+
+/** Выбирает ту же цену квоты, которую посетитель включил для всего каталога. */
+export const comparisonOwnPrices = (stats, quotaPricingOn) => (
+  (quotaPricingOn ? stats?.quotaOn : stats?.quotaOff) || stats || null
+);
+
+/** Объединяет статистику нескольких лет для состояния «Все года». */
+export function aggregateComparisonStats(years, mileageKey, source, quotaPricingOn) {
+  const values = (years || []).map((year) => {
+    const stats = year.prices?.[mileageKey]?.[source];
+    return source === "ours" ? comparisonOwnPrices(stats, quotaPricingOn) : stats;
+  }).filter(Boolean);
+  if (!values.length) return null;
+  const count = values.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  if (!count) return null;
+  const medians = values.slice().sort((left, right) => left.median - right.median);
+  let seen = 0;
+  const median = medians.find((item) => ((seen += Number(item.count || 0)), seen >= count / 2))?.median;
+  return {
+    count,
+    min:Math.min(...values.map((item) => item.min)),
+    mean:values.reduce((sum, item) => sum + item.mean * Number(item.count || 0), 0) / count,
+    median,
+  };
+}
+
+/** Полные цены состояния «Все года» с обеих сторон. */
+export const aggregateComparisonPrices = (years, mileageKey, quotaPricingOn) => ({
+  ours:aggregateComparisonStats(years, mileageKey, "ours", quotaPricingOn),
+  belarus:aggregateComparisonStats(years, mileageKey, "belarus", quotaPricingOn),
+});
+
+function comparisonPricesDifference(prices, priceKey) {
+  if (!hasEnoughComparisonSample(prices)) return null;
+  const ours = prices.ours?.[priceKey];
+  const belarus = prices.belarus?.[priceKey];
+  if (!Number.isFinite(ours) || !Number.isFinite(belarus) || belarus <= 0) return null;
+  return ((belarus - ours) / belarus) * 100;
+}
+
+/** Разница цен для одного года с учётом выбранной квоты и минимальной выборки. */
+export function comparisonYearDifference(year, mileageKey, priceKey, quotaPricingOn) {
+  const rawPrices = year?.prices?.[mileageKey];
+  if (!rawPrices) return null;
+  const prices = {
+    ...rawPrices,
+    ours:comparisonOwnPrices(rawPrices.ours, quotaPricingOn),
+  };
+  return comparisonPricesDifference(prices, priceKey);
+}
+
+/**
+ * Год, который выгоднее всего по текущим фильтрам. Слабую выборку не используем:
+ * если надёжно сравнить годы нельзя, показываем самый свежий год с нашей ценой.
+ */
+export function bestComparisonYear(card, mileageKey, priceKey, quotaPricingOn) {
+  let best = null;
+  for (const year of card?.years || []) {
+    const difference = comparisonYearDifference(year, mileageKey, priceKey, quotaPricingOn);
+    if (difference == null) continue;
+    if (!best || difference > best.difference || (difference === best.difference && year.year > best.year.year)) {
+      best = { year, difference };
+    }
+  }
+  if (best) return best;
+  const aggregatePrices = aggregateComparisonPrices(card?.years, mileageKey, quotaPricingOn);
+  const aggregateDifference = comparisonPricesDifference(aggregatePrices, priceKey);
+  if (aggregateDifference != null) {
+    return { year:null, difference:aggregateDifference, prices:aggregatePrices, aggregate:true };
+  }
+  const fallback = (card?.years || []).find((year) => {
+    const ours = comparisonOwnPrices(year.prices?.[mileageKey]?.ours, quotaPricingOn);
+    return Number.isFinite(ours?.[priceKey]);
+  }) || card?.years?.[0] || null;
+  return fallback ? { year:fallback, difference:null, aggregate:false } : null;
+}

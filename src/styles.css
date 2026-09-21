@@ -14337,6 +14337,12 @@ html[data-theme="dark"] .tool-disclosure-body .article-table-scroll {
   margin-left: 0;
   margin-right: 0;
 }
+/* Нижнее поле даёт сам контейнер. У последнего элемента убираем его собственный
+   отступ, иначе в конце каждого раскрытого пункта складывались два отступа. */
+.tool-disclosure-body > :last-child,
+.tool-disclosure-body > :last-child > :last-child {
+  margin-bottom: 0;
+}
 /* Приписка под таблицей: отступ больше, чем между карточками, иначе она липнет
    к последней карточке и читается как её часть. */
 .tool-disclosure-body p.model-page-versions-note {
@@ -15465,8 +15471,8 @@ html[data-theme="dark"] .tool-calc-share.copied:hover {
   font-family: "Manrope", system-ui, sans-serif;
 }
 .market-compare-controls {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(190px, 220px);
   align-items: center;
   gap: 10px;
   margin: 0 0 12px;
@@ -15475,7 +15481,6 @@ html[data-theme="dark"] .tool-calc-share.copied:hover {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 220px;
   min-width: 0;
   padding: 0 14px;
   height: 44px;
@@ -15498,25 +15503,299 @@ html[data-theme="dark"] .market-compare-search {
   font-size: 15px;
   outline: none;
 }
-#root .market-compare-brand {
-  flex: 0 1 220px;
+.market-compare-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.market-compare-search-clear {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #b8bdc5;
+  color: #ffffff;
+  cursor: pointer;
+}
+.market-compare-search-clear:hover {
+  background: #9fa5ae;
+}
+.market-compare-search-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.select-trigger-mobile-icon {
+  display: none;
+}
+html[data-theme="dark"] .market-compare-search-clear {
+  background: #727780;
+  color: #20242a;
+}
+html[data-theme="dark"] .market-compare-search-clear:hover {
+  background: #898e96;
+}
+#root .market-compare-brand,
+#root .market-compare-type,
+#root .market-compare-mileage,
+#root .market-compare-price,
+#root .market-compare-sort {
+  width: 100%;
   height: 44px;
 }
-/* На телефоне поиск и список марок идут в две строки во всю ширину: узкий список
-   рядом с широким полем выглядел обрезком, а места для двух колонок там всё равно
-   нет. */
-@media (max-width: 700px) {
-  .market-compare-search,
-  #root .market-compare-brand {
-    flex: 1 1 100%;
-    width: 100%;
+.market-compare-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: -2px 0 12px;
+}
+#root .market-compare-filter-row .select-field {
+  width: max-content;
+  max-width: 100%;
+  height: 34px;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+}
+#root .market-compare-filter-row .select-trigger {
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: 34px;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 0 8px;
+  color: var(--accent);
+}
+#root .market-compare-filter-row .select-trigger b {
+  flex: 0 1 auto;
+  margin-right: 0;
+  color: var(--accent);
+  font-size: 14px;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+#root .market-compare-filter-row .select-trigger svg {
+  color: var(--accent);
+}
+#root .market-compare-filter-row .select-trigger > svg:last-child {
+  display: none;
+}
+#root .market-compare-filter-row .select-menu {
+  min-width: 230px;
+}
+#root .market-compare-filter-row > .select-field:hover,
+#root .market-compare-filter-row > .select-field.open {
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel-soft);
+  box-shadow: none;
+}
+html[data-theme="dark"] #root .market-compare-filter-row .select-trigger,
+html[data-theme="dark"] #root .market-compare-filter-row .select-trigger b,
+html[data-theme="dark"] #root .market-compare-filter-row .select-trigger svg {
+  color: #ff8179;
+}
+html[data-theme="dark"] #root .market-compare-filter-row > .select-field:hover,
+html[data-theme="dark"] #root .market-compare-filter-row > .select-field.open {
+  background: color-mix(in srgb, #ff8179 15%, transparent);
+}
+.market-compare-price-range {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.market-compare-price-range-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.market-compare-price-range:hover .market-compare-price-range-toggle,
+.market-compare-price-range.open .market-compare-price-range-toggle {
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel-soft);
+}
+html[data-theme="dark"] .market-compare-price-range-toggle {
+  color: #ff8179;
+}
+html[data-theme="dark"] .market-compare-price-range:hover .market-compare-price-range-toggle,
+html[data-theme="dark"] .market-compare-price-range.open .market-compare-price-range-toggle {
+  background: color-mix(in srgb, #ff8179 15%, transparent);
+}
+.market-compare-price-range-fields {
+  position: absolute;
+  z-index: 35;
+  top: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--panel);
+  box-shadow: 0 18px 45px rgb(18 21 25 / 16%);
+}
+#root .market-compare-filter-row .market-compare-price-bound {
+  width: 112px;
+  height: 34px;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel-soft);
+}
+#root .market-compare-filter-row .market-compare-price-bound .select-trigger {
+  width: 100%;
+  padding: 0 10px;
+  color: var(--ink);
+}
+#root .market-compare-filter-row .market-compare-price-bound .select-trigger b {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#root .market-compare-filter-row .market-compare-price-bound .select-trigger > svg:last-child {
+  display: block;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+#root .market-compare-filter-row .market-compare-price-bound .select-menu {
+  min-width: 150px;
+}
+html[data-theme="dark"] #root .market-compare-filter-row .market-compare-price-bound,
+html[data-theme="dark"] #root .market-compare-filter-row .market-compare-price-bound .select-trigger {
+  background: #353a43;
+}
+html[data-theme="dark"] #root .market-compare-filter-row .market-compare-price-bound .select-trigger b {
+  color: var(--ink);
+}
+html[data-theme="dark"] #root .market-compare-filter-row .market-compare-price-bound .select-trigger > svg:last-child {
+  color: var(--muted);
+}
+@media (max-width: 900px) {
+  .market-compare-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(170px, 220px);
   }
 }
-.market-compare-count {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
+@media (max-width: 700px) {
+  .market-compare-controls {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    gap: 8px;
+  }
+  #root .market-compare-sort {
+    grid-column: auto;
+    width: 44px;
+    max-width: none;
+    padding: 0;
+  }
+  #root .market-compare-sort .select-trigger {
+    position: relative;
+    inset: auto;
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  #root .market-compare-sort .select-trigger b,
+  #root .market-compare-sort .select-trigger > svg:last-child {
+    display: none;
+  }
+  #root .market-compare-sort .select-trigger-mobile-icon {
+    display: block;
+  }
+  #root .market-compare-sort.has-selection .select-trigger::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  #root .market-compare-sort .select-menu {
+    right: 0;
+    left: auto;
+    min-width: min(260px, calc(100vw - 32px));
+  }
+  .market-compare-filter-row {
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 0 0 4px;
+    scrollbar-width: none;
+  }
+  .market-compare-filter-row::-webkit-scrollbar {
+    display: none;
+  }
+  #root .market-compare-filter-row > .select-field,
+  .market-compare-filter-row > .market-compare-price-range {
+    flex: 0 0 auto;
+    height: 38px;
+    border-radius: calc(11px * var(--corner-scale));
+    background: var(--panel-soft);
+  }
+  #root .market-compare-filter-row > .select-field .select-trigger,
+  .market-compare-filter-row > .market-compare-price-range .market-compare-price-range-toggle {
+    height: 38px;
+    min-height: 38px;
+    padding-inline: 12px;
+    color: var(--ink);
+  }
+  #root .market-compare-filter-row > .select-field .select-trigger b {
+    color: var(--ink);
+    text-decoration: none;
+  }
+  #root .market-compare-filter-row > .select-field .select-trigger svg,
+  .market-compare-filter-row > .market-compare-price-range .market-compare-price-range-toggle {
+    color: var(--ink);
+  }
+  html[data-theme="dark"] #root .market-compare-filter-row > .select-field,
+  html[data-theme="dark"] .market-compare-filter-row > .market-compare-price-range {
+    background: #272b31;
+  }
+  html[data-theme="dark"] #root .market-compare-filter-row > .select-field .select-trigger,
+  html[data-theme="dark"] #root .market-compare-filter-row > .select-field .select-trigger b,
+  html[data-theme="dark"] #root .market-compare-filter-row > .select-field .select-trigger svg,
+  html[data-theme="dark"] .market-compare-filter-row > .market-compare-price-range .market-compare-price-range-toggle {
+    color: var(--ink);
+  }
+  #root .market-compare-filter-row > .select-field:hover,
+  #root .market-compare-filter-row > .select-field.open,
+  .market-compare-filter-row > .market-compare-price-range:hover,
+  .market-compare-filter-row > .market-compare-price-range.open {
+    background: var(--filter-field-open-bg);
+  }
+  .market-compare-price-range {
+    max-width: 100%;
+  }
+  .market-compare-price-range-fields {
+    right: 0;
+    left: auto;
+  }
+  .market-select-sheet-options .sheet-option > svg:last-child {
+    flex: 0 0 auto;
+    color: var(--accent-dark);
+  }
+  .market-price-sheet-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .market-price-sheet-fields .market-compare-price-bound {
+    width: 100%;
+    height: 54px;
+  }
 }
 /* Прокрутка вбок на узких экранах: таблица из пяти столбцов в 360 точек не влезает
    никакими переносами, а ломать её на карточки — снова терять сравнимость строк. */
@@ -15899,6 +16178,256 @@ html[data-theme="dark"] .market-compare-year .market-compare-win {
 }
 html[data-theme="dark"] .market-compare-win {
   color: #6ddc92;
+}
+
+/* Подробное сравнение оформлено карточками моделей. Слева остаётся иллюстрация из
+   каталога, в центре — модель и локальный выбор года, справа — выбранный показатель
+   цены для двух рынков. Пробег и вид цены задаются один раз над всем списком. */
+.market-card-list {
+  display: grid;
+  gap: 14px;
+}
+.market-card {
+  display: grid;
+  grid-template-columns: 180px 180px minmax(0, 1fr);
+  gap: 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: calc(20px * var(--corner-scale));
+  background: var(--panel);
+  font-family: "Manrope", system-ui, sans-serif;
+}
+html[data-theme="dark"] .market-card {
+  border-color: transparent;
+  background: #272b31;
+}
+.market-card-photo {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  height: 124px;
+  overflow: hidden;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--panel-soft);
+  color: var(--muted);
+}
+html[data-theme="dark"] .market-card-photo {
+  background: #353a43;
+}
+.market-card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.market-card-identity {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+}
+.market-card-brand {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+#root .market-card-identity > a {
+  max-width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-overflow: ellipsis;
+}
+#root .market-card-identity > a:hover {
+  color: var(--ink);
+  opacity: 0.78;
+}
+.market-card-version {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+#root .market-card-year-select {
+  width: 124px;
+  height: 36px;
+  margin-top: 14px;
+}
+#root .market-card-year-select .select-trigger {
+  padding-inline: 12px 10px;
+}
+#root .market-card-year-select .select-trigger b {
+  font-size: 14px;
+}
+html[data-theme="dark"] #root .market-card-year-select {
+  background: #353a43;
+}
+.market-card-data {
+  align-self: center;
+  justify-self: end;
+  width: min(100%, 300px);
+  min-width: 0;
+  overflow: hidden;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--panel-soft);
+}
+html[data-theme="dark"] .market-card-data {
+  background: #353a43;
+}
+.market-card-stat-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+}
+.market-card-year-prices {
+  min-width: 0;
+}
+.market-card-stat-row {
+  min-height: 42px;
+  padding: 7px 14px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+.market-card-stat-row + .market-card-stat-row {
+  border-top: 1px solid var(--line);
+}
+html[data-theme="dark"] .market-card-stat-row + .market-card-stat-row {
+  border-top-color: rgb(255 255 255 / 8%);
+}
+.market-card-difference {
+  padding: 9px 14px 10px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+}
+html[data-theme="dark"] .market-card-difference {
+  border-top-color: rgb(255 255 255 / 8%);
+}
+.market-card-difference.cheaper {
+  color: var(--green);
+}
+html[data-theme="dark"] .market-card-difference.cheaper {
+  color: #6ddc92;
+}
+.market-card-difference.costlier {
+  color: var(--muted);
+}
+.market-card-difference.equal {
+  color: var(--muted);
+}
+.market-card-source {
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .market-card {
+    grid-template-columns: 170px 170px minmax(0, 1fr);
+    gap: 14px;
+  }
+  .market-card-photo,
+  .market-card-photo img {
+    height: 124px;
+  }
+  .market-card-stat-row {
+    column-gap: 5px;
+  }
+  .market-card-stat-row {
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+}
+@media (max-width: 900px) {
+  .market-card {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+  .market-card-data {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    width: 100%;
+  }
+  #root .market-card-year-select {
+    max-width: 124px;
+  }
+}
+@media (max-width: 700px) {
+  .market-card {
+    display: grid;
+    grid-template-columns: minmax(112px, 42%) minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px;
+    border-radius: calc(16px * var(--corner-scale));
+  }
+  .market-card-photo {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    aspect-ratio: 4 / 3;
+  }
+  .market-card-photo img {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+  .market-card-identity {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 4px 2px 4px 0;
+  }
+  #root .market-card-identity > a {
+    font-size: 20px;
+  }
+  #root .market-card-year-select {
+    width: 124px;
+    max-width: 124px;
+    margin-top: 14px;
+  }
+  .market-card-data {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+  }
+  .market-card-data > .market-card-difference {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 10px 12px 11px;
+    font-size: 13px;
+    line-height: 1.25;
+    text-align: left;
+  }
+  .market-card-stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    padding: 11px 12px;
+    text-align: left;
+  }
+  .market-card-stat-row > span {
+    text-align: right;
+  }
+  .market-card-source {
+    font-size: 13px;
+  }
 }
 
 /* Справочник марок: карточки на подложках, по три-четыре в ряд. Значок берётся тот же,

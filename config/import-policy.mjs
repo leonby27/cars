@@ -295,8 +295,22 @@ const MODEL_ALIASES = new Map([
   ["shangjie|shangjie suv", "H5"],
 ]);
 
-export function canonicalImportModel(brandValue, modelValue) {
+// Type R — отдельная модель каталога. Объём двигателя, мощность и слово Import
+// сами по себе её не определяют: нужно явное имя версии в данных источника.
+// rawModel — структурированная комплектация; description используем только у
+// старых записей, где отдельного rawModel ещё нет. Комментарий продавца не должен
+// превращать обычный Civic с обвесом в Type R.
+const civicTypeR = (brand, model, details = {}) => {
+  if (brand !== "Honda") return false;
+  const names = [model, details.rawSeries].filter(Boolean).join(" ");
+  if (!/\bcivic\b|思域/i.test(names)) return false;
+  return [model, details.rawSeries, details.rawModel || details.description]
+    .some((value) => /\btype[\s\-‐‑–—]*r\b/i.test(String(value || "")));
+};
+
+export function canonicalImportModel(brandValue, modelValue, details = {}) {
   const brand = canonicalImportBrand(brandValue);
+  if (civicTypeR(brand, modelValue, details)) return "Civic Type R";
   let model = String(modelValue || "").trim();
   for (const prefix of MODEL_PREFIX_STRIPS.get(brand) || []) {
     const lower = model.toLocaleLowerCase("en-US");
@@ -317,7 +331,9 @@ export function canonicalImportModel(brandValue, modelValue) {
 // заодно меняет марку: 银河E5 в Беларуси продают как Geely EX5 — без приставки Galaxy,
 // а модели альянса Huawei разъезжаются по пяти своим маркам. Импорт и обновление
 // каталога зовут именно эту функцию, иначе марка и модель разойдутся.
-export function canonicalImportName(brandValue, modelValue, powertrain) {
+export function canonicalImportName(brandValue, modelValue, powertrain, details = {}) {
+  const sourceBrand = canonicalImportBrand(brandValue);
+  if (civicTypeR(sourceBrand, modelValue, details)) return { brand:sourceBrand, model:"Civic Type R" };
   // Сначала пробуем то, что пришло, как есть: у части моделей вместе с именем меняется
   // и марка, а словарь марок к этому моменту успел бы её подменить. «HIMA / Luxeed R7»
   // должно стать «Luxeed R7», а не «AITO Luxeed R7».

@@ -4,6 +4,7 @@ import { canonicalImportName, uniquePhotos } from "../config/import-policy.mjs";
 import { pool, withTransaction } from "./db.mjs";
 import { notifyLead } from "./lead-notify.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
+import { marketPriceStatsFromRows } from "./market-price-stats.mjs";
 import { searchTextWords, searchWordStem } from "../src/car-search-text.js";
 import { normalizeBodyType } from "../src/body-types.js";
 import { carTitle } from "../src/car-title.js";
@@ -29,7 +30,7 @@ export function normalizeCar(car) {
   const combinedRange = car.combinedRange ?? (Number(car.description?.match(/综合续航\s*(\d+)/)?.[1]) || null);
   // Марка и модель приводятся вместе: часть машин при переименовании на беларуское имя
   // заодно меняет марку (银河E5 → Geely EX5, модели альянса Huawei → AITO, Luxeed и далее).
-  const { brand, model } = canonicalImportName(car.brand, car.model, car.type);
+  const { brand, model } = canonicalImportName(car.brand, car.model, car.type, car);
   // Повторы фотографий убираем здесь, потому что через эту воронку проходит и
   // запись при импорте, и каждое чтение из базы: чинится и то, что уже лежит.
   const photos = car.images ? uniquePhotos(car.images) : null;
@@ -571,6 +572,33 @@ export async function modelPriceMedians() {
     GROUP BY v.brand, v.model, v.model_year
     HAVING count(*) >= 3`);
   return rows;
+}
+
+/**
+ * Полная ценовая статистика по модели, году и верхней границе пробега для карточек
+ * сравнения. Каждый предел накопительный: «до 50 000 км» включает и машины с
+ * пробегом до 20 000 км. Для каждой машины считаются обе цены — с квотой и без,
+ * чтобы переключатель менял медиану, среднюю и границы без нового запроса к базе.
+ * Фото берём у свежего активного объявления той же модели.
+ */
+export async function modelPriceStats() {
+  const { rows } = await pool.query(`SELECT l.id, v.brand, v.model, v.model_year AS year,
+      l.mileage_km, l.price_cny, l.source, l.city, v.powertrain AS type,
+      l.source_payload->>'usdPrice' AS usd_price,
+      l.source_payload->>'sourceFuelType' AS fuel_type,
+      COALESCE(l.source_payload->>'transmission', v.specifications->>'transmission') AS transmission,
+      COALESCE(l.source_payload->>'engine', v.specifications->>'engine') AS engine,
+      l.source_payload->>'manufactureDate' AS manufacture_date,
+      l.source_payload->>'dimensions' AS dimensions,
+      l.source_payload->>'curbWeight' AS curb_weight,
+      (SELECT m.url FROM listing_media m WHERE m.listing_id=l.id ORDER BY m.position LIMIT 1) AS image
+    FROM listings l
+    JOIN vehicles v ON v.id=l.vehicle_id
+    WHERE l.status='active'
+      AND l.price_cny > 0
+      AND v.model_year IS NOT NULL
+    ORDER BY l.listed_at DESC NULLS LAST, l.id`);
+  return marketPriceStatsFromRows(rows);
 }
 
 // Кузов и тип двигателя каждой модели с числом машин — одним запросом на весь каталог

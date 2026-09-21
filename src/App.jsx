@@ -1,7 +1,7 @@
 import { prepareServiceVideo } from "./service-video-loading.js";
 import { readCatalogFallback } from "./catalog-fallback.js";
 import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "./auth-route.js";
-import { Phone, Star } from "@phosphor-icons/react";
+import { Phone, SortAscending, Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -10,7 +10,7 @@ import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
 import { Illustration } from "./illustration.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -18,7 +18,7 @@ import { matchesSearchText, searchTextWords, searchWordStem } from "./car-search
 import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { cityName } from "./city-names.js";
-import { EXCLUDED_BRANDS } from "../config/import-policy.mjs";
+import { EXCLUDED_BRANDS, canonicalImportModel } from "../config/import-policy.mjs";
 import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
@@ -49,9 +49,9 @@ import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EX
 import { InspectionReport } from "./inspection-report.jsx";
 import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
+import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, comparisonOwnPrices, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint } from "./market-compare.js";
 import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
 import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
-import { REBUILT_HINT, compareSummary, compareTable, coverageNote, groupCompareRows, hasRebuiltHint } from "./market-compare.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
@@ -469,7 +469,7 @@ function normalizeImportedCar(car) {
   const description = car.description || "";
   const legacyScore = Number(car.appearanceScore);
   const appearanceScore = legacyScore > 100 ? Number(String(legacyScore).slice(0, 2)) : legacyScore || null;
-  const model = car.brand === "Deepal" ? String(car.model).replace(/^深蓝/, "") : car.brand === "Voyah" ? String(car.model).replace(/^岚图/, "") : car.model;
+  const model = car.brand === "Honda" ? canonicalImportModel(car.brand, car.model, car) : car.brand === "Deepal" ? String(car.model).replace(/^深蓝/, "") : car.brand === "Voyah" ? String(car.model).replace(/^岚图/, "") : car.model;
   const electricRange = car.electricRange ?? (Number(description.match(/纯电续航\s*(\d+)/)?.[1]) || null);
   const combinedRange = car.combinedRange ?? (Number(description.match(/综合续航\s*(\d+)/)?.[1]) || null);
   const batteryHealth = car.batteryHealth ?? (Number(description.match(/电池健康度\s*(\d+)%/)?.[1]) || null);
@@ -1516,7 +1516,7 @@ function CardSkeleton({ row }) {
   );
 }
 
-function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, icon: Icon }) {
+function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, icon: Icon, mobileIcon: MobileIcon, mobileActionSheet = false }) {
   // В режиме мультивыбора value — массив, а первая опция играет роль «сбросить всё».
   const allOption = multiple ? options[0] : null;
   const selectedValues = multiple ? (Array.isArray(value) ? value : value && value !== allOption ? [value] : []) : [];
@@ -1534,6 +1534,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
   const searchRef = useRef(null);
   const optionsRef = useRef(null);
   const listId = useId();
+  const actionSheetMode = Boolean(mobileActionSheet);
   const selectedIndex = Math.max(0, options.indexOf(highlighted));
   const filteredOptions = useMemo(() => {
     // Поиск по списку идёт тем же приведением, что и поиск по каталогу: «skoda»
@@ -1551,11 +1552,12 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
 
   useEffect(() => {
     const closeOutside = (event) => {
+      if (actionSheetMode) return;
       if (!rootRef.current?.contains(event.target)) close();
     };
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
-  }, []);
+  }, [actionSheetMode]);
 
   useEffect(() => {
     if (disabled && open) close();
@@ -1673,13 +1675,14 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     : formatOption(value);
 
   return (
-    <div className={`select-field custom-select${className ? ` ${className}` : ""}${hasSelection ? " has-selection" : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
+    <div className={`select-field custom-select${className ? ` ${className}` : ""}${MobileIcon ? " has-mobile-icon" : ""}${hasSelection ? " has-selection" : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
       <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}`} aria-label={`${label}: ${triggerText}`} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
         {Icon && <Icon className="select-trigger-icon" size={20} weight="duotone" aria-hidden="true" />}
+        {MobileIcon && <MobileIcon className="select-trigger-mobile-icon" size={22} weight="bold" aria-hidden="true" />}
         <b>{triggerText}</b>
         <CaretDown size={16} weight="bold" />
       </button>
-      {!disabled && (
+      {!disabled && !actionSheetMode && (
         <div className={`select-menu${open ? " open" : ""}`} aria-hidden={!open} inert={open ? undefined : true}>
           {searchable && (
             <div className="select-search">
@@ -1730,6 +1733,25 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
             )}
           </div>
         </div>
+      )}
+      {!disabled && actionSheetMode && open && typeof document !== "undefined" && createPortal(
+        <FilterSheet title={label} onClose={() => close(true)} fill={filteredOptions.length > 8}>
+          <div className="sheet-options market-select-sheet-options" id={listId} role="listbox" aria-label={label} aria-multiselectable={multiple || undefined}>
+            {filteredOptions.map((item) => {
+              const optionCount = optionCounts?.get(item);
+              const chosen = isChosen(item);
+              return (
+                <button type="button" role="option" aria-selected={chosen} className={`sheet-option${chosen ? " chosen" : ""}`} key={item} onClick={() => choose(item)}>
+                  {optionIcon && <span className="select-option-icon" aria-hidden="true">{optionIcon(item)}</span>}
+                  <span className="sheet-option-name">{formatOption(item)}</span>
+                  {Number.isFinite(optionCount) && <span className="sheet-option-count">{number(optionCount)}</span>}
+                  {chosen && <Check size={18} weight="bold" aria-hidden="true" />}
+                </button>
+              );
+            })}
+          </div>
+        </FilterSheet>,
+        document.body,
       )}
     </div>
   );
@@ -9441,6 +9463,24 @@ function ToolPage({ tool, navigate }) {
       content: <p>{renderInlineText(item.a, navigate)}</p>,
     })),
   ];
+  // На сравнении цен оставляем человеку только карточки и компактный блок вопросов.
+  // Все пояснения по-прежнему находятся в разметке страницы и в FAQ schema, поэтому
+  // поисковик и агент получают полный контекст, но длинная статья не идёт следом за
+  // результатами, ради которых открывают страницу.
+  const marketDetails = !isMarket ? [] : [
+    {
+      title: "Как работает сравнение цен?",
+      content: <>{texts.intro.map((text) => <p key={text.slice(0, 40)}>{renderInlineText(text, navigate)}</p>)}</>,
+    },
+    ...texts.sections.map((section) => ({
+      title: section.title,
+      content: <ModelPageSection section={{ ...section, title: null }} navigate={navigate} />,
+    })),
+    ...texts.faq.map((item) => ({
+      title: item.q,
+      content: <p>{renderInlineText(item.a, navigate)}</p>,
+    })),
+  ];
   // Шаг назад работает, только если на страницу пришли с другой страницы сайта. По
   // прямой ссылке из поиска возвращаться некуда — ведём на главную.
   const goBack = () => (window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : navigate("/"));
@@ -9524,11 +9564,6 @@ function ToolPage({ tool, navigate }) {
           {isMarket && (
             <article className="model-page-article">
               <MarketCompare navigate={navigate} />
-              {/* Вступление здесь же, а не в своей подложке: под таблицей оно
-                  продолжает разговор, а отдельным блоком читалось как новый раздел. */}
-              <div className="model-page-intro market-compare-intro">
-                {texts.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
-              </div>
             </article>
           )}
         </div>
@@ -9548,7 +9583,9 @@ function ToolPage({ tool, navigate }) {
             </article>
           </div>
         )}
-        {isFormPage ? (
+        {isMarket ? (
+          <ToolDisclosures title="Частые вопросы" titleId="market-compare-faq-title" items={marketDetails} faq={texts.faq} />
+        ) : isFormPage ? (
           <>
             {isCalculator ? (
               <>
@@ -9585,7 +9622,7 @@ function ToolPage({ tool, navigate }) {
       <main className="model-page tool-page">
         {reading}
         <ToolPageLinks tool={tool} navigate={navigate} />
-        <p className="model-page-disclaimer page-width">{texts.disclaimer}</p>
+        {!isMarket && <p className="model-page-disclaimer page-width">{texts.disclaimer}</p>}
       </main>
     );
   }
@@ -9608,7 +9645,7 @@ function ToolPage({ tool, navigate }) {
             боковой колонке, и внизу они были вторым списком того же самого. */}
         <div className="blog-main">
           {reading}
-          <p className="model-page-disclaimer">{texts.disclaimer}</p>
+          {!isMarket && <p className="model-page-disclaimer">{texts.disclaimer}</p>}
         </div>
         <BlogSidebar navigate={navigate} currentPath={tool.path} />
       </div>
@@ -10102,15 +10139,8 @@ function ChinaBrandsDirectory({ navigate }) {
   );
 }
 
-/* Сравнение с белорусским рынком.
-
-   Считать это в браузере не из чего: цены нашего каталога живут в базе, а свод чужих
-   объявлений собирается руками с домашней сети. Поэтому сравнение собирает сервер
-   (`/api/market/compare`) по тем же правилам, что и версия для поисковика.
-
-   Ответа может не быть: свод не собран или база недоступна. Тогда блок молча исчезает,
-   а страница остаётся текстовой — пустая таблица «сравнили и ничего не нашли» хуже
-   её отсутствия. */
+/* Подробное сравнение цен с рынком Беларуси. Сервер заранее сопоставляет одинаковые
+   модели и годы, а браузер только переключает предел пробега и рисует карточки. */
 function MarketCompare({ navigate }) {
   const [data, setData] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -10130,320 +10160,352 @@ function MarketCompare({ navigate }) {
   }, []);
   if (failed) return null;
   if (!data) return <p className="cost-calculator-note">Считаем разницу…</p>;
-  const rows = data.rows || [];
-  if (!rows.length) return null;
-  // Итоговой плашки здесь нет намеренно: всё то же самое видно в самой таблице, а
-  // цветной блок над ней только отодвигал её вниз. В версии для поисковика сводка
-  // осталась — там таблицу не полистаешь.
+  const cards = data.cards || [];
+  if (!cards.length) return null;
   return (
     <section className="cost-calculator">
-      <MarketCompareTable rows={rows} brands={data.brands || []} collectedAt={data.collectedAt} navigate={navigate} />
+      <MarketCompareCards cards={cards} navigate={navigate} />
     </section>
   );
 }
 
-/* Таблица сравнения: поиск, фильтр по марке и сортировка по столбцам.
-
-   Здесь именно таблица, а не карточки, как на остальных страницах расчётов. Причина в
-   размере: наборов «модель + год», где есть предложения с обеих сторон, около двух
-   сотен, и карточками это превращается в бесконечную ленту, по которой нельзя ни найти
-   свою машину, ни сравнить строки между собой. Столбцы же читаются глазом сразу.
-
-   Сортировка по умолчанию — по числу наших машин: сверху то, где у нас настоящий
-   выбор, а не три случайных объявления. Нажатие на заголовок переключает столбец, а
-   повторное — направление. */
-const MARKET_SORTS = Object.freeze([
-  // У названия сортировка буквенная, у остальных числовая: отсюда два вида правила.
-  { id: "model", label: "Модель авто", text: (row) => `${row.brand} ${row.model}` },
-  { id: "theirMedian", label: "В Беларуси", value: (row) => row.theirMedian },
-  { id: "ourMedian", label: "У нас в каталоге", value: (row) => row.ourMedian },
-  { id: "diffPercent", label: "Разница", value: (row) => row.diffPercent },
+const MARKET_PAGE_SIZE = 50;
+const MARKET_MILEAGE_OPTIONS = Object.freeze([
+  { key:"20000", label:"До 20 000 км" },
+  { key:"50000", label:"До 50 000 км" },
+  { key:"100000", label:"До 100 000 км" },
+  { key:"150000", label:"До 150 000 км" },
+  { key:"200000", label:"До 200 000 км" },
+  { key:"all", label:"Любой пробег" },
 ]);
-// По какому столбцу таблица отсортирована при первом открытии: по разнице, сверху
-// самое выгодное. За этим на страницу и приходят — «где выгоднее всего привезти», а
-// не «каких машин у нас больше».
-const MARKET_DEFAULT_SORT = { id: "diffPercent", desc: true, value: (row) => row.diffPercent };
-// Сколько строк показываем сразу и сколько добавляет кнопка.
-const MARKET_PAGE_SIZE = 20;
+const MARKET_PRICE_OPTIONS = Object.freeze([
+  { key:"min", label:"По минимальной цене", column:"Минимум" },
+  { key:"mean", label:"По средней цене", column:"Средняя" },
+  { key:"median", label:"По медианной цене", column:"Медиана" },
+]);
+const MARKET_SORT_OPTIONS = Object.freeze(["Сначала выгодные", "Сначала невыгодные"]);
+const MARKET_POWERTRAIN_OPTIONS = Object.freeze([
+  { key:"all", label:"Все типы" },
+  { key:"Электромобиль", label:"Электро" },
+  { key:"Гибрид", label:"Гибрид" },
+  { key:"ДВС", label:"Бензин" },
+]);
+const MARKET_PRICE_RANGE_VALUES = Object.freeze([
+  10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000, 60000, 70000, 80000, 90000, 100000, 125000, 150000,
+]);
+const marketPriceRangeLabel = (value) => `${number(value)} $`;
+const marketPriceRangeValue = (label) => {
+  const value = Number(String(label).replace(/\D/g, ""));
+  return Number.isFinite(value) && value > 0 ? value : null;
+};
 
-function MarketCompareTable({ rows, brands: coverage, collectedAt, navigate }) {
-  const [query, setQuery] = useState("");
-  const [brand, setBrand] = useState("Все марки");
-  const [sort, setSort] = useState(MARKET_DEFAULT_SORT);
-  // Показываем по двадцать строк. Двести с лишним сразу — это экран, по которому
-  // невозможно идти глазом, и лишний вес страницы на телефоне.
-  const [shown, setShown] = useState(MARKET_PAGE_SIZE);
-  // В списке все марки каталога, а не только те, где сравнение получилось. Человек
-  // ищет свою машину: если её марки в списке нет, он прочитает это как «не возят»,
-  // хотя дело в белорусском рынке, а не в нас.
-  const brands = useMemo(
-    () => ["Все марки", ...coverage.map((item) => item.brand).sort((left, right) => left.localeCompare(right, "ru"))],
-    [coverage],
+function defaultMarketPrices(card, mileageKey, priceKey, quotaPricingOn) {
+  const choice = bestComparisonYear(card, mileageKey, priceKey, quotaPricingOn);
+  if (choice?.aggregate) return choice.prices;
+  const prices = choice?.year?.prices[mileageKey] || null;
+  return prices ? { ...prices, ours:comparisonOwnPrices(prices.ours, quotaPricingOn) } : null;
+}
+
+function marketDifference(card, mileageKey, priceKey, quotaPricingOn) {
+  return bestComparisonYear(card, mileageKey, priceKey, quotaPricingOn)?.difference ?? null;
+}
+
+// Поиск в сравнении использует те же словари, раскладку и транслитерацию, что
+// основной поиск каталога. Варианты проверяем по очереди и берём первый, который
+// вообще дал результат: так ошибочная раскладка «иьц» исправится как BMW, но более
+// далёкие короткие транслитерации уже не подмешают Buick и Mitsubishi.
+function marketCardsMatchingQuery(cards, query) {
+  const normalizedQuery = searchNormalize(query);
+  if (!normalizedQuery) return cards;
+  const firstPass = listSearchVariants(query);
+  const variants = [...new Set([...firstPass, ...firstPass.flatMap((variant) => listSearchVariants(variant))])];
+  for (const variant of variants) {
+    const words = searchNormalize(variant).split(/\s+/).filter(Boolean).slice(0, 6);
+    if (!words.length) continue;
+    const matches = cards.filter((card) => {
+      const haystack = searchNormalize(`${card.brand} ${card.model} ${card.years.map((year) => year.year).join(" ")}`);
+      const tokens = haystack.split(/\s+/);
+      return words.every((word) => (word.length === 1 ? tokens.includes(word) : haystack.includes(word)) || (word.length >= 7 && haystack.includes(searchWordStem(word))));
+    });
+    if (matches.length) return matches;
+  }
+  return [];
+}
+
+function MarketStatRow({ label, stats, priceOption }) {
+  const value = hasEnoughMarketSample(stats) ? stats?.[priceOption.key] : null;
+  return (
+    <div className="market-card-stat-row">
+      <b className="market-card-source">{label}</b>
+      <span data-label={priceOption.column}>{Number.isFinite(value) ? `${number(Math.round(value))} $` : "—"}</span>
+    </div>
   );
-  const chosen = coverage.find((item) => item.brand === brand) || null;
-  const thin = useMemo(() => coverage.filter((item) => !item.matched), [coverage]);
-  // Раскрытые модели. Пока ничего не раскрыто, таблица показывает по строке на модель
-  // с разбегом лет; нажатие на строку показывает годы по отдельности.
-  const [opened, setOpened] = useState(() => new Set());
-  const toggleModel = (key) => setOpened((current) => {
-    const next = new Set(current);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    return next;
+}
+
+function MarketCardDifference({ differenceLabel, difference, hasComparison, showRebuiltHint }) {
+  return (
+    <div className={`market-card-difference ${hasComparison && difference > 0.05 ? "cheaper" : hasComparison && difference < -0.05 ? "costlier" : "equal"}`}>
+      <span>{differenceLabel}</span>
+      {showRebuiltHint && (
+        <button type="button" className="market-compare-hint" aria-label="Почему в Беларуси дешевле">
+          <Info size={16} />
+          <ActionTooltip text={REBUILT_HINT} tapToOpen />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MarketModelCard({ card, navigate, mileageOption, priceOption, quotaPricingOn }) {
+  const years = card.years;
+  const defaultYear = bestComparisonYear(card, mileageOption.key, priceOption.key, quotaPricingOn)?.year || null;
+  const yearWasChosen = useRef(false);
+  const [year, setYear] = useState(() => String(defaultYear?.year || "all"));
+  useEffect(() => {
+    if (!yearWasChosen.current) setYear(String(defaultYear?.year || "all"));
+  }, [defaultYear?.year]);
+  const selectedYear = years.find((item) => String(item.year) === year) || null;
+  const rawPrices = selectedYear
+    ? selectedYear.prices[mileageOption.key] || { ours:null, belarus:null }
+    : aggregateComparisonPrices(years, mileageOption.key, quotaPricingOn);
+  const prices = selectedYear
+    ? { ...rawPrices, ours:comparisonOwnPrices(rawPrices.ours, quotaPricingOn) }
+    : rawPrices;
+  const ourPrice = prices.ours?.[priceOption.key];
+  const belarusPrice = prices.belarus?.[priceOption.key];
+  const hasComparison = hasEnoughComparisonSample(prices)
+    && Number.isFinite(ourPrice)
+    && Number.isFinite(belarusPrice)
+    && belarusPrice > 0;
+  const difference = hasComparison ? ((belarusPrice - ourPrice) / belarusPrice) * 100 : null;
+  const hasBelarusData = years.some((item) => Object.values(item.prices).some((itemPrices) => Boolean(itemPrices.belarus?.count)));
+  const differenceLabel = !hasBelarusData
+    ? "Нет данных"
+    : !hasComparison
+    ? "Недостаточно данных"
+    : Math.abs(difference) < 0.05
+    ? "Цена одинаковая"
+    : `${difference > 0 ? "Дешевле" : "Дороже"} на ${new Intl.NumberFormat("ru-RU", { maximumFractionDigits:1 }).format(Math.abs(difference))}%`;
+  const showRebuiltHint = hasComparison && difference < -0.05 && hasRebuiltHint({
+    brand:card.brand,
+    model:card.model,
+    year:selectedYear?.year ?? years[0]?.year,
+    diff:difference,
   });
-  const table = compareTable(rows, { collectedAt });
+  const source = selectedYear?.image || card.image || null;
+  const preview = imageSource(source, IMAGE_WIDTH_CARD);
+  return (
+    <article className="market-card">
+      <div className="market-card-photo">
+        {preview
+          ? <img src={preview} alt={`${card.brand} ${card.model}`} loading="lazy" onError={(event) => retryWithFullImage(event, source)} />
+          : <CarProfile size={44} weight="duotone" aria-hidden="true" />}
+      </div>
+      <div className="market-card-identity">
+        <span className="market-card-brand">{card.brand}</span>
+        <AppLink href={`/catalog?brand=${encodeURIComponent(card.brand)}&model=${encodeURIComponent(card.model)}`} navigate={navigate}>
+          {card.model}
+        </AppLink>
+        {card.longVersion && <span className="market-card-version">Длиннобазная версия</span>}
+        <SelectField
+          className="market-card-year-select"
+          label="Год выпуска"
+          value={selectedYear ? String(selectedYear.year) : "Все года"}
+          options={["Все года", ...years.map((item) => String(item.year))]}
+          onChange={(value) => {
+            yearWasChosen.current = true;
+            setYear(value === "Все года" ? "all" : value);
+          }}
+        />
+      </div>
+      <div className="market-card-data">
+        <section className="market-card-year-prices" aria-label={`${card.brand} ${card.model}, ${selectedYear ? `${selectedYear.year} год` : "все годы"}`}>
+          <MarketStatRow label="В нашем каталоге" stats={prices.ours} priceOption={priceOption} />
+          <MarketStatRow label="Продают в Беларуси" stats={prices.belarus} priceOption={priceOption} />
+        </section>
+        <MarketCardDifference differenceLabel={differenceLabel} difference={difference} hasComparison={hasComparison} showRebuiltHint={showRebuiltHint} />
+      </div>
+    </article>
+  );
+}
+
+function MarketCompareCards({ cards, navigate }) {
+  const quotaPricingOn = useQuotaPricing()?.on !== false;
+  const narrow = useNarrowViewport();
+  const [query, setQuery] = useState("");
+  const searchRef = useRef(null);
+  const [brand, setBrand] = useState("Все марки");
+  const [powertrain, setPowertrain] = useState(MARKET_POWERTRAIN_OPTIONS[0].label);
+  const [mileage, setMileage] = useState("До 100 000 км");
+  const [priceBasis, setPriceBasis] = useState("По медианной цене");
+  const [priceFrom, setPriceFrom] = useState(null);
+  const [priceTo, setPriceTo] = useState(null);
+  const [priceRangeOpen, setPriceRangeOpen] = useState(false);
+  const priceRangeRef = useRef(null);
+  const [sortOrder, setSortOrder] = useState(MARKET_SORT_OPTIONS[0]);
+  const [shown, setShown] = useState(MARKET_PAGE_SIZE);
+  const mileageOption = MARKET_MILEAGE_OPTIONS.find((option) => option.label === mileage) || MARKET_MILEAGE_OPTIONS[2];
+  const powertrainOption = MARKET_POWERTRAIN_OPTIONS.find((option) => option.label === powertrain) || MARKET_POWERTRAIN_OPTIONS[0];
+  const priceOption = MARKET_PRICE_OPTIONS.find((option) => option.label === priceBasis) || MARKET_PRICE_OPTIONS[2];
+  const brands = useMemo(() => ["Все марки", ...new Set(cards.map((card) => card.brand))].sort((left, right) => left === "Все марки" ? -1 : right === "Все марки" ? 1 : left.localeCompare(right, "ru")), [cards]);
+  const priceFromOptions = useMemo(() => ["От", ...MARKET_PRICE_RANGE_VALUES.filter((value) => priceTo == null || value <= priceTo).map(marketPriceRangeLabel)], [priceTo]);
+  const priceToOptions = useMemo(() => ["До", ...MARKET_PRICE_RANGE_VALUES.filter((value) => priceFrom == null || value >= priceFrom).map(marketPriceRangeLabel)], [priceFrom]);
+  const priceRangeLabel = priceFrom != null && priceTo != null
+    ? `${number(priceFrom)}–${number(priceTo)} $`
+    : priceFrom != null
+    ? `От ${number(priceFrom)} $`
+    : priceTo != null
+    ? `До ${number(priceTo)} $`
+    : "Любая цена";
+  useEffect(() => {
+    if (!priceRangeOpen) return undefined;
+    if (narrow) return undefined;
+    const closeOutside = (event) => {
+      if (!priceRangeRef.current?.contains(event.target)) setPriceRangeOpen(false);
+    };
+    const closeWithKeyboard = (event) => {
+      if (event.key === "Escape") setPriceRangeOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeWithKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeWithKeyboard);
+    };
+  }, [priceRangeOpen, narrow]);
   const visible = useMemo(() => {
-    // Ищем по марке и модели вместе: человек пишет «byd han», а не выбирает марку
-    // отдельно. Регистр и лишние пробелы значения не имеют, год тоже ищется.
-    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const sorter = MARKET_SORTS.find((item) => item.id === sort.id) || MARKET_DEFAULT_SORT;
-    const picked = rows
-      .filter((row) => brand === "Все марки" || row.brand === brand)
-      .filter((row) => {
-        if (!words.length) return true;
-        const haystack = `${row.brand} ${row.model} ${row.year}`.toLowerCase();
-        return words.every((word) => haystack.includes(word));
+    const brandCards = cards.filter((card) =>
+      (brand === "Все марки" || card.brand === brand)
+      && (powertrainOption.key === "all" || card.type === powertrainOption.key));
+    return marketCardsMatchingQuery(brandCards, query)
+      .filter((card) => {
+        if (priceFrom == null && priceTo == null) return true;
+        const value = defaultMarketPrices(card, mileageOption.key, priceOption.key, quotaPricingOn)?.ours?.[priceOption.key];
+        return Number.isFinite(value) && (priceFrom == null || value >= priceFrom) && (priceTo == null || value <= priceTo);
+      })
+      .sort((left, right) => {
+        const leftDifference = marketDifference(left, mileageOption.key, priceOption.key, quotaPricingOn);
+        const rightDifference = marketDifference(right, mileageOption.key, priceOption.key, quotaPricingOn);
+        if (leftDifference == null) return rightDifference == null ? 0 : 1;
+        if (rightDifference == null) return -1;
+        const result = rightDifference - leftDifference;
+        return sortOrder === MARKET_SORT_OPTIONS[0] ? result : -result;
       });
-    // Сравниваем всегда «по возрастанию», а направление переворачиваем одним местом:
-    // так числовой и буквенный столбцы не расходятся в поведении.
-    const ascending = sorter.text
-      ? (left, right) => sorter.text(left).localeCompare(sorter.text(right), "ru")
-      : (left, right) => sorter.value(left) - sorter.value(right);
-    return groupCompareRows(picked).sort((left, right) => ascending(left, right) * (sort.desc ? -1 : 1));
-  }, [rows, query, brand, sort]);
-  // Когда ищут словом, годы показываем сразу: человек уже сузил выдачу сам, и лишнее
-  // нажатие здесь только мешает.
-  const searching = query.trim().length > 0;
-  // Любая смена отбора возвращает список к первым двадцати: иначе после поиска
-  // «byd» на экране оставалось бы столько строк, сколько человек открыл до него.
-  useEffect(() => setShown(MARKET_PAGE_SIZE), [query, brand, sort]);
+  }, [cards, query, brand, powertrainOption.key, mileageOption.key, priceOption.key, priceFrom, priceTo, quotaPricingOn, sortOrder]);
+  useEffect(() => setShown(MARKET_PAGE_SIZE), [query, brand, powertrain, mileage, priceBasis, priceFrom, priceTo, sortOrder]);
   const page = visible.slice(0, shown);
-  const money = (value) => `${number(Math.round(value))} $`;
-  // Числовой столбец при первом нажатии показывает сначала большие значения, а
-  // название — от А до Я: иначе список моделей открывался бы с конца алфавита.
-  const toggleSort = (id) => setSort((current) => (current.id === id ? { id, desc: !current.desc } : { id, desc: id !== "model" }));
 
   return (
     <div className="market-compare">
       <div className="market-compare-controls">
-        <label className="market-compare-search">
+        <div className="market-compare-search">
           <MagnifyingGlass size={18} />
           <input
+            ref={searchRef}
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Марка или модель"
             aria-label="Поиск по марке и модели"
           />
-        </label>
-        <SelectField className="market-compare-brand" label="Марка" value={brand} options={brands} onChange={setBrand} />
-
+          {query && (
+            <button
+              type="button"
+              className="market-compare-search-clear"
+              aria-label="Очистить поиск"
+              onClick={() => {
+                setQuery("");
+                searchRef.current?.focus();
+              }}
+            >
+              <X size={12} weight="bold" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        <SelectField className="market-compare-sort" label="Сортировка" value={sortOrder} options={MARKET_SORT_OPTIONS} onChange={setSortOrder} mobileIcon={SortAscending} mobileActionSheet={narrow} />
       </div>
-      {/* Марка выбрана, а сравнивать не с чем: объясняем чем именно, а не оставляем
-          пустое место. Это как раз те марки, которых в Беларуси почти нет, — довод
-          в нашу пользу, а не пробел в данных. */}
-      {chosen && !chosen.matched && (
-        <p className="market-compare-empty">
-          {chosen.brand}: в каталоге {number(chosen.cars)} {pluralRu(chosen.cars, "машина", "машины", "машин")}, но {coverageNote(chosen)}.
-          {chosen.offers === 0 ? " Такую машину в Беларуси попросту не купить с рук — её нужно везти." : ""}
-        </p>
+      <div className="market-compare-filter-row">
+        <SelectField className="market-compare-brand" label="Марка" value={brand} options={brands} onChange={setBrand} icon={CarProfile} mobileActionSheet={narrow} />
+        <SelectField className="market-compare-type" label="Тип двигателя" value={powertrain} options={MARKET_POWERTRAIN_OPTIONS.map((option) => option.label)} onChange={setPowertrain} icon={Engine} mobileActionSheet={narrow} />
+        <SelectField className="market-compare-mileage" label="Пробег" value={mileage} options={MARKET_MILEAGE_OPTIONS.map((option) => option.label)} onChange={setMileage} icon={Gauge} mobileActionSheet={narrow} />
+        <div ref={priceRangeRef} className={`market-compare-price-range${priceRangeOpen ? " open" : ""}${priceFrom != null || priceTo != null ? " has-selection" : ""}`}>
+          <button
+            type="button"
+            className="market-compare-price-range-toggle"
+            aria-expanded={priceRangeOpen}
+            aria-controls="market-price-range-fields"
+            onClick={() => setPriceRangeOpen((current) => !current)}
+          >
+            <CurrencyDollar size={20} weight="duotone" aria-hidden="true" />
+            <span>{priceRangeLabel}</span>
+          </button>
+          {priceRangeOpen && !narrow && (
+            <div className="market-compare-price-range-fields" id="market-price-range-fields">
+              <SelectField
+                className="market-compare-price-bound"
+                label="Цена от"
+                value={priceFrom == null ? "От" : marketPriceRangeLabel(priceFrom)}
+                options={priceFromOptions}
+                onChange={(value) => setPriceFrom(marketPriceRangeValue(value))}
+              />
+              <SelectField
+                className="market-compare-price-bound"
+                label="Цена до"
+                value={priceTo == null ? "До" : marketPriceRangeLabel(priceTo)}
+                options={priceToOptions}
+                onChange={(value) => setPriceTo(marketPriceRangeValue(value))}
+              />
+            </div>
+          )}
+        </div>
+        <SelectField className="market-compare-price" label="Цена" value={priceBasis} options={MARKET_PRICE_OPTIONS.map((option) => option.label)} onChange={setPriceBasis} icon={Scales} mobileActionSheet={narrow} />
+      </div>
+      {priceRangeOpen && narrow && typeof document !== "undefined" && createPortal(
+        <FilterSheet
+          title="Диапазон цены"
+          onClose={() => setPriceRangeOpen(false)}
+          compact
+          footer={<button type="button" className="primary" onClick={() => setPriceRangeOpen(false)}>Готово</button>}
+        >
+          <div className="mobile-filter-sheet-fields market-price-sheet-fields" id="market-price-range-fields">
+            <SelectField
+              className="market-compare-price-bound"
+              label="Цена от"
+              value={priceFrom == null ? "От" : marketPriceRangeLabel(priceFrom)}
+              options={priceFromOptions}
+              onChange={(value) => setPriceFrom(marketPriceRangeValue(value))}
+            />
+            <SelectField
+              className="market-compare-price-bound"
+              label="Цена до"
+              value={priceTo == null ? "До" : marketPriceRangeLabel(priceTo)}
+              options={priceToOptions}
+              onChange={(value) => setPriceTo(marketPriceRangeValue(value))}
+            />
+          </div>
+        </FilterSheet>,
+        document.body,
       )}
-      {/* Заглушка та же, что в поиске на главной: значок, заголовок и подсказка,
-          что делать дальше. Голая строчка «ничего не найдено» рядом с фильтром
-          читалась как ошибка страницы. */}
       {visible.length === 0 && (
         <div className="empty-state market-compare-empty-state">
           <MagnifyingGlass size={26} />
           <h3>Ничего не найдено</h3>
           <p>
-            {brand === "Все марки"
+            {priceFrom != null || priceTo != null
+              ? "В выбранном диапазоне цен машин нет. Измените границы или выберите любую цену."
+              : powertrainOption.key !== "all"
+              ? `Машин типа «${powertrain}» с выбранными параметрами нет. Выберите другой тип или измените фильтры.`
+              : brand === "Все марки"
               ? "Попробуйте другое написание модели или выберите марку из списка."
               : `По марке ${brand} с таким запросом ничего нет. Уберите слово из поиска или выберите другую марку.`}
           </p>
         </div>
       )}
-      {visible.length > 0 && (
-        <div className="market-compare-scroll">
-          <table className="market-compare-table">
-            <thead>
-              <tr>
-                {MARKET_SORTS.map((item) => (
-                  <th key={item.id} scope="col" aria-sort={sort.id === item.id ? (sort.desc ? "descending" : "ascending") : "none"}>
-                    <button type="button" onClick={() => toggleSort(item.id)}>
-                      {item.label}
-                      {sort.id === item.id ? <span aria-hidden="true">{sort.desc ? " ↓" : " ↑"}</span> : null}
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {page.map((group) => {
-                const open = searching || opened.has(group.key);
-                // У модели с единственным годом раскрывать нечего: строка не
-                // нажимается и не подсвечивается, а стрелка остаётся приглушённой —
-                // только чтобы столбец названий не разъезжался.
-                const single = group.years.length === 1;
-                const nameInside = (
-                  <>
-                    <CaretRight size={15} weight="bold" className={`market-compare-caret${open && !single ? " open" : ""}${single ? " dim" : ""}`} />
-                    <span className="market-compare-name-text">
-                      {/* Длинное название не переносится на вторую строку, а
-                          обрезается многоточием: строки таблицы должны быть одной
-                          высоты, иначе колонки цифр разъезжаются. */}
-                      <AppLink
-                        className="market-compare-model"
-                        href={`/catalog?brand=${encodeURIComponent(group.brand)}&model=${encodeURIComponent(group.model)}`}
-                        navigate={navigate}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {group.brand} {group.model}
-                      </AppLink>
-                      <span className="market-compare-sub">
-                        {group.yearFrom === group.yearTo ? group.yearFrom : `${group.yearFrom}–${group.yearTo}`}
-                        {group.longVersion ? " · длиннобазная" : ""}
-                      </span>
-                    </span>
-                  </>
-                );
-                return (
-                  <Fragment key={group.key}>
-                    {/* Нажимается вся строка, а не только название: попасть в неё
-                        проще, и так ведут себя раскрывающиеся списки на сайте. Кнопка
-                        внутри остаётся ради клавиатуры и читалок экрана, и своё
-                        нажатие она дальше не пускает — иначе строка переключилась бы
-                        дважды и осталась бы закрытой. */}
-                    <tr
-                      className={`market-compare-row${single ? " market-compare-single" : ""}${open && !single ? " market-compare-open" : ""}`}
-                      onClick={single ? undefined : () => toggleModel(group.key)}
-                    >
-                      <th scope="row">
-                        {single ? (
-                          <span className="market-compare-name">{nameInside}</span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="market-compare-name"
-                            aria-expanded={open}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              toggleModel(group.key);
-                            }}
-                          >
-                            {nameInside}
-                          </button>
-                        )}
-                      </th>
-                      <td>
-                        {money(group.theirMedian)}
-                        <span>{number(group.theirCount)} {pluralRu(group.theirCount, "машина", "машины", "машин")}</span>
-                      </td>
-                      <td>
-                        {money(group.ourMedian)}
-                        <span>{number(group.ourCount)} {pluralRu(group.ourCount, "машина", "машины", "машин")}</span>
-                      </td>
-                      {/* Разница — единственная колонка с цветом: ради неё страницу и
-                          открывают. Слово рядом с цифрой дублирует цвет, чтобы строка
-                          читалась и без него. У модели с несколькими годами это
-                          середина по годам, и «в среднем» здесь не фигура речи. */}
-                      {/* В процентах, а не в деньгах: строки разных моделей так
-                          сравнимы между собой — «дешевле на 3 000 $» у машины за
-                          двадцать тысяч и за шестьдесят означает совсем разное. */}
-                      <td className={group.diff > 0 ? "market-compare-win" : "market-compare-lose"}>
-                        {`${group.diff > 0 ? "Дешевле" : "Дороже"} на ${Math.abs(group.diffPercent)}%`}
-                        {/* Там, где местная цена ниже, у немецких, японских и
-                            американских марок этому обычно есть причина, и молчать
-                            о ней нечестно: значок открывает объяснение. */}
-                        {hasRebuiltHint(group) && (
-                          <button type="button" className="market-compare-hint" aria-label="Почему в Беларуси дешевле">
-                            <Info size={16} />
-                            <ActionTooltip text={REBUILT_HINT} tapToOpen />
-                          </button>
-                        )}
-                        <span>выгодно в {group.cheaperYears} из {group.years.length}</span>
-                      </td>
-                    </tr>
-                    {open && !single && group.years.map((row) => (
-                      <tr key={`${group.key}|${row.year}`} className="market-compare-year">
-                        <th scope="row">
-                          <span className="market-compare-name">
-                            <AppLink
-                              className="market-compare-model"
-                              href={`/catalog?brand=${encodeURIComponent(row.brand)}&model=${encodeURIComponent(row.model)}&yearFrom=${row.year}&yearTo=${row.year}`}
-                              navigate={navigate}
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {row.year}
-                            </AppLink>
-                          </span>
-                        </th>
-                        <td>
-                          {money(row.theirMedian)}
-                          <span>{number(row.theirCount)} {pluralRu(row.theirCount, "машина", "машины", "машин")}</span>
-                        </td>
-                        <td>
-                          {money(row.ourMedian)}
-                          <span>{number(row.ourCount)} {pluralRu(row.ourCount, "машина", "машины", "машин")}</span>
-                        </td>
-                        <td className={row.diff > 0 ? "market-compare-win" : "market-compare-lose"}>
-                          {row.diff > 0 ? `Дешевле на ${row.diffPercent}%` : `Дороже на ${-row.diffPercent}%`}
-                        </td>
-                      </tr>
-                    ))}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {visible.length > 0 && <div className="market-card-list">{page.map((card) => <MarketModelCard key={card.key} card={card} navigate={navigate} mileageOption={mileageOption} priceOption={priceOption} quotaPricingOn={quotaPricingOn} />)}</div>}
       {visible.length > shown && (
         <button type="button" className="market-compare-more" onClick={() => setShown((current) => current + MARKET_PAGE_SIZE)}>
-          Показать ещё {Math.min(MARKET_PAGE_SIZE, visible.length - shown)} из {number(visible.length - shown)}
+          Показать ещё {Math.min(MARKET_PAGE_SIZE, visible.length - shown)}
         </button>
-      )}
-      {/* Полный список марок без сравнения — под таблицей, чтобы страница отвечала
-          и тем, кто пришёл за маркой, которой на местном рынке нет. */}
-      {/* Подпись относится к таблице сравнения, поэтому стоит сразу под ней, а не
-          после списка марок — иначе читается как объяснение к нему. */}
-      <p className="model-page-versions-note">{table.note}</p>
-      {brand === "Все марки" && !searching && thin.length > 0 && (
-        <div className="market-compare-thin">
-          <h3>Марки, по которым сравнивать не с чем</h3>
-          {/* Той же таблицей, что и сравнение: два разных вида списка на одной
-              странице читаются как два разных раздела. Объяснения словами убраны —
-              всё видно по цифрам: машины у нас есть, в Беларуси их нет. */}
-          <div className="market-compare-scroll">
-            <table className="market-compare-table">
-              <thead>
-                <tr>
-                  <th scope="col">Марка</th>
-                  <th scope="col">В Беларуси</th>
-                  <th scope="col">У нас в каталоге</th>
-                </tr>
-              </thead>
-              <tbody>
-                {thin.map((item) => (
-                  <tr key={item.brand}>
-                    <th scope="row">
-                      <span className="market-compare-name-text">
-                        <AppLink
-                          className="market-compare-model"
-                          href={brandLandingPath(item.brand) || `/catalog?brand=${encodeURIComponent(item.brand)}`}
-                          navigate={navigate}
-                        >
-                          {item.brand}
-                        </AppLink>
-                      </span>
-                    </th>
-                    <td>{item.offers ? `${number(item.offers)} ${pluralRu(item.offers, "машина", "машины", "машин")}` : "не нашлось"}</td>
-                    <td>{number(item.cars)} {pluralRu(item.cars, "машина", "машины", "машин")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
     </div>
   );

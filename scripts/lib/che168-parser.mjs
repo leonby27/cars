@@ -257,7 +257,7 @@ const SOURCE_BRAND_PREFIXES = new Map([
   ["Lynk & Co", ["LYNK&CO", "Lynk & Co", "Lynk Co"]],
 ]);
 
-function cleanModel(value, brand) {
+function cleanModel(value, brand, details) {
   let model = String(value || "").trim();
   const prefixes = [...(SOURCE_BRAND_PREFIXES.get(brand) || []), brand]
     .filter(Boolean)
@@ -266,7 +266,7 @@ function cleanModel(value, brand) {
     const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     model = model.replace(new RegExp(`^${escaped}\\s+`, "i"), "").trim();
   }
-  return canonicalImportModel(brand, model);
+  return canonicalImportModel(brand, model, details);
 }
 
 export function normalizeChe168Energy(detail, specs) {
@@ -318,7 +318,7 @@ export function buildChe168Car(payload, { importedAt = new Date().toISOString(),
   if (!detail?.infoid) return null;
   const specs = flattenedSpecs(payload.specGroups);
   const brand = canonicalImportBrand(detail.brandname);
-  const model = cleanModel(detail.seriesname, brand);
+  const model = cleanModel(detail.seriesname, brand, { rawModel:detail.specname });
   const year = numeric(String(detail.specname || "").match(/\b(20\d{2})\b/)?.[1]
     || String(detail.carname || "").match(/\b(20\d{2})\b/)?.[1]);
   const sourcePriceUsd = numeric(detail.price);
