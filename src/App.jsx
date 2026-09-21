@@ -10168,13 +10168,56 @@ function MarketCompare({ navigate }) {
     };
   }, []);
   if (failed) return null;
-  if (!data) return <p className="cost-calculator-note">Считаем разницу…</p>;
+  if (!data) {
+    return (
+      <section className="cost-calculator">
+        <MarketCompareSkeleton />
+      </section>
+    );
+  }
   const cards = data.cards || [];
   if (!cards.length) return null;
   return (
     <section className="cost-calculator">
       <MarketCompareCards cards={cards} navigate={navigate} />
     </section>
+  );
+}
+
+const MARKET_SKELETON_CARDS = ["a", "b", "c"];
+const MARKET_SKELETON_CHIPS = ["brand", "type", "mileage", "price", "basis"];
+
+/* До ответа API сохраняем геометрию настоящих фильтров и карточек. Так FAQ не
+   подпрыгивает вверх, а человек сразу понимает, что сравнение ещё загружается. */
+function MarketCompareSkeleton() {
+  return (
+    <div className="market-compare market-compare-skeleton" role="status" aria-live="polite" aria-busy="true">
+      <span className="visually-hidden">Загружаем сравнение цен</span>
+      <div className="market-compare-controls" aria-hidden="true">
+        <div className="skeleton-line market-skeleton-search" />
+        <div className="skeleton-line market-skeleton-sort" />
+      </div>
+      <div className="market-compare-filter-row market-skeleton-filter-row" aria-hidden="true">
+        {MARKET_SKELETON_CHIPS.map((key) => <div key={key} className={`skeleton-line market-skeleton-chip market-skeleton-chip-${key}`} />)}
+      </div>
+      <div className="market-card-list" aria-hidden="true">
+        {MARKET_SKELETON_CARDS.map((key) => (
+          <article key={key} className="market-card market-card-skeleton skeleton-card">
+            <div className="market-card-photo skeleton-line market-skeleton-photo" />
+            <div className="market-card-identity market-skeleton-identity">
+              <div className="skeleton-line market-skeleton-brand" />
+              <div className="skeleton-line market-skeleton-model" />
+              <div className="skeleton-line market-skeleton-year" />
+            </div>
+            <div className="market-card-data market-skeleton-data">
+              <div className="skeleton-line market-skeleton-data-line" />
+              <div className="skeleton-line market-skeleton-data-line" />
+              <div className="skeleton-line market-skeleton-data-result" />
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }
 
