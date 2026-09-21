@@ -16330,12 +16330,23 @@ html[data-theme="dark"] .market-card-difference.cheaper {
   color: var(--muted);
 }
 .market-card-source {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   min-width: 0;
   text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+.market-card-source-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.market-card-count {
+  flex: none;
+  color: var(--muted);
+  font-weight: 400;
 }
 
 @media (max-width: 1100px) {

@@ -1,3 +1,71 @@
+**Comparison Metadata**
+
+- Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-4c5ae275-58d1-4ebf-a90d-c3ece6f6091b.png`
+- Composition reference: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-9a625aad-bf6c-439e-abf1-3de59c6e78ad.png`
+- Count-row reference: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-6d01b359-eb91-4ae8-adf7-1d1fdc0fbb7e.png`
+- Supplied illustration: `/Users/user/Downloads/ChatGPT Image 21 сент. 2026 г., 22_50_00.png`
+- Implementation screenshot: `/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/implementation-price-belarus.png`
+- Route: `http://127.0.0.1:5173/price-belarus`
+- Browser: Codex in-app browser
+- Viewport: 1280 x 720 CSS px
+- Source pixels: 1726 x 754; composition reference: 1800 x 498; count-row reference: 784 x 314; illustration: 1254 x 1254
+- Implementation pixels: 1280 x 720
+- Density normalization: implementation capture is 1:1 with the CSS viewport. The supplied references have different crops and widths, so the comparison used shared section proportions, wrapping, spacing rhythm, and component treatment rather than direct pixel overlays.
+- State: dark desktop page, search value `Voyah FREE`, all powertrain types selected, one matching model card visible.
+
+**Full-view Comparison Evidence**
+
+- The implementation uses the same compact calculator-hero structure as the range-page reference: short heading and one-line lead on the left, clipped illustration tile on the right, and the existing search/filter row below.
+- The supplied gold scale illustration is used directly, with transparency preserved and without a generated or CSS approximation.
+- The page keeps the existing typography, palette, card radii, controls, and layout system. The reference captures differ in width, but no actionable P0/P1/P2 layout drift is visible at the tested desktop viewport.
+
+**Focused Region Comparison Evidence**
+
+- The price rows were compared separately because the requested count treatment is small in the full-page capture.
+- Each source label is followed by a muted, regular-weight middle dot and the numeric listing count only. The price remains right-aligned and the savings row is unchanged.
+- Searching for `Voyah FREE` with all powertrain types selected renders one model card, confirming that duplicate model variants no longer appear as separate cards in this state.
+
+**Required Fidelity Surfaces**
+
+- Fonts and typography: existing product font stack, hierarchy, optical weights, line height, and underlined model link are preserved. The new counts use regular weight and the existing muted text color.
+- Spacing and layout rhythm: hero copy, illustration tile, filters, model card, row separators, and right-aligned prices retain the established page rhythm and radii.
+- Colors and visual tokens: existing dark surfaces, coral filters, green savings state, white prices, and muted gray count token are preserved.
+- Image quality and asset fidelity: the supplied transparent illustration was exported to PNG, WebP, and AVIF at 512 px and renders sharply in the clipped tile without a visible halo.
+- Copy and content: heading and description are intentionally shortened; listing counts contain only the number; `Voyah FREE` appears once in the all-types state.
+
+**Comparison History**
+
+- Iteration 1 findings: [P2] hero copy was materially longer than the calculator reference; [P2] the requested illustration tile was missing; [P2] the all-types result could show multiple cards for one model; [P2] listing counts were absent from price rows.
+- Fixes made: shortened the heading and lead, added the supplied scales asset in the existing calculator tile, collapsed all-types results to one representative card per brand/model, and added muted numeric counts after each row label.
+- Post-fix evidence: `implementation-price-belarus.png`, captured in the in-app browser at 1280 x 720 with `Voyah FREE` searched. One card is visible and both counts render in place.
+
+**Findings**
+
+- No actionable P0/P1/P2 mismatch remains in the tested desktop state.
+
+**Open Questions**
+
+- None.
+
+**Implementation Checklist**
+
+- [x] Compact hero copy.
+- [x] Supplied scales illustration in the shared calculator tile.
+- [x] One card per brand/model in the all-types view.
+- [x] Muted regular numeric counts after price-row labels.
+- [x] Search interaction and console checked in the in-app browser.
+
+**Follow-up Polish**
+
+- No P3 follow-up is required for the requested state.
+
+- Primary interactions tested: search entry and clear affordance, filtered result rendering, all-types duplicate collapse, year selector presence, and count accessibility labels.
+- Console errors checked: no runtime errors were reported; only Vite connection messages and the React DevTools development notice were present.
+
+final result: passed
+
+---
+
 # Design QA — vehicle tracking desktop spacing
 
 - Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-1bfeee1a-6cbb-4529-87bb-322f637864c2.png`

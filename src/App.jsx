@@ -49,7 +49,7 @@ import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EX
 import { InspectionReport } from "./inspection-report.jsx";
 import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
-import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, comparisonOwnPrices, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint } from "./market-compare.js";
+import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, collapseSameModelCards, comparisonOwnPrices, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint } from "./market-compare.js";
 import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
 import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
@@ -9415,6 +9415,7 @@ function ContactsPage({ navigate, theme }) {
 const TOOL_HERO_ICONS = Object.freeze({
   customs: { src: "/services/customs-calculator.png", width: 224, height: 224 },
   range: { src: "/services/battery-check.png", width: 512, height: 512, fit: "inside" },
+  market: { src: "/services/price-comparison.png", width: 512, height: 512 },
 });
 
 function ToolPage({ tool, navigate }) {
@@ -10242,9 +10243,15 @@ function marketCardsMatchingQuery(cards, query) {
 
 function MarketStatRow({ label, stats, priceOption }) {
   const value = hasEnoughMarketSample(stats) ? stats?.[priceOption.key] : null;
+  const count = Number(stats?.count);
   return (
     <div className="market-card-stat-row">
-      <b className="market-card-source">{label}</b>
+      <b className="market-card-source">
+        <span className="market-card-source-label">{label}</span>
+        {Number.isFinite(count) && count > 0 ? (
+          <span className="market-card-count" aria-label={`${number(count)} объявлений`}>· {number(count)}</span>
+        ) : null}
+      </b>
       <span data-label={priceOption.column}>{Number.isFinite(value) ? `${number(Math.round(value))} $` : "—"}</span>
     </div>
   );
@@ -10385,12 +10392,14 @@ function MarketCompareCards({ cards, navigate }) {
     const brandCards = cards.filter((card) =>
       (brand === "Все марки" || card.brand === brand)
       && (powertrainOption.key === "all" || card.type === powertrainOption.key));
-    return marketCardsMatchingQuery(brandCards, query)
+    const matching = marketCardsMatchingQuery(brandCards, query)
       .filter((card) => {
         if (priceFrom == null && priceTo == null) return true;
         const value = defaultMarketPrices(card, mileageOption.key, priceOption.key, quotaPricingOn)?.ours?.[priceOption.key];
         return Number.isFinite(value) && (priceFrom == null || value >= priceFrom) && (priceTo == null || value <= priceTo);
-      })
+      });
+    const uniqueModels = powertrainOption.key === "all" ? collapseSameModelCards(matching) : matching;
+    return uniqueModels
       .sort((left, right) => {
         const leftDifference = marketDifference(left, mileageOption.key, priceOption.key, quotaPricingOn);
         const rightDifference = marketDifference(right, mileageOption.key, priceOption.key, quotaPricingOn);

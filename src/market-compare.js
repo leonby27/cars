@@ -227,6 +227,22 @@ export function groupDetailedRows(rows = []) {
     .sort((left, right) => right.rank - left.rank || `${left.brand} ${left.model}`.localeCompare(`${right.brand} ${right.model}`, "ru"));
 }
 
+/**
+ * В режиме «Все типы» одна модель занимает одну карточку. У некоторых моделей —
+ * например, Voyah FREE — в каталоге есть и гибрид, и электромобиль. Смешивать их
+ * цены нельзя, поэтому оставляем наиболее представительную силовую установку, а
+ * остальные по-прежнему доступны через фильтр типа двигателя.
+ */
+export function collapseSameModelCards(cards = []) {
+  const chosen = new Map();
+  for (const card of cards) {
+    const key = `${String(card?.brand || "").toLowerCase()}|${normalizeModel(card?.model)}`;
+    const known = chosen.get(key);
+    if (!known || Number(card?.rank || 0) > Number(known?.rank || 0)) chosen.set(key, card);
+  }
+  return [...chosen.values()];
+}
+
 /** Короткий вывод под таблицей: на скольких моделях дешевле и насколько. */
 export function compareSummary(rows) {
   if (!rows.length) return null;

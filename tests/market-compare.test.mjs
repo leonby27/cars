@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateComparisonPrices, bestComparisonYear, brandCoverage, compareDetailedRows, compareRows, compareSummary, compareTable, comparisonOwnPrices, comparisonYearDifference, coverageNote, groupCompareRows, groupDetailedRows, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint, normalizeModel } from "../src/market-compare.js";
+import { aggregateComparisonPrices, bestComparisonYear, brandCoverage, collapseSameModelCards, compareDetailedRows, compareRows, compareSummary, compareTable, comparisonOwnPrices, comparisonYearDifference, coverageNote, groupCompareRows, groupDetailedRows, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint, normalizeModel } from "../src/market-compare.js";
 
 // Сравнение цен — это публичное утверждение «у нас дешевле на столько-то». Ошибка
 // в нём дороже любой другой, поэтому проверяем не вид таблицы, а правила отбора:
@@ -349,4 +349,11 @@ test("модель без белорусских объявлений остаё
   const [card] = groupDetailedRows(rows);
   assert.equal(card.brand, "NIO");
   assert.equal(card.years[0].prices.all.belarus, null);
+});
+
+test("при всех типах двигателя одна модель занимает одну карточку", () => {
+  const hybrid = { key:"Voyah|FREE|Гибрид", brand:"Voyah", model:"FREE", type:"Гибрид", rank:185 };
+  const electric = { key:"Voyah|FREE|Электромобиль", brand:"Voyah", model:"FREE", type:"Электромобиль", rank:7 };
+  const cards = collapseSameModelCards([electric, hybrid]);
+  assert.deepEqual(cards, [hybrid], "показываем наиболее представительную версию, не смешивая её цены с другой");
 });
