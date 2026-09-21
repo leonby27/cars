@@ -674,7 +674,7 @@ Belarus price-page hero (owner decision, 2026-09-21): keep the heading and lead 
 
 Belarus price-page cards (owner decision, 2026-09-21): in the default «Все типы» view show only one card per brand/model, choosing the powertrain with the largest catalog sample while keeping powertrain statistics separate and available through the engine-type filter. In each market price row, place a muted regular-weight `·` plus the numeric listing count immediately after the source label, with no noun.
 
-Belarus price-page title revision (owner decision, 2026-09-21): use the exact heading «Где дешевле купить авто: в Китае или Беларуси». Use the revised symmetrical gold scales illustration supplied at 23:08, centered at 104 × 104 px inside the existing 124 × 124 px calculator tile so it reads slightly smaller without changing the tile or hero layout.
+Belarus price-page title revision (owner decision, latest correction 2026-09-21): use the exact heading «Где дешевле купить авто: из Китая или в Беларуси» and lead «Честно сравниваем цены на одинаковые машины.». Use the supplied dollar-bundle illustration in the existing 124 × 124 px calculator tile at the original default illustration size (134 × 134 px), before the earlier request to reduce it.
 
 Belarus price-page loading state (owner decision, 2026-09-21): while `/api/market/compare` is still loading, keep the comparison section in place with a skeleton that mirrors the real search, filter chips and several model cards. Do not let FAQ jump directly under the hero or replace the section with a one-line loading note.
 
