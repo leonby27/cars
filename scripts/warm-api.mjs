@@ -27,6 +27,8 @@ const timeoutMs = 30000;
 const fixedPaths = () => [
   "/api/cars?limit=60&sort=variety",
   "/api/cars?limit=1&sort=newest",
+  "/api/market/compare?quota=off",
+  "/api/market/compare?quota=on",
   "/api/catalog/meta",
   ...["Электромобиль", "Гибрид", "ДВС"].map((type) => `/api/catalog/meta?${new URLSearchParams({ type })}`),
 ];

@@ -8,7 +8,8 @@ const [app, styles] = await Promise.all([
 ]);
 
 test("фильтры показываются сразу, а скелетон занимает только место карточек", () => {
-  assert.match(app, /<MarketCompareCards cards=\{cards\} navigate=\{navigate\} loading=\{!data\} \/>/);
+  assert.match(app, /api\/market\/compare\?quota=\$\{quotaMode\}/);
+  assert.match(app, /<MarketCompareCards cards=\{cards\} navigate=\{navigate\} loading=\{!data\} quotaPricingOn=\{quotaPricingOn\} \/>/);
   assert.match(app, /\{loading && <MarketCompareSkeleton \/>\}/);
   assert.match(app, /className="market-card-list market-card-list-skeleton"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-busy="true"/);
   assert.match(app, /Загружаем сравнение цен/);

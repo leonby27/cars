@@ -10151,28 +10151,33 @@ function ChinaBrandsDirectory({ navigate }) {
 /* Подробное сравнение цен с рынком Беларуси. Сервер заранее сопоставляет одинаковые
    модели и годы, а браузер только переключает предел пробега и рисует карточки. */
 function MarketCompare({ navigate }) {
-  const [data, setData] = useState(null);
-  const [failed, setFailed] = useState(false);
+  const quotaPricingOn = useQuotaPricing()?.on === true;
+  const quotaMode = quotaPricingOn ? "on" : "off";
+  const [dataByQuota, setDataByQuota] = useState({});
+  const [failedModes, setFailedModes] = useState(() => new Set());
+  const data = dataByQuota[quotaMode] || null;
+  const failed = failedModes.has(quotaMode);
   useEffect(() => {
+    if (dataByQuota[quotaMode]) return undefined;
     let alive = true;
-    fetch(`${import.meta.env.BASE_URL}api/market/compare`)
+    fetch(`${import.meta.env.BASE_URL}api/market/compare?quota=${quotaMode}`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("сравнение недоступно"))))
       .then((value) => {
-        if (alive) setData(value);
+        if (alive) setDataByQuota((known) => ({ ...known, [quotaMode]:value }));
       })
       .catch(() => {
-        if (alive) setFailed(true);
+        if (alive) setFailedModes((known) => new Set([...known, quotaMode]));
       });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [quotaMode, dataByQuota]);
   if (failed) return null;
   const cards = data?.cards || [];
   if (data && !cards.length) return null;
   return (
     <section className="cost-calculator">
-      <MarketCompareCards cards={cards} navigate={navigate} loading={!data} />
+      <MarketCompareCards cards={cards} navigate={navigate} loading={!data} quotaPricingOn={quotaPricingOn} />
     </section>
   );
 }
@@ -10372,8 +10377,7 @@ function MarketModelCard({ card, navigate, mileageOption, priceOption, quotaPric
   );
 }
 
-function MarketCompareCards({ cards, navigate, loading = false }) {
-  const quotaPricingOn = useQuotaPricing()?.on !== false;
+function MarketCompareCards({ cards, navigate, loading = false, quotaPricingOn = false }) {
   const narrow = useNarrowViewport();
   const [query, setQuery] = useState("");
   const searchRef = useRef(null);

@@ -4,7 +4,7 @@ import { gzip } from "node:zlib";
 import { promisify } from "node:util";
 import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionAccount, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
-import { brandCatalogGuide, brandStock, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelPriceStats, modelSummary, soldListingVisible } from "./repository.mjs";
+import { brandCatalogGuide, brandStock, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelPriceStats, modelPriceStatsForQuota, modelSummary, soldListingVisible } from "./repository.mjs";
 import { marketComparison } from "./market-compare-data.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
@@ -484,7 +484,13 @@ export async function handleApiRequest(request, response) {
     // берутся из базы в момент запроса — чтобы страница не показывала цифры вчерашней
     // сборки, когда курс уже другой.
     if (request.method === "GET" && url.pathname === "/api/market/compare") {
-      return json(response, 200, await marketComparison(modelPriceStats, brandStock), metaCache);
+      const quotaMode = url.searchParams.get("quota");
+      const stats = quotaMode === "on"
+        ? () => modelPriceStatsForQuota(true)
+        : quotaMode === "off"
+        ? () => modelPriceStatsForQuota(false)
+        : modelPriceStats;
+      return json(response, 200, await marketComparison(stats, brandStock, quotaMode || "full"), metaCache);
     }
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")), metaCache);
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.

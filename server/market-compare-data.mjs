@@ -20,7 +20,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const marketPath = path.join(root, "data", "market-belarus-detailed.json");
 
 const TTL_MS = 10 * 60 * 1000;
-let cache = { at: 0, value: null };
+const cache = new Map();
 let marketFile;
 
 /** Свод площадки с диска. Нет файла — сравнения просто нет, это не ошибка. */
@@ -41,15 +41,18 @@ async function readMarket() {
  *   чтобы показать и те марки, по которым сравнивать не с чем: человек ищет свою
  *   машину, и её отсутствие в списке он прочитает как «не возят».
  */
-export async function marketComparison(stats, _stock) {
+export async function marketComparison(stats, _stock, cacheKey = "full") {
   const now = Date.now();
-  if (cache.value && now - cache.at < TTL_MS) return cache.value;
+  const known = cache.get(cacheKey);
+  if (known?.value && now - known.at < TTL_MS) return known.value;
   const market = await readMarket();
   if (!market) {
-    cache = { at: now, value: { cards: [], collectedAt: null, mileageLimits: [] } };
-    return cache.value;
+    const value = { cards: [], collectedAt: null, mileageLimits: [] };
+    cache.set(cacheKey, { at:now, value });
+    return value;
   }
   const cards = groupDetailedRows(compareDetailedRows({ ours: await stats(), market }));
-  cache = { at: now, value: { cards, collectedAt: market.collectedAt || null, mileageLimits:market.mileageLimits || [] } };
-  return cache.value;
+  const value = { cards, collectedAt: market.collectedAt || null, mileageLimits:market.mileageLimits || [] };
+  cache.set(cacheKey, { at:now, value });
+  return value;
 }
