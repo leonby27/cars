@@ -708,6 +708,8 @@ Delivery-calculator large-body emphasis (owner decision, 2026-09-22): highlight 
 
 Delivery-calculator model switching (owner decision, 2026-09-22): selecting a model must not show a temporary «Кузов уточняется» state. Derive the initial body class and delivery estimate synchronously from the model option, then let catalog dimensions refine it without a visible second step when the tariff group is unchanged.
 
+Vehicle price-breakdown customs alert (owner decision, 2026-09-22): render «Без квоты на льготный ввоз» and other customs warnings directly beneath «Растаможка и сборы» / «Таможня и сборы» inside that same cost row. Never leave the warning as a standalone row after «Услуги abcars.by», where it reads as if it describes the service fee.
+
 China-brand directory model-preview stability (owner decision, 2026-09-22): reserve the final width and 44px height of each card's popular-model photo group before `/api/model-facts` finishes, including the possible «+N» slot. Keep that pending reservation invisible so late photos do not change card height or move the cards below it on desktop or mobile.
 
 Shared calculator-field internals (owner decision, 2026-09-22): treat the customs-calculator select as the visual source of truth for every shared calculator field. Keep a 14px label inset from the top, a 14px value inset from the bottom, 16px horizontal text padding, 19px/700 value typography and the same 16px bold caret centered 20px from the right. Editable delivery comboboxes must use these shared tokens rather than vertically centering their contents independently.

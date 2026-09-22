@@ -8136,14 +8136,16 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 <strong>{approximateMoney(price.svhLow, price.svhHigh, currency)}</strong>
               </div>
               <div>
-                <PriceLabel label="Растаможка и сборы" description={price.customsHint || price.customsNote} />
+                <div className="price-customs-copy">
+                  <PriceLabel label="Растаможка и сборы" description={price.customsHint || price.customsNote} />
+                  {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
+                </div>
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
               <div>
                 <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
                 <strong>{money(price.serviceUsd, currency)}</strong>
               </div>
-              {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
             </div>
             <div className="price-assumption">
               <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
@@ -8570,14 +8572,16 @@ function OrderDraft({ car, navigate }) {
                 <b>{approximateMoney(price.svhLow, price.svhHigh, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Таможня и сборы" description={price.customsHint || price.customsNote} />
+                <div className="price-customs-copy">
+                  <PriceLabel label="Таможня и сборы" description={price.customsHint || price.customsNote} />
+                  {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
+                </div>
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
               <div>
                 <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
                 <b>{money(price.serviceUsd, currency)}</b>
               </div>
-              {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
             </div>
             <div className="order-grand-total">
               <PriceLabel label="Ориентировочно до Минска" description="Без постановки на учёт и страховки" />
