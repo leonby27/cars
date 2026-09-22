@@ -60,8 +60,10 @@ test("состояние объявления доезжает до карточ
 
 test("проданная машина видна ровно две недели", () => {
   const now = Date.parse("2026-09-11T12:00:00.000Z");
+  const weekAgo = new Date(now - 7 * 86400_000).toISOString();
   const soldAt = new Date(now - SOLD_LISTING_RETENTION_MS + 1).toISOString();
   const expiredAt = new Date(now - SOLD_LISTING_RETENTION_MS).toISOString();
+  assert.equal(soldListingVisible(rowToCar(listingRow("unavailable", weekAgo)), now), true);
   assert.equal(soldListingVisible(rowToCar(listingRow("unavailable", soldAt)), now), true);
   assert.equal(soldListingVisible(rowToCar(listingRow("unavailable", expiredAt)), now), false);
 });

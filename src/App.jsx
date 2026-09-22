@@ -64,6 +64,7 @@ import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "./purchase-info.js";
 import { TRACKING_FAQ } from "./tracking-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
+import { missingFavoriteIsExpired } from "./favorite-cars.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
 // таблиц) не кладём в общий файл приложения, а подгружаем отдельным файлом при
 // первом открытии /analytics: каждому посетителю сайта он не нужен.
@@ -5343,7 +5344,7 @@ function useFavoriteCars(cars, favorites, apiMode, onUnavailable) {
           ? `/api/cars/${encodeURIComponent(id)}`
           : `${import.meta.env.BASE_URL}data/cars/${encodeURIComponent(listingNumber(id))}.json`;
         const response = await fetch(url, { cache:"no-store", signal:controller.signal });
-        if (response.status === 404) return { id, unavailable:true };
+        if (response.status === 404) return { id, unavailable:missingFavoriteIsExpired(apiMode, response.status) };
         if (!response.ok) throw new Error("favorite_car_load_failed");
         return { id, car:normalizeImportedCar(await response.json()) };
       } catch (error) {
