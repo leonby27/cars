@@ -2386,6 +2386,37 @@ html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
 .empty-state h3 {
   color: var(--ink);
 }
+/* Полноценные заглушки страниц собираются одним компонентом: иконка, заголовок,
+   пояснение и спокойная подложка. В светлой теме фон отделяет блок от белой
+   страницы, в тёмной остаётся близким к окружающей поверхности. */
+.content-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-style: solid;
+  border-color: var(--line);
+  background: var(--surface);
+}
+html[data-theme="dark"] .content-empty-state {
+  border-color: transparent;
+  background: var(--surface);
+}
+.content-empty-state > svg {
+  color: var(--muted);
+}
+.empty-state.content-empty-state > h3 {
+  margin: 0;
+}
+.empty-state.content-empty-state > p {
+  margin: 0;
+  max-width: 560px;
+  line-height: 1.5;
+}
+.empty-state.content-empty-state > :is(button, .primary) {
+  margin-top: 12px;
+}
 /* Кнопке в заглушке даём полноценные поля — без них текст липнет к краям. */
 .empty-state .primary {
   min-height: 54px;
@@ -16169,12 +16200,7 @@ html[data-theme="dark"] .market-compare-more:hover {
    рамки — она стоит внутри блока сравнения, а не на голой странице. */
 .market-compare-empty-state {
   padding: 48px 24px;
-  border: 0;
   border-radius: calc(14px * var(--corner-scale));
-  background: var(--panel);
-}
-html[data-theme="dark"] .market-compare-empty-state {
-  background: #353a43;
 }
 .market-compare-empty-state h3 {
   margin: 10px 0 6px;
@@ -16530,10 +16556,8 @@ html[data-theme="dark"] .market-card-difference.cheaper {
 
 /* Справочник марок: поиск и последовательный список карточек. Значок берётся тот же,
    что в каталоге, поэтому своих правил для картинки здесь нет. */
-.brand-directory-controls {
-  display: flex;
-  align-items: stretch;
-  gap: 10px;
+.brand-directory-shell {
+  min-width: 0;
 }
 .brand-directory-search {
   position: relative;
@@ -16589,26 +16613,6 @@ html[data-theme="dark"] .brand-directory-search .brand-directory-search-clear {
 }
 html[data-theme="dark"] .brand-directory-search .brand-directory-search-clear:hover {
   background: #898e96;
-}
-.brand-directory-scope {
-  flex: 0 0 210px;
-  height: 48px;
-  padding-block: 0;
-}
-.brand-directory-sort {
-  flex: 0 0 200px;
-  height: 48px;
-  padding-block: 0;
-}
-.brand-directory-scope .select-trigger,
-.brand-directory-sort .select-trigger {
-  min-height: 48px;
-}
-.tool-page-brands-body {
-  gap: 24px;
-}
-.tool-page-brands-directory {
-  gap: 16px;
 }
 .brand-directory {
   margin: 0;
@@ -16771,18 +16775,16 @@ html[data-theme="dark"] .brand-directory-head b {
 }
 .brand-directory-empty {
   margin: 4px 0 0;
-  color: var(--muted);
-  font: 600 15px/1.5 "Manrope", system-ui, sans-serif;
+  padding: 48px 24px;
+  font-family: "Manrope", system-ui, sans-serif;
+}
+.brand-directory-empty h3 {
+  font-size: 19px;
+}
+.brand-directory-empty p {
+  font-size: 14px;
 }
 @media (max-width: 700px) {
-  .brand-directory-controls {
-    flex-direction: column;
-  }
-  .brand-directory-scope,
-  .brand-directory-sort {
-    flex-basis: 48px;
-    width: 100%;
-  }
   .brand-directory-meta {
     flex-direction: column;
     align-items: flex-start;

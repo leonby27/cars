@@ -1,13 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BRAND_POWERTRAINS, CHINA_BRANDS, CHINA_MADE_FOREIGN } from "../src/china-brands.js";
+import { BRAND_PRICE_SEGMENTS, brandMatchesPriceSegment } from "../src/brand-directory-filters.js";
 import { brandLandingPath } from "../src/catalog-landings.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const all = [...CHINA_BRANDS, ...CHINA_MADE_FOREIGN];
+const appSource = readFileSync(path.join(root, "src", "App.jsx"), "utf8");
 
 test("у каждой марки справочника есть файл значка", () => {
   // Значки те же, что в каталоге. Опечатка в имени файла дала бы на странице
@@ -51,4 +53,19 @@ test("у героя справочника есть флаг во всех фо�
   for (const extension of ["png", "webp", "avif"]) {
     assert.ok(existsSync(path.join(root, "public", "services", `china-brands.${extension}`)), `нет china-brands.${extension}`);
   }
+});
+
+test("ценовые сегменты отбирают марку по диапазонам её моделей", () => {
+  const facts = { priceRanges:[{ min:15000, max:19000 }, { min:42000, max:48000 }] };
+  assert.equal(brandMatchesPriceSegment(facts, "Все сегменты"), true);
+  assert.equal(brandMatchesPriceSegment(facts, "До 20 000 $"), true);
+  assert.equal(brandMatchesPriceSegment(facts, "20 000–40 000 $"), false);
+  assert.equal(brandMatchesPriceSegment(facts, "От 40 000 $"), true);
+  assert.deepEqual(BRAND_PRICE_SEGMENTS.map((item) => item.label), ["Все сегменты", "До 20 000 $", "20 000–40 000 $", "От 40 000 $"]);
+});
+
+test("поиск и сортировка стоят отдельно от трёх фильтров справочника", () => {
+  assert.match(appSource, /className="brand-directory-shell"[\s\S]*?className="market-compare-controls brand-directory-controls"[\s\S]*?brand-directory-search[\s\S]*?market-compare-sort brand-directory-sort/);
+  assert.match(appSource, /className="market-compare-sort brand-directory-sort"[\s\S]*?mobileIcon=\{SortAscending\}[\s\S]*?mobileActionSheet=\{narrow\}/);
+  assert.match(appSource, /className="market-compare-filter-row brand-directory-filter-row"[\s\S]*?brand-directory-scope[\s\S]*?brand-directory-powertrain-filter[\s\S]*?brand-directory-price-filter/);
 });

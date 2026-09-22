@@ -10,6 +10,7 @@ import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
 import { Illustration } from "./illustration.jsx";
 import { SearchField } from "./search-field.jsx";
+import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
@@ -52,6 +53,7 @@ import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFrom
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, collapseSameModelCards, comparisonCatalogHref, comparisonOwnPrices, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint } from "./market-compare.js";
 import { BRAND_POWERTRAINS, CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
+import { BRAND_PRICE_SEGMENTS, brandMatchesPriceSegment } from "./brand-directory-filters.js";
 import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
@@ -3505,14 +3507,14 @@ function ModelPageCatalog({ modelPage, carsState, filters, navigate, favorites, 
            отсутствие модели в каталоге — разные случаи: в первом надо сбросить отбор,
            во втором предложить подбор под заказ и другие модели марки, иначе страница
            становится тупиком (а часть моделей не проходит правила ввоза совсем). */
-        <div className="model-page-catalog-empty">
-          <CarProfile size={26} />
-          <h3>{narrowed ? "По этим параметрам ничего не найдено" : `${modelPage.name} сейчас нет в каталоге`}</h3>
-          <p>
-            {narrowed
-              ? "Попробуйте поднять цену или пробег — или сбросьте отбор и посмотрите все машины модели."
-              : `Мы возим эту модель под заказ: найдём подходящий вариант в Китае, проверим и рассчитаем цену до Минска. Или выберите другую модель ${modelPage.brand} — они есть в наличии.`}
-          </p>
+        <EmptyState
+          className="model-page-catalog-empty"
+          icon={CarProfile}
+          title={narrowed ? "По этим параметрам ничего не найдено" : `${modelPage.name} сейчас нет в каталоге`}
+          description={narrowed
+            ? "Попробуйте поднять цену или пробег — или сбросьте отбор и посмотрите все машины модели."
+            : `Мы возим эту модель под заказ: найдём подходящий вариант в Китае, проверим и рассчитаем цену до Минска. Или выберите другую модель ${modelPage.brand} — они есть в наличии.`}
+        >
           {narrowed ? (
             <button type="button" onClick={filters.onReset}>
               Сбросить
@@ -3543,7 +3545,7 @@ function ModelPageCatalog({ modelPage, carsState, filters, navigate, favorites, 
               )}
             </>
           )}
-        </div>
+        </EmptyState>
       ) : view === "list" ? (
         <div className="car-list model-page-car-list">
           {(loading ? Array.from({ length: MODEL_PAGE_CARS_LIMIT }) : cars).map((car, index) =>
@@ -4901,11 +4903,10 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             поиска на любом экране) вид выбирает посетитель: списочные карточки
             каталога или плитка — на телефоне по две карточки в ряд. */}
         {searchEmpty ? (
-          <div className="empty-state search-empty">
-            <MagnifyingGlass size={26} />
-            <h3>Ничего не найдено</h3>
-            <p>Попробуйте изменить запрос: марка, модель, год, цена («до 40 тыс»), пробег («до 50 тыс км»), запас хода («от 500 км»), разгон («до 5 сек»), батарея («от 70») или номер объявления. Лишнее убирает слово «кроме»: «зикр кроме 001».</p>
-          </div>
+          <EmptyState
+            className="search-empty"
+            description="Попробуйте изменить запрос: марка, модель, год, цена («до 40 тыс»), пробег («до 50 тыс км»), запас хода («от 500 км»), разгон («до 5 сек»), батарея («от 70») или номер объявления. Лишнее убирает слово «кроме»: «зикр кроме 001»."
+          />
         ) : (searching || useCatalogCards) && heroView === "list" ? (
           <div className="car-list home-car-list" aria-busy={gridBusy ? "true" : undefined}>
             {gridBusy
@@ -5305,12 +5306,15 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
       ) : awaitingCars ? (
         <div className="account-section-loading" aria-live="polite">Загружаем сохранённые автомобили…</div>
       ) : (
-        <div className="empty-state favorites-empty">
-          <Heart size={34} />
-          <h3>В избранном пока ничего нет</h3>
-          <p>Нажмите на сердце в карточке автомобиля, чтобы сохранить его здесь.</p>
+        <EmptyState
+          className="favorites-empty"
+          icon={Heart}
+          iconSize={34}
+          title="В избранном пока ничего нет"
+          description="Нажмите на сердце в карточке автомобиля, чтобы сохранить его здесь."
+        >
           <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
-        </div>
+        </EmptyState>
       )}
       <ScrollToTopButton />
       {quickViewModal}
@@ -5497,12 +5501,15 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
       ) : saving ? (
         <div className="account-section-loading" aria-live="polite">Загружаем сохранённые поиски…</div>
       ) : (
-        <div className="empty-state saved-searches-empty">
-          <BookmarkSimple size={34} />
-          <h3>Сохранённых поисков пока нет</h3>
-          <p>Настройте фильтры в каталоге и нажмите «Сохранить поиск» — подборка будет ждать вас здесь.</p>
+        <EmptyState
+          className="saved-searches-empty"
+          icon={BookmarkSimple}
+          iconSize={34}
+          title="Сохранённых поисков пока нет"
+          description="Настройте фильтры в каталоге и нажмите «Сохранить поиск» — подборка будет ждать вас здесь."
+        >
           <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
-        </div>
+        </EmptyState>
       )}
       <ScrollToTopButton />
       {quickViewModal}
@@ -10115,6 +10122,8 @@ function ChinaBrandsDirectory({ navigate }) {
   const [modelsByBrand, setModelsByBrand] = useState({});
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState("Только китайские");
+  const [powertrain, setPowertrain] = useState("Все типы");
+  const [priceSegment, setPriceSegment] = useState(BRAND_PRICE_SEGMENTS[0].label);
   const [sortMode, setSortMode] = useState("По популярности");
   useEffect(() => {
     let alive = true;
@@ -10139,12 +10148,18 @@ function ChinaBrandsDirectory({ navigate }) {
             model:row.model,
             count:Number(row.count) || 0,
             image:row.image || null,
+            priceMin:Number(row.priceMin) || null,
+            priceMax:Number(row.priceMax) || null,
           });
         }
         const next = {};
         for (const [brand, models] of Object.entries(grouped)) {
           models.sort((left, right) => right.count - left.count || left.model.localeCompare(right.model, "ru", { sensitivity:"base" }));
-          next[brand] = { total:models.length, items:models.slice(0, 5) };
+          next[brand] = {
+            total:models.length,
+            items:models.slice(0, 5),
+            priceRanges:models.map((model) => ({ min:model.priceMin, max:model.priceMax })),
+          };
         }
         setModelsByBrand(next);
       })
@@ -10160,8 +10175,11 @@ function ChinaBrandsDirectory({ navigate }) {
     item.partner,
     item.about,
   ].filter(Boolean).join(" ").toLocaleLowerCase("ru").includes(normalizedQuery);
-  const chineseBrands = scope === "Не китайские" ? [] : CHINA_BRANDS.filter(matchesQuery);
-  const foreignBrands = scope === "Только китайские" ? [] : CHINA_MADE_FOREIGN.filter(matchesQuery);
+  const matchesFilters = (item) => matchesQuery(item)
+    && (powertrain === "Все типы" || (BRAND_POWERTRAINS[item.brand] || []).includes(powertrain))
+    && brandMatchesPriceSegment(modelsByBrand[item.brand], priceSegment);
+  const chineseBrands = scope === "Не китайские" ? [] : CHINA_BRANDS.filter(matchesFilters);
+  const foreignBrands = scope === "Только китайские" ? [] : CHINA_MADE_FOREIGN.filter(matchesFilters);
   const visibleBrands = [
     ...chineseBrands,
     ...foreignBrands.map((item) => ({ ...item, group: `В Китае — вместе с ${item.partner}` })),
@@ -10172,8 +10190,8 @@ function ChinaBrandsDirectory({ navigate }) {
       : (counts.get(right.brand) || 0) - (counts.get(left.brand) || 0)
   ));
   return (
-    <>
-      <div className="brand-directory-controls">
+    <div className="brand-directory-shell">
+      <div className="market-compare-controls brand-directory-controls">
         <SearchField
           className="brand-directory-search"
           value={query}
@@ -10182,18 +10200,42 @@ function ChinaBrandsDirectory({ navigate }) {
           ariaLabel="Поиск по маркам"
         />
         <SelectField
+          className="market-compare-sort brand-directory-sort"
+          label="Сортировка"
+          value={sortMode}
+          options={["По популярности", "По алфавиту"]}
+          onChange={setSortMode}
+          mobileIcon={SortAscending}
+          mobileActionSheet={narrow}
+        />
+      </div>
+      <div className="market-compare-filter-row brand-directory-filter-row">
+        <SelectField
           className="brand-directory-scope"
           label="Какие марки показывать"
           value={scope}
           options={["Только китайские", "Все марки", "Не китайские"]}
           onChange={setScope}
+          icon={CarProfile}
+          mobileActionSheet={narrow}
         />
         <SelectField
-          className="brand-directory-sort"
-          label="Сортировка"
-          value={sortMode}
-          options={["По популярности", "По алфавиту"]}
-          onChange={setSortMode}
+          className="brand-directory-powertrain-filter"
+          label="Тип двигателя"
+          value={powertrain}
+          options={["Все типы", "Бензин", "Гибрид", "Электро"]}
+          onChange={setPowertrain}
+          icon={Engine}
+          mobileActionSheet={narrow}
+        />
+        <SelectField
+          className="brand-directory-price-filter"
+          label="Ценовой сегмент"
+          value={priceSegment}
+          options={BRAND_PRICE_SEGMENTS.map((item) => item.label)}
+          onChange={setPriceSegment}
+          icon={CurrencyDollar}
+          mobileActionSheet={narrow}
         />
       </div>
       {sortedBrands.length > 0 && <section className="brand-directory">
@@ -10203,8 +10245,14 @@ function ChinaBrandsDirectory({ navigate }) {
           ))}
         </div>
       </section>}
-      {!sortedBrands.length && <p className="brand-directory-empty">Такой марки в справочнике нет.</p>}
-    </>
+      {!sortedBrands.length && (
+        <EmptyState
+          className="brand-directory-empty"
+          title="Такой марки в справочнике нет"
+          description="Попробуйте другое написание или измените выбор марок."
+        />
+      )}
+    </div>
   );
 }
 
@@ -10581,19 +10629,16 @@ function MarketCompareCards({ cards, navigate, loading = false, quotaPricingOn =
       )}
       {loading && <MarketCompareSkeleton />}
       {!loading && visible.length === 0 && (
-        <div className="empty-state market-compare-empty-state">
-          <MagnifyingGlass size={26} />
-          <h3>Ничего не найдено</h3>
-          <p>
-            {priceFrom != null || priceTo != null
+        <EmptyState
+          className="market-compare-empty-state"
+          description={priceFrom != null || priceTo != null
               ? "В выбранном диапазоне цен машин нет. Измените границы или выберите любую цену."
               : powertrainOption.key !== "all"
               ? `Машин типа «${powertrain}» с выбранными параметрами нет. Выберите другой тип или измените фильтры.`
               : brand === "Все марки"
               ? "Попробуйте другое написание модели или выберите марку из списка."
               : `По марке ${brand} с таким запросом ничего нет. Уберите слово из поиска или выберите другую марку.`}
-          </p>
-        </div>
+        />
       )}
       {!loading && visible.length > 0 && <div className="market-card-list">{page.map((card) => <MarketModelCard key={card.key} card={card} navigate={navigate} mileageOption={mileageOption} priceOption={priceOption} quotaPricingOn={quotaPricingOn} />)}</div>}
       {!loading && visible.length > shown && (
