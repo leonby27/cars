@@ -2666,9 +2666,11 @@ html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
     display: none;
   }
 }
+
 .detail {
   padding-bottom: 90px;
 }
+
 .back-mobile {
   display: none;
 }
@@ -13778,6 +13780,14 @@ html[data-theme="dark"] .tool-page-hero-icon {
   max-width: none;
   object-fit: contain;
 }
+/* Флаг шире остальных иллюстраций и визуально тяжёлый слева. Увеличиваем его и
+   сдвигаем вправо внутри неизменной плитки, оставляя краям намеренный мягкий кроп. */
+.tool-page-hero-icon-flag img {
+  top: 10px;
+  left: 14px;
+  width: 154px;
+  height: 154px;
+}
 /* Высокие рисовки внутри плитки не сдвигаем: у батареи от сдвига срезало бы
    половину. Она стоит по центру и целиком. */
 .tool-page-hero-icon-inside {
@@ -16518,10 +16528,95 @@ html[data-theme="dark"] .market-card-difference.cheaper {
   }
 }
 
-/* Справочник марок: карточки на подложках, по три-четыре в ряд. Значок берётся тот же,
-   что в каталоге, поэтому своих правил для картинки здесь нет — только сетка. */
+/* Справочник марок: поиск и последовательный список карточек. Значок берётся тот же,
+   что в каталоге, поэтому своих правил для картинки здесь нет. */
+.brand-directory-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.brand-directory-search {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 15px;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--filter-field-bg);
+  color: var(--muted);
+}
+.brand-directory-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 600 15px/1.3 "Manrope", system-ui, sans-serif;
+}
+.brand-directory-search input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.brand-directory-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.brand-directory-search .brand-directory-search-clear {
+  display: grid;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  place-items: center;
+  background: #b8bdc5;
+  color: #ffffff;
+  cursor: pointer;
+}
+.brand-directory-search .brand-directory-search-clear:hover {
+  background: #9fa5ae;
+}
+.brand-directory-search .brand-directory-search-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+html[data-theme="dark"] .brand-directory-search .brand-directory-search-clear {
+  background: #727780;
+  color: #20242a;
+}
+html[data-theme="dark"] .brand-directory-search .brand-directory-search-clear:hover {
+  background: #898e96;
+}
+.brand-directory-scope {
+  flex: 0 0 210px;
+  height: 48px;
+  padding-block: 0;
+}
+.brand-directory-sort {
+  flex: 0 0 200px;
+  height: 48px;
+  padding-block: 0;
+}
+.brand-directory-scope .select-trigger,
+.brand-directory-sort .select-trigger {
+  min-height: 48px;
+}
+.tool-page-brands-body {
+  gap: 24px;
+}
+.tool-page-brands-directory {
+  gap: 16px;
+}
 .brand-directory {
-  margin: 0 0 28px;
+  margin: 0;
+}
+/* Заголовков внутри отфильтрованного списка нет: режим уже назван в селекте.
+   Правило также скрывает старый узел, если Fast Refresh сохранил прежнее дерево. */
+.tool-page-brands-directory .brand-directory > h2 {
+  display: none;
 }
 .brand-directory h2 {
   margin: 0 0 18px;
@@ -16530,52 +16625,177 @@ html[data-theme="dark"] .market-card-difference.cheaper {
 }
 .brand-directory-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 .brand-directory-card {
+  --brand-directory-card-bg: var(--panel-soft);
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 18px 20px;
   border-radius: calc(14px * var(--corner-scale));
-  background: var(--panel);
+  background: var(--brand-directory-card-bg);
   color: inherit;
   text-decoration: none;
   font-family: "Manrope", system-ui, sans-serif;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
 }
 html[data-theme="dark"] .brand-directory-card {
-  background: #353a43;
+  --brand-directory-card-bg: var(--model-nested-bg);
 }
-a.brand-directory-card:hover {
-  background: var(--panel-soft);
+.brand-directory-card:hover {
+  --brand-directory-card-bg: var(--model-chip-bg);
+  transform: translateY(-2px);
 }
-html[data-theme="dark"] a.brand-directory-card:hover {
-  background: #3d434d;
+.brand-directory-card a:hover {
+  text-decoration: none;
+}
+html[data-theme="dark"] .brand-directory-card:hover {
+  --brand-directory-card-bg: color-mix(in srgb, var(--ink) 8%, var(--model-nested-bg));
+}
+.brand-directory-card-main-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.brand-directory-card-main-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .brand-directory-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   font-size: 17px;
 }
-.brand-directory-say,
-.brand-directory-group {
+.brand-directory-head b {
+  color: var(--ink);
+}
+html[data-theme="dark"] .brand-directory-head b {
+  color: #ffffff;
+}
+.brand-directory-models {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+  padding-left: 12px;
+}
+.brand-directory-model-photo {
+  position: relative;
+  display: grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 2px solid var(--brand-directory-card-bg);
+  border-radius: 50%;
+  corner-shape: round;
+  place-items: center;
+  background: var(--surface);
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.4;
+  box-sizing: border-box;
+  text-decoration: none;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.brand-directory-model-photo + .brand-directory-model-photo {
+  margin-left: -10px;
+}
+.brand-directory-model-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  corner-shape: round;
+  object-fit: cover;
+}
+.brand-directory-model-link {
+  z-index: 2;
+}
+.brand-directory-model-link:hover,
+.brand-directory-model-link:focus-visible {
+  z-index: 10;
+  outline: none;
+  transform: scale(2);
+}
+.brand-directory-model-more {
+  z-index: 2;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
 }
 .brand-directory-card p {
   margin: 4px 0 0;
-  font-size: 14px;
+  color: color-mix(in srgb, var(--ink) 35%, var(--muted));
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1.5;
 }
-.brand-directory-count {
+.brand-directory-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-top: auto;
   padding-top: 8px;
-  color: var(--muted-contrast, var(--muted));
-  font-size: 13px;
+}
+.brand-directory-count {
+  color: var(--accent-dark);
+  font-size: 15px;
   font-weight: 700;
+}
+.brand-directory-powertrains {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.brand-directory-powertrains > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.brand-directory-empty {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font: 600 15px/1.5 "Manrope", system-ui, sans-serif;
+}
+@media (max-width: 700px) {
+  .brand-directory-controls {
+    flex-direction: column;
+  }
+  .brand-directory-scope,
+  .brand-directory-sort {
+    flex-basis: 48px;
+    width: 100%;
+  }
+  .brand-directory-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .brand-directory-powertrains {
+    order: 1;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+  .brand-directory-count {
+    order: 2;
+  }
 }
 
 /* Переходы к остальным расчётам: три карточки-ссылки. Подложку блока задаёт то же
@@ -22343,4 +22563,110 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
     width: 100%;
     min-width: 0;
   }
+}
+
+/* Directory cards deliberately keep their desktop scale on phones. These rules
+   live after the shared article/mobile rules so those generic selectors cannot
+   enlarge the description or shrink the reusable brand logo. */
+@media (max-width: 700px) {
+  .model-page-article .brand-directory-card p {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .model-page-article .brand-directory-head > .brand-logo {
+    width: 52px;
+    height: 27px;
+    flex-basis: 52px;
+  }
+}
+
+/* Shared search used by tool/article pages. The china-brands field is the visual
+   source of truth: one height, radius, fill, type scale and clear affordance. */
+html body #root .app-search-field {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  min-width: 0;
+  min-height: 48px;
+  height: 48px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: calc(12px * var(--corner-scale));
+  background: var(--filter-field-bg);
+  color: var(--muted);
+}
+html body #root .app-search-field:focus-within {
+  background: var(--filter-field-bg);
+}
+html[data-theme="dark"] body #root .app-search-field,
+html[data-theme="dark"] body #root .app-search-field:focus-within {
+  background: var(--filter-field-bg);
+}
+html body #root .app-search-field > svg {
+  flex: 0 0 auto;
+  margin: 0;
+}
+html body #root .app-search-field input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 600 15px/1.3 "Manrope", system-ui, sans-serif;
+}
+html body #root .app-search-field input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+html body #root .app-search-field input::-webkit-search-cancel-button {
+  display: none;
+}
+html body #root .app-search-field-clear {
+  display: grid;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  place-items: center;
+  background: #b8bdc5;
+  color: #ffffff;
+  cursor: pointer;
+}
+html body #root .app-search-field-clear:hover {
+  background: #9fa5ae;
+}
+html body #root .app-search-field-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+html[data-theme="dark"] body #root .app-search-field-clear {
+  background: #727780;
+  color: #20242a;
+}
+html[data-theme="dark"] body #root .app-search-field-clear:hover {
+  background: #898e96;
+}
+html body #root .app-search-field.models-index-search {
+  margin: 18px 0 0;
+}
+html body #root .app-search-field.sheet-search {
+  margin-bottom: 8px;
+}
+html body #root .app-search-field.spec-search {
+  margin: 0;
+}
+html body #root .market-compare-sort,
+html body #root .market-compare-sort .select-trigger {
+  min-height: 48px;
+  height: 48px;
 }

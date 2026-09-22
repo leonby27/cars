@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
 import { Illustration } from "./illustration.jsx";
+import { SearchField } from "./search-field.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
@@ -50,7 +51,7 @@ import { InspectionReport } from "./inspection-report.jsx";
 import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, collapseSameModelCards, comparisonCatalogHref, comparisonOwnPrices, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint } from "./market-compare.js";
-import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
+import { BRAND_POWERTRAINS, CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
 import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
@@ -2164,29 +2165,20 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
         >
           {/* Крестик очистки — свой, как в строке поиска на главной: у браузерного
               нет ни плашки, ни отступа от края. */}
-          <div className="sheet-search">
-            <MagnifyingGlass size={18} weight="bold" aria-hidden="true" />
-            <input
-              type="search"
-              value={sheetQuery}
-              placeholder={sheet === "models" ? "Поиск модели" : "Поиск марки"}
-              aria-label={sheet === "models" ? "Поиск модели" : "Поиск марки"}
-              autoComplete="off"
-              onChange={(event) => {
-                const next = event.target.value;
-                setSheetQuery(next);
-                // Ищем всегда по всем маркам: на вкладке «Германия» запрос «Зикр»
-                // показывал пустоту, хотя марка в каталоге есть. Начали печатать —
-                // вкладка возвращается на «Все», чтобы было видно, где ищем.
-                if (next.trim()) setBrandGroup("Все");
-              }}
-            />
-            {sheetQuery && (
-              <button type="button" className="sheet-search-clear" aria-label="Очистить поиск" onClick={() => setSheetQuery("")}>
-                <X size={18} weight="bold" />
-              </button>
-            )}
-          </div>
+          <SearchField
+            className="sheet-search"
+            value={sheetQuery}
+            placeholder={sheet === "models" ? "Поиск модели" : "Поиск марки"}
+            ariaLabel={sheet === "models" ? "Поиск модели" : "Поиск марки"}
+            inputProps={{ autoComplete:"off" }}
+            onValueChange={(next) => {
+              setSheetQuery(next);
+              // Ищем всегда по всем маркам: на вкладке «Германия» запрос «Зикр»
+              // показывал пустоту, хотя марка в каталоге есть. Начали печатать —
+              // вкладка возвращается на «Все», чтобы было видно, где ищем.
+              if (next.trim()) setBrandGroup("Все");
+            }}
+          />
           {sheet === "brands" ? (
             <>
               <div className="sheet-tabs" role="tablist" aria-label="Группы марок">
@@ -3834,21 +3826,13 @@ function ModelsIndexPage({ navigate }) {
         <article className="model-page-article">
           <section>
             <h2>{MODELS_INDEX.listTitle}</h2>
-            <div className="select-search models-index-search">
-              <MagnifyingGlass size={20} />
-              <input
-                type="search"
-                value={query}
-                placeholder="Поиск по моделям: Tesla, кроссовер, бензин…"
-                aria-label="Поиск по обзорам моделей"
-                onChange={(event) => setQuery(event.target.value)}
-              />
-              {query && (
-                <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => setQuery("")}>
-                  <X size={14} weight="bold" />
-                </button>
-              )}
-            </div>
+            <SearchField
+              className="models-index-search"
+              value={query}
+              placeholder="Поиск по моделям: Tesla, кроссовер, бензин…"
+              ariaLabel="Поиск по обзорам моделей"
+              onValueChange={setQuery}
+            />
             {/* Под поиском: тип двигателя, затем марка, справа сортировка. */}
             <div className="models-index-controls">
               <SelectField className="models-index-select" label="Тип" value={type} options={MODELS_INDEX_TYPES} onChange={setType} />
@@ -7157,15 +7141,13 @@ function TechnicalSpecs({ car }) {
     <section className="detail-facts-section technical-specs">
       <h2>Полные данные</h2>
       <div className="spec-search-box" ref={searchBoxRef}>
-        <div className="select-search spec-search">
-          <MagnifyingGlass size={16} />
-          <input type="search" value={query} placeholder="Поиск: разгон, багажник, зарядка…" aria-label="Поиск по полным данным" onChange={(event) => setQuery(event.target.value)} />
-          {query && (
-            <button type="button" className="select-search-clear" aria-label="Очистить поиск" onClick={() => setQuery("")}>
-              <X size={14} weight="bold" />
-            </button>
-          )}
-        </div>
+        <SearchField
+          className="spec-search"
+          value={query}
+          placeholder="Поиск: разгон, багажник, зарядка…"
+          ariaLabel="Поиск по полным данным"
+          onValueChange={setQuery}
+        />
         {searching && (
           <div className="spec-search-results" role="region" aria-label="Результаты поиска по полным данным">
             {found.length
@@ -9416,6 +9398,7 @@ const TOOL_HERO_ICONS = Object.freeze({
   customs: { src: "/services/customs-calculator.png", width: 224, height: 224 },
   range: { src: "/services/battery-check.png", width: 512, height: 512, fit: "inside" },
   market: { src: "/services/price-comparison.png", width: 512, height: 512 },
+  brands: { src: "/services/china-brands.png", width: 512, height: 426, fit: "flag" },
 });
 
 function ToolPage({ tool, navigate }) {
@@ -9472,6 +9455,18 @@ function ToolPage({ tool, navigate }) {
       content: <p>{renderInlineText(item.a, navigate)}</p>,
     })),
   ];
+  // Справочник нужен прежде всего как быстрый список с поиском. Пояснения остаются
+  // доступными людям и поисковикам, но не превращают страницу в длинную простыню.
+  const brandsDetails = tool.kind !== "brands" ? [] : [
+    ...texts.sections.map((section) => ({
+      title: section.title,
+      content: <ModelPageSection section={{ ...section, title: null }} navigate={navigate} />,
+    })),
+    ...texts.faq.map((item) => ({
+      title: item.q,
+      content: <p>{renderInlineText(item.a, navigate)}</p>,
+    })),
+  ];
   // На сравнении цен оставляем человеку только карточки и компактный блок вопросов.
   // Все пояснения по-прежнему находятся в разметке страницы и в FAQ schema, поэтому
   // поисковик и агент получают полный контекст, но длинная статья не идёт следом за
@@ -9508,7 +9503,7 @@ function ToolPage({ tool, navigate }) {
           </button>
         </div>
         )}
-        <div className="model-page-body page-width">
+        <div className={`model-page-body page-width${tool.kind === "brands" ? " tool-page-brands-body" : ""}`}>
           <section className="model-page-hero">
             <div className="model-page-hero-copy">
               {/* Та же строка над заголовком, что у материалов журнала: название
@@ -9525,7 +9520,7 @@ function ToolPage({ tool, navigate }) {
                   насколько оно свежее. Текст общий с версией для поисковика. */}
               {/* На калькуляторе этой строки нет: там курс с датой стоит прямо
                   в расчёте, под суммой платежа, и вторая дата была бы повтором. */}
-              {updatedLabel && !isFormPage ? <p className="tool-page-updated">{updatedLabel}</p> : null}
+              {updatedLabel && !isFormPage && tool.kind !== "brands" ? <p className="tool-page-updated">{updatedLabel}</p> : null}
             </div>
             {/* Значок у заголовка калькулятора: справа от заголовка оставалось
                 пустое поле, а страница расчёта среди прочих узнаётся по картинке
@@ -9542,7 +9537,7 @@ function ToolPage({ tool, navigate }) {
           {/* На сравнении цен этого блока нет вовсе: вступление уехало под таблицу, а
               полосы цифр у страницы нет — пустая обёртка добавляла к отступу лишние
               38 точек, и таблица отрывалась от заголовка. */}
-          {!isFormPage && !isMarket && (
+          {!isFormPage && !isMarket && tool.kind !== "brands" && (
             <article className="model-page-article">
               {true && (
                 <div className="model-page-intro">
@@ -9559,6 +9554,11 @@ function ToolPage({ tool, navigate }) {
                   ))}
                 </div>
               )}
+            </article>
+          )}
+          {tool.kind === "brands" && (
+            <article className="model-page-article tool-page-brands-directory">
+              <ChinaBrandsDirectory navigate={navigate} />
             </article>
           )}
           {/* На калькуляторе форма стоит в одной подложке с заголовком: между ними
@@ -9583,12 +9583,11 @@ function ToolPage({ tool, navigate }) {
         {/* У сравнения цен этого блока нет: его таблица стоит выше, в одной подложке
             с заголовком, а пустая подложка здесь читалась бы как не загрузившийся
             кусок страницы. */}
-        {!isFormPage && !isMarket && (
+        {!isFormPage && !isMarket && tool.kind !== "brands" && (
           <div className="model-page-body page-width">
             <article className="model-page-article">
               {tool.kind === "quota" && <QuotaFigures />}
               {tool.kind === "cost" && <ToolPageTable table={deliveryStages()} />}
-              {tool.kind === "brands" && <ChinaBrandsDirectory navigate={navigate} />}
             </article>
           </div>
         )}
@@ -9606,6 +9605,8 @@ function ToolPage({ tool, navigate }) {
             )}
             <ModelPagePromo navigate={navigate} />
           </>
+        ) : tool.kind === "brands" ? (
+          <ToolDisclosures title="Подробнее о марках" titleId="china-brands-details-title" items={brandsDetails} faq={texts.faq} />
         ) : (
           <>
             <div className="model-page-body page-width">
@@ -10109,7 +10110,12 @@ function CustomsCalculator() {
 const brandCountsFromMeta = (meta) => new Map((meta?.brands || []).map((item) => [item.brand, item.count]));
 
 function ChinaBrandsDirectory({ navigate }) {
+  const narrow = useNarrowViewport();
   const [counts, setCounts] = useState(() => brandCountsFromMeta(bootCatalogMeta("")));
+  const [modelsByBrand, setModelsByBrand] = useState({});
+  const [query, setQuery] = useState("");
+  const [scope, setScope] = useState("Только китайские");
+  const [sortMode, setSortMode] = useState("По популярности");
   useEffect(() => {
     let alive = true;
     requestCatalogMeta("")
@@ -10121,29 +10127,83 @@ function ChinaBrandsDirectory({ navigate }) {
       alive = false;
     };
   }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/model-facts", { signal:controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model facts unavailable"))))
+      .then((data) => {
+        const grouped = {};
+        for (const row of data.models || []) {
+          if (!grouped[row.brand]) grouped[row.brand] = [];
+          grouped[row.brand].push({
+            model:row.model,
+            count:Number(row.count) || 0,
+            image:row.image || null,
+          });
+        }
+        const next = {};
+        for (const [brand, models] of Object.entries(grouped)) {
+          models.sort((left, right) => right.count - left.count || left.model.localeCompare(right.model, "ru", { sensitivity:"base" }));
+          next[brand] = { total:models.length, items:models.slice(0, 5) };
+        }
+        setModelsByBrand(next);
+      })
+      .catch(() => null);
+    return () => controller.abort();
+  }, []);
+  const normalizedQuery = query.trim().toLocaleLowerCase("ru");
+  const matchesQuery = (item) => !normalizedQuery || [
+    item.brand,
+    item.say,
+    item.chinese,
+    item.group,
+    item.partner,
+    item.about,
+  ].filter(Boolean).join(" ").toLocaleLowerCase("ru").includes(normalizedQuery);
+  const chineseBrands = scope === "Не китайские" ? [] : CHINA_BRANDS.filter(matchesQuery);
+  const foreignBrands = scope === "Только китайские" ? [] : CHINA_MADE_FOREIGN.filter(matchesQuery);
+  const visibleBrands = [
+    ...chineseBrands,
+    ...foreignBrands.map((item) => ({ ...item, group: `В Китае — вместе с ${item.partner}` })),
+  ];
+  const sortedBrands = [...visibleBrands].sort((left, right) => (
+    sortMode === "По алфавиту"
+      ? left.brand.localeCompare(right.brand, "ru", { sensitivity: "base" })
+      : (counts.get(right.brand) || 0) - (counts.get(left.brand) || 0)
+  ));
   return (
     <>
-      <section className="brand-directory">
-        <h2>Китайские марки</h2>
+      <div className="brand-directory-controls">
+        <SearchField
+          className="brand-directory-search"
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Найти марку"
+          ariaLabel="Поиск по маркам"
+        />
+        <SelectField
+          className="brand-directory-scope"
+          label="Какие марки показывать"
+          value={scope}
+          options={["Только китайские", "Все марки", "Не китайские"]}
+          onChange={setScope}
+        />
+        <SelectField
+          className="brand-directory-sort"
+          label="Сортировка"
+          value={sortMode}
+          options={["По популярности", "По алфавиту"]}
+          onChange={setSortMode}
+        />
+      </div>
+      {sortedBrands.length > 0 && <section className="brand-directory">
         <div className="brand-directory-grid">
-          {CHINA_BRANDS.map((item) => (
-            <BrandDirectoryCard key={item.brand} item={item} count={counts.get(item.brand) || 0} navigate={navigate} />
+          {sortedBrands.map((item) => (
+            <BrandDirectoryCard key={item.brand} item={item} count={counts.get(item.brand) || 0} models={modelsByBrand[item.brand]} modelPreviewLimit={narrow ? 3 : 5} navigate={navigate} />
           ))}
         </div>
-      </section>
-      <section className="brand-directory">
-        <h2>Привычные марки, которые делают в Китае</h2>
-        <div className="brand-directory-grid">
-          {CHINA_MADE_FOREIGN.map((item) => (
-            <BrandDirectoryCard
-              key={item.brand}
-              item={{ ...item, group: `В Китае — вместе с ${item.partner}` }}
-              count={counts.get(item.brand) || 0}
-              navigate={navigate}
-            />
-          ))}
-        </div>
-      </section>
+      </section>}
+      {!sortedBrands.length && <p className="brand-directory-empty">Такой марки в справочнике нет.</p>}
     </>
   );
 }
@@ -10447,30 +10507,14 @@ function MarketCompareCards({ cards, navigate, loading = false, quotaPricingOn =
   return (
     <div className="market-compare">
       <div className="market-compare-controls">
-        <div className="market-compare-search">
-          <MagnifyingGlass size={18} />
-          <input
-            ref={searchRef}
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Марка или модель"
-            aria-label="Поиск по марке и модели"
-          />
-          {query && (
-            <button
-              type="button"
-              className="market-compare-search-clear"
-              aria-label="Очистить поиск"
-              onClick={() => {
-                setQuery("");
-                searchRef.current?.focus();
-              }}
-            >
-              <X size={12} weight="bold" aria-hidden="true" />
-            </button>
-          )}
-        </div>
+        <SearchField
+          ref={searchRef}
+          className="market-compare-search"
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Марка или модель"
+          ariaLabel="Поиск по марке и модели"
+        />
         <SelectField className="market-compare-sort" label="Сортировка" value={sortOrder} options={MARKET_SORT_OPTIONS} onChange={setSortOrder} mobileIcon={SortAscending} mobileActionSheet={narrow} />
       </div>
       <div className="market-compare-filter-row">
@@ -10739,27 +10783,64 @@ function RangeCalculator() {
   );
 }
 
-function BrandDirectoryCard({ item, count, navigate }) {
+function BrandDirectoryCard({ item, count, models, modelPreviewLimit = 5, navigate }) {
   const path = brandLandingPath(item.brand);
+  const visibleModels = models?.items?.slice(0, modelPreviewLimit) || [];
+  const powertrains = BRAND_POWERTRAINS[item.brand] || [];
+  const powertrainIcons = {
+    "Бензин": GasPump,
+    "Гибрид": ArrowsLeftRight,
+    "Электро": Lightning,
+  };
+  const since = item.since ? `С ${item.since} года. ` : "";
   const inner = (
     <>
       <span className="brand-directory-head">
         <BrandMark brand={item.brand} />
         <b>{item.brand}</b>
+        {visibleModels.length > 0 && (
+          <span className="brand-directory-models" aria-label={`Популярные модели ${item.brand}: ${visibleModels.map((model) => model.model).join(", ")}`}>
+            {visibleModels.map((model) => {
+              const modelPage = MODEL_PAGES.find((page) => page.brand === item.brand && page.model === model.model);
+              const modelPath = modelPage?.path || `${path}?model=${encodeURIComponent(model.model)}`;
+              return (
+                <AppLink className="brand-directory-model-photo brand-directory-model-link" href={modelPath} navigate={navigate} key={model.model} aria-label={`${item.brand} ${model.model}`}>
+                  {model.image
+                    ? <img src={imageSource(model.image, 240)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, model.image)} />
+                    : <CarProfile size={16} weight="duotone" aria-hidden="true" />}
+                  <ActionTooltip text={`${item.brand} ${model.model}`} />
+                </AppLink>
+              );
+            })}
+            {models.total > visibleModels.length && (
+              <AppLink className="brand-directory-model-photo brand-directory-model-more" href={path} navigate={navigate} aria-label={`Ещё ${models.total - visibleModels.length} моделей ${item.brand}`}>
+                +{models.total - visibleModels.length}
+                <ActionTooltip text={`Ещё ${models.total - visibleModels.length} моделей ${item.brand}`} />
+              </AppLink>
+            )}
+          </span>
+        )}
       </span>
-      {item.say ? <span className="brand-directory-say">{item.say}{item.chinese ? ` · ${item.chinese}` : ""}</span> : null}
-      <span className="brand-directory-group">{item.group}{item.since ? `, с ${item.since} года` : ""}</span>
-      <p>{item.about}</p>
-      <span className="brand-directory-count">
-        {count > 0 ? `${number(count)} ${pluralRu(count, "машина", "машины", "машин")} в каталоге` : "Сейчас в каталоге нет"}
+      <p>{since}{item.about}</p>
+      <span className="brand-directory-meta">
+        <span className="brand-directory-count">
+          {count > 0 ? `${number(count)} ${pluralRu(count, "машина", "машины", "машин")} в каталоге` : "Сейчас в каталоге нет"}
+        </span>
+        <span className="brand-directory-powertrains" aria-label={`Выпускает: ${powertrains.join(", ")}`}>
+          {powertrains.map((powertrain) => {
+            const Icon = powertrainIcons[powertrain];
+            return <span key={powertrain}><Icon size={15} weight="duotone" aria-hidden="true" />{powertrain}</span>;
+          })}
+        </span>
       </span>
     </>
   );
-  // Ссылкой делаем только ту карточку, за которой есть что показать: раздел без
-  // единой машины — это тупик, а не переход.
-  return path && count > 0
-    ? <AppLink className="brand-directory-card" href={path} navigate={navigate}>{inner}</AppLink>
-    : <div className="brand-directory-card">{inner}</div>;
+  return (
+    <div className="brand-directory-card">
+      {path && <AppLink className="brand-directory-card-main-link" href={path} navigate={navigate} aria-label={`Все автомобили ${item.brand}`} />}
+      {inner}
+    </div>
+  );
 }
 
 function LegalPage({ kind }) {

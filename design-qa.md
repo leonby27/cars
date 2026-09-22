@@ -53,6 +53,63 @@ final result: passed
 
 ---
 
+# Design QA — china-brands mobile card scale
+
+- Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-79683e6c-4d84-4b49-9617-e0a6cd234909.png`
+- Desktop scale reference: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-83c36bd1-dec2-4801-90ec-94fc608edd4f.png`
+- Implementation screenshot: `/tmp/china-brands-mobile-after-crop.png`
+- Route: `http://127.0.0.1:5173/china-brands`
+- Browser: Codex in-app browser
+- Viewport: 494 × 898 CSS px at 2× density; dark theme; default Chinese/popularity filters
+- Source pixels: 976 × 694 mobile crop and 1668 × 416 desktop crop; implementation crop: 980 × 1960
+- Density normalization: the mobile source and implementation were compared at effectively equal 2× pixel width; the desktop crop established the requested 15px description and 52 × 27px logo scale.
+
+## Full-view comparison evidence
+
+The corrected mobile card visibly uses the compact desktop typography and desktop-size brand mark while retaining the intended mobile stacking, three model previews and left-aligned powertrain row.
+
+## Focused region comparison evidence
+
+Before the fix, browser-computed styles were 18px/25px for the description and 24 × 20px for the brand logo. After the fix, the same rendered card measures 15px/22.5px and 52 × 27px. The resulting BYD card was captured and visually checked against both supplied references.
+
+## Required fidelity surfaces
+
+- Fonts and typography: Manrope, weight 500, 15px size and 1.5 line height now match the desktop card.
+- Spacing and layout rhythm: mobile-only stacking and the existing gaps are preserved.
+- Colors and visual tokens: unchanged dark-theme card, muted copy and red count tokens.
+- Image quality and asset fidelity: the original SVG logo and model photos remain unchanged; only the logo's rendered dimensions were corrected.
+- Copy and content: unchanged.
+
+## Findings
+
+No actionable P0, P1 or P2 mismatch remains in the requested card description and logo sizing.
+
+## Comparison history
+
+- Earlier finding: shared mobile article rules enlarged card paragraphs to 18px, while the global mobile brand-list rule shrank every `.brand-logo` to 24 × 20px.
+- Fix: added late, directory-specific mobile overrides for the desktop 15px description and 52 × 27px logo dimensions.
+- Post-fix evidence: browser-computed dimensions and `/tmp/china-brands-mobile-after-crop.png`.
+
+## Interaction and runtime checks
+
+- Page contains meaningful content and no framework error overlay.
+- Browser console contains no runtime errors; only Vite development messages and the React DevTools notice.
+
+## Implementation checklist
+
+- [x] Desktop description type scale on mobile.
+- [x] Desktop brand-logo size on mobile.
+- [x] Preserve mobile layout and three-preview limit.
+- [x] Visually inspect the corrected mobile rendering.
+
+## Follow-up polish
+
+No additional polish is required for this scoped change.
+
+final result: passed
+
+---
+
 **Comparison Metadata**
 
 - Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-4c5ae275-58d1-4ebf-a90d-c3ece6f6091b.png`
