@@ -15474,8 +15474,29 @@ html[data-theme="dark"] .tool-calc-share.copied:hover {
   pointer-events: none;
 }
 .market-card-list-skeleton .skeleton-line {
-  background: linear-gradient(90deg, var(--panel-soft) 30%, var(--header-control-bg) 50%, var(--panel-soft) 70%);
-  background-size: 300% 100%;
+  /* У этого скелетона большие плоскости, поэтому общий почти незаметный блик
+     выглядел статичным. Контраст берём от текста: в светлой теме волна чуть темнее,
+     в тёмной — чуть светлее, и движение читается одинаково хорошо. */
+  background: linear-gradient(
+    100deg,
+    var(--panel-soft) 24%,
+    color-mix(in srgb, var(--ink) 14%, var(--panel-soft)) 44%,
+    var(--panel-soft) 64%
+  );
+  background-size: 250% 100%;
+  animation: market-skeleton-shimmer 1.15s linear infinite;
+  will-change: background-position;
+}
+@keyframes market-skeleton-shimmer {
+  from { background-position: 180% 0; }
+  to { background-position: -180% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .market-card-list-skeleton .skeleton-line {
+    background: var(--panel-soft);
+    animation: none;
+    will-change: auto;
+  }
 }
 .market-card-list-skeleton-items {
   display: contents;

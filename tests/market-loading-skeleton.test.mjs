@@ -23,3 +23,9 @@ test("скелетон повторяет геометрию карточек", 
   assert.match(styles, /\.market-skeleton-photo[\s\S]*?height:\s*124px/);
   assert.match(styles, /@media \(max-width: 700px\)[\s\S]*?\.market-card-skeleton/);
 });
+
+test("у скелетона видимый бегущий блик с безопасным режимом без движения", () => {
+  assert.match(styles, /\.market-card-list-skeleton \.skeleton-line[\s\S]*?animation:\s*market-skeleton-shimmer 1\.15s linear infinite/);
+  assert.match(styles, /@keyframes market-skeleton-shimmer[\s\S]*?background-position:\s*180% 0[\s\S]*?background-position:\s*-180% 0/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.market-card-list-skeleton \.skeleton-line[\s\S]*?animation:\s*none/);
+});
