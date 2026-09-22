@@ -10,6 +10,7 @@ import { brandLandingPath } from "../src/catalog-landings.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const all = [...CHINA_BRANDS, ...CHINA_MADE_FOREIGN];
 const appSource = readFileSync(path.join(root, "src", "App.jsx"), "utf8");
+const styles = readFileSync(path.join(root, "src", "styles.css"), "utf8");
 
 test("у каждой марки справочника есть файл значка", () => {
   // Значки те же, что в каталоге. Опечатка в имени файла дала бы на странице
@@ -68,4 +69,16 @@ test("поиск и сортировка стоят отдельно от трё
   assert.match(appSource, /className="brand-directory-shell"[\s\S]*?className="market-compare-controls brand-directory-controls"[\s\S]*?brand-directory-search[\s\S]*?market-compare-sort brand-directory-sort/);
   assert.match(appSource, /className="market-compare-sort brand-directory-sort"[\s\S]*?mobileIcon=\{SortAscending\}[\s\S]*?mobileActionSheet=\{narrow\}/);
   assert.match(appSource, /className="market-compare-filter-row brand-directory-filter-row"[\s\S]*?brand-directory-scope[\s\S]*?brand-directory-powertrain-filter[\s\S]*?brand-directory-price-filter/);
+});
+
+test("карточки заранее резервируют место под поздние фотографии моделей", () => {
+  assert.match(appSource, /className=\{`brand-directory-models\$\{models \? "" : " pending"\}`\}/);
+  assert.match(styles, /\.brand-directory-models\s*\{[\s\S]*?width:\s*var\(--brand-directory-models-width,[^)]+\);[\s\S]*?min-height:\s*44px;/);
+  assert.match(styles, /\.brand-directory-models\.pending\s*\{\s*visibility:\s*hidden;/);
+});
+
+test("страницы расчётов используют единый отступ от описания до рабочего блока", () => {
+  assert.match(styles, /\.tool-page-aside \.model-page-body\s*\{\s*gap:\s*47px;/);
+  assert.match(styles, /\.tool-page-aside \.model-page-body > \.model-page-article > \.tool-calc\s*\{\s*margin-top:\s*0;/);
+  assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.tool-page-aside \.model-page-body\s*\{\s*gap:\s*39px;/);
 });

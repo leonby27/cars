@@ -13819,6 +13819,15 @@ html[data-theme="dark"] .tool-page-hero-icon {
   width: 154px;
   height: 154px;
 }
+/* Автовоз — широкая иллюстрация: показываем всю кабину и большую часть платформы,
+   слегка обрезая только дальний край внутри той же квадратной плитки. */
+.tool-page-hero-icon-carrier img {
+  top: 8px;
+  left: 10px;
+  width: 168px;
+  height: 112px;
+  object-fit: contain;
+}
 /* Высокие рисовки внутри плитки не сдвигаем: у батареи от сдвига срезало бы
    половину. Она стоит по центру и целиком. */
 .tool-page-hero-icon-inside {
@@ -14995,6 +15004,14 @@ html[data-theme="dark"] .cost-calculator-note {
    Ответ — одна плашка: сверху главное число, под чертой разбивка, из чего оно
    сложилось. Под плашкой мелкая сноска с разбором. */
 .tool-calc {
+  --tool-calc-field-height: 70px;
+  --tool-calc-field-inline: 16px;
+  --tool-calc-field-label-top: 14px;
+  --tool-calc-field-value-bottom: 14px;
+  --tool-calc-field-caret-right: 20px;
+  --tool-calc-field-caret-size: 16px;
+  --tool-calc-field-caret-offset: 8px;
+  --tool-calc-field-value-size: 19px;
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   align-items: start;
@@ -15023,7 +15040,8 @@ html[data-theme="dark"] .cost-calculator-note {
   position: relative;
   display: flex;
   align-items: stretch;
-  min-height: 70px;
+  height: var(--tool-calc-field-height);
+  min-height: var(--tool-calc-field-height);
   border-radius: calc(16px * var(--corner-scale));
   background: var(--filter-field-bg);
   transition: box-shadow var(--motion-fast) ease;
@@ -15075,6 +15093,102 @@ html[data-theme="dark"] .cost-calculator-note {
   margin: 0;
   appearance: none;
 }
+/* В калькуляторе доставки поиск и выбор — одно поле: посетитель сразу печатает
+   модель или город, а подходящие варианты раскрываются под этой же плашкой. */
+.tool-calc-combo-field:has(.tool-combobox.open) {
+  z-index: 8;
+}
+.tool-combobox {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+}
+.tool-combobox .tool-calc-main {
+  position: relative;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 0 48px var(--tool-calc-field-value-bottom) var(--tool-calc-field-inline);
+}
+/* Комбобокс повторяет внутреннюю геометрию обычного SelectField из калькулятора
+   растаможки: подпись закреплена сверху, значение — снизу, без отдельного
+   вертикального центрирования, которое давало расхождение в несколько пикселей. */
+.tool-combobox .tool-calc-label {
+  position: absolute;
+  top: var(--tool-calc-field-label-top);
+  left: var(--tool-calc-field-inline);
+}
+.tool-combobox .tool-calc-input {
+  height: auto;
+  font-size: var(--tool-calc-field-value-size);
+  line-height: 1.1;
+}
+.tool-combobox .tool-calc-input::placeholder {
+  color: var(--muted);
+  opacity: 0.78;
+}
+.tool-combobox-caret {
+  position: absolute;
+  top: calc(50% - var(--tool-calc-field-caret-offset));
+  right: var(--tool-calc-field-caret-right);
+  width: var(--tool-calc-field-caret-size);
+  height: var(--tool-calc-field-caret-size);
+  color: var(--ink);
+  pointer-events: none;
+  transition: transform var(--motion-medium) var(--motion-ease);
+}
+.tool-combobox.open .tool-combobox-caret {
+  transform: rotate(180deg);
+}
+.tool-combobox-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 290px;
+  padding: 6px;
+  overflow: auto;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--panel);
+  box-shadow: 0 18px 44px rgba(10, 13, 18, 0.18);
+}
+html[data-theme="dark"] .tool-combobox-menu {
+  background: var(--header-control-bg);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+}
+.tool-combobox-menu button {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: calc(10px * var(--corner-scale));
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.tool-combobox-menu button.active,
+.tool-combobox-menu button:hover {
+  background: var(--filter-field-bg);
+}
+.tool-combobox-menu button.selected {
+  color: var(--accent-dark);
+}
+.tool-combobox-menu p {
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--muted);
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 14px;
+}
 /* Плашка со списком: подпись лежит поверх неё и нажатий не ловит, а сам список
    растянут на всю площадь плашки. Иначе нажималась бы только строка значения, и
    промах в сантиметр от текста ничего не открывал. Своей подложки и своих полей
@@ -15082,8 +15196,8 @@ html[data-theme="dark"] .cost-calculator-note {
 .tool-calc-field-select > .tool-calc-label {
   position: absolute;
   z-index: 1;
-  top: 14px;
-  left: 16px;
+  top: var(--tool-calc-field-label-top);
+  left: var(--tool-calc-field-inline);
   pointer-events: none;
 }
 /* Открытый список общими правилами закрашивается своей подложкой — здесь она бы
@@ -15107,10 +15221,10 @@ html[data-theme="dark"] body #root .tool-calc-select.open {
    кнопка при этом занимает всю плашку целиком. */
 #root .tool-calc-select .select-trigger {
   align-items: flex-end;
-  padding: 0 16px 14px;
+  padding: 0 var(--tool-calc-field-inline) var(--tool-calc-field-value-bottom);
 }
 #root .tool-calc-select .select-trigger b {
-  font-size: 19px;
+  font-size: var(--tool-calc-field-value-size);
   font-weight: 700;
 }
 /* Стрелка стоит по центру плашки, а не на строке значения: у соседних полей
@@ -15118,8 +15232,10 @@ html[data-theme="dark"] body #root .tool-calc-select.open {
    открытии задаём здесь же, иначе общее правило перебило бы положение. */
 #root .tool-calc-select .select-trigger > svg:last-child {
   position: absolute;
-  right: 20px;
-  top: calc(50% - 8px);
+  right: var(--tool-calc-field-caret-right);
+  top: calc(50% - var(--tool-calc-field-caret-offset));
+  width: var(--tool-calc-field-caret-size);
+  height: var(--tool-calc-field-caret-size);
 }
 #root .tool-calc-select.open .select-trigger > svg:last-child {
   transform: rotate(180deg);
@@ -15308,6 +15424,9 @@ html[data-theme="dark"] .tool-calc-currency {
   display: grid;
   gap: 14px;
 }
+.tool-calc-delivery .tool-calc-fields {
+  align-content: start;
+}
 /* Итог и разбивка по сборам — одна плашка со спокойной подложкой, как у прочих
    блоков страницы. Внутри их делит тонкая черта: без неё сумма и столбик цифр
    слипаются в один кусок. */
@@ -15348,6 +15467,13 @@ html[data-theme="dark"] .tool-calc-currency {
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -1.2px;
+}
+/* Доплата за крупный кузов влияет на итог, поэтому название этой тарифной группы
+   выделяем тем же красным, что и валюту рядом с суммой. Это только текст: никаких
+   признаков кнопки, ссылки или отдельной пилюли. */
+.tool-calc-body-class.large {
+  color: var(--accent-dark);
+  font-weight: 700;
 }
 /* Валюта платежа — наш обычный список, только без плашки: на месте подписи стоит
    сам знак валюты нашим красным, рядом треугольник, по нажатию открывается тот же
@@ -16687,9 +16813,19 @@ html[data-theme="dark"] .brand-directory-head b {
 .brand-directory-models {
   display: flex;
   flex: 0 0 auto;
+  width: var(--brand-directory-models-width, 214px);
+  min-height: 44px;
   align-items: center;
+  justify-content: flex-end;
   margin-left: auto;
   padding-left: 12px;
+  box-sizing: content-box;
+}
+/* Пока фотографии моделей едут отдельным запросом, невидимый блок уже занимает
+   их окончательные ширину и высоту. Поэтому заголовок карточки и весь список ниже
+   остаются на месте как на широком, так и на узком экране. */
+.brand-directory-models.pending {
+  visibility: hidden;
 }
 .brand-directory-model-photo {
   position: relative;
@@ -19206,6 +19342,17 @@ html[data-theme="dark"] .blog-tool-button.current:hover {
 .tool-page-aside .tool-page-links {
   width: 100%;
 }
+/* У всех страниц из правого меню один ритм между описанием героя и первым рабочим
+   блоком. Раньше справочник и сравнение получали только общий gap 38px, а формы
+   добавляли к нему собственные 18px и визуально отъезжали на 56px. Берём середину
+   этих двух значений и задаём её контейнером, чтобы тип следующего компонента больше
+   не менял отступ. */
+.tool-page-aside .model-page-body {
+  gap: 47px;
+}
+.tool-page-aside .model-page-body > .model-page-article > .tool-calc {
+  margin-top: 0;
+}
 /* Подложки заняли колонку сетки, а вот строка внутри них ограничена той же меркой,
    что в материалах журнала: 780 точек — примерно семьдесят знаков, дальше глаз теряет
    начало следующей строки. Содержимое стоит по центру подложки, поэтому поля справа
@@ -19260,6 +19407,13 @@ html[data-theme="dark"] .blog-tool-button:hover {
   }
   .blog-sidebar {
     position: static;
+  }
+}
+@media (max-width: 980px) {
+  /* На узком экране прежние варианты были 30px и 48px. Их общий средний шаг —
+     39px: достаточно воздуха, но первый интерактивный блок остаётся рядом с лидом. */
+  .tool-page-aside .model-page-body {
+    gap: 39px;
   }
 }
 @media (max-width: 700px) {

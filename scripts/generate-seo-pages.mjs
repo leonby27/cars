@@ -24,7 +24,7 @@ import { PRICING, estimateLandedCost } from "../src/pricing.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
-import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS } from "../src/purchase-info.js";
+import { FAQ_GROUPS, HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "../src/purchase-info.js";
 import { TRACKING_FAQ } from "../src/tracking-info.js";
 import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
@@ -147,7 +147,7 @@ const publicPages = [
   // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
   // подход и «чего мы не обещаем» — перенесены вниз `/how-it-works`, а сам адрес
   // перебрасывается туда навсегда (правило в vercel.json).
-  { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы о проверке, цене, договоре, оплате, доставке и ответственности." },
+  { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы Абкарс (ABCars) о проверке, цене, договоре, оплате, доставке и ответственности." },
   { route: "/tracking/", title: "Отслеживание автомобиля по VIN | abcars.by", description: "Проверка текущего этапа доставки автомобиля из Китая по VIN-номеру.", h1: "Отслеживание автомобиля", lead: "Введите VIN, чтобы узнать, на каком этапе находится ваш автомобиль." },
   { route: "/contacts/", title: "Контакты abcars.by — автомобили из Китая в Минске", description: "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая.", h1: "Контакты abcars.by", lead: "Обсудим бюджет, подбор, проверку, договор и доставку автомобиля из Китая в Беларусь." },
   { route: "/privacy/", title: "Политика конфиденциальности | abcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
@@ -509,7 +509,7 @@ function infoArticle(route) {
     // Главная — самая массовая страница по запросам и была самой пустой: 44 слова.
     return `<section><h2>Как проходит покупка</h2>${HOME_ORDER_STEPS.map(
       (step) => `<h3>${escapeHtml(step.number)}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.description)}</p>`,
-    ).join("")}</section><section><h2>Частые вопросы о покупке и доставке б/у авто из Китая</h2>${HOME_FAQ.map(
+    ).join("")}</section><section><h2>Частые вопросы о покупке и доставке б/у авто из Китая</h2><p>${escapeHtml(HOME_FAQ_LEAD)}</p>${HOME_FAQ.map(
       (item) => `<h3>${escapeHtml(item.question)}</h3><p>${linkifyText(item.answer, hrefRoute)}</p>`,
     ).join("")}<p><a href="${hrefRoute("/faq/")}">Все вопросы и ответы</a></p></section>`;
   }
@@ -1087,8 +1087,8 @@ for (const page of publicPages) {
       mainEntityOfPage: routeUrl(page.route),
       datePublished: page.post.published,
       dateModified: isoDate(blogUpdatedAt(page.post, live.collections.get(page.post.slug)?.changedAt)) || page.post.published,
-      author: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
-      publisher: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
+      author: { "@type": "Organization", name: COMPANY.schemaName, url: routeUrl("/") },
+      publisher: { "@type": "Organization", name: COMPANY.schemaName, url: routeUrl("/") },
     });
     if (page.post.faq?.length) schemas.push(renderer.faqSchema(page.post.faq));
   }
@@ -1103,7 +1103,7 @@ for (const page of publicPages) {
       inLanguage: "ru-BY",
       url: routeUrl(page.route),
       dateModified: toolLastmod(page.tool),
-      publisher: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
+      publisher: { "@type": "Organization", name: COMPANY.schemaName, url: routeUrl("/") },
     });
   }
   if (page.route === "/") {

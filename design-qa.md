@@ -1,3 +1,104 @@
+## Design QA — delivery-cost CIP calculator
+
+- Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-168551e8-ae60-4b48-9c35-f563cde2347a.png`
+- Implementation screenshot: unavailable by project policy
+- Intended route: `http://127.0.0.1:5173/delivery-cost`
+- Intended states: desktop and mobile, dark and light themes, model/location combobox open, default and large-vehicle estimates
+- Source pixels: 1746 × 1396
+- Implementation pixels, CSS viewport and density normalization: unavailable because a browser capture was not permitted
+
+### Full-view comparison evidence
+
+Blocked. The repository owner decision in `AGENTS.md` prohibits opening, refreshing, capturing or visually inspecting the rendered preview unless visual verification is explicitly requested in the current request. The current request specified the result-card content but did not authorize visual verification.
+
+### Focused region comparison evidence
+
+Blocked for the same reason. No claim about rendered typography, spacing, colors, image quality, copy wrapping or responsive fidelity is made from code alone.
+
+### Findings
+
+- [Blocked] No rendered comparison artifact is available. Automated calculation tests and the production build pass, but they are not a substitute for the required visual comparison.
+
+### Comparison history
+
+- No visual iteration was run for this change because the project-specific visual-verification prohibition takes precedence.
+
+### Implementation checklist
+
+- [x] Shared two-column calculator structure implemented.
+- [x] Editable, filterable model and location comboboxes implemented.
+- [x] Location defaults to «Точно не знаю».
+- [x] CIP total and itemized breakdown implemented.
+- [x] Calculation tests pass.
+- [x] Production build passes.
+- [ ] Browser-rendered desktop/mobile and theme comparison pending explicit owner authorization.
+
+### Follow-up polish
+
+No visual polish is classified without rendered evidence.
+
+final result: blocked
+
+---
+
+## Design QA — shared tool-page hero spacing
+
+- Source visual truth: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-6b77ff75-02e6-4250-aac7-447c29f9e83b.png` and `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-a3f96897-5360-4925-a4bf-83e26e6ea513.png`
+- Implementation screenshots: Codex in-app Browser captures emitted during the 2026-09-22 verification run; this browser API did not expose filesystem paths for the captures.
+- Routes: `/ev-quota`, `/customs`, `/delivery-cost`, `/china-brands`, `/range`, `/price-belarus`
+- Browser: Codex in-app browser
+- Viewports: 1243 × 894 CSS px desktop and 390 × 844 CSS px mobile at 1× CSS density
+- Source pixels: 1856 × 996 and 1594 × 1064
+- State: dark theme, default controls, first functional block visible below each hero.
+
+### Full-view comparison evidence
+
+The supplied screenshots show the same structural boundary with two different distances: the directory/comparison pages used the container's 38px desktop gap, while calculator forms added an 18px top margin and reached 56px. The revised pages use the exact midpoint, 47px, without changing the hero, controls, illustrations, typography, or card layout.
+
+### Focused region comparison evidence
+
+Browser geometry was measured between `.model-page-hero` and the following `.model-page-article` on all six right-menu pages. Every desktop route measured exactly 47px. At 390px wide every route measured exactly 39px, the midpoint of the former responsive values 30px and 48px. The two calculator routes report a computed top margin of 0px, so no component adds a second spacing contribution. No route has horizontal overflow on mobile.
+
+### Required fidelity surfaces
+
+- Fonts and typography: unchanged across all six pages.
+- Spacing and layout rhythm: one shared 47px desktop and 39px narrow-screen interval replaces the 38/56px and 30/48px split.
+- Colors and visual tokens: unchanged.
+- Image quality and asset fidelity: existing hero illustrations are unchanged and remain sharp.
+- Copy and content: unchanged.
+
+### Findings
+
+No actionable P0, P1, or P2 mismatch remains. The shared interval is visually centered between the two supplied reference values and is consistent on every checked route.
+
+### Comparison history
+
+- Earlier finding: calculators added their own 18px top margin on top of the page gap, while directory and comparison components did not, producing visibly jumping vertical rhythm.
+- Fix: moved the spacing decision to the shared tool-page container and removed only the calculator's extra top contribution inside that template.
+- Post-fix evidence: browser-computed geometry for six desktop and six mobile route states, plus full-page in-app Browser captures for `/range` mobile and `/china-brands` desktop.
+
+### Interaction and runtime checks
+
+- All six pages were navigated through the shared right-side menu at desktop and mobile widths.
+- Search, filters, calculators, cards, and responsive wrapping remain present; no horizontal overflow was detected at 390px.
+- Browser console contains no runtime errors; only Vite development messages and the React DevTools notice.
+
+### Implementation checklist
+
+- [x] Shared midpoint spacing on desktop.
+- [x] Shared midpoint spacing on mobile/tablet.
+- [x] No calculator-specific double margin.
+- [x] All six menu pages visually and geometrically checked.
+- [x] Production build passes.
+
+### Follow-up polish
+
+No further scoped polish is required.
+
+final result: passed
+
+---
+
 ## Design QA — price-page title and scales revision
 
 - Source visual truth: `/Users/user/Downloads/ChatGPT Image 21 сент. 2026 г., 23_08_16.png`

@@ -336,9 +336,24 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       "@context": "https://schema.org",
       "@type": "Organization",
-      name: "abcars.by",
+      // Имя, под которым нас ищут, — «абкарс» кириллицей и ABCars латиницей. Раньше
+      // здесь стоял только адрес сайта, и по названию компании поисковик уводил на
+      // страницу контактов вместо главной. Реквизиты, адрес и связь — из карточки
+      // компании, чтобы не разъезжались с подвалом и страницей контактов.
+      "@id": `${routeUrl("/")}#organization`,
+      name: COMPANY.schemaName,
+      alternateName: [...COMPANY.schemaAlternateNames],
+      legalName: COMPANY.legalName,
       url: routeUrl("/"),
       logo: `${base}/og.jpg`,
+      email: COMPANY.email,
+      telephone: COMPANY.phoneHref || COMPANY.phone,
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: COMPANY.street,
+        addressLocality: COMPANY.city,
+        addressCountry: COMPANY.countryCode,
+      },
       areaServed: { "@type": "Country", name: "Беларусь" },
       // Наши страницы в соцсетях: по ним поисковик связывает профили с сайтом, а не
       // считает их чужими однофамильцами. Адреса — из карточки компании, чтобы не
@@ -356,9 +371,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      name: "abcars.by",
-      alternateName: "Автомобили из Китая в Беларусь",
+      name: COMPANY.schemaName,
+      alternateName: [...COMPANY.schemaAlternateNames, "Автомобили из Китая в Беларусь"],
       url: routeUrl("/"),
+      publisher: { "@id": `${routeUrl("/")}#organization` },
       inLanguage: "ru-BY",
       potentialAction: {
         "@type": "SearchAction",
@@ -494,7 +510,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         price: landed.totalUsd,
         availability: sold ? "https://schema.org/SoldOut" : "https://schema.org/InStock",
         itemCondition: "https://schema.org/UsedCondition",
-        seller: { "@type": "Organization", name: "abcars.by", url: routeUrl("/") },
+        seller: { "@type": "Organization", name: COMPANY.schemaName, url: routeUrl("/"), "@id": `${routeUrl("/")}#organization` },
       },
     };
     const modelLink = modelPage

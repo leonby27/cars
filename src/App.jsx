@@ -19,7 +19,7 @@ import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel,
 import { matchesSearchText, searchTextWords, searchWordStem } from "./car-search-text.js";
 import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
-import { cityName } from "./city-names.js";
+import { CITY_NAMES, cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS, canonicalImportModel } from "../config/import-policy.mjs";
 import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
@@ -55,12 +55,13 @@ import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, collapseSa
 import { BRAND_POWERTRAINS, CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
 import { BRAND_PRICE_SEGMENTS, brandMatchesPriceSegment } from "./brand-directory-filters.js";
 import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
+import { deliveryBodyClass, deliveryModelSize, deliveryPrecisionPrompt, estimateDeliveryCip } from "./delivery-estimate.js";
 import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
-import { FAQ_GROUPS, HOME_FAQ, HOME_ORDER_STEPS } from "./purchase-info.js";
+import { FAQ_GROUPS, HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "./purchase-info.js";
 import { TRACKING_FAQ } from "./tracking-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
@@ -1755,6 +1756,138 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
           </div>
         </FilterSheet>,
         document.body,
+      )}
+    </div>
+  );
+}
+
+/* Поле и поиск здесь один контрол, а не кнопка с отдельным поиском внутри меню.
+   Это важно для калькулятора доставки: модель или город проще начать печатать,
+   чем сначала открывать список из нескольких сотен вариантов. */
+function ComboboxField({ label, value, options, onChange, placeholder }) {
+  const rootRef = useRef(null);
+  const optionsRef = useRef(null);
+  const centerActiveOnOpenRef = useRef(false);
+  const openRef = useRef(false);
+  const listId = useId();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(value?.label || "");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const labels = useMemo(() => options.map((item) => item.label), [options]);
+  const filteredOptions = useMemo(() => {
+    if (!query.trim() || (query === value?.label && !value?.custom)) return options;
+    const matches = new Set(listSearchMatches(labels, query));
+    return options.filter((item) => matches.has(item.label));
+  }, [labels, options, query, value?.custom, value?.label]);
+  const changeOpen = (next) => {
+    openRef.current = next;
+    setOpen(next);
+  };
+
+  useEffect(() => setQuery(value?.label || ""), [value?.label]);
+  useEffect(() => {
+    const closeOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) changeOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, []);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const menu = optionsRef.current;
+    const active = optionsRef.current?.querySelector('[role="option"].active');
+    if (!menu || !active) return;
+    const top = active.offsetTop;
+    const bottom = top + active.offsetHeight;
+    if (centerActiveOnOpenRef.current) {
+      menu.scrollTop = Math.max(0, top - (menu.clientHeight - active.offsetHeight) / 2);
+    } else if (top < menu.scrollTop) {
+      menu.scrollTop = top;
+    } else if (bottom > menu.scrollTop + menu.clientHeight) {
+      menu.scrollTop = bottom - menu.clientHeight;
+    }
+    centerActiveOnOpenRef.current = false;
+  }, [open, activeIndex]);
+
+  const openAtSelection = () => {
+    // Первый клик по полю приходит двумя событиями: focus, затем click. После focus
+    // список уже открыт и отцентрирован; повторная подготовка на click оставляла
+    // флаг центрирования до следующего hover, из-за чего активный пункт прыгал.
+    if (openRef.current) return;
+    const selectedIndex = filteredOptions.findIndex((item) => item.value === value?.value);
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    centerActiveOnOpenRef.current = selectedIndex >= 0;
+    changeOpen(true);
+  };
+  const choose = (item) => {
+    onChange(item);
+    setQuery(item.label);
+    changeOpen(false);
+  };
+  const move = (delta) => {
+    if (!filteredOptions.length) return;
+    setActiveIndex((index) => Math.max(0, Math.min(filteredOptions.length - 1, index + delta)));
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) openAtSelection();
+      else move(event.key === "ArrowDown" ? 1 : -1);
+    } else if (event.key === "Enter" && open && filteredOptions[activeIndex]) {
+      event.preventDefault();
+      choose(filteredOptions[activeIndex]);
+    } else if (event.key === "Escape") {
+      changeOpen(false);
+    } else if (event.key === "Tab") {
+      changeOpen(false);
+    }
+  };
+
+  return (
+    <div className={`tool-combobox${open ? " open" : ""}`} ref={rootRef}>
+      <label className="tool-calc-main">
+        <span className="tool-calc-label">{label}</span>
+        <input
+          className="tool-calc-input"
+          type="text"
+          value={query}
+          placeholder={placeholder}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-activedescendant={open && filteredOptions[activeIndex] ? `${listId}-${activeIndex}` : undefined}
+          onFocus={openAtSelection}
+          onClick={openAtSelection}
+          onChange={(event) => {
+            const next = event.target.value;
+            setQuery(next);
+            setActiveIndex(0);
+            changeOpen(true);
+            onChange(next ? { value: next, label: next, custom: true } : null);
+          }}
+          onKeyDown={onKeyDown}
+        />
+      </label>
+      <CaretDown className="tool-combobox-caret" size={16} weight="bold" aria-hidden="true" />
+      {open && (
+        <div className="tool-combobox-menu" id={listId} role="listbox" aria-label={label} ref={optionsRef}>
+          {filteredOptions.length ? filteredOptions.map((item, index) => (
+            <button
+              type="button"
+              id={`${listId}-${index}`}
+              role="option"
+              aria-selected={item.value === value?.value}
+              className={`${item.value === value?.value ? "selected " : ""}${index === activeIndex ? "active" : ""}`}
+              key={item.value}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => choose(item)}
+            >
+              <span>{item.label}</span>
+              {item.value === value?.value && <Check size={16} weight="bold" aria-hidden="true" />}
+            </button>
+          )) : <p>Ничего не найдено</p>}
+        </div>
       )}
     </div>
   );
@@ -4485,7 +4618,7 @@ function HomeConversionSections({ navigate }) {
         <div className="home-faq-intro">
           <span className="home-section-kicker">Коротко о главном</span>
           <h2 id="home-faq-title">Частые вопросы о покупке и доставке б/у авто из Китая</h2>
-          <p>Коротко объясняем, как выбрать и проверить автомобиль, из чего складывается цена до Минска и как проходит доставка в Беларусь.</p>
+          <p>{HOME_FAQ_LEAD}</p>
           <button type="button" className="primary home-faq-link" onClick={() => window.location.assign("/how-it-works#faq")}>Все вопросы и ответы <ArrowRight size={18} weight="bold" /></button>
         </div>
         <HomeFaqList items={HOME_FAQ} navigate={navigate} />
@@ -9403,6 +9536,7 @@ function ContactsPage({ navigate, theme }) {
    внутри плитки целиком. */
 const TOOL_HERO_ICONS = Object.freeze({
   customs: { src: "/services/customs-calculator.png", width: 224, height: 224 },
+  cost: { src: "/services/delivery-car-carrier.png", width: 640, height: 426, fit: "carrier", raw: true },
   range: { src: "/services/battery-check.png", width: 512, height: 512, fit: "inside" },
   market: { src: "/services/price-comparison.png", width: 512, height: 512 },
   brands: { src: "/services/china-brands.png", width: 512, height: 426, fit: "flag" },
@@ -9437,7 +9571,8 @@ function ToolPage({ tool, navigate }) {
   // Расчёт запаса хода живёт по тем же правилам, что и растаможка: за страницей
   // приходят посчитать, поэтому форма стоит сразу под заголовком, а текст свёрнут
   // в пункты под ней — он в разметке страницы, но не отодвигает форму вниз.
-  const isFormPage = isCalculator || tool.kind === "range";
+  const isDeliveryCalculator = tool.kind === "cost";
+  const isFormPage = isCalculator || tool.kind === "range" || isDeliveryCalculator;
   const calculatorDetails = !isCalculator ? [] : [
     { title: customsExample().title, content: <ToolPageDataTable table={{ ...customsExample(), title: null }} /> },
     {
@@ -9535,7 +9670,9 @@ function ToolPage({ tool, navigate }) {
                 на главной. Картинка украшает и в озвучку экрана не идёт. */}
             {heroIcon && (
               <span className={`tool-page-hero-icon${heroIcon.fit ? ` tool-page-hero-icon-${heroIcon.fit}` : ""}`} aria-hidden="true">
-                <Illustration src={heroIcon.src} width={heroIcon.width} height={heroIcon.height} alt="" aria-hidden="true" />
+                {heroIcon.raw
+                  ? <img src={appHref(heroIcon.src)} width={heroIcon.width} height={heroIcon.height} alt="" aria-hidden="true" />
+                  : <Illustration src={heroIcon.src} width={heroIcon.width} height={heroIcon.height} alt="" aria-hidden="true" />}
               </span>
             )}
           </section>
@@ -9572,7 +9709,7 @@ function ToolPage({ tool, navigate }) {
               нечего читать, а две подложки подряд читались как пропущенный кусок. */}
           {isFormPage && (
             <article className="model-page-article">
-              {isCalculator ? <CustomsCalculator /> : <RangeCalculator />}
+              {isCalculator ? <CustomsCalculator /> : isDeliveryCalculator ? <DeliveryCalculator /> : <RangeCalculator />}
             </article>
           )}
           {/* Сравнение — в одной подложке с заголовком, как форма калькулятора: две
@@ -9848,6 +9985,156 @@ function QuotaFigures() {
 
    Списки выбора — те же, что в фильтрах каталога: свой вид у выпадающего списка
    на одной странице сразу выбивался бы из сайта. */
+const modelLengthMm = (item) => {
+  const match = `${item.lead || ""} ${item.teaser || ""}`.match(/длин(?:ой|а)\s+(\d)[,.](\d{1,2})\s*метр/i);
+  return match ? Math.round(Number(`${match[1]}.${match[2]}`) * 1000) : 0;
+};
+const DELIVERY_MODEL_OPTIONS = [...new Map(MODEL_PAGES.map((item) => [item.name, {
+  value: item.slug,
+  label: item.name,
+  brand: item.brand,
+  catalogModel: item.model,
+  lengthMm: modelLengthMm(item),
+}])).values()]
+  .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+const DELIVERY_LOCATION_OPTIONS = [...new Map(Object.entries(CITY_NAMES)
+    .filter(([key]) => /^[a-z_]+$/.test(key))
+    .map(([value, label]) => [label, { value, label }])).values()]
+  .sort((a, b) => a.label.localeCompare(b.label, "ru"));
+
+function DeliveryCalculator() {
+  const [initial] = useState(() => {
+    const params = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+    const modelValue = params.get("model") || "";
+    const cityValue = params.get("city") || "";
+    return {
+      model: DELIVERY_MODEL_OPTIONS.find((item) => item.value === modelValue) || null,
+      location: DELIVERY_LOCATION_OPTIONS.find((item) => item.value === cityValue) || null,
+      currency: CALC_CURRENCIES.some((item) => item.id === params.get("cur")) ? params.get("cur") : "usd",
+    };
+  }, []);
+  const [model, setModel] = useState(initial.model);
+  const [location, setLocation] = useState(initial.location);
+  const [outCurrency, setOutCurrency] = useState(initial.currency);
+  const [copied, setCopied] = useState(false);
+  const [modelSizes, setModelSizes] = useState({});
+  const knownSize = model?.value ? modelSizes[model.value] : null;
+  const modelSize = knownSize || model || {};
+  const estimate = useMemo(() => estimateDeliveryCip({
+    model: model?.label,
+    city: location?.value,
+    lengthMm: modelSize.lengthMm,
+    curbWeight: modelSize.curbWeight,
+  }), [model, modelSize.lengthMm, modelSize.curbWeight, location]);
+  const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn }[outCurrency] || 1;
+  const sign = { usd: "$", eur: "€", byn: "BYN" }[outCurrency] || "$";
+  const amount = (value) => number(Math.round(value * fromUsd));
+  const money = (value) => `${amount(value)} ${sign}`;
+  const shareSearch = new URLSearchParams();
+  if (model?.value && !model.custom) shareSearch.set("model", model.value);
+  if (location?.value && !location.custom) shareSearch.set("city", location.value);
+  if (outCurrency !== "usd") shareSearch.set("cur", outCurrency);
+  const search = shareSearch.toString();
+
+  useEffect(() => {
+    if (!window.history?.replaceState) return;
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+  }, [search]);
+  useEffect(() => {
+    if (!model?.value || model.custom || knownSize) return undefined;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ brand:model.brand, model:model.catalogModel, limit:"24", sort:"newest" });
+    fetchCarsJson(`/api/cars?${query}`, controller.signal)
+      .then((catalog) => {
+        const size = deliveryModelSize(catalog.items || []);
+        setModelSizes((current) => ({ ...current, [model.value]:size }));
+      })
+      .catch((error) => {
+        if (error?.name !== "AbortError") setModelSizes((current) => ({ ...current, [model.value]:{ lengthMm:model.lengthMm || 0, curbWeight:0 } }));
+      });
+    return () => controller.abort();
+  }, [model, knownSize]);
+  const bodyClass = model && !model.custom
+    ? deliveryBodyClass(model.label, modelSize)
+    : "";
+  const modelSelected = Boolean(model?.value && !model.custom);
+  const locationSelected = Boolean(location?.value && !location.custom);
+  const precisionPrompt = deliveryPrecisionPrompt({ modelSelected, locationSelected });
+  // Не показываем промежуточный статус загрузки: базовую тарифную группу можно
+  // определить сразу по названию и данным страницы модели. Ответ каталога затем
+  // лишь уточняет габариты; если группа не изменилась, интерфейс остаётся полностью
+  // неподвижным и выбор модели не выглядит как два последовательных пересчёта.
+  const bodyClassText = `${bodyClass || "Кузов не определён"}.`;
+  const deliveryHint = precisionPrompt
+    || `Ориентир от ${money(estimate.low)} до ${money(estimate.high)}. Плечо по Китаю: ${estimate.transitLabel}.`;
+  const copyShareLink = async () => {
+    const url = `${window.location.origin}${appHref("/delivery-cost")}${search ? `?${search}` : ""}`;
+    if (!await copyToClipboard(url)) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  return (
+    <section className="tool-calc tool-calc-delivery" aria-label="Расчёт стоимости доставки CIP до Минска">
+      <div className="tool-calc-fields">
+        <div className="tool-calc-field tool-calc-combo-field">
+          <ComboboxField
+            label="Модель машины"
+            value={model}
+            options={DELIVERY_MODEL_OPTIONS}
+            onChange={setModel}
+            placeholder="Начните вводить модель"
+          />
+        </div>
+        <div className="tool-calc-field tool-calc-combo-field">
+          <ComboboxField
+            label="Местоположение машины"
+            value={location}
+            options={DELIVERY_LOCATION_OPTIONS}
+            onChange={setLocation}
+            placeholder="Точно не знаю"
+          />
+        </div>
+        <p className="tool-calc-why tool-calc-delivery-note">
+          В CIP входят перевозка и страхование до Минска. Цена машины, растаможка, СВХ, регистрация и услуги abcars.by считаются отдельно.
+        </p>
+      </div>
+      <div className="tool-calc-result">
+        <div className="tool-calc-summary">
+          <div className="tool-calc-total">
+            <span>Доставка CIP до Минска</span>
+            <span className="tool-calc-sum">
+              <strong>≈ {amount(estimate.total)}</strong>
+              <SelectField
+                className="tool-calc-money-select"
+                label="Валюта расчёта"
+                value={(CALC_CURRENCIES.find((item) => item.id === outCurrency) || CALC_CURRENCIES[0]).name}
+                options={CALC_CURRENCIES.map((item) => item.name)}
+                onChange={(name) => setOutCurrency((CALC_CURRENCIES.find((item) => item.name === name) || CALC_CURRENCIES[0]).id)}
+              />
+            </span>
+            <small aria-live="polite">
+              {deliveryHint} <span className={`tool-calc-body-class${bodyClass === "Крупный кузов" ? " large" : ""}`}>{bodyClassText}</span>
+            </small>
+          </div>
+          <dl className="tool-calc-rows">
+            {estimate.rows.map((row) => (
+              <div key={row.label}>
+                <dt>{row.label}</dt>
+                <dd>≈ {money(row.amount)}</dd>
+              </div>
+            ))}
+          </dl>
+          <button type="button" className={`primary tool-calc-share${copied ? " copied" : ""}`} onClick={copyShareLink}>
+            <LinkSimple size={17} />
+            <span>{copied ? "Ссылка скопирована" : "Поделиться расчётом"}</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CustomsCalculator() {
   // Расчёт из чужой ссылки. Читаем адрес один раз при первом появлении формы:
   // дальше поля живут своей жизнью, и подмешивать в них адрес на каждом шаге
@@ -10831,6 +11118,10 @@ function RangeCalculator() {
 function BrandDirectoryCard({ item, count, models, modelPreviewLimit = 5, navigate }) {
   const path = brandLandingPath(item.brand);
   const visibleModels = models?.items?.slice(0, modelPreviewLimit) || [];
+  // Резервируем максимальную ширину превью ещё до ответа /api/model-facts.
+  // Последний слот оставляем под «+N», поэтому карточка не меняет высоту, когда
+  // фотографии моделей появляются после первого кадра.
+  const modelPreviewWidth = 44 + modelPreviewLimit * 34;
   const powertrains = BRAND_POWERTRAINS[item.brand] || [];
   const powertrainIcons = {
     "Бензин": GasPump,
@@ -10843,28 +11134,31 @@ function BrandDirectoryCard({ item, count, models, modelPreviewLimit = 5, naviga
       <span className="brand-directory-head">
         <BrandMark brand={item.brand} />
         <b>{item.brand}</b>
-        {visibleModels.length > 0 && (
-          <span className="brand-directory-models" aria-label={`Популярные модели ${item.brand}: ${visibleModels.map((model) => model.model).join(", ")}`}>
-            {visibleModels.map((model) => {
-              const modelPage = MODEL_PAGES.find((page) => page.brand === item.brand && page.model === model.model);
-              const modelPath = modelPage?.path || `${path}?model=${encodeURIComponent(model.model)}`;
-              return (
-                <AppLink className="brand-directory-model-photo brand-directory-model-link" href={modelPath} navigate={navigate} key={model.model} aria-label={`${item.brand} ${model.model}`}>
-                  {model.image
-                    ? <img src={imageSource(model.image, 240)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, model.image)} />
-                    : <CarProfile size={16} weight="duotone" aria-hidden="true" />}
-                  <ActionTooltip text={`${item.brand} ${model.model}`} />
-                </AppLink>
-              );
-            })}
-            {models.total > visibleModels.length && (
-              <AppLink className="brand-directory-model-photo brand-directory-model-more" href={path} navigate={navigate} aria-label={`Ещё ${models.total - visibleModels.length} моделей ${item.brand}`}>
-                +{models.total - visibleModels.length}
-                <ActionTooltip text={`Ещё ${models.total - visibleModels.length} моделей ${item.brand}`} />
+        <span
+          className={`brand-directory-models${models ? "" : " pending"}`}
+          style={{ "--brand-directory-models-width": `${modelPreviewWidth}px` }}
+          aria-label={models ? `Популярные модели ${item.brand}: ${visibleModels.map((model) => model.model).join(", ")}` : undefined}
+          aria-hidden={models ? undefined : true}
+        >
+          {visibleModels.map((model) => {
+            const modelPage = MODEL_PAGES.find((page) => page.brand === item.brand && page.model === model.model);
+            const modelPath = modelPage?.path || `${path}?model=${encodeURIComponent(model.model)}`;
+            return (
+              <AppLink className="brand-directory-model-photo brand-directory-model-link" href={modelPath} navigate={navigate} key={model.model} aria-label={`${item.brand} ${model.model}`}>
+                {model.image
+                  ? <img src={imageSource(model.image, 240)} alt="" loading="lazy" onError={(event) => retryWithFullImage(event, model.image)} />
+                  : <CarProfile size={16} weight="duotone" aria-hidden="true" />}
+                <ActionTooltip text={`${item.brand} ${model.model}`} />
               </AppLink>
-            )}
-          </span>
-        )}
+            );
+          })}
+          {models?.total > visibleModels.length && (
+            <AppLink className="brand-directory-model-photo brand-directory-model-more" href={path} navigate={navigate} aria-label={`Ещё ${models.total - visibleModels.length} моделей ${item.brand}`}>
+              +{models.total - visibleModels.length}
+              <ActionTooltip text={`Ещё ${models.total - visibleModels.length} моделей ${item.brand}`} />
+            </AppLink>
+          )}
+        </span>
       </span>
       <p>{since}{item.about}</p>
       <span className="brand-directory-meta">
