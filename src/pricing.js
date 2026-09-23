@@ -130,7 +130,9 @@ export function customsPayment({
   const age = Number(ageYears) || 0;
   const overFiveYears = age > 5;
 
-  const utilUsd = (age < 3 ? PRICING.utilFeeByn.upTo3Years : PRICING.utilFeeByn.over3Years) / PRICING.usdByn;
+  // В постановлении № 195 граница сформулирована как «до трёх лет
+  // включительно». Ровно трёхлетняя машина ещё относится к младшей ставке.
+  const utilUsd = (age <= 3 ? PRICING.utilFeeByn.upTo3Years : PRICING.utilFeeByn.over3Years) / PRICING.usdByn;
   const clearanceUsd = PRICING.clearanceFeeByn / PRICING.usdByn;
 
   let dutyUsd = 0;
@@ -157,7 +159,7 @@ export function customsPayment({
     const cc = Math.max(0, Math.round(Number(engineCc) || 0));
     const valueEur = value / eurUsd;
     let dutyEur;
-    if (age < 3) {
+    if (age <= 3) {
       const [, percent, minRate] = NEW_CAR_DUTY.find(([limit]) => valueEur <= limit);
       const byValue = valueEur * percent;
       const byVolume = cc * minRate;
@@ -279,8 +281,11 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   // растаможки, поэтому карточка и калькулятор не могут разойтись в цифрах.
   // Здесь остаются только подписи под строкой — они про конкретную карточку.
   const evPayment = customsPayment({ customsValueUsd, kind: "ev", ageYears: age, quotaOver });
-  const feesUsd = evPayment.feesUsd;
-  let customsUsd = evPayment.totalUsd;
+  // Храним выбранный расчёт целиком. Из него берутся и итог таможни, и состав
+  // строки в детальной смете: так утильсбор или таможенный сбор невозможно
+  // случайно посчитать отдельно второй раз.
+  let payment = evPayment;
+  let customsUsd = payment.totalUsd;
   let customsNote = quotaOver
     ? (overFiveYears ? "Пошлина 15% и НДС 20% · старше 5 лет" : "Пошлина 15% · оформление и сборы")
     : (overFiveYears ? "НДС 20% · машина старше 5 лет" : "Льгота 0% · оформление и сборы");
@@ -299,7 +304,8 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   let engineAssumed = false;
   const seriesHybrid = isSeriesHybrid(car);
   if (seriesHybrid) {
-    customsUsd = customsPayment({ customsValueUsd, kind: "erev", ageYears: age }).totalUsd;
+    payment = customsPayment({ customsValueUsd, kind: "erev", ageYears: age });
+    customsUsd = payment.totalUsd;
     customsNote = "Гибрид с генератором · пошлина 15% и НДС 20%";
     customsHint = "Бензиновый мотор здесь только крутит генератор, колёс он не касается, поэтому таможня оформляет машину как электромобиль. Но льготу на такие гибриды отменили с 1 января 2026 года: пошлина 15% и НДС 20% сверху — около 38% от цены машины, плюс сборы за оформление.";
     customsAlert = "Гибрид с генератором — льготы нет с 2026 года";
@@ -312,14 +318,15 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     const parsedEngine = engineVolume(car);
     const engineCc = parsedEngine ? Math.round(parsedEngine * 1000) : ASSUMED_ENGINE_CC;
     engineAssumed = !parsedEngine;
-    customsUsd = customsPayment({ customsValueUsd, kind: "ice", engineCc, ageYears: age }).totalUsd;
+    payment = customsPayment({ customsValueUsd, kind: "ice", engineCc, ageYears: age });
+    customsUsd = payment.totalUsd;
     customsNote = `Пошлина по объёму · ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (оценка)" : ""}`;
     // Подсказку про квоту и НДС здесь оставлять нельзя: она написана про
     // электромобиль, а машине с двигателем ставку считают по объёму и возрасту.
     customsHint = engineAssumed
       ? "В объявлении не указан объём двигателя, а пошлина считается именно по нему. В расчёте взято 1,5 литра — у мотора побольше платёж будет выше. Точную сумму подтверждаем по документам машины до договора."
-      : age < 3
-        ? "Машине меньше трёх лет: пошлину считают как долю от стоимости, но не меньше ставки за кубический сантиметр объёма. Это самая дорогая из трёх возрастных ступеней."
+      : age <= 3
+        ? "Машине не больше трёх лет: пошлину считают как долю от стоимости, но не меньше ставки за кубический сантиметр объёма. Это самая дорогая из трёх возрастных ступеней."
         : age <= 5
           ? "Пошлину считают по ставке за кубический сантиметр объёма двигателя — стоимость машины на неё уже не влияет. Это самая выгодная возрастная ступень."
           : "Машине больше пяти лет: ставка за кубический сантиметр примерно вдвое выше, чем у машины от трёх до пяти лет. Плюс сборы за оформление.";
@@ -335,6 +342,16 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const customsLow = Math.max(0, customsUsd - customsSpread);
   const customsHigh = customsUsd + customsSpread;
 
+  const utilFeeByn = age <= 3 ? PRICING.utilFeeByn.upTo3Years : PRICING.utilFeeByn.over3Years;
+  const utilFeeLabel = utilFeeByn.toLocaleString("ru-RU", { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const includedPayments = [
+    payment.dutyUsd > 0 ? "ввозная пошлина" : null,
+    payment.vatUsd > 0 ? "НДС" : null,
+    `утильсбор ${utilFeeLabel} BYN`,
+    `таможенный сбор ${PRICING.clearanceFeeByn} BYN`,
+  ].filter(Boolean);
+  const customsIncludedText = `Уже внутри этой строки: ${includedPayments.join(", ")}. Повторно в итог они не добавляются.`;
+
   const totalLow = round50(chinaUsd + buyoutLow + chinaLegLow + intlLow + PRICING.svhUsd[0] + customsLow + PRICING.serviceUsd);
   const totalHigh = round50(chinaUsd + buyoutHigh + chinaLegHigh + intlHigh + PRICING.svhUsd[1] + customsHigh + PRICING.serviceUsd);
   return {
@@ -343,8 +360,9 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     chinaLegLow, chinaLegHigh, chinaLegNote,
     intlLow, intlHigh, intlNote,
     svhLow:PRICING.svhUsd[0], svhHigh:PRICING.svhUsd[1],
-    customsUsd, customsLow, customsHigh, customsNote, customsHint, customsAlert, customsAlertTone, seriesHybrid, ageYears:age,
-    customsValueUsd, customsFeesUsd:feesUsd,
+    customsUsd, customsLow, customsHigh, customsNote, customsHint, customsAlert, customsAlertTone, customsIncludedText, seriesHybrid, ageYears:age,
+    customsValueUsd, customsFeesUsd:payment.feesUsd,
+    dutyUsd:payment.dutyUsd, vatUsd:payment.vatUsd, utilUsd:payment.utilUsd, clearanceUsd:payment.clearanceUsd,
     serviceUsd:PRICING.serviceUsd,
     totalLow, totalHigh, totalUsd:round50((totalLow + totalHigh) / 2),
   };

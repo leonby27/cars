@@ -263,10 +263,33 @@ test("гибриду с генератором считает 15% пошлины
 
 test("сборы берутся в рублях по официальным ставкам и зависят от возраста", () => {
   const young = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 2, quotaOver: false });
+  const exactlyThree = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 3, quotaOver: false });
   const old = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 4, quotaOver: false });
   assert.equal(Math.round(young.utilUsd * PRICING.usdByn * 100) / 100, PRICING.utilFeeByn.upTo3Years);
+  assert.equal(Math.round(exactlyThree.utilUsd * PRICING.usdByn * 100) / 100, PRICING.utilFeeByn.upTo3Years, "ровно три года входят в младшую ставку");
   assert.equal(Math.round(old.utilUsd * PRICING.usdByn * 100) / 100, PRICING.utilFeeByn.over3Years);
   assert.equal(Math.round(young.clearanceUsd * PRICING.usdByn), PRICING.clearanceFeeByn);
+});
+
+test("ровно трёхлетней машине применяет ступень до трёх лет включительно", () => {
+  const payment = customsPayment({ customsValueUsd: 20000, kind: "ice", engineCc: 1500, ageYears: 3 });
+  assert.equal(payment.basis, "value-or-volume");
+});
+
+test("в цене под ключ таможенные платежи и сборы складываются ровно один раз", () => {
+  for (const car of [
+    { source:"Che168", usdPrice:20000, year:2024, type:"Электромобиль" },
+    { source:"Che168", usdPrice:20000, year:2024, type:"Гибрид", sourceFuelType:"Range Extender" },
+    { source:"Che168", usdPrice:20000, year:2022, type:"ДВС", engine:"1.5T", manufactureDate:"2022-06-01" },
+  ]) {
+    const price = estimateLandedCost(car, { quotaOver:true });
+    const lowerComponents = price.chinaUsd + price.buyoutLow + price.chinaLegLow + price.intlLow
+      + price.svhLow + price.customsLow + price.serviceUsd;
+    assert.equal(price.totalLow, Math.round(lowerComponents / 50) * 50);
+    assert.equal(price.customsFeesUsd, price.utilUsd + price.clearanceUsd);
+    assert.match(price.customsIncludedText, /утильсбор/);
+    assert.match(price.customsIncludedText, /Повторно в итог они не добавляются/);
+  }
 });
 
 test("возмещение по указу № 140 снимает половину пошлины и налога, но не сборов", () => {

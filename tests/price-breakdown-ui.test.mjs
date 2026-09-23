@@ -13,3 +13,9 @@ test("customs warning stays inside the customs row in both price breakdowns", ()
   assert.match(styles, /\.price-customs-copy\s*\{[\s\S]*?display:\s*grid;/);
   assert.match(styles, /\.price-customs-alert\s*\{[\s\S]*?margin:\s*1px 0 0;/);
 });
+
+test("both detailed price breakdowns say customs fees are already included", () => {
+  assert.equal((app.match(/className="price-customs-includes"/g) || []).length, 2);
+  assert.match(app, /customsIncludedText/);
+  assert.match(styles, /\.price-customs-includes\s*\{/);
+});

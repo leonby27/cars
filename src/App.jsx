@@ -8138,13 +8138,14 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </div>
               <div>
                 <div className="price-customs-copy">
-                  <PriceLabel label="Растаможка и сборы" description={price.customsHint || price.customsNote} />
+                  <PriceLabel label="Растаможка и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText].filter(Boolean).join(" ")} />
+                  <p className="price-customs-includes">{price.customsIncludedText}</p>
                   {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
                 </div>
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
               <div>
-                <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
+                <PriceLabel label="Услуги abcars.by" description="Подбор, проверка и сопровождение сделки" />
                 <strong>{money(price.serviceUsd, currency)}</strong>
               </div>
             </div>
@@ -8574,13 +8575,14 @@ function OrderDraft({ car, navigate }) {
               </div>
               <div>
                 <div className="price-customs-copy">
-                  <PriceLabel label="Таможня и сборы" description={price.customsHint || price.customsNote} />
+                  <PriceLabel label="Таможня и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText].filter(Boolean).join(" ")} />
+                  <p className="price-customs-includes">{price.customsIncludedText}</p>
                   {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
                 </div>
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Услуги abcars.by" description="Проверка, выкуп и документы" />
+                <PriceLabel label="Услуги abcars.by" description="Подбор, проверка и сопровождение сделки" />
                 <b>{money(price.serviceUsd, currency)}</b>
               </div>
             </div>
@@ -10226,8 +10228,8 @@ function CustomsCalculator() {
     if (payment?.basis === "erev") return "Бензиновый мотор здесь крутит только генератор, и машину оформляют по коду электромобиля. Но льготы у неё нет с 2026 года: пошлина 15% от стоимости и НДС 20% сверху — вместе около 38% цены.";
     if (payment?.basis === "value-or-volume") {
       return d.wonByVolume
-        ? `Машине меньше трёх лет, поэтому пошлину считают по большему из двух: доля от стоимости (${Math.round(d.percent * 100)}% — ${eur(d.byValue)}) или ставка за объём (${cc} см³ × ${rate(d.ratePerCc)} — ${eur(d.byVolume)}). Больше вышла ставка за объём.`
-        : `Машине меньше трёх лет, поэтому пошлину считают по большему из двух: доля от стоимости (${Math.round(d.percent * 100)}% — ${eur(d.byValue)}) или ставка за объём (${cc} см³ × ${rate(d.ratePerCc)} — ${eur(d.byVolume)}). Больше вышла доля от стоимости.`;
+        ? `Машине не больше трёх лет, поэтому пошлину считают по большему из двух: доля от стоимости (${Math.round(d.percent * 100)}% — ${eur(d.byValue)}) или ставка за объём (${cc} см³ × ${rate(d.ratePerCc)} — ${eur(d.byVolume)}). Больше вышла ставка за объём.`
+        : `Машине не больше трёх лет, поэтому пошлину считают по большему из двух: доля от стоимости (${Math.round(d.percent * 100)}% — ${eur(d.byValue)}) или ставка за объём (${cc} см³ × ${rate(d.ratePerCc)} — ${eur(d.byVolume)}). Больше вышла доля от стоимости.`;
     }
     if (payment?.basis === "volume-3-5") {
       return `Машине от трёх до пяти лет, а на этой ступени пошлину считают только по объёму двигателя: ${cc} см³ × ${rate(d.ratePerCc)} = ${eur(d.dutyEur)}. Цена машины на пошлину не влияет — впишите другую, и сумма не изменится.`;
@@ -10243,7 +10245,7 @@ function CustomsCalculator() {
     if (payment?.vatUsd && payment.basis !== "erev") {
       parts.push("Сверху идёт НДС 20%: нулевую ставку дают только машинам не старше пяти лет с даты выпуска.");
     }
-    parts.push(`Утилизационный сбор — ${payment?.ageYears < 3 ? "624,92" : "1 282,02"} р. по льготной ставке для частного ввоза, таможенный сбор за оформление — 120 р.`);
+    parts.push(`Утилизационный сбор — ${payment?.ageYears <= 3 ? "624,92" : "1 282,02"} р. по льготной ставке для частного ввоза, таможенный сбор за оформление — 120 р. Оба уже входят в итог и повторно не прибавляются.`);
     return parts.join(" ");
   };
 
