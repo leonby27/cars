@@ -641,9 +641,14 @@ export async function getAnalyticsDashboard(rangeValue) {
         l.id IS NULL AS gone,
         coalesce(l.status, '') AS status,
         l.estimated_total_usd,
-        count(*)::int AS people,
+        COALESCE(
+          array_agg(DISTINCT btrim(a.name) ORDER BY btrim(a.name))
+            FILTER (WHERE btrim(coalesce(a.name, '')) <> ''),
+          ARRAY[]::text[]
+        ) AS owners,
         max(f.created_at) AS added_at
       FROM customer_favorites f
+      JOIN customer_accounts a ON a.id = f.customer_id
       LEFT JOIN listings l ON l.id = f.listing_id
       WHERE ${notStaffAccount("f.customer_id")}
       GROUP BY f.listing_id, l.id, l.title, l.status, l.estimated_total_usd
@@ -757,7 +762,7 @@ export async function getAnalyticsDashboard(rangeValue) {
     daily,
     catalogPages:catalogPagesResult.rows.map((row) => ({ path:row.path, views:row.views, viewers:row.viewers, lastViewedAt:row.last_viewed })),
     vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, availabilityRequests:row.availability_requests, favorites:row.favorites, lastViewedAt:row.last_viewed })),
-    favorites:favoritesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.title, people:row.people, addedAt:row.added_at, gone:row.gone, status:row.status, priceUsd:row.estimated_total_usd })),
+    favorites:favoritesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.title, owners:row.owners || [], addedAt:row.added_at, gone:row.gone, status:row.status, priceUsd:row.estimated_total_usd })),
     // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),

@@ -10151,6 +10151,7 @@ function CustomsCalculator() {
   const [engineCc, setEngineCc] = useState(() => String(shared.engineCc ?? 1500));
   const [year, setYear] = useState(() => shared.year || String(new Date().getFullYear() - 3));
   const [refund50, setRefund50] = useState(() => Boolean(shared.refund50));
+  const quotaPricing = useQuotaPricing();
   // Валюта, в которой показан платёж. Пусто — значит «как у цены машины»: человек
   // вписал цену в долларах и, скорее всего, хочет видеть в них же ответ. Как только
   // он выберет валюту у самой суммы, она перестаёт следовать за ценой.
@@ -10158,6 +10159,7 @@ function CustomsCalculator() {
   const [copied, setCopied] = useState(false);
 
   const kindItem = CALC_KINDS.find((item) => item.name === kind) || CALC_KINDS[0];
+  const isElectric = kindItem.id === "ev";
   const years = calcYears();
   // Цена приходит в той валюте, которую выбрал человек, а расчёт живёт в долларах.
   const toUsd = { usd: 1, eur: PRICING.eurByn / PRICING.usdByn, byn: 1 / PRICING.usdByn }[currency];
@@ -10175,7 +10177,9 @@ function CustomsCalculator() {
       kind: kindItem.id === "phev" ? "ice" : kindItem.id,
       engineCc: cc,
       ageYears,
-      refund50,
+      // У электромобиля этот переключатель управляет квотой, поэтому скрытое
+      // состояние возмещения от ранее выбранного ДВС не должно менять сумму.
+      refund50: isElectric ? false : refund50,
     })
     : null;
 
@@ -10334,9 +10338,20 @@ function CustomsCalculator() {
         {/* Переключатели — такие же, как «Быстрый просмотр» и «Цены с квотами»:
             обычная галочка была бы единственной на сайте. */}
         <label className="quick-view-toggle tool-calc-toggle">
-          <input type="checkbox" role="switch" checked={refund50} onChange={(event) => setRefund50(event.target.checked)} />
+          <input
+            type="checkbox"
+            role="switch"
+            checked={isElectric ? Boolean(quotaPricing?.on) : refund50}
+            disabled={isElectric && !quotaPricing?.available}
+            onChange={(event) => {
+              if (isElectric) quotaPricing?.set(event.target.checked);
+              else setRefund50(event.target.checked);
+            }}
+          />
           <span className="quick-view-toggle-track" aria-hidden="true"><i /></span>
-          <span className="quick-view-toggle-label">Возмещение 50% по указу № 140</span>
+          <span className="quick-view-toggle-label">
+            {isElectric ? "Учитывать квоту на беспошлинный ввоз" : "Возмещение 50% по указу № 140"}
+          </span>
         </label>
       </div>
       {payment ? (

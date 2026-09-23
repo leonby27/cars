@@ -81,6 +81,18 @@ test("таблицы автомобилей по умолчанию сортир
   assert.match(source, /setSort\(\{ column:"lastViewed", desc:true \}\)/);
 });
 
+test("избранное показывает имена добавивших вместо числа людей и статуса", async () => {
+  const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  const favoriteColumns = page.match(/const columns = mode === "favorites"[\s\S]*?: \[/)?.[0] || "";
+  assert.match(favoriteColumns, /label:"У кого"/);
+  assert.doesNotMatch(favoriteColumns, /label:"Люди"|label:"Статус"/);
+  assert.match(page, /item\.owners\.join\(", "\)/);
+  assert.match(server, /JOIN customer_accounts a ON a\.id = f\.customer_id/);
+  assert.match(server, /array_agg\(DISTINCT btrim\(a\.name\)/);
+  assert.match(server, /owners:row\.owners \|\| \[\]/);
+});
+
 test("график и заходы постоянные, а баннер при каждом входе свёрнут", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   assert.match(source, /\[open, setOpen\] = useState\(false\)/);

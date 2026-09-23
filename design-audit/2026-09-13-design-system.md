@@ -39,7 +39,7 @@
 
 **Что делать:** собрать базу, состояния, тематические и мобильные варианты каждого общего элемента рядом. Уменьшать силу селекторов после проверки всех затронутых состояний. Простое разнесение текущего файла по нескольким файлам проблему не устранит.
 
-Доказательства: [первый общий слой тёмной темы](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:77), [второй слой](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:3955), [поздние поправки](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:12310); сетка фильтров — строки 2025, 6441 и 7299 этого же файла.
+Доказательства: [первый общий слой тёмной темы](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:77), [второй слой](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:3955), [поздние поправки](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:12310); сетка фильтров — строки 2025, 6441 и 7299 этого же файла.
 
 ## 2. При сборке действительно меняется порядок конкурирующих правил
 
@@ -58,7 +58,7 @@
 
 **Что делать:** обеспечить сохранение каскада при разделении; добавить проверку именно результата преобразования. Внесение одного пропущенного класса исправит этот пример, но не докажет безопасность общего алгоритма.
 
-Доказательства: [критерий разделения](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/scripts/split-css.mjs:120), [разметка карточки](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/App.jsx:1498), [12 px](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:3139), [6 px](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:8194).
+Доказательства: [критерий разделения](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/scripts/split-css.mjs:120), [разметка карточки](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/App.jsx:1498), [12 px](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:3139), [6 px](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:8194).
 
 ## 3. Тёмная палитра существует в нескольких независимых копиях
 
@@ -72,7 +72,7 @@
 
 **Что делать:** дать имена поверхностям по назначению — страница, группа, карточка, поле, меню, наведение — и использовать единую палитру также внутри локальных тёмных областей. Различие между общей светлой темой и чёрным вступлением сервиса сохранить.
 
-Доказательства: [основная палитра](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:3912), [повторные переменные](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:12311), [локальная палитра шапки](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:18394).
+Доказательства: [основная палитра](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:3912), [повторные переменные](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:12311), [локальная палитра шапки](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:18394).
 
 ## 4. Есть обращения к общим настройкам, которых не существует
 
@@ -86,7 +86,7 @@
 
 **Что делать:** согласовать словарь переменных и добавить проверку неопределённых ссылок с учётом переменных, которые задаются динамически. Динамические координаты, масштаб цены и параметры анимации не считать ошибками.
 
-Доказательства: [неопределённый шрифт](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:1532), [неопределённый цвет](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:8801), [меню CRM](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/analytics.css:244).
+Доказательства: [неопределённый шрифт](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:1532), [неопределённый цвет](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:8801), [меню CRM](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/analytics.css:244).
 
 ## 5. Глобальная форма углов требует постоянно дописывать исключения
 
@@ -100,7 +100,7 @@
 
 **Что делать:** применять нужную форму на уровне примитива карточки/кнопки; кругам дать самостоятельный общий вариант. Сохранить выбранный владельцем характер скруглений.
 
-Доказательства: [глобальное правило и исключения](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:15218), [круглые подложки логотипов](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:1940), [фиксированный радиус отзывов](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:17365).
+Доказательства: [глобальное правило и исключения](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:15218), [круглые подложки логотипов](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:1940), [фиксированный радиус отзывов](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:17365).
 
 ## 6. Разные информационные окна зависят от оформления удаления заказа
 
@@ -112,7 +112,7 @@
 
 **Что делать:** выделить общую оболочку окна и простой информационный вариант с иллюстрацией, заголовком, текстом и действиями. Сохранить отдельные сценарии и тексты; общие размеры и поведение задавать один раз.
 
-Доказательства: [окно недоступности](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/App.jsx:10928), [окно приложения](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/App.jsx:10955), [окно подписки](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/App.jsx:10979), [повторное оформление иллюстраций и заголовков](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:11119).
+Доказательства: [окно недоступности](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/App.jsx:10928), [окно приложения](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/App.jsx:10955), [окно подписки](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/App.jsx:10979), [повторное оформление иллюстраций и заголовков](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:11119).
 
 ## 7. Есть буквальные копии одинакового оформления
 
@@ -132,7 +132,7 @@
 
 **Что делать:** объединять по смыслу и ожидаемому совместному изменению. Восемь одинаковых правил для заполнения фотографией прямоугольника не означают, что все восемь видов карточек нужно превратить в одну карточку.
 
-Доказательства: [кнопки поиска](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:8822), [карточки главной](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:953), [карточки сервиса](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:3396), [квота на странице](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:14600), [квота в панели](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:15128).
+Доказательства: [кнопки поиска](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:8822), [карточки главной](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:953), [карточки сервиса](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:3396), [квота на странице](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:14600), [квота в панели](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:15128).
 
 ## 8. Старые элементы удалены из интерфейса, но их оформление осталось
 
@@ -147,7 +147,7 @@
 
 **Что делать:** удалить подтверждённо недостижимые элементы вместе с исключительно их стилями. Общие селекторы, динамические классы и резервную серверную разметку проверять отдельно, не удалять по одному текстовому совпадению.
 
-Доказательства: [старые этапы](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:17648), [неподключённая анимация](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/use-purchase-motion.js:4), [старая форма](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/order-contact.jsx:20), [глобальные импорты CSS](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/main.jsx:9).
+Доказательства: [старые этапы](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:17648), [неподключённая анимация](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/use-purchase-motion.js:4), [старая форма](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/order-contact.jsx:20), [глобальные импорты CSS](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/main.jsx:9).
 
 ## 9. Статьи и инструменты переиспользуют названия страниц вместо общих ролей
 
@@ -161,7 +161,7 @@
 
 **Что делать:** выделить общий макет статьи и общие текстовые роли. Применять оформление строчной ссылки к соответствующим ссылкам, а не ко всем переходам и кнопкам внутри большой области.
 
-Доказательства: [пять классов на странице инструмента](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/App.jsx:9272), [обход коллизии ссылок и кнопок](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:16731), [широкие правила ссылок](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:16775).
+Доказательства: [пять классов на странице инструмента](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/App.jsx:9272), [обход коллизии ссылок и кнопок](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:16731), [широкие правила ссылок](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:16775).
 
 ## 10. Переключатели и меню похожи, но не имеют общей основы
 
@@ -173,7 +173,7 @@
 
 **Что делать:** объединить базовое оформление сегментов, поверхность выпадающего меню, фокус и движение. Логику выбора, плотность CRM и размеры конкретных вариантов оставить явными параметрами.
 
-Доказательства: [валюта и тема](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/App.jsx:1100), [мобильные группы марок](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:9104), [валютные сегменты](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:9680), [меню периода CRM](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/analytics.css:50).
+Доказательства: [валюта и тема](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/App.jsx:1100), [мобильные группы марок](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:9104), [валютные сегменты](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:9680), [меню периода CRM](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/analytics.css:50).
 
 ## 11. Мобильные переопределения уже оставляют неверные размеры
 
@@ -185,7 +185,7 @@
 
 **Что делать:** закрепить размеры через согласованные варианты кнопки и проверить сочетания `height`, `min-height`, внутренних отступов и ширины. Не заменять все мобильные настройки одним глобальным размером.
 
-Доказательства: [базовая высота кнопки](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:18221), [мобильное переопределение](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:18786), [мобильная ширина VIN-кнопки](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/styles.css:18841).
+Доказательства: [базовая высота кнопки](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:18221), [мобильное переопределение](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:18786), [мобильная ширина VIN-кнопки](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/styles.css:18841).
 
 ## 12. Загрузочная шапка поддерживается отдельно и уже отстала
 
@@ -199,7 +199,7 @@
 
 **Что делать:** иметь один источник разметки общей шапки или согласованный минимальный загрузочный вариант. Список классов для ранней загрузки CSS тоже должен обновляться вместе с интерфейсом, а не жить как независимый снимок.
 
-Доказательства: [серверная копия шапки](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/server/boot-screen.mjs:52), [её подключение](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/server/seo-render.mjs:392), [актуальная шапка](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/src/App.jsx:1315).
+Доказательства: [серверная копия шапки](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/server/boot-screen.mjs:52), [её подключение](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/server/seo-render.mjs:392), [актуальная шапка](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/src/App.jsx:1315).
 
 ## Что уже сделано правильно
 
@@ -231,4 +231,4 @@
 
 Не проверялись в браузере: итоговые цвета и контраст всех состояний, наложения окон, клавиатурное поведение, переполнение на каждом размере экрана и фактическая частота мигания загрузочной шапки. Для таких выводов нужен отдельный просмотр интерфейса. Полная серверная сборка, вся бизнес-логика и производительность действующего сайта не проверялись.
 
-Машинная сводка с полным списком найденных повторов: [2026-09-13-design-system-data.json](/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/design-audit/2026-09-13-design-system-data.json).
+Машинная сводка с полным списком найденных повторов: [2026-09-13-design-system-data.json](/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/design-audit/2026-09-13-design-system-data.json).

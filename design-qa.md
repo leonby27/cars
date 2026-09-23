@@ -102,7 +102,7 @@ final result: passed
 ## Design QA — price-page title and scales revision
 
 - Source visual truth: `/Users/user/Downloads/ChatGPT Image 21 сент. 2026 г., 23_08_16.png`
-- Implementation screenshot: `/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/implementation-price-belarus-title.png`
+- Implementation screenshot: `/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/implementation-price-belarus-title.png`
 - Route: `http://127.0.0.1:5173/price-belarus`
 - Browser: Codex in-app browser
 - Viewport and implementation pixels: 1280 × 720 CSS px at 1× density
@@ -217,7 +217,7 @@ final result: passed
 - Composition reference: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-9a625aad-bf6c-439e-abf1-3de59c6e78ad.png`
 - Count-row reference: `/var/folders/kf/9xg09l710qvbnpkq2fzdw0140000gn/T/codex-clipboard-6d01b359-eb91-4ae8-adf7-1d1fdc0fbb7e.png`
 - Supplied illustration: `/Users/user/Downloads/ChatGPT Image 21 сент. 2026 г., 22_50_00.png`
-- Implementation screenshot: `/Users/user/Documents/Files/profile2/AI-Folders/car/chinacar-mvp/implementation-price-belarus.png`
+- Implementation screenshot: `/Users/user/Documents/Files/profile2/AI-Folders/car/abcars/implementation-price-belarus.png`
 - Route: `http://127.0.0.1:5173/price-belarus`
 - Browser: Codex in-app browser
 - Viewport: 1280 x 720 CSS px

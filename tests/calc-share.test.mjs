@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { calcParamNames, calcShareSearch, calcStateFromSearch, calcYears } from "../src/tool-pages.js";
 
 // Ссылка на расчёт уходит в чужую переписку и живёт там годами. Поэтому проверяем
@@ -30,6 +31,18 @@ test("объём двигателя не попадает в ссылку там
 test("выключенный переключатель ссылку не засоряет", () => {
   const search = calcShareSearch({ ...full, refund50: false });
   assert.equal(new URLSearchParams(search).has("refund"), false);
+});
+
+test("у электромобиля скрытое возмещение не попадает в ссылку", () => {
+  const search = calcShareSearch({ ...full, kind: "ev", refund50: true });
+  assert.equal(new URLSearchParams(search).has("refund"), false);
+});
+
+test("электромобиль меняет переключатель возмещения на квоту", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(app, /isElectric \? "Учитывать квоту на беспошлинный ввоз" : "Возмещение 50% по указу № 140"/);
+  assert.match(app, /checked=\{isElectric \? Boolean\(quotaPricing\?\.on\) : refund50\}/);
+  assert.match(app, /refund50: isElectric \? false : refund50/);
 });
 
 test("испорченная ссылка не ломает форму", () => {

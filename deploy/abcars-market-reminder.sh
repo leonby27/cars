@@ -38,7 +38,7 @@ if [ -z "$CHAT_ID" ] && [ -r "$CHAT_FILE" ]; then
 fi
 [ -n "$CHAT_ID" ] || { echo "адрес чата неизвестен — напишите боту любое сообщение"; exit 0; }
 
-TEXT=$'Пора обновить сравнение цен с белорусским рынком.\n\nСкажите Claude: «обнови сравнение цен» — или запустите сами:\ncd ~/Documents/Files/profile2/AI-Folders/car/chinacar-mvp && npm run market\n\nСбор идёт с домашнего компьютера (с сервера площадка недоступна) и занимает около получаса. После сбора нужна обычная выкладка сайта, чтобы новые цифры попали на страницу /price-belarus.'
+TEXT=$'Пора обновить сравнение цен с белорусским рынком.\n\nСкажите Claude: «обнови сравнение цен» — или запустите сами:\ncd ~/Documents/Files/profile2/AI-Folders/car/abcars && npm run market\n\nСбор идёт с домашнего компьютера (с сервера площадка недоступна) и занимает около получаса. После сбора нужна обычная выкладка сайта, чтобы новые цифры попали на страницу /price-belarus.'
 
 curl -sS -m 30 -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
   --data-urlencode "chat_id=${CHAT_ID}" \

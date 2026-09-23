@@ -631,6 +631,7 @@ const vehicleModes = [
 ];
 
 const modelTitle = (title) => String(title || "").replace(/\s+\d{4}\s*$/, "").trim() || title || "—";
+const favoriteOwners = (item) => Array.isArray(item.owners) && item.owners.length ? item.owners.join(", ") : "Имя не указано";
 
 function VehiclesSection({ data, updates, markViewed }) {
   const [mode, setMode] = useState("cars");
@@ -655,8 +656,7 @@ function VehiclesSection({ data, updates, markViewed }) {
   const columns = mode === "favorites"
     ? [
       { id:"title", label:"Автомобиль", text:true, value:(item) => item.title || "" },
-      { id:"people", label:"Люди", value:(item) => Number(item.people) || 0 },
-      { id:"status", label:"Статус", text:true, value:(item) => item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже" },
+      { id:"owners", label:"У кого", text:true, value:favoriteOwners },
       { id:"lastViewed", label:"Просмотр", value:(item) => item.lastViewedAt ? new Date(item.lastViewedAt).getTime() || 0 : 0 },
     ]
     : [
@@ -691,7 +691,7 @@ function VehiclesSection({ data, updates, markViewed }) {
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
       <tbody>{rows.length ? rows.slice(0, visible).map((item) => <tr key={item.id} className={mode === "favorites" && (item.gone || item.status === "unavailable") ? "analytics-row-warning" : undefined}>
         <td>{mode === "models" ? item.title : mode === "catalog" ? <a href={analyticsNoCountHref(item.path)} target="_blank" rel="noopener noreferrer">{item.title}</a> : <a href={analyticsNoCountHref(carHref(item.listingId))}>{item.title}</a>}</td>
-        {mode === "favorites" ? <><td>{formatNumber(item.people)}</td><td>{item.gone ? "Нет в каталоге" : item.status === "unavailable" ? "Снята с продажи" : "В продаже"}</td><td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></> : <><td>{formatNumber(item.viewers)}</td><td>{formatNumber(item.views)}</td>{mode === "cars" && <td>{formatNumber(item.asks)}</td>}<td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></>}
+        {mode === "favorites" ? <><td>{favoriteOwners(item)}</td><td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></> : <><td>{formatNumber(item.viewers)}</td><td>{formatNumber(item.views)}</td>{mode === "cars" && <td>{formatNumber(item.asks)}</td>}<td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></>}
       </tr>) : <tr><td colSpan={columns.length}>{mode === "catalog" ? "Страницы каталога пока не просматривали." : mode === "favorites" ? "Избранного пока нет." : "Событий по автомобилям пока нет."}</td></tr>}</tbody></table></div>
     {visible < rows.length && <button className="analytics-show-more" type="button" onClick={() => setVisible((count) => count + 20)}>Показать ещё</button>}
   </section>;
