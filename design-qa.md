@@ -481,3 +481,55 @@ No actionable P0, P1 or P2 visual mismatches remain.
 No additional polish is required for this scoped change.
 
 final result: passed
+## Design QA — EV quota hero illustration scale
+
+- Source visual truth path: browser comment screenshot supplied in the current task (tool attachment; no filesystem path exposed).
+- Implementation screenshot path: Codex in-app Browser capture emitted during the 2026-09-23 verification run (browser API did not expose a filesystem path).
+- Route: `http://localhost:5173/ev-quota`
+- Browser: Codex in-app browser
+- Viewport: 1135 × 898 CSS px at 1× density
+- Source and implementation pixels: 1135 × 898
+- Density normalization: none required; source and implementation use the same viewport and density.
+- State: dark desktop page, physical-person tab, September selected.
+
+### Full-view comparison evidence
+
+The 124 × 124 hero tile remains the same size and position as the other calculator-page tiles. No title wrapping, hero height, sidebar position, calculator columns, or surrounding spacing changed.
+
+### Focused region comparison evidence
+
+The source comment showed the quota illustration sitting too small and too high inside the square tile. In the revised browser capture the image is 132px wide, centered with a 4px crop on each side, and starts at 31px from the tile top. The subject is visibly larger and its lower leaves sit close to the bottom edge without clipping the central `0%` mark.
+
+### Required fidelity surfaces
+
+- Fonts and typography: unchanged.
+- Spacing and layout rhythm: the shared tile remains 124 × 124; only the image inside it moved and scaled.
+- Colors and visual tokens: unchanged.
+- Image quality and asset fidelity: the supplied transparent PNG remains sharp; only a minimal symmetric edge crop is used.
+- Copy and content: unchanged.
+
+### Findings
+
+No actionable P0, P1, or P2 mismatch remains for the requested illustration scale and vertical placement.
+
+### Comparison history
+
+- Earlier finding: the illustration occupied too little of the tile and left excessive space below it.
+- Fix: increased the image width from 124px to 132px, shifted it to `left: -4px`, and moved it down from 27px to 31px.
+- Post-fix evidence: the in-app Browser capture at 1135 × 898 shows the larger, lower illustration inside the unchanged tile.
+
+### Implementation checklist
+
+- [x] Keep the shared 124 × 124 tile.
+- [x] Increase only the illustration.
+- [x] Move the illustration lower.
+- [x] Preserve the hero and calculator layout.
+- [x] Run the focused layout tests.
+
+### Follow-up polish
+
+No additional scoped polish is required.
+
+final result: passed
+
+---

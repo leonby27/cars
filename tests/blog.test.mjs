@@ -452,7 +452,7 @@ test("у материалов расписания нет пометки «че�
 test("ссылка на первоисточник в абзаце уходит с nofollow", () => {
   const hrefRoute = (path) => `/base${path}`;
   const html = linkifyText("Ставка стоит в [решении ЕЭК](https://docs.eaeunion.org/docs/ru-ru/1), а посчитать можно в [калькуляторе](/customs).", hrefRoute);
-  assert.match(html, /<a class="article-inline-link" href="https:\/\/docs\.eaeunion\.org\/docs\/ru-ru\/1" target="_blank" rel="nofollow noreferrer">решении ЕЭК<\/a>/);
+  assert.match(html, /<a class="article-inline-link" href="https:\/\/docs\.eaeunion\.org\/docs\/ru-ru\/1" target="_blank" rel="nofollow noopener noreferrer">решении ЕЭК<\/a>/);
   // Своя ссылка остаётся своей: тот же корень, без nofollow.
   assert.match(html, /<a class="article-inline-link" href="\/base\/customs">калькуляторе<\/a>/);
   // Небезопасная схема не разбирается как ссылка — остаётся текстом.

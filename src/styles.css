@@ -13825,6 +13825,21 @@ html[data-theme="dark"] .tool-page-hero-icon {
   max-width: none;
   object-fit: contain;
 }
+/* Плитка остаётся стандартной для всех страниц расчётов. Квадратная иллюстрация
+   целиком вписана по центру без индивидуальных смещений и кропа. */
+.tool-page-hero-icon.tool-page-hero-icon-quota {
+  width: 124px;
+  height: 124px;
+}
+.tool-page-hero-icon.tool-page-hero-icon-quota img {
+  top: 50%;
+  left: 50%;
+  width: 85%;
+  height: 85%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  object-position: center;
+}
 /* Флаг шире остальных иллюстраций и визуально тяжёлый слева. Увеличиваем его и
    сдвигаем вправо внутри неизменной плитки, оставляя краям намеренный мягкий кроп. */
 .tool-page-hero-icon-flag img {
@@ -15324,19 +15339,26 @@ html[data-theme="dark"] .tool-calc-currency {
   position: relative;
   background: linear-gradient(90deg, #6d28d9 0%, #3730a3 12%, #1d4ed8 26%, #0ea5e9 40%, #22c55e 56%, #eab308 70%, #f97316 86%, #ef4444 100%);
 }
-/* Правее выбранного градуса цвет гаснет: тот же переход, только притемнённый и
-   обесцвеченный. Обрезаем его по выбранной доле шкалы. */
+/* Правее выбранного градуса в светлой теме градиент виден с 50% прозрачностью:
+   поверх него лежит полупрозрачная подложка страницы, без примеси чёрного. */
 .tool-calc-field-temp::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  background: var(--panel);
+  opacity: 0.5;
+  clip-path: inset(0 0 0 calc(var(--temp-pct, 0.5) * 100%));
+  pointer-events: none;
+}
+/* В тёмной теме сохраняем прежнее приглушение: светлая подложка здесь дала бы
+   засветку и спорила бы с остальными полями калькулятора. */
+:root[data-theme="dark"] .tool-calc-field-temp::after {
   background:
     linear-gradient(90deg, rgba(16, 19, 25, 0.62), rgba(16, 19, 25, 0.62)),
     linear-gradient(90deg, #6d28d9 0%, #3730a3 12%, #1d4ed8 26%, #0ea5e9 40%, #22c55e 56%, #eab308 70%, #f97316 86%, #ef4444 100%);
   filter: saturate(0.4);
-  clip-path: inset(0 0 0 calc(var(--temp-pct, 0.5) * 100%));
-  pointer-events: none;
+  opacity: 1;
 }
 .tool-calc-field-temp .tool-calc-main {
   position: relative;
@@ -17166,6 +17188,10 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   --quota-track-bg: var(--line);
   --quota-tab-active-bg: var(--panel);
 }
+.quota-panel-result {
+  display: grid;
+  gap: 8px;
+}
 :root[data-theme="dark"] .quota-panel {
   --quota-block-bg: #30343c;
   --quota-track-bg: #454b55;
@@ -17214,6 +17240,24 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   font-size: 13px;
   line-height: 1.4;
 }
+.quota-panel-details {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 15px;
+  text-decoration: none;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+.quota-panel-details:hover {
+  transform: translateY(-1px);
+}
+.quota-panel-details:active {
+  transform: scale(0.98);
+}
+.quota-panel-details:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
 
 /* Переключатель «кому квота» — как валютный в шапке: сегмент активной вкладки
    светлее дорожки в тёмной теме и белый в светлой. */
@@ -17252,12 +17296,6 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   border-radius: calc(13px * var(--corner-scale));
   background: var(--quota-block-bg);
 }
-/* Расход по месяцам живёт в той же плашке, что и остаток: отделяем его отступом,
-   а не второй подложкой. Подпись над списком его же и вводит, поэтому зазор
-   небольшой — это подпись со своим списком, а не отдельный блок. */
-.quota-panel-months {
-  margin-top: 10px;
-}
 .quota-panel-figure > b {
   display: block;
   font-size: 21px;
@@ -17267,19 +17305,39 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   color: var(--accent-dark);
 }
 .quota-panel-bar {
+  position: relative;
   display: block;
   height: 12px;
   margin-top: 12px;
   border-radius: 999px;
-  background: var(--quota-track-bg);
-  overflow: hidden;
+  background: color-mix(in srgb, var(--accent-dark) 50%, transparent);
 }
-/* Полоса — тем же красным, что и заголовок в этой плашке. */
+:root[data-theme="dark"] .quota-panel-bar {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent-dark) 38%, #17191d),
+    color-mix(in srgb, var(--accent-dark) 20%, #17191d)
+  );
+}
+/* Заполненная часть показывает остаток слева направо. Вертикальный штрих отмечает
+   текущее положение, а приглушённый фон справа — уже недоступную часть квоты. */
 .quota-panel-bar > b {
+  position: relative;
   display: block;
   height: 100%;
-  border-radius: 999px;
-  background: var(--accent-dark);
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(90deg, var(--accent-dark), color-mix(in srgb, var(--accent-dark) 80%, #ffffff));
+  transition: width 560ms cubic-bezier(.22, 1, .36, 1);
+}
+.quota-panel-bar > b::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: -1px;
+  width: 2px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--ink);
 }
 .quota-panel-figure > small {
   display: block;
@@ -17287,41 +17345,261 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   color: var(--muted);
   font-size: 13px;
 }
-.quota-panel-months ul {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.quota-panel-months li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 16px;
-}
-.quota-panel-months li > span {
-  color: var(--ink);
-  font-weight: 600;
-  line-height: 1.15;
-}
-/* Месяцы, которые ещё не наступили, отличаются только цветом: они держат каркас
-   года, но спорить за внимание с реальными цифрами не должны. Начертание строго
-   такое же — прибавка веса на светлой теме сразу читается как жирный шрифт. */
-.quota-panel-months li.future > span,
-.quota-panel-months li.future > strong {
-  color: var(--muted);
-}
-.quota-panel-months li > strong {
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
 .quota-panel-forecast {
   margin: 2px 2px 4px;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+/* На отдельной странице управление и календарь стоят слева, а состояние
+   выбранного месяца — справа. Так строка месяца и её шкала читаются как
+   действие и результат, а не как одна длинная таблица. */
+.quota-panel.quota-page-calc {
+  grid-template-columns: minmax(0, 1.08fr) minmax(280px, .92fr);
+  align-items: start;
+  gap: 12px;
+  margin: 0 0 38px;
+  font-family: "Manrope", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.quota-page-calendar-column {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+.quota-page-calc .quota-panel-result {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+.quota-page-calc .quota-panel-tabs,
+.quota-page-calc .quota-page-months,
+.quota-page-calc .quota-panel-figure {
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--filter-field-bg);
+}
+.quota-page-calc .quota-panel-tabs {
+  padding: 4px;
+}
+.quota-page-calc .quota-panel-tabs button {
+  height: 46px;
+  border-radius: calc(12px * var(--corner-scale));
+  font-size: 17px;
+}
+.quota-page-months {
+  padding: 12px;
+}
+.quota-page-months ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.quota-page-months button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px minmax(104px, auto);
+  align-items: baseline;
+  width: 100%;
+  min-height: 38px;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: calc(9px * var(--corner-scale));
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, transform .16s ease;
+}
+.quota-page-months button:hover {
+  background: color-mix(in srgb, var(--quota-tab-active-bg) 72%, transparent);
+}
+.quota-page-months button:active {
+  transform: translateY(1px);
+}
+.quota-page-months button.active {
+  background: var(--quota-tab-active-bg);
+  color: var(--accent-dark);
+}
+.quota-page-months button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.quota-page-month-label {
+  font-size: 16px;
+  font-weight: 650;
+}
+.quota-page-month-share {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+}
+.quota-page-months button > strong {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.quota-page-months li.unavailable button {
+  color: var(--muted);
+}
+.quota-page-months li.unavailable button > strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.quota-page-months li.unavailable button.active {
+  color: var(--accent-dark);
+}
+.quota-page-calc .quota-panel-figure {
+  padding: 22px 24px 24px;
+}
+.quota-page-period-result .quota-panel-figure {
+  min-height: 196px;
+}
+.quota-page-selected-month {
+  margin: 0 0 12px;
+  color: var(--ink) !important;
+  font-size: 16px !important;
+  font-weight: 700;
+  line-height: 1.2 !important;
+  text-transform: capitalize;
+}
+.quota-page-calc .quota-panel-figure > b {
+  font-size: 23px;
+  letter-spacing: -.5px;
+}
+.quota-page-calc .quota-page-period-result .quota-panel-figure > b {
+  color: var(--ink);
+  font-size: 50px;
+  line-height: 1;
+  letter-spacing: -2.2px;
+}
+.quota-page-animated-value {
+  height: 1em;
+}
+.quota-page-value-digits {
+  display: inline-flex;
+  height: 1em;
+  letter-spacing: 0;
+  vertical-align: bottom;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 20%, #000 80%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 20%, #000 80%, transparent 100%);
+}
+.quota-page-value-reel {
+  display: inline-block;
+  width: .6em;
+  height: 1em;
+  overflow: hidden;
+  opacity: 1;
+  transition: width 420ms ease, opacity 320ms ease;
+}
+.quota-page-value-reel.is-leading {
+  width: 0;
+  opacity: 0;
+}
+.quota-page-value-track {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(calc(var(--quota-digit) * -1em));
+  transition: transform 1.8s cubic-bezier(.12, .8, .2, 1);
+  will-change: transform;
+}
+.quota-page-value-track > span {
+  display: block;
+  flex: 0 0 1em;
+  width: .6em;
+  height: 1em;
+  line-height: 1em;
+  text-align: center;
+}
+.quota-page-value-separator {
+  display: inline-block;
+  width: .22em;
+  overflow: hidden;
+  opacity: 1;
+  transition: width 420ms ease, opacity 320ms ease;
+}
+.quota-page-value-separator.is-hidden {
+  width: 0;
+  opacity: 0;
+}
+.quota-page-calc .quota-page-period-result .quota-panel-figure.unavailable > b {
+  font-size: 50px;
+  line-height: 1;
+  letter-spacing: -2.2px;
+}
+.quota-page-value-empty {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  color: var(--muted);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -.6px;
+}
+.quota-page-calc .quota-panel-bar {
+  width: 100%;
+  height: 16px;
+  margin-top: 18px;
+  margin-left: 0;
+}
+.quota-page-calc .quota-panel-bar > b::after {
+  top: -4px;
+  height: 24px;
+}
+.quota-page-calc .quota-panel-figure > small {
+  margin-top: 11px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.quota-page-period-result .quota-panel-figure.unavailable .quota-panel-bar > b::after {
+  display: none;
+}
+.quota-page-calc .quota-panel-months {
+  margin-top: 16px;
+}
+.quota-page-calc .quota-panel-months ul {
+  gap: 10px;
+}
+.quota-page-calc .quota-panel-months li {
+  font-size: 17px;
+}
+.model-page-article .quota-page-calc .quota-panel-forecast {
+  max-width: none;
+  margin: 2px 2px 0;
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .quota-panel-bar > b {
+    transition: none;
+  }
+  .quota-page-value-track,
+  .quota-page-value-reel,
+  .quota-page-value-separator {
+    transition: none;
+  }
+}
+@media (max-width: 700px) {
+  .quota-panel.quota-page-calc {
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 30px;
+  }
+  .quota-page-calc .quota-panel-figure {
+    padding: 18px;
+  }
+  .quota-page-calc .quota-panel-tabs button {
+    height: 42px;
+    font-size: 16px;
+  }
 }
 /* На планшете в шапке уже тесно, поэтому от кнопки остаётся молния и число —
    что это за число, объясняет подсказка и сама карточка. */
@@ -17656,23 +17934,21 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
 :root[data-theme="dark"] .price-change-tooltip .price-change-shift.price-change-down {
   color: #0a7a48;
 }
-/* Подсказка у остатка квоты в шапке: здесь не два слова, а объяснение в пару строк,
-   поэтому плашка шире остальных, а внутри — заголовок и текст. */
+/* Подсказка у остатка квоты остаётся компактной, хотя внутри есть заголовок и
+   короткое объяснение: по масштабу она не должна спорить с раскрывающимся меню. */
 .quota-link-tooltip {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  max-width: min(340px, calc(100vw - 20px));
-  padding: 11px 14px;
+  gap: 3px;
+  max-width: min(280px, calc(100vw - 20px));
+  padding: 8px 10px;
   text-align: left;
-  /* Кегль крупнее остальных подсказок: там два слова у кнопки, а здесь связный
-     текст, который читают, а не узнают по форме. */
-  font-size: 16px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.35;
 }
 .quota-link-tooltip b {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 650;
 }
 .quota-link-tooltip span {
   font-weight: 400;

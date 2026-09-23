@@ -179,10 +179,8 @@ const remainingAt = (points, ms) => {
 };
 
 // Остаток квоты по месяцам: сколько машин оставалось к концу каждого месяца.
-// Первая сводка ГТК вышла только 7 мая 2026: ни у таможни, ни в открытой статистике
-// нет расхода квоты по январю — апрелю, поэтому начало года идёт одной строкой,
-// а по месяцам расписан весь остальной год. Разбить первые месяцы значило бы
-// придумать цифры, которых никто не публиковал.
+// Первая сводка ГТК вышла только 7 мая 2026. Каркас всегда показывает январь —
+// декабрь, но неизвестные месяцы честно помечены как «Нет данных».
 const spentByPeriod = (points) => {
   const first = points[0];
   const firstReport = points[1] || first;
@@ -239,8 +237,29 @@ const spentByPeriod = (points) => {
     });
   }
 
-  // Список идёт по календарю: от начала года к декабрю.
-  return periods;
+  // Список всегда идёт по календарю с января. До первой доступной строки не
+  // дорисовываем остаток задним числом: вместо выдуманных значений показываем,
+  // что сводки за этот месяц нет.
+  const periodByMonth = new Map(periods.map((period) => [period.label, period]));
+  const firstMonth = new Date(first.ms).getUTCMonth();
+  const lastMonth = new Date(last.ms).getUTCMonth();
+  const exhausted = last.remaining === 0;
+  return MONTHS_NOMINATIVE.map((label, month) => {
+    const known = periodByMonth.get(label);
+    if (known) return exhausted && known.future ? { ...known, left: 0 } : known;
+    const initial = month === firstMonth;
+    const afterExhaustion = exhausted && month > lastMonth;
+    return {
+      key: `${lastYear}-${month + 1}`,
+      label,
+      spent: 0,
+      // В январе известен утверждённый стартовый лимит. После подтверждённого
+      // нуля остаток уже не может вернуться в следующих месяцах этого же года.
+      left: initial ? first.remaining : afterExhaustion ? 0 : null,
+      partial: initial,
+      future: month > lastMonth,
+    };
+  });
 };
 
 /**

@@ -31,17 +31,28 @@ test("monthly spending adds up to the whole quota used so far", () => {
 
 test("keeps the months the customs reports do cover", () => {
   const quota = state();
-  // До 7 мая таможня остаток не публиковала, поэтому начало года — одной строкой.
+  // Каркас начинается с января, неизвестные и будущие месяцы не получают
+  // выдуманного остатка.
   assert.deepEqual(quota.periods.map((period) => period.label), [
-    "апрель", "май", "июнь", "июль", "август",
+    "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август",
     "сентябрь", "октябрь", "ноябрь", "декабрь",
   ]);
-  // У ненаступивших месяцев остатка нет — в карточке там прочерк, а не выдуманный ноль.
+  assert.equal(quota.periods[0].left, EV_QUOTA.personalTotal);
+  assert.deepEqual(quota.periods.slice(1, 3).map((period) => period.left), [null, null]);
+  // У ненаступивших месяцев остатка нет — в карточке там «Нет данных».
   assert.deepEqual(quota.periods.filter((period) => period.future).map((period) => period.left), [null, null, null, null]);
   // Август ещё не закрыт, предыдущие месяцы посчитаны целиком.
   const august = quota.periods.find((period) => period.label === "август");
   assert.equal(august.partial, true);
-  assert.deepEqual(quota.periods.slice(1, 4).map((period) => period.partial), [false, false, false]);
+  assert.deepEqual(quota.periods.slice(4, 7).map((period) => period.partial), [false, false, false]);
+});
+
+test("после подтверждённого исчерпания остаток до конца года равен нулю", () => {
+  const quota = evQuotaState({ today: new Date("2026-09-23T00:00:00Z") });
+  assert.deepEqual(
+    quota.periods.slice(9).map((period) => period.left),
+    [0, 0, 0],
+  );
 });
 
 test("fills the bar with what is already used up", () => {

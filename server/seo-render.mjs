@@ -46,7 +46,7 @@ export const linkifyText = (text, hrefRoute) =>
       if (typeof part === "string") return escapeHtml(part);
       // Ссылка на первоисточник ведёт на чужой сайт: адрес не переписываем под свой
       // корень и отдаём с `nofollow` — вес чужому сайту не передаём.
-      if (part.external) return `<a class="article-inline-link" href="${escapeHtml(part.href)}" target="_blank" rel="nofollow noreferrer">${escapeHtml(part.label)}</a>`;
+      if (part.external) return `<a class="article-inline-link" href="${escapeHtml(part.href)}" target="_blank" rel="nofollow noopener noreferrer">${escapeHtml(part.label)}</a>`;
       return `<a class="article-inline-link" href="${escapeHtml(hrefRoute(part.href))}">${escapeHtml(part.label)}</a>`;
     })
     .join("");
@@ -170,12 +170,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       ["/faq/", "Вопросы и ответы"],
       ...TOOL_PAGES.map((tool) => [`${tool.path}/`, tool.name]),
       ["/contacts/", "Контакты"],
-      [LEGAL_DOCUMENTS.privacy, "Политика конфиденциальности"],
-      [LEGAL_DOCUMENTS.terms, "Условия использования"],
     ];
     return `<footer class="site-footer"><nav class="page-width" aria-label="Информация для покупателя">
-    ${links.map(([route, name]) => `<a href="${hrefRoute(route)}"${route.endsWith(".pdf") ? ' target="_blank" rel="noopener noreferrer"' : ""}>${escapeHtml(name)}</a>`).join("\n    ")}
-  </nav></footer>`;
+    ${links.map(([route, name]) => `<a href="${hrefRoute(route)}">${escapeHtml(name)}</a>`).join("\n    ")}
+  </nav><div class="page-width footer-bottom"><span>© 2026</span><div><a href="${hrefRoute(LEGAL_DOCUMENTS.privacy)}" target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a><a href="${hrefRoute(LEGAL_DOCUMENTS.terms)}" target="_blank" rel="noopener noreferrer">Условия использования</a></div></div></footer>`;
   }
 
   // ── Постраничный обход списка ────────────────────────────────────────────────
@@ -338,12 +336,11 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       "@type": "Organization",
       // Имя, под которым нас ищут, — «абкарс» кириллицей и ABCars латиницей. Раньше
       // здесь стоял только адрес сайта, и по названию компании поисковик уводил на
-      // страницу контактов вместо главной. Реквизиты, адрес и связь — из карточки
-      // компании, чтобы не разъезжались с подвалом и страницей контактов.
+      // страницу контактов вместо главной. Адрес и связь берём из общей карточки,
+      // чтобы они не разъезжались с подвалом и страницей контактов.
       "@id": `${routeUrl("/")}#organization`,
       name: COMPANY.schemaName,
       alternateName: [...COMPANY.schemaAlternateNames],
-      legalName: COMPANY.legalName,
       url: routeUrl("/"),
       logo: `${base}/og.jpg`,
       email: COMPANY.email,

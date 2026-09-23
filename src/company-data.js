@@ -1,13 +1,12 @@
 // Demo company details for the prototype. Replace every value in this object before publication.
 export const COMPANY = Object.freeze({
   brand: "abcars.by",
-  legalName: "ООО «Абкарс»",
   // Имя компании для разметки, по которой поисковик узнаёт организацию. До этого
   // там стоял только адрес сайта, поэтому по запросу «абкарс» Google выводил
   // страницу контактов — единственную, где это слово встречалось словами.
   // Основное имя латиницей, остальные написания — как дополнительные.
   schemaName: "ABCars",
-  schemaAlternateNames: Object.freeze(["Абкарс", "abcars.by", "ООО «Абкарс»"]),
+  schemaAlternateNames: Object.freeze(["Абкарс", "abcars.by"]),
   address: "Минск, ул. Тимирязева, 65Б",
   city: "Минск",
   street: "ул. Тимирязева, 65Б",
@@ -24,6 +23,4 @@ export const COMPANY = Object.freeze({
   threadsUrl: "https://www.threads.com/@abcars.by",
   viber: "+375 25 646-21-63",
   viberUrl: "viber://chat?number=%2B375256462163",
-  bank: "ЗАО «Альфа-Банк»",
-  bic: "ALFABY2X",
 });

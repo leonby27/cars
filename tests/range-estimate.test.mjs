@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { RANGE_CYCLES, RANGE_MODES, ageFactor, rangeTable, realRange, temperatureFactor } from "../src/range-estimate.js";
+
+const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
 // Точность расчёта проверить нечем — это оценка по чужим исследованиям. Зато можно
 // проверить, что он ведёт себя как положено: холоднее и быстрее — меньше километров,
@@ -75,4 +78,9 @@ test("таблица собирается по всем режимам и тем
 
 test("у всех циклов множитель не выше единицы", () => {
   for (const cycle of RANGE_CYCLES) assert.ok(cycle.factor > 0 && cycle.factor <= 1, `странный множитель у ${cycle.id}`);
+});
+
+test("невыбранная часть температурной шкалы в светлой теме гасится прозрачностью", () => {
+  assert.match(styles, /\.tool-calc-field-temp::after\s*\{[\s\S]*?background:\s*var\(--panel\);[\s\S]*?opacity:\s*0\.5/);
+  assert.match(styles, /:root\[data-theme="dark"\] \.tool-calc-field-temp::after\s*\{[\s\S]*?filter:\s*saturate\(0\.4\);[\s\S]*?opacity:\s*1/);
 });

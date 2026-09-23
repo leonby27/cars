@@ -15,7 +15,7 @@ test("разметка организации знает имя компании
   assert.equal(organization.name, "ABCars");
   assert.ok(organization.alternateName.includes("Абкарс"));
   assert.ok(organization.alternateName.includes("abcars.by"));
-  assert.equal(organization.legalName, COMPANY.legalName);
+  assert.equal("legalName" in organization, false);
   assert.equal(organization.address.addressLocality, COMPANY.city);
   // Карточка сайта ссылается на ту же организацию, а не заводит вторую.
   assert.equal(render().webSiteSchema().publisher["@id"], organization["@id"]);

@@ -354,7 +354,7 @@ function catalogBrandCount(brand) {
 }
 
 function toolArticle(tool) {
-  const paragraphs = (items) => items.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+  const paragraphs = (items) => items.map((text) => `<p>${linkifyText(text, hrefRoute)}</p>`).join("");
   const extras = (section) =>
     [
       // Ссылки внутри списков и врезок разбираются так же, как в абзацах: в статьях
@@ -523,7 +523,6 @@ function infoArticle(route) {
   }
   if (route === "/contacts/") {
     const rows = [
-      ["Компания", COMPANY.legalName],
       ["Адрес", COMPANY.address],
       ["Время работы", COMPANY.hours],
       ["Электронная почта", COMPANY.email],
@@ -873,7 +872,7 @@ function blogArticleArticle(post) {
 function blogSources(post) {
   if (!post.sources?.length) return "";
   const items = post.sources
-    .map((source) => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="nofollow noreferrer">${escapeHtml(source.name)}</a>${source.note ? ` — ${escapeHtml(source.note)}` : ""}</li>`)
+    .map((source) => `<li><a href="${escapeHtml(source.url)}" target="_blank" rel="nofollow noopener noreferrer">${escapeHtml(source.name)}</a>${source.note ? ` — ${escapeHtml(source.note)}` : ""}</li>`)
     .join("");
   return `<section><h2>Источники</h2><ul>${items}</ul></section>`;
 }

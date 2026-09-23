@@ -124,7 +124,7 @@ function LeadCar({ car }) {
   }
   const facts = [car.mileage ? `${formatNumber(car.mileage)} км` : "", formatUsd(car.estimatedTotalUsd)].filter(Boolean).join(" · ");
   return (
-    <a className="lead-car" href={analyticsNoCountHref(carHref(car.id))} target="_blank" rel="noreferrer">
+    <a className="lead-car" href={analyticsNoCountHref(carHref(car.id))} target="_blank" rel="nofollow noopener noreferrer">
       {car.image ? <img src={leadPhoto(car.image)} alt="" loading="lazy" width="88" height="66" /> : <span><CarProfile size={20} weight="duotone" /></span>}
       <div>
         <strong>{car.title}</strong>
@@ -554,7 +554,7 @@ function VisitRow({ visit, number, unread }) {
     <td><span className={`analytics-visit-number${unread ? " is-unread" : ""}`}>{number}</span></td>
     <td className={sourceUnknown ? "analytics-visit-source-unknown" : undefined}><VisitSource visit={visit} /></td>
     <td><VisitDevice device={visit.device} platform={visit.platform} /></td>
-    <td><a href={analyticsNoCountHref(landingPath)} target="_blank" rel="noreferrer" title={landingPath === "/" ? "Главная" : landingPath || "—"}>{landingPath === "/" ? "Главная" : landingPath || "—"}</a></td>
+    <td><a href={analyticsNoCountHref(landingPath)} target="_blank" rel="nofollow noopener noreferrer" title={landingPath === "/" ? "Главная" : landingPath || "—"}>{landingPath === "/" ? "Главная" : landingPath || "—"}</a></td>
     <td>{formatNumber(visit.pageViews)}</td>
     <td>{formatVisitDate(visit.createdAt)}</td>
   </tr>;
@@ -690,7 +690,7 @@ function VehiclesSection({ data, updates, markViewed }) {
     </div></div>
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
       <tbody>{rows.length ? rows.slice(0, visible).map((item) => <tr key={item.id} className={mode === "favorites" && (item.gone || item.status === "unavailable") ? "analytics-row-warning" : undefined}>
-        <td>{mode === "models" ? item.title : mode === "catalog" ? <a href={analyticsNoCountHref(item.path)} target="_blank" rel="noopener noreferrer">{item.title}</a> : <a href={analyticsNoCountHref(carHref(item.listingId))}>{item.title}</a>}</td>
+        <td>{mode === "models" ? item.title : mode === "catalog" ? <a href={analyticsNoCountHref(item.path)} target="_blank" rel="nofollow noopener noreferrer">{item.title}</a> : <a href={analyticsNoCountHref(carHref(item.listingId))}>{item.title}</a>}</td>
         {mode === "favorites" ? <><td>{favoriteOwners(item)}</td><td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></> : <><td>{formatNumber(item.viewers)}</td><td>{formatNumber(item.views)}</td>{mode === "cars" && <td>{formatNumber(item.asks)}</td>}<td>{item.lastViewedAt ? formatVisitDate(item.lastViewedAt) : "—"}</td></>}
       </tr>) : <tr><td colSpan={columns.length}>{mode === "catalog" ? "Страницы каталога пока не просматривали." : mode === "favorites" ? "Избранного пока нет." : "Событий по автомобилям пока нет."}</td></tr>}</tbody></table></div>
     {visible < rows.length && <button className="analytics-show-more" type="button" onClick={() => setVisible((count) => count + 20)}>Показать ещё</button>}
@@ -748,10 +748,10 @@ function SearchTrafficTable({ title, rows, status, availableTo, source, pages = 
 
 function SearchLandingLink({ value }) {
   const path = String(value || '').trim();
-  if (path.startsWith('/')) return <a href={analyticsNoCountHref(path)} target="_blank" rel="noopener noreferrer">{path}</a>;
+  if (path.startsWith('/')) return <a href={analyticsNoCountHref(path)} target="_blank" rel="nofollow noopener noreferrer">{path}</a>;
   try {
     const url = new URL(path);
-    if (['http:', 'https:'].includes(url.protocol)) return <a href={analyticsNoCountHref(url.href)} target="_blank" rel="noopener noreferrer">{url.pathname}{url.search}</a>;
+    if (['http:', 'https:'].includes(url.protocol)) return <a href={analyticsNoCountHref(url.href)} target="_blank" rel="nofollow noopener noreferrer">{url.pathname}{url.search}</a>;
   } catch { /* Missing or invalid upstream URL is plain text. */ }
   return path || 'Страница не определена';
 }

@@ -27,7 +27,7 @@ import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
-import { EV_QUOTA, evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
+import { evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
@@ -816,6 +816,13 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
   return <a href={appHref(href)} onClick={handleClick} {...props}>{children}</a>;
 }
 
+// Внешние ссылки по умолчанию не передают поисковый вес. `follow` разрешён только
+// для редкого явного исключения, согласованного владельцем сайта.
+const EXTERNAL_LINK_REL = "nofollow noopener noreferrer";
+function ExternalLink({ href, follow = false, children, ...props }) {
+  return <a {...props} href={href} target="_blank" rel={follow ? "noopener noreferrer" : EXTERNAL_LINK_REL}>{children}</a>;
+}
+
 // Абзацы обзоров изредка ссылаются со середины текста на соседний раздел каталога —
 // разбор ссылок общий с сервером, см. src/inline-links.js.
 function renderInlineText(text, navigate) {
@@ -826,9 +833,9 @@ function renderInlineText(text, navigate) {
       // Первоисточник: чужой сайт открываем в новой вкладке, статья остаётся на месте.
       // `nofollow` — не передаём вес чужому сайту, `noreferrer` заодно скрывает,
       // с какой страницы пришли.
-      <a className="article-inline-link" key={`link-${index}`} href={part.href} target="_blank" rel="nofollow noreferrer">
+      <ExternalLink className="article-inline-link" key={`link-${index}`} href={part.href}>
         {part.label}
-      </a>
+      </ExternalLink>
     ) : (
       <AppLink className="article-inline-link" key={`link-${index}`} href={part.href} navigate={navigate}>
         {part.label}
@@ -1181,10 +1188,10 @@ function QuotaPricingToggle() {
   const available = Boolean(pricing?.available);
   const on = Boolean(pricing?.on);
   const hint = !available
-    ? "Режим цены задан ссылкой для проверки."
+    ? "Режим цены на электромобили задан ссылкой для проверки."
     : on
-      ? "Цены по квоте: пошлина 0%. Выключите — добавится пошлина 15%."
-      : "Цены без квоты: пошлина 15%. Включите — вернутся льготные цены.";
+      ? "Цены на электромобили по квоте: пошлина 0%. Выключите — добавится пошлина 15%."
+      : "Цены на электромобили без квоты: пошлина 15%. Включите — вернутся льготные цены.";
   return (
     <div className="quota-panel-pricing">
       <label className="quick-view-toggle quota-pricing-toggle">
@@ -1205,51 +1212,137 @@ function QuotaPricingToggle() {
   );
 }
 
-function EvQuotaPanel({ quotas }) {
-  const [audience, setAudience] = useState("personal");
-  const quota = quotas[audience];
-  const forecast = quota.exhausted
-    ? `Квота выбрана${quota.exhaustedOnLabel ? ` ${quota.exhaustedOnLabel}` : ""}: при ввозе электромобиля применяется пошлина 15%.`
-    : quota.stale || quota.overdue
-      ? "Сводка устарела — свежий остаток смотрите у таможни."
-      : `Расход держится около ${number(quota.perWeek)} машин в неделю. При таком темпе квота закончится примерно ${quota.runsOutLabel}, а дальше к цене добавится пошлина 15%.`;
+const quotaForecast = (quota) => quota.exhausted
+  ? `Квота исчерпана${quota.exhaustedOnLabel ? ` ${quota.exhaustedOnLabel}` : ""}. Льготное оформление по ставке 0% больше недоступно: при ввозе электромобиля применяется пошлина 15%. Остаток за выбранный месяц — историческое значение из официальной сводки, а не доступная квота на сегодня.`
+  : quota.stale || quota.overdue
+    ? "Сводка устарела — свежий остаток смотрите у таможни."
+    : `Расход держится около ${number(quota.perWeek)} машин в неделю. При таком темпе квота закончится примерно ${quota.runsOutLabel}, а дальше к цене добавится пошлина 15%.`;
+
+function QuotaAudienceTabs({ audience, onChange }) {
+  return (
+    <div className="quota-panel-tabs" role="group" aria-label="Чья квота">
+      {QUOTA_AUDIENCES.map(([code, label]) => (
+        <button
+          key={code}
+          type="button"
+          className={audience === code ? "active" : ""}
+          aria-pressed={audience === code}
+          onClick={() => onChange(code)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function QuotaMonthValue({ quota, period }) {
+  return (
+    <>
+      <span className="quota-page-month-share">
+        {period.left > 0 ? `${Math.round((period.left / quota.total) * 100)}%` : ""}
+      </span>
+      <strong>{period.left == null ? "Нет данных" : number(period.left)}</strong>
+    </>
+  );
+}
+
+function QuotaMonthPicker({ quota, selectedKey, onSelect }) {
+  return (
+    <div className="quota-page-months" aria-label="Остаток квоты по месяцам">
+      <ul>
+        {quota.periods.map((period) => {
+          const selected = period.key === selectedKey;
+          return (
+            <li key={period.key} className={period.left == null ? "unavailable" : undefined}>
+              <button
+                type="button"
+                className={selected ? "active" : ""}
+                aria-pressed={selected}
+                onClick={() => onSelect(period.key)}
+              >
+                <span className="quota-page-month-label">{period.label}</span>
+                <QuotaMonthValue quota={quota} period={period} />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+const QUOTA_DIGITS = Array.from({ length: 10 }, (_, digit) => digit);
+
+function AnimatedQuotaValue({ hasData, maxDigits, value }) {
+  if (!hasData) {
+    return (
+      <b className="quota-page-animated-value" aria-live="polite" aria-atomic="true">
+        <span className="quota-page-value-empty">Нет данных</span>
+      </b>
+    );
+  }
+
+  const label = number(value);
+  const paddedDigits = String(value).padStart(maxDigits, "0").split("");
+  const firstNonZero = paddedDigits.findIndex((digit) => digit !== "0");
+  const firstVisible = firstNonZero < 0 ? paddedDigits.length - 1 : firstNonZero;
+  return (
+    <b className="quota-page-animated-value" aria-live="polite" aria-atomic="true" aria-label={label}>
+      <span className="quota-page-value-digits" aria-hidden="true">
+        {paddedDigits.map((digit, index) => {
+          const separatorBefore = index > 0 && (paddedDigits.length - index) % 3 === 0;
+          const separatorVisible = separatorBefore && firstVisible < index;
+          return (
+            <Fragment key={`quota-digit-${index}`}>
+              {separatorBefore && (
+                <span className={`quota-page-value-separator${separatorVisible ? "" : " is-hidden"}`}>&nbsp;</span>
+              )}
+              <span className={`quota-page-value-reel${index < firstVisible ? " is-leading" : ""}`}>
+                <span className="quota-page-value-track" style={{ "--quota-digit": Number(digit) }}>
+                  {QUOTA_DIGITS.map((trackDigit) => (
+                    <span key={trackDigit}>{trackDigit}</span>
+                  ))}
+                </span>
+              </span>
+            </Fragment>
+          );
+        })}
+      </span>
+    </b>
+  );
+}
+
+function QuotaPeriodResult({ quota, period }) {
+  const hasData = period?.left != null;
+  const remainingShare = hasData && quota.total ? period.left / quota.total : 0;
+  return (
+    <div className="quota-panel-result quota-page-period-result">
+      <div className={`quota-panel-figure${hasData ? "" : " unavailable"}`}>
+        <small className="quota-page-selected-month">{period?.label || "Выбранный месяц"}</small>
+        <AnimatedQuotaValue hasData={hasData} maxDigits={String(quota.total).length} value={period?.left} />
+        <i className="quota-panel-bar" aria-hidden="true">
+          <b style={{ width: `${hasData ? Math.min(100, Math.max(3, Math.round(remainingShare * 100))) : 0}%` }} />
+        </i>
+        <small>
+          {hasData
+            ? `${Math.round(remainingShare * 100)}% от первоначального объёма квоты.`
+            : `Официальной сводки за ${period?.label || "этот месяц"} нет.`}
+        </small>
+      </div>
+      <p className="quota-panel-forecast">{quotaForecast(quota)}</p>
+    </div>
+  );
+}
+
+function EvQuotaPanel({ navigate, onDetails }) {
   return (
     <div className="quota-panel">
       <QuotaPricingToggle />
-      <div className="quota-panel-tabs" role="group" aria-label="Чья квота">
-        {QUOTA_AUDIENCES.map(([code, label]) => (
-          <button
-            key={code}
-            type="button"
-            className={audience === code ? "active" : ""}
-            aria-pressed={audience === code}
-            onClick={() => setAudience(code)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {/* Остаток и расход по месяцам — про одно и то же, поэтому лежат в одной
-          плашке: заголовок «Расход квоты» списку не нужен, месяцы говорят сами. */}
-      <div className="quota-panel-figure">
-        <b>Ост. {number(quota.remaining)} из {number(quota.total)}</b>
-        {/* Полоса заполняется израсходованным: почти полная — значит квота на исходе. */}
-        <i className="quota-panel-bar" aria-hidden="true">
-          <b style={{ width: `${Math.min(100, Math.max(2, Math.round(quota.usedShare * 100)))}%` }} />
-        </i>
-        <small>Данные за {quota.asOfLabel}. Осталось квот:</small>
-        <div className="quota-panel-months">
-          <ul>
-            {quota.periods.map((period) => (
-              <li key={period.key} className={period.future ? "future" : undefined}>
-                <span>{period.label}</span>
-                <strong>{period.left == null ? "—" : number(period.left)}</strong>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      <p className="quota-panel-forecast">{forecast}</p>
+      <AppLink className="primary quota-panel-details" href="/ev-quota" navigate={navigate} onClick={onDetails}>
+        <Lightning size={17} weight="bold" aria-hidden="true" />
+        <span>Подробнее</span>
+      </AppLink>
     </div>
   );
 }
@@ -1261,7 +1354,7 @@ const QUOTA_TOOLTIP = (
   </>
 );
 
-function EvQuotaButton({ quotas }) {
+function EvQuotaButton({ quotas, navigate }) {
   // В шапке — общий остаток по стране: физлица плюс юрлица. Разбивка по каждой
   // половине лежит во вкладках карточки.
   const remaining = quotas.personal.remaining + quotas.business.remaining;
@@ -1309,7 +1402,7 @@ function EvQuotaButton({ quotas }) {
         aria-hidden={!open}
         inert={open ? undefined : true}
       >
-        <EvQuotaPanel quotas={quotas} />
+        <EvQuotaPanel navigate={navigate} onDetails={() => setOpen(false)} />
       </div>
     </div>
   );
@@ -1402,7 +1495,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
           </div>
         </div>
         <div className="header-actions header-left-controls">
-          <EvQuotaButton quotas={quotas} />
+          <EvQuotaButton quotas={quotas} navigate={navigate} />
         </div>
         <div className="header-actions">
           <div className="header-contact-actions" aria-label="Связаться с нами">
@@ -3517,7 +3610,7 @@ function ArticleSources({ sources }) {
       <ul>
         {sources.map((source) => (
           <li key={source.url}>
-            <a href={source.url} target="_blank" rel="nofollow noreferrer">{source.name}</a>
+            <ExternalLink href={source.url}>{source.name}</ExternalLink>
             {source.note ? <span> — {source.note}</span> : null}
           </li>
         ))}
@@ -8727,9 +8820,9 @@ function OrderDraft({ car, navigate }) {
             )}
             <div className="progress-links">
               {sourceLink && (
-                <a href={sourceLink} target="_blank" rel="noreferrer">
+                <ExternalLink href={sourceLink}>
                   Оригинал объявления <ArrowRight size={16} />
-                </a>
+                </ExternalLink>
               )}
               <button onClick={() => navigate(carHref(car))}>Вернуться к автомобилю</button>
             </div>
@@ -9065,16 +9158,16 @@ function ServiceContactCta() {
         />
       </section>
       <section className="service-contact-options page-width" aria-label="Способы связи">
-        <a className="service-contact-option" href={COMPANY.viberUrl} onClick={() => trackEvent("service_contact_sales_click")}>
+        <a className="service-contact-option" href={COMPANY.viberUrl} rel={EXTERNAL_LINK_REL} onClick={() => trackEvent("service_contact_sales_click")}>
           <span aria-hidden="true"><ViberLogo size={27} /></span>
           <strong>Viber</strong>
           <p>Напишите или позвоните — поможем выбрать автомобиль и посчитать цену до Минска.</p>
         </a>
-        <a className="service-contact-option" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("service_contact_telegram_click")}>
+        <ExternalLink className="service-contact-option" href={COMPANY.telegramUrl} onClick={() => trackEvent("service_contact_telegram_click")}>
           <span aria-hidden="true"><TelegramLogo size={27} weight="duotone" /></span>
           <strong>Telegram</strong>
           <p>Быстро ответим на вопросы и подскажем по вашему запросу.</p>
-        </a>
+        </ExternalLink>
         <a className="service-contact-option" href={`mailto:${COMPANY.email}`} onClick={() => trackEvent("service_contact_email_click")}>
           <span aria-hidden="true"><EnvelopeSimple size={27} weight="duotone" /></span>
           <strong>Электронная почта</strong>
@@ -9477,9 +9570,9 @@ function ContactsPage({ navigate, theme }) {
             До обращения можно посмотреть <AppLink href="/" navigate={navigate}>автомобили из Китая с расчётом до Минска</AppLink>.
           </p>
           <div className="info-actions">
-            <a className="primary contact-telegram-cta" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer">
+            <ExternalLink className="primary contact-telegram-cta" href={COMPANY.telegramUrl}>
               Написать нам в Telegram <ArrowRight size={18} />
-            </a>
+            </ExternalLink>
           </div>
         </div>
         <div className="info-hero-visual">
@@ -9488,10 +9581,10 @@ function ContactsPage({ navigate, theme }) {
       </section>
 
       <section className="contact-options page-width" aria-label="Способы связи">
-        <a href={COMPANY.telegramUrl} target="_blank" rel="noreferrer">
+        <ExternalLink href={COMPANY.telegramUrl}>
           <TelegramLogo size={24} weight="duotone" />
           <span><small>Написать в Telegram</small><b>{COMPANY.telegram}</b><em>Обычно отвечаем за 10 минут</em></span>
-        </a>
+        </ExternalLink>
         <a href={`mailto:${COMPANY.email}`}>
           <EnvelopeSimple size={24} weight="duotone" />
           <span><small>Электронная почта</small><b>{COMPANY.email}</b><em>Документы и деловые вопросы</em></span>
@@ -9508,21 +9601,6 @@ function ContactsPage({ navigate, theme }) {
         />
       </section>
 
-      <section className="company-details-section">
-        <div className="page-width company-details-grid">
-          <div>
-            <span className="info-eyebrow">Реквизиты</span>
-            <h2>Фиксируем все детали договором</h2>
-            <p>Перед оплатой фиксируем выбранный автомобиль, состав услуг, порядок расчётов и ответственность сторон.</p>
-          </div>
-          <dl className="company-details" id="details">
-            <div><dt>Юридическое лицо</dt><dd>{COMPANY.legalName}</dd></div>
-            <div><dt>Юридический адрес</dt><dd>{COMPANY.address}</dd></div>
-            <div><dt>Банк</dt><dd>{COMPANY.bank}</dd></div>
-            <div><dt>BIC</dt><dd>{COMPANY.bic}</dd></div>
-          </dl>
-        </div>
-      </section>
     </main>
   );
 }
@@ -9542,6 +9620,7 @@ function ContactsPage({ navigate, theme }) {
    «почему мы» на главной, а высокая батарея так обрезалась бы пополам — она стоит
    внутри плитки целиком. */
 const TOOL_HERO_ICONS = Object.freeze({
+  quota: { src: "/services/ev-quota-zero-percent-gold.png", width: 512, height: 512, fit: "quota", raw: true },
   customs: { src: "/services/customs-calculator.png", width: 224, height: 224 },
   cost: { src: "/services/delivery-car-carrier.png", width: 640, height: 426, fit: "carrier", raw: true },
   range: { src: "/services/battery-check.png", width: 512, height: 512, fit: "inside" },
@@ -9580,6 +9659,7 @@ function ToolPage({ tool, navigate }) {
   // в пункты под ней — он в разметке страницы, но не отодвигает форму вниз.
   const isDeliveryCalculator = tool.kind === "cost";
   const isFormPage = isCalculator || tool.kind === "range" || isDeliveryCalculator;
+  const isQuotaPage = tool.kind === "quota";
   const calculatorDetails = !isCalculator ? [] : [
     { title: customsExample().title, content: <ToolPageDataTable table={{ ...customsExample(), title: null }} /> },
     {
@@ -9634,6 +9714,19 @@ function ToolPage({ tool, navigate }) {
       content: <p>{renderInlineText(item.a, navigate)}</p>,
     })),
   ];
+  // После живого остатка квоты оставляем только ответы на поисковый запрос.
+  // Повторное вступление, история тех же чисел и сервисная реклама здесь не помогают
+  // ни человеку, ни поисковику.
+  const quotaDetails = !isQuotaPage ? [] : [
+    ...texts.sections.map((section) => ({
+      title: section.title,
+      content: <ModelPageSection section={{ ...section, title: null }} navigate={navigate} />,
+    })),
+    ...texts.faq.map((item) => ({
+      title: item.q,
+      content: <p>{renderInlineText(item.a, navigate)}</p>,
+    })),
+  ];
   // Шаг назад работает, только если на страницу пришли с другой страницы сайта. По
   // прямой ссылке из поиска возвращаться некуда — ведём на главную.
   const goBack = () => (window.history.length > 1 && window.history.state?.fromPath ? navigate(-1) : navigate("/"));
@@ -9669,7 +9762,7 @@ function ToolPage({ tool, navigate }) {
                   насколько оно свежее. Текст общий с версией для поисковика. */}
               {/* На калькуляторе этой строки нет: там курс с датой стоит прямо
                   в расчёте, под суммой платежа, и вторая дата была бы повтором. */}
-              {updatedLabel && !isFormPage && tool.kind !== "brands" ? <p className="tool-page-updated">{updatedLabel}</p> : null}
+              {updatedLabel && !isFormPage && !isQuotaPage && tool.kind !== "brands" ? <p className="tool-page-updated">{updatedLabel}</p> : null}
             </div>
             {/* Значок у заголовка калькулятора: справа от заголовка оставалось
                 пустое поле, а страница расчёта среди прочих узнаётся по картинке
@@ -9690,12 +9783,13 @@ function ToolPage({ tool, navigate }) {
               38 точек, и таблица отрывалась от заголовка. */}
           {!isFormPage && !isMarket && tool.kind !== "brands" && (
             <article className="model-page-article">
-              {true && (
+              {isQuotaPage && <QuotaPageCalculator />}
+              {!isQuotaPage && (
                 <div className="model-page-intro">
                   {texts.intro.map((text) => <p key={text.slice(0, 40)}>{text}</p>)}
                 </div>
               )}
-              {stats.length > 0 && (
+              {stats.length > 0 && !isQuotaPage && (
                 <div className="model-page-numbers">
                   {stats.map((stat) => (
                     <div key={stat.label}>
@@ -9734,16 +9828,17 @@ function ToolPage({ tool, navigate }) {
         {/* У сравнения цен этого блока нет: его таблица стоит выше, в одной подложке
             с заголовком, а пустая подложка здесь читалась бы как не загрузившийся
             кусок страницы. */}
-        {!isFormPage && !isMarket && tool.kind !== "brands" && (
+        {!isFormPage && !isMarket && !isQuotaPage && tool.kind !== "brands" && (
           <div className="model-page-body page-width">
             <article className="model-page-article">
-              {tool.kind === "quota" && <QuotaFigures />}
               {tool.kind === "cost" && <ToolPageTable table={deliveryStages()} />}
             </article>
           </div>
         )}
         {isMarket ? (
           <ToolDisclosures title="Частые вопросы" titleId="market-compare-faq-title" items={marketDetails} faq={texts.faq} />
+        ) : isQuotaPage ? (
+          <ToolDisclosures title="О квоте и расчёте" titleId="ev-quota-details-title" items={quotaDetails} faq={texts.faq} />
         ) : isFormPage ? (
           <>
             {isCalculator ? (
@@ -9783,7 +9878,7 @@ function ToolPage({ tool, navigate }) {
       <main className="model-page tool-page">
         {reading}
         <ToolPageLinks tool={tool} navigate={navigate} />
-        {!isMarket && <p className="model-page-disclaimer page-width">{texts.disclaimer}</p>}
+        {!isMarket && texts.disclaimer ? <p className="model-page-disclaimer page-width">{texts.disclaimer}</p> : null}
       </main>
     );
   }
@@ -9806,7 +9901,7 @@ function ToolPage({ tool, navigate }) {
             боковой колонке, и внизу они были вторым списком того же самого. */}
         <div className="blog-main">
           {reading}
-          {!isMarket && <p className="model-page-disclaimer">{texts.disclaimer}</p>}
+          {!isMarket && texts.disclaimer ? <p className="model-page-disclaimer">{texts.disclaimer}</p> : null}
         </div>
         <BlogSidebar navigate={navigate} currentPath={tool.path} />
       </div>
@@ -9889,95 +9984,28 @@ function ToolPageLinks({ tool, navigate }) {
   );
 }
 
-/* Живые цифры квоты: остаток с полосой расхода, темп и прогноз, остаток по месяцам и
-   история сводок таможни. Данные обновляет ежедневная задача в src/ev-quota.js —
-   здесь только показ. */
-function QuotaFigures() {
-  const state = evQuotaState();
-  const businessQuota = evQuotaState({ audience: "business" });
-  const rows = [...EV_QUOTA.reports].reverse().slice(0, 12);
-  const usedPercent = Math.min(100, Math.max(2, Math.round(state.usedShare * 100)));
-  // Прогноз обещаем только пока он правда: на исчерпанной квоте и на устаревшей
-  // сводке вместо даты стоит честное объяснение.
-  const forecast = state.exhausted
-    ? `Квота выбрана${state.exhaustedOnLabel ? ` ${state.exhaustedOnLabel}` : ""}: при ввозе электромобиля применяется пошлина 15%.`
-    : state.stale || state.overdue
-      ? "Свежей сводки таможни пока нет, поэтому прогноз мог сдвинуться. Цифра выше — последняя официальная."
-      : `При таком темпе квота заканчивается около ${state.runsOutLabel}, а дальше к цене каждого электромобиля добавляется ввозная пошлина 15%.`;
+const currentQuotaPeriodKey = (periods, now = new Date()) => {
+  const key = `${now.getFullYear()}-${now.getMonth() + 1}`;
+  if (periods.some((period) => period.key === key)) return key;
+  return [...periods].reverse().find((period) => period.left != null)?.key || periods[0]?.key || "";
+};
+
+/* Главный интерактив страницы квоты: слева выбираются аудитория и месяц, справа
+   шкала показывает официальный остаток именно для выбранной строки календаря. */
+function QuotaPageCalculator() {
+  const [audience, setAudience] = useState("personal");
+  const quota = evQuotaState({ audience });
+  const [selectedPeriodKey, setSelectedPeriodKey] = useState(() => currentQuotaPeriodKey(quota.periods));
+  const selectedPeriod = quota.periods.find((period) => period.key === selectedPeriodKey)
+    || quota.periods.find((period) => period.key === currentQuotaPeriodKey(quota.periods))
+    || quota.periods[0];
   return (
-    <section className="tool-live">
-      <h2>Сколько квоты на электромобили осталось сейчас</h2>
-      <div className="tool-live-figure">
-        <div className="tool-live-main">
-          <span>Осталось у граждан</span>
-          <strong>{number(state.remaining)}</strong>
-          <small>из {number(state.total)} по квоте {EV_QUOTA.year} года · сводка на {state.asOfLabel}</small>
-          {/* Полоса заполняется израсходованным: почти полная — значит квота на исходе. */}
-          <i className="tool-live-bar" aria-hidden="true">
-            <b style={{ width: `${usedPercent}%` }} />
-          </i>
-          <small>Выбрано {number(state.spent)} {pluralRu(state.spent, "машина", "машины", "машин")} — это {usedPercent}% квоты для граждан</small>
-        </div>
-        <dl className="tool-live-side">
-          {state.exhausted ? (
-            <>
-              <div>
-                <dt>Квота физлиц</dt>
-                <dd>{`выбрана${state.exhaustedOnLabel ? ` ${state.exhaustedOnLabel}` : ""}`}</dd>
-              </div>
-              <div>
-                <dt>Ввозная пошлина</dt>
-                <dd>15% от стоимости</dd>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <dt>Темп расхода</dt>
-                <dd>{state.perWeek ? `≈ ${number(state.perWeek)} машин в неделю` : "по сводкам не считается"}</dd>
-              </div>
-              <div>
-                <dt>Хватит примерно до</dt>
-                <dd>{state.runsOutLabel && !state.overdue && !state.stale ? state.runsOutLabel : "нужна свежая сводка"}</dd>
-              </div>
-            </>
-          )}
-          <div>
-            <dt>Квота юрлиц</dt>
-            <dd>{businessQuota.exhausted ? `выбрана${businessQuota.exhaustedOnLabel ? ` ${businessQuota.exhaustedOnLabel}` : ""}` : `осталось ${number(businessQuota.remaining)}`}</dd>
-          </div>
-        </dl>
+    <section className="quota-page-calc quota-panel" aria-label="Остаток квоты на электромобили">
+      <div className="quota-page-calendar-column">
+        <QuotaAudienceTabs audience={audience} onChange={setAudience} />
+        <QuotaMonthPicker quota={quota} selectedKey={selectedPeriod?.key} onSelect={setSelectedPeriodKey} />
       </div>
-      <p className="tool-live-forecast">{forecast}</p>
-      <div className="tool-live-months">
-        <h3>Остаток по месяцам</h3>
-        <ul>
-          {state.periods.map((period) => (
-            <li key={period.key} className={period.future ? "future" : undefined}>
-              <span>{period.label}</span>
-              <strong>{period.left == null ? "—" : number(period.left)}</strong>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="tool-live-table">
-        <h3>История сводок таможни</h3>
-        <table className="quota-history">
-          <thead>
-            <tr><th scope="col">Дата сводки</th><th scope="col">Осталось у граждан</th><th scope="col">Осталось у юрлиц</th></tr>
-          </thead>
-          <tbody>
-            {rows.map(([date, personal, business]) => (
-              <tr key={date}>
-                <th scope="row">{date}</th>
-                <td>{personal === null ? "не названо" : number(personal)}</td>
-                <td>{business === null ? "не названо" : number(business)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="tool-live-source">Источник — недельные сводки Государственного таможенного комитета.</p>
-      </div>
+      <QuotaPeriodResult quota={quota} period={selectedPeriod} />
     </section>
   );
 }
@@ -11445,12 +11473,12 @@ function BlogShareMenu({ post, direction = "up" }) {
             </span>
           </button>
           {BLOG_SHARE_TARGETS.map(({ id, name, Icon, href }) => (
-            <a key={id} role="menuitem" href={href(shareUrl, post.name)} target="_blank" rel="noreferrer noopener" onClick={() => setOpen(false)}>
+            <ExternalLink key={id} role="menuitem" href={href(shareUrl, post.name)} onClick={() => setOpen(false)}>
               <span className="select-option-label">
                 <Icon size={17} />
                 <span>{name}</span>
               </span>
-            </a>
+            </ExternalLink>
           ))}
         </div>
       </div>
@@ -12758,10 +12786,10 @@ function SiteFooter({ navigate }) {
           <b>Связаться</b>
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
           <div className="footer-socials">
-            <a className="header-social-link is-telegram" aria-label="Telegram" href={COMPANY.telegramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("contact_telegram_click")}><TelegramOfficialLogo size={36} weight="fill" /></a>
-            <a className="header-social-link is-viber" aria-label="Viber" href={COMPANY.viberUrl} onClick={() => trackEvent("contact_viber_click")}><ViberLogo size={24} /></a>
-            <a className="header-social-link is-instagram" aria-label="Instagram" href={COMPANY.instagramUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("contact_instagram_click")}><InstagramLogo size={25} weight="bold" /></a>
-            <a className="header-social-link is-threads" aria-label="Threads" href={COMPANY.threadsUrl} target="_blank" rel="noreferrer" onClick={() => trackEvent("contact_threads_click")}><ThreadsLogo size={25} /></a>
+            <ExternalLink className="header-social-link is-telegram" aria-label="Telegram" href={COMPANY.telegramUrl} onClick={() => trackEvent("contact_telegram_click")}><TelegramOfficialLogo size={36} weight="fill" /></ExternalLink>
+            <a className="header-social-link is-viber" aria-label="Viber" href={COMPANY.viberUrl} rel={EXTERNAL_LINK_REL} onClick={() => trackEvent("contact_viber_click")}><ViberLogo size={24} /></a>
+            <ExternalLink className="header-social-link is-instagram" aria-label="Instagram" href={COMPANY.instagramUrl} onClick={() => trackEvent("contact_instagram_click")}><InstagramLogo size={25} weight="bold" /></ExternalLink>
+            <ExternalLink className="header-social-link is-threads" aria-label="Threads" href={COMPANY.threadsUrl} onClick={() => trackEvent("contact_threads_click")}><ThreadsLogo size={25} /></ExternalLink>
           </div>
         </div>
         <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
@@ -12788,7 +12816,7 @@ function SiteFooter({ navigate }) {
         </form>
       </div>
       <div className="page-width footer-bottom">
-        <span>© 2026 {COMPANY.legalName}</span>
+        <span>© 2026</span>
         <div><a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a><a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">Условия использования</a></div>
       </div>
     </footer>

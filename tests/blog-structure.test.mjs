@@ -128,9 +128,9 @@ test("ссылки на источники отдаются с nofollow", () => 
   const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
   const generator = readFileSync(new URL("../scripts/generate-seo-pages.mjs", import.meta.url), "utf8");
   const appBlock = app.slice(app.indexOf("function ArticleSources("), app.indexOf("function ArticleFaq("));
-  assert.match(appBlock, /rel="nofollow noreferrer"/, "в приложении блок источников без nofollow");
+  assert.match(appBlock, /<ExternalLink href=\{source\.url\}>/, "в приложении блок источников не использует общий nofollow-компонент");
   const seoBlock = generator.slice(generator.indexOf("function blogSources("), generator.indexOf("function blogPostArticle("));
-  assert.match(seoBlock, /rel="nofollow noreferrer"/, "в странице для поисковика блок источников без nofollow");
+  assert.match(seoBlock, /rel="nofollow noopener noreferrer"/, "в странице для поисковика блок источников без nofollow");
   // Блок обязан стоять во всех четырёх видах материалов, а не только в статье.
   assert.equal(app.split("<ArticleSources sources={text?.sources} />").length - 1, 4, "блок источников не во всех видах материалов");
   assert.equal(generator.split("${blogSources(post)}").length - 1, 4, "блок источников для поисковика не во всех видах материалов");
@@ -184,5 +184,13 @@ test("внутренние ссылки в текстах ведут на сущ
     for (const match of JSON.stringify(text).matchAll(/\]\((\/[a-z0-9/_-]+)\)/gi)) {
       assert.ok(known.has(match[1]), `в материале ${slug} ссылка на несуществующий адрес ${match[1]}`);
     }
+  }
+});
+
+// В профильных материалах ссылка на живой расчёт должна быть видна уже во
+// вступлении: читателю не приходится искать актуальный остаток глубоко в статье.
+test("статьи про квоту ведут на страницу актуального остатка из вступления", () => {
+  for (const slug of ["ev-quota-end", "ev-quota-2027", "ev-quota-extra-2026"]) {
+    assert.match(BLOG_TEXTS[slug].intro.join(" "), /\]\(\/ev-quota\)/, `в материале ${slug} нет ссылки на страницу квоты во вступлении`);
   }
 });
