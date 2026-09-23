@@ -8232,7 +8232,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               <div>
                 <div className="price-customs-copy">
                   <PriceLabel label="Растаможка и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText].filter(Boolean).join(" ")} />
-                  <p className="price-customs-includes">{price.customsIncludedText}</p>
                   {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
                 </div>
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
@@ -8669,7 +8668,6 @@ function OrderDraft({ car, navigate }) {
               <div>
                 <div className="price-customs-copy">
                   <PriceLabel label="Таможня и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText].filter(Boolean).join(" ")} />
-                  <p className="price-customs-includes">{price.customsIncludedText}</p>
                   {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
                 </div>
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
