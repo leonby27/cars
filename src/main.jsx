@@ -7,6 +7,10 @@ import { loadModelText } from "./model-text-load.js";
 import { findModelPage } from "./model-pages.js";
 import { loadToolPageTexts } from "./tool-page-text-load.js";
 import { findToolPage } from "./tool-pages.js";
+import { loadBlogText } from "./blog-text-load.js";
+import { findBlogPost } from "./blog-posts.js";
+import { holdQuotaChoice, isEvQuotaOver } from "./ev-quota.js";
+import { setPricingQuotaOver } from "./pricing.js";
 import "./styles.css";
 import "./order-contact.css";
 import "./analytics.css";
@@ -64,10 +68,16 @@ function start() {
   // Снимок каталога в записи истории (фильтры, порядок, догруженные страницы) —
   // это уже не стартовое состояние, с которого собрана готовая разметка: после
   // перезагрузки такой вкладки рисуем с нуля.
-  const restoredCatalog = Boolean(window.history.state?.catalog);
+  // То же с поиском на главной: возврат из карточки поднимает прошлую выдачу поиска
+  // из памяти вкладки (heroReturn), а сервер нарисовал обычную главную.
+  const restoredCatalog = Boolean(window.history.state?.catalog || window.history.state?.heroReturn);
   if (prerenderedFor && prerenderedFor === currentPath && !restoredCatalog) {
     document.documentElement.classList.remove("booting");
     dropSeoBody();
+    // Цены в готовой разметке посчитаны без льготы — так же и первый кадр (ev-quota.js).
+    holdQuotaChoice(true);
+    // Расчёт цены запомнил режим ещё при загрузке модуля — сбрасываем на серверный.
+    setPricingQuotaOver(isEvQuotaOver());
     const ready = () => installRussianTypography(root);
     hydrateRoot(
       root,
@@ -104,6 +114,17 @@ const isToolPath = (() => {
   return Boolean(findToolPage(unbased));
 })();
 
+// Материал журнала по прямой ссылке: сервер нарисовал его уже с текстом
+// (server/static-page.mjs), поэтому текст нужен до первого кадра — иначе оживление
+// увидело бы страницу без текста и перерисовало её целиком.
+const blogSlug = (() => {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const pathname = window.location.pathname;
+  const unbased = base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
+  return unbased.startsWith("/blog/") ? findBlogPost(unbased.replace(/\/+$/, ""))?.slug || null : null;
+})();
+
 if (modelSlug) loadModelText(modelSlug).catch(() => null).then(start);
+else if (blogSlug) loadBlogText(blogSlug).catch(() => null).then(start);
 else if (isToolPath) loadToolPageTexts().catch(() => null).then(start);
 else start();

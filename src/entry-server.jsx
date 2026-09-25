@@ -13,6 +13,8 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { App } from "./App.jsx";
 import { primeModelText } from "./model-text-load.js";
+import { primeBlogText } from "./blog-text-load.js";
+import { primeToolPageTexts } from "./tool-page-text-load.js";
 
 const render = () =>
   // Тот же StrictMode, что в main.jsx: на разметку он не влияет, но пусть обе точки
@@ -62,6 +64,35 @@ export function renderModelApp(pathname, search, boot, { text = null } = {}) {
   setServerLocation(pathname, search);
   // Текст обзора — в загруженные заранее: браузер до оживления подгрузит тот же файл.
   if (boot?.modelCatalog?.review?.slug && text) primeModelText(boot.modelCatalog.review.slug, text);
+  globalThis.window.__boot = boot;
+  try {
+    return render();
+  } finally {
+    globalThis.window.__boot = undefined;
+    setServerLocation("/", "");
+  }
+}
+
+/**
+ * Готовая разметка общего каталога и его разделов (`/catalog`, `/catalog/byd`,
+ * `/catalog/electric?page=3`). `boot` — встроенные данные (server/catalog-page.mjs):
+ * первая страница выдачи, ключ перемешивания, справочник фильтров, сводка по марке.
+ * Устроено как у страниц моделей, только без текста обзора.
+ */
+export function renderCatalogApp(pathname, search, boot, options = {}) {
+  return renderModelApp(pathname, search, boot, options);
+}
+
+/**
+ * Готовая разметка страницы журнала, инструмента или справочной страницы — в момент
+ * запроса (server/static-page.mjs). Тексты, которые браузер подгружает отдельным
+ * файлом до старта (main.jsx), кладутся в загруженные заранее; живые данные блоков
+ * приходят в `boot.api` (src/boot-api.js).
+ */
+export function renderStaticApp(pathname, search, boot, { blogSlug = null, blogText = null, toolTexts = null } = {}) {
+  if (blogSlug && blogText) primeBlogText(blogSlug, blogText);
+  if (toolTexts) primeToolPageTexts(toolTexts);
+  setServerLocation(pathname, search);
   globalThis.window.__boot = boot;
   try {
     return render();

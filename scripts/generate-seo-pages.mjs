@@ -1067,7 +1067,12 @@ const brandModelTabs = [...brandTotals]
     total,
     models: modelEntries.filter((item) => item.brand === brand).map(({ brand: _brand, ...item }) => item),
   }));
-writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs })}\n`);
+// Витрина главной — те же машины, что в списке для поисковика: приложение рисует их
+// в готовой разметке, и робот видит на главной машины с ценами, а не пустой блок.
+// Карточка витрины показывает не больше пяти кадров (HoverImagePreview) — остальные
+// фото и история цены в странице только утяжелили бы главную.
+const homeShowcase = live.showcase.map(({ images, priceHistory: _history, ...car }) => ({ ...car, images: Array.isArray(images) ? images.slice(0, 5) : images }));
+writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs, showcase: homeShowcase })}\n`);
 
 // Разделы, в которых есть хотя бы одна машина. Марки заведены заранее, под загрузку
 // каталога: пока импорт до марки не дошёл, её раздел пуст — в карту сайта и в ссылки
@@ -1479,7 +1484,10 @@ const modelPageEntries = () => {
 const pageEntries = [
   // Черновики (образец отчёта) в карту сайта не идут: их страница собрана только
   // ради прямой ссылки и закрыта от индексации.
-  ...publicPages.filter((page) => !page.post || !blogPostHidden(page.post)).map((page) => ({
+  // «/faq» — не страница: посетителя приложение сразу уводит к вопросам на «О сервисе»,
+  // а сервер с 26.09.2026 отвечает постоянным перебросом туда же (nginx). Отдельный
+  // текст вопросов видел только робот.
+  ...publicPages.filter((page) => (!page.post || !blogPostHidden(page.post)) && page.route !== "/faq/").map((page) => ({
     loc: routeUrl(page.route),
     lastmod: page.post ? blogLastmod(page.post) : page.blogIndex ? blogIndexLastmod : page.tool ? toolLastmod(page.tool) : null,
   })),

@@ -46,3 +46,10 @@ test("the tooltip shows how far the price moved, in percent", () => {
   assert.equal(formatChangePercent(0, 1200), null);
   assert.equal(formatChangePercent(1000, null), null);
 });
+
+// Сервер рисует страницу по UTC, браузер — по часам посетителя; дата обязана совпасть,
+// поэтому считается по Минску (UTC+3, без перехода на летнее время).
+test("дата изменения цены считается по минскому времени", () => {
+  assert.equal(formatChangeDate("2026-08-24T22:30:00Z"), "25 августа");
+  assert.equal(formatChangeDate("2026-08-24T20:59:00Z"), "24 августа");
+});

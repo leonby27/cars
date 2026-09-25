@@ -13,6 +13,13 @@ let promise = null;
 /** Тексты, если они уже загружены, иначе null. */
 export const loadedToolPageTexts = () => cache;
 
+/** Положить тексты заранее — для сервера, который рисует страницу инструмента. */
+export const primeToolPageTexts = (texts) => {
+  if (!texts) return;
+  cache = texts;
+  promise = Promise.resolve(texts);
+};
+
 /** Загрузить тексты (повторные вызовы возвращают тот же запрос). */
 export const loadToolPageTexts = () => {
   if (!promise) {

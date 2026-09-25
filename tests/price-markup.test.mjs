@@ -166,3 +166,26 @@ test("подпись с датой обновления появляется т�
   assert.match(renderer.landingPage({ ...args, changedAt: "2026-08-29T10:00:00.000Z" }).html, /Наличие и цены обновлены 29 августа 2026\./);
   assert.doesNotMatch(renderer.landingPage(args).html, /Наличие и цены обновлены/);
 });
+
+// 25.09.2026: цена была только в разметке, а видимая строка списка — «BYD Han 2023 —
+// 40 000 км». У конкурента, стоящего в выдаче Яндекса, у каждой машины сумма в долларах
+// и рублях. Теперь в строке обе суммы, рубли первыми, как в переключателе сайта.
+test("в видимом списке раздела у каждой машины цена в рублях и долларах", async () => {
+  const { usdToByn } = await import("../src/pricing.js");
+  const shown = [car(5, 90000), car(6, 150000)];
+  const page = renderer.landingPage({
+    landing: findCatalogLanding("/catalog/byd"),
+    cars: shown,
+    total: 2,
+    page: 1,
+    pages: 1,
+    perPage: 48,
+    edges: { cheapest: shown[0], dearest: shown[1] },
+    priced: shown,
+  });
+  const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
+  for (const item of shown) {
+    const usd = priceOf(item);
+    assert.ok(page.html.includes(`— ${number(40000)} км · ≈ ${number(usdToByn(usd))} BYN (${number(usd)} $)</li>`), `нет цены в строке машины ${item.id}`);
+  }
+});

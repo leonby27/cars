@@ -10,7 +10,7 @@ export { photoHref };
 //
 // Здесь нет ни файловых операций, ни обращений к базе: на вход заготовка страницы и данные,
 // на выходе строка. Поэтому модуль проверяется тестами без сборки и без Postgres.
-import { estimateLandedCost, yuanToUsdAbout } from "../src/pricing.js";
+import { estimateLandedCost, usdToByn, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
 import { carTitleDetails } from "../src/car-title.js";
 import { brandNotice } from "../src/brand-notice.js";
@@ -167,7 +167,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       // страницы журнала не имели в готовой разметке ни одной входящей ссылки: в
       // приложении ссылка есть, но её рисует скрипт, а Яндекс ходит по разметке.
       ...(BLOG_ENABLED ? [[`${BLOG_INDEX.path}/`, BLOG_INDEX.name]] : []),
-      ["/faq/", "Вопросы и ответы"],
+      // Вопросы живут на «О сервисе», как в подвале приложения: /faq — переброс туда.
+      ["/how-it-works#faq", "Вопросы и ответы"],
       ...TOOL_PAGES.map((tool) => [`${tool.path}/`, tool.name]),
       ["/contacts/", "Контакты"],
     ];
@@ -224,7 +225,14 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       const href = source.startsWith("/") ? `${siteBasePath}${source}` : source;
       return `<img src="${escapeHtml(href)}" alt="${escapeHtml(carTitle(car))} из Китая" width="600" height="450" loading="lazy" decoding="async" />`;
     };
-    return `<ul>${items.slice(0, limit).map((car) => `<li><a href="${hrefRoute(carRoute(car))}">${photo(car)}${escapeHtml(carTitle(car))}</a> — ${number(car.mileage)} км</li>`).join("")}</ul>`;
+    // Цена у каждой машины — как на карточке сайта: рубли первыми (так стоит по
+    // умолчанию в переключателе), доллары рядом. Без неё список раздела для поисковика
+    // выглядел как перечень названий с пробегом, хотя раздел продаёт машины с ценой.
+    const price = (car) => {
+      const usd = Number(estimateLandedCost(car).totalUsd);
+      return Number.isFinite(usd) && usd > 0 ? ` · ≈ ${number(usdToByn(usd))} BYN (${number(usd)} $)` : "";
+    };
+    return `<ul>${items.slice(0, limit).map((car) => `<li><a href="${hrefRoute(carRoute(car))}">${photo(car)}${escapeHtml(carTitle(car))}</a> — ${number(car.mileage)} км${price(car)}</li>`).join("")}</ul>`;
   }
 
   /**
@@ -645,7 +653,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * Общая страница каталога: заголовок, количество машин, ссылки на свежие объявления
    * и на все разделы. `sections` — разделы из `src/catalog-landings.js`.
    */
-  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null }) {
+  function catalogIndexPage({ cars: items = [], total = 0, sections = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null, app = null }) {
     const canonical = routeUrl(pageRoute(CATALOG_INDEX.route, page));
     const first = (page - 1) * perPage;
     const spread = priceSpread(edges, priced);
@@ -688,6 +696,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         indexable,
         prev: page > 1 ? routeUrl(pageRoute(CATALOG_INDEX.route, page - 1)) : null,
         next: page < pages ? routeUrl(pageRoute(CATALOG_INDEX.route, page + 1)) : null,
+        appRoot: app?.appRoot || null,
+        appRootPath: app?.appRootPath || null,
+        bootData: app?.bootData || null,
         schemas: [breadcrumbsSchema([["Главная", "/"], [CATALOG_INDEX.h1, pageRoute(CATALOG_INDEX.route, page)]]), itemList],
       }),
     };
@@ -723,7 +734,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * и переходы на соседние разделы. Приложение поверх этого рисует обычный каталог с
    * выставленным фильтром.
    */
-  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], models = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null, guide = null, seo = null }) {
+  // `app` — готовая разметка приложения ({ appRoot, appRootPath, bootData }): тогда
+  // страницу видят одинаково человек и робот, а собранный здесь текст остаётся только
+  // запасной версией на случай, когда сборка приложения недоступна.
+  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], models = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null, guide = null, seo = null, app = null }) {
     const canonical = routeUrl(pageRoute(landing.path, page));
     const first = (page - 1) * perPage;
     const spread = priceSpread(edges, priced);
@@ -838,10 +852,15 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         // сказать поисковику, что машин со второй страницы не существует.
         prev: page > 1 ? routeUrl(pageRoute(landing.path, page - 1)) : null,
         next: page < pages ? routeUrl(pageRoute(landing.path, page + 1)) : null,
+        appRoot: app?.appRoot || null,
+        appRootPath: app?.appRootPath || null,
+        bootData: app?.bootData || null,
+        // Разметку вопросов в готовой странице ставит само приложение (блок вопросов
+        // раздела) — вторая копия здесь дала бы на странице два одинаковых FAQPage.
         schemas: [
           breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]),
           itemList,
-          ...(questions.length ? [faqSchema(questions)] : []),
+          ...(questions.length && !app?.appRoot ? [faqSchema(questions)] : []),
         ],
       }),
     };

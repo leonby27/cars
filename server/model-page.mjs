@@ -206,7 +206,10 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
   };
   // Текст обзора в том же виде, в каком его подгружает браузер (см. model-text-load.js).
   const text = review ? { intro: review.intro, stats: review.stats, sections: review.sections, versions: review.versions, faq: review.faq, disclaimer: review.disclaimer } : null;
-  const appRoot = await renderModelAppMarkup(path, search, boot, text);
+  // Рисуем по полному адресу запроса: с метками рекламы встроенный список не берут обе
+  // стороны (сверка идёт по всей строке запроса), иначе сервер нарисовал бы список, а
+  // браузер — заготовку, и страница перерисовалась бы целиком.
+  const appRoot = await renderModelAppMarkup(path, params.toString(), boot, text);
   const first = (data.page - 1) * CATALOG_PAGE_SIZE;
   const itemList = {
     "@context": "https://schema.org",

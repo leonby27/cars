@@ -26,6 +26,15 @@ async function loadStableText(slug) {
   return null;
 }
 
+/**
+ * Положить текст в загруженные заранее — для сервера: он рисует страницу материала
+ * приложением и уже держит все тексты (src/blog-texts.js), а разметка обязана совпасть
+ * с той, что браузер оживит, подгрузив тот же файл до старта (main.jsx).
+ */
+export const primeBlogText = (slug, text) => {
+  if (slug && text) loaded.set(slug, text);
+};
+
 /** Уже загруженный текст — чтобы отрисовать страницу без ожидания. */
 export const loadedBlogText = (slug) => loaded.get(slug) || null;
 

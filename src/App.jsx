@@ -29,13 +29,13 @@ import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
 import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
-import { evQuotaPricingAvailable, evQuotaState, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
+import { evQuotaPricingAvailable, evQuotaState, holdQuotaChoice, isEvQuotaOver, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
 import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
 import { formatListingAge, getListingAddedAt, getSourceListedAt, isNewListing } from "./listing-age.js";
-import { formatChangeDate, formatChangePercent, getPriceChange } from "./price-change.js";
+import { formatChangeDate, formatChangePercent, getPriceChange, minskClock } from "./price-change.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar, modelPageRedirect } from "./model-pages.js";
 import { carTitle, carTitleDetails } from "./car-title.js";
@@ -63,6 +63,7 @@ import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
+import { embeddedApiValue } from "./boot-api.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "./purchase-info.js";
 import { TRACKING_FAQ } from "./tracking-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
@@ -504,7 +505,11 @@ const pluralRu = (count, one, few, many) => {
 };
 const daysRange = ([low, high]) => `${low}–${high} ${pluralRu(high, "день", "дня", "дней")}`;
 
-const startOfDayMs = (value) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+// Начало суток по Минску — одинаково у сервера (UTC) и браузера (любой пояс), см. minskClock.
+const startOfDayMs = (value) => {
+  const date = minskClock(value);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+};
 
 // «сегодня» / «вчера» / «5 дней назад», а для давних дат — число и месяц:
 // «143 дня назад» посетителю ничего не говорит, «18 августа» — говорит.
@@ -519,7 +524,8 @@ function formatDayAgo(value, recentDays = 30) {
   if (days === 1) return "вчера";
   if (days <= recentDays) return `${days} ${pluralRu(days, "день", "дня", "дней")} назад`;
   const date = formatChangeDate(at);
-  return at.getFullYear() === now.getFullYear() ? date : `${date} ${at.getFullYear()}`;
+  const year = minskClock(at).getUTCFullYear();
+  return year === minskClock(now).getUTCFullYear() ? date : `${date} ${year}`;
 }
 
 // Строка дат карточки: когда машина попала в наш каталог (firstSeenAt) и когда мы
@@ -3404,7 +3410,7 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
   );
 }
 
-function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
+function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey, hideNewBadge = false }) {
   const currency = useCurrency();
   const price = estimateLandedCost(car);
   const listingAge = formatListingAge(getSourceListedAt(car));
@@ -3414,7 +3420,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey }) {
   return (
     <article className="featured-card" data-car-id={car.id} data-feed-key={anchorKey} onClick={onClick}>
       <CardLinkOverlay car={car} open={onClick} />
-      <HoverImagePreview car={car} className="featured-image" badge={<NewListingBadge car={car} />} />
+      <HoverImagePreview car={car} className="featured-image" badge={hideNewBadge ? null : <NewListingBadge car={car} />} />
       {toggleFavorite && (
         <button
           type="button"
@@ -3583,6 +3589,16 @@ const modelStockText = (landing, paging) => {
     return lastModelStock;
   }
   return lastModelStock || "Считаем наличие и цены до Минска…";
+};
+
+// Цифры разделов каталога (число машин, вилка цен, годы), которые сервер встроил в
+// готовую страницу (window.__boot.sectionFacts). Запоминаем по адресу: при возврате на
+// раздел внутри сайта строка наличия остаётся той же, что была в первом кадре.
+const sectionFactsCache = new Map();
+const sectionFactsFor = (path) => {
+  const embedded = window.__boot?.sectionFacts;
+  if (embedded?.path) sectionFactsCache.set(embedded.path, embedded);
+  return sectionFactsCache.get(path) || null;
 };
 
 // Модели каждой марки, которые каталог уже видел в справочнике фильтров: по ним
@@ -3827,36 +3843,43 @@ function ModelPagePromo({ navigate }) {
 // Раньше страница спрашивала каталог по одной модели за раз — сто тридцать запросов
 // партиями по шесть, и фотографии проявлялись сверху вниз десятки секунд. Без API
 // (статическая сборка) ответа нет: список остаётся в исходном порядке и без фото.
+// Цифры моделей для указателя обзоров: карточки модели по ответу /api/model-facts.
+function modelsIndexFactsFrom(data) {
+  // Ключ — марка и модель вместе: у разных марок бывают одноимённые модели.
+  const byModel = new Map((data.models || []).map((row) => [`${row.brand}\u0000${row.model}`, row]));
+  const next = {};
+  for (const modelPage of MODEL_PAGES) {
+    const row = byModel.get(`${modelPage.brand}\u0000${modelPage.model}`);
+    if (!row) continue;
+    next[modelPage.slug] = {
+      image:imageSource(row.image || null, IMAGE_WIDTH_TILE) || null,
+      // Исходный адрес держим рядом: на него подменяем кадр, если хранилище не
+      // отдало уменьшенный.
+      imageFull:row.image || null,
+      count:Number(row.count) || 0,
+      priceMin:Number(row.priceMin) || null,
+      priceMax:Number(row.priceMax) || null,
+      accel:Number(row.accel) || null,
+      range:Number(row.range) || null,
+      // Типы двигателя машин этой модели в наличии — сама модель может
+      // продаваться и электромобилем, и гибридом (BYD Han и другие).
+      types:new Set(row.powertrains || []),
+    };
+  }
+  return next;
+}
+
 function useModelsIndexFacts() {
-  const [facts, setFacts] = useState({});
+  // Ответ из заранее собранной страницы (src/boot-api.js) — для первого кадра.
+  const [facts, setFacts] = useState(() => {
+    const embedded = embeddedApiValue("/api/model-facts");
+    return embedded ? modelsIndexFactsFrom(embedded) : {};
+  });
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/model-facts", { signal:controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model facts unavailable"))))
-      .then((data) => {
-        // Ключ — марка и модель вместе: у разных марок бывают одноимённые модели.
-        const byModel = new Map((data.models || []).map((row) => [`${row.brand}\u0000${row.model}`, row]));
-        const next = {};
-        for (const modelPage of MODEL_PAGES) {
-          const row = byModel.get(`${modelPage.brand}\u0000${modelPage.model}`);
-          if (!row) continue;
-          next[modelPage.slug] = {
-            image:imageSource(row.image || null, IMAGE_WIDTH_TILE) || null,
-            // Исходный адрес держим рядом: на него подменяем кадр, если хранилище не
-            // отдало уменьшенный.
-            imageFull:row.image || null,
-            count:Number(row.count) || 0,
-            priceMin:Number(row.priceMin) || null,
-            priceMax:Number(row.priceMax) || null,
-            accel:Number(row.accel) || null,
-            range:Number(row.range) || null,
-            // Типы двигателя машин этой модели в наличии — сама модель может
-            // продаваться и электромобилем, и гибридом (BYD Han и другие).
-            types:new Set(row.powertrains || []),
-          };
-        }
-        setFacts(next);
-      })
+      .then((data) => setFacts(modelsIndexFactsFrom(data)))
       .catch(() => {});
     return () => controller.abort();
   }, []);
@@ -4010,6 +4033,24 @@ function ModelsIndexPage({ navigate }) {
             <ModelPageSection key={section.title} section={section} navigate={navigate} />
           ))}
         </article>
+      </div>
+      {/* Все модели списком по маркам — ссылками, одним блоком. Сетка выше показывает
+          по 24 карточки за раз; до 26.09.2026 полный перечень видел только робот в
+          отдельной копии страницы, теперь он общий для всех. */}
+      <div className="model-page-body page-width">
+        <section className="catalog-landing-notes" aria-labelledby="models-index-all-title">
+          <h2 id="models-index-all-title">Все модели по маркам</h2>
+          {MODELS_INDEX_BRANDS.filter((name) => name !== MODELS_INDEX_ALL_BRANDS).map((name) => (
+            <div className="catalog-landing-links" key={name}>
+              <b>{name}</b>
+              <div>
+                {MODEL_PAGES.filter((modelPage) => modelPage.brand === name).map((modelPage) => (
+                  <AppLink key={modelPage.slug} href={modelPage.path} navigate={navigate}>{modelPage.name}</AppLink>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
       </div>
       </div>
       <ModelPagePromo navigate={navigate} />
@@ -4768,22 +4809,42 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     randomPool.current.push(...candidates);
     return batch;
   };
+  // Витрина, собранная вместе со страницей (window.__boot.homeShowcase, её кладёт
+  // scripts/prerender-home.mjs): первый кадр рисуется из неё, и поисковик видит на
+  // главной машины с ценами. Пока каталог не пришёл, `cars` пуст — без неё вместо
+  // машин стояли бы заготовки. Первый кадр рисуется из неё всегда, даже когда в
+  // истории есть своя лента (перезагрузка после открытой машины): сервер про ту
+  // ленту не знает, и иначе первый кадр разошёлся бы с готовой разметкой. Свою
+  // ленту поднимаем, когда придёт каталог (эффект ниже).
+  const bootShowcase = useRef(undefined);
+  if (bootShowcase.current === undefined) {
+    const embedded = window.__boot?.homeShowcase;
+    bootShowcase.current = Array.isArray(embedded) && embedded.length ? embedded.map(normalizeImportedCar) : null;
+  }
   // Лента набирается случайно при каждом визите, но возврат назад — это не новый
   // визит: без восстановления выбранная карточка оказывается в другом месте
   // списка или вообще исчезает из ленты.
   const restoreFeed = (stored) => {
     if (!stored?.length || !cars.length) return null;
-    const byId = new Map(cars.map((car) => [car.id, car]));
+    // Машины встроенной витрины могут не входить в загруженный каталог — без них
+    // возврат назад терял карточку, с которой человек ушёл.
+    const byId = new Map([...(bootShowcase.current || []), ...cars].map((car) => [car.id, car]));
     const restored = stored.filter((item) => byId.has(item.id)).map((item) => ({ car:byId.get(item.id), key:item.key }));
     if (!restored.length) return null;
     nextItemKey.current = restored.reduce((max, item) => Math.max(max, Number(String(item.key).split("-").pop()) || 0), 0) + 1;
     return restored;
   };
+  const feedFromBoot = useRef(false);
   // После перезагрузки на другой странице от сохранённой ленты обычно выживают
   // только просмотренные машины: остальных нет в свежезагруженном списке. Пара
   // «знакомых» карточек вместо витрины выглядит как поломка, поэтому уцелевшие
   // оставляем сверху (к ним ведёт возврат прокрутки), а ленту добираем свежими.
   const buildFeed = () => {
+    if (!cars.length && bootShowcase.current) {
+      feedFromBoot.current = true;
+      nextItemKey.current = bootShowcase.current.length;
+      return bootShowcase.current.map((car, index) => ({ car, key: `${car.id}-${index}` }));
+    }
     const restored = restoreFeed(window.history.state?.feed);
     if (!restored) return takeRandomBatch();
     if (restored.length >= batchSize) return restored;
@@ -4811,9 +4872,31 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     if (feedSource.current === cars) return;
     feedSource.current = cars;
     randomPool.current = [];
+    // Каталог пришёл, а на экране встроенная витрина: карточки не меняем (иначе они
+    // перемешаются на глазах), новые машины для «Подгрузить ещё» берём из каталога
+    // без уже показанных.
+    if (feedFromBoot.current && cars.length && !window.history.state?.feed) {
+      feedFromBoot.current = false;
+      setFeedCars((current) => {
+        const shown = new Set(current.map((item) => item.car.id));
+        randomPool.current = shuffleCars(cars.filter((car) => !shown.has(car.id)));
+        return current;
+      });
+      return;
+    }
+    feedFromBoot.current = false;
     nextItemKey.current = 0;
     setFeedCars(buildFeed());
   }, [cars]);
+  // Плашка «N дней назад» зависит от сегодняшней даты, а встроенная витрина собрана
+  // в день сборки: в первом кадре плашек нет (иначе разметка разойдётся с серверной),
+  // появляются они сразу после оживления. Там же телефон получает свою короткую порцию.
+  const [feedHydrated, setFeedHydrated] = useState(false);
+  useEffect(() => setFeedHydrated(true), []);
+  // Ширина экрана известна только после оживления (первый кадр — настольный).
+  useEffect(() => {
+    if (feedFromBoot.current && useCatalogCards) setFeedCars((current) => (current.length > batchSize ? current.slice(0, batchSize) : current));
+  }, [useCatalogCards]);
 
   const loadMore = () => setFeedCars((current) => [...current, ...takeRandomBatch(current.slice(-3).map((item) => item.car))]);
   const showSkeletons = loading && !feedCars.length;
@@ -4854,7 +4937,13 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   // «зикр» открывался десятком одинаковых дорогих машин подряд.
   const [heroShuffleSeed] = useState(() => restoredHero?.shuffleSeed || randomShuffleSeed());
   // Вид выдачи общий с каталогом: переключили здесь — каталог откроется так же.
-  const [heroView, setHeroView] = useState(readCatalogView);
+  // Вид выдачи — в первом кадре всегда список, выбор посетителя из хранилища браузера
+  // читаем сразу после: сервер его не знает, и готовая разметка главной с поисковой
+  // фразой в адресе («/?q=…») иначе разошлась бы с первым кадром.
+  const [heroView, setHeroView] = useState("list");
+  useLayoutEffect(() => {
+    setHeroView(readCatalogView());
+  }, []);
   const updateHeroView = (value) => {
     setHeroView(value);
     window.localStorage.setItem(catalogViewKey, value);
@@ -5161,7 +5250,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             {gridBusy
               ? skeletonCards.map((key) => <CardSkeleton key={key} />)
               : displayItems.map(({ car, key }) => (
-                  <FeaturedCard key={key} anchorKey={key} car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openFeedCar({ car, key })} />
+                  <FeaturedCard key={key} anchorKey={key} car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openFeedCar({ car, key })} hideNewBadge={!feedHydrated} />
                 ))}
           </div>
         )}
@@ -5326,7 +5415,10 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <CardLinkOverlay car={car} open={open} />
       <div className="car-row-mobile-header">
         <div>
-          <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
+          {/* Название здесь — не заголовок: строка для телефона повторяет заголовок
+              карточки ниже, и два заголовка на машину превращали выдачу в коде страницы
+              в 96 одинаковых «глав» (48 машин × 2). Заголовок у карточки один — ниже. */}
+          <p className="car-row-mobile-title"><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></p>
           <TotalPrice car={car} price={price} currency={currency} />
         </div>
         <button
@@ -5345,7 +5437,9 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <div className="car-row-info">
         <div className="row-title">
           <div>
-            <h2><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h2>
+            {/* Третий уровень: карточка машины — пункт списка внутри страницы, а не её
+                раздел; разделы (обзор, вопросы, другие модели) идут вторым уровнем. */}
+            <h3><AppLink href={carHref(car)} navigate={open} onClick={(event) => event.stopPropagation()}>{car.title}</AppLink></h3>
           </div>
           <div className="row-actions">
             <button
@@ -5892,22 +5986,35 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // Когда сервер уже встроил в страницу готовый список, память вкладки не берём:
   // иначе первый кадр разошёлся бы с готовой разметкой (ошибка оживления), а страница
   // по свежей ссылке показала бы чужую глубину прокрутки.
-  const serverListHere = Boolean(window.__boot?.catalogValue && landing && window.__boot.catalogPath === landing.path);
+  // Адрес, для которого сервер встроил список: у раздела — его адрес, у общего
+  // каталога — «/catalog» (раздела у него нет).
+  const listPath = landing?.path || "/catalog";
+  const serverListHere = Boolean(window.__boot?.catalogValue && window.__boot.catalogPath === listPath);
   const restoredCatalog = window.history.state?.catalog || (serverListHere ? null : matchingCatalogReturn()?.catalog) || null;
   const [filters, setFilters] = useState(() => ({
     ...initialFilters,
     ...(restoredCatalog?.filters || {}),
   }));
-  // Первая страница выдачи, встроенная сервером в готовую страницу (страницы моделей):
-  // берём её, если она про этот адрес и этот отбор, и ничего не восстанавливаем из
-  // истории. Тогда первый кадр совпадает с серверным, а первый запрос не нужен.
+  // Первая страница выдачи, встроенная сервером в готовую страницу (каталог, разделы,
+  // страницы моделей): берём её, если она про этот адрес и этот отбор, и ничего не
+  // восстанавливаем из истории. Тогда первый кадр совпадает с серверным, а первый
+  // запрос не нужен.
   const bootList = (() => {
     const boot = window.__boot;
-    if (!boot?.catalogValue || !landing || boot.catalogPath !== landing.path || restoredCatalog) return null;
+    if (!boot?.catalogValue || boot.catalogPath !== listPath || restoredCatalog) return null;
     return String(boot.catalogSearch || "") === window.location.search.replace(/^\?/, "") ? boot.catalogValue : null;
   })();
+  // Порядок «по умолчанию» перемешан по ключу. Для встроенного списка ключ выбрал
+  // сервер (один на сутки): со случайным ключом браузер переставил бы машины, и
+  // готовая разметка разошлась бы с первым кадром.
+  const bootSeed = bootList && /^s\d{1,2}$/.test(String(window.__boot.catalogSeed || "")) ? window.__boot.catalogSeed : null;
   const bootListUsed = useRef(Boolean(bootList));
-  const [remoteCars, setRemoteCars] = useState(() => (bootList ? (bootList.items || []).map(normalizeImportedCar) : []));
+  const [remoteCars, setRemoteCars] = useState(() => {
+    if (!bootList) return [];
+    const items = (bootList.items || []).map(normalizeImportedCar);
+    // Тот же разбор, что у ответа на первый запрос (orderRemoteBatch ниже).
+    return bootSeed ? varietyOrder(items, seededRandom(`${bootSeed}:0`), []) : items;
+  });
   const [remoteReceived, setRemoteReceived] = useState(Boolean(bootList));
   const [remoteTotal, setRemoteTotal] = useState(bootList ? Number(bootList.total) || 0 : 0);
   // «Есть ли ещё» решает сервер, а не сравнение загруженного с общим числом: у API
@@ -5929,7 +6036,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
   // mix in place while paging and when a visitor comes back from a vehicle page.
-  const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || randomShuffleSeed());
+  const [shuffleSeed] = useState(() => restoredCatalog?.shuffleSeed || bootSeed || randomShuffleSeed());
   // Первый запрос — всегда одна страница. Больше сотни машин за раз каталог не отдаёт
   // (потолок в `catalogPaging`), поэтому при возврате из карточки с двумя-тремя
   // подгруженными страницами запрос на 300 машин молча превращался в сотню: список
@@ -6370,7 +6477,21 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
                цифры новой модели едут, на том же месте стоит строка той же высоты:
                иначе заголовок и выдача дёргались бы при смене модели. */
             <p className="model-page-stock">{modelStockText(landing, { page: currentPage, pages: totalPages, first: startOffset, shown: displayed.length })}</p>
-          ) : Boolean(heading.subtitle) && <p>{heading.subtitle}</p>}
+          ) : (
+            <>
+              {Boolean(heading.subtitle) && <p>{heading.subtitle}</p>}
+              {/* Та же строка наличия, что у страницы модели: сколько машин и почём.
+                  Цифры — из готовой страницы (сервер); при переходе внутри сайта на
+                  раздел, для которого их нет, — хотя бы число машин из выдачи. */}
+              {(() => {
+                // Цифры раздела годятся, пока выдача — весь раздел: с фильтром поверх
+                // (год, цена) число машин другое, и тогда пишем только его.
+                const known = sectionFactsFor(listPath);
+                const facts = known && (knownResultCount == null || knownResultCount === known.total) ? known : knownResultCount != null ? { total: knownResultCount } : null;
+                return facts ? <p className="model-page-stock">{modelStockLine(facts, { page: currentPage, pages: totalPages, first: startOffset, shown: displayed.length })}</p> : null;
+              })()}
+            </>
+          )}
         </div>
       </div>
       <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} />
@@ -6561,9 +6682,18 @@ function CatalogSectionLinks({ navigate }) {
    машины, а не чтение. Здесь же ссылки на обзоры моделей этой марки и на соседние
    страницы каталога — по ним поисковик обходит раздел, а человек переходит к похожему. */
 function CatalogLandingNotes({ landing, models, navigate, total = null }) {
-  const [guide, setGuide] = useState(null);
+  // Сводку по марке сервер встраивает в готовую страницу раздела (window.__boot.
+  // brandGuideValue): без неё первый кадр — «Загружаем сводку…», а у готовой
+  // разметки — цифры, и они бы разошлись.
+  const bootGuide = () => (window.__boot?.brandGuideValue && window.__boot.brandGuideBrand === landing.brand ? window.__boot.brandGuideValue : null);
+  const [guide, setGuide] = useState(bootGuide);
   useEffect(() => {
     if (!isBrandGuideLanding(landing)) return undefined;
+    const embedded = bootGuide();
+    if (embedded) {
+      setGuide(embedded);
+      return undefined;
+    }
     const controller = new AbortController();
     fetch(`/api/brand-guide?brand=${encodeURIComponent(landing.brand)}&version=3`, { signal:controller.signal })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("brand guide unavailable")))
@@ -10654,10 +10784,40 @@ function CustomsCalculator() {
    разошлись бы с каталогом при первой же замене логотипа. */
 const brandCountsFromMeta = (meta) => new Map((meta?.brands || []).map((item) => [item.brand, item.count]));
 
+// Модели марок для справочника марок: по ответу /api/model-facts, пять самых
+// многочисленных на марку.
+function brandModelsFromFacts(data) {
+  const grouped = {};
+  for (const row of data.models || []) {
+    if (!grouped[row.brand]) grouped[row.brand] = [];
+    grouped[row.brand].push({
+      model:row.model,
+      count:Number(row.count) || 0,
+      image:row.image || null,
+      priceMin:Number(row.priceMin) || null,
+      priceMax:Number(row.priceMax) || null,
+    });
+  }
+  const next = {};
+  for (const [brand, models] of Object.entries(grouped)) {
+    models.sort((left, right) => right.count - left.count || left.model.localeCompare(right.model, "ru", { sensitivity:"base" }));
+    next[brand] = {
+      total:models.length,
+      items:models.slice(0, 5),
+      priceRanges:models.map((model) => ({ min:model.priceMin, max:model.priceMax })),
+    };
+  }
+  return next;
+}
+
 function ChinaBrandsDirectory({ navigate }) {
   const narrow = useNarrowViewport();
   const [counts, setCounts] = useState(() => brandCountsFromMeta(bootCatalogMeta("")));
-  const [modelsByBrand, setModelsByBrand] = useState({});
+  // Ответ из заранее собранной страницы (src/boot-api.js) — для первого кадра.
+  const [modelsByBrand, setModelsByBrand] = useState(() => {
+    const embedded = embeddedApiValue("/api/model-facts");
+    return embedded ? brandModelsFromFacts(embedded) : {};
+  });
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState("Только китайские");
   const [powertrain, setPowertrain] = useState("Все типы");
@@ -10678,29 +10838,7 @@ function ChinaBrandsDirectory({ navigate }) {
     const controller = new AbortController();
     fetch("/api/model-facts", { signal:controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model facts unavailable"))))
-      .then((data) => {
-        const grouped = {};
-        for (const row of data.models || []) {
-          if (!grouped[row.brand]) grouped[row.brand] = [];
-          grouped[row.brand].push({
-            model:row.model,
-            count:Number(row.count) || 0,
-            image:row.image || null,
-            priceMin:Number(row.priceMin) || null,
-            priceMax:Number(row.priceMax) || null,
-          });
-        }
-        const next = {};
-        for (const [brand, models] of Object.entries(grouped)) {
-          models.sort((left, right) => right.count - left.count || left.model.localeCompare(right.model, "ru", { sensitivity:"base" }));
-          next[brand] = {
-            total:models.length,
-            items:models.slice(0, 5),
-            priceRanges:models.map((model) => ({ min:model.priceMin, max:model.priceMax })),
-          };
-        }
-        setModelsByBrand(next);
-      })
+      .then((data) => setModelsByBrand(brandModelsFromFacts(data)))
       .catch(() => null);
     return () => controller.abort();
   }, []);
@@ -10799,7 +10937,11 @@ function ChinaBrandsDirectory({ navigate }) {
 function MarketCompare({ navigate }) {
   const quotaPricingOn = useQuotaPricing()?.on === true;
   const quotaMode = quotaPricingOn ? "on" : "off";
-  const [dataByQuota, setDataByQuota] = useState({});
+  // Сравнение из готовой страницы (src/boot-api.js) — для первого кадра.
+  const [dataByQuota, setDataByQuota] = useState(() => {
+    const embedded = embeddedApiValue(`${import.meta.env.BASE_URL}api/market/compare?quota=${quotaMode}`);
+    return embedded ? { [quotaMode]: embedded } : {};
+  });
   const [failedModes, setFailedModes] = useState(() => new Set());
   const data = dataByQuota[quotaMode] || null;
   const failed = failedModes.has(quotaMode);
@@ -11478,22 +11620,30 @@ function useBlogText(slug) {
 
 /** Живой срез каталога по правилу отбора подборки. */
 function useCollectionCars(post, { limit = BLOG_POST_CARS_LIMIT } = {}) {
-  const [cars, setCars] = useState([]);
-  const [total, setTotal] = useState(null);
+  const query = post ? String(blogListParams(post, limit)) : null;
+  // Список, встроенный в заранее собранную страницу: первый кадр рисуется из него,
+  // свежий ответ приходит следом и заменяет список без заготовок на месте машин.
+  const embedded = query ? embeddedApiValue(`/api/cars?${query}`) : undefined;
+  const bootQuery = useRef(embedded ? query : null);
+  const [cars, setCars] = useState(() => (embedded ? embedded.items.map(normalizeImportedCar) : []));
+  const [total, setTotal] = useState(embedded ? embedded.total : null);
   // Не «последняя проверка» (`refreshedAt`), а настоящее изменение набора: проверка
   // идёт каждую ночь по всему каталогу и у всех наборов одинаковая.
-  const [changedAt, setChangedAt] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [changedAt, setChangedAt] = useState(embedded?.changedAt || null);
+  const [loading, setLoading] = useState(!embedded);
   const [failed, setFailed] = useState(false);
-  const query = post ? String(blogListParams(post, limit)) : null;
   useEffect(() => {
     if (!query) return undefined;
     const controller = new AbortController();
-    setCars([]);
-    setTotal(null);
-    setChangedAt(null);
-    setLoading(true);
-    setFailed(false);
+    const fromBoot = bootQuery.current === query;
+    bootQuery.current = null;
+    if (!fromBoot) {
+      setCars([]);
+      setTotal(null);
+      setChangedAt(null);
+      setLoading(true);
+      setFailed(false);
+    }
     fetch(`/api/cars?${query}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("collection unavailable"))))
       .then((catalog) => {
@@ -11502,7 +11652,8 @@ function useCollectionCars(post, { limit = BLOG_POST_CARS_LIMIT } = {}) {
         setChangedAt(catalog.changedAt || null);
       })
       .catch((error) => {
-        if (error.name !== "AbortError") setFailed(true);
+        // Встроенный список уже на экране — неудачное обновление его не прячет.
+        if (error.name !== "AbortError" && !fromBoot) setFailed(true);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -11522,16 +11673,34 @@ function useCollectionCars(post, { limit = BLOG_POST_CARS_LIMIT } = {}) {
  * Запросы крошечные — по одной строке, — и сервер отдаёт их из общего кэша.
  */
 function useCollectionEdges(post) {
-  const [edges, setEdges] = useState({ priceFromUsd: null, highlight: null });
   const cheapestQuery = post ? String(blogApiParams(post, { sort: "price_asc", limit: 1 })) : null;
   const highlightSort = blogHighlightSort(post);
   // Берём пять машин, а не одну: у части объявлений главная цифра не заполнена
   // (пробег стоит нулём, разгон не указан), и первая строка выборки может её не иметь.
   const highlightQuery = highlightSort ? String(blogApiParams(post, { sort: highlightSort, limit: 5 })) : null;
+  const edgesFrom = (cheapestCars, notableCars) => {
+    const cheapest = cheapestCars[0] || null;
+    // Первая машина, у которой главная цифра вообще есть.
+    const notable = notableCars.find((car) => blogHighlight(post, car)) || null;
+    return {
+      priceFromUsd: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
+      highlight: blogHighlight(post, notable),
+    };
+  };
+  // Края из заранее собранной страницы (src/boot-api.js) — для первого кадра.
+  const embeddedCheapest = cheapestQuery ? embeddedApiValue(`/api/cars?${cheapestQuery}`) : undefined;
+  const embeddedNotable = highlightQuery ? embeddedApiValue(`/api/cars?${highlightQuery}`) : { items: [] };
+  const booted = Boolean(embeddedCheapest && embeddedNotable);
+  const bootKey = useRef(booted ? `${cheapestQuery}|${highlightQuery}` : null);
+  const [edges, setEdges] = useState(() =>
+    booted ? edgesFrom(embeddedCheapest.items.map(normalizeImportedCar), embeddedNotable.items.map(normalizeImportedCar)) : { priceFromUsd: null, highlight: null },
+  );
   useEffect(() => {
     if (!cheapestQuery) return undefined;
     const controller = new AbortController();
-    setEdges({ priceFromUsd: null, highlight: null });
+    const fromBoot = bootKey.current === `${cheapestQuery}|${highlightQuery}`;
+    bootKey.current = null;
+    if (!fromBoot) setEdges({ priceFromUsd: null, highlight: null });
     const load = (query) =>
       query
         ? fetch(`/api/cars?${query}`, { signal: controller.signal })
@@ -11539,15 +11708,7 @@ function useCollectionEdges(post) {
             .then((catalog) => catalog.items.map(normalizeImportedCar))
         : Promise.resolve([]);
     Promise.all([load(cheapestQuery), load(highlightQuery)])
-      .then(([cheapestCars, notableCars]) => {
-        const cheapest = cheapestCars[0] || null;
-        // Первая машина, у которой главная цифра вообще есть.
-        const notable = notableCars.find((car) => blogHighlight(post, car)) || null;
-        setEdges({
-          priceFromUsd: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
-          highlight: blogHighlight(post, notable),
-        });
-      })
+      .then(([cheapestCars, notableCars]) => setEdges(edgesFrom(cheapestCars, notableCars)))
       .catch(() => {});
     return () => controller.abort();
   }, [cheapestQuery, highlightQuery]);
@@ -11563,8 +11724,10 @@ function useCollectionEdges(post) {
  * перезагрузке, и главная выглядела бы так, будто её подменили.
  */
 function useCollectionCover(post) {
-  const [cover, setCover] = useState({ car: null });
   const query = post ? String(blogApiParams(post, { sort: "price_desc", limit: 1 })) : null;
+  // Обложка из заранее собранной страницы (src/boot-api.js) — для первого кадра.
+  const embedded = query ? embeddedApiValue(`/api/cars?${query}`) : undefined;
+  const [cover, setCover] = useState(() => ({ car: embedded?.items?.length ? normalizeImportedCar(embedded.items[0]) : null }));
   useEffect(() => {
     if (!query) return undefined;
     const controller = new AbortController();
@@ -12137,10 +12300,47 @@ function useDuelSides(post, { deep = true, listLimit = 5 } = {}) {
       })),
     [slug, deep, listLimit],
   );
-  const [state, setState] = useState(() => sides.map((side) => ({ side, ...DUEL_SIDE_EMPTY })));
+  // Ответы по стороне → строка состояния: одна и та же сборка и для ответа сервера,
+  // и для данных, встроенных в заранее собранную страницу.
+  const sideState = ([summary, list, cheapest, hero], index) => {
+    // Каталог сортирует по записанной в базу сумме, а карточка показывает
+    // пересчитанную — после смены правил расчёта они какое-то время расходятся.
+    // Поэтому пять машин переставляем по той цене, которую человек и увидит,
+    // и «цена от» берётся из них же: иначе в таблице стояла бы одна сумма,
+    // а первой строкой списка — другая, поменьше.
+    const landed = (car) => estimateLandedCost(car).totalUsd;
+    const cars = [...(list?.cars || [])].sort((left, right) => landed(left) - landed(right));
+    const prices = [...(cheapest?.cars || []), ...cars].map(landed).filter((value) => Number.isFinite(value) && value > 0);
+    return {
+      side: sides[index],
+      cars,
+      changedAt: summary?.changedAt || list?.changedAt || cheapest?.changedAt || null,
+      priceFromUsd: prices.length ? Math.min(...prices) : null,
+      // Кадр для шапки — первая машина со снимком: у части объявлений
+      // фотографий нет вовсе.
+      hero: (hero?.cars || []).find((car) => car.images?.length || car.image) || cars[0] || null,
+      ...(summary || { total: list?.total ?? cheapest?.total ?? null }),
+    };
+  };
+  const listAnswer = (catalog) => (catalog ? { total: catalog.total ?? null, changedAt: catalog.changedAt || null, cars: catalog.items.map(normalizeImportedCar) } : null);
+  // Встроенные ответы (src/boot-api.js): берём, только если есть все до одного.
+  const embeddedAnswers = (() => {
+    const answers = queries.map((query) => {
+      const summary = embeddedApiValue(`/api/cars/summary?${query.summary}`);
+      const list = query.list ? embeddedApiValue(`/api/cars?${query.list}`) : null;
+      const cheapest = embeddedApiValue(`/api/cars?${query.cheapest}`);
+      const hero = embeddedApiValue(`/api/cars?${query.hero}`);
+      return summary === undefined || list === undefined || cheapest === undefined || hero === undefined ? null : [summary, listAnswer(list), listAnswer(cheapest), listAnswer(hero)];
+    });
+    return answers.every(Boolean) ? answers : null;
+  })();
+  const bootQueries = useRef(embeddedAnswers ? queries : null);
+  const [state, setState] = useState(() => (embeddedAnswers ? embeddedAnswers.map(sideState) : sides.map((side) => ({ side, ...DUEL_SIDE_EMPTY }))));
   useEffect(() => {
     const controller = new AbortController();
-    setState(sides.map((side) => ({ side, ...DUEL_SIDE_EMPTY })));
+    const fromBoot = bootQueries.current === queries;
+    bootQueries.current = null;
+    if (!fromBoot) setState(sides.map((side) => ({ side, ...DUEL_SIDE_EMPTY })));
     const load = (query) =>
       query
         ? fetch(`/api/cars?${query}`, { signal: controller.signal })
@@ -12152,30 +12352,7 @@ function useDuelSides(post, { deep = true, listLimit = 5 } = {}) {
         .then((response) => (response.ok ? response.json() : Promise.reject(new Error("duel summary unavailable"))))
         .catch(() => null);
     Promise.all(queries.map((query) => Promise.all([loadSummary(query.summary), load(query.list), load(query.cheapest), load(query.hero)])))
-      .then((answers) => {
-        setState(
-          answers.map(([summary, list, cheapest, hero], index) => {
-            // Каталог сортирует по записанной в базу сумме, а карточка показывает
-            // пересчитанную — после смены правил расчёта они какое-то время расходятся.
-            // Поэтому пять машин переставляем по той цене, которую человек и увидит,
-            // и «цена от» берётся из них же: иначе в таблице стояла бы одна сумма,
-            // а первой строкой списка — другая, поменьше.
-            const landed = (car) => estimateLandedCost(car).totalUsd;
-            const cars = [...(list?.cars || [])].sort((left, right) => landed(left) - landed(right));
-            const prices = [...(cheapest?.cars || []), ...cars].map(landed).filter((value) => Number.isFinite(value) && value > 0);
-            return {
-            side: sides[index],
-            cars,
-            changedAt: summary?.changedAt || list?.changedAt || cheapest?.changedAt || null,
-            priceFromUsd: prices.length ? Math.min(...prices) : null,
-            // Кадр для шапки — первая машина со снимком: у части объявлений
-            // фотографий нет вовсе.
-            hero: (hero?.cars || []).find((car) => car.images?.length || car.image) || cars[0] || null,
-            ...(summary || { total: list?.total ?? cheapest?.total ?? null }),
-            };
-          }),
-        );
-      })
+      .then((answers) => setState(answers.map(sideState)))
       .catch(() => {});
     return () => controller.abort();
   }, [queries]);
@@ -12685,8 +12862,10 @@ function BlogReportPage({ post, navigate }) {
  * менялись бы при каждой перезагрузке, и статья выглядела бы подменённой.
  */
 function useArticlePhotos(post, limit = 6) {
-  const [cars, setCars] = useState([]);
   const query = post?.photos?.filters ? String(blogListParams({ slug: post.slug, filters: post.photos.filters }, limit)) : null;
+  // Кадры из заранее собранной страницы (src/boot-api.js) — для первого кадра.
+  const embedded = query ? embeddedApiValue(`/api/cars?${query}`) : undefined;
+  const [cars, setCars] = useState(() => (embedded ? embedded.items.map(normalizeImportedCar).filter((car) => car.images?.length || car.image) : []));
   useEffect(() => {
     if (!query) return undefined;
     const controller = new AbortController();
@@ -14035,7 +14214,11 @@ const requestCatalogMeta = (query = "") => {
 };
 // Тот же справочник, но уже готовым ответом: если загрузочный запрос успел ответить до
 // первой отрисовки, панель фильтров показывает все поля сразу, а не достраивается.
-const bootCatalogMeta = (query = "") => (window.__boot?.metaValue && String(window.__boot.metaQuery || "") === String(query) ? window.__boot.metaValue : null);
+const bootCatalogMeta = (query = "") =>
+  window.__boot?.metaValue && String(window.__boot.metaQuery || "") === String(query)
+    ? window.__boot.metaValue
+    // Справочник, встроенный в заранее собранную страницу (src/boot-api.js).
+    : embeddedApiValue(`/api/catalog/meta${query ? `?${query}` : ""}`) || null;
 const EMPTY_CATALOG_META = { brands: [], models: [], bodyTypes: [], drives: [], availability: {} };
 // Строка запроса справочника: те же три признака и в каталоге, и в поиске на главной.
 const catalogMetaQuery = (type, brand, bodyType) => {
@@ -14110,6 +14293,15 @@ export function App() {
   // Режим цен: включённый переключатель показывает льготную цену, выключенный —
   // цену с пошлиной 15%. Выбор запоминается в браузере и применяется ко всем карточкам.
   const [quotaPricingOn, setQuotaPricingOn] = useState(isEvQuotaPricingOn);
+  // После оживления готовой страницы — выбор посетителя: до этого он придержан
+  // (holdQuotaChoice в main.jsx), иначе суммы первого кадра разошлись бы с сервером.
+  useEffect(() => {
+    holdQuotaChoice(false);
+    if (!isEvQuotaPricingOn()) return;
+    // Расчёт цены помнит режим в своей переменной (pricing.js) — возвращаем его тоже.
+    setPricingQuotaOver(isEvQuotaOver());
+    setQuotaPricingOn(true);
+  }, []);
   const quotaPricing = useMemo(() => ({
     on: quotaPricingOn,
     available: evQuotaPricingAvailable(),

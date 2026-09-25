@@ -25,7 +25,7 @@ const shell = `<!doctype html>
 const entryServer = `export const renderAppPage = () => '<link rel="preload" href="/logo.svg" /><div class="app-content"><h1>Автомобили из Китая</h1><footer class="site-footer"></footer></div>';
 `;
 
-async function prerender() {
+async function prerender({ saved } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "prerender-home-"));
   const clientDir = path.join(dir, "client");
   const ssrDir = path.join(dir, "ssr");
@@ -33,6 +33,7 @@ async function prerender() {
   await mkdir(ssrDir, { recursive: true });
   await writeFile(path.join(clientDir, "index.html"), shell);
   await writeFile(path.join(ssrDir, "entry-server.js"), entryServer);
+  if (saved) await writeFile(path.join(dir, "popular-models.json"), JSON.stringify(saved));
   // Пути относительные: скрипт складывает адрес разметки приложения с рабочей папкой.
   await run(process.execPath, [script, "--dir=client", "--ssr=ssr"], { cwd: dir });
   return readFile(path.join(clientDir, "index.html"), "utf8");
@@ -69,4 +70,14 @@ test("скрипт-пометка «чужая страница» в готов�
   const trim = new Function("value", `return value.replace(${scripts[0].match(/replace\((\/[^,]+\/)/)[1]}, "")`);
   assert.equal(trim("/"), "");
   assert.equal(trim("/favorites"), "/favorites");
+});
+
+// Витрина «Каталог» на главной раньше дорисовывалась в браузере: поисковик видел пустой
+// блок без единой машины. Сборка кладёт машины витрины в страницу, приложение рисует
+// из них первый кадр.
+test("машины витрины из сборки попадают в данные страницы", async () => {
+  const html = await prerender({ saved: { models: [], brands: [], showcase: [{ id: "che168-1", title: "BYD Han 2023" }] } });
+  const boot = html.match(/window\.__boot = Object\.assign\(window\.__boot \|\| \{\}, (.*?)\);<\/script>/);
+  assert.ok(boot, "данных витрины в странице нет");
+  assert.deepEqual(JSON.parse(boot[1]).homeShowcase, [{ id: "che168-1", title: "BYD Han 2023" }]);
 });

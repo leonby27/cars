@@ -443,6 +443,25 @@ export async function handleApiRequest(request, response) {
         return html(response, status, fallback, { "cache-control":"no-store" });
       }
     }
+    // Журнал, инструменты и справочные страницы — готовой разметкой приложения
+    // (server/static-page.mjs). Адрес переводит сюда правило nginx; неизвестный адрес
+    // или отсутствие файла сборки — 404, дальше отвечает обычное правило сайта.
+    if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/static") {
+      try {
+        const { renderStaticPage } = await import("./static-page.mjs");
+        // Остальные параметры адреса — строкой запроса для отрисовки: калькуляторы
+        // держат в ней введённое, главная — поисковую фразу, и первый кадр браузера
+        // рисуется по ним же.
+        const rest = new URLSearchParams(url.searchParams);
+        rest.delete("path");
+        const page = await renderStaticPage(url.searchParams.get("path"), rest.toString());
+        if (!page) return json(response, 404, { error:"page_not_found" });
+        return html(response, page.status, page.html, seoPageCache);
+      } catch (error) {
+        console.error(error);
+        return json(response, 500, { error:"internal_error" });
+      }
+    }
     // Готовая страница раздела каталога: `/catalog/byd`, `/catalog/electric`, `/catalog/suv`.
     // Адрес переводит сюда правило в `vercel.json`.
     if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/catalog") {

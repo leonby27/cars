@@ -1359,13 +1359,13 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   line-height: 1.45;
 }
 .featured-body h3 a,
-.row-title h2 a {
+.row-title h3 a {
   color: inherit;
   text-decoration: none;
 }
 .featured-body h3 a:hover,
-.row-title h2 a:hover,
-.car-row:hover .row-title h2 a {
+.row-title h3 a:hover,
+.car-row:hover .row-title h3 a {
   color: var(--accent-dark);
 }
 .featured-body > p {
@@ -2377,7 +2377,7 @@ html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
   justify-content: space-between;
   gap: 10px;
 }
-.row-title h2 {
+.row-title h3 {
   margin: 0 0 8px;
   font-size: 19px;
   letter-spacing: -0.4px;
@@ -5806,7 +5806,7 @@ html[data-theme="dark"] #root .load-more {
   .car-row-mobile-header > div {
     min-width: 0;
   }
-  .car-row-mobile-header h2 {
+  .car-row-mobile-header .car-row-mobile-title {
     margin: 0;
     overflow: hidden;
     font-size: 17px;
@@ -5816,7 +5816,7 @@ html[data-theme="dark"] #root .load-more {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .car-row-mobile-header h2 a:any-link {
+  .car-row-mobile-header .car-row-mobile-title a:any-link {
     color: inherit;
     text-decoration: none;
   }

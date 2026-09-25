@@ -11,10 +11,18 @@ const MIN_STEP_USD = 100;
 
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
+// Даты считаем по Минску, а не по часам того, кто рисует: страницу рисует и сервер
+// (он живёт по UTC), и браузер посетителя, и число с месяцем у них обязаны совпасть —
+// иначе с полуночи до трёх ночи по Минску готовая разметка расходилась с первым кадром.
+// В Беларуси нет перехода на летнее время, сдвиг постоянный.
+const MINSK_OFFSET_MS = 3 * 3600 * 1000;
+/** Та же дата, сдвинутая так, что её getUTC* дают минские число, месяц и год. */
+export const minskClock = (value) => new Date(new Date(value).getTime() + MINSK_OFFSET_MS);
+
 export function formatChangeDate(value) {
-  const date = new Date(value);
+  const date = minskClock(value);
   if (Number.isNaN(date.getTime())) return null;
-  return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
 }
 
 // Цена «под ключ» до переоценки: тот же расчёт, что и для текущей цены, только с

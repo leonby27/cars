@@ -78,8 +78,17 @@ export const isEvQuotaExhausted = () => {
   return override !== null ? override : quotaGone();
 };
 
+// Пока браузер оживляет готовую разметку сервера, выбор из хранилища не действует:
+// сервер про него не знает и считает цены без льготы, и первый кадр обязан совпасть
+// с его разметкой. Сразу после оживления приложение снимает запрет и пересчитывает
+// цены по выбору посетителя (App в src/App.jsx).
+let heldForHydration = false;
+export const holdQuotaChoice = (held) => {
+  heldForHydration = Boolean(held);
+};
+
 const quotaPricingChoice = () => {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined" || heldForHydration) return false;
   try {
     return window.localStorage.getItem(QUOTA_PRICING_KEY) === "on";
   } catch {
