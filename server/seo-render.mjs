@@ -147,7 +147,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   function navigation(modelsPath = "/models") {
     return `<header class="site-header"><nav class="page-width" aria-label="Основная навигация">
     <a href="${hrefRoute("/")}">abcars.by</a>
-    <a href="${hrefRoute("/catalog/")}">Автомобили</a>
+    <a href="${hrefRoute("/catalog/")}">Автомобили</a>${BLOG_ENABLED ? `
+    <a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(BLOG_INDEX.name)}</a>` : ""}
     <a href="${hrefRoute("/how-it-works/")}">О сервисе</a>
     <a href="${hrefRoute(`${modelsPath}/`)}">О моделях авто</a>
     <a href="${hrefRoute("/tracking/")}">Отслеживание авто</a>
@@ -350,7 +351,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       name: COMPANY.schemaName,
       alternateName: [...COMPANY.schemaAlternateNames],
       url: routeUrl("/"),
-      logo: `${base}/og.jpg`,
+      // Квадратный знак, а не картинка для соцсетей (1200×659): поисковики берут логотип
+      // организации из этого поля и ждут квадрат не меньше 112 точек.
+      logo: `${base}/icon-512.png`,
       email: COMPANY.email,
       telephone: COMPANY.phoneHref || COMPANY.phone,
       address: {

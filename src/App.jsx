@@ -1514,6 +1514,11 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
                 {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
               </div>
               <nav aria-label="Основная навигация">
+                {/* Каталог и журнал — первыми (25.09.2026): главный раздел сайта в главном
+                    меню, как у всех сайтов в выдаче; до этого на каталог вели только
+                    подвал и кнопки на главной, а на журнал — только подвал. */}
+                <AppLink href="/catalog" navigate={navigate} className={path === "/catalog" || path.startsWith("/catalog/") ? "active" : ""} aria-current={path === "/catalog" ? "page" : undefined}>Автомобили</AppLink>
+                {BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate} className={path === BLOG_INDEX.path || path.startsWith(`${BLOG_INDEX.path}/`) ? "active" : ""} aria-current={path === BLOG_INDEX.path ? "page" : undefined}>{BLOG_INDEX.name}</AppLink>}
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
                 <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>
                 <AppLink href="/tracking" navigate={navigate} className={path === "/tracking" ? "active" : ""} aria-current={path === "/tracking" ? "page" : undefined}>Отслеживание авто</AppLink>
@@ -4365,7 +4370,6 @@ const BRAND_SHOWCASE_ROWS = 5;
 const brandSwitchLabel = (item) => (item === "Все" ? "Все марки авто" : item);
 const BRAND_SWITCH_OPTIONS = POWERTRAIN_TABS.map(brandSwitchLabel);
 const brandSwitchType = (label) => POWERTRAIN_TABS.find((item) => brandSwitchLabel(item) === label) || "Все";
-const brandShowcaseColumns = () => (window.innerWidth <= 980 ? 3 : 4);
 // Раздел под выбранный тип двигателя: у каждого из трёх есть своя страница.
 const powertrainLandingPath = (label) => CATALOG_LANDINGS.find((landing) => landing.kind === "powertrain" && landing.powertrain === typeValue(label))?.path || "/catalog";
 
@@ -4544,23 +4548,18 @@ function HomeWhyUs({ navigate }) {
 }
 
 function PopularBrands({ navigate, cars, apiMode }) {
-  const mobileLayout = useNarrowViewport();
-  // Сервер отдаёт разметку в четыре колонки, поэтому и здесь начинаем с четырёх:
-  // мерить ширину окна можно только после того, как страница появилась в браузере.
-  const [columns, setColumns] = useState(4);
   const [expanded, setExpanded] = useState(false);
-  // Начинаем без счётчиков даже когда мета уже пришла: серверная разметка главной
-  // собрана без них, и первый браузерный кадр обязан совпасть с ней. Настоящие
-  // значения ставит слой ниже — до первого кадра, посетитель пустых плиток не видит.
-  const [remoteBrands, setRemoteBrands] = useState({});
+  // Числа марок сервер встраивает в готовую главную (справочник /api/catalog/meta, см.
+  // src/boot-api.js) — с ними и первый кадр: плитки сразу стоят с числами, и марки без
+  // машин не исчезают после загрузки, сдвигая всё, что ниже. Без встроенного ответа
+  // (запасная страница сборки) начинаем без чисел, как и она, а прошлые числа из
+  // браузера ставит слой ниже — до первого кадра.
+  const [remoteBrands, setRemoteBrands] = useState(() => {
+    const embedded = bootCatalogMeta("")?.brands;
+    return embedded ? { "Все": embedded } : {};
+  });
   useLayoutEffect(() => {
     setRemoteBrands((current) => (Object.keys(current).length ? current : initialBrandCounts()));
-  }, []);
-  useLayoutEffect(() => {
-    const measure = () => setColumns(brandShowcaseColumns());
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
   }, []);
 
   const localBrands = useMemo(() => {
@@ -4607,32 +4606,40 @@ function PopularBrands({ navigate, cars, apiMode }) {
     .map((brand) => ({ brand, count: brandCounts.get(brand) || 0 }))
     .filter((item) => !countsKnown || item.count > 0)
     .sort((a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" }));
-  const limit = columns * (mobileLayout ? 4 : BRAND_SHOWCASE_ROWS);
   // В сокращённом виде оставляем самые многочисленные марки, но показываем их всё равно
   // по алфавиту: список ищут глазами по имени, а не читают как рейтинг. Марки без машин
   // сюда не попадают даже когда свободные строки есть: «Acura 0» в популярных — это
   // тупик, а не предложение. В полном списке они остаются.
-  const expandedOnlyBrands = mobileLayout ? showcaseMobileExpandedOnlyBrands : showcaseExpandedOnlyBrands;
-  const ranked = brands.filter((item) => !expandedOnlyBrands.has(item.brand) && (!countsKnown || item.count > 0));
   const byName = (a, b) => a.brand.localeCompare(b.brand, "en", { sensitivity: "base" });
   const byCount = (a, b) => b.count - a.count || byName(a, b);
   // Закреплённые марки занимают свои места первыми, дальше идут остальные по числу
   // машин, а отставленные не участвуют вовсе. Ряды в блоке всегда полные: если
   // отставленных и закреплённых не хватило, недостающие места добираются из тех же
   // отставленных — пустых клеток в сетке быть не должно.
-  const pickShowcase = () => {
+  const pickShowcase = (limit, expandedOnlyBrands) => {
+    const ranked = brands.filter((item) => !expandedOnlyBrands.has(item.brand) && (!countsKnown || item.count > 0));
     const pinned = ranked.filter((item) => showcasePinnedBrands.has(item.brand)).sort(byCount);
     const usual = ranked.filter((item) => !showcasePinnedBrands.has(item.brand) && !showcaseDemotedBrands.has(item.brand)).sort(byCount);
     const demoted = ranked.filter((item) => showcaseDemotedBrands.has(item.brand)).sort(byCount);
-    return [...pinned, ...usual, ...demoted].slice(0, limit);
+    return new Set([...pinned, ...usual, ...demoted].slice(0, limit).map((item) => item.brand));
   };
-  const collapsed = pickShowcase().sort(byName);
+  // Три раскладки сокращённого вида — по ширине экрана: 4 колонки × 5 рядов, 3 × 5 и на
+  // телефоне 3 × 4 (там свой список отставленных марок). Раньше скрипт после загрузки
+  // мерил окно и пересобирал список: сервер рисовал 20 плиток, телефон оставлял 12, и
+  // всё, что ниже, прыгало вверх (сдвиг вёрстки 0,1 по замеру PageSpeed 25.09.2026).
+  // Теперь в разметке сразу все плитки, нужные любой ширине, а лишние для этой
+  // ширины прячет оформление (.brand-show-* в styles.css) — ещё до скриптов.
+  const wide = pickShowcase(4 * BRAND_SHOWCASE_ROWS, showcaseExpandedOnlyBrands);
+  const mid = pickShowcase(3 * BRAND_SHOWCASE_ROWS, showcaseExpandedOnlyBrands);
+  const narrow = pickShowcase(3 * 4, showcaseMobileExpandedOnlyBrands);
+  const collapsed = brands.filter((item) => wide.has(item.brand) || mid.has(item.brand) || narrow.has(item.brand)).sort(byName);
   const shown = expanded ? brands : collapsed;
+  const layoutClass = (brand) => expanded ? "" : [wide.has(brand) && "brand-show-wide", mid.has(brand) && "brand-show-mid", narrow.has(brand) && "brand-show-narrow"].filter(Boolean).join(" ");
 
   return (
     <section className="popular-brands page-width" aria-labelledby="popular-brands-title">
       <h2 className="visually-hidden" id="popular-brands-title">Популярные марки</h2>
-      <div className="popular-brands-grid">
+      <div className={`popular-brands-grid${expanded ? "" : " popular-brands-collapsed"}`}>
         {shown.map(({ brand, count }) => {
           // Ссылка ведёт на страницу марки, если она у нас есть: адрес с параметром
           // (`/catalog?brand=BYD`) для поисковика указывает на общий каталог, то есть
@@ -4644,7 +4651,7 @@ function PopularBrands({ navigate, cars, apiMode }) {
           // доступности требует, чтобы видимый текст входил в подпись с начала.
           // Прежнее «Перейти к предложениям: Audi 8 525» это правило нарушало.
           return (
-            <AppLink className="brand-link" key={brand} href={href} navigate={navigate} aria-label={countsKnown ? `${brand} ${number(count)} объявлений` : brand}>
+            <AppLink className={`brand-link ${layoutClass(brand)}`.trim()} key={brand} href={href} navigate={navigate} aria-label={countsKnown ? `${brand} ${number(count)} объявлений` : brand}>
               <BrandMark brand={brand} />
               <span className="brand-name" title={brand}>{brand}</span>
               <span className="brand-count" aria-hidden="true">{countsKnown ? number(count) : ""}</span>
@@ -4655,7 +4662,7 @@ function PopularBrands({ navigate, cars, apiMode }) {
       {/* У типа двигателя, до которого импорт ещё не дошёл, марок нет вовсе — пустая
           сетка выглядела бы поломкой. */}
       {!shown.length && <p className="popular-brands-empty">Машин с таким двигателем в каталоге пока нет.</p>}
-      {brands.length > collapsed.length && (
+      {brands.length > narrow.size && (
         <div className="popular-brands-more">
           <button type="button" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded}>
             {expanded ? "Свернуть список" : countsKnown
@@ -5155,7 +5162,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             страница не дёргается. Тот же приём в первом экране до запуска приложения
             (server/boot-screen.mjs): там даты не существует в принципе. */}
         {Boolean(catalogUpdatedAt) && Boolean(catalogUpdatedDate(catalogUpdatedAt)) ? (
-          <div className="hero-updated">Каталог авто обновлён {catalogUpdatedDate(catalogUpdatedAt)}</div>
+          <div className="hero-updated">
+            {catalogTotal > 0 ? `В каталоге ${number(catalogTotal)} авто · обновлён ${catalogUpdatedDate(catalogUpdatedAt)}` : `Каталог авто обновлён ${catalogUpdatedDate(catalogUpdatedAt)}`}
+          </div>
         ) : (
           <div className="hero-updated boot-invisible">&nbsp;</div>
         )}
@@ -5654,7 +5663,8 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
 const catalogUpdatedDate = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ru-RU", { day:"numeric", month:"long", year:"numeric" }).format(date).replace(/\s*г\.$/, "");
+  // По Минску: строку рисуют и сервер (UTC), и браузер — число обязано совпасть.
+  return new Intl.DateTimeFormat("ru-RU", { day:"numeric", month:"long", year:"numeric", timeZone:"Europe/Minsk" }).format(date).replace(/\s*г\.$/, "");
 };
 
 // Дата сохранения поиска — коротко, по-русски: «12 августа» либо с годом, если он не текущий.
@@ -14341,10 +14351,12 @@ export function App() {
   const [apiMode, setApiMode] = useState(null);
   // The total only moves when an import runs, so the last known value is a sound placeholder
   // while the catalog request is in flight and keeps the search button from reading "0+".
-  const [catalogTotal, setCatalogTotal] = useState(0);
+  // Главную сервер рисует с настоящими цифрами (window.__boot.catalogFacts,
+  // server/static-page.mjs) — с ними же и первый кадр.
+  const [catalogTotal, setCatalogTotal] = useState(() => Number(window.__boot?.catalogFacts?.total) || 0);
   // Дата последней актуализации каталога — как и total, последнее известное значение
   // годится как заглушка, пока ответ каталога в пути.
-  const [catalogUpdatedAt, setCatalogUpdatedAt] = useState("");
+  const [catalogUpdatedAt, setCatalogUpdatedAt] = useState(() => String(window.__boot?.catalogFacts?.updatedAt || ""));
   // Пара «размер каталога и дата обновления» для рекламной врезки в статьях. Держим
   // её одним запомненным значением: иначе каждое рисование корня давало бы новый
   // объект и перерисовывало всё, что слушает контекст.

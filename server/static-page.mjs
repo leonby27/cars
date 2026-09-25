@@ -21,6 +21,7 @@ import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { loadEntryServer } from "./app-render.mjs";
 import { renderWithApi } from "./api-replay.mjs";
+import { listCars } from "./repository.mjs";
 import { injectAppRoot } from "./root-inject.mjs";
 import { findBlogPost } from "../src/blog-posts.js";
 import { BLOG_TEXTS } from "../src/blog-texts.js";
@@ -56,17 +57,33 @@ async function cachedFile(file) {
 }
 const pageFile = (path) => cachedFile(path === "/" ? `${clientDir}index.html` : `${clientDir}${path.replace(/^\//, "")}/index.html`);
 
-/** Данные главной в том виде, в каком их встроил scripts/prerender-home.mjs. */
+/**
+ * Размер каталога и дата последней сверки — строкой над заголовком главной. Раньше
+ * обе цифры приходили только после загрузки скриптов, и поисковик не видел, сколько
+ * машин в каталоге (размер ассортимента Яндекс прямо называет коммерческим признаком).
+ * Те же поля, что отдаёт /api/cars: `total` и `refreshedAt`.
+ */
+async function catalogFacts() {
+  try {
+    const answer = await listCars(new URLSearchParams({ limit: "1", sort: "price_asc" }));
+    return Number(answer?.total) > 0 ? { catalogFacts: { total: Number(answer.total), updatedAt: answer.refreshedAt ? new Date(answer.refreshedAt).toISOString() : "" } } : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Данные главной в том виде, в каком их встроил scripts/prerender-home.mjs, и цифры каталога. */
 async function homeBoot() {
+  const facts = await catalogFacts();
   try {
     const saved = JSON.parse((await cachedFile(homeDataFile)) || "null");
-    if (!saved) return {};
+    if (!saved) return facts;
     const popularModels = Array.isArray(saved) ? saved : saved.models || [];
     const brandModelTabs = Array.isArray(saved) ? [] : saved.brands || [];
     const homeShowcase = Array.isArray(saved?.showcase) ? saved.showcase : [];
-    return popularModels.length || homeShowcase.length ? { popularModels, brandModelTabs, homeShowcase } : {};
+    return { ...(popularModels.length || homeShowcase.length ? { popularModels, brandModelTabs, homeShowcase } : {}), ...facts };
   } catch {
-    return {};
+    return facts;
   }
 }
 
@@ -90,7 +107,8 @@ export async function renderStaticPage(rawPath, search = "") {
   const extra = path === "/" ? await homeBoot() : {};
   try {
     const { markup, api } = await renderWithApi((answers) => entry.renderStaticApp(path, search, { ...extra, api: answers }, options));
-    const html = markup ? injectAppRoot(file, markup, { path, boot: { api } }) : null;
+    // Цифры каталога — в данные страницы: первый кадр браузера рисует ту же строку.
+    const html = markup ? injectAppRoot(file, markup, { path, boot: { api, ...(extra.catalogFacts ? { catalogFacts: extra.catalogFacts } : {}) } }) : null;
     return { status: 200, html: html || file };
   } catch (error) {
     console.error(`готовая страница ${path}: отрисовка упала, отдаём файл сборки`, error);

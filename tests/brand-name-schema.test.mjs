@@ -30,3 +30,9 @@ test("имя компании встречается в текстах глав�
   const faqMentions = FAQ_GROUPS.flatMap((group) => group.items).filter((item) => item.answer.includes("Абкарс")).length;
   assert.ok(faqMentions >= 3, `в вопросах и ответах упоминаний: ${faqMentions}`);
 });
+
+// Логотип организации — квадратный знак, а не картинка для соцсетей 1200×659:
+// поисковики ждут в этом поле квадрат не меньше 112 точек (исправлено 25.09.2026).
+test("логотип в разметке организации — квадратный знак", () => {
+  assert.equal(render().organizationSchema().logo, "https://abcars.by/icon-512.png");
+});

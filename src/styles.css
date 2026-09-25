@@ -1039,6 +1039,18 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   columns: 4;
   column-gap: 36px;
 }
+/* Сокращённый вид плитки марок: в разметке лежат плитки для всех трёх раскладок
+   (PopularBrands в App.jsx), а лишние для этой ширины прячутся здесь — до скриптов,
+   без сдвига вёрстки после загрузки. Границы те же, что у колонок ниже: 980 и 700. */
+@media (min-width: 981px) {
+  .popular-brands-collapsed > .brand-link:not(.brand-show-wide) { display: none; }
+}
+@media (min-width: 701px) and (max-width: 980px) {
+  .popular-brands-collapsed > .brand-link:not(.brand-show-mid) { display: none; }
+}
+@media (max-width: 700px) {
+  .popular-brands-collapsed > .brand-link:not(.brand-show-narrow) { display: none; }
+}
 .brand-link {
   break-inside: avoid;
   margin-bottom: 2px;
