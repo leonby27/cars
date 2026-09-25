@@ -10,6 +10,7 @@ import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
 import { Illustration } from "./illustration.jsx";
 import { SearchField } from "./search-field.jsx";
+import { homeModelBrands, homeModelEntries } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
@@ -4409,117 +4410,254 @@ const initialBrandCounts = () => {
    а на ценовые разделы («до 20 000 $») с неё не вело ни одной ссылки: человек, который
    выбирает по бюджету, а не по марке, попадал туда только через общий каталог. */
 function HomePriceBands({ navigate }) {
-  const bands = CATALOG_LANDINGS.filter((landing) => landing.kind === "price" && !landing.powertrain);
+  // Карточка «до 40 000 $» с главной убрана 25.09.2026, сам раздел каталога остался.
+  const bands = CATALOG_LANDINGS.filter((landing) => landing.kind === "price" && !landing.powertrain && landing.landedMax <= 30000);
+  // Подпись карточки — самая популярная модель, у которой самая доступная машина стоит
+  // между прошлой ценой и этой: у каждой карточки своя модель, а не одна Haval H6 на все
+  // четыре. Модели — те же, что в «Популярных моделях» (встроены в страницу).
+  const [models] = useState(() => (Array.isArray(window.__boot?.popularModels) ? window.__boot.popularModels : []));
   if (!bands.length) return null;
   return (
+    // С 25.09.2026 — карточки как у полосы доверия, но без картинок; заголовок «По цене
+    // до Минска» убран.
     <nav className="home-price-bands page-width" aria-label="Автомобили по цене до Минска">
-      <b>По цене до Минска</b>
-      <div>
-        {bands.map((band) => (
-          <AppLink key={band.path} href={band.path} navigate={navigate}>{band.name}</AppLink>
-        ))}
-      </div>
+      {bands.map((band, index) => {
+        const floor = index ? bands[index - 1].landedMax : 0;
+        const example = models.find((item) => item.priceFrom > floor && item.priceFrom <= band.landedMax);
+        return (
+          <AppLink key={band.path} href={band.path} navigate={navigate}>
+            <b>{band.name}</b>
+            <small>{example ? `${example.name} и другие` : "С доставкой до Минска"}</small>
+          </AppLink>
+        );
+      })}
     </nav>
   );
 }
 
 /* Популярные модели на главной — оглавление каталога, как у IM4CAR: вкладка «Все» —
    48 моделей с наибольшим числом машин, дальше вкладка на каждую крупную марку со всеми
-   её моделями, числом машин и ценой «от». Данные считает сборка и встраивает в
-   страницу (window.__boot.popularModels / brandModelTabs, scripts/prerender-home.mjs),
-   поэтому первый кадр в браузере совпадает с готовой разметкой. Все вкладки и все
-   ссылки есть в разметке сразу (их читает поисковик); на экране — одна вкладка и
-   первые 16 моделей, остальные по кнопке «Ещё». */
-const HOME_POPULAR_MODELS_VISIBLE = 16;
-function HomeModelChips({ items, navigate, open, onToggle }) {
-  const currency = useCurrency();
+   её моделями. Данные считает сборка и встраивает в страницу (window.__boot.popularModels
+   / brandModelTabs, scripts/prerender-home.mjs), поэтому первый кадр в браузере совпадает
+   с готовой разметкой; в режиме разработки их встраивает vite.config.mjs.
+
+   С 25.09.2026 модели идут не плашками, а карточками как в каталоге: фото одной из машин
+   модели, название, годы выпуска и сколько машин. Один ряд (пять на широком экране) и
+   стрелки по краям; лента начинается с самой популярной модели. Карточки
+   рисуются только у открытой вкладки — у остальных в разметке лежат обычные ссылки
+   (их читает поисковик), иначе главная тяжелела бы на четыре сотни карточек. */
+function HomeModelCard({ item, navigate }) {
+  const years = item.yearFrom && item.yearTo ? (item.yearFrom === item.yearTo ? String(item.yearFrom) : `${item.yearFrom}–${item.yearTo}`) : "";
   return (
-    <div className="home-popular-list">
-      {items.map((item, index) => (
-        <AppLink key={item.path} href={item.path} navigate={navigate} className={index >= HOME_POPULAR_MODELS_VISIBLE ? "home-popular-extra" : undefined}>
-          {item.name}
-          <small>{number(item.count)}{item.priceFrom ? ` · от ${money(item.priceFrom, currency)}` : ""}</small>
-        </AppLink>
-      ))}
-      {items.length > HOME_POPULAR_MODELS_VISIBLE && (
-        <button type="button" className="home-popular-toggle" onClick={onToggle} aria-expanded={open}>
-          {open ? "Свернуть" : `Ещё ${number(items.length - HOME_POPULAR_MODELS_VISIBLE)}`}
+    <AppLink href={item.path} navigate={navigate} className="featured-card home-model-card">
+      <div className="featured-image">
+        {item.image && <img src={imageSource(item.image, IMAGE_WIDTH_CARD)} alt="" loading="lazy" draggable="false" />}
+      </div>
+      <div className="featured-body">
+        <h3>{item.name}</h3>
+        <p>{years ? `${years} · ` : ""}{number(item.count)} шт.</p>
+      </div>
+    </AppLink>
+  );
+}
+
+// Сколько карточек помещается в ряд — те же пороги, что в стилях .home-model-track.
+const homeModelsPerView = () => {
+  if (typeof window === "undefined" || !window.matchMedia) return 5;
+  if (window.matchMedia("(max-width: 640px)").matches) return 2;
+  if (window.matchMedia("(max-width: 980px)").matches) return 3;
+  return 5;
+};
+
+function HomeModelSlider({ items, navigate, label }) {
+  // Лента не зациклена: в начале нет стрелки назад, в конце — вперёд. Шаг — одна карточка.
+  const [first, setFirst] = useState(0);
+  const [perView, setPerView] = useState(5);
+  const touch = useRef(null);
+  const count = items.length;
+  useEffect(() => {
+    const update = () => setPerView(homeModelsPerView());
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  const last = Math.max(0, count - perView);
+  // Экран стал шире — лента не должна остаться сдвинутой за последнюю карточку.
+  const start = Math.min(first, last);
+  const step = (direction) => setFirst(Math.min(last, Math.max(0, start + direction)));
+  return (
+    <div
+      className="home-model-slider"
+      role="group"
+      aria-roledescription="карусель"
+      aria-label={label}
+      onTouchStart={(event) => { touch.current = event.touches[0]?.clientX ?? null; }}
+      onTouchEnd={(event) => {
+        const begin = touch.current;
+        touch.current = null;
+        const end = event.changedTouches[0]?.clientX;
+        if (begin == null || end == null || Math.abs(end - begin) < 40) return;
+        step(end < begin ? 1 : -1);
+      }}
+    >
+      <div className="home-model-viewport">
+        <div className="home-model-track" style={start ? { "--home-model-shift": -start } : undefined}>
+          {items.map((item) => (
+            <HomeModelCard key={item.path} item={item} navigate={navigate} />
+          ))}
+        </div>
+      </div>
+      {start > 0 && (
+        <button type="button" className="home-model-arrow prev" aria-label="Предыдущие модели" onClick={() => step(-1)}>
+          <CaretRight size={20} weight="bold" mirrored aria-hidden="true" />
+        </button>
+      )}
+      {start < last && (
+        <button type="button" className="home-model-arrow next" aria-label="Следующие модели" onClick={() => step(1)}>
+          <CaretRight size={20} weight="bold" aria-hidden="true" />
         </button>
       )}
     </div>
   );
 }
 
+// Закрытая вкладка: только ссылки, без фото — их видит поисковик, а человеку они скрыты.
+function HomeModelLinks({ items, navigate }) {
+  return (
+    <ul className="home-model-links">
+      {items.map((item) => (
+        <li key={item.path}><AppLink href={item.path} navigate={navigate}>{item.name}</AppLink></li>
+      ))}
+    </ul>
+  );
+}
+
+// Марка и модель одной строкой — по ней ищет поле над лентой.
+const homeModelHaystack = (item) => `${item.brand || ""} ${item.name}`;
+
 function HomePopularModels({ navigate }) {
   const [models] = useState(() => (Array.isArray(window.__boot?.popularModels) ? window.__boot.popularModels : []));
   const [brands] = useState(() => (Array.isArray(window.__boot?.brandModelTabs) ? window.__boot.brandModelTabs : []));
   const [active, setActive] = useState("all");
-  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  // В страницу встроены только 48 популярных моделей и модели 16 крупных марок — Zeekr
+  // или Denza там нет. Весь список моделей каталога (/api/model-facts) грузим, когда
+  // посетитель впервые трогает поиск, а до ответа ищем по встроенному.
+  const [catalogModels, setCatalogModels] = useState(null);
+  const loadingModels = useRef(false);
   const tabsId = useId();
-  if (!models.length) return null;
-  // В id элементов — номер вкладки, а не имя марки: в именах бывают пробелы («Li Auto»).
-  const tabs = [{ key: "all", id: "all", label: "Все" }, ...brands.map((brand, index) => ({ key: brand.brand, id: String(index), label: brand.brand, total: brand.total }))];
-  const choose = (key) => {
-    setActive(key);
-    setOpen(false);
+  const loadCatalogModels = () => {
+    if (catalogModels || loadingModels.current) return;
+    loadingModels.current = true;
+    fetch("/api/model-facts")
+      .then((answer) => (answer.ok ? answer.json() : null))
+      .then((data) => { if (Array.isArray(data?.models)) setCatalogModels(homeModelEntries(data.models)); })
+      .catch(() => {})
+      .finally(() => { loadingModels.current = false; });
   };
+  const found = useMemo(() => {
+    if (!searchNormalize(query)) return null;
+    let source = catalogModels;
+    if (!source) {
+      const embedded = new Map();
+      for (const brand of brands) for (const item of brand.models) embedded.set(item.path, { ...item, brand: brand.brand });
+      for (const item of models) if (!embedded.has(item.path)) embedded.set(item.path, item);
+      source = [...embedded.values()].sort((left, right) => right.count - left.count);
+    }
+    const all = itemsMatchingQuery(source, query, homeModelHaystack);
+    // Марка остаётся вкладкой, если совпало её имя (тогда в ней все её модели) или
+    // хотя бы одна её модель.
+    const matchedBrands = homeModelBrands(source)
+      .map((brand) => {
+        const whole = itemsMatchingQuery([{ brand: brand.brand, name: "" }], query, homeModelHaystack).length > 0;
+        return whole ? brand : { ...brand, models: all.filter((item) => item.brand === brand.brand) };
+      })
+      .filter((brand) => brand.models.length);
+    return { all, brands: matchedBrands };
+  }, [query, catalogModels, models, brands]);
+  if (!models.length) return null;
+  const shownBrands = found ? found.brands : brands;
+  const allItems = found ? found.all : models;
+  const current = active === "all" || shownBrands.some((brand) => brand.brand === active) ? active : "all";
+  // В id элементов — номер вкладки, а не имя марки: в именах бывают пробелы («Li Auto»).
+  const tabs = [{ key: "all", id: "all", label: "Все" }, ...shownBrands.map((brand, index) => ({ key: brand.brand, id: String(index), label: brand.brand }))];
   return (
-    <section className={`home-popular-models page-width${open ? " open" : ""}`} aria-labelledby={`${tabsId}-title`}>
-      <h2 id={`${tabsId}-title`}>Популярные модели</h2>
-      {brands.length > 0 && (
-        <div className="home-popular-tabs" role="tablist" aria-label="Модели по маркам">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              id={`${tabsId}-tab-${tab.id}`}
-              aria-controls={`${tabsId}-panel-${tab.id}`}
-              aria-selected={active === tab.key}
-              className={active === tab.key ? "active" : undefined}
-              onClick={() => choose(tab.key)}
-            >
-              {tab.label}
-            </button>
+    <section className="home-popular-models page-width" aria-labelledby={`${tabsId}-title`}>
+      <div className="home-popular-heading">
+        <h2 id={`${tabsId}-title`}>Популярные модели</h2>
+        <SearchField
+          className="home-popular-search"
+          value={query}
+          onValueChange={(value) => {
+            setQuery(value);
+            loadCatalogModels();
+          }}
+          placeholder="Марка или модель"
+          ariaLabel="Поиск по маркам и моделям"
+          inputProps={{ onFocus: loadCatalogModels }}
+        />
+      </div>
+      {found && !found.all.length ? (
+        <div className="home-popular-empty">
+          {/* Невидимые марки и карточка держат высоту блока: заглушка встаёт на их место,
+              и то, что ниже, не прыгает при каждой букве поиска. */}
+          <div className="home-popular-empty-spacer" aria-hidden="true">
+            <div className="home-popular-tabs"><button type="button" tabIndex={-1}>Все</button></div>
+            <div className="home-model-slider">
+              <div className="home-model-viewport">
+                <div className="home-model-track">
+                  <div className="featured-card home-model-card">
+                    <div className="featured-image" />
+                    <div className="featured-body"><h3>&nbsp;</h3><p>&nbsp;</p></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <EmptyState title="Ничего не найдено" description="Такой марки или модели нет в каталоге. Попробуйте другое написание." />
+        </div>
+      ) : (
+        <>
+          {brands.length > 0 && (
+            <div className="home-popular-tabs" role="tablist" aria-label="Модели по маркам">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  id={`${tabsId}-tab-${tab.id}`}
+                  aria-controls={`${tabsId}-panel-${tab.id}`}
+                  aria-selected={current === tab.key}
+                  className={current === tab.key ? "active" : undefined}
+                  onClick={() => setActive(tab.key)}
+                >
+                  {tab.key !== "all" && <BrandMark brand={tab.key} />}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div role="tabpanel" id={`${tabsId}-panel-all`} aria-labelledby={`${tabsId}-tab-all`} hidden={current !== "all"}>
+            {current !== "all" ? (
+              <HomeModelLinks items={allItems} navigate={navigate} />
+            ) : (
+              <HomeModelSlider key={query} items={allItems} navigate={navigate} label="Популярные модели" />
+            )}
+          </div>
+          {shownBrands.map((brand, index) => (
+            <div key={brand.brand} role="tabpanel" id={`${tabsId}-panel-${index}`} aria-labelledby={`${tabsId}-tab-${index}`} hidden={current !== brand.brand}>
+              {current === brand.brand ? (
+                <HomeModelSlider key={query} items={brand.models} navigate={navigate} label={`Модели ${brand.brand}`} />
+              ) : (
+                <HomeModelLinks items={brand.models} navigate={navigate} />
+              )}
+              <AppLink className="home-popular-brand-link" href={brand.path} navigate={navigate}>
+                Все {brand.brand} — {number(brand.total)} авто <ArrowRight size={16} />
+              </AppLink>
+            </div>
           ))}
-        </div>
+        </>
       )}
-      <div role="tabpanel" id={`${tabsId}-panel-all`} aria-labelledby={`${tabsId}-tab-all`} hidden={active !== "all"}>
-        <HomeModelChips items={models} navigate={navigate} open={open && active === "all"} onToggle={() => setOpen((value) => !value)} />
-      </div>
-      {brands.map((brand, index) => (
-        <div key={brand.brand} role="tabpanel" id={`${tabsId}-panel-${index}`} aria-labelledby={`${tabsId}-tab-${index}`} hidden={active !== brand.brand}>
-          <HomeModelChips items={brand.models} navigate={navigate} open={open && active === brand.brand} onToggle={() => setOpen((value) => !value)} />
-          <AppLink className="home-popular-brand-link" href={brand.path} navigate={navigate}>
-            Все {brand.brand} — {number(brand.total)} авто <ArrowRight size={16} />
-          </AppLink>
-        </div>
-      ))}
-    </section>
-  );
-}
-
-/* Почему у нас удобнее — честные отличия, которые у нас есть на деле: цена до Минска
-   целиком, фиксированная плата, проверка до оплаты с правом отказаться, срок. Текст
-   на главной нужен и человеку, и поисковику: у IM4CAR на главной ~4 800 слов, у нас
-   было ~600. Цифры — из тех же данных, что расчёт в карточке (src/pricing.js). */
-function HomeWhyUs({ navigate }) {
-  // Карточки «цена до Минска», «плата за работу», «проверка до оплаты» и «срок»
-  // убраны 25.09.2026: слово в слово повторяли вопросы-ответы ниже на той же странице.
-  return (
-    <section className="home-why page-width" aria-labelledby="home-why-title">
-      <div className="home-why-intro">
-        <h2 id="home-why-title">Авто из Китая в Беларусь — с понятной ценой</h2>
-        <p>
-          В каталоге abcars.by — китайские автомобили и машины мировых марок, собранные для рынка Китая: BYD, Geely, Zeekr, Li Auto, Tesla, BMW, Mercedes-Benz, Audi и другие. Электромобили, гибриды и бензиновые машины с пробегом, у каждой — цена с доставкой в Беларусь. Можно выбрать готовое объявление или прислать запрос на подбор.
-        </p>
-        <p>
-          Каталог регулярно сверяем с площадкой-источником, проданные машины убираем. Перед договором ещё раз спрашиваем у продавца, что машина на месте и цена не изменилась.
-        </p>
-      </div>
-      <p className="home-why-tools">
-        Посчитать самостоятельно: <AppLink href="/customs" navigate={navigate}>растаможка</AppLink>, <AppLink href="/delivery-cost" navigate={navigate}>из чего складывается цена</AppLink>, <AppLink href="/ev-quota" navigate={navigate}>квота на электромобили</AppLink>, <AppLink href="/price-belarus" navigate={navigate}>дешевле ли привезти, чем купить в Беларуси</AppLink>.
-      </p>
     </section>
   );
 }
@@ -5158,8 +5296,6 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         <HeroSearch value={heroQuery} onChange={setHeroQuery} navigate={navigate} />
       </section>
       {!searching && <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />}
-      {!searching && <HomePriceBands navigate={navigate} />}
-      {!searching && <HomePopularModels navigate={navigate} />}
       <section className={searching ? "featured featured--search page-width" : "featured page-width"}>
         {/* Во время поиска заголовок не показываем: выдача начинается сразу со
             строки с числом результатов, переключатель быстрого просмотра — там же. */}
@@ -5257,6 +5393,8 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           )
         )}
       </section>
+      {!searching && <HomePriceBands navigate={navigate} />}
+      {!searching && <HomePopularModels navigate={navigate} />}
       {!searching && (
       <section className="trust-strip page-width">
         <div>
@@ -5297,7 +5435,6 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         </div>
       </section>
       )}
-      {!searching && <HomeWhyUs navigate={navigate} />}
       <HomeConversionSections navigate={navigate} />
       {/* Журнал: четыре свежих материала. Пока раздел не готов, выключатель
           BLOG_ENABLED убирает блок целиком — на его месте ничего не остаётся. */}
@@ -11017,15 +11154,21 @@ function marketDifference(card, mileageKey, priceKey, quotaPricingOn) {
 // вообще дал результат: так ошибочная раскладка «иьц» исправится как BMW, но более
 // далёкие короткие транслитерации уже не подмешают Buick и Mitsubishi.
 function marketCardsMatchingQuery(cards, query) {
+  return itemsMatchingQuery(cards, query, (card) => `${card.brand} ${card.model} ${card.years.map((year) => year.year).join(" ")}`);
+}
+
+/* Поиск по короткому списку марок и моделей: сравнение цен и «Популярные модели» на
+   главной. Понимает русские названия и раскладку (listSearchVariants) — «бмв», «зикр». */
+function itemsMatchingQuery(items, query, haystackOf) {
   const normalizedQuery = searchNormalize(query);
-  if (!normalizedQuery) return cards;
+  if (!normalizedQuery) return items;
   const firstPass = listSearchVariants(query);
   const variants = [...new Set([...firstPass, ...firstPass.flatMap((variant) => listSearchVariants(variant))])];
   for (const variant of variants) {
     const words = searchNormalize(variant).split(/\s+/).filter(Boolean).slice(0, 6);
     if (!words.length) continue;
-    const matches = cards.filter((card) => {
-      const haystack = searchNormalize(`${card.brand} ${card.model} ${card.years.map((year) => year.year).join(" ")}`);
+    const matches = items.filter((item) => {
+      const haystack = searchNormalize(haystackOf(item));
       const tokens = haystack.split(/\s+/);
       return words.every((word) => (word.length === 1 ? tokens.includes(word) : haystack.includes(word)) || (word.length >= 7 && haystack.includes(searchWordStem(word))));
     });

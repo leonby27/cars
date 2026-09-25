@@ -730,61 +730,130 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 }
 /* Полосы цен под плиткой марок на главной: строка подписи и плашки-ссылки, как у
    блоков ссылок под разделами каталога. */
+/* Цены до Минска: четыре карточки в ряд — тот же фон, скругление и шрифт, что у полосы
+   доверия ниже (.trust-strip), только без картинок. */
 .home-price-bands {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
   margin-top: 16px;
 }
-.home-price-bands b {
-  font-size: 16px;
-}
-.home-price-bands > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
 .home-price-bands a {
-  padding: 8px 14px;
-  border-radius: calc(10px * var(--corner-scale));
-  background: var(--panel);
+  min-width: 0;
+  padding: 22px;
+  border-radius: calc(18px * var(--corner-scale));
+  background: var(--surface);
   color: inherit;
-  font-size: 16px;
   text-decoration: none;
-  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+  transition: background var(--motion-fast) var(--motion-ease);
 }
 .home-price-bands a:hover {
-  background: var(--model-chip-hover-bg);
-  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+}
+.home-price-bands b {
+  display: block;
+  font-size: 16px;
+  line-height: 1.35;
+}
+.home-price-bands small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.45;
+}
+@media (max-width: 980px) {
+  .home-price-bands {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* С 25.09.2026 полосы цен и популярные модели стоят после каталога. Отступ сверху и
+   снизу — как между полосой доверия и блоком «Понятный путь» (.trust-strip +
+   .home-conversion): 92 точки, на телефоне 62. Каталог сам даёт 86 (54) снизу. */
+.featured + .home-price-bands {
+  margin-top: 6px;
+}
+/* Полосы цен — отдельный блок: между ними и популярными моделями тот же отступ. */
+.home-price-bands + .home-popular-models,
+.home-popular-models + .trust-strip,
+.home-price-bands + .trust-strip {
+  margin-top: 92px;
+}
+@media (max-width: 700px) {
+  .featured + .home-price-bands {
+    margin-top: 8px;
+  }
+  .home-price-bands + .home-popular-models,
+  .home-popular-models + .trust-strip,
+  .home-price-bands + .trust-strip {
+    margin-top: 62px;
+  }
 }
 
 /* Популярные модели на главной: заголовок, вкладки марок (ряд прокручивается на
-   телефоне) и плашки моделей — те же, что у полос цен; число машин и цена мельче.
-   Сверх первых шестнадцати плашки скрыты до «Ещё» (ссылки в разметке есть). */
+   телефоне) и лента карточек моделей в один ряд со стрелками по краям. */
 .home-popular-models {
   margin-top: 28px;
 }
-.home-popular-models h2 {
-  margin: 0 0 12px;
-  font-size: 22px;
+/* Заголовок того же размера, что «Каталог»; справа короткий поиск по маркам и моделям. */
+.home-popular-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.home-popular-heading h2 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.9px;
+}
+html body #root .app-search-field.home-popular-search {
+  flex: 0 1 300px;
+}
+/* Ничего не нашлось: заглушка лежит поверх невидимых марок и карточки той же высоты. */
+.home-popular-empty {
+  position: relative;
+}
+.home-popular-empty-spacer {
+  visibility: hidden;
+  pointer-events: none;
+}
+.home-popular-empty > .empty-state {
+  position: absolute;
+  inset: 0;
+  padding: 24px;
+}
+@media (max-width: 640px) {
+  .home-popular-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  html body #root .app-search-field.home-popular-search {
+    flex: 0 0 auto;
+  }
 }
 .home-popular-tabs {
   display: flex;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 16px;
   overflow-x: auto;
   scrollbar-width: none;
 }
 .home-popular-tabs::-webkit-scrollbar {
   display: none;
 }
+/* Каждая марка — плашка с небольшим логотипом, как полосы цен над блоком. */
 .home-popular-tabs button {
   flex: 0 0 auto;
-  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
   border: 0;
-  border-radius: 999px;
-  background: transparent;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--model-chip-bg);
   color: var(--muted-contrast);
   font: inherit;
   font-size: 15px;
@@ -792,47 +861,106 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   cursor: pointer;
 }
 .home-popular-tabs button:hover {
-  color: var(--ink);
-}
-.home-popular-tabs button.active {
-  background: var(--panel);
-  color: var(--ink);
-}
-.home-popular-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.home-popular-list a,
-.home-popular-toggle {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 0;
-  border-radius: calc(10px * var(--corner-scale));
-  background: var(--panel);
-  color: inherit;
-  font: inherit;
-  font-size: 16px;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
-}
-.home-popular-list a small {
-  color: var(--muted-contrast);
-  font-size: 13px;
-}
-.home-popular-list a:hover,
-.home-popular-toggle:hover {
   background: var(--model-chip-hover-bg);
   color: var(--ink);
 }
-.home-popular-models:not(.open) .home-popular-extra {
-  display: none;
+/* Выбранная марка — заметно плотнее фоном, но не тёмной заливкой: на ней пропали бы
+   чёрные логотипы. Обводку не ставим — блоки отделяем фоном. */
+.home-popular-tabs button.active {
+  background: color-mix(in srgb, var(--ink) 20%, var(--model-chip-bg));
+  color: var(--ink);
 }
-.home-popular-toggle {
-  font-weight: 700;
+.home-popular-tabs .brand-logo {
+  width: 26px;
+  height: 18px;
+  flex: 0 0 26px;
+}
+/* Лента: пять карточек на широком экране, три на планшете, две на телефоне. Сдвиг
+   считается в долях ширины ряда — (ширина + промежуток) / число карточек и есть шаг
+   на одну карточку. */
+.home-model-slider {
+  --home-model-gap: 16px;
+  --home-model-per-view: 5;
+  position: relative;
+}
+.home-model-viewport {
+  overflow: hidden;
+  /* Место под тень и подъём карточки при наведении, чтобы их не срезал край. */
+  margin: -6px -6px -18px;
+  padding: 6px 6px 18px;
+}
+.home-model-track {
+  display: flex;
+  gap: var(--home-model-gap);
+  transform: translateX(calc(var(--home-model-shift, 0) * (100% + var(--home-model-gap)) / var(--home-model-per-view)));
+  transition: transform 0.32s var(--motion-ease);
+}
+.home-model-card {
+  display: block;
+  flex: 0 0 calc((100% - var(--home-model-gap) * (var(--home-model-per-view) - 1)) / var(--home-model-per-view));
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.home-model-card .featured-body h3 {
+  font-size: 17px;
+}
+.home-model-arrow {
+  position: absolute;
+  z-index: 2;
+  /* По середине карточки целиком, а не фото. Поля ленты снизу (18px) под тень в
+     высоту карточки не входят. */
+  top: calc((100% - 18px) / 2 + 3px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  /* Инверсия: заливка цветом текста, стрелка цветом страницы — в тёмной теме белый
+     кружок, в светлой чёрный. */
+  background: var(--ink);
+  color: var(--page);
+  box-shadow: 0 6px 18px rgba(14, 16, 19, 0.28);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.home-model-arrow:hover {
+  background: color-mix(in srgb, var(--ink) 82%, var(--page));
+}
+.home-model-arrow.prev {
+  left: -22px;
+}
+.home-model-arrow.next {
+  right: -22px;
+}
+@media (max-width: 980px) {
+  .home-model-slider {
+    --home-model-per-view: 3;
+  }
+}
+@media (max-width: 640px) {
+  .home-model-slider {
+    --home-model-gap: 10px;
+    --home-model-per-view: 2;
+  }
+  .home-model-arrow {
+    width: 38px;
+    height: 38px;
+  }
+  .home-model-arrow.prev {
+    left: -8px;
+  }
+  .home-model-arrow.next {
+    right: -8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-model-track {
+    transition: none;
+  }
 }
 .home-popular-brand-link {
   display: inline-flex;
@@ -846,36 +974,6 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 .home-popular-brand-link:hover {
   color: var(--ink);
 }
-/* «Авто из Китая в Беларусь — с понятной ценой»: вступление и строка ссылок на расчёты.
-   Пять пунктов на подложках убраны 25.09.2026 — повторяли вопросы-ответы главной. */
-.home-why {
-  margin-top: 56px;
-}
-.home-why-intro h2 {
-  margin: 0 0 12px;
-  font-size: 28px;
-  line-height: 1.2;
-}
-.home-why-intro p {
-  max-width: 860px;
-  margin: 0;
-  font-size: 17px;
-  line-height: 1.55;
-}
-.home-why-intro p + p {
-  margin-top: 12px;
-}
-.home-why-tools {
-  margin: 16px 0 0;
-  font-size: 15px;
-  line-height: 1.6;
-}
-.home-why-tools a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 .popular-brands {
   width: min(1040px, calc(100% - 48px));
   padding: 7px 0 19px;

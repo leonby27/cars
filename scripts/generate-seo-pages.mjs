@@ -1039,7 +1039,9 @@ const live = await readLiveCatalog();
 // сборке (scripts/prerender-home.mjs), поэтому список считаем здесь же и кладём рядом со
 // сборкой: он попадёт и в готовую разметку, и в данные для оживления — первый кадр в
 // браузере совпадёт с сервером.
-const { models: popularModels, brands: brandModelTabs } = homePopularModels([...live.models].map(([key, count]) => {
+// Из базы приходит полная сводка по моделям (с годами и снимком); из дампа каталога —
+// только счётчики.
+const { models: popularModels, brands: brandModelTabs } = homePopularModels(live.modelRows || [...live.models].map(([key, count]) => {
   const [brand, model] = key.split("|");
   return { brand, model, count, priceMin: live.modelPrices?.get(key) };
 }));
@@ -1383,6 +1385,8 @@ async function readLiveCatalog() {
       showcase,
       collections,
       models: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.count])),
+      // Сводка целиком — для карточек «Популярные модели» на главной (src/home-popular-models.js).
+      modelRows: facts.models,
       // Цена «от» по модели (сохранённая оценка до Минска) — для вкладок марок на главной.
       modelPrices: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.priceMin])),
       // Дата последнего изменения по каждой модели — для `lastmod` у обзоров.

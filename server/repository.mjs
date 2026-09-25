@@ -843,7 +843,7 @@ export async function getCatalogMeta(type, brand, bodyType) {
 // сводкой по модели, фото — с самой доступной машины, то есть с той же, что и раньше.
 export async function getModelFacts() {
   const result = await pool.query(`WITH active AS (
-      SELECT l.id, v.brand, v.model, v.powertrain, l.estimated_total_usd AS price,
+      SELECT l.id, v.brand, v.model, v.powertrain, l.estimated_total_usd AS price, v.model_year AS year,
         NULLIF(v.specifications->>'acceleration','')::numeric AS accel,
         COALESCE(v.electric_range_km, v.combined_range_km) AS range,
         -- Когда у модели в последний раз что-то менялось: нужно карте сайта, чтобы
@@ -852,14 +852,14 @@ export async function getModelFacts() {
       FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'
     ), summary AS (
       SELECT brand, model, count(*)::int AS count, min(price) AS price_min, max(price) AS price_max,
-        min(accel) AS accel, max(range) AS range, max(changed_at) AS changed_at,
+        min(year) AS year_min, max(year) AS year_max, min(accel) AS accel, max(range) AS range, max(changed_at) AS changed_at,
         array_agg(DISTINCT powertrain) FILTER (WHERE powertrain IS NOT NULL) AS powertrains
       FROM active GROUP BY brand, model
     ), cheapest AS (
       SELECT DISTINCT ON (brand, model) brand, model, id
       FROM active ORDER BY brand, model, price ASC NULLS LAST, id
     )
-    SELECT s.brand, s.model, s.count, s.price_min, s.price_max, s.accel, s.range, s.powertrains, s.changed_at,
+    SELECT s.brand, s.model, s.count, s.price_min, s.price_max, s.year_min, s.year_max, s.accel, s.range, s.powertrains, s.changed_at,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=c.id ORDER BY m.position LIMIT 1) AS image
     FROM summary s LEFT JOIN cheapest c ON c.brand=s.brand AND c.model=s.model
     ORDER BY s.brand, s.model`);
@@ -869,6 +869,9 @@ export async function getModelFacts() {
     count:row.count,
     priceMin:Number(row.price_min) || null,
     priceMax:Number(row.price_max) || null,
+    // Годы выпуска машин модели в каталоге — для карточек «Популярные модели» на главной.
+    yearMin:Number(row.year_min) || null,
+    yearMax:Number(row.year_max) || null,
     accel:Number(row.accel) || null,
     range:Number(row.range) || null,
     powertrains:row.powertrains || [],
