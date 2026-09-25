@@ -204,16 +204,13 @@ export function modelFaq({ name, facts, review = null }) {
       a: `Сейчас в каталоге ${cars(total)}, цены ${span} — это итог до Минска: автомобиль, доставка, таможенные платежи и сборы. У каждой машины в карточке своя сумма и её разбор по этапам.`,
     });
   }
-  if (total && !covered(own, /в наличии|сколько .*машин|есть ли/i)) {
-    const years = yearsPhrase(facts?.yearMin, facts?.yearMax);
-    auto.push({
-      q: `Сколько ${name} сейчас в наличии?`,
-      a: `${cars(total)}${years ? ` ${years}` : ""}${finite(facts?.mileageMin) ? `, пробег от ${number(facts.mileageMin)} км` : ""}. Список регулярно обновляется по данным площадки-источника; сортировка и фильтры над списком считают только эту модель.`,
-    });
-  }
+  // Вопроса «Сколько X сейчас в наличии?» нет (убран 25.09.2026): число машин, годы и
+  // пробег стоят строкой выше, в блоке «что есть и почём» (modelAutoText).
   const type = (facts?.powertrains || []).length === 1 ? facts.powertrains[0].type : null;
   if (!covered(own, /растамож|пошлин|таможн/i)) auto.push(landingFaqDuty(type));
-  if (!covered(own, /сколько ждать|срок|как долго|когда приедет/i)) auto.push(landingFaqDelivery());
+  // «Доставка» — тоже про срок: в обзорах вопрос звучит «Сколько идёт доставка из Китая в
+  // Минск?», и без этого слова на 440 страницах срок спрашивался дважды.
+  if (!covered(own, /сколько ждать|срок|как долго|когда приедет|доставк/i)) auto.push(landingFaqDelivery());
   return [...auto, ...own];
 }
 

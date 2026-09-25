@@ -12,7 +12,6 @@ import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, norma
 import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
-import { issueVerification, verificationStatus } from "./lead-verify.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 // Ограничение размера: через прокси идёт фотография объявления, а не файл в сотни
@@ -581,16 +580,7 @@ export async function handleApiRequest(request, response) {
       if (name.length > 120) return json(response, 400, { error:"name_too_long" });
       if (contact.length > 200) return json(response, 400, { error:"contact_too_long" });
       const draft = await createOrderDraft({ listingId:body.listingId || null, name:name || null, contact, calculation });
-      // Заявка уже сохранена; ссылка на бота — дополнение, без которого она не хуже
-      // прежней. Если телеграм не отвечает или бот не настроен, поля просто нет.
-      const verification = isAvailabilityCheck ? await issueVerification(draft.id).catch(() => null) : null;
-      return json(response, 201, verification ? { ...draft, verification } : draft);
-    }
-    // Опрос сайта: подтвердил ли человек номер в боте. Ключ — тот же, что в ссылке.
-    if (request.method === "GET" && url.pathname === "/api/order-drafts/verification") {
-      const limit = await checkRateLimit("leadVerification", [clientAddress(request)]);
-      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
-      return json(response, 200, await verificationStatus(url.searchParams.get("token")));
+      return json(response, 201, draft);
     }
     return json(response, 404, { error:"not_found" });
   } catch (error) {

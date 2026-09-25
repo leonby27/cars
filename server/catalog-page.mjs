@@ -93,7 +93,7 @@ async function firstListing(filters, query, number) {
  * фильтров, см. plainCatalogSearch), ключ перемешивания, справочник фильтров под тот
  * же отбор, что спросит каталог (/api/catalog/meta), и сводка по марке.
  */
-async function catalogBoot({ path, filters, query, list, seed, guide = null, brand = null, stats = null }) {
+async function catalogBoot({ path, filters, query, list, seed, guide = null, brand = null }) {
   const type = filters.get("type");
   const brandFilter = filters.get("brand");
   const bodyType = filters.getAll("bodyType");
@@ -111,8 +111,6 @@ async function catalogBoot({ path, filters, query, list, seed, guide = null, bra
     metaValue: meta,
     metaQuery: metaQuery.toString(),
     ...(guide && brand ? { brandGuideValue: guide, brandGuideBrand: brand } : {}),
-    // Цифры для строки наличия под заголовком (та же строка, что у страниц моделей).
-    ...(stats ? { sectionFacts: { path, ...stats } } : {}),
   };
 }
 
@@ -160,12 +158,7 @@ export async function renderCatalogIndex(searchParams) {
   // предложений, весь список — в готовую страницу.
   const priced = items.slice(0, 24);
   const stock = await brandStock();
-  const indexStats = {
-    total,
-    priceFrom: edges?.cheapest ? estimateLandedCost(edges.cheapest).totalUsd : null,
-    priceTo: edges?.dearest ? estimateLandedCost(edges.dearest).totalUsd : null,
-  };
-  const app = await catalogApp("/catalog", await catalogBoot({ path: "/catalog", filters, query: params, list, seed, stats: indexStats }), params);
+  const app = await catalogApp("/catalog", await catalogBoot({ path: "/catalog", filters, query: params, list, seed }), params);
   const page = renderer.catalogIndexPage({ app, cars: items, total, sections: CATALOG_LANDINGS.filter(visibleLandings(stock)), page: number, pages, perPage: carsOnPage, edges, priced, changedAt });
   return { status: 200, html: page.html };
 }
@@ -245,7 +238,7 @@ export async function renderCatalogPage(slug, searchParams) {
     yearMax: summary?.yearMax ?? null,
   };
   const seo = { title: landingSeoTitle(landing, stats), description: landingSeoDescription(landing, stats) };
-  const app = await catalogApp(landing.path, await catalogBoot({ path: landing.path, filters: params, query, list, seed, guide, brand: landing.brand, stats }), query);
+  const app = await catalogApp(landing.path, await catalogBoot({ path: landing.path, filters: params, query, list, seed, guide, brand: landing.brand }), query);
   const page = renderer.landingPage({ app, landing, cars: items, total, modelPages, models, others, page: number, pages, perPage: carsOnPage, edges, priced, changedAt, guide, indexable: landingIndexable({ total }), seo });
   return { status: 200, html: page.html };
 }

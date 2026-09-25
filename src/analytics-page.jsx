@@ -170,7 +170,7 @@ function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
       <LeadCar car={lead.car} />
       <dl className="lead-facts">
         <div><dt>Клиент</dt><dd>{lead.customer.name || "Имя не указано"}</dd></div>
-        <div><dt>Телефон</dt><dd>{phoneHref ? <a href={phoneHref}>{lead.customer.phone}</a> : (lead.customer.contact || "—")}{lead.customer.phoneVerified && <span className="lead-phone-verified" title="Клиент подтвердил номер через Telegram">подтверждён</span>}</dd></div>
+        <div><dt>Телефон</dt><dd>{phoneHref ? <a href={phoneHref}>{lead.customer.phone}</a> : (lead.customer.contact || "—")}</dd></div>
         {methods && <div><dt>Как связаться</dt><dd>{methods}</dd></div>}
         {lead.customer.telegram && <div><dt>Telegram</dt><dd>@{lead.customer.telegram.replace(/^@/, "")}</dd></div>}
         {lead.customer.email && <div><dt>Email</dt><dd><a href={`mailto:${lead.customer.email}`}>{lead.customer.email}</a></dd></div>}

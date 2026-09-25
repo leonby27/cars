@@ -86,7 +86,7 @@ html[data-theme="dark"] #root :where(
   .contact-options,
   .order-card,
   .select-menu,
-  .select-menu .select-options button,
+  .select-menu .select-options :is(button, a),
   .load-more,
   .custom-search-cta,
   .sort-custom-select,
@@ -846,8 +846,8 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 .home-popular-brand-link:hover {
   color: var(--ink);
 }
-/* «Почему удобнее»: вступление и пять пунктов на подложках — тем же приёмом, что
-   блоки ссылок: фон вместо рамки. */
+/* «Авто из Китая в Беларусь — с понятной ценой»: вступление и строка ссылок на расчёты.
+   Пять пунктов на подложках убраны 25.09.2026 — повторяли вопросы-ответы главной. */
 .home-why {
   margin-top: 56px;
 }
@@ -862,28 +862,8 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   font-size: 17px;
   line-height: 1.55;
 }
-.home-why-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-  margin: 20px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.home-why-list li {
-  padding: 20px;
-  border-radius: calc(16px * var(--corner-scale));
-  background: var(--panel);
-}
-.home-why-list h3 {
-  margin: 0 0 8px;
-  font-size: 18px;
-}
-.home-why-list p {
-  margin: 0;
-  color: var(--muted-contrast);
-  font-size: 15px;
-  line-height: 1.5;
+.home-why-intro p + p {
+  margin-top: 12px;
 }
 .home-why-tools {
   margin: 16px 0 0;
@@ -1636,6 +1616,21 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   margin: 0;
   color: var(--muted);
 }
+/* Свёрнутые сочетания разделов под общим каталогом (CatalogSectionLinks): ссылки лежат
+   в разметке и видны поисковику, человек раскрывает их по желанию. */
+.catalog-landing-more {
+  margin-top: 16px;
+}
+.catalog-landing-more > summary {
+  width: fit-content;
+  color: var(--accent-dark);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.catalog-landing-more[open] > summary {
+  margin-bottom: 4px;
+}
 .catalog-landing-links {
   display: flex;
   flex-direction: column;
@@ -2250,7 +2245,7 @@ html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
   border: 1px solid var(--line);
   border-radius: calc(14px * var(--corner-scale));
 }
-.model-quick-chips button {
+.model-quick-chips :is(button, a) {
   min-width: 0;
   width: 100%;
   max-width: 100%;
@@ -2268,25 +2263,27 @@ html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
   font-weight: 600;
   line-height: 1.3;
   text-align: left;
+  text-decoration: none;
+  box-sizing: border-box;
   cursor: pointer;
 }
-.model-quick-chips button span {
+.model-quick-chips :is(button, a) span {
   overflow: hidden;
   direction: rtl;
   text-overflow: ellipsis;
   text-align: left;
   white-space: nowrap;
 }
-.model-quick-chips button small {
+.model-quick-chips :is(button, a) small {
   flex: 0 0 auto;
   color: color-mix(in srgb, var(--ink) 72%, transparent);
   font-size: 13px;
   font-weight: 500;
 }
-.model-quick-chips button:hover span {
+.model-quick-chips :is(button, a):hover span {
   color: var(--accent-dark);
 }
-.model-quick-chips button.active {
+.model-quick-chips :is(button, a).active {
   background: transparent;
   color: var(--accent-dark);
   font-weight: 700;
@@ -4193,7 +4190,7 @@ body.header-menu-open .detail-floating-availability {
   .contact-options,
   .order-card,
   .select-menu,
-  .select-menu .select-options button,
+  .select-menu .select-options :is(button, a),
   .load-more,
   .custom-search-cta,
   .sort-custom-select,
@@ -6852,6 +6849,10 @@ html[data-theme="dark"] #root .load-more {
   scrollbar-width: thin;
 }
 .select-menu .select-options :is(button, a) {
+  /* Пункт может быть и ссылкой (марка, тип двигателя, кузов — ведут на свои разделы). */
+  box-sizing: border-box;
+  cursor: pointer;
+  text-decoration: none;
   width: 100%;
   min-width: 0;
   display: flex;
@@ -6922,7 +6923,7 @@ html[data-theme="dark"] #root .load-more {
   font-size: 16px;
   line-height: 1;
 }
-.select-options button.selected .select-option-icon {
+.select-options :is(button, a).selected .select-option-icon {
   color: inherit;
 }
 .select-option-check {
@@ -7451,7 +7452,7 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
     font-size: 14px;
   }
   /* Чипы моделей под фильтрами — тем же кеглем, что и селект сортировки рядом. */
-  .model-quick-chips button {
+  .model-quick-chips :is(button, a) {
     min-height: 34px;
     padding: 0 12px;
     font-size: 14px;
@@ -8558,9 +8559,6 @@ footer {
   .detail-main .detail-sidebar > .order-card {
     order: 6;
   }
-  .detail-content > .model-intro {
-    order: 7;
-  }
   .detail-content > .detail-section-links {
     order: 8;
   }
@@ -9150,10 +9148,13 @@ html[data-theme="dark"] #root .spec-search,
   background: var(--surface);
   color: var(--ink);
 }
-.search-reset + .primary {
+/* Правая группа: [Сбросить] | [Сохранить поиск] [Показать]. К краю прижимается первая
+   кнопка группы (её margin-left: auto), остальные стоят вплотную: раньше «auto» было
+   и у «Сохранить», и у «Показать», и свободное место делилось между ними пополам. */
+.search-reset + .primary,
+.search-save + .primary {
   margin-left: 0;
 }
-/* «Сохранить поиск» стоит в паре со «Сбросить» и делит с ним правый край строки. */
 .search-save {
   display: flex;
   align-items: center;
@@ -9175,7 +9176,7 @@ html[data-theme="dark"] #root .spec-search,
 .search-save.saved {
   color: var(--accent-dark);
 }
-.search-save ~ .search-reset {
+.search-reset ~ .search-save {
   margin-left: 0;
 }
 .filter-actions-divider {
@@ -11085,30 +11086,6 @@ html[data-theme="dark"] #root .spec-search,
   font-weight: 650;
   line-height: 1.45;
 }
-/* Второй шаг заявки с карточки: подтверждение номера через бота. Кнопка-ссылка
-   повторяет кнопку отправки, галочка — цветом акцента. */
-.availability-lead-verify .auth-submit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-decoration: none;
-}
-.availability-lead-verify .availability-lead-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.availability-lead-verify-mark {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--accent-dark);
-}
-.availability-lead-verify-close {
-  margin-top: 12px;
-  align-self: stretch;
-}
-
 .auth-submit {
   width: 100%;
   margin-top: 20px;
@@ -12795,10 +12772,10 @@ html[data-theme="dark"] body #root .select-menu .select-options :is(button, a).a
   background: #30363f;
   color: #fff;
 }
-html[data-theme="dark"] body #root .select-options:hover button.active:not(:hover):not(.selected) {
+html[data-theme="dark"] body #root .select-options:hover :is(button, a).active:not(:hover):not(.selected) {
   background: transparent;
 }
-html[data-theme="dark"] body #root .select-menu .select-options button.selected {
+html[data-theme="dark"] body #root .select-menu .select-options :is(button, a).selected {
   background: var(--accent-soft);
   color: var(--accent-dark) !important;
 }
@@ -13380,7 +13357,7 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .custom-select,
   .custom-select .select-trigger svg,
   .select-menu,
-  .select-menu .select-options button,
+  .select-menu .select-options :is(button, a),
   .select-search,
   .disclosure-caret,
   .home-faq-item > button svg,
@@ -13772,90 +13749,9 @@ html[data-theme="dark"] {
   --model-nested-bg: #272a2f;
 }
 
-/* Блок «О модели» в карточке машины: начало текста и переход на страницу модели. */
-.model-intro {
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: calc(16px * var(--corner-scale));
-  background: var(--panel);
-}
+
 /* С фотографией блок становится двухколонным: слева кадр этой же машины из
    объявления, справа текст и кнопка. */
-/* Колонки тянутся по высоте текста: так верх и низ фотографии совпадают с краями
-   текстового блока и он никуда не выступает. */
-.model-intro.has-photo {
-  display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
-  gap: 22px;
-  align-items: stretch;
-}
-.model-intro-photo {
-  overflow: hidden;
-  border-radius: calc(12px * var(--corner-scale));
-  background: var(--surface);
-  min-height: 170px;
-}
-.model-intro-body {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-/* Скругления как в iOS: непрерывная кривая (squircle) вместо дуги окружности —
-   у угла нет заметного перехода от прямой к скруглению. Свойство новое, поэтому
-   включаем его только там, где браузер его понимает; остальные рисуют обычное
-   скругление и ничего не ломается. Радиус при этом берём чуть больше: у непрерывной
-   кривой угол визуально «поджимается». */
-/* Форму углов задаёт общее правило в конце файла; здесь только радиусы чуть больше
-   обычных: у непрерывной кривой угол визуально «поджимается». */
-@supports (corner-shape: squircle) {
-  .model-intro {
-    border-radius: calc(20px * var(--corner-scale));
-  }
-  .model-intro-photo {
-    border-radius: calc(18px * var(--corner-scale));
-  }
-  .model-intro-more {
-    border-radius: calc(17px * var(--corner-scale));
-  }
-}
-.model-intro-photo img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-/* В тёмной теме подложка блока сама отделяет его от фона, рамка только шумит.
-   Убираем цветом, а не свойством border, чтобы геометрия блока не сдвинулась. */
-html[data-theme="dark"] .model-intro {
-  border-color: transparent;
-}
-.model-intro-heading h2 {
-  margin: 6px 0 6px;
-  font-size: 24px;
-  letter-spacing: -0.5px;
-}
-.model-intro-text {
-  display: grid;
-  gap: 12px;
-}
-/* Текст описания темнее обычной серой подписи: это связный абзац, который читают,
-   а не служебная пометка. В карточке стоит только первый абзац — остальное на
-   странице модели по кнопке «Подробнее». */
-.model-intro-text p {
-  margin: 0;
-  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1.6;
-}
-.model-intro-more {
-  align-self: flex-start;
-  min-height: 38px;
-  border-radius: calc(12px * var(--corner-scale));
-  margin-top: 14px;
-  padding: 0 18px;
-  text-decoration: none;
-}
 
 .model-page {
   display: flex;
@@ -14691,16 +14587,8 @@ html[data-theme="dark"] .model-page-faq .home-faq-item {
 }
 /* Хлебные крошки над заголовком обзора: своё верхнее поле им не нужно — его уже
    даёт отступ страницы, а снизу расстояние задаёт зазор между блоками. */
-/* Каталожная страница модели: строка наличия под заголовком, кнопка-ссылка
-   «Показать ещё», номера страниц и сводка по цифрам под выдачей. */
-.model-page-stock {
-  margin: 8px 0 0;
-  min-height: calc(17px * 1.45);
-  color: var(--muted-contrast);
-  font-size: 17px;
-  line-height: 1.45;
-  max-width: 860px;
-}
+/* Каталожная страница модели: кнопка-ссылка «Показать ещё», номера страниц и сводка
+   по цифрам под выдачей. */
 .model-page-load-more {
   display: block;
   width: fit-content;
@@ -14979,21 +14867,6 @@ html[data-theme="dark"] .model-page-promo {
   }
 }
 @media (max-width: 700px) {
-  .model-intro {
-    padding: 18px;
-  }
-  /* На узком экране фото встаёт над текстом: в колонку 240 пикселей она уже не влезает. */
-  .model-intro.has-photo {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
-  .model-intro-photo {
-    aspect-ratio: 16 / 9;
-    min-height: 0;
-  }
-  .model-intro-heading h2 {
-    font-size: 21px;
-  }
   /* На узком экране рамка подложки только сужала бы текст: оставляем поля меньше. */
   .model-page-body,
   .model-page-faq,
