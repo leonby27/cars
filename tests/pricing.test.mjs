@@ -8,8 +8,23 @@ test("rounds converted Belarusian-ruble prices to the nearest hundred", () => {
   assert.equal(usdToByn(123451 / PRICING.usdByn), 123500);
 });
 
+test("если подбор и сопровождение выключены, их нет ни в строке, ни в итоге", () => {
+  const originalEnabled = PRICING.serviceFeeEnabled;
+  PRICING.serviceFeeEnabled = false;
+  try {
+    const price = estimateLandedCost({ source:"Che168", usdPrice:10000, year:2024, type:"Электромобиль" }, { quotaOver:false });
+    assert.equal(price.serviceUsd, 0);
+    const otherCosts = price.chinaUsd + price.buyoutLow + price.chinaLegLow + price.intlLow + price.svhLow + price.customsLow;
+    assert.equal(price.totalLow, Math.round(otherCosts / 50) * 50);
+  } finally {
+    PRICING.serviceFeeEnabled = originalEnabled;
+  }
+});
+
 test("keeps the service fee at 2000 BYN when exchange rates change", () => {
   const originalRate = PRICING.usdByn;
+  const originalEnabled = PRICING.serviceFeeEnabled;
+  PRICING.serviceFeeEnabled = true;
   try {
     for (const [rate, expectedUsd] of [[3.026, 660], [3.1, 650], [2.8, 710], [2.5, 800]]) {
       PRICING.usdByn = rate;
@@ -22,6 +37,7 @@ test("keeps the service fee at 2000 BYN when exchange rates change", () => {
     }
   } finally {
     PRICING.usdByn = originalRate;
+    PRICING.serviceFeeEnabled = originalEnabled;
   }
 });
 

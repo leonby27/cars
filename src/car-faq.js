@@ -38,7 +38,7 @@ function priceAnswer(car, landed) {
     landed.chinaUsd ? `${money(landed.chinaUsd)} — цена продавца в Китае` : null,
     landed.customsUsd ? `${money(landed.customsUsd)} — таможенные платежи и сборы` : null,
     landed.intlHigh ? `около ${money((Number(landed.intlLow) + Number(landed.intlHigh)) / 2)} — доставка до Беларуси` : null,
-    landed.serviceUsd ? `${money(landed.serviceUsd)} — наши услуги` : null,
+    landed.serviceUsd ? `около ${money(landed.serviceUsd)} — подбор и сопровождение` : null,
   ].filter(Boolean);
   return {
     q: `Сколько будет стоить ${title(car)} с доставкой в Минск?`,

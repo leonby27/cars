@@ -75,7 +75,7 @@ export const TOOL_PAGES = Object.freeze([
     name: "Стоимость доставки",
     h1: "Стоимость доставки авто из Китая",
     seoTitle: `Сколько стоит привезти авто из Китая в Беларусь ${CURRENT_YEAR} | abcars.by`,
-    seoDescription: `Из чего складывается итоговая цена авто из Китая в ${CURRENT_YEAR} году: выкуп, документы, автовоз до Минска, таможня и услуги сервиса — с ориентирами по этапам.`,
+    seoDescription: `Из чего складывается итоговая цена авто из Китая в ${CURRENT_YEAR} году: выкуп, документы, автовоз до Минска, таможня, подбор и сопровождение — с ориентирами по этапам.`,
     lead: "Считаем доставку CIP до Минска.",
   },
   {
@@ -228,9 +228,9 @@ export function toolPageStats(kind) {
     return [
       { value: "≈ 2/3", label: "доля цены продавца в итоге" },
       { value: moneyRange(PRICING.intlDeliveryUsd), label: "автовоз до Минска" },
-      { value: money(PRICING.serviceUsd), label: "услуги сервиса" },
+      PRICING.serviceUsd ? { value: `≈ ${money(PRICING.serviceUsd)}`, label: "подбор и сопровождение" } : null,
       { value: daysRange(deliveryTotalDays()), label: "от выкупа до выдачи" },
-    ];
+    ].filter(Boolean);
   }
   return [];
 }
@@ -331,7 +331,7 @@ export function deliveryStages() {
       ["Надбавка за крупный кузов", `+ ${moneyRange(PRICING.bigCarExtraUsd)}`, "—"],
       ["Таможня и оформление", `от ${money(PRICING.customsFeesUsd.upTo3Years)}`, "вместе с выдачей"],
       ["Склад в Минске и выдача", moneyRange(PRICING.svhUsd), daysRange(DELIVERY_STAGE_DAYS.svh)],
-      ["Услуги сервиса", money(PRICING.serviceUsd), "—"],
+      ...(PRICING.serviceUsd ? [["Подбор и сопровождение", `≈ ${money(PRICING.serviceUsd)}`, "—"]] : []),
     ],
     note: `Полный срок от выкупа до выдачи — ${daysRange(deliveryTotalDays())}. Таможня здесь посчитана по электромобилю с льготой: у гибрида эта строка заметно больше. Суммы этапов — ориентиры по открытым тарифам перевозчиков и платёжных агентов, а не согласованный прайс. Итог по конкретной машине считает калькулятор растаможки.`,
   };

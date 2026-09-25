@@ -8743,10 +8743,12 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 </div>
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
+              {price.serviceUsd > 0 && (
               <div>
-                <PriceLabel label="Услуги abcars.by" description="Подбор, расчёт и проверка объявления" />
-                <strong>{money(price.serviceUsd, currency)}</strong>
+                <PriceLabel label="Подбор и сопровождение" description="Ориентировочно. Точную сумму назовут после расчёта конкретной машины — она может быть немного больше или меньше" />
+                <strong>≈ {money(price.serviceUsd, currency)}</strong>
               </div>
+              )}
             </div>
             <div className="price-assumption">
               <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
@@ -9182,10 +9184,12 @@ function OrderDraft({ car, navigate }) {
                 </div>
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
+              {price.serviceUsd > 0 && (
               <div>
-                <PriceLabel label="Услуги abcars.by" description="Подбор, расчёт и проверка объявления" />
-                <b>{money(price.serviceUsd, currency)}</b>
+                <PriceLabel label="Подбор и сопровождение" description="Ориентировочно. Точную сумму назовут после расчёта конкретной машины — она может быть немного больше или меньше" />
+                <b>≈ {money(price.serviceUsd, currency)}</b>
               </div>
+              )}
             </div>
             <div className="order-grand-total">
               <PriceLabel label="Ориентировочно до Минска" description="Без постановки на учёт и страховки" />
@@ -10634,7 +10638,7 @@ function DeliveryCalculator() {
           />
         </div>
         <p className="tool-calc-why tool-calc-delivery-note">
-          В CIP входят перевозка и страхование до Минска. Цена машины, растаможка, СВХ, регистрация и услуги abcars.by считаются отдельно.
+          В CIP входят перевозка и страхование до Минска. Цена машины, растаможка, СВХ, регистрация, подбор и сопровождение считаются отдельно.
         </p>
       </div>
       <div className="tool-calc-result">
