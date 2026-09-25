@@ -46,6 +46,28 @@ const modelPage = { path: "/models/byd-han", name: "BYD Han", brand: "BYD", mode
 const render = (options = {}) =>
   createSeoRenderer({ shell, siteUrl: "https://abcars.by", allowIndexing: true, ...options });
 
+// Крошки и поля машины в разметке: та же цепочка, что над заголовком карточки, и те
+// поля, что видны на странице. Латиница источника и неизвестные значения не попадают.
+test("разметка карточки: полная цепочка крошек и поля машины по-русски", () => {
+  const { html } = render().carPage({ car: { ...car, bodyColor: "Black", seats: "5", doors: "4", horsepower: "517", firstRegistration: "2023.4" } });
+  const crumbs = JSON.parse(html.match(/<script type="application\/ld\+json">(\{[^<]*"BreadcrumbList"[^<]*)<\/script>/)[1]);
+  assert.deepEqual(crumbs.itemListElement.map((item) => item.name), ["Главная", "Каталог авто из Китая", "BYD", "BYD Han", "BYD Han 2023"]);
+  assert.equal(crumbs.itemListElement[2].item, "https://abcars.by/catalog/byd");
+  assert.equal(crumbs.itemListElement[3].item, "https://abcars.by/catalog/byd/han");
+  const vehicle = JSON.parse(html.match(/<script type="application\/ld\+json">(\{[^<]*"@type":"Vehicle"[^<]*)<\/script>/)[1]);
+  assert.equal(vehicle.bodyType, "Седан");
+  assert.equal(vehicle.color, "Чёрный");
+  assert.equal(vehicle.seatingCapacity, 5);
+  assert.equal(vehicle.numberOfDoors, 4);
+  assert.equal(vehicle.vehicleEngine.enginePower.value, 517);
+  assert.equal(vehicle.dateVehicleFirstRegistered, "2023-04");
+  assert.equal(vehicle.itemCondition, "https://schema.org/UsedCondition");
+
+  const bare = JSON.parse(render().carPage({ car: { ...car, bodyType: "", bodyColor: "Champagne Gold" } }).html.match(/<script type="application\/ld\+json">(\{[^<]*"@type":"Vehicle"[^<]*)<\/script>/)[1]);
+  assert.equal(bare.color, undefined);
+  assert.equal(bare.seatingCapacity, undefined);
+});
+
 test("страница машины несёт свой заголовок, описание и адрес-первоисточник", () => {
   const { html } = render().carPage({ car });
   assert.match(html, /<title>BYD Han 2023, пробег 21[^<]*400 км, батарея 85,4 кВт·ч — [^<]+\$ с доставкой в Беларусь \| abcars\.by<\/title>/);

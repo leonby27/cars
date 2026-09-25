@@ -1688,12 +1688,16 @@ html body #root .app-search-field.home-popular-search {
   font-weight: 500;
   padding: 23px 0 16px;
 }
-.breadcrumbs button {
+/* Крошки — ссылки (CrumbLink в App.jsx), но выглядят так же, как прежние кнопки:
+   без подчёркивания и без цвета ссылки, в том числе у посещённой. */
+.breadcrumbs button,
+.breadcrumbs a {
   border: 0;
   padding: 0;
   background: transparent;
   color: var(--muted);
   font: inherit;
+  text-decoration: none;
 }
 .catalog {
   padding-bottom: 80px;
@@ -1833,6 +1837,48 @@ html body #root .app-search-field.home-popular-search {
 }
 html[data-theme="dark"] .catalog-landing-faq .home-faq-item {
   background: var(--surface);
+}
+/* В карточке машины вопросы выглядят как ссылки «Калькулятор растаможки» и
+   «Из чего складывается цена» ниже (.detail-tool-links): тот же фон, отступы,
+   шрифт и приглушённая стрелка. Отличие — стрелка вниз и нет иконки слева. */
+/* Заголовки блоков в конце карточки — «Частые вопросы» и «Смотреть в каталоге» —
+   одного размера и с одинаковым отступом до содержимого. */
+.detail-faq.catalog-landing-faq h3 {
+  margin-bottom: 20px;
+  font-size: 23px;
+}
+.detail-faq .catalog-landing-faq-list {
+  gap: 8px;
+}
+.detail-faq.catalog-landing-faq .home-faq-item,
+html[data-theme="dark"] .detail-faq.catalog-landing-faq .home-faq-item {
+  background: var(--surface);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.detail-faq.catalog-landing-faq .home-faq-item:not(.open):hover,
+html[data-theme="dark"] .detail-faq.catalog-landing-faq .home-faq-item:not(.open):hover {
+  background: var(--model-chip-hover-bg);
+}
+.detail-faq .home-faq-item > button {
+  min-height: 0;
+  gap: 13px;
+  padding: 15px 17px;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+.detail-faq .home-faq-item > button svg {
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+}
+.detail-faq .home-faq-item > button:hover svg {
+  color: var(--ink);
+}
+.detail-faq.catalog-landing-faq .home-faq-item p {
+  margin: 0 40px 18px 17px;
+  font-size: 15px;
+  line-height: 1.6;
 }
 .brand-guide {
   gap: 20px;
@@ -6704,6 +6750,15 @@ html[data-theme="dark"] #root .load-more {
 .order-card > .report-order-cta {
   margin: 18px 0 0;
 }
+/* Подпись под кнопкой заявки: кто её получит. Только у настоящей кнопки —
+   плавающий повтор идёт без неё. */
+.report-order-note {
+  margin: 10px 0 0;
+  color: var(--muted-contrast, var(--muted));
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
 .delivery-disclosure {
   padding: 20px 0;
 }
@@ -8242,10 +8297,13 @@ footer {
 .detail-section-links {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 20px;
 }
+/* Размер и отступ — как у заголовка частых вопросов выше (.detail-faq h3). */
 .detail-section-links b {
-  font-size: 16px;
+  font-size: 23px;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
 }
 .detail-section-links > div {
   display: flex;
@@ -8258,6 +8316,7 @@ footer {
   background: var(--surface);
   color: var(--ink);
   font-size: 16px;
+  font-weight: 600;
   text-decoration: none;
   transition: background var(--motion-fast) var(--motion-ease);
 }
@@ -13169,11 +13228,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
-.header-contact-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 .header-social-link {
   display: grid;
   place-items: center;
@@ -13220,12 +13274,16 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   transform: scale(0.96);
 }
 .header-social-link:focus-visible,
-.header-actions .header-phone-reveal:focus-visible {
+.footer-contacts .phone-reveal:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
-.header-actions .header-phone-reveal {
+/* Кнопка «+375 показать номер» в подвале, под соцсетями (до 25.09.2026 стояла в
+   шапке). Селекторы через .footer-contacts — иначе их перебьют общие правила
+   кнопок подвала (.footer-column button). */
+.footer-contacts .phone-reveal {
   display: inline-flex;
+  margin-top: 6px;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -13241,25 +13299,20 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   font-weight: 800;
   transition: background var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease);
 }
-.header-actions .header-phone-reveal > svg {
+.footer-contacts .phone-reveal > svg {
   flex: none;
 }
-.header-actions .header-phone-reveal:hover {
+.footer-contacts .phone-reveal:hover {
   background: var(--panel-soft);
   color: var(--accent-dark);
 }
-.header-actions .header-phone-reveal:active {
+.footer-contacts .phone-reveal:active {
   transform: scale(0.98);
 }
-.header-actions .header-phone-reveal.is-revealed {
+.footer-contacts .phone-reveal.is-revealed {
   min-width: 174px;
   color: var(--accent-dark);
   font-variant-numeric: tabular-nums;
-}
-@media (max-width: 980px) {
-  .header-contact-actions {
-    display: none;
-  }
 }
 /* У «Моих поисков» и «Избранного» подписи в шапке нет — только значок, а слово
    показывает подсказка по наведению. Поэтому кнопка квадратная, значок по центру,
@@ -13379,9 +13432,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   }
   .header-actions {
     gap: 6px;
-  }
-  .header-contact-actions {
-    display: none;
   }
   .header-actions > .currency-switch {
     display: none;

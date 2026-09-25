@@ -100,7 +100,7 @@ export function modelCatalogSeo({ name, facts = null, review = null, page = 1, o
   const years = yearsPhrase(facts?.yearMin, facts?.yearMax);
   const stock = total
     ? `${name} б/у ${from}: ${cars(total)} в наличии, цены ${span ? `${span} ` : ""}с доставкой до Минска${years ? `, ${years}` : ""}.`
-    : `${name} ${from}: сейчас в наличии нет, привезём под заказ с расчётом цены до Минска.`;
+    : `${name} ${from}: сейчас в наличии нет, можно привезти под заказ с расчётом цены до Минска.`;
   const tail = review?.lead || review?.teaser || "";
   const description = page > 1 ? `${stock} Страница ${page} списка.` : `${stock}${tail ? ` ${tail}` : ""}`.slice(0, 300);
   return { title, description, h1 };
@@ -116,7 +116,7 @@ export const modelPageIndexable = ({ facts = null, review = null } = {}) => Bool
 /** Строка под заголовком: что есть и почём — шапка списка, а не текст. */
 export function modelStockLine(facts, { page = 1, pages = 1, first = 0, shown = 0 } = {}) {
   const total = Number(facts?.total) || 0;
-  if (!total) return "Сейчас в наличии нет. Привезём под заказ: найдём вариант в Китае, проверим и рассчитаем цену до Минска.";
+  if (!total) return "Сейчас в наличии нет. Можно привезти под заказ: найдём вариант в Китае и рассчитаем цену до Минска.";
   const parts = [`В наличии ${cars(total)}`];
   const span = priceSpan(facts?.priceFrom, facts?.priceTo);
   if (span) parts.push(`цены ${span} до Минска`);
@@ -147,7 +147,7 @@ export function modelAutoText({ name, facts }) {
   const total = Number(facts?.total) || 0;
   if (!total) {
     return [
-      `${name} сейчас в каталоге нет. Мы возим эту модель под заказ: найдём подходящий вариант на площадках Китая, проверим историю и состояние и рассчитаем цену с доставкой до Минска.`,
+      `${name} сейчас в каталоге нет. Эту модель можно привезти под заказ: найдём подходящий вариант на площадках Китая, сверим историю и состояние и рассчитаем цену с доставкой до Минска.`,
     ];
   }
   const paragraphs = [];

@@ -75,6 +75,15 @@ test("автоматически открытый обзор не гасит с�
   assert.equal(analyticsUpdatesUrl("vehicle_favorites"), "/api/analytics/updates?viewing=vehicle_favorites");
 });
 
+test("«Каталог» гасит все свои вкладки одним запросом при входе и выходе", async () => {
+  assert.equal(analyticsUpdatesUrl(["vehicles", "vehicle_cars", "vehicle_favorites"]), "/api/analytics/updates?viewing=vehicles%2Cvehicle_cars%2Cvehicle_favorites");
+  const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(page, /sectionTabs\(id\)/, "вход в раздел гасит все его вкладки");
+  assert.match(page, /section === "vehicles" && id !== "vehicles" \? sectionTabs\("vehicles"\)/, "выход из каталога гасит его вкладки");
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  assert.match(server, /split\(","\)/, "сервер принимает несколько разделов через запятую");
+});
+
 test("таблицы автомобилей по умолчанию сортируются по последнему просмотру", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   assert.match(source, /useState\(\{ column:"lastViewed", desc:true \}\)/);
@@ -228,7 +237,7 @@ test("в разделе каталога вкладка авто стоит пе
   const worker = await readFile(new URL("../worker/analytics.js", import.meta.url), "utf8");
   assert.match(source, /const vehicleModes = \[\s*\{ id:"cars", label:"Авто" \},\s*\{ id:"catalog", label:"Каталог" \}/);
   assert.match(source, /function VehiclesSection[\s\S]*?useState\("cars"\)/);
-  assert.match(source, /const viewedId = id === "vehicles" \? "vehicle_cars" : id/);
+  assert.match(source, /const viewedIds = \[\.\.\.new Set\(\[\.\.\.sectionTabs\(id\)/);
   assert.match(source, /section === "vehicles" \? <VehiclesSection/);
   assert.match(source, /id:"vehicles", label:"Каталог"/);
   assert.match(source, /data\.catalogPages/);

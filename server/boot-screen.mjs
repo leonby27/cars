@@ -62,7 +62,7 @@ function header(hrefRoute) {
 // Этот же текст рисует приложение: первый кадр и готовая страница не должны менять
 // главный заголовок после загрузки.
 const HERO_TITLE = "Б/у авто из&nbsp;Китая с&nbsp;доставкой в&nbsp;Беларусь";
-const HERO_BENEFITS = ["Без скрытых платежей", "Прозрачные договора", "Полное сопровождение"];
+const HERO_BENEFITS = ["Без скрытых платежей", "Всё по договору", "Проверка авто до оплаты"];
 
 function homeHero() {
   const benefits = HERO_BENEFITS.map((text) => `<li>${svg(21, ICON.check)}${text}</li>`).join("");

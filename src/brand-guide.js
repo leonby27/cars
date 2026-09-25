@@ -2,8 +2,12 @@ import { usdToByn } from "./pricing.js";
 
 const RU = new Intl.NumberFormat("ru-RU", { maximumFractionDigits:0 });
 
-export const isBrandGuide = (landing, guide) => GUIDE_BRANDS.has(landing?.brand) && guide?.brand === landing.brand && guide.total > 0;
-export const isBrandGuideLanding = (landing) => GUIDE_BRANDS.has(landing?.brand);
+// Сводка марки (цены, модели, бюджеты, вопросы по всей марке) — только на странице
+// самой марки. Раздел «марка + кузов» тоже знает марку, но его выборка уже: на
+// /catalog/audi-suv сводка писала «3 219 автомобилей» и перечисляла все модели Audi
+// (с седаном A3 во главе), хотя кроссоверов в разделе 1 250. Там остаются свои тексты.
+export const isBrandGuideLanding = (landing) => GUIDE_BRANDS.has(landing?.brand) && landing?.kind === "brand";
+export const isBrandGuide = (landing, guide) => isBrandGuideLanding(landing) && guide?.brand === landing.brand && guide.total > 0;
 export const isZeekrGuide = (landing, guide) => landing?.brand === "Zeekr" && isBrandGuide(landing, guide);
 export const guideNumber = (value) => RU.format(Math.round(Number(value) || 0));
 export const guidePlural = (count, one, few, many) => {
@@ -373,7 +377,7 @@ export function brandGuideFaq(guide, currency = "USD") {
   return [
     {
       q:`Сколько стоит ${brand} с доставкой до Минска?`,
-      a:`Сейчас цены в каталоге начинаются от ${guidePrice(guide.priceMin, currency)}. Медианная цена — ${guidePrice(guide.priceMedian, currency)}: половина предложений дешевле, половина дороже. У центральной половины объявлений цена находится примерно между ${guidePrice(guide.priceP25, currency)} и ${guidePrice(guide.priceP75, currency)}. Это предварительный расчёт до Минска; перед договором подтверждаем цену продавца, курс и логистику.`,
+      a:`Сейчас цены в каталоге начинаются от ${guidePrice(guide.priceMin, currency)}. Медианная цена — ${guidePrice(guide.priceMedian, currency)}: половина предложений дешевле, половина дороже. У центральной половины объявлений цена находится примерно между ${guidePrice(guide.priceP25, currency)} и ${guidePrice(guide.priceP75, currency)}. Это предварительный расчёт до Минска; перед договором цену продавца, курс и логистику подтверждают.`,
     },
     {
       q:`Какие модели ${brand} чаще встречаются в каталоге?`,

@@ -12,6 +12,8 @@ export { photoHref };
 // на выходе строка. Поэтому модуль проверяется тестами без сборки и без Postgres.
 import { estimateLandedCost, usdToByn, yuanToUsdAbout } from "../src/pricing.js";
 import { cityName } from "../src/city-names.js";
+import { normalizeBodyType } from "../src/body-types.js";
+import { translateColor } from "../src/colors.js";
 import { carTitleDetails } from "../src/car-title.js";
 import { brandNotice } from "../src/brand-notice.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
@@ -151,7 +153,6 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     <a href="${hrefRoute(`${BLOG_INDEX.path}/`)}">${escapeHtml(BLOG_INDEX.name)}</a>` : ""}
     <a href="${hrefRoute("/how-it-works/")}">О сервисе</a>
     <a href="${hrefRoute(`${modelsPath}/`)}">О моделях авто</a>
-    <a href="${hrefRoute("/tracking/")}">Отслеживание авто</a>
     <a href="${hrefRoute("/contacts/")}">Контакты</a>
   </nav></header>`;
   }
@@ -479,6 +480,40 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * каталогу, которого иначе нет: списки в приложении рисует скрипт).
    * `modelPage` — обзор модели из `src/model-pages.js`, если он есть.
    */
+  // Поля машины для разметки, которые видны и на странице: кузов, цвет, места, двери,
+  // мощность, первая регистрация. Только по-русски и только известные — латиница
+  // источника («Black») и «Не определён» в разметку не попадают.
+  function vehicleDetails(car) {
+    const body = normalizeBodyType(car);
+    const color = translateColor(car.bodyColor);
+    const count = (value) => (Number(value) > 0 ? Number(value) : undefined);
+    const power = count(car.horsepower);
+    const registered = /^(\d{4})[.\-/](\d{1,2})/.exec(String(car.firstRegistration || ""));
+    return {
+      bodyType: body && body !== "Не определён" ? body : undefined,
+      color: color && /[а-яё]/i.test(color) ? color : undefined,
+      seatingCapacity: count(car.seats),
+      numberOfDoors: count(car.doors),
+      vehicleEngine: power ? { "@type": "EngineSpecification", enginePower: { "@type": "QuantitativeValue", value: power, unitText: "л.с." } } : undefined,
+      dateVehicleFirstRegistered: registered ? `${registered[1]}-${registered[2].padStart(2, "0")}` : undefined,
+    };
+  }
+
+  // Цепочка крошек карточки — та же, что видит посетитель над заголовком (Detail в
+  // App.jsx): каталог, марка, модель, машина. Марку и модель без своей страницы
+  // пропускаем: в разметке крошек нужен адрес.
+  function carCrumbs(car, titleText, route) {
+    const brandPath = car.brand ? brandLandingPath(car.brand) : null;
+    const modelPath = car.brand && car.model ? modelLandingPath(car.brand, car.model) : null;
+    return [
+      ["Главная", "/"],
+      ["Каталог авто из Китая", "/catalog/"],
+      ...(brandPath ? [[car.brand, brandPath]] : []),
+      ...(modelPath ? [[[car.brand, car.model].join(" "), modelPath]] : []),
+      [titleText, route],
+    ];
+  }
+
   function carPage({ car, related = [], modelPage = null, sections = [], journal = [], indexable = allowIndexing, appRoot = null, appRootPath = null, bootData = null }) {
     const titleText = carTitle(car);
     const route = carRoute(car);
@@ -513,6 +548,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       fuelType: car.type || undefined,
       driveWheelConfiguration: car.drive || undefined,
       numberOfPreviousOwners: Number(car.owners) || undefined,
+      ...vehicleDetails(car),
+      itemCondition: "https://schema.org/UsedCondition",
       description,
       offers: {
         "@type": "Offer",
@@ -521,7 +558,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         price: landed.totalUsd,
         availability: sold ? "https://schema.org/SoldOut" : "https://schema.org/InStock",
         itemCondition: "https://schema.org/UsedCondition",
-        seller: { "@type": "Organization", name: COMPANY.schemaName, url: routeUrl("/"), "@id": `${routeUrl("/")}#organization` },
+        // Продавца не указываем (25.09.2026): abcars — сервис подбора, машину продаёт
+        // владелец в Китае, а ввозит компания-импортёр.
       },
     };
     const modelLink = modelPage
@@ -578,7 +616,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         // Разметку вопросов при готовой разметке приложения ставит оно само (VehicleFaq
         // в App.jsx) рядом с блоком вопросов. Здесь её добавляем только в простой версии
         // страницы — иначе на карточке было два одинаковых FAQPage (найдено 25.09.2026).
-        schemas: [breadcrumbsSchema([["Главная", "/"], ["Каталог авто из Китая", "/catalog/"], [titleText, route]]), schema, ...(questions.length && !appRoot ? [faqSchema(questions)] : [])],
+        schemas: [breadcrumbsSchema(carCrumbs(car, titleText, route)), schema, ...(questions.length && !appRoot ? [faqSchema(questions)] : [])],
       }),
     };
   }
@@ -755,7 +793,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       // Пустой раздел без объяснения — тонкая страница и тупик. Часть марок мы
       // перестали возить из наличия, но привезти под заказ можем: так и пишем,
       // а ниже идут ссылки на соседние разделы и весь каталог.
-      : `<p><strong>Сейчас в этом разделе машин нет.</strong> Привезём под заказ: подберём подходящий вариант в Китае, проверим и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>. Или посмотрите <a href="${hrefRoute("/catalog/")}">весь каталог автомобилей из Китая</a>.</p>`;
+      : `<p><strong>Сейчас в этом разделе машин нет.</strong> Машину можно привезти под заказ: подберём подходящий вариант в Китае и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>. Или посмотрите <a href="${hrefRoute("/catalog/")}">весь каталог автомобилей из Китая</a>.</p>`;
     const paging = paginationLinks({ route: landing.path, page, pages });
     const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}${paging}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
     // Ссылки на расчёты — только на первой странице раздела: на страницах 2–50 это был
@@ -967,7 +1005,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       // Пустая страница без выходов — тупик и для человека, и для поисковика.
       // Поэтому здесь честное «нет», предложение подбора под заказ и ссылки на
       // замену: раздел марки и её другие обзоры (они идут блоком ниже).
-      : `<p><strong>Сейчас ${escapeHtml(page.name)} в каталоге нет.</strong> Мы возим эту модель под заказ: найдём подходящий вариант в Китае, проверим и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>.${brandLanding ? ` Или выберите другую модель: <a href="${hrefRoute(brandLanding.path)}">все автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`;
+      : `<p><strong>Сейчас ${escapeHtml(page.name)} в каталоге нет.</strong> Эту модель можно привезти под заказ: найдём подходящий вариант в Китае и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>.${brandLanding ? ` Или выберите другую модель: <a href="${hrefRoute(brandLanding.path)}">все автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`;
     const offers = items.length
       ? `<section><h2>${escapeHtml(page.name)} в наличии — цены до Минска</h2>${carLinks(items, 12)}${brandLanding ? `<p><a href="${hrefRoute(brandLanding.path)}">Все ${escapeHtml(page.brand)} в каталоге</a></p>` : ""}</section>`
       : "";

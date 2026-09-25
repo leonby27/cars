@@ -796,7 +796,10 @@ export async function readAnalyticsSeen(viewing = "") {
     `INSERT INTO analytics_seen(section, seen_at) SELECT unnest($1::text[]), now() ON CONFLICT (section) DO NOTHING`,
     [ANALYTICS_SECTIONS],
   );
-  const viewingSections = ANALYTICS_SECTIONS.includes(viewing) ? [viewing] : [];
+  // Раздел с вкладками («Каталог») гасит все свои счётчики одним запросом:
+  // viewing=vehicles,vehicle_cars,vehicle_favorites.
+  const viewingSections = [...new Set(String(viewing || "").split(",").map((item) => item.trim()))]
+    .filter((item) => ANALYTICS_SECTIONS.includes(item));
   if (viewingSections.length) {
     await pool.query("UPDATE analytics_seen SET seen_at=now() WHERE section = ANY($1::text[])", [viewingSections]);
   }

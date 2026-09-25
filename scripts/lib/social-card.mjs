@@ -5,7 +5,7 @@
 //   ⚡ Zeekr 001, 2026 · 35 100$ (106 100 BYN) под ключ
 //   🛣 Пробег 9 500 км
 //   🔋 Батарея 95 кВт·ч · запас хода 710 км
-//   📦 В цену входит доставка, растаможка и все сборы
+//   📦 Цена — наш расчёт с доставкой, растаможкой и сборами
 //   🔎 В каталоге под номером 59876786 — ссылка в шапке профиля
 //
 // Третья строка зависит от того, чем машина едет, и пропадает совсем, если в
@@ -88,7 +88,7 @@ export function buildPostText(car, { totalUsd, totalByn, network = "instagram", 
     `${typeIcon(car)} ${title}, ${car?.year}${price}`,
     Number(car?.mileage) > 0 ? `🛣 Пробег ${formatNumber(car.mileage)} км` : "",
     specLine(car),
-    "📦 В цену входит доставка, растаможка и все сборы",
+    "📦 Цена — наш расчёт с доставкой, растаможкой и сборами",
     network === "threads" ? `🔎 №${carNumber(car)} · ${site}/cars/${carNumber(car)}`
       : network === "telegram" ? (withLink ? `🔎 №${carNumber(car)} · <a href="${carPageUrl(car, site)}">Смотреть в каталоге</a>` : `🔎 №${carNumber(car)}`)
       : `🔎 В каталоге под номером ${carNumber(car)} — ссылка в шапке профиля`,

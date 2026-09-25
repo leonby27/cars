@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { brandCatalogGuide } from "../server/repository.mjs";
 import { pool } from "../server/db.mjs";
 import { createSeoRenderer } from "../server/seo-render.mjs";
-import { brandLandingPath, findCatalogLanding } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, brandLandingPath, findCatalogLanding } from "../src/catalog-landings.js";
+import { isBrandGuide, isBrandGuideLanding } from "../src/brand-guide.js";
 import { landingFaq } from "../src/landing-faq.js";
 
 const guide = {
@@ -155,4 +156,20 @@ test("all active catalog brands use the same data-driven guide", () => {
     assert.match(html, new RegExp(`С чем сравнить ${htmlBrand}`));
     assert.doesNotMatch(html, /Другие разделы каталога/);
   }
+});
+
+// Сводка марки — только на странице самой марки. На /catalog/audi-suv она писала
+// «3 219 автомобилей в каталоге» и таблицу всех моделей Audi, хотя кроссоверов в
+// разделе 1 250 (найдено 25.09.2026).
+test("сводка марки не встаёт на разделы «марка + кузов»", () => {
+  const brandBody = CATALOG_LANDINGS.filter((landing) => landing.kind === "brandBody");
+  assert.ok(brandBody.length > 0);
+  for (const landing of brandBody) assert.equal(isBrandGuideLanding(landing), false, landing.path);
+  assert.equal(isBrandGuideLanding(findCatalogLanding("/catalog/audi")), true);
+  const audiSuv = findCatalogLanding("/catalog/audi-suv");
+  const audiGuide = { ...xiaomiGuide, brand: "Audi", total: 3219 };
+  assert.equal(isBrandGuide(audiSuv, audiGuide), false);
+  const faq = landingFaq(audiSuv, { total: 1250, guide: audiGuide });
+  assert.match(faq[0].a, /1[\s  ]250/);
+  assert.doesNotMatch(JSON.stringify(faq), /3[\s  ]219/);
 });

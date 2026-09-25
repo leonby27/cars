@@ -6,7 +6,7 @@ import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, Instagr
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
-import { analyticsUpdatesUrl, sectionFreshCount, watchAnalyticsExit } from "./analytics-updates.js";
+import { analyticsUpdatesUrl, sectionFreshCount, sectionTabs, watchAnalyticsExit } from "./analytics-updates.js";
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
 import { socialGeneration } from "./social-generations.js";
 import { carFrame, headlineSize, KINDS, resolvePlace, socialThemeQuery, socialTiles, tileHeadline } from "./social-themes.js";
@@ -1209,7 +1209,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
       const response = await fetch(analyticsUpdatesUrl(viewing), { credentials:"same-origin" });
       if (response.ok) {
         setUpdates(await response.json());
-        viewedSections.current.add(viewing || "overview");
+        for (const item of [viewing].flat()) viewedSections.current.add(item || "overview");
       }
     } catch { /* счётчики — не повод ломать раздел */ }
   }, []);
@@ -1223,10 +1223,12 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
     // 7/30/90 дней дальше не переопределяем.
     if (id === "search-traffic" && (period === "today" || period === "yesterday")) setPeriod("30");
     setSection(id);
-    const viewedId = id === "vehicles" ? "vehicle_cars" : id;
+    // «Каталог» гасит все свои вкладки и при входе, и при выходе из него:
+    // пока он был открыт, могло набежать новое, и уносить его цифрой в меню незачем.
+    const viewedIds = [...new Set([...sectionTabs(id), ...(section === "vehicles" && id !== "vehicles" ? sectionTabs("vehicles") : [])])];
     // Цифру гасим сразу, не дожидаясь ответа сервера.
-    setUpdates((current) => ({ ...current, [viewedId]:0, ...(id === "contact_interest" ? { contact_interest_details:{} } : {}) }));
-    loadUpdates(viewedId);
+    setUpdates((current) => ({ ...current, ...Object.fromEntries(viewedIds.map((key) => [key, 0])), ...(id === "contact_interest" ? { contact_interest_details:{} } : {}) }));
+    loadUpdates(viewedIds);
   };
   const markViewed = (id) => {
     setUpdates((current) => ({ ...current, [id]:0 }));

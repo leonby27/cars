@@ -846,6 +846,19 @@ function AppLink({ href, navigate, onClick, children, ...props }) {
   return <a href={appHref(href)} onClick={handleClick} onPointerEnter={prefetch} onTouchStart={prefetch} onFocus={prefetch} {...props}>{children}</a>;
 }
 
+// Хлебная крошка — настоящая ссылка: поисковик видит по ней путь вверх по разделам,
+// посетитель может открыть его в новой вкладке. Обычное нажатие делает то же, что
+// делала кнопка на этом месте (шаг назад по истории, возврат в каталог с прежними
+// фильтрами), поэтому это не AppLink: у него переход всегда ровно по адресу.
+function CrumbLink({ href, onOpen, children }) {
+  const handleClick = (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onOpen();
+  };
+  return <a href={appHref(href)} onClick={handleClick}>{children}</a>;
+}
+
 // Внешние ссылки по умолчанию не передают поисковый вес. `follow` разрешён только
 // для редкого явного исключения, согласованного владельцем сайта.
 const EXTERNAL_LINK_REL = "nofollow noopener noreferrer";
@@ -1041,10 +1054,10 @@ function ScrollToTopButton() {
 const routeSeo = {
   "/": [HOME_SEO.title, HOME_SEO.description],
   "/catalog": [CATALOG_INDEX_SEO.title, CATALOG_INDEX_SEO.description],
-  "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
+  "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Подбор и проверка автомобиля, расчёт цены под ключ, договор, доставка и выдача автомобиля из Китая в Минске."],
   "/faq": ["Вопросы о покупке и доставке авто из Китая | abcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
-  "/tracking": ["Отслеживание автомобиля по VIN | abcars.by", "Проверка текущего этапа доставки автомобиля из Китая по VIN-номеру."],
-  "/contacts": ["Контакты abcars.by — автомобили из Китая в Минске", "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая."],
+  "/tracking": ["Отслеживание автомобиля по VIN | abcars.by", "Статус автомобиля из Китая по VIN-номеру."],
+  "/contacts": ["Контакты abcars.by — автомобили из Китая в Минске", "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, расчёту и покупке автомобиля из Китая."],
   "/privacy": ["Политика конфиденциальности | abcars.by", "Политика обработки и защиты персональных данных пользователей сайта abcars.by."],
   "/terms": ["Условия использования сайта | abcars.by", "Условия использования каталога abcars.by, предварительных расчётов и информации об автомобилях из Китая."],
 };
@@ -1468,18 +1481,12 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [phoneRevealed, setPhoneRevealed] = useState(false);
   const menuRef = useRef(null);
   // Остаток квоты считается по вшитым в сборку сводкам — за сессию он не меняется.
   const quotas = useMemo(() => ({
     personal: evQuotaState({ audience: "personal" }),
     business: evQuotaState({ audience: "business" }),
   }), []);
-
-  const togglePhone = () => {
-    if (!phoneRevealed) trackEvent("contact_phone_reveal");
-    setPhoneRevealed(!phoneRevealed);
-  };
 
   useEffect(() => {
     setMenuOpen(false);
@@ -1543,7 +1550,6 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
                 {BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate} className={path === BLOG_INDEX.path || path.startsWith(`${BLOG_INDEX.path}/`) ? "active" : ""} aria-current={path === BLOG_INDEX.path ? "page" : undefined}>{BLOG_INDEX.name}</AppLink>}
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
                 <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>
-                <AppLink href="/tracking" navigate={navigate} className={path === "/tracking" ? "active" : ""} aria-current={path === "/tracking" ? "page" : undefined}>Отслеживание авто</AppLink>
                 <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
                 {/* На узких экранах кнопке «Мои поиски» в шапке не хватает места,
                     поэтому там она живёт в этом меню; на широких — прячется, чтобы
@@ -1559,17 +1565,6 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
           <EvQuotaButton quotas={quotas} navigate={navigate} />
         </div>
         <div className="header-actions">
-          <div className="header-contact-actions" aria-label="Связаться с нами">
-            <button
-              type="button"
-              className={`header-phone-reveal${phoneRevealed ? " is-revealed" : ""}`}
-              aria-expanded={phoneRevealed}
-              onClick={togglePhone}
-            >
-              <Phone size={18} weight="fill" aria-hidden="true" />
-              {phoneRevealed ? COMPANY.phone : "+375 показать номер"}
-            </button>
-          </div>
           <button
             className={`icon-label searches-link${path === "/searches" ? " selected" : ""}`}
             aria-label="Мои поиски"
@@ -3877,7 +3872,7 @@ function ModelPagePromo({ navigate }) {
       </div>
       <div className="model-page-promo-copy">
         <strong>Как заказать авто из Китая</strong>
-        <p>Сначала проверка автомобиля и понятная смета, только потом решение, договор и оплата. Дальше — выкуп, доставка и выдача в Минске.</p>
+        <p>Сначала подбор, проверка автомобиля и понятная смета, только потом решение, договор и оплата. Дальше машину выкупают, доставляют и выдают в Минске.</p>
         <AppLink className="primary" href="/how-it-works" navigate={navigate}>
           О сервисе <ArrowRight size={18} />
         </AppLink>
@@ -5342,7 +5337,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             (server/boot-screen.mjs): там даты не существует в принципе. */}
         {Boolean(catalogUpdatedAt) && Boolean(catalogUpdatedDate(catalogUpdatedAt)) ? (
           <div className="hero-updated">
-            {catalogTotal > 0 ? `В каталоге ${number(catalogTotal)} авто · обновлён ${catalogUpdatedDate(catalogUpdatedAt)}` : `Каталог авто обновлён ${catalogUpdatedDate(catalogUpdatedAt)}`}
+            {`Каталог обновлён ${catalogUpdatedDate(catalogUpdatedAt)}`}
           </div>
         ) : (
           <div className="hero-updated boot-invisible">&nbsp;</div>
@@ -5354,8 +5349,8 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         <h1>{HOME_SEO.h1}</h1>
         <ul className="hero-benefits" aria-label="Преимущества заказа">
           <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
-          <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
-          <li><CheckCircle size={21} weight="fill" />Полное сопровождение</li>
+          <li><CheckCircle size={21} weight="fill" />Всё по договору</li>
+          <li><CheckCircle size={21} weight="fill" />Проверка авто до оплаты</li>
         </ul>
         <HeroSearch value={heroQuery} onChange={setHeroQuery} navigate={navigate} />
       </section>
@@ -5466,7 +5461,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             <Illustration src="/services/delivery-control.png" width="512" height="341" alt="" aria-hidden="true" />
           </span>
           <p>
-            <b>Сопровождаем до выдачи</b>
+            <b>На связи до выдачи</b>
             <small>От подбора до получения</small>
           </p>
         </div>
@@ -5475,7 +5470,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             <Illustration src="/trust-strip/vehicle-documents.png" width="100" height="100" alt="" aria-hidden="true" />
           </span>
           <p>
-            <b>Проверяем до оплаты</b>
+            <b>Проверка до оплаты</b>
             <small>История, батарея и документы</small>
           </p>
         </div>
@@ -5493,7 +5488,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             <Illustration src="/trust-strip/fixed-terms.png" width="100" height="100" alt="" aria-hidden="true" />
           </span>
           <p>
-            <b>Фиксируем условия</b>
+            <b>Условия в договоре</b>
             <small>Цена, сроки и ответственность</small>
           </p>
         </div>
@@ -5819,7 +5814,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
   return (
     <main className="catalog favorites-page page-width">
       <div className="breadcrumbs">
-        <button onClick={() => navigate("/")}>Главная</button>
+        <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <span>/</span>
         <span>Избранное</span>
       </div>
@@ -5963,7 +5958,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
   return (
     <main className="catalog saved-searches-page page-width">
       <div className="breadcrumbs">
-        <button onClick={() => navigate("/")}>Главная</button>
+        <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <span>/</span>
         <span>Мои поиски</span>
       </div>
@@ -6664,15 +6659,15 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   return (
     <main className="catalog page-width">
       <div className="breadcrumbs">
-        <button onClick={() => navigate("/")}>Главная</button>
+        <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         {landing ? (
           <>
-            <button onClick={() => navigate("/catalog")}>Каталог авто из Китая</button>
+            <CrumbLink href="/catalog" onOpen={() => navigate("/catalog")}>Каталог авто из Китая</CrumbLink>
             <CaretRight size={13} />
             {landing.kind === "model" && landing.links?.brandPath && (
               <>
-                <button onClick={() => navigate(landing.links.brandPath)}>{landing.brand}</button>
+                <CrumbLink href={landing.links.brandPath} onOpen={() => navigate(landing.links.brandPath)}>{landing.brand}</CrumbLink>
                 <CaretRight size={13} />
               </>
             )}
@@ -6818,7 +6813,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             aria-hidden="true"
           />
           <h3>Как устроена покупка</h3>
-          <p>Покажем весь путь автомобиля из Китая до выдачи в Минске — без скрытых этапов.</p>
+          <p>Весь путь автомобиля из Китая до выдачи в Минске — без скрытых этапов.</p>
           <ul>
             <li>
               <Check size={15} />
@@ -7184,7 +7179,7 @@ function VehicleFaq({ car, navigate }) {
     })),
   };
   return (
-    <div className="catalog-landing-faq">
+    <div className="catalog-landing-faq detail-faq">
       <h3>{carFaqTitle(car)}</h3>
       <HomeFaqList
         className="catalog-landing-faq-list"
@@ -8087,6 +8082,10 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   };
   const openBrand = () => openFilteredCatalog(false);
   const openModel = () => openFilteredCatalog(true);
+  // Адреса крошек — страницы марки и модели; адрес с фильтром остаётся только
+  // у марки без своего раздела (туда же ведёт и нажатие).
+  const brandCrumbHref = brandLandingPath(car.brand) || `/catalog?brand=${encodeURIComponent(car.brand)}`;
+  const modelCrumbHref = modelLandingPath(car.brand, car.model) || `/catalog?brand=${encodeURIComponent(car.brand)}&model=${encodeURIComponent(car.model)}`;
   const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
   const openSimilarCar = (candidate) => {
     if (openQuickView(candidate)) return;
@@ -8096,13 +8095,13 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   return (
     <main className="detail page-width">
       <div className="breadcrumbs">
-        <button onClick={() => navigate("/")}>Главная</button>
+        <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
-        <button onClick={() => backToCatalog(car.id)}>Каталог авто из Китая</button>
+        <CrumbLink href="/catalog" onOpen={() => backToCatalog(car.id)}>Каталог авто из Китая</CrumbLink>
         <CaretRight size={13} />
-        <button onClick={openBrand}>{car.brand}</button>
+        <CrumbLink href={brandCrumbHref} onOpen={openBrand}>{car.brand}</CrumbLink>
         <CaretRight size={13} />
-        <button onClick={openModel}>{car.model}</button>
+        <CrumbLink href={modelCrumbHref} onOpen={openModel}>{car.model}</CrumbLink>
         <CaretRight size={13} />
         {car.model} {car.year}
       </div>
@@ -8376,7 +8375,7 @@ function AvailabilityRequestModal({ onClose }) {
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
         <Illustration className="availability-request-icon" src="/illustrations/catalog-service-shield.png" width="80" height="80" alt="" aria-hidden="true" />
         <h2 id="availability-request-title">Заявка принята</h2>
-        <p id="availability-request-description">Мы получили запрос и уже занимаемся им. Свяжемся с продавцом и вернёмся к вам с ответом.</p>
+        <p id="availability-request-description">Мы передали запрос проверенной компании-импортёру: она уточнит у продавца наличие и цену и свяжется с вами.</p>
         <div className="order-removal-actions availability-paused-actions">
           <button className="invert-button" type="button" onClick={onClose} autoFocus>Закрыть</button>
         </div>
@@ -8439,7 +8438,7 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
         <div className="auth-modal-heading">
           <h1 id="availability-lead-title">Оставить заявку</h1>
         </div>
-        <p className="availability-lead-note">Проверим у продавца, что автомобиль ещё в продаже, цена и комплектация не изменились, и вернёмся к вам с ответом.</p>
+        <p className="availability-lead-note">Заявку получит проверенная компания-импортёр: она уточнит у продавца, что автомобиль ещё в продаже, цена и комплектация не изменились, и свяжется с вами.</p>
         <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
         <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
         <label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
@@ -8745,7 +8744,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
               </div>
               <div>
-                <PriceLabel label="Услуги abcars.by" description="Подбор, проверка и сопровождение сделки" />
+                <PriceLabel label="Услуги abcars.by" description="Подбор, расчёт и проверка объявления" />
                 <strong>{money(price.serviceUsd, currency)}</strong>
               </div>
             </div>
@@ -8796,6 +8795,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               <button ref={availabilityCtaRef} className={`primary report-order-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
                 {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
               </button>
+            )}
+            {!sold && (
+              <p className="report-order-note">Заявку получит наш проверенный партнёр и проконсультирует вас по этому автомобилю</p>
             )}
           </aside>
           <BrandNotice car={car} />
@@ -9108,9 +9110,9 @@ function OrderDraft({ car, navigate }) {
   return (
     <main className="order-page page-width">
       <div className="breadcrumbs">
-        <button onClick={() => navigate("/")}>Главная</button>
+        <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
-        <button onClick={() => navigate(carHref(car))}>{car.title}</button>
+        <CrumbLink href={carHref(car)} onOpen={() => navigate(carHref(car))}>{car.title}</CrumbLink>
         <CaretRight size={13} />
         Предварительный заказ
       </div>
@@ -9181,7 +9183,7 @@ function OrderDraft({ car, navigate }) {
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Услуги abcars.by" description="Подбор, проверка и сопровождение сделки" />
+                <PriceLabel label="Услуги abcars.by" description="Подбор, расчёт и проверка объявления" />
                 <b>{money(price.serviceUsd, currency)}</b>
               </div>
             </div>
@@ -9475,8 +9477,8 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
         <div className="service-video-copy">
           <div className="service-video-copy-inner">
             <div className="service-video-copy-panel service-video-copy-panel-primary">
-              <h1>Доставляем авто из Китая в Минск под ключ.</h1>
-              <p>Полное сопровождение сделки от выбора авто и до передачи ключей</p>
+              <h1>Авто из Китая под ключ.</h1>
+              <p>Подберём, посчитаем и найдём, кто привезёт. На связи от выбора машины до получения ключей</p>
               <div className="service-video-copy-actions">
                 <button className="primary service-video-copy-cta" onClick={() => navigate("/catalog")}>
                   Выбрать автомобиль <ArrowRight size={18} />
@@ -9495,7 +9497,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
             </div>
             <aside className="service-video-trust-card">
               <ShieldCheck className="service-video-trust-card-icon" size={28} weight="duotone" />
-              <h3>Работаем по договору. Оплата напрямую в Китай.</h3>
+              <h3>Всё по договору. Оплата напрямую в Китай.</h3>
             </aside>
             <div className="service-video-checkline">
               <Check size={20} weight="bold" />
@@ -9847,7 +9849,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
           src/service-copy.js — оттуда же их берёт разметка
           для поисковика, поэтому страница и её видимая роботу версия не разойдутся. */}
       <section className="service-assurance-section page-width" aria-labelledby="service-assurance-title">
-        <h2 className="visually-hidden" id="service-assurance-title">Проверка и сопровождение</h2>
+        <h2 className="visually-hidden" id="service-assurance-title">Проверка и связь</h2>
         <div className="service-assurance-grid">
           {ABOUT_PRINCIPLES.map(({ title, text }, index) => {
             const artwork = assuranceArtwork[index];
@@ -9855,11 +9857,6 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
               <article className={`service-opportunity-card service-assurance-card${index === 1 ? " service-assurance-card-tracking" : ""}`} key={title}>
                 <strong>{title}</strong>
                 <p>{text}</p>
-                {index === 1 && (
-                  <button className="secondary service-assurance-cta" type="button" onClick={() => navigate("/tracking")}>
-                    Отследить авто по VIN
-                  </button>
-                )}
                 <Illustration
                   className={artwork.className}
                   src={artwork.src}
@@ -9898,7 +9895,7 @@ function TrackingPage() {
       setMessage({ type: "error", text: "Проверьте VIN: нужно 17 латинских букв и цифр без I, O и Q." });
       return;
     }
-    setMessage({ type: "empty", text: "По этому VIN пока нет статуса. Проверьте номер или уточните у менеджера, привязан ли автомобиль к отслеживанию." });
+    setMessage({ type: "empty", text: "По этому VIN пока нет статуса. Проверьте номер или уточните у компании, которая везёт автомобиль, подключён ли он к отслеживанию." });
   };
 
   return (
@@ -10393,9 +10390,9 @@ function ToolPage({ tool, navigate }) {
       {/* Крошки ведут через журнал, а не сразу на главную: расчёты — его раздел,
           и обратный путь должен это показывать. */}
       <div className="breadcrumbs">
-        <button onClick={() => goBackTo(navigate, "/")}>Главная</button>
+        <CrumbLink href="/" onOpen={() => goBackTo(navigate, "/")}>Главная</CrumbLink>
         <CaretRight size={13} />
-        <button onClick={() => goBackTo(navigate, BLOG_INDEX.path)}>{BLOG_INDEX.name}</button>
+        <CrumbLink href={BLOG_INDEX.path} onOpen={() => goBackTo(navigate, BLOG_INDEX.path)}>{BLOG_INDEX.name}</CrumbLink>
         <CaretRight size={13} />
         {tool.name}
       </div>
@@ -12371,7 +12368,7 @@ function BlogIndexPage({ navigate }) {
   return (
     <main className="blog-page page-width">
       <div className="breadcrumbs">
-        <button onClick={() => goBackTo(navigate, "/")}>Главная</button>
+        <CrumbLink href="/" onOpen={() => goBackTo(navigate, "/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         {BLOG_INDEX.name}
       </div>
@@ -12886,9 +12883,9 @@ function BlogArticleShell({ post, navigate, quickViewModal, children }) {
   return (
     <main className="blog-page page-width">
       <div className="breadcrumbs">
-        <button onClick={() => goBackTo(navigate, "/")}>Главная</button>
+        <CrumbLink href="/" onOpen={() => goBackTo(navigate, "/")}>Главная</CrumbLink>
         <CaretRight size={13} />
-        <button onClick={() => goBackTo(navigate, BLOG_INDEX.path)}>{BLOG_INDEX.name}</button>
+        <CrumbLink href={BLOG_INDEX.path} onOpen={() => goBackTo(navigate, BLOG_INDEX.path)}>{BLOG_INDEX.name}</CrumbLink>
         <CaretRight size={13} />
         {post.name}
       </div>
@@ -13287,6 +13284,13 @@ function SiteFooter({ navigate }) {
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSaving, setNewsletterSaving] = useState(false);
   const [newsletterError, setNewsletterError] = useState("");
+  // Телефон жил в шапке, 25.09.2026 переехал сюда под соцсети — та же кнопка
+  // «показать номер» и то же событие в статистике.
+  const [phoneRevealed, setPhoneRevealed] = useState(false);
+  const togglePhone = () => {
+    if (!phoneRevealed) trackEvent("contact_phone_reveal");
+    setPhoneRevealed(!phoneRevealed);
+  };
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("app") === "download") {
       trackEvent("app_download_qr_deeplink_modal_open");
@@ -13340,7 +13344,7 @@ function SiteFooter({ navigate }) {
       <div className="page-width footer-main">
         <div className="footer-brand">
           <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="abcars.by — на главную"><SiteLogo /></AppLink>
-          <p>Помогаем выбрать, проверить и доставить автомобиль из Китая в Беларусь.</p>
+          <p>Помогаем выбрать и купить автомобиль из Китая в Беларусь.</p>
         </div>
         <FooterAppDownload onOpen={openAppUnavailable} />
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<a href={"/how-it-works#faq"}>Вопросы и ответы</a></div>
@@ -13354,6 +13358,15 @@ function SiteFooter({ navigate }) {
             <ExternalLink className="header-social-link is-instagram" aria-label="Instagram" href={COMPANY.instagramUrl} onClick={() => trackEvent("contact_instagram_click")}><InstagramLogo size={25} weight="bold" /></ExternalLink>
             <ExternalLink className="header-social-link is-threads" aria-label="Threads" href={COMPANY.threadsUrl} onClick={() => trackEvent("contact_threads_click")}><ThreadsLogo size={25} /></ExternalLink>
           </div>
+          <button
+            type="button"
+            className={`phone-reveal${phoneRevealed ? " is-revealed" : ""}`}
+            aria-expanded={phoneRevealed}
+            onClick={togglePhone}
+          >
+            <Phone size={18} weight="fill" aria-hidden="true" />
+            {phoneRevealed ? COMPANY.phone : "+375 показать номер"}
+          </button>
         </div>
         <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
           <span className="footer-newsletter-title">
@@ -13834,6 +13847,9 @@ const activeOrderStage = (order) => {
   return 4;
 };
 
+// Этапы сделки в кабинете (осмотр, договор, оплата) — пока сделку ведёт импортёр, скрыты.
+const ORDER_DEAL_STAGES_ENABLED = false;
+
 function OrderStageRow({ number:stageNumber, title, description, open, locked, done, fixed = false, onToggle, children }) {
   const heading = (
     <>
@@ -13865,7 +13881,7 @@ function OrderRemovalModal({ carTitle, orderNumber, saving, error, onCancel, onC
         <button className="modal-close" type="button" onClick={onCancel} disabled={saving} aria-label="Закрыть"><X size={19} /></button>
         <div className="order-removal-icon"><Trash size={25} weight="duotone" /></div>
         <h2 id="order-removal-title">Убрать автомобиль?</h2>
-        <p id="order-removal-description"><b>{carTitle}</b> будет удалён из заказа № {orderNumber}. Прогресс по проверке объявления, осмотру, договору и оплате также будет удалён.</p>
+        <p id="order-removal-description"><b>{carTitle}</b> будет удалён из заказа № {orderNumber}. Заявка на проверку объявления также будет удалена.</p>
         {error && <div className="auth-error order-removal-error" role="alert">{error}</div>}
         <form className="order-removal-actions" onSubmit={(event) => { event.preventDefault(); onConfirm(); }}>
           <button className="secondary" type="button" onClick={onCancel} disabled={saving}>Отмена</button>
@@ -14087,7 +14103,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
   if (!order) return (
     <section className="account-panel account-empty">
       <div className="account-panel-title"><div><span>Мои заказы</span><h2>Начните с подходящего автомобиля</h2></div><ClipboardText size={27} weight="duotone" /></div>
-      <p>{error || "Выберите автомобиль в каталоге — после этого здесь появятся проверка объявления, осмотр, договор и оплата."}</p>
+      <p>{error || "Выберите автомобиль в каталоге — после этого здесь появится заявка на проверку объявления."}</p>
       <button className="primary" onClick={() => navigate("/catalog")}>Перейти в каталог <ArrowRight size={18} /></button>
     </section>
   );
@@ -14154,12 +14170,12 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         </div>
       </div>
       <div className="customer-order-stages">
-        <OrderStageRow number={1} title="Проверка объявления" description="Уточним у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
+        <OrderStageRow number={1} title="Проверка объявления" description="Проверенная компания-импортёр уточнит у продавца наличие, цену и готовность к сделке." open fixed done={availabilityRequested}>
           {/* После отправки запроса вёрстка этапа не меняется: поле с комментарием и
               кнопка просто перестают быть активными, а рядом с кнопкой встаёт статус. */}
           <form className="availability-check-form" onSubmit={(event) => { event.preventDefault(); requestAvailabilityCheck(); }}>
             <div className="availability-check-block">
-              <p>Перед осмотром свяжемся с продавцом и подтвердим:</p>
+              <p>Заявку получит проверенная компания-импортёр. Она свяжется с продавцом и подтвердит:</p>
               <ul className="availability-check-list">
                 <li><CheckCircle size={20} weight="fill" /> автомобиль ещё в продаже;</li>
                 <li><CheckCircle size={20} weight="fill" /> цена и комплектация не изменились;</li>
@@ -14175,34 +14191,38 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
             <div className="availability-check-actions">
               <button className="primary" type="submit" disabled={saving || availabilityRequested}>Уточнить актуальность</button>
               {availabilityRequested && (
-                <p className="availability-check-status"><CheckCircle size={20} weight="fill" />{availabilityConfirmed ? "Актуальность подтверждена." : "Запрос отправлен, скоро свяжемся."}</p>
+                <p className="availability-check-status"><CheckCircle size={20} weight="fill" />{availabilityConfirmed ? "Актуальность подтверждена." : "Запрос отправлен, с вами скоро свяжутся."}</p>
               )}
             </div>
           </form>
         </OrderStageRow>
-        <OrderStageRow number={2} title="Осмотр автомобиля" description="Проверим состояние автомобиля перед покупкой." open={expandedStage === 2} locked={!inspectionUnlocked} done={inspectionDone} onToggle={() => setExpandedStage(expandedStage === 2 ? 0 : 2)}>
-          {order.inspectionStatus === "decision" ? (
-            <><p>Заказать осмотр перед покупкой?</p><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("order_inspection")}>Заказать осмотр</button><button className="order-text-action" type="button" disabled={saving} onClick={() => applyAction("skip_inspection")}>Пропустить</button></div></>
-          ) : order.inspectionStatus === "requested" ? (
-            <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Осмотр заказан.</b><span>Подтвердим стоимость и срок в выбранном вами канале связи.</span></p></div>
-          ) : (
-            <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Осмотр пропущен.</b><span>Решение сохранено, можно перейти к договору.</span></p></div>
-          )}
-        </OrderStageRow>
-        <OrderStageRow number={3} title="Договор" description="Подготовим и согласуем договор доставки." open={expandedStage === 3} locked={!contractUnlocked} done={contractDone} onToggle={() => setExpandedStage(expandedStage === 3 ? 0 : 3)}>
-          {contractDone ? (
-            <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Договор согласован.</b><span>Переходим к счёту и выкупу автомобиля.</span></p></div>
-          ) : (
-            <><p>Данные уже заполнены из профиля. Подтвердите автомобиль и условия.</p><div className="contract-summary"><span>{user.name}</span><span>{formatAccountPhone(user.phone)}</span><span>{order.car.title}</span></div><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("confirm_contract")}>Согласовать договор</button></div></>
-          )}
-        </OrderStageRow>
-        <OrderStageRow number={4} title="Оплата и выкуп" description="Сформируем счёт и подтвердим выкуп автомобиля." open={expandedStage === 4} locked={!paymentUnlocked} done={order.paymentStatus === "invoice_requested"} onToggle={() => setExpandedStage(expandedStage === 4 ? 0 : 4)}>
-          {order.paymentStatus === "invoice_requested" ? (
-            <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос на счёт получен.</b><span>После проверки цены продавца счёт появится здесь.</span></p></div>
-          ) : (
-            <><p>Сначала подтвердим актуальную цену продавца, затем подготовим счёт.</p>{order.car.estimatedTotalUsd && <div className="order-estimate"><span>Ориентировочно до Минска</span><b>≈ {money(order.car.estimatedTotalUsd, currency)}</b></div>}<button className="primary" type="button" disabled={saving} onClick={() => applyAction("request_invoice")}>Запросить счёт</button></>
-          )}
-        </OrderStageRow>
+        {/* Этапы «Осмотр», «Договор», «Оплата и выкуп» скрыты 25.09.2026: abcars — сервис,
+            договор и оплату ведёт компания-импортёр. Вернуть — ORDER_DEAL_STAGES_ENABLED = true. */}
+        {ORDER_DEAL_STAGES_ENABLED && (<>
+          <OrderStageRow number={2} title="Осмотр автомобиля" description="Проверим состояние автомобиля перед покупкой." open={expandedStage === 2} locked={!inspectionUnlocked} done={inspectionDone} onToggle={() => setExpandedStage(expandedStage === 2 ? 0 : 2)}>
+            {order.inspectionStatus === "decision" ? (
+              <><p>Заказать осмотр перед покупкой?</p><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("order_inspection")}>Заказать осмотр</button><button className="order-text-action" type="button" disabled={saving} onClick={() => applyAction("skip_inspection")}>Пропустить</button></div></>
+            ) : order.inspectionStatus === "requested" ? (
+              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Осмотр заказан.</b><span>Подтвердим стоимость и срок в выбранном вами канале связи.</span></p></div>
+            ) : (
+              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Осмотр пропущен.</b><span>Решение сохранено, можно перейти к договору.</span></p></div>
+            )}
+          </OrderStageRow>
+          <OrderStageRow number={3} title="Договор" description="Подготовим и согласуем договор доставки." open={expandedStage === 3} locked={!contractUnlocked} done={contractDone} onToggle={() => setExpandedStage(expandedStage === 3 ? 0 : 3)}>
+            {contractDone ? (
+              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Договор согласован.</b><span>Переходим к счёту и выкупу автомобиля.</span></p></div>
+            ) : (
+              <><p>Данные уже заполнены из профиля. Подтвердите автомобиль и условия.</p><div className="contract-summary"><span>{user.name}</span><span>{formatAccountPhone(user.phone)}</span><span>{order.car.title}</span></div><div className="customer-order-actions"><button className="primary" type="button" disabled={saving} onClick={() => applyAction("confirm_contract")}>Согласовать договор</button></div></>
+            )}
+          </OrderStageRow>
+          <OrderStageRow number={4} title="Оплата и выкуп" description="Сформируем счёт и подтвердим выкуп автомобиля." open={expandedStage === 4} locked={!paymentUnlocked} done={order.paymentStatus === "invoice_requested"} onToggle={() => setExpandedStage(expandedStage === 4 ? 0 : 4)}>
+            {order.paymentStatus === "invoice_requested" ? (
+              <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос на счёт получен.</b><span>После проверки цены продавца счёт появится здесь.</span></p></div>
+            ) : (
+              <><p>Сначала подтвердим актуальную цену продавца, затем подготовим счёт.</p>{order.car.estimatedTotalUsd && <div className="order-estimate"><span>Ориентировочно до Минска</span><b>≈ {money(order.car.estimatedTotalUsd, currency)}</b></div>}<button className="primary" type="button" disabled={saving} onClick={() => applyAction("request_invoice")}>Запросить счёт</button></>
+            )}
+          </OrderStageRow>
+        </>)}
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
       {removalOpen && <OrderRemovalModal carTitle={order.car.title} orderNumber={order.orderNumber} saving={saving} error={removalError} onCancel={() => { setRemovalOpen(false); setRemovalError(""); }} onConfirm={removeOrder} />}

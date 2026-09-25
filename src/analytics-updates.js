@@ -1,7 +1,8 @@
 // Без `viewing` сервер только возвращает непрочитанные счётчики. Конкретный
 // раздел передаём после явного нажатия или при выходе из аналитики.
+// Несколько разделов сразу — массивом: сервер отметит их одним запросом.
 export const analyticsUpdatesUrl = (viewing = "") => {
-  const section = String(viewing || "").trim();
+  const section = (Array.isArray(viewing) ? viewing : [viewing]).map((item) => String(item || "").trim()).filter(Boolean).join(",");
   return section
     ? `/api/analytics/updates?viewing=${encodeURIComponent(section)}`
     : "/api/analytics/updates";
@@ -27,5 +28,8 @@ export function watchAnalyticsExit(getViewedSections, target = window, send = fe
 // видно только после того, как раздел откроешь.
 export const SECTION_TABS = { vehicles:["vehicles", "vehicle_cars", "vehicle_favorites"] };
 
+// Все счётчики раздела: у «Каталога» — три вкладки, у остальных — он сам.
+export const sectionTabs = (section = "") => SECTION_TABS[section] || [section];
+
 export const sectionFreshCount = (updates = {}, section = "") =>
-  (SECTION_TABS[section] || [section]).reduce((sum, key) => sum + (Number(updates[key]) || 0), 0);
+  sectionTabs(section).reduce((sum, key) => sum + (Number(updates[key]) || 0), 0);

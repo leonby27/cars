@@ -158,14 +158,14 @@ const marketBelarus = existsSync(marketPath) ? JSON.parse(readFileSync(marketPat
 // адрес с фильтрами (`/catalog?brand=BYD`) не дошёл бы до переброса на свой раздел.
 const publicPages = [
   { route: "/", title: HOME_SEO.title, description: HOME_SEO.description, h1: HOME_SEO.h1.replace(/\u00a0/g, " "), lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },
-  { route: "/how-it-works/", title: "О сервисе покупки автомобилей из Китая | abcars.by", description: "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске.", h1: "О сервисе abcars.by", lead: "Сначала подтверждаем наличие, состояние и полную смету. После согласования заключаем договор, выкупаем автомобиль и доставляем его в Минск." },
+  { route: "/how-it-works/", title: "О сервисе покупки автомобилей из Китая | abcars.by", description: "Подбор и проверка автомобиля, расчёт цены под ключ, договор, доставка и выдача автомобиля из Китая в Минске.", h1: "О сервисе abcars.by", lead: "Подбираем автомобиль, сверяем наличие, состояние и полную смету. После вашего согласования заключается договор, машину выкупают и доставляют в Минск." },
   // Страницы `/about` больше нет: у неё был тот же заголовок «О сервисе abcars.by», что
   // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
   // подход и «чего мы не обещаем» — перенесены вниз `/how-it-works`, а сам адрес
   // перебрасывается туда навсегда (правило в vercel.json).
-  { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы Абкарс (ABCars) о проверке, цене, договоре, оплате, доставке и ответственности." },
-  { route: "/tracking/", title: "Отслеживание автомобиля по VIN | abcars.by", description: "Проверка текущего этапа доставки автомобиля из Китая по VIN-номеру.", h1: "Отслеживание автомобиля", lead: "Введите VIN, чтобы узнать, на каком этапе находится ваш автомобиль." },
-  { route: "/contacts/", title: "Контакты abcars.by — автомобили из Китая в Минске", description: "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, покупке и доставке автомобиля из Китая.", h1: "Контакты abcars.by", lead: "Обсудим бюджет, подбор, проверку, договор и доставку автомобиля из Китая в Беларусь." },
+  { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы Абкарс (ABCars) о проверке, цене, договоре, оплате, доставке и о том, кто привозит машину." },
+  { route: "/tracking/", title: "Отслеживание автомобиля по VIN | abcars.by", description: "Статус автомобиля из Китая по VIN-номеру.", h1: "Отслеживание автомобиля", lead: "Введите VIN, чтобы узнать, на каком этапе находится ваш автомобиль." },
+  { route: "/contacts/", title: "Контакты abcars.by — автомобили из Китая в Минске", description: "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, расчёту и покупке автомобиля из Китая.", h1: "Контакты abcars.by", lead: "Обсудим бюджет, подбор, проверку и расчёт цены автомобиля из Китая в Беларусь." },
   { route: "/privacy/", title: "Политика конфиденциальности | abcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
   { route: "/terms/", title: "Условия использования сайта | abcars.by", description: "Условия использования каталога abcars.by, предварительных расчётов и информации об автомобилях из Китая.", h1: "Условия использования сайта", lead: "Информация каталога и расчёты являются предварительными; финальные условия фиксируются после проверки и в договоре." },
   // Общая страница «О моделях авто». Сами обзоры файлами не собираются: их отдаёт
@@ -544,7 +544,7 @@ function infoArticle(route) {
       ["Электронная почта", COMPANY.email],
       ["Telegram", COMPANY.telegram],
     ].filter(([, value]) => value);
-    return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства оформлять заказ.</p><p>До обращения можно посмотреть <a href="${hrefRoute("/")}">автомобили из Китая с расчётом до Минска</a>.</p></section>`;
+    return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства что-то покупать.</p><p>До обращения можно посмотреть <a href="${hrefRoute("/")}">автомобили из Китая с расчётом до Минска</a>.</p></section>`;
   }
   if (route === "/how-it-works/") {
     const report = SERVICE_REPORT_EXAMPLE;
@@ -569,7 +569,7 @@ function infoArticle(route) {
       ? `<h3>${escapeHtml(report.recommendation.eyebrow)}</h3><h4>${escapeHtml(report.recommendation.title)}</h4><p>${escapeHtml(report.recommendation.summary)}</p><ol>${report.recommendation.steps.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`
       : "";
     const reportPowertrainNote = report.powertrainNote?.text ? `<p>${escapeHtml(report.powertrainNote.text)}</p>` : "";
-    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что мы обещаем</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и сопровождение</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Покупка авто: от выбора до ключей</h2>${list(PURCHASE_FLOW_STEPS.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(report.presentation.title)}</h2><h3>${escapeHtml(report.vehicle.name)}</h3><p><strong>${escapeHtml(report.verdict.title)}.</strong> ${escapeHtml(report.verdict.summary)}</p>${list(report.risks.map((item) => [item.title, [item.status, item.note].filter(Boolean).join(". ")]))}${reportInspection}<h3>${escapeHtml(report.labels.evidenceTitle)}</h3>${reportPhotoGroups}<h3>${escapeHtml(report.labels.factsTitle)}</h3>${list(report.facts.map((item) => [item.label, item.metric === "photoCount" ? String(reportPhotos.length) : item.value]))}<h3>${escapeHtml(report.labels.findingsTitle)}</h3><ul>${report.findings.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul>${reportLimitations}${reportRecommendation}${reportPowertrainNote}</section>`;
+    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что входит в сервис</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и связь</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Покупка авто: от выбора до ключей</h2>${list(PURCHASE_FLOW_STEPS.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(report.presentation.title)}</h2><h3>${escapeHtml(report.vehicle.name)}</h3><p><strong>${escapeHtml(report.verdict.title)}.</strong> ${escapeHtml(report.verdict.summary)}</p>${list(report.risks.map((item) => [item.title, [item.status, item.note].filter(Boolean).join(". ")]))}${reportInspection}<h3>${escapeHtml(report.labels.evidenceTitle)}</h3>${reportPhotoGroups}<h3>${escapeHtml(report.labels.factsTitle)}</h3>${list(report.facts.map((item) => [item.label, item.metric === "photoCount" ? String(reportPhotos.length) : item.value]))}<h3>${escapeHtml(report.labels.findingsTitle)}</h3><ul>${report.findings.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul>${reportLimitations}${reportRecommendation}${reportPowertrainNote}</section>`;
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {
@@ -1623,9 +1623,10 @@ const llmsFull = () => {
   return `${block(
     "# abcars.by — б/у автомобили из Китая в Беларусь: факты для пересказа",
     "",
-    "Маркетплейс подержанных машин с китайского рынка с доставкой в Минск. У каждой машины",
-    "показаны цена продавца в Китае и расчётная стоимость до Минска: доставка, таможенные",
-    "платежи, утилизационный сбор и сопровождение сделки. Сайт на русском языке.",
+    "Сервис подбора подержанных машин с китайского рынка с расчётом цены до Минска. У каждой",
+    "машины показаны цена продавца в Китае и расчётная стоимость до Минска: доставка, таможенные",
+    "платежи, утилизационный сбор и услуги сервиса. Ввоз организуют компании-импортёры, с которыми",
+    "работает сервис. Сайт на русском языке.",
     "",
     `Файл собран ${day(new Date().toISOString())}. Цифры пересобираются вместе с сайтом каждую ночь.`,
     "",

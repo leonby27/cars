@@ -253,7 +253,7 @@ export async function biggestDrops({ models, network = "telegram", limit = 5 }) 
     block: "drops",
     cars,
     photos: (await Promise.all(cars.map((car) => photosFor(car, 1)))).flat(),
-    text: `📉 Подешевели за неделю\n\n${lines.join("\n")}\n\nЦены под ключ: с доставкой, растаможкой и сборами.\n${callToAction(network)}`,
+    text: `📉 Подешевели за неделю\n\n${lines.join("\n")}\n\nЦены под ключ — наш расчёт с доставкой, растаможкой и сборами.\n${callToAction(network)}`,
   };
 }
 
@@ -288,7 +288,7 @@ export async function budgetPick({ models, capUsd, network = "telegram", limit =
     block: "budget",
     cars,
     photos: (await Promise.all(cars.map((car) => photosFor(car, 1)))).flat(),
-    text: `💰 ${cars.length} машин до ${money(capUsd)} под ключ\n\n${cars.map((car, index) => listLine(car, index, { numbered: true })).join("\n")}\n\nЦена под ключ — с доставкой, растаможкой и сборами, доплачивать сверху нечего.\n${callToAction(network)}`,
+    text: `💰 ${cars.length} машин до ${money(capUsd)} под ключ\n\n${cars.map((car, index) => listLine(car, index, { numbered: true })).join("\n")}\n\nЦена под ключ — наш расчёт с доставкой, растаможкой и сборами.\n${callToAction(network)}`,
   };
 }
 

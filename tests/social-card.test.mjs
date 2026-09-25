@@ -36,7 +36,7 @@ test("у электромобиля в первой строке цена в д�
   assert.equal(lines[0], "⚡ Zeekr 001, 2026 · 35 100$ (106 100 BYN) под ключ");
   assert.equal(lines[1], "🛣 Пробег 9 500 км");
   assert.equal(lines[2], "🔋 Батарея 95 кВт·ч · запас хода 710 км");
-  assert.equal(lines[3], "📦 В цену входит доставка, растаможка и все сборы");
+  assert.equal(lines[3], "📦 Цена — наш расчёт с доставкой, растаможкой и сборами");
   assert.equal(lines[4], "🔎 В каталоге под номером 59876786 — ссылка в шапке профиля");
 });
 
@@ -84,7 +84,7 @@ test("недостающие характеристики строку не со
   const bare = { id: "che168-1", externalId: "1", brand: "BYD", model: "Song", year: 2022, type: "Электромобиль" };
   const lines = norm(buildPostText(bare, { totalUsd: 0 })).split("\n");
   assert.equal(lines[0], "⚡ BYD Song, 2022");
-  assert.equal(lines[1], "📦 В цену входит доставка, растаможка и все сборы");
+  assert.equal(lines[1], "📦 Цена — наш расчёт с доставкой, растаможкой и сборами");
   assert.ok(!lines.some((line) => /Пробег|Батарея|л\.с\./.test(line)));
 });
 
