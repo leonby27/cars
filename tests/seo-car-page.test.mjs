@@ -212,3 +212,13 @@ test("на странице машины есть ценовая полоса с
   // Без материалов блока нет вовсе.
   assert.doesNotMatch(render().carPage({ car, sections }).html, /в журнале/);
 });
+
+test("на странице машины с готовой разметкой приложения вопросы размечены один раз", () => {
+  // 25.09.2026: FAQPage стоял дважды — в заголовке от сервера и рядом с блоком вопросов
+  // от приложения. Приложение ставит его само, сервер — только в простой версии.
+  const appRoot = '<main><script type="application/ld+json">{"@type":"FAQPage"}</script></main>';
+  const withApp = render().carPage({ car, appRoot, appRootPath: "/cars/56135000" }).html;
+  assert.equal((withApp.match(/"@type":"FAQPage"/g) || []).length, 1);
+  const plain = render().carPage({ car }).html;
+  assert.equal((plain.match(/"@type":"FAQPage"/g) || []).length, 1);
+});

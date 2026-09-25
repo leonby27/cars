@@ -50,7 +50,12 @@ const outPath = path.resolve(args.get("out") || path.join(root, buildDir, "clien
 const freshDays = Math.max(1, Number(args.get("fresh-days")) || 7);
 // Лимит Яндекса на файл — 30 000 предложений; держим небольшой запас.
 const offerLimit = Math.min(30_000, Math.max(100, Number(args.get("limit")) || 29_500));
-const photosPerCar = 5;
+// Одно фото на машину и 600 точек: Яндексу для предложения хватает одного кадра, а
+// каждую картинку он скачивает через наш сервер (JPEG нет в постоянном хранилище
+// фото, он берётся у источника и ложится во временный кэш на 8 ГБ). Пять кадров по
+// 1080 — это ~150 тыс. картинок и десятки гигабайт, которые вытеснили бы из кэша
+// фото самого сайта.
+const photosPerCar = 1;
 const allowDb = args.has("db") || /^(1|true|yes)$/i.test(String(process.env.SEO_CARS_FROM_DB || ""));
 
 if (!allowDb) {
@@ -66,7 +71,7 @@ const escapeXml = (value) => String(value ?? "")
 const number = (value) => new Intl.NumberFormat("ru-RU").format(Math.round(Number(value) || 0));
 // Снимок в JPEG со своего домена: Яндекс в фидах ждёт JPEG или PNG, а кэш фото отдаёт
 // тот же кадр и как .jpg (так же берут картинки соцсети, см. socialPhotoHref).
-const photoUrl = (source) => socialPhotoHref(String(source || ""), { origin: siteUrl, width: 1080 }) || null;
+const photoUrl = (source) => socialPhotoHref(String(source || ""), { origin: siteUrl, width: 600 }) || null;
 const isoDate = (value) => {
   const date = value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toISOString().slice(0, 19) : null;
@@ -170,7 +175,7 @@ for (const [key, list] of [...byModel].sort((left, right) => right[1].length - l
     from: true,
     categoryId: categoryOf.get(list[0].body_type) || 1,
     setIds: [brandSetId.get(brand)],
-    pictures: list.slice(0, 3).map((row) => photoUrl(row.photos[0])).filter(Boolean),
+    pictures: list.slice(0, 2).map((row) => photoUrl(row.photos[0])).filter(Boolean),
     description: `${name} ${fromPhrase()} с доставкой в Беларусь: ${number(list.length)} авто в наличии`,
     params: [["Конверсия", coreKeys.has(key) ? 6 : 4], ["Число объявлений", list.length]],
   });

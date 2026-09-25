@@ -564,7 +564,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         image: schemaPhoto,
         type: "product",
         indexable,
-        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [titleText, route]]), schema, ...(questions.length ? [faqSchema(questions)] : [])],
+        // Разметку вопросов при готовой разметке приложения ставит оно само (VehicleFaq
+        // в App.jsx) рядом с блоком вопросов. Здесь её добавляем только в простой версии
+        // страницы — иначе на карточке было два одинаковых FAQPage (найдено 25.09.2026).
+        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [titleText, route]]), schema, ...(questions.length && !appRoot ? [faqSchema(questions)] : [])],
       }),
     };
   }

@@ -759,24 +759,51 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   color: var(--ink);
 }
 
-/* Популярные модели на главной — те же плашки, что у полос цен; число машин мельче.
-   Сверх первых шестнадцати плашки скрыты до нажатия «Ещё» (ссылки в разметке есть). */
+/* Популярные модели на главной: заголовок, вкладки марок (ряд прокручивается на
+   телефоне) и плашки моделей — те же, что у полос цен; число машин и цена мельче.
+   Сверх первых шестнадцати плашки скрыты до «Ещё» (ссылки в разметке есть). */
 .home-popular-models {
+  margin-top: 28px;
+}
+.home-popular-models h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+.home-popular-tabs {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.home-popular-models b {
-  font-size: 16px;
+.home-popular-tabs::-webkit-scrollbar {
+  display: none;
 }
-.home-popular-models > div {
+.home-popular-tabs button {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-contrast);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.home-popular-tabs button:hover {
+  color: var(--ink);
+}
+.home-popular-tabs button.active {
+  background: var(--panel);
+  color: var(--ink);
+}
+.home-popular-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-.home-popular-models a,
+.home-popular-list a,
 .home-popular-toggle {
   display: inline-flex;
   align-items: baseline;
@@ -792,11 +819,11 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   cursor: pointer;
   transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
 }
-.home-popular-models a small {
+.home-popular-list a small {
   color: var(--muted-contrast);
   font-size: 13px;
 }
-.home-popular-models a:hover,
+.home-popular-list a:hover,
 .home-popular-toggle:hover {
   background: var(--model-chip-hover-bg);
   color: var(--ink);
@@ -806,6 +833,67 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
 }
 .home-popular-toggle {
   font-weight: 700;
+}
+.home-popular-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+.home-popular-brand-link:hover {
+  color: var(--ink);
+}
+/* «Почему удобнее»: вступление и пять пунктов на подложках — тем же приёмом, что
+   блоки ссылок: фон вместо рамки. */
+.home-why {
+  margin-top: 56px;
+}
+.home-why-intro h2 {
+  margin: 0 0 12px;
+  font-size: 28px;
+  line-height: 1.2;
+}
+.home-why-intro p {
+  max-width: 860px;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+}
+.home-why-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.home-why-list li {
+  padding: 20px;
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--panel);
+}
+.home-why-list h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.home-why-list p {
+  margin: 0;
+  color: var(--muted-contrast);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.home-why-tools {
+  margin: 16px 0 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.home-why-tools a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .popular-brands {

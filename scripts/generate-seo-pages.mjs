@@ -1041,16 +1041,33 @@ const live = await readLiveCatalog();
 // здесь же и кладём рядом со сборкой: он попадёт и в готовую разметку, и в данные для
 // оживления — первый кадр в браузере совпадёт с сервером.
 const POPULAR_MODELS_ON_HOME = 48;
-const popularModels = [...live.models]
+// Вкладки марок: как у IM4CAR, главная — оглавление каталога. Крупные марки со всеми
+// своими моделями (от трёх машин), числом машин и ценой «от» — ссылками на страницы
+// моделей. До 25.09.2026 с главной на модели не вело ни одной ссылки, у них — 387.
+const BRAND_TABS_ON_HOME = 16;
+const modelEntries = [...live.models]
   .map(([key, count]) => {
     const [brand, model] = key.split("|");
     const review = MODEL_PAGES.find((page) => page.brand === brand && page.model === model);
-    return { path: modelLandingPath(brand, model), name: review?.name || carNameTitle(brand, model), count: Number(count) || 0 };
+    const price = Number(live.modelPrices?.get(key)) || null;
+    return { brand, path: modelLandingPath(brand, model), name: review?.name || carNameTitle(brand, model), count: Number(count) || 0, priceFrom: price ? Math.round(price / 50) * 50 : null };
   })
   .filter((item) => item.path && item.count >= 3)
-  .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, "ru"))
-  .slice(0, POPULAR_MODELS_ON_HOME);
-writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify(popularModels)}\n`);
+  .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, "ru"));
+const popularModels = modelEntries.slice(0, POPULAR_MODELS_ON_HOME).map(({ brand, ...item }) => item);
+const brandTotals = new Map();
+for (const item of modelEntries) brandTotals.set(item.brand, (brandTotals.get(item.brand) || 0) + item.count);
+const brandModelTabs = [...brandTotals]
+  .filter(([brand]) => brandLandingPath(brand))
+  .sort((left, right) => right[1] - left[1])
+  .slice(0, BRAND_TABS_ON_HOME)
+  .map(([brand, total]) => ({
+    brand,
+    path: brandLandingPath(brand),
+    total,
+    models: modelEntries.filter((item) => item.brand === brand).map(({ brand: _brand, ...item }) => item),
+  }));
+writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs })}\n`);
 
 // Разделы, в которых есть хотя бы одна машина. Марки заведены заранее, под загрузку
 // каталога: пока импорт до марки не дошёл, её раздел пуст — в карту сайта и в ссылки
@@ -1385,6 +1402,8 @@ async function readLiveCatalog() {
       showcase,
       collections,
       models: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.count])),
+      // Цена «от» по модели (сохранённая оценка до Минска) — для вкладок марок на главной.
+      modelPrices: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.priceMin])),
       // Дата последнего изменения по каждой модели — для `lastmod` у обзоров.
       modelChanged: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, isoDate(row.changedAt)])),
       carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at), image: carSitemapPhoto(row.image) })),

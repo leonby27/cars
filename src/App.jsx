@@ -4375,33 +4375,130 @@ function HomePriceBands({ navigate }) {
   );
 }
 
-/* Популярные модели на главной: до 48 моделей с наибольшим числом машин — ссылками на
-   их каталожные страницы. Список считает сборка и встраивает в страницу
-   (window.__boot.popularModels, см. scripts/prerender-home.mjs), поэтому первый кадр в
-   браузере совпадает с готовой разметкой. Сначала видны первые 16, остальные — по
-   кнопке; ссылки на все 48 есть в разметке сразу (их читает поисковик). */
+/* Популярные модели на главной — оглавление каталога, как у IM4CAR: вкладка «Все» —
+   48 моделей с наибольшим числом машин, дальше вкладка на каждую крупную марку со всеми
+   её моделями, числом машин и ценой «от». Данные считает сборка и встраивает в
+   страницу (window.__boot.popularModels / brandModelTabs, scripts/prerender-home.mjs),
+   поэтому первый кадр в браузере совпадает с готовой разметкой. Все вкладки и все
+   ссылки есть в разметке сразу (их читает поисковик); на экране — одна вкладка и
+   первые 16 моделей, остальные по кнопке «Ещё». */
 const HOME_POPULAR_MODELS_VISIBLE = 16;
+function HomeModelChips({ items, navigate, open, onToggle }) {
+  const currency = useCurrency();
+  return (
+    <div className="home-popular-list">
+      {items.map((item, index) => (
+        <AppLink key={item.path} href={item.path} navigate={navigate} className={index >= HOME_POPULAR_MODELS_VISIBLE ? "home-popular-extra" : undefined}>
+          {item.name}
+          <small>{number(item.count)}{item.priceFrom ? ` · от ${money(item.priceFrom, currency)}` : ""}</small>
+        </AppLink>
+      ))}
+      {items.length > HOME_POPULAR_MODELS_VISIBLE && (
+        <button type="button" className="home-popular-toggle" onClick={onToggle} aria-expanded={open}>
+          {open ? "Свернуть" : `Ещё ${number(items.length - HOME_POPULAR_MODELS_VISIBLE)}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function HomePopularModels({ navigate }) {
   const [models] = useState(() => (Array.isArray(window.__boot?.popularModels) ? window.__boot.popularModels : []));
+  const [brands] = useState(() => (Array.isArray(window.__boot?.brandModelTabs) ? window.__boot.brandModelTabs : []));
+  const [active, setActive] = useState("all");
   const [open, setOpen] = useState(false);
+  const tabsId = useId();
   if (!models.length) return null;
+  // В id элементов — номер вкладки, а не имя марки: в именах бывают пробелы («Li Auto»).
+  const tabs = [{ key: "all", id: "all", label: "Все" }, ...brands.map((brand, index) => ({ key: brand.brand, id: String(index), label: brand.brand, total: brand.total }))];
+  const choose = (key) => {
+    setActive(key);
+    setOpen(false);
+  };
   return (
-    <nav className={`home-popular-models page-width${open ? " open" : ""}`} aria-label="Популярные модели">
-      <b>Популярные модели</b>
-      <div>
-        {models.map((item, index) => (
-          <AppLink key={item.path} href={item.path} navigate={navigate} className={index >= HOME_POPULAR_MODELS_VISIBLE ? "home-popular-extra" : undefined}>
-            {item.name}
-            <small>{number(item.count)}</small>
-          </AppLink>
-        ))}
-        {models.length > HOME_POPULAR_MODELS_VISIBLE && (
-          <button type="button" className="home-popular-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-            {open ? "Свернуть" : `Ещё ${number(models.length - HOME_POPULAR_MODELS_VISIBLE)}`}
-          </button>
-        )}
+    <section className={`home-popular-models page-width${open ? " open" : ""}`} aria-labelledby={`${tabsId}-title`}>
+      <h2 id={`${tabsId}-title`}>Популярные модели</h2>
+      {brands.length > 0 && (
+        <div className="home-popular-tabs" role="tablist" aria-label="Модели по маркам">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              id={`${tabsId}-tab-${tab.id}`}
+              aria-controls={`${tabsId}-panel-${tab.id}`}
+              aria-selected={active === tab.key}
+              className={active === tab.key ? "active" : undefined}
+              onClick={() => choose(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div role="tabpanel" id={`${tabsId}-panel-all`} aria-labelledby={`${tabsId}-tab-all`} hidden={active !== "all"}>
+        <HomeModelChips items={models} navigate={navigate} open={open && active === "all"} onToggle={() => setOpen((value) => !value)} />
       </div>
-    </nav>
+      {brands.map((brand, index) => (
+        <div key={brand.brand} role="tabpanel" id={`${tabsId}-panel-${index}`} aria-labelledby={`${tabsId}-tab-${index}`} hidden={active !== brand.brand}>
+          <HomeModelChips items={brand.models} navigate={navigate} open={open && active === brand.brand} onToggle={() => setOpen((value) => !value)} />
+          <AppLink className="home-popular-brand-link" href={brand.path} navigate={navigate}>
+            Все {brand.brand} — {number(brand.total)} авто <ArrowRight size={16} />
+          </AppLink>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/* Почему у нас удобнее — честные отличия, которые у нас есть на деле: цена до Минска
+   целиком, фиксированная плата, проверка до оплаты с правом отказаться, срок. Текст
+   на главной нужен и человеку, и поисковику: у IM4CAR на главной ~4 800 слов, у нас
+   было ~600. Цифры — из тех же данных, что расчёт в карточке (src/pricing.js). */
+function HomeWhyUs({ navigate }) {
+  const fee = number(PRICING.serviceByn);
+  const points = [
+    {
+      title: "Цена сразу до Минска",
+      text: "В карточке — итог, а не цена продавца: сама машина, выкуп и перевод денег в Китай, доставка по Китаю и автовозом до Минска, таможенные платежи, утильсбор и наша работа. Разбор по строкам открывается в каждой карточке.",
+    },
+    {
+      title: "Фиксированная плата за работу",
+      text: `Сопровождение — ${fee} BYN за машину, без процента от цены. Эта сумма уже внутри цены до Минска: дешёвая машина не дорожает на комиссию, дорогая — тоже.`,
+    },
+    {
+      title: "Проверка до оплаты",
+      text: "До выкупа сверяем VIN и документы, проверяем кузов, следы ДТП и затопления, у электромобилей и гибридов — батарею. Если отчёт не устроил, от покупки можно отказаться.",
+    },
+    {
+      title: "Наличие подтверждаем до договора",
+      text: "Каталог регулярно сверяем с площадкой-источником, проданные машины убираем. Перед договором ещё раз спрашиваем у продавца, что машина на месте и цена не изменилась.",
+    },
+    {
+      title: "Срок — 30–50 дней",
+      text: "Столько обычно занимает путь от договора до выдачи в Минске: выкуп, экспортные документы, дорога до границы, автовоз через Казахстан и Россию, таможня.",
+    },
+  ];
+  return (
+    <section className="home-why page-width" aria-labelledby="home-why-title">
+      <div className="home-why-intro">
+        <h2 id="home-why-title">Авто из Китая в Беларусь — с понятной ценой</h2>
+        <p>
+          В каталоге abcars.by — китайские автомобили и машины мировых марок, собранные для рынка Китая: BYD, Geely, Zeekr, Li Auto, Tesla, BMW, Mercedes-Benz, Audi и другие. Электромобили, гибриды и бензиновые машины с пробегом, у каждой — цена с доставкой в Беларусь. Можно выбрать готовое объявление или прислать запрос на подбор.
+        </p>
+      </div>
+      <ul className="home-why-list">
+        {points.map((point) => (
+          <li key={point.title}>
+            <h3>{point.title}</h3>
+            <p>{point.text}</p>
+          </li>
+        ))}
+      </ul>
+      <p className="home-why-tools">
+        Посчитать самостоятельно: <AppLink href="/customs" navigate={navigate}>растаможка</AppLink>, <AppLink href="/delivery-cost" navigate={navigate}>из чего складывается цена</AppLink>, <AppLink href="/ev-quota" navigate={navigate}>квота на электромобили</AppLink>, <AppLink href="/price-belarus" navigate={navigate}>дешевле ли привезти, чем купить в Беларуси</AppLink>.
+      </p>
+    </section>
   );
 }
 
@@ -5125,6 +5222,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         </div>
       </section>
       )}
+      {!searching && <HomeWhyUs navigate={navigate} />}
       <HomeConversionSections navigate={navigate} />
       {/* Журнал: четыре свежих материала. Пока раздел не готов, выключатель
           BLOG_ENABLED убирает блок целиком — на его месте ничего не остаётся. */}

@@ -32,10 +32,14 @@ const { renderAppPage } = await import(pathToFileURL(join(process.cwd(), ssrDir,
 // Популярные модели считает generate-seo-pages (он читает базу) и кладёт рядом со
 // сборкой. Нет файла — блока на главной просто нет; это не ошибка сборки.
 let popularModels = [];
+let brandModelTabs = [];
 try {
-  popularModels = JSON.parse(readFileSync(join(clientDir, "..", "popular-models.json"), "utf8"));
+  const saved = JSON.parse(readFileSync(join(clientDir, "..", "popular-models.json"), "utf8"));
+  // Прежний вид файла — просто список моделей; новый — модели и вкладки марок.
+  popularModels = Array.isArray(saved) ? saved : saved.models || [];
+  brandModelTabs = Array.isArray(saved) ? [] : saved.brands || [];
 } catch {}
-const homeBoot = popularModels.length ? { popularModels } : undefined;
+const homeBoot = popularModels.length ? { popularModels, brandModelTabs } : undefined;
 const app = renderAppPage("/", homeBoot);
 if (!app.includes("<h1>") || !app.includes("site-footer")) {
   console.error("[prerender] разметка главной собралась без заголовка или подвала — страницу не трогаем");

@@ -216,6 +216,29 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
     numberOfItems: data.total,
     itemListElement: data.cars.slice(0, 24).map((car, index) => renderer.carListItem(car, first + index + 1)),
   };
+  // Вилка цен по модели: «BYD Seal, 286 предложений, от … до … $» — так было у прежних
+  // обзоров и так делает хаб модели у IM4CAR. При переделке в каталожную страницу
+  // разметка потерялась (найдено 25.09.2026). Только у страницы модели: у разделов
+  // («Электромобили», «BYD») её нет намеренно — это не товар.
+  const aggregate = data.total && Number(data.facts?.priceFrom) > 0
+    ? {
+        "@context": "https://schema.org",
+        "@type": "Car",
+        name: data.model.name,
+        url: renderer.routeUrl(path),
+        brand: { "@type": "Brand", name: data.model.brand },
+        model: data.model.model,
+        offers: {
+          "@type": "AggregateOffer",
+          priceCurrency: "USD",
+          lowPrice: Math.round(Number(data.facts.priceFrom)),
+          highPrice: Math.round(Number(data.facts.priceTo) || Number(data.facts.priceFrom)),
+          offerCount: data.total,
+          availability: "https://schema.org/InStock",
+          itemCondition: "https://schema.org/UsedCondition",
+        },
+      }
+    : null;
   const crumbs = [["Главная", "/"], ["Автомобили из Китая", "/catalog/"]];
   if (data.links.brandPath) crumbs.push([data.model.brand, data.links.brandPath]);
   crumbs.push([data.model.name, pageRoute(data.page)]);
@@ -236,7 +259,7 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
     bootData: appRoot ? boot : null,
     // Разметку вопросов при готовой разметке приложения ставит оно само (ArticleFaq);
     // в простой версии — добавляем здесь.
-    schemas: [renderer.breadcrumbsSchema(crumbs), ...(data.cars.length ? [itemList] : []), ...(faq.length && !appRoot ? [renderer.faqSchema(faq)] : [])],
+    schemas: [renderer.breadcrumbsSchema(crumbs), ...(data.cars.length ? [itemList] : []), ...(aggregate ? [aggregate] : []), ...(faq.length && !appRoot ? [renderer.faqSchema(faq)] : [])],
   });
   return { status: 200, html };
 }
