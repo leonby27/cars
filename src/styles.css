@@ -962,17 +962,44 @@ html body #root .app-search-field.home-popular-search {
     transition: none;
   }
 }
-.home-popular-brand-link {
-  display: inline-flex;
-  align-items: center;
+/* Последняя плитка ленты марки — «Все Audi · 3 206 авто», как «Смотреть все» в
+   сохранённых поисках: фон подложки, кружок со стрелкой, высота как у карточек. */
+.home-model-more {
+  flex: 0 0 calc((100% - var(--home-model-gap) * (var(--home-model-per-view) - 1)) / var(--home-model-per-view));
+  min-width: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
   gap: 6px;
-  margin-top: 12px;
-  color: inherit;
-  font-weight: 700;
-  text-decoration: none;
-}
-.home-popular-brand-link:hover {
+  padding: 16px;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--surface);
   color: var(--ink);
+  text-align: center;
+  text-decoration: none;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.home-model-more:hover {
+  background: var(--model-chip-hover-bg);
+}
+.home-model-more-circle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  background: var(--panel);
+}
+:root[data-theme="dark"] .home-model-more-circle {
+  background: #414751;
+}
+.home-model-more b {
+  font-size: 17px;
+}
+.home-model-more small {
+  color: var(--muted);
+  font-size: 16px;
 }
 .popular-brands {
   width: min(1040px, calc(100% - 48px));

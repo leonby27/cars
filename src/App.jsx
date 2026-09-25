@@ -10,7 +10,7 @@ import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
 import { Illustration } from "./illustration.jsx";
 import { SearchField } from "./search-field.jsx";
-import { homeModelBrands, homeModelEntries } from "./home-popular-models.js";
+import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
 import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
@@ -4415,7 +4415,7 @@ function HomePriceBands({ navigate }) {
   // Подпись карточки — самая популярная модель, у которой самая доступная машина стоит
   // между прошлой ценой и этой: у каждой карточки своя модель, а не одна Haval H6 на все
   // четыре. Модели — те же, что в «Популярных моделях» (встроены в страницу).
-  const [models] = useState(() => (Array.isArray(window.__boot?.popularModels) ? window.__boot.popularModels : []));
+  const { models } = useHomeModels();
   if (!bands.length) return null;
   return (
     // С 25.09.2026 — карточки как у полосы доверия, но без картинок; заголовок «По цене
@@ -4469,12 +4469,13 @@ const homeModelsPerView = () => {
   return 5;
 };
 
-function HomeModelSlider({ items, navigate, label }) {
+function HomeModelSlider({ items, navigate, label, more = null }) {
   // Лента не зациклена: в начале нет стрелки назад, в конце — вперёд. Шаг — одна карточка.
+  // `more` — последняя плитка «Все Audi · 3 206 авто», как «Смотреть все» в сохранённых поисках.
   const [first, setFirst] = useState(0);
   const [perView, setPerView] = useState(5);
   const touch = useRef(null);
-  const count = items.length;
+  const count = items.length + (more ? 1 : 0);
   useEffect(() => {
     const update = () => setPerView(homeModelsPerView());
     update();
@@ -4505,6 +4506,15 @@ function HomeModelSlider({ items, navigate, label }) {
           {items.map((item) => (
             <HomeModelCard key={item.path} item={item} navigate={navigate} />
           ))}
+          {more && (
+            <AppLink href={more.path} navigate={navigate} className="home-model-more">
+              <span className="home-model-more-circle" aria-hidden="true">
+                <ArrowRight size={20} weight="bold" />
+              </span>
+              <b>{more.label}</b>
+              <small>{more.note}</small>
+            </AppLink>
+          )}
         </div>
       </div>
       {start > 0 && (
@@ -4522,22 +4532,62 @@ function HomeModelSlider({ items, navigate, label }) {
 }
 
 // Закрытая вкладка: только ссылки, без фото — их видит поисковик, а человеку они скрыты.
-function HomeModelLinks({ items, navigate }) {
+// Ссылка на раздел марки — там же, как последняя плитка в открытой вкладке.
+function HomeModelLinks({ items, navigate, more = null }) {
   return (
     <ul className="home-model-links">
       {items.map((item) => (
         <li key={item.path}><AppLink href={item.path} navigate={navigate}>{item.name}</AppLink></li>
       ))}
+      {more && <li><AppLink href={more.path} navigate={navigate}>{more.label} — {more.note}</AppLink></li>}
     </ul>
   );
 }
+
+// Сводка по всем моделям каталога (/api/model-facts) — один запрос на всю главную: её
+// ждут и «Популярные модели» без встроенных данных, и поиск над лентой.
+let homeModelFactsRequest = null;
+const loadHomeModelFacts = () => {
+  homeModelFactsRequest ||= fetch("/api/model-facts")
+    .then((answer) => (answer.ok ? answer.json() : null))
+    .then((data) => (Array.isArray(data?.models) ? data.models : null))
+    .catch(() => null)
+    .then((rows) => {
+      if (!rows) homeModelFactsRequest = null; // сбой — следующий заход спросит снова
+      return rows;
+    });
+  return homeModelFactsRequest;
+};
+
+/* Списки «Популярных моделей». При прямом заходе на главную они встроены в страницу
+   (window.__boot) — первый кадр совпадает с готовой разметкой, её и читает поисковик.
+   При переходе на главную внутри сайта (логотип, «назад») встроенных данных нет, и блок
+   раньше просто не появлялся, а полосы цен теряли подписи с моделями. Тогда считаем те
+   же списки тем же кодом из сводки по моделям. */
+function useHomeModels() {
+  const [lists, setLists] = useState(() => {
+    const boot = window.__boot;
+    return Array.isArray(boot?.popularModels) && boot.popularModels.length
+      ? { models: boot.popularModels, brands: Array.isArray(boot.brandModelTabs) ? boot.brandModelTabs : [] }
+      : null;
+  });
+  useEffect(() => {
+    if (lists) return undefined;
+    let alive = true;
+    loadHomeModelFacts().then((rows) => {
+      if (alive && rows) setLists(homePopularModels(rows));
+    });
+    return () => { alive = false; };
+  }, [lists]);
+  return lists || HOME_MODELS_EMPTY;
+}
+const HOME_MODELS_EMPTY = Object.freeze({ models: [], brands: [] });
 
 // Марка и модель одной строкой — по ней ищет поле над лентой.
 const homeModelHaystack = (item) => `${item.brand || ""} ${item.name}`;
 
 function HomePopularModels({ navigate }) {
-  const [models] = useState(() => (Array.isArray(window.__boot?.popularModels) ? window.__boot.popularModels : []));
-  const [brands] = useState(() => (Array.isArray(window.__boot?.brandModelTabs) ? window.__boot.brandModelTabs : []));
+  const { models, brands } = useHomeModels();
   const [active, setActive] = useState("all");
   const [query, setQuery] = useState("");
   // В страницу встроены только 48 популярных моделей и модели 16 крупных марок — Zeekr
@@ -4549,10 +4599,8 @@ function HomePopularModels({ navigate }) {
   const loadCatalogModels = () => {
     if (catalogModels || loadingModels.current) return;
     loadingModels.current = true;
-    fetch("/api/model-facts")
-      .then((answer) => (answer.ok ? answer.json() : null))
-      .then((data) => { if (Array.isArray(data?.models)) setCatalogModels(homeModelEntries(data.models)); })
-      .catch(() => {})
+    loadHomeModelFacts()
+      .then((rows) => { if (rows) setCatalogModels(homeModelEntries(rows)); })
       .finally(() => { loadingModels.current = false; });
   };
   const found = useMemo(() => {
@@ -4644,18 +4692,18 @@ function HomePopularModels({ navigate }) {
               <HomeModelSlider key={query} items={allItems} navigate={navigate} label="Популярные модели" />
             )}
           </div>
-          {shownBrands.map((brand, index) => (
-            <div key={brand.brand} role="tabpanel" id={`${tabsId}-panel-${index}`} aria-labelledby={`${tabsId}-tab-${index}`} hidden={current !== brand.brand}>
-              {current === brand.brand ? (
-                <HomeModelSlider key={query} items={brand.models} navigate={navigate} label={`Модели ${brand.brand}`} />
-              ) : (
-                <HomeModelLinks items={brand.models} navigate={navigate} />
-              )}
-              <AppLink className="home-popular-brand-link" href={brand.path} navigate={navigate}>
-                Все {brand.brand} — {number(brand.total)} авто <ArrowRight size={16} />
-              </AppLink>
-            </div>
-          ))}
+          {shownBrands.map((brand, index) => {
+            const more = { path: brand.path, label: `Все ${brand.brand}`, note: `${number(brand.total)} авто` };
+            return (
+              <div key={brand.brand} role="tabpanel" id={`${tabsId}-panel-${index}`} aria-labelledby={`${tabsId}-tab-${index}`} hidden={current !== brand.brand}>
+                {current === brand.brand ? (
+                  <HomeModelSlider key={query} items={brand.models} navigate={navigate} label={`Модели ${brand.brand}`} more={more} />
+                ) : (
+                  <HomeModelLinks items={brand.models} navigate={navigate} more={more} />
+                )}
+              </div>
+            );
+          })}
         </>
       )}
     </section>
