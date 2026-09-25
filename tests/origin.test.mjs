@@ -13,7 +13,11 @@ test("пока возим только из Китая, и общие загол
   assert.equal(siteAdjective(), "китайские");
   assert.equal(fromPhrase("korea"), "из Кореи");
   assert.match(HOME_SEO.title, /^Авто из Китая в Беларусь — китайские автомобили/);
-  assert.match(CATALOG_INDEX_SEO.title, /^Каталог китайских автомобилей — авто из Китая в Беларусь/);
+  assert.match(CATALOG_INDEX_SEO.title, /^Купить авто из Китая — каталог и цены/);
+  assert.equal(CATALOG_INDEX_SEO.h1, "Каталог авто из Китая");
+  // Главные запросы — «в Беларусь» и «китайские автомобили» — остаются за главной:
+  // каталог их не повторяет, чтобы две страницы не спорили за одну выдачу.
+  assert.doesNotMatch(CATALOG_INDEX_SEO.title, /Беларус|китайск/i);
   assert.doesNotMatch(`${HOME_SEO.title} ${CATALOG_INDEX_SEO.title}`, /Минск|б\/у|с пробегом/i);
 });
 

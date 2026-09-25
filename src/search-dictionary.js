@@ -542,6 +542,8 @@ for (const [spelling, name] of [...HERO_BRAND_RU, ...HERO_MODEL_RU]) {
   list.push(searchNormalize(spelling));
   NAME_SPELLINGS.set(key, list);
 }
+/** Русские написания каталожного названия: «Zeekr» → «зикр», «зикер», «зеекр». */
+export const nameSpellings = (name) => NAME_SPELLINGS.get(searchNormalize(name)) || [];
 /** Отбирает из списка названий (марки, модели) подходящие под набранное. */
 export const listSearchMatches = (items, query) => {
   const variants = listSearchVariants(query);

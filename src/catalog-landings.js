@@ -1,6 +1,6 @@
 import { isEvQuotaExhausted } from "./ev-quota.js";
 import { modelSlug } from "./model-slug.js";
-import { fromPhrase, originOf, siteAdjective, siteAdjectiveCapital, siteAdjectiveGenitive, siteFromPhrase } from "./origin.js";
+import { fromPhrase, originOf, siteAdjective, siteAdjectiveCapital, siteFromPhrase } from "./origin.js";
 import { chinaBrandByName } from "./china-brands.js";
 
 // Страницы каталога под марку, тип двигателя и тип кузова: `/catalog/byd`,
@@ -1732,10 +1732,14 @@ export const HOME_SEO = Object.freeze({
   h1: `Авто ${siteFromPhrase({ nbsp: true })} с\u00a0доставкой в\u00a0Беларусь`,
 });
 
+// Каталог не спорит с главной за «авто из Китая в Беларусь» и «китайские автомобили»:
+// эти запросы частотнее, и отвечать на них должна главная. У каталога свои слова —
+// «купить», «каталог», «цены» (Вордстат 20.09.2026: «купить авто из Китая» 248 в
+// точной форме, «каталог» и «цены» — ещё сотни в широкой).
 export const CATALOG_INDEX_SEO = Object.freeze({
-  title: `Каталог ${siteAdjectiveGenitive()} автомобилей — авто ${siteFromPhrase()} в Беларусь${TITLE_TAIL}`,
-  description: `Каталог б/у авто ${siteFromPhrase()}: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь.`,
-  h1: `Авто ${siteFromPhrase()}`,
+  title: `Купить авто ${siteFromPhrase()} — каталог и цены с доставкой${TITLE_TAIL}`,
+  description: `Каталог б/у авто ${siteFromPhrase()}: купить электромобиль, гибрид или бензиновую машину с пробегом по цене с доставкой в Беларусь и ориентировочным расчётом растаможки.`,
+  h1: `Каталог авто ${siteFromPhrase()}`,
 });
 
 

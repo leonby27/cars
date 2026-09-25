@@ -165,7 +165,7 @@ function fallbackBody(renderer, data, { faq, autoText, review }) {
   const text = page > 1 ? "" : `<section><h2>${model.name}: что есть в каталоге</h2>${autoText.map((p) => `<p>${p}</p>`).join("")}</section>${review ? renderer.modelPageArticle(review) : ""}`;
   const questions = page > 1 || !faq.length ? "" : `<section><h2>${modelFaqTitle(model.name)}</h2>${faq.map((item) => `<h3>${item.q}</h3><p>${item.a}</p>`).join("")}</section>`;
   const ways = pathwayLinks({ heading: `Где смотреть ${model.name} и похожие машины`, links: [...(links.brandPath ? [[links.brandPath, `Все ${model.brand} из Китая`, null]] : []), ...links.sections.map((s) => [s.path, s.name, null]), ...links.siblings.map((s) => [s.path, s.name, null]), ...(links.similar || []).map((s) => [s.path, s.name, null]), ...links.journal.map((s) => [s.path, s.name, null])] });
-  return `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a>${links.brandPath ? ` → <a href="${hrefRoute(links.brandPath)}">${model.brand}</a>` : ""}</p><h1>${modelCatalogSeo({ name: model.name, facts: data.facts, review, page }).h1}${page > 1 ? ` — страница ${page}` : ""}</h1><p>${stock}</p>${renderer.freshnessLine(data.changedAt)}${list}${paging}${text}${questions}${ways}</main>${footer()}`;
+  return `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Каталог авто из Китая</a>${links.brandPath ? ` → <a href="${hrefRoute(links.brandPath)}">${model.brand}</a>` : ""}</p><h1>${modelCatalogSeo({ name: model.name, facts: data.facts, review, page }).h1}${page > 1 ? ` — страница ${page}` : ""}</h1><p>${stock}</p>${renderer.freshnessLine(data.changedAt)}${list}${paging}${text}${questions}${ways}</main>${footer()}`;
 }
 
 /**
@@ -242,7 +242,7 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
         },
       }
     : null;
-  const crumbs = [["Главная", "/"], ["Автомобили из Китая", "/catalog/"]];
+  const crumbs = [["Главная", "/"], ["Каталог авто из Китая", "/catalog/"]];
   if (data.links.brandPath) crumbs.push([data.model.brand, data.links.brandPath]);
   crumbs.push([data.model.name, pageRoute(data.page)]);
   const html = renderer.renderHtml({

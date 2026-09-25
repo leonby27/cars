@@ -132,7 +132,7 @@ test("общая страница каталога показывает маши
   // Файлом она собиралась вхолостую: на хостинге дампа каталога нет, и в странице
   // не оставалось ни одной ссылки на машину. Сервер берёт список из базы.
   const { html } = render().catalogIndexPage({ cars, total: 32916, sections: CATALOG_LANDINGS });
-  assert.match(html, /<h1><span>Авто<\/span> <span>из Китая<\/span><\/h1><p>Китайские автомобили с пробегом — купить с доставкой в Беларусь<\/p>/);
+  assert.match(html, /<h1><span>Каталог авто<\/span> <span>из Китая<\/span><\/h1><p>Китайские автомобили с пробегом — купить с доставкой в Беларусь<\/p>/);
   assert.match(html, /В каталоге 32[\s\u00a0\u202f]916 автомобилей/);
   assert.match(html, /<a href="\/cars\/1">BYD Han 2023<\/a>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog"/);

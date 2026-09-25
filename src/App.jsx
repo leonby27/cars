@@ -18,7 +18,7 @@ import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
 import { matchesSearchText, searchTextWords, searchWordStem } from "./car-search-text.js";
-import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
+import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, nameSpellings, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { CITY_NAMES, cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS, canonicalImportModel } from "../config/import-policy.mjs";
@@ -3567,8 +3567,14 @@ function useSameModelCars(car, active) {
 // сеток подряд слишком много, поэтому теперь это два состояния одного блока.
 function SimilarCars({ car, cars, onOpenCar }) {
   const similarPricingOn = useQuotaPricing()?.on;
-  const [sameModelOnly, setSameModelOnly] = useState(false);
   const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars, similarPricingOn]);
+  // Карточку, открытую по прямой ссылке, сервер рисует с соседями той же модели
+  // (server/car-page.mjs), а подбор «Все» их исключает — до загрузки каталога сетка
+  // была пустой, и робот не видел из карточки ни одной ссылки на другие машины.
+  // Поэтому, пока других похожих нет, блок открывается на «Этой модели»: сервер и
+  // браузер при оживлении получают одно и то же, и после загрузки каталога вид не
+  // перескакивает.
+  const [sameModelOnly, setSameModelOnly] = useState(() => !similarCars.length);
   const sameModelLoaded = useMemo(
     () =>
       cars
@@ -3586,18 +3592,21 @@ function SimilarCars({ car, cars, onOpenCar }) {
         .sort((left, right) => (Number(estimateLandedCost(left).totalUsd) || 0) - (Number(estimateLandedCost(right).totalUsd) || 0) || String(left.id).localeCompare(String(right.id))),
     [sameModelFromCatalog.cars, sameModelLoaded, similarPricingOn],
   );
-  const shown = sameModelOnly ? sameModel : similarCars;
-  const [visibleCount, setVisibleCount] = useState(SIMILAR_CARS_BATCH);
-
-  useEffect(() => setVisibleCount(SIMILAR_CARS_BATCH), [car.id, sameModelOnly]);
-
   // Переключателя нет, когда машина в каталоге одна такая: кнопка «Эта модель»
   // открывала бы пустую сетку.
   const sameModelReachable = Boolean(car.brand && car.model && (sameModelLoaded.length || sameModelFromCatalog.cars?.length));
+  // Открылись на «Этой модели», а таких машин не нашлось, зато подъехали похожие, —
+  // показываем их: переключателя в этом случае нет, и вернуться было бы нечем.
+  const sameModelView = sameModelOnly && (sameModelReachable || !similarCars.length);
+  const shown = sameModelView ? sameModel : similarCars;
+  const [visibleCount, setVisibleCount] = useState(SIMILAR_CARS_BATCH);
+
+  useEffect(() => setVisibleCount(SIMILAR_CARS_BATCH), [car.id, sameModelView]);
+
   if (!similarCars.length && !sameModelReachable) return null;
   // Ещё не загруженные машины той же модели: кнопка «Подгрузить ещё» должна остаться
   // и когда всё загруженное уже показано, а в каталоге таких машин больше.
-  const more = sameModelOnly ? Math.max(shown.length, Number(sameModelFromCatalog.total) || 0) : shown.length;
+  const more = sameModelView ? Math.max(shown.length, Number(sameModelFromCatalog.total) || 0) : shown.length;
 
   return (
     <section className="similar-cars" aria-labelledby="similar-cars-title">
@@ -3605,10 +3614,10 @@ function SimilarCars({ car, cars, onOpenCar }) {
         <h2 id="similar-cars-title">Похожие автомобили из Китая</h2>
         {sameModelReachable && (
           <div className="brand-type-switch similar-mode-switch" role="group" aria-label="Какие машины показывать">
-            <button type="button" className={sameModelOnly ? "" : "active"} aria-pressed={!sameModelOnly} onClick={() => setSameModelOnly(false)}>
+            <button type="button" className={sameModelView ? "" : "active"} aria-pressed={!sameModelView} onClick={() => setSameModelOnly(false)}>
               Все
             </button>
-            <button type="button" className={sameModelOnly ? "active" : ""} aria-pressed={sameModelOnly} onClick={() => setSameModelOnly(true)}>
+            <button type="button" className={sameModelView ? "active" : ""} aria-pressed={sameModelView} onClick={() => setSameModelOnly(true)}>
               Эта модель
             </button>
           </div>
@@ -3626,7 +3635,7 @@ function SimilarCars({ car, cars, onOpenCar }) {
           onClick={() => {
             const next = visibleCount + SIMILAR_CARS_BATCH;
             setVisibleCount(next);
-            if (sameModelOnly && next > shown.length) sameModelFromCatalog.loadMore();
+            if (sameModelView && next > shown.length) sameModelFromCatalog.loadMore();
           }}
         >
           Подгрузить ещё
@@ -4585,6 +4594,13 @@ const HOME_MODELS_EMPTY = Object.freeze({ models: [], brands: [] });
 
 // Марка и модель одной строкой — по ней ищет поле над лентой.
 const homeModelHaystack = (item) => `${item.brand || ""} ${item.name}`;
+// В записи главной нет голого имени модели, только заголовок «Zeekr 001»: марку
+// в начале срезаем, чтобы найти русские написания модели («аксела» → Mazda3).
+const homeModelNames = (item) => {
+  const brand = item.brand || "";
+  const model = brand && item.name.startsWith(`${brand} `) ? item.name.slice(brand.length + 1) : item.name;
+  return [brand, model, item.name];
+};
 
 function HomePopularModels({ navigate }) {
   const { models, brands } = useHomeModels();
@@ -4612,12 +4628,12 @@ function HomePopularModels({ navigate }) {
       for (const item of models) if (!embedded.has(item.path)) embedded.set(item.path, item);
       source = [...embedded.values()].sort((left, right) => right.count - left.count);
     }
-    const all = itemsMatchingQuery(source, query, homeModelHaystack);
+    const all = itemsMatchingQuery(source, query, homeModelHaystack, homeModelNames);
     // Марка остаётся вкладкой, если совпало её имя (тогда в ней все её модели) или
     // хотя бы одна её модель.
     const matchedBrands = homeModelBrands(source)
       .map((brand) => {
-        const whole = itemsMatchingQuery([{ brand: brand.brand, name: "" }], query, homeModelHaystack).length > 0;
+        const whole = itemsMatchingQuery([{ brand: brand.brand, name: "" }], query, homeModelHaystack, homeModelNames).length > 0;
         return whole ? brand : { ...brand, models: all.filter((item) => item.brand === brand.brand) };
       })
       .filter((brand) => brand.models.length);
@@ -6652,7 +6668,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         <CaretRight size={13} />
         {landing ? (
           <>
-            <button onClick={() => navigate("/catalog")}>Автомобили из Китая</button>
+            <button onClick={() => navigate("/catalog")}>Каталог авто из Китая</button>
             <CaretRight size={13} />
             {landing.kind === "model" && landing.links?.brandPath && (
               <>
@@ -6663,7 +6679,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             {landing.name}
           </>
         ) : (
-          "Автомобили из Китая"
+          "Каталог авто из Китая"
         )}
       </div>
       <div className="catalog-heading">
@@ -7749,7 +7765,9 @@ function ActiveVehicleGallery({ car }) {
         <div className="gallery-thumbs" ref={thumbsRef}>
           {images.map((image, index) => (
             <button key={`${image}-${index}`} className={active === index ? "active" : ""} onMouseEnter={() => selectImage(index)} onClick={() => selectImage(index)} aria-label={`Показать фото ${index + 1}`}>
-              <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt="" loading="lazy" fetchPriority="low" decoding="async" onError={(event) => retryWithFullImage(event, image)} />
+              {/* Подпись для поиска по картинкам: большой кадр в разметке один, остальные
+                  фото машины робот находит только здесь. Имя кнопки даёт aria-label. */}
+              <img src={imageSource(image, IMAGE_WIDTH_THUMB)} alt={`${car.title}, фото ${index + 1}`} loading="lazy" fetchPriority="low" decoding="async" onError={(event) => retryWithFullImage(event, image)} />
             </button>
           ))}
         </div>
@@ -8080,7 +8098,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
       <div className="breadcrumbs">
         <button onClick={() => navigate("/")}>Главная</button>
         <CaretRight size={13} />
-        <button onClick={() => backToCatalog(car.id)}>Автомобили из Китая</button>
+        <button onClick={() => backToCatalog(car.id)}>Каталог авто из Китая</button>
         <CaretRight size={13} />
         <button onClick={openBrand}>{car.brand}</button>
         <CaretRight size={13} />
@@ -11202,12 +11220,14 @@ function marketDifference(card, mileageKey, priceKey, quotaPricingOn) {
 // вообще дал результат: так ошибочная раскладка «иьц» исправится как BMW, но более
 // далёкие короткие транслитерации уже не подмешают Buick и Mitsubishi.
 function marketCardsMatchingQuery(cards, query) {
-  return itemsMatchingQuery(cards, query, (card) => `${card.brand} ${card.model} ${card.years.map((year) => year.year).join(" ")}`);
+  return itemsMatchingQuery(cards, query, (card) => `${card.brand} ${card.model} ${card.years.map((year) => year.year).join(" ")}`, (card) => [card.brand, card.model]);
 }
 
 /* Поиск по короткому списку марок и моделей: сравнение цен и «Популярные модели» на
-   главной. Понимает русские названия и раскладку (listSearchVariants) — «бмв», «зикр». */
-function itemsMatchingQuery(items, query, haystackOf) {
+   главной. Понимает русские названия и раскладку (listSearchVariants) — «бмв», «зикр».
+   namesOf отдаёт марку и модель записи: по их русским написаниям слово ищется с начала,
+   поэтому недописанное «зик» уже находит Zeekr — словарь ждёт «зикр» целиком. */
+function itemsMatchingQuery(items, query, haystackOf, namesOf) {
   const normalizedQuery = searchNormalize(query);
   if (!normalizedQuery) return items;
   const firstPass = listSearchVariants(query);
@@ -11218,7 +11238,8 @@ function itemsMatchingQuery(items, query, haystackOf) {
     const matches = items.filter((item) => {
       const haystack = searchNormalize(haystackOf(item));
       const tokens = haystack.split(/\s+/);
-      return words.every((word) => (word.length === 1 ? tokens.includes(word) : haystack.includes(word)) || (word.length >= 7 && haystack.includes(searchWordStem(word))));
+      const spellingWords = namesOf ? namesOf(item).flatMap((name) => nameSpellings(name)).flatMap((spelling) => spelling.split(" ")) : [];
+      return words.every((word) => (word.length === 1 ? tokens.includes(word) : haystack.includes(word)) || (word.length >= 7 && haystack.includes(searchWordStem(word))) || (word.length >= 2 && spellingWords.some((spelling) => spelling.startsWith(word))));
     });
     if (matches.length) return matches;
   }

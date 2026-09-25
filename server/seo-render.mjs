@@ -561,7 +561,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const faqBlock = questions.length
       ? `<section><h2>${escapeHtml(carFaqTitle(car))}</h2>${questions.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${faqBlock}${relatedBlock}${sectionBlock}${journalBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Каталог авто из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${faqBlock}${relatedBlock}${sectionBlock}${journalBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({
@@ -578,7 +578,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         // Разметку вопросов при готовой разметке приложения ставит оно само (VehicleFaq
         // в App.jsx) рядом с блоком вопросов. Здесь её добавляем только в простой версии
         // страницы — иначе на карточке было два одинаковых FAQPage (найдено 25.09.2026).
-        schemas: [breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [titleText, route]]), schema, ...(questions.length && !appRoot ? [faqSchema(questions)] : [])],
+        schemas: [breadcrumbsSchema([["Главная", "/"], ["Каталог авто из Китая", "/catalog/"], [titleText, route]]), schema, ...(questions.length && !appRoot ? [faqSchema(questions)] : [])],
       }),
     };
   }
@@ -861,7 +861,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         // Разметку вопросов в готовой странице ставит само приложение (блок вопросов
         // раздела) — вторая копия здесь дала бы на странице два одинаковых FAQPage.
         schemas: [
-          breadcrumbsSchema([["Главная", "/"], ["Автомобили из Китая", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]),
+          breadcrumbsSchema([["Главная", "/"], ["Каталог авто из Китая", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]),
           itemList,
           ...(questions.length && !app?.appRoot ? [faqSchema(questions)] : []),
         ],
