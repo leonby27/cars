@@ -1,0 +1,16 @@
+[Unit]
+Description=Пересобрать фид каталога для Яндекса (/feeds/yandex-cars.xml)
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+# Пишем прямо в живую сборку: nginx отдаёт файл как есть. Скрипт пишет через
+# временный файл и кладёт рядом свежие .gz и .br.
+ExecStart=/usr/bin/node scripts/yandex-feed.mjs --db --out=/srv/abcars/dist/client/feeds/yandex-cars.xml
+TimeoutStartSec=900
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-feed

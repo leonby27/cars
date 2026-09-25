@@ -1,0 +1,10 @@
+[Unit]
+Description=Фид каталога для Яндекса — каждое утро, после ночной сверки каталога
+
+[Timer]
+OnCalendar=*-*-* 07:10:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
