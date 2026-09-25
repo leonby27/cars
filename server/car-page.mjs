@@ -17,8 +17,11 @@ import { createSeoRenderer, carRoute, listingNumber } from "./seo-render.mjs";
 // по требованию — из обработчика запросов страницы машины. Обычные запросы к каталогу
 // его не загружают, а сборщик функции видит обе зависимости и точно их упакует.
 import { modelPageForCar } from "../src/model-pages.js";
-import { landingsForCar } from "../src/catalog-landings.js";
+import { landingsForCar, priceBandsForCar } from "../src/catalog-landings.js";
 import { normalizeDrive } from "../src/drive-types.js";
+import { estimateLandedCost } from "../src/pricing.js";
+import { BLOG_ENABLED } from "../src/feature-flags.js";
+import { blogPostsForModel } from "../src/blog-posts.js";
 
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
@@ -102,11 +105,15 @@ export async function renderCarPage(id) {
   // адресной строкой.
   const route = `/cars/${encodeURIComponent(String(id).trim())}`;
   const appRoot = await renderCarAppMarkup(route, car, related);
+  const modelPage = modelPageForCar(car);
   const page = renderer.carPage({
     car: { ...car, drive: normalizeDrive(car.drive) },
     related,
-    modelPage: modelPageForCar(car),
-    sections: landingsForCar(car),
+    modelPage,
+    // Разделы машины: марка, тип, кузов и их сочетания — плюс ценовая полоса по её
+    // цене до Минска (см. priceBandsForCar). Те же ссылки рисует и приложение.
+    sections: [...landingsForCar(car), ...priceBandsForCar({ type: car.type, landedUsd: estimateLandedCost(car).totalUsd })],
+    journal: BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [],
     appRoot,
     appRootPath: route,
     bootData: appRoot ? { carId: car.id, carValue: car, relatedValue: related } : null,

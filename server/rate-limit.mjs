@@ -57,6 +57,9 @@ export const RATE_LIMITS = {
   accountDelete:{ limit:10, windowSeconds:600 },
   analyticsLogin:{ limit:10, windowSeconds:3600 },
   orderDraft:{ limit:10, windowSeconds:3600 },
+  // Опрос «подтверждён ли номер» идёт раз в три секунды, пока открыт экран заявки
+  // (не дольше пяти минут): сотня запросов — одна заявка, предел с запасом на две.
+  leadVerification:{ limit:240, windowSeconds:600 },
   newsletterSubscribe:{ limit:10, windowSeconds:3600 },
   // Одна страница присылает десятки событий, и за одним адресом может сидеть целый
   // мобильный оператор, поэтому предел здесь высокий: он отсекает наполнение базы,

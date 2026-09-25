@@ -4,11 +4,12 @@
 // Зачем сервером, а не файлами: список машин в разделе меняется каждый день, а держать
 // тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
-import { brandCatalogGuide, brandStock, carsByIds, listCarPage, priceEdges } from "./repository.mjs";
+import { brandCatalogGuide, brandModels, brandStock, carsByIds, listCarPage, modelSummary, priceEdges } from "./repository.mjs";
+import { estimateLandedCost } from "../src/pricing.js";
 import { isBrandGuideLanding } from "../src/brand-guide.js";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
-import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingSeoDescription, landingSeoTitle, modelLandingRedirect, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
 // Вычеркнутые марки: из наличия их убрали, но раздел оставили с предложением
 // привезти под заказ — см. ветку «раздел без единой машины» ниже.
@@ -51,6 +52,13 @@ const pageLocation = (path, page, params) => {
 export const visibleLandings = (stock) => (landing) => !landing.brand || (stock.get(landing.brand) || 0) > 0;
 
 /**
+ * Пускать ли поисковик на страницу раздела. Раздел без единой машины (вычеркнутая
+ * марка, см. ниже) для человека остаётся — с предложением привезти под заказ, — но
+ * для поиска это пустая страница: 25.09.2026 таких было 22, все с «index, follow».
+ */
+export const landingIndexable = ({ total, allowIndexing: allowed = allowIndexing }) => Boolean(allowed) && (Number(total) || 0) > 0;
+
+/**
  * Общая страница каталога `/catalog` — тоже в момент запроса, вместе с фильтрами из адреса.
  *
  * Адрес с фильтрами, которые в точности повторяют раздел (`/catalog?brand=BYD`), — это
@@ -63,7 +71,7 @@ export const visibleLandings = (stock) => (landing) => !landing.brand || (stock.
  */
 export async function renderCatalogIndex(searchParams) {
   const params = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams(searchParams || "");
-  const location = catalogLandingRedirect(params);
+  const location = catalogLandingRedirect(params) || modelLandingRedirect(null, params);
   if (location) return { status: 301, location };
   // Раздела в фильтрах нет, а подписи «не выбрано» в адресе есть — убираем их.
   // Переброс тут один: адрес раздела выше собирается уже без них.
@@ -118,16 +126,25 @@ export async function renderCatalogPage(slug, searchParams) {
   const query = searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams(searchParams || "");
   const cleaned = catalogPlaceholderRedirect(landing.path, query);
   if (cleaned) return { status: 301, location: cleaned };
+  // Фильтр «модель» на странице марки — это каталожная страница модели: `/catalog/byd?model=Seal`
+  // уводит на `/catalog/byd/seal`, иначе одна выдача жила бы по двум адресам.
+  const modelPage = modelLandingRedirect(landing, query);
+  if (modelPage) return { status: 301, location: modelPage };
   const number = requestedPage(query);
   if (number === null) return { status: 404, html: renderer.landingMissingPage() };
   if (query.get("page") !== null && number === 1) return { status: 301, location: pageLocation(landing.path, 1, query) };
 
   const params = landingApiParams(landing);
   params.set("sort", "price_asc");
-  const [{ items, total, changedAt }, edges, guide] = await Promise.all([
+  const [{ items, total, changedAt }, edges, guide, models, summary] = await Promise.all([
     listCarPage(params, { limit: carsOnPage, offset: (number - 1) * carsOnPage }),
     priceEdges(params),
     isBrandGuideLanding(landing) && number === 1 ? brandCatalogGuide(landing.brand) : null,
+    // Все модели марки в наличии: со страницы марки ведут ссылки на каталожные
+    // страницы моделей (с 25.09.2026 — у каждой модели, обзор написан или нет).
+    landing.brand && number === 1 ? brandModels(landing.brand) : [],
+    // Годы выпуска — для описания страницы (число и вилка цен есть и без этого).
+    number === 1 ? modelSummary(landingApiParams(landing)) : null,
   ]);
   const pages = catalogPageCount(total);
   if (number > pages) return { status: 404, html: renderer.landingMissingPage() };
@@ -145,8 +162,22 @@ export async function renderCatalogPage(slug, searchParams) {
   // сначала то, что связано с этим разделом (та же марка, тот же кузов, тот же тип),
   // и немного соседей. Одинаковый на всех страницах блок поисковик обесценивает.
   const stock = await brandStock();
-  const others = relatedLandings(landing).filter(visibleLandings(stock));
+  const related = relatedLandings(landing).filter(visibleLandings(stock));
+  // Ценовые полосы — к каждому разделу: они собраны из всего каталога и на них
+  // почти не было входящих ссылок (см. priceBandsForLanding).
+  const seen = new Set(related.map((item) => item.path));
+  const others = [...related, ...priceBandsForLanding(landing).filter((band) => !seen.has(band.path))];
 
-  const page = renderer.landingPage({ landing, cars: items, total, modelPages, others, page: number, pages, perPage: carsOnPage, edges, priced, changedAt, guide });
+  // Заголовок и описание с живыми цифрами: число машин, цена «от» (тем же расчётом,
+  // что в карточке) и годы. Только у первой страницы — дальше свой шаблон «страница N».
+  const stats = {
+    total,
+    priceFrom: edges?.cheapest ? estimateLandedCost(edges.cheapest).totalUsd : null,
+    priceTo: edges?.dearest ? estimateLandedCost(edges.dearest).totalUsd : null,
+    yearMin: summary?.yearMin ?? null,
+    yearMax: summary?.yearMax ?? null,
+  };
+  const seo = { title: landingSeoTitle(landing, stats), description: landingSeoDescription(landing, stats) };
+  const page = renderer.landingPage({ landing, cars: items, total, modelPages, models, others, page: number, pages, perPage: carsOnPage, edges, priced, changedAt, guide, indexable: landingIndexable({ total }), seo });
   return { status: 200, html: page.html };
 }

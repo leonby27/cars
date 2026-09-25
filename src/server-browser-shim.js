@@ -74,9 +74,12 @@ if (typeof window === "undefined") {
 }
 
 /** Подставляет адрес страницы, которую собираем. */
-export const setServerLocation = (pathname = "/") => {
+export const setServerLocation = (pathname = "/", search = "") => {
   if (typeof globalThis.window !== "undefined" && globalThis.window.navigator?.userAgent === "abcars-prerender") {
+    const query = search ? (String(search).startsWith("?") ? String(search) : `?${search}`) : "";
     globalThis.window.location.pathname = pathname;
-    globalThis.window.location.href = `https://abcars.by${pathname}`;
+    // Страница списка («?page=2») читает номер из строки запроса — она нужна и здесь.
+    globalThis.window.location.search = query;
+    globalThis.window.location.href = `https://abcars.by${pathname}${query}`;
   }
 };

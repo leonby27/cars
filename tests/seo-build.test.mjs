@@ -107,7 +107,7 @@ test("удалённые страницы отсутствуют вместе с
 test("preview build ships public pages as noindex and no vehicle pages", async () => {
   const { read, missing } = await build();
   const [home, robots, sitemap] = await Promise.all([read("index.html"), read("robots.txt"), read(sitemapIndex)]);
-  assert.match(home, /<h1>Б\/у авто из Китая с доставкой в Беларусь<\/h1>/);
+  assert.match(home, /<h1>Авто из Китая с доставкой в Беларусь<\/h1>/);
   assert.match(home, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   // Общая страница каталога файлом не собирается: её отдаёт сервер, а готовый файл
   // перекрыл бы и переброс адресов с фильтрами на разделы. В карте сайта она есть.
@@ -131,15 +131,21 @@ test("внутренняя CRM не содержит счётчиков и по�
   assert.doesNotMatch(analytics, /googletagmanager\.com|google-analytics\.com|window\.__ga|\bgtag\(/, "в HTML CRM остался код Google Analytics");
 });
 
-test("предсказуемых имён карты сайта в сборке нет", async () => {
-  const { read, missing } = await build();
-  // `/sitemap.xml` — готовый список адресов каталога для конкурента, поэтому карта лежит
-  // под именем с токеном, а robots.txt на неё не ссылается: адрес задают вручную.
-  await missing("sitemap.xml");
+test("указатель карты сайта лежит и под открытым именем, и под зарегистрированным", async () => {
+  const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
+  // До 25.09.2026 `/sitemap.xml` прятали от конкурентов, и по этому адресу отвечала
+  // страница приложения. Теперь тот же указатель лежит под обоими именами, а robots.txt
+  // ссылается на открытое; имя с токеном остаётся — оно зарегистрировано в кабинетах.
   await missing("sitemap-pages.xml");
-  const [robots, sitemap] = await Promise.all([read("robots.txt"), read(sitemapIndex)]);
-  assert.doesNotMatch(robots, /Sitemap:/i);
+  const [robots, sitemap, publicSitemap] = await Promise.all([read("robots.txt"), read(sitemapIndex), read("sitemap.xml")]);
+  assert.match(robots, /^Sitemap: https:\/\/abcars\.by\/sitemap\.xml$/m);
   assert.match(sitemap, /<loc>https:\/\/abcars\.by\/sitemap-testtoken-pages\.xml<\/loc>/);
+  assert.equal(publicSitemap, sitemap);
+});
+
+test("в закрытой сборке robots.txt на карту сайта не ссылается", async () => {
+  const { read } = await build();
+  assert.doesNotMatch(await read("robots.txt"), /Sitemap:/i);
 });
 
 test("заготовка страницы машины отдаётся без чужого адреса-первоисточника", async () => {
@@ -181,7 +187,7 @@ test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", asyn
   // Адрес карточки — короткий номер объявления: приставка источника из ссылок убрана.
   assert.match(home, /<a href="\/cars\/170268619192114"/);
   assert.doesNotMatch(home, /<a href="\/cars\/guazi-/);
-  assert.match(html, /<title>BYD Song Pro 2024, пробег 21[^<]*400 км, гибрид — [^<]+\$ до Минска/);
+  assert.match(html, /<title>BYD Song Pro 2024, пробег 21[^<]*400 км, гибрид — [^<]+\$ с доставкой в Беларусь/);
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/cars\/170268619192114"/);
   assert.match(html, /<meta name="robots" content="index, follow/);
   assert.match(html, /"@type":"Vehicle"/);
@@ -190,6 +196,20 @@ test("SEO_VEHICLE_PAGES adds indexable vehicle pages with structured data", asyn
   assert.doesNotMatch(html, /比亚迪/);
   assert.match(robots, /^Allow: \/$/m);
   assert.match(sitemap, new RegExp(sitemapCars.replace(/\./g, "\\.")));
+});
+
+test("в карте машин у каждой карточки есть дата изменения и первый снимок", async () => {
+  // 25.09.2026: карта снова перечисляет все машины, и роботу нужно, за чем возвращаться
+  // (lastmod) и что показывать в поиске по картинкам (image:loc с нашего адреса).
+  const { read } = await build({ SEO_ALLOW_INDEXING: "1", SEO_VEHICLE_PAGES: "1" });
+  const carsXml = await read(sitemapCars);
+  assert.match(carsXml, /xmlns:image="http:\/\/www\.google\.com\/schemas\/sitemap-image\/1\.1"/);
+  const entries = [...carsXml.matchAll(/<url>[\s\S]*?<\/url>/g)].map((match) => match[0]);
+  assert.equal(entries.length, fixtureCars.length);
+  for (const entry of entries) {
+    assert.match(entry, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/, entry);
+    assert.match(entry, /<image:image><image:loc>https:\/\/[^<]+<\/image:loc><\/image:image>/, entry);
+  }
 });
 
 test("static fallback ships a compact catalog and addressable full records", async () => {
@@ -212,8 +232,10 @@ test("обзоры моделей файлами не собираются, но
   const [index, pagesXml] = await Promise.all([read("models/index.html"), read(`sitemap-${sitemapToken}-pages.xml`)]);
   // Общая страница «О моделях авто» файлом остаётся: она не зависит от каталога.
   assert.match(index, /<h1>/);
-  assert.match(index, /<a href="\/models\/zeekr-007gt">/);
-  assert.match(pagesXml, /<loc>https:\/\/abcars\.by\/models\/zeekr-007gt<\/loc>/);
+  // С 25.09.2026 обзор живёт на каталожной странице модели `/catalog/<марка>/<модель>`.
+  assert.match(index, /<a href="\/catalog\/zeekr\/007gt">/);
+  assert.match(pagesXml, /<loc>https:\/\/abcars\.by\/catalog\/zeekr\/007gt<\/loc>/);
+  assert.doesNotMatch(pagesXml, /\/models\/zeekr-007gt</);
 });
 
 test("страницы-инструменты собираются с живыми цифрами", async () => {
@@ -352,8 +374,8 @@ test("на главной есть ссылки на все разделы ка�
   const sections = new Set([...body.matchAll(/<a href="(\/catalog\/[a-z0-9-]+)"/g)].map((match) => match[1]));
   assert.equal(sections.size, CATALOG_LANDINGS.length, `ссылок на разделы ${sections.size}, а разделов ${CATALOG_LANDINGS.length}`);
   for (const landing of CATALOG_LANDINGS) assert.ok(sections.has(landing.path), `на главной нет ссылки на ${landing.path}`);
-  const reviews = [...body.matchAll(/<a href="\/models\/[a-z0-9-]+"/g)];
-  assert.ok(reviews.length >= 20, `ссылок на обзоры моделей ${reviews.length}, ожидалось не меньше 20`);
+  const reviews = [...body.matchAll(/<a href="\/catalog\/[a-z0-9-]+\/[a-z0-9-]+"/g)];
+  assert.ok(reviews.length >= 20, `ссылок на страницы моделей ${reviews.length}, ожидалось не меньше 20`);
 });
 
 test("с информационных страниц и расчётов ведут ссылки в каталог", async () => {

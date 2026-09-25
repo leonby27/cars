@@ -12,6 +12,7 @@ import { setServerLocation } from "./server-browser-shim.js";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { App } from "./App.jsx";
+import { primeModelText } from "./model-text-load.js";
 
 const render = () =>
   // Тот же StrictMode, что в main.jsx: на разметку он не влияет, но пусть обе точки
@@ -23,10 +24,16 @@ const render = () =>
   );
 
 /** Готовая разметка страницы по адресу — для страниц без данных (главная). */
-export function renderAppPage(pathname = "/") {
+export function renderAppPage(pathname = "/", boot = undefined) {
   setServerLocation(pathname);
-  globalThis.window.__boot = undefined;
-  return render();
+  // `boot` — данные, которые сборка встраивает в страницу (популярные модели на главной):
+  // приложение в браузере прочтёт их же, и первый кадр совпадёт с этой разметкой.
+  globalThis.window.__boot = boot;
+  try {
+    return render();
+  } finally {
+    globalThis.window.__boot = undefined;
+  }
 }
 
 /**
@@ -42,5 +49,24 @@ export function renderCarApp(pathname, { car, related = [] }) {
     return render();
   } finally {
     globalThis.window.__boot = undefined;
+  }
+}
+
+/**
+ * Готовая разметка каталожной страницы модели (`/catalog/byd/seal`, с номером
+ * страницы в строке запроса). `data` — ответ modelCatalogData (server/model-page.mjs):
+ * список машин первой страницы, цифры и обзор; приложение рисует из него первый
+ * кадр, а браузер при оживлении получает те же байты через window.__boot.
+ */
+export function renderModelApp(pathname, search, boot, { text = null } = {}) {
+  setServerLocation(pathname, search);
+  // Текст обзора — в загруженные заранее: браузер до оживления подгрузит тот же файл.
+  if (boot?.modelCatalog?.review?.slug && text) primeModelText(boot.modelCatalog.review.slug, text);
+  globalThis.window.__boot = boot;
+  try {
+    return render();
+  } finally {
+    globalThis.window.__boot = undefined;
+    setServerLocation("/", "");
   }
 }

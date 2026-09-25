@@ -29,7 +29,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CATALOG_LANDINGS } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, modelLandingPath } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
 import { BLOG_INDEX, blogPosts } from "../src/blog-posts.js";
 
@@ -76,6 +76,7 @@ async function collect() {
   // здесь были бы дороже самого списка.
   const { rows } = await pool.query(
     `SELECT v.brand, v.model, v.powertrain, NULLIF(v.specifications->>'bodyType','') AS body_type,
+       count(*)::int AS count,
        max(GREATEST(COALESCE(l.content_changed_at, l.imported_at), l.first_seen_at)) AS changed_at
      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
      WHERE l.status='active' GROUP BY 1,2,3,4`,
@@ -85,6 +86,11 @@ async function collect() {
   const bodies = new Set();
   const powertrains = new Set();
   const models = new Set();
+  // Сколько машин у модели всего — тонкие страницы (без обзора, меньше трёх машин)
+  // закрыты от индексации, сообщать о них незачем.
+  const modelCounts = new Map();
+  for (const row of rows) modelCounts.set(`${row.brand}|${row.model}`, (modelCounts.get(`${row.brand}|${row.model}`) || 0) + (Number(row.count) || 0));
+  const reviewed = new Set(MODEL_PAGES.map((page) => `${page.brand}|${page.model}`));
   for (const row of rows) {
     if (!fresh(row.changed_at)) continue;
     if (row.brand) brands.add(row.brand);
@@ -101,7 +107,14 @@ async function collect() {
     if (landing.powertrain && !powertrains.has(landing.powertrain)) return false;
     return Boolean(landing.brand || landing.bodyType || landing.powertrain || brands.size);
   }).map((landing) => `${siteUrl}${landing.path}`);
-  const reviews = MODEL_PAGES.filter((page) => models.has(`${page.brand}|${page.model}`)).map((page) => `${siteUrl}${page.path}`);
+  // Каталожные страницы моделей (с 25.09.2026 — у каждой модели с машинами, обзор
+  // написан или нет): адрес строится по марке и модели тем же правилом, что на сайте.
+  const reviews = [...models]
+    .filter((key) => reviewed.has(key) || (modelCounts.get(key) || 0) >= 3)
+    .map((key) => key.split("|"))
+    .map(([brand, model]) => modelLandingPath(brand, model))
+    .filter(Boolean)
+    .map((path) => `${siteUrl}${path}`);
   // Журнал: вышедшие за период материалы и сам список. Без этого новая статья ждёт,
   // пока поисковик набредёт на неё сам, — а это недели вместо одного утра. Черновики
   // не отправляем: их страницы закрыты от индексации, сообщать о них нечего.

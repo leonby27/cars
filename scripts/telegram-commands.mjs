@@ -12,8 +12,12 @@ import path from "node:path";
 import https from "node:https";
 import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { sendTelegram } from "./lib/telegram.mjs";
+import { callTelegram, sendTelegram } from "./lib/telegram.mjs";
 import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand } from "../config/import-policy.mjs";
+// Подтверждение номера из заявки на сайте: посетитель приходит в этого же бота по
+// ссылке с ключом и делится контактом. Всё, что не Сергей и не подтверждение,
+// получает короткую подсказку — бот посторонним не служит.
+import { confirmContact, phoneVerifiedMessage, startVerification, tokenFromStart } from "../server/lead-verify.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OFFSET_PATH = path.join(ROOT, "runtime", "telegram-offset.json");
@@ -137,6 +141,41 @@ async function handle(text) {
   }
 }
 
+// ── Посетители сайта: подтверждение номера ────────────────────────────────────
+const SITE_URL = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
+const reply = (chatId, text, extra = {}) =>
+  callTelegram("sendMessage", { chat_id: chatId, text, disable_web_page_preview: true, ...extra }).catch(() => null);
+const askForContact = (chatId, text) =>
+  reply(chatId, text, { reply_markup: { keyboard: [[{ text: "Поделиться номером", request_contact: true }]], one_time_keyboard: true, resize_keyboard: true } });
+const removeKeyboard = { reply_markup: { remove_keyboard: true } };
+
+async function handleVisitor(message) {
+  const chatId = String(message.chat?.id || "");
+  if (!chatId) return;
+  // Пришёл по ссылке из заявки: находим её и просим номер.
+  const token = tokenFromStart(message.text);
+  if (token) {
+    const draft = await startVerification(token, chatId);
+    if (!draft) return reply(chatId, "Ссылка устарела или заявка уже подтверждена. Если вы ещё не оставили заявку — сделайте это на сайте abcars.by, там появится новая ссылка.", removeKeyboard);
+    const car = draft.title ? ` по автомобилю «${draft.title}»` : "";
+    return askForContact(chatId, `Здравствуйте${draft.customer_name ? `, ${draft.customer_name}` : ""}! Чтобы подтвердить номер из заявки${car}, нажмите кнопку «Поделиться номером» внизу. Телеграм передаст нам номер вашего аккаунта — вводить ничего не нужно.`);
+  }
+  // Прислал контакт: сверяем с заявкой.
+  if (message.contact) {
+    const result = await confirmContact({ chatId, phone: message.contact.phone_number, contactUserId: message.contact.user_id, fromId: message.from?.id });
+    if (result.ok) {
+      await reply(chatId, "Спасибо, номер подтверждён. Мы уточним у продавца, что автомобиль ещё в продаже, и свяжемся с вами.", removeKeyboard);
+      await say(phoneVerifiedMessage(result.draft, { siteUrl: SITE_URL }));
+      return;
+    }
+    if (result.reason === "foreign_contact") return askForContact(chatId, "Это чужой контакт. Нажмите кнопку «Поделиться номером» — так телеграм отправит ваш собственный номер.");
+    if (result.reason === "phone_mismatch") return reply(chatId, "Номер вашего телеграма не совпадает с номером в заявке. Оставьте заявку на сайте ещё раз с этим номером — или мы просто позвоним по тому, что указан.", removeKeyboard);
+    return reply(chatId, "Не нашёл заявку, которую нужно подтвердить. Оставьте заявку на сайте abcars.by и вернитесь сюда по ссылке из неё.", removeKeyboard);
+  }
+  // Всё остальное — короткая подсказка, без диалога.
+  if (message.text) return reply(chatId, "Это бот abcars.by. Он подтверждает номер телефона из заявки на сайте: оставьте заявку на abcars.by и нажмите там «Подтвердить номер в Telegram».", removeKeyboard);
+}
+
 let offset = await fs
   .readFile(OFFSET_PATH, "utf8")
   .then((s) => Number(JSON.parse(s).offset) || 0)
@@ -148,7 +187,16 @@ for (;;) {
   for (const update of answer?.result || []) {
     offset = Math.max(offset, Number(update.update_id) + 1);
     const message = update.message || update.edited_message;
-    if (!message || String(message.chat?.id) !== CHAT) continue;
+    if (!message) continue;
+    if (String(message.chat?.id) !== CHAT) {
+      // Чужой чат — только подтверждение номера, никаких команд.
+      try {
+        await handleVisitor(message);
+      } catch (error) {
+        console.log(`[bot] посетитель ${message.chat?.id}: ${String(error.message).slice(0, 100)}`);
+      }
+      continue;
+    }
     console.log(`[bot] команда: ${String(message.text || "").slice(0, 60)}`);
     try {
       await handle(message.text);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSeoRenderer } from "../server/seo-render.mjs";
-import { MODEL_PAGES, findModelPage } from "../src/model-pages.js";
+import { MODEL_PAGES, findModelPageBySlug } from "../src/model-pages.js";
 import { modelPageWithText } from "../src/model-texts.js";
 import { CATALOG_LANDINGS, findCatalogLanding, landingsForCar } from "../src/catalog-landings.js";
 
@@ -14,7 +14,7 @@ const shell = `<!doctype html>
 const render = (options = {}) => createSeoRenderer({ shell, siteUrl: "https://abcars.by", allowIndexing: true, ...options });
 
 // Странице для поисковика нужен обзор целиком: обложка из model-pages.js плюс текст.
-const page = modelPageWithText(findModelPage("/models/byd-han"));
+const page = modelPageWithText(findModelPageBySlug("byd-han"));
 const cars = [
   { id: "che168-1", title: "BYD Han 2023", brand: "BYD", model: "Han", year: 2023, mileage: 21400, chinaPrice: 128000, type: "Электромобиль" },
   { id: "che168-2", title: "BYD Han 2022", brand: "BYD", model: "Han", year: 2022, mileage: 54000, chinaPrice: 96000, type: "Электромобиль" },
@@ -52,7 +52,7 @@ test("текст обзора и частые вопросы остаются в
   assert.match(html, /"@type":"FAQPage"/);
   assert.match(html, /"@type":"ItemList"/);
   assert.match(html, /"@type":"BreadcrumbList"/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/models\/byd-han"/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog\/byd\/han"/);
   // Внутренние ссылки без косой черты на конце — хостинг с чертой перебрасывает.
   assert.doesNotMatch(html, /<a href="\/[^"]+\/"/);
 });
@@ -112,13 +112,13 @@ test("обзор ведёт в разделы каталога своего кл
   // же класса у других марок: это самые содержательные страницы сайта, и раньше вес
   // с них дальше никуда не шёл.
   const sections = landingsForCar({ brand: "BYD", type: "Электромобиль", bodyType: "Седан" }).slice(0, 6);
-  const similar = [findModelPage("/models/tesla-model-3"), findModelPage("/models/xiaomi-su7")].filter(Boolean);
+  const similar = [findModelPageBySlug("tesla-model-3"), findModelPageBySlug("xiaomi-su7")].filter(Boolean);
   const { html } = render().modelPage({ modelPage: page, cars, total: 616, siblings, brandLanding, sections, similar });
   assert.match(html, /<h2>Где смотреть BYD Han и похожие машины<\/h2>/);
   assert.match(html, /<a href="\/catalog\/byd-sedan">/);
   assert.match(html, /<a href="\/catalog\/electric-sedan">/);
   assert.match(html, /<h2>Похожие модели других марок<\/h2>/);
-  assert.match(html, /<a href="\/models\/tesla-model-3">/);
+  assert.match(html, /<a href="\/catalog\/tesla\/model-3">/);
   // Своя марка в «похожих» не участвует — она идёт отдельным блоком.
   assert.ok(!similar.some((item) => item.brand === "BYD"));
 });

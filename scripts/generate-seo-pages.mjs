@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
-import { CATALOG_LANDINGS, brandLandingPath, catalogPageCount, landingApiParams, landingsForCar } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, HOME_SEO, brandLandingPath, catalogPageCount, landingApiParams, landingsForCar, modelLandingPath } from "../src/catalog-landings.js";
 import { TOOL_PAGES, calcParamNames, calculatorFields, customsExample, deliveryStages, dutyRateTables, toolPageStats, toolUpdatedLabel } from "../src/tool-pages.js";
 import { rangeParamNames } from "../src/range-estimate.js";
 // Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
@@ -39,7 +39,8 @@ import { BLOG_TEXTS, blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
-import { carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, linkifyText, listingNumber, number, photoHref, plural, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
+import { carTitle as carNameTitle } from "../src/car-title.js";
+import { IMAGE_WIDTH_SCHEMA, carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, linkifyText, listingNumber, number, photoHref, plural, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
@@ -67,19 +68,34 @@ const shellPath = existsSync(appShellPath) ? appShellPath : path.join(clientDir,
 const catalogPath = process.env.SEO_CATALOG ? path.resolve(process.env.SEO_CATALOG) : path.join(root, "public", "data", "cars.json");
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
-// Карта сайта лежит под неочевидным именем и не упомянута в robots.txt. Причина не в
-// поисковиках — им адрес задают вручную в Search Console и Вебмастере, — а в том, что
-// `/sitemap.xml` это готовый список всех адресов каталога: конкуренту не нужно обходить
-// сайт, чтобы узнать, что у нас есть. Имя должно оставаться одним и тем же между
-// сборками, иначе зарегистрированный адрес перестанет открываться; сменить его можно
-// через `SEO_SITEMAP_TOKEN` — тогда карту нужно заново добавить в оба сервиса.
+// Файлы карты сайта носят имя с токеном: до 25.09.2026 карта пряталась от конкурентов
+// (готовый список всех адресов каталога), и под этим именем она зарегистрирована в
+// Search Console и Вебмастере — имя менять нельзя, иначе зарегистрированный адрес
+// перестанет открываться (`SEO_SITEMAP_TOKEN` — тогда карту нужно добавить заново).
+//
+// 25.09.2026 (разбор против IM4CAR) карта открыта: тот же указатель лежит и по
+// обычному адресу `/sitemap.xml`, а robots.txt на него ссылается. Прятать оказалось
+// нечего — каталог и так обходится по ссылкам разделов, а у конкурента в карте
+// 631 тысяча адресов, и Google взял из них 147 тысяч; наша карта без строки в
+// robots.txt была для роботов, которые не знают адреса, пустым местом.
 const sitemapToken = String(process.env.SEO_SITEMAP_TOKEN || "7c4f19b2").replace(/[^a-z0-9-]/gi, "") || "7c4f19b2";
 const sitemapIndexName = `sitemap-${sitemapToken}.xml`;
 const pagesSitemapName = `sitemap-${sitemapToken}-pages.xml`;
+// Открытое имя указателя — то, что стоит в robots.txt.
+const publicSitemapName = "sitemap.xml";
 // Первый файл машин сохраняет привычное имя, следующие получают номер: в одну карту
 // по стандарту влезает 50 000 адресов, и при росте каталога её придётся делить.
 const carsSitemapName = (index) => (index === 0 ? `sitemap-${sitemapToken}-cars.xml` : `sitemap-${sitemapToken}-cars-${index + 1}.xml`);
 const carsPerSitemap = 45_000;
+// Адрес первого снимка машины для карты сайта — тот же кадр и тот же наш адрес
+// (/photo/…), что стоит в разметке карточки: чужое хранилище отвечает роботу
+// втрое медленнее и в любой день может его не пустить.
+const carSitemapPhoto = (url) => {
+  const source = String(url || "");
+  if (!/^https:\/\//.test(source)) return null;
+  const proxied = photoHref(source, IMAGE_WIDTH_SCHEMA);
+  return proxied?.startsWith("/") ? `${siteUrl}${proxied}` : proxied || null;
+};
 const shell = readFileSync(shellPath, "utf8");
 const renderer = createSeoRenderer({ shell, siteUrl, allowIndexing });
 const { carLinks, footer, hrefRoute, modelLinks, navigation, pathwayLinks, renderHtml, routeUrl } = renderer;
@@ -100,20 +116,20 @@ const carsSitemap = /^(1|true|yes)$/i.test(String(process.env.SEO_CARS_SITEMAP |
 
 // ── Сколько адресов уходит в карту сайта ──────────────────────────────────────
 // 01.09.2026, по данным Search Console: Google проиндексировал 336 страниц, а 107 383
-// висят в состоянии «обнаружена, не проиндексирована». Карта из ста десяти тысяч
-// карточек съедала весь бюджет обхода, и до 163 разделов с 449 обзорами робот просто
-// не доходил — они тонули среди почти одинаковых объявлений.
+// висели в состоянии «обнаружена, не проиндексирована». Тогда карту сузили до
+// нескольких свежих карточек на модель, чтобы разделы и обзоры не тонули среди
+// объявлений.
 //
-// Поэтому карта сужена: разделы, обзоры, информационные страницы и журнал остаются
-// целиком, а машины идут выборкой — по нескольку свежих карточек на каждую модель.
-// Остальные объявления никуда не деваются: их находят по ссылкам из разделов, а
-// Яндексу и Bing про каждое изменение отдельно сообщает IndexNow (scripts/indexnow.mjs),
-// который шлёт до десяти тысяч изменившихся карточек в сутки.
+// 25.09.2026 (разбор против IM4CAR) машины возвращены в карту целиком: в карте было
+// 2 693 карточки из 38 764, а у конкурента — все 631 тысяча, и именно из карты Google
+// взял у него 147 тысяч страниц. К каждой карточке идут дата настоящего изменения
+// и первый снимок (расширение image-sitemap): так робот отличает обновлённую машину
+// от нетронутой, а снимок попадает в поиск по картинкам с нашего адреса.
 //
-// Числа можно поднимать по мере роста доверия к домену; `SEO_SITEMAP_FULL=1`
-// возвращает прежнее поведение — все карточки и все страницы-листалки.
+// `SEO_SITEMAP_CARS_PER_MODEL=5` возвращает прежнюю выборку, если бюджет обхода
+// снова окажется узким; `SEO_SITEMAP_FULL=1` дополнительно отдаёт все страницы-листалки.
 const fullSitemap = /^(1|true|yes)$/i.test(String(process.env.SEO_SITEMAP_FULL || "false"));
-const carsPerModelInSitemap = fullSitemap ? 0 : Math.max(1, Number(process.env.SEO_SITEMAP_CARS_PER_MODEL) || 5);
+const carsPerModelInSitemap = fullSitemap ? 0 : Math.max(0, Number(process.env.SEO_SITEMAP_CARS_PER_MODEL) || 0);
 // Сколько страниц-«листалок» раздела попадает в карту сверх первой. Глубокие страницы
 // (в разделе электромобилей их две сотни) для поиска бесполезны: содержание у них
 // одинаковое, а бюджет обхода они забирают наравне с разделами. Робот дойдёт до них
@@ -141,7 +157,7 @@ const marketBelarus = existsSync(marketPath) ? JSON.parse(readFileSync(marketPat
 // одной ссылки на машину. Готовый файл вдобавок перекрыл бы правило переадресации, и
 // адрес с фильтрами (`/catalog?brand=BYD`) не дошёл бы до переброса на свой раздел.
 const publicPages = [
-  { route: "/", title: "Б/у авто из Китая в Беларусь — доставка и проверка | abcars.by", description: "Б/у авто из Китая с проверкой и доставкой в Беларусь. Каталог актуальных объявлений, цена в Китае и предварительный расчёт стоимости до Минска.", h1: "Б/у авто из Китая с доставкой в Беларусь", lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },
+  { route: "/", title: HOME_SEO.title, description: HOME_SEO.description, h1: HOME_SEO.h1.replace(/\u00a0/g, " "), lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },
   { route: "/how-it-works/", title: "О сервисе покупки автомобилей из Китая | abcars.by", description: "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске.", h1: "О сервисе abcars.by", lead: "Сначала подтверждаем наличие, состояние и полную смету. После согласования заключаем договор, выкупаем автомобиль и доставляем его в Минск." },
   // Страницы `/about` больше нет: у неё был тот же заголовок «О сервисе abcars.by», что
   // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
@@ -523,7 +539,7 @@ function infoArticle(route) {
   }
   if (route === "/contacts/") {
     const rows = [
-      ["Адрес", COMPANY.address],
+      ["Город", COMPANY.address],
       ["Время работы", COMPANY.hours],
       ["Электронная почта", COMPANY.email],
       ["Telegram", COMPANY.telegram],
@@ -1019,6 +1035,23 @@ function publicPageBody(page) {
 // Живые данные читаем до отрисовки страниц: витрина и счётчики моделей нужны главной.
 const live = await readLiveCatalog();
 
+// Популярные модели для главной: сорок восемь моделей с наибольшим числом машин.
+// До 25.09.2026 с главной на модели не вело ни одной ссылки (у IM4CAR — 370).
+// Главная собирается при сборке (scripts/prerender-home.mjs), поэтому список считаем
+// здесь же и кладём рядом со сборкой: он попадёт и в готовую разметку, и в данные для
+// оживления — первый кадр в браузере совпадёт с сервером.
+const POPULAR_MODELS_ON_HOME = 48;
+const popularModels = [...live.models]
+  .map(([key, count]) => {
+    const [brand, model] = key.split("|");
+    const review = MODEL_PAGES.find((page) => page.brand === brand && page.model === model);
+    return { path: modelLandingPath(brand, model), name: review?.name || carNameTitle(brand, model), count: Number(count) || 0 };
+  })
+  .filter((item) => item.path && item.count >= 3)
+  .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, "ru"))
+  .slice(0, POPULAR_MODELS_ON_HOME);
+writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify(popularModels)}\n`);
+
 // Разделы, в которых есть хотя бы одна машина. Марки заведены заранее, под загрузку
 // каталога: пока импорт до марки не дошёл, её раздел пуст — в карту сайта и в ссылки
 // он не попадает, а сервер отдаёт по нему 404. Когда база при сборке недоступна,
@@ -1175,7 +1208,15 @@ const carShellHtml = renderHtml({
 writeFileSync(path.join(clientDir, "car.html"), carShellHtml);
 
 // ── Карты сайта ───────────────────────────────────────────────────────────────
-const urlset = (entries) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map(({ loc, lastmod }) => `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`).join("\n")}\n</urlset>\n`;
+// Снимок у адреса — расширение image-sitemap: одна картинка на машину, первая в
+// галерее, с нашего кэша (см. carSitemapPhoto). Пространство имён объявляем только
+// когда картинки есть, иначе валидаторы ругаются на неиспользуемый префикс.
+const urlset = (entries) => {
+  const withImages = entries.some((entry) => entry.image);
+  const open = `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${withImages ? ` xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"` : ""}>`;
+  const item = ({ loc, lastmod, image }) => `  <url><loc>${escapeXml(loc)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}${image ? `<image:image><image:loc>${escapeXml(image)}</image:loc></image:image>` : ""}</url>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${open}\n${entries.map(item).join("\n")}\n</urlset>\n`;
+};
 
 /**
  * Живые данные каталога для сборки: витрина главной, число машин по каждой модели и
@@ -1203,7 +1244,7 @@ async function readLiveCatalog() {
       showcase: cars.slice(0, showcaseSize),
       models: countByModel(cars),
       modelChanged: new Map(),
-      carEntries: carsSitemap ? cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt) })) : [],
+      carEntries: carsSitemap ? cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt), image: carSitemapPhoto(car.image || car.images?.[0]) })) : [],
       listPages: new Map(),
       stock: new Map(),
       collections: new Map(),
@@ -1233,12 +1274,15 @@ async function readLiveCatalog() {
     // с ограничением — по `carsPerModelInSitemap` карточек на каждую модель, и первыми
     // идут те, у которых есть фотографии и которые недавно менялись: такая карточка
     // и роботу полезнее, и человеку из выдачи.
+    // Первый снимок каждой машины — из той же таблицы, что и галерея карточки.
+    const firstPhoto = "(SELECT m.url FROM listing_media m WHERE m.listing_id = l.id ORDER BY m.position LIMIT 1)";
     const rows = !carsSitemap
       ? []
       : carsPerModelInSitemap
         ? (await pool.query(`WITH ranked AS (
             SELECT l.id,
               COALESCE(l.content_changed_at, l.imported_at) AS changed_at,
+              ${firstPhoto} AS image,
               row_number() OVER (
                 PARTITION BY v.brand, v.model
                 ORDER BY EXISTS (SELECT 1 FROM listing_media m WHERE m.listing_id = l.id) DESC,
@@ -1247,8 +1291,12 @@ async function readLiveCatalog() {
             FROM listings l JOIN vehicles v ON v.id = l.vehicle_id
             WHERE l.status = 'active'
           )
-          SELECT id, changed_at FROM ranked WHERE place <= $1`, [carsPerModelInSitemap])).rows
-        : (await pool.query("SELECT l.id, COALESCE(l.content_changed_at, l.imported_at) AS changed_at FROM listings l WHERE l.status='active'")).rows;
+          SELECT id, changed_at, image FROM ranked WHERE place <= $1`, [carsPerModelInSitemap])).rows
+        // Все живые объявления; сначала те, что менялись недавно, — так первый файл
+        // карты всегда держит самое свежее.
+        : (await pool.query(`SELECT l.id, COALESCE(l.content_changed_at, l.imported_at) AS changed_at, ${firstPhoto} AS image
+            FROM listings l WHERE l.status='active'
+            ORDER BY COALESCE(l.content_changed_at, l.imported_at) DESC, l.id`)).rows;
     // Сколько страниц в каждом разделе. Нужно карте сайта: страницы списка робот иначе
     // находит только переходами «дальше», а в разделе электромобилей их две сотни —
     // до середины он дошёл бы нескоро.
@@ -1339,7 +1387,7 @@ async function readLiveCatalog() {
       models: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.count])),
       // Дата последнего изменения по каждой модели — для `lastmod` у обзоров.
       modelChanged: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, isoDate(row.changedAt)])),
-      carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at) })),
+      carEntries: rows.map((row) => ({ loc: routeUrl(`/cars/${encodeURIComponent(listingNumber(row.id))}/`), lastmod: isoDate(row.changed_at), image: carSitemapPhoto(row.image) })),
       activeCars: whole.total,
       // Когда каталог последний раз проверяли — та же дата и из того же места, что
       // приложение пишет на главной и в рекламной врезке статьи: последняя отметка
@@ -1387,6 +1435,28 @@ const blogIndexLastmod = BLOG_ENABLED
   ? blogPosts().map(blogLastmod).filter(Boolean).sort().pop() || null
   : null;
 
+const modelPageEntries = () => {
+  const seen = new Set();
+  const entries = [];
+  const reviewed = new Set(MODEL_PAGES.map((page) => `${page.brand}|${page.model}`));
+  for (const [key, count] of live.models) {
+    const [brand, model] = key.split("|");
+    const path = modelLandingPath(brand, model);
+    if (!path || seen.has(path)) continue;
+    // Тонкие страницы моделей (без обзора и меньше трёх машин) закрыты от индексации —
+    // в карте сайта им не место.
+    if (!reviewed.has(key) && (Number(count) || 0) < 3) continue;
+    seen.add(path);
+    entries.push({ loc: routeUrl(path), lastmod: live.modelChanged.get(key) || null });
+  }
+  for (const modelPage of MODEL_PAGES) {
+    if (seen.has(modelPage.path)) continue;
+    seen.add(modelPage.path);
+    entries.push({ loc: routeUrl(modelPage.path), lastmod: live.modelChanged.get(`${modelPage.brand}|${modelPage.model}`) || null });
+  }
+  return entries;
+};
+
 const pageEntries = [
   // Черновики (образец отчёта) в карту сайта не идут: их страница собрана только
   // ради прямой ссылки и закрыта от индексации.
@@ -1400,7 +1470,9 @@ const pageEntries = [
   // раздел обновляется каждую ночь.
   { loc: routeUrl("/catalog/"), lastmod: live.changed.get("/catalog") || null },
   ...listPageEntries("/catalog/"),
-  ...MODEL_PAGES.map((modelPage) => ({ loc: routeUrl(modelPage.path), lastmod: live.modelChanged.get(`${modelPage.brand}|${modelPage.model}`) || null })),
+  // Каталожные страницы моделей: все модели с машинами (адрес по марке и модели)
+  // плюс обзоры моделей, которых сейчас нет в наличии, — у них есть текст.
+  ...modelPageEntries(),
   ...liveSections.flatMap((landing) => [{ loc: routeUrl(landing.path), lastmod: live.changed.get(landing.path) || null }, ...listPageEntries(landing.path)]),
 ];
 writeFileSync(path.join(clientDir, pagesSitemapName), urlset(pageEntries));
@@ -1416,17 +1488,22 @@ for (const stale of readdirSync(clientDir).filter((name) => /^sitemap-.*-cars(-\
 }
 
 const sitemaps = [pagesSitemapName, ...carChunks.map((_, index) => carsSitemapName(index))];
-writeFileSync(path.join(clientDir, sitemapIndexName), `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps.map((name) => `  <sitemap><loc>${escapeXml(siteUrl)}/${name}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`);
-// Прежние предсказуемые имена в сборке не оставляем: файл с адресами всех машин по
-// адресу `/sitemap.xml` — готовый список для выкачки конкурентом.
-for (const stale of ["sitemap.xml", "sitemap-pages.xml", "sitemap-cars.xml"]) {
-  if (!sitemaps.includes(stale) && stale !== sitemapIndexName) rmSync(path.join(clientDir, stale), { force:true });
+const sitemapIndexXml = `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemaps.map((name) => `  <sitemap><loc>${escapeXml(siteUrl)}/${name}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`;
+// Один и тот же указатель под двумя именами: с токеном — для адреса, который уже
+// зарегистрирован в Search Console и Вебмастере; `/sitemap.xml` — для строки в
+// robots.txt и для роботов, которые ищут карту по обычному адресу. До 25.09.2026
+// по `/sitemap.xml` отвечала страница приложения с кодом 200.
+writeFileSync(path.join(clientDir, sitemapIndexName), sitemapIndexXml);
+writeFileSync(path.join(clientDir, publicSitemapName), sitemapIndexXml);
+// Прежние имена частей карты в сборке не оставляем: устаревший файл уводил бы робота
+// на адреса, которых уже нет.
+for (const stale of ["sitemap-pages.xml", "sitemap-cars.xml"]) {
+  if (!sitemaps.includes(stale)) rmSync(path.join(clientDir, stale), { force:true });
 }
 
 const robots = allowIndexing
-  // Карту сайта в robots.txt не упоминаем: эта строка публично показала бы, где лежит
-  // список всех адресов каталога. Поисковикам её адрес задают вручную — один раз, в
-  // Google Search Console и Яндекс.Вебмастере; на обход и индексацию это не влияет.
+  // Строка `Sitemap:` — открытый адрес указателя карты (см. publicSitemapName): без неё
+  // робот, не знающий зарегистрированного адреса с токеном, карты не находил вовсе.
   // Запреты пишем без косой черты на конце и с якорем `$`, где нужно точное совпадение.
   // Это не мелочь: в robots.txt адрес сравнивается по началу строки, поэтому «/car»
   // запрещал заодно и «/cars/59372753» — то есть все 31 тысячу карточек, ради которых
@@ -1463,12 +1540,16 @@ const robots = allowIndexing
       // сервер перебрасывает на готовый раздел (`/catalog?brand=BYD` → `/catalog/byd`),
       // а склеенный с общим каталогом адрес до этого переброса не дошёл бы. Остальные
       // параметры своей страницы не имеют, поэтому их по-прежнему склеиваем.
-      "Clean-param: sort&model&color&drive&yearFrom&yearTo&priceFrom&priceTo&mileage&owners&battery&range&accel&tire&torque&condition&q /catalog",
+      // `mileageTo` — фильтр каталожной страницы модели (/catalog/<марка>/<модель>);
+      // `page` в списке нет намеренно: страницы списка — отдельные адреса.
+      "Clean-param: sort&model&color&drive&yearFrom&yearTo&priceFrom&priceTo&mileage&mileageTo&owners&battery&range&accel&tire&torque&condition&q /catalog",
       // Поля калькулятора: по ссылке на конкретный расчёт открывается та же страница
       // с теми же текстами, и в выдаче она должна быть одна, а не по адресу на каждую
       // введённую цену.
       `Clean-param: ${calcParamNames().join("&")} /customs`,
       `Clean-param: ${rangeParamNames().join("&")} /range`,
+      "",
+      `Sitemap: ${siteUrl}/${publicSitemapName}`,
       "",
       // Оптовые обходчики каталогов: сервер грузят как настоящая толпа, а взамен не
       // дают ничего — ни выдачи, ни посетителей. Поисковиков (Google, Яндекс, Bing,
@@ -1644,10 +1725,12 @@ console.log(`Generated ${publicPages.length} public pages, ${MODEL_PAGES.length}
 console.log(`Адресов в карте сайта: ${pageEntries.length} страниц и ${carsInSitemap} машин${carsSitemap ? "" : " (машины включаются SEO_CARS_SITEMAP=1 или открытой индексацией)"}.`);
 if (carsSitemap && carsPerModelInSitemap) {
   console.log(`  машины идут выборкой: до ${carsPerModelInSitemap} свежих карточек на модель из ${live.activeCars || "?"} активных; остальные робот находит по ссылкам, а Яндексу об изменениях говорит IndexNow.`);
+} else if (carsSitemap && carsInSitemap) {
+  console.log(`  все активные машины, с датой изменения; со снимком — ${carEntries.filter((entry) => entry.image).length}.`);
 }
 if (Number.isFinite(listPagesInSitemap)) {
   console.log(`  страницы-листалки: не глубже ${listPagesInSitemap + 1}-й в каждом разделе (полная карта — SEO_SITEMAP_FULL=1).`);
 }
 // Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
 // вставляют в Google Search Console и Яндекс.Вебмастер.
-console.log(`Карта сайта (в robots.txt не указана, добавить вручную в Search Console и Вебмастер): ${siteUrl}/${sitemapIndexName}`);
+console.log(`Карта сайта: ${siteUrl}/${publicSitemapName} (в robots.txt), тот же указатель под зарегистрированным именем ${siteUrl}/${sitemapIndexName}.`);

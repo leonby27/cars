@@ -3,7 +3,8 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { EXCLUDED_BRANDS, IMPORT_BRANDS, MAINSTREAM_IMPORT_BRANDS } from "../config/import-policy.mjs";
 import { visibleLandings } from "../server/catalog-page.mjs";
-import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, relatedLandings } from "../src/catalog-landings.js";
+import { landingSeoDescription, landingSeoTitle, landingSubtitle } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, priceBandsForCar, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
 import { isEvQuotaExhausted } from "../src/ev-quota.js";
 
@@ -79,7 +80,9 @@ test("страница раздела отдаётся с текстом, маш
   // Длинная фраза раздела разложена на две половины и общую подпись под ними. Слова
   // со страницы не убраны: половины стоят через пробел, а на телефоне стили ставят
   // каждую своей строкой.
-  assert.match(html, /<h1><span>Автомобили BYD<\/span> <span>(с пробегом|б\/у) из Китая<\/span><\/h1><p>Купить с доставкой в Беларусь<\/p>/);
+  // С 25.09.2026 «б/у» и «с пробегом» ушли из заголовка в подзаголовок, а в нём же —
+  // «китайские автомобили» (у китайской марки).
+  assert.match(html, /<h1><span>Автомобили BYD<\/span> <span>из Китая<\/span><\/h1><p>Китайские автомобили с пробегом — купить с доставкой в Беларусь<\/p>/);
   assert.match(html, /В наличии 5[^<]*673 автомобиля/);
   // Текст раздела лежит в самой странице, а не подгружается скриптом.
   assert.match(html, /собственный тип батареи Blade/);
@@ -129,7 +132,7 @@ test("общая страница каталога показывает маши
   // Файлом она собиралась вхолостую: на хостинге дампа каталога нет, и в странице
   // не оставалось ни одной ссылки на машину. Сервер берёт список из базы.
   const { html } = render().catalogIndexPage({ cars, total: 32916, sections: CATALOG_LANDINGS });
-  assert.match(html, /<h1><span>Б\/у авто<\/span> <span>из Китая<\/span><\/h1><p>Купить с доставкой в Беларусь<\/p>/);
+  assert.match(html, /<h1><span>Авто<\/span> <span>из Китая<\/span><\/h1><p>Китайские автомобили с пробегом — купить с доставкой в Беларусь<\/p>/);
   assert.match(html, /В каталоге 32[\s\u00a0\u202f]916 автомобилей/);
   assert.match(html, /<a href="\/cars\/1">BYD Han 2023<\/a>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog"/);
@@ -242,8 +245,12 @@ test("карточка машины в приложении ведёт в сво
   // там не было — из 48 тысяч карточек в каталог вела одна общая ссылка.
   const code = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
   assert.match(code, /className="detail-section-links"/, "в карточке машины нет блока со ссылками на разделы");
-  const block = code.slice(code.indexOf("const sections = landingsForCar(car)"), code.indexOf('className="detail-tool-links"'));
+  const start = code.indexOf("const modelPath = modelLandingPath(car.brand, car.model)");
+  assert.ok(start > 0, "в карточке машины разделы собираются не из landingsForCar");
+  const block = code.slice(start, code.indexOf('className="detail-tool-links"'));
   assert.ok(block.includes("detail-section-links"), "блок ссылок на разделы собирается не из landingsForCar");
+  // С 25.09.2026 к разделам машины добавлена её ценовая полоса.
+  assert.ok(block.includes("priceBandsForCar({ type: car.type"), "в карточке нет ссылки на ценовую полосу");
   // У обычной машины разделов пять: марка, тип двигателя, кузов и два сочетания.
   const forCar = landingsForCar({ brand: "BYD", type: "Электромобиль", bodyType: "SUV / кроссовер" });
   assert.deepEqual(forCar.map((item) => item.path), ["/catalog/byd", "/catalog/electric", "/catalog/suv", "/catalog/electric-suv", "/catalog/byd-suv"]);
@@ -270,6 +277,29 @@ test("ссылки между разделами идут по смыслу, а 
   assert.ok(shared <= 4, `у BYD и Tesla общих ссылок ${shared}, ожидалось не больше 4`);
   // Своей же страницы среди ссылок быть не должно.
   assert.equal(byd.includes("/catalog/byd"), false);
+});
+
+test("ценовая полоса машины — самая узкая подходящая, у бензина ещё и своя", () => {
+  // 25.09.2026: с карточек и обзоров на полосы «до N $» не вело ни одной ссылки.
+  assert.deepEqual(priceBandsForCar({ type: "Электромобиль", landedUsd: 18_400 }).map((band) => band.path), ["/catalog/under-20000"]);
+  assert.deepEqual(priceBandsForCar({ type: "ДВС", landedUsd: 22_900 }).map((band) => band.path), ["/catalog/under-25000", "/catalog/petrol-under-25000"]);
+  // Ровно на границе — ещё внутри полосы.
+  assert.deepEqual(priceBandsForCar({ type: "Гибрид", landedUsd: 15_000 }).map((band) => band.path), ["/catalog/under-15000"]);
+  // Дороже самой широкой полосы — полос нет; без цены — тоже.
+  assert.deepEqual(priceBandsForCar({ type: "Электромобиль", landedUsd: 64_000 }), []);
+  assert.deepEqual(priceBandsForCar({ type: "Электромобиль", landedUsd: null }), []);
+});
+
+test("разделу достаются общие ценовые полосы, бензиновому — ещё и бензиновые", () => {
+  const byd = priceBandsForLanding(findCatalogLanding("/catalog/byd")).map((band) => band.path);
+  assert.deepEqual(byd, ["/catalog/under-15000", "/catalog/under-20000", "/catalog/under-25000", "/catalog/under-30000", "/catalog/under-40000"]);
+  const petrol = priceBandsForLanding(findCatalogLanding("/catalog/petrol")).map((band) => band.path);
+  assert.ok(petrol.includes("/catalog/petrol-under-25000"), petrol.join(", "));
+  assert.ok(petrol.includes("/catalog/under-20000"), petrol.join(", "));
+  // Сама полоса в своём списке не значится.
+  const band = priceBandsForLanding(findCatalogLanding("/catalog/under-20000")).map((item) => item.path);
+  assert.equal(band.includes("/catalog/under-20000"), false);
+  assert.ok(band.includes("/catalog/under-15000"));
 });
 
 test("на каждый раздел ссылается хотя бы один другой раздел", () => {
@@ -397,4 +427,29 @@ test("в разметке списка у машины есть фотограф
   assert.deepEqual(first.image, ["https://example.com/photo.jpg"]);
   assert.match(first.description, /пробег .* км/);
   assert.equal(first.offers.price, list.itemListElement[0].item.offers.price);
+});
+
+test("заголовки разделов: «в Беларусь», без Минска, «б/у» и «с пробегом», без повторов", () => {
+  // Правила «Слова и ссылки» (AUDIT_2026-09-25): спрос «авто из китая в беларусь»
+  // 1 295 в месяц против «минск» 134; «б/у» и «с пробегом» — в описании и подзаголовке.
+  for (const landing of CATALOG_LANDINGS) {
+    assert.match(landing.seoTitle, /Беларусь/, `${landing.path}: ${landing.seoTitle}`);
+    assert.doesNotMatch(landing.seoTitle, /Минск|б\/у|с пробегом/i, `${landing.path}: ${landing.seoTitle}`);
+    assert.doesNotMatch(landing.h1, /б\/у|с пробегом/i, `${landing.path}: ${landing.h1}`);
+  }
+  assert.equal(new Set(CATALOG_LANDINGS.map((landing) => landing.seoTitle)).size, CATALOG_LANDINGS.length, "у двух разделов одинаковый заголовок");
+});
+
+test("с живыми цифрами заголовок раздела называет число машин и цену «от»", () => {
+  const byd = findCatalogLanding("/catalog/byd");
+  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ | abcars.by");
+  const description = landingSeoDescription(byd, { total: 5204, priceFrom: 9950, priceTo: 88000, yearMin: 2021, yearMax: 2025 });
+  assert.match(description, /^В наличии 5\u00a0204 авто, цены от 9\u00a0950 до 88\u00a0000 \$ с доставкой до Минска, 2021–2025 годов выпуска\./);
+  // Прежний текст — с «б/у» и Минском — остаётся после цифр.
+  assert.match(description, /б\/у/);
+});
+
+test("у марки не из Китая подзаголовок без «китайских автомобилей»", () => {
+  assert.equal(landingSubtitle(findCatalogLanding("/catalog/audi")), "С пробегом — купить с доставкой в Беларусь");
+  assert.match(landingSubtitle(findCatalogLanding("/catalog/byd")), /^Китайские автомобили/);
 });

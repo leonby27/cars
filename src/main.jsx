@@ -4,6 +4,7 @@ import { createRoot, hydrateRoot } from "react-dom/client";
 import { App } from "./App.jsx";
 import { installRussianTypography } from "./typography.js";
 import { loadModelText } from "./model-text-load.js";
+import { findModelPage } from "./model-pages.js";
 import { loadToolPageTexts } from "./tool-page-text-load.js";
 import { findToolPage } from "./tool-pages.js";
 import "./styles.css";
@@ -21,7 +22,10 @@ const modelSlug = (() => {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const pathname = window.location.pathname;
   const unbased = base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
-  return /^\/models\/([^/]+)\/?$/.exec(unbased)?.[1] || null;
+  // Каталожная страница модели `/catalog/<марка>/<модель>`: если у модели есть обзор,
+  // его текст нужен до первого кадра — сервер отрисовал страницу уже с ним, и при
+  // оживлении разметка обязана совпасть.
+  return findModelPage(unbased.replace(/\/+$/, ""))?.slug || null;
 })();
 // Обёртка, сообщающая, что оживление готовой разметки завершилось. Эффект React
 // выполняет после сверки и первого кадра — раньше включать типографику нельзя:
@@ -57,7 +61,11 @@ function start() {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const currentPath = (window.location.pathname.replace(/\/+$/, "") || "/").replace(base, "") || "/";
   const prerenderedFor = (root.dataset.prerender || "").replace(/\/+$/, "") || (root.dataset.prerender ? "/" : "");
-  if (prerenderedFor && prerenderedFor === currentPath) {
+  // Снимок каталога в записи истории (фильтры, порядок, догруженные страницы) —
+  // это уже не стартовое состояние, с которого собрана готовая разметка: после
+  // перезагрузки такой вкладки рисуем с нуля.
+  const restoredCatalog = Boolean(window.history.state?.catalog);
+  if (prerenderedFor && prerenderedFor === currentPath && !restoredCatalog) {
     document.documentElement.classList.remove("booting");
     dropSeoBody();
     const ready = () => installRussianTypography(root);

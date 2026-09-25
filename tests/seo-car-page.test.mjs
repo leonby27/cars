@@ -48,7 +48,7 @@ const render = (options = {}) =>
 
 test("страница машины несёт свой заголовок, описание и адрес-первоисточник", () => {
   const { html } = render().carPage({ car });
-  assert.match(html, /<title>BYD Han 2023, пробег 21[^<]*400 км, батарея 85,4 кВт·ч — [^<]+\$ до Минска \| abcars\.by<\/title>/);
+  assert.match(html, /<title>BYD Han 2023, пробег 21[^<]*400 км, батарея 85,4 кВт·ч — [^<]+\$ с доставкой в Беларусь \| abcars\.by<\/title>/);
   // Тема — в описании и в хлебных крошках, а не в названии машины: заголовок остаётся
   // тем, что человек ищет («BYD Han 2023»), а слова «из Китая» идут второй строкой.
   assert.match(html, /<meta name="description" content="BYD Han 2023 из Китая: пробег 21[^"]*400 км, электромобиль, ориентировочная цена до Минска — [^"]+\$\. Проверка перед покупкой\."/);
@@ -195,4 +195,20 @@ test("адрес с приставкой источника переезжает
   assert.equal(moved.location, "/cars/59355862");
   const old = await renderCarPage("guazi_777");
   assert.equal(old.location, "/cars/777");
+});
+
+test("на странице машины есть ценовая полоса среди подборок и материалы журнала", () => {
+  // 25.09.2026 (разбор против IM4CAR): из карточки не было пути ни на ценовые полосы,
+  // ни в журнал — а это постоянные страницы, которые и должны собирать поиск.
+  const sections = [
+    { path: "/catalog/byd", h1: "BYD из Китая", name: "BYD" },
+    { path: "/catalog/under-30000", h1: "Автомобили до 30 000 $", name: "До 30 000 $" },
+  ];
+  const journal = [{ path: "/blog/byd-han-vs-tesla-model-3", name: "BYD Han или Tesla Model 3", teaser: "Что взять за те же деньги." }];
+  const { html } = render().carPage({ car, related, modelPage, sections, journal });
+  assert.match(html, /<a href="\/catalog\/under-30000">Автомобили до 30 000 \$<\/a>/);
+  assert.match(html, /<h2>Об этой модели в журнале<\/h2>/);
+  assert.match(html, /<a href="\/blog\/byd-han-vs-tesla-model-3">BYD Han или Tesla Model 3<\/a> — Что взять за те же деньги\./);
+  // Без материалов блока нет вовсе.
+  assert.doesNotMatch(render().carPage({ car, sections }).html, /в журнале/);
 });

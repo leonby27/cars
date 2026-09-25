@@ -123,6 +123,40 @@ async function deliver({ token, chatId, text, log }) {
   return false;
 }
 
+/**
+ * Любой метод Bot API с произвольными полями (клавиатура, чужой чат) — тем же путём
+ * по IPv6. Нужен боту-приёмщику, чтобы отвечать посетителям, которые подтверждают
+ * номер: там нужна кнопка «Поделиться номером», а очередь и повторы ни к чему —
+ * человек ждёт ответа сейчас. Возвращает разобранный ответ или `null`.
+ */
+export function callTelegram(method, payload, { token = process.env.TELEGRAM_BOT_TOKEN } = {}) {
+  if (!token) return Promise.resolve(null);
+  const body = JSON.stringify(payload || {});
+  return new Promise((resolve) => {
+    const request = https.request(
+      {
+        host: "api.telegram.org",
+        path: `/bot${token}/${method}`,
+        method: "POST",
+        family: 6,
+        headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body) },
+        timeout: 25_000,
+      },
+      (response) => {
+        let answer = "";
+        response.on("data", (chunk) => { if (answer.length < 4000) answer += chunk; });
+        response.on("end", () => {
+          try { resolve(JSON.parse(answer)); } catch { resolve(null); }
+        });
+      },
+    );
+    request.on("timeout", () => request.destroy(new Error("таймаут соединения")));
+    request.on("error", () => resolve(null));
+    request.write(body);
+    request.end();
+  });
+}
+
 // Никогда не бросает исключений: недоставленное сообщение не должно ронять
 // прогон, ради которого оно отправлялось.
 export async function sendTelegram(text, { root, log = console.log } = {}) {

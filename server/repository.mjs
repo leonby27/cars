@@ -215,8 +215,8 @@ export function withoutDetailPayload(car) {
   return { ...summary, _summary: true };
 }
 
-// Глубже этой позиции каталог не листается. Посетитель берёт по 99 карточек, то есть
-// потолок наступает после полусотни нажатий «Подгрузить ещё»; выкачка всех 33 тысяч
+// Глубже этой позиции каталог не листается. Посетитель берёт по 48 карточек, то есть
+// потолок наступает после сотни нажатий «Подгрузить ещё»; выкачка всех 33 тысяч
 // объявлений постраничным перебором на этом заканчивается. Ответ всегда несёт
 // `hasMore`, поэтому приложение узнаёт про упор в потолок и прекращает подгрузку,
 // вместо того чтобы сравнивать загруженное с общим числом и биться в пустые страницы.
@@ -539,6 +539,63 @@ export async function getCar(id) {
 // а состав марок меняется раз в сутки, после ночного импорта.
 const BRAND_STOCK_TTL_MS = 5 * 60 * 1000;
 let brandStockCache = { at: 0, value: null };
+
+/**
+ * Модели марки с числом живых машин — для каталожных страниц моделей: по этому
+ * списку адрес `/catalog/byd/seal-06-dm-i` превращается в имя модели из базы.
+ */
+export async function brandModels(brand) {
+  const result = await pool.query(
+    `SELECT v.model, count(*)::int AS count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+     WHERE l.status='active' AND v.brand=$1 GROUP BY v.model ORDER BY count DESC, v.model`,
+    [brand],
+  );
+  return result.rows.map((row) => ({ model:row.model, count:row.count }));
+}
+
+/**
+ * Живые цифры одной модели для каталожной страницы: сколько машин, годы, пробег,
+ * вилка и середина цен, типы двигателя, кузова и лучшие характеристики. Один скан
+ * по объявлениям модели; цены — по сохранённой оценке до Минска (та же, что в
+ * сортировке), края вилки страница потом пересчитывает живым расчётом.
+ */
+export async function modelCatalogFacts(brand, model) {
+  const numeric = (source) => `(CASE WHEN ${source} ~ '^[0-9]+([.,][0-9]+)?$' THEN replace(${source}, ',', '.')::numeric END)`;
+  const spec = (name) => numeric(`v.specifications->>'${name}'`);
+  const payload = (name) => numeric(`l.source_payload->>'${name}'`);
+  const powerSql = `COALESCE(${payload("horsepower")}, ${numeric("v.specifications->>'enginePower'")})`;
+  const where = "WHERE l.status='active' AND v.brand=$1 AND v.model=$2";
+  const [summary, powertrains, bodies] = await Promise.all([
+    pool.query(`SELECT count(*)::int AS total, ${SECTION_CHANGED_AT} AS changed_at, max(l.last_seen_at) AS refreshed_at,
+        min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
+        min(NULLIF(l.mileage_km, 0))::int AS mileage_min,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY NULLIF(l.mileage_km, 0)) AS mileage_median,
+        min(l.estimated_total_usd) AS price_min, max(l.estimated_total_usd) AS price_max,
+        percentile_cont(0.25) WITHIN GROUP (ORDER BY l.estimated_total_usd) AS price_p25,
+        percentile_cont(0.75) WITHIN GROUP (ORDER BY l.estimated_total_usd) AS price_p75,
+        max(v.battery_kwh)::numeric AS battery_max,
+        max(COALESCE(v.electric_range_km, v.combined_range_km))::int AS range_max,
+        max(${powerSql}) AS power_max,
+        min(${spec("acceleration")}) AS accel_min
+      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, [brand, model]),
+    pool.query(`SELECT v.powertrain AS type, count(*)::int AS count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.powertrain IS NOT NULL GROUP BY 1 ORDER BY 2 DESC`, [brand, model]),
+    pool.query(`SELECT v.specifications->>'bodyType' AS name, count(*)::int AS count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY 1 ORDER BY 2 DESC`, [brand, model]),
+  ]);
+  const row = summary.rows[0] || {};
+  const value = (name) => (row[name] == null ? null : Number(row[name]));
+  return {
+    total:row.total || 0,
+    changedAt:row.changed_at || null,
+    refreshedAt:row.refreshed_at || null,
+    yearMin:value("year_min"), yearMax:value("year_max"),
+    mileageMin:value("mileage_min"), mileageMedian:value("mileage_median"),
+    priceFrom:value("price_min"), priceTo:value("price_max"),
+    priceP25:value("price_p25"), priceP75:value("price_p75"),
+    batteryMax:value("battery_max"), rangeMax:value("range_max"), powerMax:value("power_max"), accelMin:value("accel_min"),
+    powertrains:powertrains.rows.map((item) => ({ type:item.type, count:item.count })),
+    bodyTypes:bodies.rows.map((item) => ({ name:item.name, count:item.count })),
+  };
+}
 
 export async function brandStock() {
   const now = Date.now();

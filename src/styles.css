@@ -728,6 +728,86 @@ html[data-theme="dark"] .primary.ordered-cta:hover {
   outline-offset: 5px;
   border-radius: calc(20px * var(--corner-scale));
 }
+/* Полосы цен под плиткой марок на главной: строка подписи и плашки-ссылки, как у
+   блоков ссылок под разделами каталога. */
+.home-price-bands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 16px;
+}
+.home-price-bands b {
+  font-size: 16px;
+}
+.home-price-bands > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.home-price-bands a {
+  padding: 8px 14px;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel);
+  color: inherit;
+  font-size: 16px;
+  text-decoration: none;
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+.home-price-bands a:hover {
+  background: var(--model-chip-hover-bg);
+  color: var(--ink);
+}
+
+/* Популярные модели на главной — те же плашки, что у полос цен; число машин мельче.
+   Сверх первых шестнадцати плашки скрыты до нажатия «Ещё» (ссылки в разметке есть). */
+.home-popular-models {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+.home-popular-models b {
+  font-size: 16px;
+}
+.home-popular-models > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.home-popular-models a,
+.home-popular-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+.home-popular-models a small {
+  color: var(--muted-contrast);
+  font-size: 13px;
+}
+.home-popular-models a:hover,
+.home-popular-toggle:hover {
+  background: var(--model-chip-hover-bg);
+  color: var(--ink);
+}
+.home-popular-models:not(.open) .home-popular-extra {
+  display: none;
+}
+.home-popular-toggle {
+  font-weight: 700;
+}
+
 .popular-brands {
   width: min(1040px, calc(100% - 48px));
   padding: 7px 0 19px;
@@ -6926,6 +7006,17 @@ html[data-theme="dark"] .select-search-clear:hover {
   border-color: #b9bdc2;
   background: var(--panel-soft);
 }
+/* «Подгрузить ещё» в каталоге — ссылка на следующую страницу (её видит поисковик),
+   но выглядит как кнопка: без подчёркивания и цвета ссылки, текст по центру. */
+a.load-more,
+a.load-more:visited {
+  color: inherit;
+  font: inherit;
+  font-weight: 750;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
 .custom-search-cta {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -10894,6 +10985,30 @@ html[data-theme="dark"] #root .spec-search,
   font-weight: 650;
   line-height: 1.45;
 }
+/* Второй шаг заявки с карточки: подтверждение номера через бота. Кнопка-ссылка
+   повторяет кнопку отправки, галочка — цветом акцента. */
+.availability-lead-verify .auth-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.availability-lead-verify .availability-lead-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.availability-lead-verify-mark {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--accent-dark);
+}
+.availability-lead-verify-close {
+  margin-top: 12px;
+  align-self: stretch;
+}
+
 .auth-submit {
   width: 100%;
   margin-top: 20px;
@@ -14476,6 +14591,26 @@ html[data-theme="dark"] .model-page-faq .home-faq-item {
 }
 /* Хлебные крошки над заголовком обзора: своё верхнее поле им не нужно — его уже
    даёт отступ страницы, а снизу расстояние задаёт зазор между блоками. */
+/* Каталожная страница модели: строка наличия под заголовком, кнопка-ссылка
+   «Показать ещё», номера страниц и сводка по цифрам под выдачей. */
+.model-page-stock {
+  margin: 8px 0 0;
+  min-height: calc(17px * 1.45);
+  color: var(--muted-contrast);
+  font-size: 17px;
+  line-height: 1.45;
+  max-width: 860px;
+}
+.model-page-load-more {
+  display: block;
+  width: fit-content;
+  margin: 20px auto 0;
+  text-decoration: none;
+  text-align: center;
+}
+.model-page-summary + .model-page-intro {
+  margin-top: 28px;
+}
 .model-page-crumbs {
   padding: 0;
 }

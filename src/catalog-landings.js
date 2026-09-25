@@ -1,4 +1,7 @@
 import { isEvQuotaExhausted } from "./ev-quota.js";
+import { modelSlug } from "./model-slug.js";
+import { fromPhrase, originOf, siteAdjective, siteAdjectiveCapital, siteAdjectiveGenitive, siteFromPhrase } from "./origin.js";
+import { chinaBrandByName } from "./china-brands.js";
 
 // Страницы каталога под марку, тип двигателя и тип кузова: `/catalog/byd`,
 // `/catalog/electric`, `/catalog/suv`.
@@ -178,13 +181,27 @@ const priceBand = (slug, landedMax, { name, h1, seoTitle, seoDescription, lead, 
 // Сколько машин на одной странице списка — и в каталоге у посетителя, и в той версии
 // страницы, которую собирает сервер для поисковика. Одно число на оба места: если они
 // разойдутся, поисковик будет ходить по страницам, которых у посетителя нет.
-// Девяносто девять, а не сотня: сетка каталога в три карточки, и 99 — это ровно
-// тридцать три полных ряда, без одинокой карточки в последнем.
+// Сорок восемь: сетка каталога идёт по три карточки на широком экране и по две
+// на ширине до 1180 px и на телефоне. 48 делится и на 3, и на 2 — последний ряд
+// закрыт при любой ширине. До 25.09.2026 было 99: на три делилось, а на двух
+// колонках внизу оставалась одинокая карточка, и порция была слишком длинной.
 // Подпись под заголовком одна на все разделы каталога. Раньше она собиралась из хвоста
 // самой фразы, и от раздела к разделу менялась («доставка в Беларусь», «с доставкой
 // в Беларусь», «купить с доставкой…»): при переходе между разделами строка дёргалась,
 // хотя говорила одно и то же.
 export const LANDING_SUBTITLE = "Купить с доставкой в Беларусь";
+
+/**
+ * Подзаголовок под заголовком раздела. Здесь живут слова, которых нет в заголовке, но
+ * которыми ищут: «китайские автомобили» (5 463 запроса в месяц, 25.09.2026) и
+ * «с пробегом» — из заголовков его убрали, в тексте оставили. У разделов марок не из
+ * Китая (Audi, BMW) «китайские автомобили» было бы неправдой — там только «с пробегом».
+ * Страна — из src/origin.js: с Кореей подпись сама станет «китайские и корейские».
+ */
+export const landingSubtitle = (landing = null) => {
+  if (landing?.brand && !chinaBrandByName(landing.brand)) return "С пробегом — купить с доставкой в Беларусь";
+  return `${siteAdjectiveCapital()} автомобили с пробегом — купить с доставкой в Беларусь`;
+};
 
 /**
  * Заголовок раздела для показа: длинную фразу из `h1` разбираем на две строки крупного
@@ -201,14 +218,15 @@ export const LANDING_SUBTITLE = "Купить с доставкой в Бела�
  * вместо него встаёт общая подпись. Вторая строка заголовка всегда начинается с «из
  * Китая» (или «с пробегом из Китая»), чтобы у всех разделов перенос стоял в одном месте.
  */
-export const landingHeading = (h1) => {
+export const landingHeading = (h1, landing = null) => {
   const text = String(h1 ?? "").trim();
   const dash = text.split(" — ");
   const title = dash.length > 1 ? dash[0] : splitByDelivery(text);
   const at = FROM_CHINA_TAILS.reduce((found, tail) => (found >= 0 ? found : title.indexOf(tail)), -1);
+  const subtitle = landingSubtitle(landing);
   return at > 0
-    ? { title: title.slice(0, at).trim(), tail: title.slice(at).trim(), subtitle: LANDING_SUBTITLE }
-    : { title, tail: "", subtitle: LANDING_SUBTITLE };
+    ? { title: title.slice(0, at).trim(), tail: title.slice(at).trim(), subtitle }
+    : { title, tail: "", subtitle };
 };
 
 // Хвосты второй строки заголовка — от самого длинного к короткому: у раздела, который
@@ -220,20 +238,21 @@ const splitByDelivery = (text) => {
   return at > 0 ? text.slice(0, at) : text;
 };
 
-export const CATALOG_PAGE_SIZE = 99;
+export const CATALOG_PAGE_SIZE = 48;
 
-// Глубже пятидесятой страницы список не листается — ни у посетителя, ни у поисковика.
+// Глубже 104-й страницы (104 × 48 = 4 992 машины) список не листается — ни у
+// посетителя, ни у поисковика. При 99 на странице это была пятидесятая.
 // Потолок стоит в `maxOffset` (server/repository.mjs) и бережёт базу от выборок
 // с огромным пропуском; поисковику дальше и не нужно. Проверено на боевом каталоге:
 // каждая из 31 332 машин попадает в первые пять тысяч хотя бы одного раздела — машина
 // из середины «Электромобилей» находится через раздел своей марки или марки с кузовом.
 // Совпадение потолков закрепляет tests/catalog-pagination.test.mjs.
-export const CATALOG_MAX_PAGES = 50;
+export const CATALOG_MAX_PAGES = 104;
 
 /** Сколько страниц у списка из `total` машин — с учётом потолка глубины. */
 export const catalogPageCount = (total) => Math.min(CATALOG_MAX_PAGES, Math.max(1, Math.ceil((Number(total) || 0) / CATALOG_PAGE_SIZE)));
 
-export const CATALOG_LANDINGS = Object.freeze([
+const CATALOG_LANDINGS_SOURCE = ([
   // ── Марки ───────────────────────────────────────────────────────────────────
   brand("byd", "BYD", [
     "BYD выпускает и сами автомобили, и батареи к ним: собственный тип батареи Blade и гибридная схема DM-i, где бензиновый двигатель работает вместе с электромотором. На китайском вторичном рынке это самая широкая линейка — от компактной Seagull до представительного Han.",
@@ -1599,6 +1618,127 @@ export const CATALOG_LANDINGS = Object.freeze([
   }),
 ]);
 
+// ── Заголовки разделов (25.09.2026, разбор «Слова и ссылки») ──────────────────
+// Правила по Вордстату Беларуси: «из Китая в Беларусь» (1 295 запросов в месяц)
+// вместо «Минск» (134) — Минск остаётся в описании; «б/у» и «с пробегом» (86 + 17) из
+// заголовков ушли в описание и подзаголовок; в заголовке — число машин и цена «от»,
+// когда сервер их знает. Страна — из src/origin.js (`landing.origin`, по умолчанию
+// Китай): с Кореей корейские разделы получат «из Кореи» тем же кодом.
+const RU_NUMBER = new Intl.NumberFormat("ru-RU");
+const formatCount = (value) => RU_NUMBER.format(Math.round(Number(value) || 0));
+const TITLE_TAIL = " | abcars.by";
+
+/**
+ * Предмет раздела для заголовка: «BYD», «Кроссоверы Li Auto», «Buick GL8»,
+ * «Бензиновые кроссоверы». Берётся из прежнего заголовка раздела — там уже есть
+ * модели, которые у части разделов стоят вместо слова «кроссоверы» (Audi A3, GL8),
+ * — без «б/у», «с пробегом», «купить» и страны.
+ */
+const landingSubject = (landing) => {
+  if (landing.kind === "price") return String(landing.name).replace(/^Автомобили/, "Авто").replace(/^Бензиновые(?! авто)/, "Бензиновые авто");
+  const head = String(landing.sourceSeoTitle || landing.seoTitle || landing.name).split(" | ")[0].split(" — ")[0];
+  const subject = head
+    .replace(/^Купить\s+/i, "")
+    .replace(/\s+(б\/у|с пробегом)(?=\s|$)/gi, "")
+    .replace(/\s+из\s+(Китая|Кореи)(?=\s|$)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  // Раздел «марка + кузов», у которого в старом заголовке стояла только марка
+  // (Land Rover), совпал бы с разделом самой марки — берём его название.
+  return landing.kind === "brandBody" && subject === landing.brand ? landing.name : subject;
+};
+
+/** «BYD из Китая в Беларусь», «Китайские седаны с доставкой в Беларусь», «Авто из Китая до 20 000 $ с доставкой в Беларусь». */
+const landingTitleBase = (landing) => {
+  const origin = originOf(landing.origin);
+  const from = fromPhrase(origin.key);
+  const subject = landingSubject(landing);
+  const adjective = new RegExp(`^${origin.adjective}\\s`, "i");
+  if (adjective.test(subject)) return `${subject} с доставкой в Беларусь`;
+  if (landing.kind === "price") {
+    const [word, ...rest] = subject.split(" до ");
+    return `${word} ${from} до ${rest.join(" до ")} в Беларусь`;
+  }
+  return `${subject} ${from} в Беларусь`;
+};
+
+/** Первый вариант, который помещается в `limit` символов вместе с хвостом сайта. */
+const fitTitle = (base, variants, limit) => {
+  for (const variant of variants) {
+    const title = `${base}${variant}${TITLE_TAIL}`;
+    if (title.length <= limit) return title;
+  }
+  return `${base}${TITLE_TAIL}`;
+};
+
+/**
+ * Заголовок вкладки раздела. `stats` — живые цифры с сервера: `{ total, priceFrom }`;
+ * без них (переход внутри сайта, сборка без базы) — без цифр. Длина — до 70 символов
+ * без цифр и до 80 с цифрами: поисковик показывает около 70, а цифры в начале хвоста
+ * всё равно видны.
+ */
+export const landingSeoTitle = (landing, stats = null) => {
+  const base = landingTitleBase(landing);
+  const total = Number(stats?.total) || 0;
+  const price = Number(stats?.priceFrom) || 0;
+  if (total > 0) {
+    const variants = [
+      price ? ` — ${formatCount(total)} в наличии, от ${formatCount(price)} $` : null,
+      price ? ` — от ${formatCount(price)} $` : null,
+      ` — ${formatCount(total)} в наличии`,
+    ].filter(Boolean);
+    return fitTitle(base, variants, 80);
+  }
+  return fitTitle(base, [" — цены и наличие", " — цены"], 70);
+};
+
+/**
+ * Описание раздела: сначала живые цифры (число, вилка цен до Минска, годы), потом
+ * прежний текст — в нём остаются «б/у», «с пробегом» и Минск.
+ */
+export const landingSeoDescription = (landing, stats = null) => {
+  const base = landing.sourceSeoDescription || landing.seoDescription || "";
+  const total = Number(stats?.total) || 0;
+  if (!total) return base;
+  const from = Number(stats?.priceFrom) || 0;
+  const to = Number(stats?.priceTo) || 0;
+  const prices = from && to && to > from ? `цены от ${formatCount(from)} до ${formatCount(to)} $ с доставкой до Минска` : from ? `цены от ${formatCount(from)} $ с доставкой до Минска` : "";
+  const yearMin = Number(stats?.yearMin) || 0;
+  const yearMax = Number(stats?.yearMax) || 0;
+  const years = yearMin && yearMax ? (yearMin === yearMax ? `${yearMin} года выпуска` : `${yearMin}–${yearMax} годов выпуска`) : "";
+  const lead = [`В наличии ${formatCount(total)} авто`, prices, years].filter(Boolean).join(", ");
+  return `${lead}. ${base}`.trim();
+};
+
+/** Заголовок страницы без «б/у» и «с пробегом»: они в подзаголовке и в тексте. */
+const cleanHeading = (h1) => String(h1 || "").replace(/\s+(б\/у|с пробегом)(?=\s)/gi, "").replace(/\s{2,}/g, " ").trim();
+
+const withSeo = (landing) => {
+  const prepared = { ...landing, sourceSeoTitle: landing.seoTitle, sourceSeoDescription: landing.seoDescription, h1: cleanHeading(landing.h1) };
+  return { ...prepared, seoTitle: landingSeoTitle(prepared) };
+};
+
+export const CATALOG_LANDINGS = Object.freeze(CATALOG_LANDINGS_SOURCE.map(withSeo));
+
+// Главная и общий каталог: те же правила, страна — сразу все, откуда возим (сейчас
+// Китай; с Кореей станет «из Китая и Кореи», «китайские и корейские автомобили»).
+// Одно место для сервера, сборки и приложения — иначе заголовок менялся бы после
+// загрузки скрипта.
+export const HOME_SEO = Object.freeze({
+  title: `Авто ${siteFromPhrase()} в Беларусь — ${siteAdjective()} автомобили с доставкой${TITLE_TAIL}`,
+  description: `Б/у авто ${siteFromPhrase()} с проверкой и доставкой в Беларусь: ${siteAdjective()} автомобили с пробегом, цена в Китае и предварительный расчёт стоимости до Минска.`,
+  // Неразрывные пробелы стоят в самом тексте: типографика после оживления его не
+  // трогает (см. заголовок главной в App.jsx).
+  h1: `Авто ${siteFromPhrase({ nbsp: true })} с\u00a0доставкой в\u00a0Беларусь`,
+});
+
+export const CATALOG_INDEX_SEO = Object.freeze({
+  title: `Каталог ${siteAdjectiveGenitive()} автомобилей — авто ${siteFromPhrase()} в Беларусь${TITLE_TAIL}`,
+  description: `Каталог б/у авто ${siteFromPhrase()}: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь.`,
+  h1: `Авто ${siteFromPhrase()}`,
+});
+
+
 const BY_PATH = new Map(CATALOG_LANDINGS.map((landing) => [landing.path, landing]));
 
 /** Страница каталога по адресу или null. */
@@ -1621,6 +1761,70 @@ export const catalogLandingMoved = (path) => CATALOG_LANDING_REDIRECTS[String(pa
 
 /** Страница каталога для марки — нужна ссылкам на марки с главной. */
 export const brandLandingPath = (brandName) => CATALOG_LANDINGS.find((landing) => landing.brand === brandName)?.path || null;
+
+// ── Каталожные страницы моделей: `/catalog/<марка>/<модель>` ─────────────────
+// С 25.09.2026 у модели одна страница — каталожная, внутри раздела своей марки:
+// список объявлений, а под ним обзор (если написан) и цифры по наличию. Прежние
+// обзоры `/models/<slug>` уводят сюда перебросом (см. src/model-pages.js).
+// Марка в адресе — тот же слуг, что у раздела марки; модель — по правилу
+// src/model-slug.js. Такие страницы не перечислены в CATALOG_LANDINGS: моделей
+// шесть сотен, и список живёт в базе, а не в справочнике.
+
+/** Слуг марки из её раздела: «BYD» → «byd»; у марки без раздела — null. */
+export const brandSlugFor = (brandName) => brandLandingPath(brandName)?.replace(/^\/catalog\//, "") || null;
+
+/** Марка по слугу раздела: «byd» → «BYD». */
+export const brandForSlug = (slug) => findCatalogLanding(`/catalog/${String(slug || "").toLowerCase()}`)?.brand || null;
+
+/** Адрес каталожной страницы модели или null, если у марки нет раздела. */
+export const modelLandingPath = (brandName, model) => {
+  const brand = brandSlugFor(brandName);
+  const slug = modelSlug(model);
+  return brand && slug ? `/catalog/${brand}/${slug}` : null;
+};
+
+/**
+ * Разбор адреса страницы модели: `{ brand, brandSlug, modelSlug }` или null.
+ * Само имя модели по адресу не восстановить (слуг необратим) — его находят по списку
+ * моделей марки (`modelFromSlug`).
+ */
+export const parseModelLandingPath = (path) => {
+  const match = /^\/catalog\/([a-z0-9-]+)\/([a-z0-9-]+)\/?$/.exec(String(path || "").split("?")[0].split("#")[0]);
+  if (!match) return null;
+  const brand = brandForSlug(match[1]);
+  return brand ? { brand, brandSlug: match[1], modelSlug: match[2] } : null;
+};
+
+/** Имя модели из списка по слугу — или null. */
+export const modelFromSlug = (models, slug) => (models || []).find((model) => modelSlug(model) === slug) || null;
+
+/**
+ * Адрес страницы модели, на который нужно перебросить адрес с фильтрами «марка +
+ * модель» (и ничем больше): `/catalog?brand=BYD&model=Seal` и `/catalog/byd?model=Seal`
+ * — это она и есть. Остальные параметры (метки переходов, порядок, страница списка)
+ * переносятся. `landing` — раздел, на котором стоит адрес (его марка считается
+ * выбранной), или null для общего каталога.
+ */
+export const modelLandingRedirect = (landing, search) => {
+  const params = asSearchParams(search);
+  const chosen = chosenFilters(params);
+  if (landing?.brand && !chosen.has("brand")) chosen.set("brand", [landing.brand]);
+  if (landing && !landing.brand) return null;
+  if (chosen.size !== 2 || !chosen.has("brand") || !chosen.has("model")) return null;
+  if ([...chosen.values()].some((values) => values.length > 1)) return null;
+  const brand = chosen.get("brand")[0];
+  const model = chosen.get("model")[0];
+  if (landing?.brand && landing.brand.toLowerCase() !== brand.toLowerCase()) return null;
+  const path = modelLandingPath(brand, model);
+  if (!path) return null;
+  const kept = new URLSearchParams();
+  for (const [key, value] of params) {
+    if (CATALOG_FILTER_KEYS.includes(key) || !String(value).trim()) continue;
+    kept.append(key, value);
+  }
+  const query = kept.toString();
+  return `${path}${query ? `?${query}` : ""}`;
+};
 
 /**
  * Разделы, на которые стоит ссылаться со страницы этого раздела.
@@ -1690,6 +1894,34 @@ export const landingsForCar = (car) => {
 };
 
 /**
+ * Ценовые полосы, в которые машина попадает по цене до Минска: общая («до 20 000 $»)
+ * и, у бензиновых, своя бензиновая. Берётся самая узкая подходящая полоса — там
+ * машина стоит среди похожих по цене, а не тонет среди дешёвых. Нужно ссылкам с
+ * карточки и обзора: до 25.09.2026 на полосу «до 20 000 $» с шести ключевых страниц
+ * вела одна ссылка, и полосы держались только на общем каталоге.
+ */
+export const priceBandsForCar = ({ type = null, landedUsd = null } = {}) => {
+  const price = Number(landedUsd);
+  if (!Number.isFinite(price) || price <= 0) return [];
+  const bands = CATALOG_LANDINGS
+    .filter((landing) => landing.kind === "price" && landing.landedMax >= price)
+    .sort((left, right) => left.landedMax - right.landedMax);
+  const general = bands.find((band) => !band.powertrain) || null;
+  const own = type ? bands.find((band) => band.powertrain === type) || null : null;
+  return [general, own].filter(Boolean);
+};
+
+/**
+ * Ценовые полосы для страницы раздела: общие — всем разделам, бензиновые — только
+ * бензиновым. Сама полоса из своего списка исключена.
+ */
+export const priceBandsForLanding = (landing) => {
+  if (!landing) return [];
+  return CATALOG_LANDINGS.filter((band) =>
+    band.kind === "price" && band.path !== landing.path && (!band.powertrain || band.powertrain === landing.powertrain));
+};
+
+/**
  * Фильтры каталога, которые задаёт страница, — в том виде, в каком их читает каталог
  * из адреса. Благодаря этому страница марки остаётся обычным каталогом с выставленным
  * фильтром, а не отдельной вёрсткой.
@@ -1698,6 +1930,8 @@ export const landingFilterParams = (landing) => {
   const params = new URLSearchParams();
   if (!landing) return params;
   if (landing.brand) params.set("brand", landing.brand);
+  // Каталожная страница модели — раздел марки с выбранной моделью.
+  if (landing.model) params.set("model", landing.model);
   if (landing.powertrain) params.set("type", landing.filterLabel || landing.powertrain);
   if (landing.bodyType) params.set("body", landing.bodyType);
   // Верхняя граница цены — в долларах итоговой суммы до Минска, как её показывает
@@ -1715,6 +1949,7 @@ export const landingApiParams = (landing) => {
   const params = new URLSearchParams();
   if (!landing) return params;
   if (landing.brand) params.set("brand", landing.brand);
+  if (landing.model) params.set("model", landing.model);
   if (landing.powertrain) params.set("type", landing.powertrain);
   if (landing.bodyType) params.set("bodyType", landing.bodyType);
   if (landing.landedMax) params.set("landedMax", String(landing.landedMax));

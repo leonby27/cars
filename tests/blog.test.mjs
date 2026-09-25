@@ -204,7 +204,8 @@ test("у сравнения ровно две стороны и у каждой 
     for (const side of sides) {
       assert.ok(side.brand && side.model, `у стороны сравнения ${post.slug} нет марки или модели`);
       assert.ok(side.name && side.short, `у стороны сравнения ${post.slug} нет названия`);
-      assert.match(side.review, /^\/models\/[a-z0-9-]+$/, `у стороны ${side.name} нет ссылки на обзор модели`);
+      // С 25.09.2026 обзор живёт на каталожной странице модели.
+      assert.match(side.review, /^\/catalog\/[a-z0-9-]+\/[a-z0-9-]+$/, `у стороны ${side.name} нет ссылки на страницу модели`);
       assert.deepEqual(side.filters, { brand: side.brand, model: side.model });
     }
     // Порядок сторон — порядок в заголовке: иначе таблица и заголовок расходятся.

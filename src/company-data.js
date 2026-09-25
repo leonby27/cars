@@ -1,4 +1,7 @@
-// Demo company details for the prototype. Replace every value in this object before publication.
+// Контакты компании: подвал, страница контактов и разметка для поисковиков берут их отсюда.
+// Улицы нет намеренно: офиса пока нет, а адрес без помещения журналист или клиент
+// проверит по панорамам (решение владельца 24.09.2026). Город оставлен — он же стоит
+// в карточке Google. Часы совпадают с карточкой Google.
 export const COMPANY = Object.freeze({
   brand: "abcars.by",
   // Имя компании для разметки, по которой поисковик узнаёт организацию. До этого
@@ -7,11 +10,10 @@ export const COMPANY = Object.freeze({
   // Основное имя латиницей, остальные написания — как дополнительные.
   schemaName: "ABCars",
   schemaAlternateNames: Object.freeze(["Абкарс", "abcars.by"]),
-  address: "Минск, ул. Тимирязева, 65Б",
+  address: "Минск",
   city: "Минск",
-  street: "ул. Тимирязева, 65Б",
   countryCode: "BY",
-  hours: "Пн–Пт: 10:00–18:00 · Сб, Вс: Выходной",
+  hours: "Пн–Пт: 9:00–20:00 · Сб, Вс: Выходной",
   email: "abcarsby@gmail.com",
   phone: "+375 25 646-21-63",
   phoneHref: "+375256462163",

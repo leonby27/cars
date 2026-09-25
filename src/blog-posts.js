@@ -23,6 +23,15 @@
 
 /** Общая страница журнала. */
 import { BLOG_DRAFTS_VISIBLE } from "./feature-flags.js";
+import { MODEL_PAGES } from "./model-pages.js";
+
+// Ссылки на обзоры в материалах записаны прежними адресами `/models/<slug>`; с
+// 25.09.2026 обзор живёт на каталожной странице модели, и ссылку переводим здесь —
+// один раз при чтении, чтобы не править сотню записей руками.
+const reviewPath = (ref) => {
+  const path = String(ref || "").replace(/\/+$/, "");
+  return MODEL_PAGES.find((page) => page.legacyPath === path || page.path === path)?.path || path;
+};
 
 export const BLOG_INDEX = Object.freeze({
   path: "/blog",
@@ -1821,7 +1830,7 @@ export const blogCarFacts = (car, post = null) => {
 
 /** Стороны сравнения с готовым правилом отбора у каждой. */
 export const blogPostSides = (post) =>
-  (post?.sides || []).map((side, index) => ({ ...side, index, filters: { brand: side.brand, model: side.model } }));
+  (post?.sides || []).map((side, index) => ({ ...side, review: side.review ? reviewPath(side.review) : side.review, index, filters: { brand: side.brand, model: side.model } }));
 
 /**
  * Все правила отбора материала: у подборки одно, у сравнения по одному на сторону.
@@ -1978,7 +1987,7 @@ export const blogPostsForModel = (modelPath, limit = 3) => {
   const wanted = String(modelPath || "").replace(/\/+$/, "");
   if (!wanted) return [];
   return blogPosts()
-    .filter((post) => (post.sides || []).some((side) => side.review === wanted) || (post.models || []).includes(wanted))
+    .filter((post) => (post.sides || []).some((side) => reviewPath(side.review) === wanted) || (post.models || []).map(reviewPath).includes(wanted))
     .slice(0, limit);
 };
 

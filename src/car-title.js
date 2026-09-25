@@ -42,6 +42,8 @@ export function carTitleDetails(car, totalUsd) {
   const parts = [`пробег ${formatNumber(car?.mileage)} км`];
   if (car?.type === "Электромобиль" && Number(car?.battery) > 0) parts.push(`батарея ${formatNumber(car.battery)} кВт·ч`);
   if (car?.type === "Гибрид") parts.push("гибрид");
-  const price = Number(totalUsd) > 0 ? `${formatNumber(totalUsd)} $ до Минска` : "цена до Минска";
+  // «С доставкой в Беларусь», а не «до Минска»: так ищут в семь раз чаще (Вордстат,
+  // 25.09.2026). Минск остаётся в описании и в тексте карточки.
+  const price = Number(totalUsd) > 0 ? `${formatNumber(totalUsd)} $ с доставкой в Беларусь` : "цена с доставкой в Беларусь";
   return `${parts.join(", ")} — ${price}`;
 }

@@ -29,7 +29,14 @@ const ssrDir = arg("ssr", `${buildDir}/ssr`);
 const indexPath = join(clientDir, "index.html");
 
 const { renderAppPage } = await import(pathToFileURL(join(process.cwd(), ssrDir, "entry-server.js")).href);
-const app = renderAppPage("/");
+// Популярные модели считает generate-seo-pages (он читает базу) и кладёт рядом со
+// сборкой. Нет файла — блока на главной просто нет; это не ошибка сборки.
+let popularModels = [];
+try {
+  popularModels = JSON.parse(readFileSync(join(clientDir, "..", "popular-models.json"), "utf8"));
+} catch {}
+const homeBoot = popularModels.length ? { popularModels } : undefined;
+const app = renderAppPage("/", homeBoot);
 if (!app.includes("<h1>") || !app.includes("site-footer")) {
   console.error("[prerender] разметка главной собралась без заголовка или подвала — страницу не трогаем");
   process.exit(1);
@@ -93,7 +100,12 @@ const foreignGuard =
   `<script>if(location.pathname.replace(/[/]+$/,"")!=="")document.documentElement.classList.add("foreign-boot");</script>` +
   `<style>html.foreign-boot #root .app-content > :not(header){display:none}</style>`;
 const replaced = withRoot.replace("</head>", `${hoisted.join("")}${foreignGuard}</head>`);
-writeFileSync(indexPath, replaced);
+// Те же данные — в страницу, чтобы браузер нарисовал первый кадр из них. Ставим
+// перед </head>: после загрузочного скрипта, который сам заводит window.__boot.
+const withBoot = homeBoot
+  ? replaced.replace("</head>", `<script>window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(homeBoot).replace(/</g, "\\u003c")});</script></head>`)
+  : replaced;
+writeFileSync(indexPath, withBoot);
 
 const kb = (value) => (value / 1024).toFixed(1);
 console.log(

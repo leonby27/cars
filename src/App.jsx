@@ -21,7 +21,9 @@ import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVar
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { CITY_NAMES, cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS, canonicalImportModel } from "../config/import-policy.mjs";
-import { CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, brandLandingPath, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, relatedLandings } from "./catalog-landings.js";
+import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, HOME_SEO, brandLandingPath, catalogPageCount, modelFromSlug, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, modelLandingPath, modelLandingRedirect, parseModelLandingPath, priceBandsForCar, priceBandsForLanding, relatedLandings } from "./catalog-landings.js";
+import { modelAutoText, modelFaq, modelFaqTitle, modelLandingObject, modelStockLine } from "./model-landing.js";
+import { modelSlug } from "./model-slug.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
@@ -795,7 +797,7 @@ function useRoute(user) {
 // Страницы марок, типов двигателя и кузова — это тот же каталог с выставленным фильтром,
 // поэтому всё, что каталог делает со своим адресом (сохраняет прокрутку, помнит фильтры
 // при возврате из карточки, подсвечивает пункт меню), должно работать и на них.
-const isCatalogPath = (path) => path === "/catalog" || Boolean(findCatalogLanding(path));
+const isCatalogPath = (path) => path === "/catalog" || Boolean(findCatalogLanding(path)) || Boolean(parseModelLandingPath(path));
 
 // Адрес текущей страницы в том же виде, в каком его хранят маршруты: без базового
 // префикса сборки и без косой черты на конце.
@@ -1009,8 +1011,8 @@ function ScrollToTopButton() {
 }
 
 const routeSeo = {
-  "/": ["Б/у авто из Китая в Беларусь — доставка и проверка | abcars.by", "Б/у авто из Китая с проверкой и доставкой в Беларусь. Каталог актуальных объявлений, цена в Китае и предварительный расчёт стоимости до Минска."],
-  "/catalog": ["Купить б/у авто из Китая — каталог и цены | abcars.by", "Каталог б/у авто из Китая: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь."],
+  "/": [HOME_SEO.title, HOME_SEO.description],
+  "/catalog": [CATALOG_INDEX_SEO.title, CATALOG_INDEX_SEO.description],
   "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Проверка объявления и автомобиля, договор, оплата, выкуп, доставка и выдача автомобиля из Китая в Минске."],
   "/faq": ["Вопросы о покупке и доставке авто из Китая | abcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
   "/tracking": ["Отслеживание автомобиля по VIN | abcars.by", "Проверка текущего этапа доставки автомобиля из Китая по VIN-номеру."],
@@ -1053,17 +1055,63 @@ const privateRouteSeo = {
   "/analytics": ["Аналитика | abcars.by", "Закрытый раздел статистики и заявок abcars.by."],
 };
 
+// Заголовок вкладки, описание, запрет индексации и адрес-первоисточник — одним
+// вызовом. Общий для ClientSeo и страниц, которые задают эти поля сами
+// (каталожная страница модели: у неё заголовок из живых цифр).
+function applyPageHead({ title, description, canonical, indexable }) {
+  const ensureMeta = (selector, attribute, value) => {
+    let element = document.head.querySelector(selector);
+    if (!element) {
+      element = document.createElement("meta");
+      const [key, name] = selector.includes("property=") ? ["property", selector.match(/property="([^"]+)/)?.[1]] : ["name", selector.match(/name="([^"]+)/)?.[1]];
+      element.setAttribute(key, name);
+      document.head.appendChild(element);
+    }
+    element.setAttribute(attribute, value);
+  };
+  document.title = title;
+  // `null` означает «описание уже стоит в странице, менять нечем».
+  if (description) ensureMeta('meta[name="description"]', "content", description);
+  ensureMeta('meta[name="robots"]', "content", indexable ? "index, follow, max-image-preview:large" : "noindex, nofollow, noarchive");
+  ensureMeta('meta[property="og:title"]', "content", title);
+  if (description) ensureMeta('meta[property="og:description"]', "content", description);
+  ensureMeta('meta[property="og:url"]', "content", canonical);
+  ensureMeta('meta[name="twitter:title"]', "content", title);
+  if (description) ensureMeta('meta[name="twitter:description"]', "content", description);
+  let canonicalLink = document.head.querySelector('link[rel="canonical"]');
+  if (!canonicalLink) {
+    canonicalLink = document.createElement("link");
+    canonicalLink.rel = "canonical";
+    document.head.appendChild(canonicalLink);
+  }
+  canonicalLink.href = canonical;
+}
+
 function ClientSeo({ path, car, landing }) {
+  // Страница списка раздела («?page=2») — свой первоисточник и свой заголовок, как
+  // отдаёт сервер; номер читаем при каждой отрисовке, а не только при смене пути.
+  const listPageRaw = isCatalogPath(path) ? String(new URLSearchParams(window.location.search).get("page") || "") : "";
+  const listPage = /^[1-9]\d{0,4}$/.test(listPageRaw) && listPageRaw !== "1" ? Number(listPageRaw) : 0;
   useEffect(() => {
+    // Сервер уже поставил заголовок, описание и адрес-первоисточник для этого адреса —
+    // с живыми цифрами, которых у приложения нет. Не переписываем их, пока человек на
+    // этом адресе; ушёл внутри сайта — метку снимаем, дальше заголовки ставит приложение.
+    const serverPath = document.documentElement.dataset.seoPath;
+    if (serverPath) {
+      if (serverPath === `${path.replace(/\/+$/, "") || "/"}${listPage ? `?page=${listPage}` : ""}`) return;
+      delete document.documentElement.dataset.seoPath;
+    }
     const privatePage = ["/favorites", "/searches", "/login", "/register", "/account", "/analytics"].includes(path) || path.startsWith("/orders/");
     const detailTitle = car?.title || (car ? carTitle(car.brand, car.model, car.year) : null);
     // Заголовок и описание страницы марки, типа двигателя или кузова лежат в её
     // описании (src/catalog-landings.js) — там же, откуда их берёт сервер, когда
     // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
     const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
-    const [title, description] = detailTitle
+    const [baseTitle, baseDescription] = detailTitle
       ? [carPageTitle(car), `${detailTitle} из Китая: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены с доставкой до Минска.`]
       : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | abcars.by", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена | abcars.by", "Запрошенная страница не найдена."];
+    const title = listPage ? String(baseTitle).replace(/ \| abcars\.by$/, ` — страница ${listPage} | abcars.by`) : baseTitle;
+    const description = listPage && baseDescription ? `${baseDescription} Страница ${listPage} списка.` : baseDescription;
     const canonicalRoot = document.querySelector('link[rel="canonical"]')?.href || `${window.location.origin}${import.meta.env.BASE_URL}`;
     const canonicalBase = new URL(canonicalRoot);
     canonicalBase.pathname = "/";
@@ -1072,37 +1120,17 @@ function ClientSeo({ path, car, landing }) {
     // Без косой черты на конце — как отвечает хостинг и как ведут внутренние ссылки.
     // С чертой первоисточник указывал на адрес, с которого посетителя перебрасывают.
     const canonicalPath = detailTitle ? carHref(car) : path === "/" ? "/" : path.replace(/\/+$/, "");
-    const canonical = new URL(canonicalPath, canonicalBase).href;
+    const canonical = new URL(listPage ? `${canonicalPath}?page=${listPage}` : canonicalPath, canonicalBase).href;
     const indexingEnabled = document.documentElement.dataset.seoIndexing === "true";
-    const indexable = indexingEnabled && !privatePage && Boolean(routeSeo[path] || detailTitle || landingSeo);
-    const ensureMeta = (selector, attribute, value) => {
-      let element = document.head.querySelector(selector);
-      if (!element) {
-        element = document.createElement("meta");
-        const [key, name] = selector.includes("property=") ? ["property", selector.match(/property="([^"]+)/)?.[1]] : ["name", selector.match(/name="([^"]+)/)?.[1]];
-        element.setAttribute(key, name);
-        document.head.appendChild(element);
-      }
-      element.setAttribute(attribute, value);
-    };
-    document.title = title;
-    // `null` означает «описание уже стоит в странице, менять нечем»: так помечены
-    // страницы обзоров, чьи описания живут только на сервере.
-    if (description) ensureMeta('meta[name="description"]', "content", description);
-    ensureMeta('meta[name="robots"]', "content", indexable ? "index, follow, max-image-preview:large" : "noindex, nofollow, noarchive");
-    ensureMeta('meta[property="og:title"]', "content", title);
-    if (description) ensureMeta('meta[property="og:description"]', "content", description);
-    ensureMeta('meta[property="og:url"]', "content", canonical);
-    ensureMeta('meta[name="twitter:title"]', "content", title);
-    if (description) ensureMeta('meta[name="twitter:description"]', "content", description);
-    let canonicalLink = document.head.querySelector('link[rel="canonical"]');
-    if (!canonicalLink) {
-      canonicalLink = document.createElement("link");
-      canonicalLink.rel = "canonical";
-      document.head.appendChild(canonicalLink);
-    }
-    canonicalLink.href = canonical;
-  }, [path, car, landing]);
+    // Раздел вычеркнутой марки живёт для человека («привезём под заказ»), а машин в
+    // нём нет — сервер отдаёт его с noindex, и приложение при переходе внутри сайта
+    // не должно это отменять.
+    const emptyLanding = Boolean(landing?.kind === "brand" && landing.brand && EXCLUDED_BRANDS.includes(landing.brand))
+      // Страница модели без обзора и меньше чем с тремя машинами — тонкая: не индексируем.
+      || Boolean(landing?.kind === "model" && landing.facts && !landing.review && (Number(landing.facts.total) || 0) < 3);
+    const indexable = indexingEnabled && !privatePage && !emptyLanding && Boolean(routeSeo[path] || detailTitle || landingSeo);
+    applyPageHead({ title, description, canonical, indexable });
+  }, [path, car, landing, listPage]);
   return null;
 }
 
@@ -3538,56 +3566,84 @@ function SimilarCars({ car, cars, onOpenCar }) {
   );
 }
 
-// Страница модели: текст о машине плюс живой срез каталога по этой модели. Машины
-// страница запрашивает сама, как каталог: при прямом заходе boot-запрос нужных
-// карточек не несёт.
-// Восемь машин — два ряда по четыре карточки. Пять рядов отодвигали сам обзор далеко
-// вниз: срез каталога здесь не список, а показ «что есть и почём», а весь список
-// открывается кнопкой под ним.
-const MODEL_PAGE_CARS_LIMIT = 8;
+// ── Каталожная страница модели: `/catalog/<марка>/<модель>` ─────────────────
+// С 25.09.2026 у модели одна страница, и это раздел каталога — тот же компонент
+// Catalog с боковыми фильтрами, что у страницы марки, только с выбранной моделью.
+// Под выдачей — живые цифры, обзор (если написан) и вопросы (ModelLandingNotes).
+// Сервер рисует эту же страницу заранее и встраивает в неё данные
+// (window.__boot: modelCatalog, catalogValue, metaValue), браузер её оживляет.
 
-function useModelPageCars(modelPage, { sort, priceMax, mileage }) {
-  const [cars, setCars] = useState([]);
-  const [total, setTotal] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    setCars([]);
-    setTotal(null);
-    setLoading(true);
-    setFailed(false);
-    // Сортировка и два фильтра над сеткой уходят в тот же запрос, что и в каталоге,
-    // поэтому число рядом с «Каталогом» всегда считает выбранный отбор.
-    const carsQuery = new URLSearchParams({ brand: modelPage.brand, model: modelPage.model, sort, limit: String(MODEL_PAGE_CARS_LIMIT), offset: "0" });
-    appendPriceRange(carsQuery, ANY_PRICE_MIN, priceMax);
-    appendMileageRange(carsQuery, mileage);
-    fetch(`/api/cars?${carsQuery}`, { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("model page catalog unavailable"))))
-      .then((catalog) => {
-        setCars(catalog.items.map(normalizeImportedCar));
-        setTotal(catalog.total);
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") setFailed(true);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [modelPage, sort, priceMax, mileage]);
-  return { cars, total, loading, failed };
+// Строка наличия под заголовком страницы модели. Пока цифры новой модели едут
+// (переход с одной модели на другую), держим прежнюю строку: у неё та же высота,
+// и выдача под ней не прыгает. Заглушка — только когда показывать совсем нечего.
+let lastModelStock = "";
+const modelStockText = (landing, paging) => {
+  if (landing.facts) {
+    lastModelStock = modelStockLine(landing.facts, paging);
+    return lastModelStock;
+  }
+  return lastModelStock || "Считаем наличие и цены до Минска…";
+};
+
+// Модели каждой марки, которые каталог уже видел в справочнике фильтров: по ним
+// адрес модели превращается в её имя без запроса — для перехода по ссылке со
+// страницы марки, чтобы каталог не пропадал на время ответа.
+const brandModelsCache = new Map();
+
+/**
+ * Предварительный раздел модели — без цифр, обзора и ссылок, но с именем: чтобы при
+ * переходе на другую модель каталог оставался на экране и не мигал заглушками.
+ * Имя берётся из обзора, из снимка фильтров в истории (смена модели плашкой) или из
+ * справочника моделей марки; если взять неоткуда — null, и страница ждёт ответа.
+ */
+function provisionalModelLanding(path) {
+  const parsed = parseModelLandingPath(path);
+  if (!parsed) return null;
+  const review = findModelPage(path);
+  let model = review?.model || null;
+  if (!model) {
+    const filters = window.history.state?.catalog?.filters;
+    const chosen = filters && filters.brand === parsed.brand ? multiValues(filters.model, ANY_MODEL) : [];
+    if (chosen.length === 1 && modelSlug(chosen[0]) === parsed.modelSlug) model = chosen[0];
+  }
+  if (!model) model = modelFromSlug(brandModelsCache.get(parsed.brand) || [], parsed.modelSlug);
+  if (!model) return null;
+  return modelLandingObject({
+    model: { brand: parsed.brand, model, name: review?.name || `${parsed.brand} ${model}`, path, brandSlug: parsed.brandSlug, modelSlug: parsed.modelSlug, inCatalog: true },
+    review: review ? { slug: review.slug, path: review.path, legacyPath: review.legacyPath, name: review.name, h1: review.h1, lead: review.lead, teaser: review.teaser, tagline: review.tagline } : null,
+    facts: null,
+    links: { brandPath: brandLandingPath(parsed.brand), sections: [], siblings: [], similar: [], journal: [] },
+  });
 }
 
-// Переход в каталог с той же моделью и тем же отбором, что выбран над сеткой:
-// в каталоге он открывается уже применённым, вместе со всеми остальными фильтрами.
-const modelPageCatalogHref = (modelPage, filters = {}) => {
-  const params = new URLSearchParams({ brand: modelPage.brand, model: modelPage.model });
-  if (filters.mileage && filters.mileage !== ANY_MILEAGE) params.set("mileage", filters.mileage);
-  if (priceBound(filters.priceMax, ANY_PRICE_MAX) !== null) params.set("priceTo", String(filters.priceMax));
-  if (filters.sort && filters.sort !== "default") params.set("sort", filters.sort);
-  return `/catalog?${params}`;
-};
+/**
+ * Раздел модели по адресу: из встроенных сервером данных, иначе запросом
+ * `/api/model-catalog` без списка машин (список каталог запросит сам). Пока раздел
+ * не известен, страница показывает загрузку — без имени модели каталог не соберёт
+ * запрос.
+ */
+function useModelLanding(path) {
+  const parsed = parseModelLandingPath(path);
+  const key = parsed ? path : null;
+  const [state, setState] = useState(() => {
+    const boot = window.__boot?.modelCatalog;
+    return key && boot?.model?.path === key ? { key, landing: modelLandingObject(boot), failed: false } : { key: null, landing: null, failed: false };
+  });
+  useEffect(() => {
+    if (!key || state.key === key) return undefined;
+    const controller = new AbortController();
+    fetch(`/api/model-catalog?brand=${encodeURIComponent(parsed.brandSlug)}&model=${encodeURIComponent(parsed.modelSlug)}&light=1`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status === 404 ? "missing" : "unavailable"))))
+      .then((data) => setState({ key, landing: modelLandingObject(data), failed: false }))
+      .catch((error) => {
+        if (error.name !== "AbortError") setState({ key, landing: null, failed: error.message === "missing" ? "missing" : true });
+      });
+    return () => controller.abort();
+  }, [key]);
+  if (!key) return { landing: null, provisional: null, loading: false, failed: false };
+  const ready = state.key === key;
+  return { landing: ready ? state.landing : null, provisional: ready ? null : provisionalModelLanding(path), loading: !ready, failed: ready ? state.failed : false };
+}
 
 // Частые вопросы по модели: те же плашки, что на главной, плюс разметка для
 // поисковика — по ней вопросы и ответы попадают прямо в выдачу.
@@ -3646,161 +3702,6 @@ function ArticleFaq({ faq, title, navigate = null }) {
         navigate={navigate}
       />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
-    </section>
-  );
-}
-
-// Срез каталога сеткой сразу под заголовком страницы — с переходом ко всем машинам
-// модели. Люди приходят из поиска, чтобы посмотреть, что есть и почём, поэтому машины
-// стоят выше статьи; своего крупного заголовка у блока нет — его роль играет
-// заголовок страницы прямо над ним.
-function ModelPageCatalog({ modelPage, carsState, filters, navigate, favorites, toggleFavorite, onOpenCar }) {
-  const { cars, loading, failed } = carsState;
-  const currency = useCurrency();
-  // Сколько машин этой модели подходит под выбранный отбор — числом рядом
-  // с «Каталогом»: раньше общее число стояло в кнопке над сеткой, а её убрали.
-  const selectedSort = HERO_SORT_OPTIONS.find((option) => option.value === filters.sort) || HERO_SORT_OPTIONS[0];
-  const narrowed = filters.priceMax !== ANY_PRICE_MAX || filters.mileage !== ANY_MILEAGE;
-  const nothingFound = !failed && !loading && !cars.length;
-  // Вид выдачи общий со всем сайтом: выбрали список в каталоге — обзор откроется
-  // списком, и наоборот. Своей памяти у страницы модели нет намеренно, разница только
-  // в том, что показать, пока выбора не было (см. readModelPageView).
-  const [view, setView] = useState(readModelPageView);
-  const updateView = (value) => {
-    setView(value);
-    window.localStorage.setItem(catalogViewKey, value);
-  };
-  const catalogTarget = modelPageCatalogHref(modelPage, filters);
-  // Замена для случая «модели нет в каталоге»: раздел своей марки и до четырёх её
-  // обзоров. Считаем только когда пригодится — на обычной странице это лишняя работа.
-  const emptyBrandPath = nothingFound && !narrowed ? brandLandingPath(modelPage.brand) : null;
-  const emptySiblings =
-    nothingFound && !narrowed
-      ? MODEL_PAGES.filter((item) => item.brand === modelPage.brand && item.path !== modelPage.path).slice(0, 4)
-      : [];
-  // Когда под выбранный отбор ничего не нашлось, жёлтая кнопка ведёт в каталог без
-  // него: с ним посетитель попал бы на такую же пустую страницу.
-  const allCarsTarget = nothingFound ? modelPageCatalogHref(modelPage, { sort: filters.sort }) : catalogTarget;
-  return (
-    <section className="model-page-catalog page-width" aria-labelledby="model-page-catalog-title">
-      {/* Строка над сеткой: слева «Каталог» с числом машин, справа сортировка,
-          два самых частых фильтра и переход ко всем фильтрам каталога. Остальной
-          отбор живёт в каталоге — здесь только то, с чего выбор обычно начинают. */}
-      {/* Ряд собран как заголовок каталога, а не как заголовок подборки на главной:
-          в подборке все вложенные надписи набраны красными прописными, и списки
-          отбора наследовали это оформление. */}
-      <div className="catalog-heading">
-        <h2 id="model-page-catalog-title">Каталог{carsState.total ? ` · ${number(carsState.total)}` : ""}</h2>
-        <div className="result-controls model-page-catalog-controls">
-          <SelectField
-            className="sort-custom-select"
-            label="Сортировка"
-            value={selectedSort.label}
-            options={HERO_SORT_OPTIONS.map((option) => option.label)}
-            onChange={(label) => filters.onSort(HERO_SORT_OPTIONS.find((option) => option.label === label)?.value || "price_asc")}
-          />
-          <SelectField
-            className="sort-custom-select"
-            label="Цена до"
-            value={filters.priceMax}
-            options={priceMaxOptions}
-            onChange={filters.onPriceMax}
-            formatOption={(item) => (item === ANY_PRICE_MAX ? "Цена до" : `до ${money(Number(item), currency)}`)}
-          />
-          <SelectField
-            className="sort-custom-select"
-            label="Пробег до"
-            value={filters.mileage}
-            options={mileageOptions}
-            onChange={filters.onMileage}
-            formatOption={(item) => (item === ANY_MILEAGE ? "Пробег до" : item)}
-          />
-          <ViewToggle value={view} onChange={updateView} />
-          {/* На телефоне от кнопки остаётся один значок: три списка отбора рядом
-              с заголовком там не помещались, а надпись рядом со значком отнимала
-              место у переключателя вида. Название остаётся для чтения вслух. */}
-          <AppLink className="invert-button model-page-catalog-filters" href={catalogTarget} navigate={navigate} aria-label="Все фильтры">
-            <SlidersHorizontal size={17} weight="bold" />
-            <span>Все фильтры</span>
-          </AppLink>
-        </div>
-      </div>
-      {failed ? (
-        <p className="catalog-message">
-          Не получилось загрузить список. Обновите страницу или откройте <AppLink href={catalogTarget} navigate={navigate}>каталог</AppLink>.
-        </p>
-      ) : nothingFound ? (
-        /* Пустая сетка выглядела поломкой: вместо неё — заглушка. Отбор посетителя и
-           отсутствие модели в каталоге — разные случаи: в первом надо сбросить отбор,
-           во втором предложить подбор под заказ и другие модели марки, иначе страница
-           становится тупиком (а часть моделей не проходит правила ввоза совсем). */
-        <EmptyState
-          className="model-page-catalog-empty"
-          icon={CarProfile}
-          title={narrowed ? "По этим параметрам ничего не найдено" : `${modelPage.name} сейчас нет в каталоге`}
-          description={narrowed
-            ? "Попробуйте поднять цену или пробег — или сбросьте отбор и посмотрите все машины модели."
-            : `Мы возим эту модель под заказ: найдём подходящий вариант в Китае, проверим и рассчитаем цену до Минска. Или выберите другую модель ${modelPage.brand} — они есть в наличии.`}
-        >
-          {narrowed ? (
-            <button type="button" onClick={filters.onReset}>
-              Сбросить
-            </button>
-          ) : (
-            <>
-              <div className="model-page-empty-actions">
-                <AppLink href="/how-it-works" navigate={navigate} className="primary model-page-empty-primary">
-                  Заказать подбор
-                </AppLink>
-                {emptyBrandPath && (
-                  <AppLink href={emptyBrandPath} navigate={navigate} className="model-page-empty-secondary">
-                    Все {modelPage.brand} в каталоге
-                  </AppLink>
-                )}
-              </div>
-              {emptySiblings.length > 0 && (
-                <div className="model-page-empty-siblings">
-                  <p>Другие модели {modelPage.brand}</p>
-                  <div>
-                    {emptySiblings.map((page) => (
-                      <AppLink key={page.path} href={page.path} navigate={navigate}>
-                        {page.name}
-                      </AppLink>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </EmptyState>
-      ) : view === "list" ? (
-        <div className="car-list model-page-car-list">
-          {(loading ? Array.from({ length: MODEL_PAGE_CARS_LIMIT }) : cars).map((car, index) =>
-            car ? (
-              <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} onOpen={onOpenCar} />
-            ) : (
-              <CardSkeleton key={index} row />
-            ),
-          )}
-        </div>
-      ) : (
-        <div className="featured-grid mobile-cards-grid">
-          {(loading ? Array.from({ length: MODEL_PAGE_CARS_LIMIT }) : cars).map((car, index) =>
-            car ? (
-              <FeaturedCard key={car.id} car={car} onClick={() => onOpenCar(car)} favorite={favorites?.has(car.id)} toggleFavorite={toggleFavorite} />
-            ) : (
-              <CardSkeleton key={index} />
-            ),
-          )}
-        </div>
-      )}
-      {/* Под сеткой — переход в каталог этой модели: догружать машины прямо здесь
-          незачем, дальше идёт обзор, а весь список удобнее смотреть с фильтрами. */}
-      {!failed && !loading && (
-        <AppLink className="primary model-page-catalog-all" href={allCarsTarget} navigate={navigate}>
-          Смотреть все {modelPage.name} <ArrowRight size={18} />
-        </AppLink>
-      )}
     </section>
   );
 }
@@ -4137,154 +4038,102 @@ function useModelText(slug) {
   return text;
 }
 
-function ModelPage({ modelPage, navigate, favorites, toggleFavorite }) {
-  // Отбор над сеткой машин: сортировка и два самых частых фильтра. По умолчанию
-  // сначала самые доступные — так страница и открывалась раньше.
-  const [sort, setSort] = useState("price_asc");
-  const [priceMax, setPriceMax] = useState(ANY_PRICE_MAX);
-  const [mileage, setMileage] = useState(ANY_MILEAGE);
-  const resetFilters = () => {
-    setPriceMax(ANY_PRICE_MAX);
-    setMileage(ANY_MILEAGE);
-  };
-  const filters = { sort, priceMax, mileage, onSort: setSort, onPriceMax: setPriceMax, onMileage: setMileage, onReset: resetFilters };
-  const carsState = useModelPageCars(modelPage, { sort, priceMax, mileage });
-  const text = useModelText(modelPage.slug);
-  // Текст разрываем примерно посередине: между половинами встаёт рекламный блок.
+/* Под выдачей на странице модели: сводка по живым цифрам, обзор (если написан),
+   вопросы и ссылки. Только на первой странице списка — дальше только ссылки. */
+function ModelLandingNotes({ landing, page, navigate }) {
+  const { facts, review, links, name } = landing;
+  const text = useModelText(review?.slug || null);
+  // Цифры ещё едут (переход на другую модель): блок появится вместе с ними.
+  if (!facts) return null;
+  if (page > 1) return <ModelPageWays model={landing} links={links} navigate={navigate} className="model-page-ways" />;
+  const autoText = modelAutoText({ name, facts });
+  const faq = modelFaq({ name, facts, review: text ? { faq: text.faq } : null });
   const sections = text?.sections || [];
-  const splitAt = Math.ceil(sections.length / 2);
-  const firstSections = sections.slice(0, splitAt);
-  const restSections = sections.slice(splitAt);
-  // Клик по машине раскрывает быстрый просмотр — как в каталоге и на главной. Если
-  // он выключен или экран узкий, открывается полная страница автомобиля.
-  const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode: true, favorites, toggleFavorite, navigate });
-  const openCar = (car) => {
-    if (openQuickView(car)) return;
-    navigate(carHref(car));
-  };
   return (
-    <main className="model-page">
-      {/* Обычные хлебные крошки вместо кружка «назад»: путь наверх виден словами и
-          совпадает с тем, что мы отдаём поисковику разметкой. */}
-      <div className="breadcrumbs model-page-crumbs page-width">
-        <button onClick={() => goBackTo(navigate, "/")}>Главная</button>
-        <CaretRight size={13} />
-        <button onClick={() => goBackTo(navigate, MODELS_INDEX.path)}>О моделях авто</button>
-        <CaretRight size={13} />
-        {modelPage.name}
-      </div>
-      {/* Заголовок страницы без подложки и по левому краю: он относится и к сетке
-          машин под ним, и ко всей странице, поэтому стоит на одной линии с ней.
-          Аннотации под ним нет — сразу за заголовком идут машины. */}
-      <section className="model-page-hero model-page-head page-width">
-        <div className="model-page-hero-copy">
-          <h1>{modelPage.h1}</h1>
+    <section className="catalog-landing-notes catalog-landing-article model-landing-notes" aria-labelledby="model-landing-notes-title">
+      <div className="model-page-article">
+        <div className="model-page-intro model-page-summary">
+          <h2 id="model-landing-notes-title">{name} в каталоге: что есть и почём</h2>
+          {autoText.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
         </div>
-      </section>
-      {/* Сетка машин сразу под заголовком: из поиска сюда приходят прежде всего
-          посмотреть, что есть в наличии и почём. Обзор начинается ниже. */}
-      <ModelPageCatalog modelPage={modelPage} carsState={carsState} filters={filters} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} onOpenCar={openCar} />
-      {/* Сам обзор — ниже машин, одной колонкой. */}
-      <div className="model-page-reading">
-      <div className="model-page-body page-width">
-        <article className="model-page-article">
+        {text && (
           <div className="model-page-intro">
-            <h2>Обзор {modelPage.name}</h2>
-            {text?.intro.map((paragraph) => (
+            <h2>Обзор {name}</h2>
+            {text.intro.map((paragraph) => (
               <p key={paragraph}>{renderInlineText(paragraph, navigate)}</p>
             ))}
           </div>
-          {/* Полоса главных цифр разбивает текст сразу после вступления: то, за чем
-              обычно и приходят, видно не вчитываясь. */}
-          {text?.stats && (
-            <div className="model-page-numbers">
-              {text.stats.map((stat) => (
-                <div key={stat.label}>
-                  <strong>{stat.value}</strong>
-                  <span>{stat.label}</span>
+        )}
+        {text?.stats && (
+          <div className="model-page-numbers">
+            {text.stats.map((stat) => (
+              <div key={stat.label}>
+                <strong>{stat.value}</strong>
+                <span>{stat.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {sections.map((section) => (
+          <ModelPageSection key={section.title} section={section} navigate={navigate} />
+        ))}
+        {text?.versions && (
+          <section className="model-page-versions">
+            <h2>{text.versions.title}</h2>
+            <div className="model-page-versions-cards">
+              {text.versions.rows.map((row) => (
+                <div key={row.join("-")}>
+                  <strong>{row[0]}</strong>
+                  <dl>
+                    {text.versions.columns.slice(1).map((column, index) => {
+                      const value = row[index + 1];
+                      return (
+                        <div key={column}>
+                          <dt>{column}</dt>
+                          <dd>{yuanToUsdAbout(value) || value}</dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
                 </div>
               ))}
             </div>
-          )}
-        </article>
+            <p className="model-page-versions-note">{text.versions.note}</p>
+          </section>
+        )}
       </div>
-      <div className="model-page-body page-width">
-        <article className="model-page-article">
-          {firstSections.map((section) => (
-            <ModelPageSection key={section.title} section={section} navigate={navigate} />
-          ))}
-        </article>
-      </div>
-      {/* Реклама сервиса в разрыве текста: человек уже читает про модель, самое
-          время показать, как её вообще заказывают. */}
-      <ModelPagePromo navigate={navigate} />
-      <div className="model-page-body page-width">
-        <article className="model-page-article">
-          {restSections.map((section) => (
-            <ModelPageSection key={section.title} section={section} navigate={navigate} />
-          ))}
-          {text?.versions && (
-            <section className="model-page-versions">
-              <h2>{text.versions.title}</h2>
-              {/* Вместо таблицы — карточки: первая ячейка строки становится
-                  заголовком, остальные читаются как «свойство — значение». Цены в
-                  юанях дополняем примерным пересчётом в доллары. */}
-              <div className="model-page-versions-cards">
-                {text.versions.rows.map((row) => (
-                  <div key={row.join("-")}>
-                    <strong>{row[0]}</strong>
-                    <dl>
-                      {text.versions.columns.slice(1).map((column, index) => {
-                        const value = row[index + 1];
-                        // Цену показываем только в долларах: юани для покупателя
-                        // из Минска ничего не значат.
-                        return (
-                          <div key={column}>
-                            <dt>{column}</dt>
-                            <dd>{yuanToUsdAbout(value) || value}</dd>
-                          </div>
-                        );
-                      })}
-                    </dl>
-                  </div>
-                ))}
-              </div>
-              <p className="model-page-versions-note">{text.versions.note}</p>
-            </section>
-          )}
-        </article>
-      </div>
-      <ArticleFaq faq={text?.faq} title={`Частые вопросы про ${modelPage.name}`} />
-      </div>
-      <ModelPageWays modelPage={modelPage} cars={carsState.cars} navigate={navigate} />
-      <p className="model-page-disclaimer page-width">{text?.disclaimer}</p>
-      {quickViewModal}
-    </main>
+      {faq.length > 0 && (
+        <div className="catalog-landing-faq">
+          <h3>{modelFaqTitle(name)}</h3>
+          <HomeFaqList className="model-page-faq-list" items={faq.map((item) => ({ question: item.q, answer: item.a }))} navigate={navigate} />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageSchema(faq)) }} />
+        </div>
+      )}
+      <ModelPageWays model={landing} links={links} navigate={navigate} className="model-page-ways" />
+      {text?.disclaimer && <p className="model-page-disclaimer">{text.disclaimer}</p>}
+    </section>
   );
 }
 
-/* Куда идти со страницы обзора: разделы каталога, в которые попадает эта модель, и
-   другие обзоры той же марки. Раньше обзор был почти тупиком — из него вела одна
-   ссылка в каталог, — а это самые содержательные страницы сайта.
-
-   Кузов и тип двигателя берём у первой загруженной машины модели: держать их руками
-   в конфиге не нужно, а у модели они одни и те же. Пока список машин не пришёл,
-   разделы не показываем — угадывать нечего. */
-function ModelPageWays({ modelPage, cars, navigate }) {
-  const car = (cars || [])[0] || null;
-  const sections = car ? landingsForCar({ brand: modelPage.brand, type: car.type, bodyType: car.bodyType }).slice(0, 6) : [];
-  const siblings = MODEL_PAGES.filter((item) => item.brand === modelPage.brand && item.path !== modelPage.path).slice(0, 12);
-  // Материалы журнала про эту модель — сравнения с соседями. Тот, кто дочитал обзор,
-  // как раз выбирает между двумя машинами, а из обзора об этом узнать было неоткуда.
-  const journal = BLOG_ENABLED ? blogPostsForModel(modelPage.path) : [];
-  if (!sections.length && !siblings.length && !journal.length) return null;
+/* Куда идти со страницы модели: раздел марки, разделы каталога и ценовая полоса,
+   другие модели марки, материалы журнала. Списки приходят с сервера вместе с данными
+   страницы — одни и те же у готовой разметки и у оживлённой. */
+function ModelPageWays({ model, links, navigate, className = "model-page-ways page-width" }) {
+  const sections = links?.sections || [];
+  const siblings = links?.siblings || [];
+  const similar = links?.similar || [];
+  const journal = links?.journal || [];
+  if (!sections.length && !siblings.length && !similar.length && !journal.length && !links?.brandPath) return null;
   return (
-    <section className="model-page-ways page-width" aria-labelledby="model-page-ways-title">
-      <h2 id="model-page-ways-title">Где смотреть {modelPage.name} и похожие машины</h2>
-      {sections.length > 0 && (
+    <section className={className} aria-labelledby="model-page-ways-title">
+      <h2 id="model-page-ways-title">Где смотреть {model.name} и похожие машины</h2>
+      {(sections.length > 0 || links?.brandPath) && (
         <div className="catalog-landing-links">
           <b>Разделы каталога</b>
           <div>
+            {links?.brandPath && <AppLink href={links.brandPath} navigate={navigate}>Все {model.brand} из Китая</AppLink>}
             {sections.map((landing) => (
               <AppLink key={landing.path} href={landing.path} navigate={navigate}>{landing.name}</AppLink>
             ))}
@@ -4303,9 +4152,19 @@ function ModelPageWays({ modelPage, cars, navigate }) {
       )}
       {siblings.length > 0 && (
         <div className="catalog-landing-links">
-          <b>Другие модели {modelPage.brand}</b>
+          <b>Другие модели {model.brand}</b>
           <div>
             {siblings.map((page) => (
+              <AppLink key={page.path} href={page.path} navigate={navigate}>{page.name}</AppLink>
+            ))}
+          </div>
+        </div>
+      )}
+      {similar.length > 0 && (
+        <div className="catalog-landing-links">
+          <b>Похожие модели других марок</b>
+          <div>
+            {similar.map((page) => (
               <AppLink key={page.path} href={page.path} navigate={navigate}>{page.name}</AppLink>
             ))}
           </div>
@@ -4497,6 +4356,54 @@ const initialBrandCounts = () => {
   const boot = bootCatalogMeta("")?.brands;
   return boot ? { ...readStoredBrandCounts(), "Все": boot } : readStoredBrandCounts();
 };
+
+/* Полосы цен до Минска под плиткой марок. Главная — самая сильная страница сайта,
+   а на ценовые разделы («до 20 000 $») с неё не вело ни одной ссылки: человек, который
+   выбирает по бюджету, а не по марке, попадал туда только через общий каталог. */
+function HomePriceBands({ navigate }) {
+  const bands = CATALOG_LANDINGS.filter((landing) => landing.kind === "price" && !landing.powertrain);
+  if (!bands.length) return null;
+  return (
+    <nav className="home-price-bands page-width" aria-label="Автомобили по цене до Минска">
+      <b>По цене до Минска</b>
+      <div>
+        {bands.map((band) => (
+          <AppLink key={band.path} href={band.path} navigate={navigate}>{band.name}</AppLink>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+/* Популярные модели на главной: до 48 моделей с наибольшим числом машин — ссылками на
+   их каталожные страницы. Список считает сборка и встраивает в страницу
+   (window.__boot.popularModels, см. scripts/prerender-home.mjs), поэтому первый кадр в
+   браузере совпадает с готовой разметкой. Сначала видны первые 16, остальные — по
+   кнопке; ссылки на все 48 есть в разметке сразу (их читает поисковик). */
+const HOME_POPULAR_MODELS_VISIBLE = 16;
+function HomePopularModels({ navigate }) {
+  const [models] = useState(() => (Array.isArray(window.__boot?.popularModels) ? window.__boot.popularModels : []));
+  const [open, setOpen] = useState(false);
+  if (!models.length) return null;
+  return (
+    <nav className={`home-popular-models page-width${open ? " open" : ""}`} aria-label="Популярные модели">
+      <b>Популярные модели</b>
+      <div>
+        {models.map((item, index) => (
+          <AppLink key={item.path} href={item.path} navigate={navigate} className={index >= HOME_POPULAR_MODELS_VISIBLE ? "home-popular-extra" : undefined}>
+            {item.name}
+            <small>{number(item.count)}</small>
+          </AppLink>
+        ))}
+        {models.length > HOME_POPULAR_MODELS_VISIBLE && (
+          <button type="button" className="home-popular-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+            {open ? "Свернуть" : `Ещё ${number(models.length - HOME_POPULAR_MODELS_VISIBLE)}`}
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+}
 
 function PopularBrands({ navigate, cars, apiMode }) {
   const mobileLayout = useNarrowViewport();
@@ -5070,7 +4977,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             после оживления: заголовок — главный элемент страницы для PageSpeed, и
             любая замена его текста после первого кадра считается новой отрисовкой
             и сдвигом строк — метрика готовности уезжала с 0,2 с обратно на 3+ с. */}
-        <h1>Б/у авто из Китая с доставкой в Беларусь</h1>
+        <h1>{HOME_SEO.h1}</h1>
         <ul className="hero-benefits" aria-label="Преимущества заказа">
           <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
           <li><CheckCircle size={21} weight="fill" />Прозрачные договора</li>
@@ -5079,6 +4986,8 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         <HeroSearch value={heroQuery} onChange={setHeroQuery} navigate={navigate} />
       </section>
       {!searching && <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />}
+      {!searching && <HomePriceBands navigate={navigate} />}
+      {!searching && <HomePopularModels navigate={navigate} />}
       <section className={searching ? "featured featured--search page-width" : "featured page-width"}>
         {/* Во время поиска заголовок не показываем: выдача начинается сразу со
             строки с числом результатов, переключатель быстрого просмотра — там же. */}
@@ -5881,27 +5790,43 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     return () => { cancelled = true; };
   }, [searchQuery]);
 
-  const restoredCatalog = window.history.state?.catalog || matchingCatalogReturn()?.catalog || null;
+  // Снимок прошлой выдачи: из записи истории (возврат «Назад») или из памяти вкладки.
+  // Когда сервер уже встроил в страницу готовый список, память вкладки не берём:
+  // иначе первый кадр разошёлся бы с готовой разметкой (ошибка оживления), а страница
+  // по свежей ссылке показала бы чужую глубину прокрутки.
+  const serverListHere = Boolean(window.__boot?.catalogValue && landing && window.__boot.catalogPath === landing.path);
+  const restoredCatalog = window.history.state?.catalog || (serverListHere ? null : matchingCatalogReturn()?.catalog) || null;
   const [filters, setFilters] = useState(() => ({
     ...initialFilters,
     ...(restoredCatalog?.filters || {}),
   }));
-  const [remoteCars, setRemoteCars] = useState([]);
-  const [remoteReceived, setRemoteReceived] = useState(false);
-  const [remoteTotal, setRemoteTotal] = useState(0);
+  // Первая страница выдачи, встроенная сервером в готовую страницу (страницы моделей):
+  // берём её, если она про этот адрес и этот отбор, и ничего не восстанавливаем из
+  // истории. Тогда первый кадр совпадает с серверным, а первый запрос не нужен.
+  const bootList = (() => {
+    const boot = window.__boot;
+    if (!boot?.catalogValue || !landing || boot.catalogPath !== landing.path || restoredCatalog) return null;
+    return String(boot.catalogSearch || "") === window.location.search.replace(/^\?/, "") ? boot.catalogValue : null;
+  })();
+  const bootListUsed = useRef(Boolean(bootList));
+  const [remoteCars, setRemoteCars] = useState(() => (bootList ? (bootList.items || []).map(normalizeImportedCar) : []));
+  const [remoteReceived, setRemoteReceived] = useState(Boolean(bootList));
+  const [remoteTotal, setRemoteTotal] = useState(bootList ? Number(bootList.total) || 0 : 0);
   // «Есть ли ещё» решает сервер, а не сравнение загруженного с общим числом: у API
   // есть потолок глубины листания, и без его признака бесконечная прокрутка молотила
   // бы пустые страницы и показывала ошибку загрузки на ровном месте.
-  const [remoteHasMore, setRemoteHasMore] = useState(false);
+  const [remoteHasMore, setRemoteHasMore] = useState(Boolean(bootList?.hasMore));
   const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType)) || EMPTY_CATALOG_META);
-  const [remoteLoading, setRemoteLoading] = useState(useApi);
+  const [remoteLoading, setRemoteLoading] = useState(useApi && !bootList);
   const [remoteError, setRemoteError] = useState(false);
   // Сортировку может нести и ссылка (например, из сохранённого поиска); снимок
   // истории при возврате важнее — он описывает то, что было на экране.
   // Адрес со страницей списка («?page=7») приходит из поисковой выдачи, а сервер режет
   // список по возрастанию цены. Оставить здесь перемешанный порядок по умолчанию значит
   // показать человеку на этой странице совсем не те машины, за которыми он пришёл.
-  const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : params.get("page") ? "price_asc" : "default";
+  // На странице модели порядок по умолчанию — по цене: так же режет список сервер,
+  // и готовая разметка совпадает с первым кадром.
+  const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : params.get("page") || landing?.kind === "model" ? "price_asc" : "default";
   const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : urlSort));
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
@@ -5931,7 +5856,12 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // двигателя или кузова уводит на свой раздел, страница собирается заново —
   // и без этого фильтры закрывались прямо во время выбора.
   const [filtersExpanded, setFiltersExpanded] = useState(() => Boolean(restoredCatalog?.filtersExpanded));
-  const [view, setView] = useState(readCatalogView);
+  // Вид выдачи — в первом кадре всегда список: хранилище браузера читаем после него,
+  // иначе готовая разметка со сервера не совпала бы с первым кадром.
+  const [view, setView] = useState("list");
+  useLayoutEffect(() => {
+    setView(readCatalogView());
+  }, []);
   // На телефоне плитка идёт двумя карточками в ряд (см. .mobile-cards-grid).
   const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:useApi, favorites, toggleFavorite, navigate });
   const loadMoreRequest = useRef(null);
@@ -5981,12 +5911,24 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const landingPath = landing?.path || "/catalog";
   // Заголовок раздела и обычного каталога режется на крупную часть и мелкую подпись
   // одним правилом (src/catalog-landings.js) — тем же, что и в серверной версии страницы.
-  const heading = landingHeading(landing ? landing.h1 : "Б/у авто из Китая");
+  const heading = landingHeading(landing ? landing.h1 : CATALOG_INDEX_SEO.h1, landing);
+  // При создании каталог никуда не уводим: ссылка «Все фильтры» со страницы модели
+  // открывает каталог с этой же моделью, и без этой проверки он тут же вернул бы
+  // человека обратно на страницу модели.
+  const mountedForMove = useRef(false);
   useEffect(() => {
     // Раздел, который описывает выбранное точнее всего и при этом остаётся правдой:
     // на странице BYD можно выбрать модель или год, а выбрать к седанам ещё и
     // кроссоверы — уже нет, такую выдачу раздел седанов не описывает.
-    const target = landingForFilters(filters, landingPath)?.path || "/catalog";
+    const firstRun = !mountedForMove.current;
+    mountedForMove.current = true;
+    // На странице модели остаёмся, пока выбраны её марка и она сама: остальные
+    // фильтры (год, пробег, цена) её не отменяют — как у марки кузов или год.
+    const chosenModels = multiValues(filters.model, ANY_MODEL);
+    if (landing?.kind === "model" && filters.brand === landing.brand && chosenModels.length === 1 && chosenModels[0] === landing.model) return undefined;
+    // Выбраны марка и модель, и больше ничего — это каталожная страница модели.
+    const modelTarget = modelLandingRedirect(landing?.kind === "model" ? null : landing, savedSearchCatalogHref(filters).split("?")[1] || "");
+    const target = (modelTarget && !firstRun ? modelTarget.split("?")[0] : null) || landingForFilters(filters, landingPath)?.path || "/catalog";
     if (target === landingPath) return undefined;
     const move = () => {
       catalogFilterMoveTarget = target;
@@ -6025,6 +5967,28 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     setView(value);
     window.localStorage.setItem(catalogViewKey, value);
   };
+  // Переход с одной модели на другую ссылкой (блок «Другие модели», похожие модели):
+  // каталог остаётся на месте и просто берёт отбор новой модели — прежний список
+  // стоит на экране, пока не придёт новый, без заглушек и пересоздания страницы.
+  const adoptedLandingPath = useRef(landing?.path || null);
+  useEffect(() => {
+    const path = landing?.path || null;
+    if (adoptedLandingPath.current === path) return;
+    adoptedLandingPath.current = path;
+    if (landing?.kind !== "model") return;
+    const chosen = multiValues(filters.model, ANY_MODEL);
+    // Отбор уже про эту модель — сюда увёл сам каталог (плашка модели).
+    if (filters.brand === landing.brand && chosen.length === 1 && chosen[0] === landing.model) return;
+    loadMoreRequest.current?.abort();
+    loadMoreRequest.current = null;
+    loadingMore.current = false;
+    setLoadedLimit(pageSize);
+    setStartOffset(0);
+    restorePages.current = 0;
+    restoredOrder.current = null;
+    setSort("price_asc");
+    setFilters(catalogFiltersFromParams(landingFilterParams(landing)));
+  }, [landing?.path]);
   const updateSort = (value) => {
     loadMoreRequest.current?.abort();
     loadMoreRequest.current = null;
@@ -6040,6 +6004,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const brandCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE));
   const modelCars = cars.filter((car) => (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE));
   const models = ["Все модели", ...(useApi ? remoteMeta.models.map((item) => item.model) : uniqueSorted(modelCars.map((car) => car.model)))];
+  // Запоминаем модели марки: по ним переход на страницу модели обходится без ожидания.
+  if (useApi && filters.brand !== "Все марки" && remoteMeta.models.length) brandModelsCache.set(filters.brand, remoteMeta.models.map((item) => item.model));
   const brandEntries = useApi ? remoteMeta.brands : [...brandCars.reduce((counts, car) => counts.set(car.brand, (counts.get(car.brand) || 0) + 1), new Map())].map(([brandName, count]) => ({ brand:brandName, count }));
   const modelEntries = useApi ? remoteMeta.models : [...modelCars.reduce((counts, car) => counts.set(car.model, (counts.get(car.model) || 0) + 1), new Map())].map(([modelName, count]) => ({ model:modelName, count }));
   const brandOptionCounts = new Map(brandEntries.map((item) => [item.brand, Number(item.count) || 0]));
@@ -6114,6 +6080,14 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   };
   useEffect(() => {
     if (!useApi) return;
+    // Первая страница уже встроена сервером — первый запрос пропускаем. Встроенный
+    // список одноразовый: при следующем заходе на этот адрес внутри сайта он был бы
+    // уже устаревшим.
+    if (bootListUsed.current) {
+      bootListUsed.current = false;
+      if (window.__boot) window.__boot.catalogValue = null;
+      return;
+    }
     const controller = new AbortController();
     setRemoteLoading(true);
     setRemoteError(false);
@@ -6200,6 +6174,18 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // страницей («?page=7») первые шестьсот машин в выдачу не попадают, и сравнение
   // «показано меньше, чем найдено» оставляло бы кнопку висеть на конце списка.
   const hasMore = useApi ? remoteHasMore : startOffset + displayed.length < resultCount;
+  // Страницы списка: номер текущей, сколько всего и адрес любой из них — с теми же
+  // параметрами, что в адресной строке (порядок, фильтры), только с другим номером.
+  const currentPage = Math.floor(startOffset / pageSize) + 1;
+  const totalPages = catalogPageCount(resultCount);
+  const nextPage = Math.floor((startOffset + displayed.length) / pageSize) + 1;
+  const pageHref = (n) => {
+    const query = new URLSearchParams(window.location.search);
+    if (n > 1) query.set("page", String(n));
+    else query.delete("page");
+    const tail = query.toString();
+    return `${landingPath}${tail ? `?${tail}` : ""}`;
+  };
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
   const selectedModels = multiValues(filters.model, ANY_MODEL);
   const quickModels = [
@@ -6261,6 +6247,12 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           <>
             <button onClick={() => navigate("/catalog")}>Автомобили из Китая</button>
             <CaretRight size={13} />
+            {landing.kind === "model" && landing.links?.brandPath && (
+              <>
+                <button onClick={() => navigate(landing.links.brandPath)}>{landing.brand}</button>
+                <CaretRight size={13} />
+              </>
+            )}
             {landing.name}
           </>
         ) : (
@@ -6275,7 +6267,12 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
               месте на каждой ширине, и «с пробегом из Китая» скакало от раздела
               к разделу. Для поиска текст один и тот же — слова и пробел на месте. */}
           <h1>{Boolean(heading.tail) ? <><span>{heading.title}</span> <span>{heading.tail}</span></> : heading.title}</h1>
-          {Boolean(heading.subtitle) && <p>{heading.subtitle}</p>}
+          {landing?.kind === "model" ? (
+            /* Строка наличия под заголовком: что есть и почём — шапка списка. Пока
+               цифры новой модели едут, на том же месте стоит строка той же высоты:
+               иначе заголовок и выдача дёргались бы при смене модели. */
+            <p className="model-page-stock">{modelStockText(landing, { page: currentPage, pages: totalPages, first: startOffset, shown: displayed.length })}</p>
+          ) : Boolean(heading.subtitle) && <p>{heading.subtitle}</p>}
         </div>
       </div>
       <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} />
@@ -6343,10 +6340,22 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             <CustomSearchCta variant="empty" />
           )}
           {remoteLoading && displayed.length > 0 && <div className="catalog-message">Загружаем объявления…</div>}
+          {/* Кнопка — настоящая ссылка на следующую страницу списка: человек нажимает
+              и получает продолжение на месте, робот идёт по адресу. Номеров страниц
+              нет (решение Сергея 25.09.2026): по цепочке «дальше» поисковик доходит до
+              любой страницы, а сами машины перечислены в карте сайта. */}
           {hasMore && !remoteLoading && !remoteError && (
-            <button type="button" className="load-more" onClick={loadMore}>
+            <a
+              className="load-more"
+              href={appHref(pageHref(nextPage))}
+              onClick={(event) => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                loadMore();
+              }}
+            >
               Подгрузить ещё
-            </button>
+            </a>
           )}
           {useApi && hasMore && !remoteLoading && remoteError && (
             <button className="load-more" onClick={loadMore}>
@@ -6388,12 +6397,36 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         </aside>
         {/* Текстовый блок стоит в той же колонке, что выдача: справа от него —
             карточка сервиса, и правый край блока совпадает с правым краем выдачи. */}
-        {landing ? <CatalogLandingNotes landing={landing} models={models} navigate={navigate} total={knownResultCount} /> : <CatalogSectionLinks navigate={navigate} />}
+        {landing?.kind === "model" ? (
+          <ModelLandingNotes landing={landing} page={currentPage} navigate={navigate} />
+        ) : landing ? (
+          <CatalogLandingNotes landing={landing} models={models} navigate={navigate} total={knownResultCount} />
+        ) : (
+          <CatalogSectionLinks navigate={navigate} />
+        )}
       </div>
       <ScrollToTopButton />
       {Boolean(toast) && <Toast text={toast} onClose={() => setToast(null)} />}
       {quickViewModal}
     </main>
+  );
+}
+
+/* Ценовые полосы под страницей раздела: «до 15 000 $», «до 20 000 $» и дальше.
+   Они собраны из всего каталога, и до 25.09.2026 на них вели ссылки только с общего
+   каталога и указателя моделей — с разделов марок, кузовов и типов не было ни одной. */
+function PriceBandLinks({ landing, navigate, heading = "По цене до Минска" }) {
+  const bands = priceBandsForLanding(landing);
+  if (!bands.length) return null;
+  return (
+    <div className="catalog-landing-links">
+      <b>{heading}</b>
+      <div>
+        {bands.map((band) => (
+          <AppLink key={band.path} href={band.path} navigate={navigate}>{band.name}</AppLink>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -6443,6 +6476,11 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
   const modelPages = landing.brand ? MODEL_PAGES.filter((page) => page.brand === landing.brand) : [];
   const available = new Set((models || []).filter((model) => model !== ANY_MODEL));
   const reviews = modelPages.filter((page) => !available.size || available.has(page.model));
+  // Все модели марки в наличии — на их каталожные страницы; пока список моделей не
+  // пришёл, показываем хотя бы те, у которых есть обзор.
+  const modelLinks = landing.brand && available.size
+    ? [...available].map((name) => ({ path: modelLandingPath(landing.brand, name), name: `${landing.brand} ${name}` })).filter((item) => item.path)
+    : reviews.map((page) => ({ path: page.path, name: page.name }));
   // Разделы по смыслу, а не все подряд: полный список всех 55 лежит в каталоге — это его
   // естественное место. Одинаковый на всех страницах блок ссылок поисковик со временем
   // считает частью шаблона и обесценивает, а вес размазывается ровным слоем.
@@ -6456,11 +6494,11 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
       {landing.notes.map((text) => (
         <p key={text.slice(0, 40)}>{text}</p>
       ))}
-      {reviews.length > 0 && (
+      {modelLinks.length > 0 && (
         <div className="catalog-landing-links">
-          <b>Обзоры моделей {landing.brand}</b>
+          <b>Модели {landing.brand} в каталоге</b>
           <div>
-            {reviews.map((page) => (
+            {modelLinks.map((page) => (
               <AppLink key={page.path} href={page.path} navigate={navigate}>{page.name}</AppLink>
             ))}
           </div>
@@ -6476,6 +6514,7 @@ function CatalogLandingNotes({ landing, models, navigate, total = null }) {
           </div>
         </div>
       )}
+      <PriceBandLinks landing={landing} navigate={navigate} />
       <CatalogLandingFaq landing={landing} total={total} navigate={navigate} />
     </section>
   );
@@ -6504,9 +6543,8 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
   const guideModels = new Map((guide?.models || []).map((row) => [row.model, row]));
   const activeBudget = ZEEKR_BUDGETS.find((band) => band.key === selectedBudget) || ZEEKR_BUDGETS[0];
   const activeBudgetData = guide?.budgets?.[activeBudget.key];
-  const reviewByModel = new Map(modelPages.map((page) => [page.model, page]));
-  const modelHref = (model) => reviewByModel.get(model)?.path
-    || `${landing.path}?model=${encodeURIComponent(model)}`;
+  // У каждой модели своя каталожная страница — на неё и ведём, обзор есть или нет.
+  const modelHref = (model) => modelLandingPath(landing.brand, model) || `${landing.path}?model=${encodeURIComponent(model)}`;
   const alternatives = config.alternatives.map((item) => ({ ...item, href:brandLandingPath(item.brand) })).filter((item) => item.href);
   return (
     <section className="catalog-landing-notes catalog-landing-article brand-guide" aria-labelledby="catalog-landing-notes-title">
@@ -6610,6 +6648,7 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
           <div>{modelPages.map((page) => <AppLink key={page.path} href={page.path} navigate={navigate}>{page.name}</AppLink>)}</div>
         </div>
       )}
+      <PriceBandLinks landing={landing} navigate={navigate} />
       {alternatives.length > 0 && (
         <section className="brand-guide-section" aria-labelledby={`${idPrefix}-compare-title`}>
           <h3 id={`${idPrefix}-compare-title`}>С чем сравнить {brand}</h3>
@@ -7904,6 +7943,30 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   const [values, setValues] = useState({ name:"", phone:"+375", account:false, password:"", confirm:"", consent:true });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  // Второй шаг после отправки: ссылка на бота, чтобы подтвердить номер. Заявка к этому
+  // моменту уже сохранена — подтверждение по желанию, окно можно просто закрыть.
+  const [verification, setVerification] = useState(null);
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    if (!verification?.token || verified) return undefined;
+    // Опрашиваем раз в три секунды, не дольше пяти минут: дальше человек, скорее
+    // всего, ушёл, а подтверждение всё равно запишется в заявку.
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (attempts > 100) return window.clearInterval(timer);
+      fetch(`/api/order-drafts/verification?token=${encodeURIComponent(verification.token)}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((status) => {
+          if (status?.verified) {
+            setVerified(true);
+            window.clearInterval(timer);
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [verification, verified]);
   const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
   const withAccount = values.account;
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
@@ -7936,14 +7999,35 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
     }
     setPending(true);
     try {
-      await submitLead(car, { name:values.name.trim(), phone, createAccount:withAccount, password:values.password, confirm:values.confirm });
-      onDone();
+      const result = await submitLead(car, { name:values.name.trim(), phone, createAccount:withAccount, password:values.password, confirm:values.confirm });
+      if (result?.verification?.url) setVerification(result.verification);
+      else onDone();
     } catch (submitError) {
       setError(authMessages[submitError.message] || "Не удалось отправить заявку. Попробуйте ещё раз.");
     } finally {
       setPending(false);
     }
   };
+  if (verification) return (
+    <div className="modal-backdrop auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="auth-card auth-modal availability-lead-modal availability-lead-verify" role="dialog" aria-modal="true" aria-labelledby="availability-lead-title">
+        <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={19} /></button>
+        <div className="auth-modal-heading">
+          <h1 id="availability-lead-title">{verified ? "Номер подтверждён" : "Заявка принята"}</h1>
+        </div>
+        {verified ? (
+          <p className="availability-lead-note"><CheckCircle size={20} weight="fill" className="availability-lead-verify-mark" /> Спасибо. Мы уточним у продавца, что автомобиль ещё в продаже, и свяжемся с вами по этому номеру.</p>
+        ) : (
+          <>
+            <p className="availability-lead-note">Мы получили запрос. Чтобы мы точно до вас дозвонились, подтвердите номер в Telegram: откройте бота и нажмите в нём «Поделиться номером» — вводить ничего не нужно.</p>
+            <a className="primary auth-submit" href={verification.url} target="_blank" rel="noopener noreferrer">Подтвердить номер в Telegram<ArrowUpRight size={18} /></a>
+            <p className="availability-lead-legal">Ждём подтверждение… Если Telegram у вас нет, просто закройте окно — заявка уже у нас.</p>
+          </>
+        )}
+        <button className="invert-button availability-lead-verify-close" type="button" onClick={onClose}>{verified ? "Закрыть" : "Пропустить"}</button>
+      </section>
+    </div>
+  );
   return (
     <div className="modal-backdrop auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
       <form className="auth-card auth-modal availability-lead-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="availability-lead-title">
@@ -8061,7 +8145,18 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // которые и должны собирать поиск, в отличие от карточки, живущей до продажи.
   // Раздел, на котором посетитель уже стоит, из списка убираем: в быстром просмотре
   // из каталога марки первой плашкой была бы ссылка на эту же страницу.
-  const sections = landingsForCar(car).filter((landing) => landing.path !== currentAppPath());
+  // Плюс ценовая полоса по цене этой машины до Минска — тот же расчёт, что в правой
+  // колонке. Полосы собраны из всего каталога, и с карточек на них не вело ничего.
+  // Первой — каталожная страница этой модели: все такие машины с ценами. Раньше
+  // из карточки туда вела только плашка «О модели», а она есть лишь у машин с обзором.
+  const modelPath = modelLandingPath(car.brand, car.model);
+  const sections = [
+    ...(modelPath ? [{ path: modelPath, name: `Все ${car.brand} ${car.model} в наличии` }] : []),
+    ...landingsForCar(car),
+    ...priceBandsForCar({ type: car.type, landedUsd: price.totalUsd }),
+  ].filter((landing) => landing.path !== currentAppPath());
+  // Материалы журнала про модель этой машины: сравнения с соседями по классу.
+  const journal = BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [];
   // Все восемь плашек сохраняют место, даже если источник не указал значение.
   const specs = [
     [CalendarBlank, "Год", car.year],
@@ -8163,6 +8258,16 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               <div>
                 {sections.map((landing) => (
                   <AppLink key={landing.path} href={landing.path} navigate={navigate}>{landing.name}</AppLink>
+                ))}
+              </div>
+            </nav>
+          )}
+          {journal.length > 0 && (
+            <nav className="detail-section-links" aria-label="Материалы журнала об этой модели">
+              <b>Об этой модели в журнале</b>
+              <div>
+                {journal.map((post) => (
+                  <AppLink key={post.path} href={post.path} navigate={navigate}>{post.name}</AppLink>
                 ))}
               </div>
             </nav>
@@ -11189,8 +11294,7 @@ function BrandDirectoryCard({ item, count, models, modelPreviewLimit = 5, naviga
           aria-hidden={models ? undefined : true}
         >
           {visibleModels.map((model) => {
-            const modelPage = MODEL_PAGES.find((page) => page.brand === item.brand && page.model === model.model);
-            const modelPath = modelPage?.path || `${path}?model=${encodeURIComponent(model.model)}`;
+            const modelPath = modelLandingPath(item.brand, model.model) || `${path}?model=${encodeURIComponent(model.model)}`;
             return (
               <AppLink className="brand-directory-model-photo brand-directory-model-link" href={modelPath} navigate={navigate} key={model.model} aria-label={`${item.brand} ${model.model}`}>
                 {model.image
@@ -14509,8 +14613,11 @@ export function App() {
         calculation:{ requestType:"availability_check", contactMethods:["phone"] },
       }),
     });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "lead_failed");
-    return true;
+    const saved = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(saved.error || "lead_failed");
+    // Вместе с заявкой сервер может выдать ссылку на бота для подтверждения номера
+    // (см. server/lead-verify.mjs); форма покажет её следующим шагом.
+    return { ok:true, verification:saved.verification || null };
   };
   const availability = { signedIn:Boolean(user), request:requestCarAvailability, submitLead:submitAvailabilityLead };
   const logout = async () => {
@@ -14597,8 +14704,35 @@ export function App() {
   // и читает свой фильтр. Но когда на раздел увёл фильтр самого каталога, ключ
   // оставляем прежним: выдача уже та, что нужна, и пересоздание только мигало бы
   // заглушками. Метку ставит каталог, а гасит её отрисовка ниже.
-  const catalogKey = useRef(contentPath);
-  if (isCatalogPath(contentPath) && catalogFilterMoveTarget !== contentPath) catalogKey.current = contentPath;
+  // Раздел модели по адресу — из встроенных данных или запросом (см. useModelLanding).
+  const modelLanding = useModelLanding(contentPath);
+  // Номер страницы списка — тоже часть ключа: переход по ссылке «?page=2» должен
+  // пересоздать каталог с новым отступом, а не оставить прежний список.
+  const listPageParam = String(new URLSearchParams(window.location.search).get("page") || "");
+  const catalogPathKey = `${contentPath}${/^[1-9]\d{0,4}$/.test(listPageParam) && listPageParam !== "1" ? `?page=${listPageParam}` : ""}`;
+  // Ключ каталога живёт, пока адрес тот, для которого он выдан. Переход, который
+  // сделал сам каталог (смена фильтра увела на раздел или на страницу модели),
+  // ключ не меняет — и не меняет его ни один следующий рендер на том же адресе:
+  // раньше ключ обновлялся уже следующим рендером, и каталог пересоздавался,
+  // как только приходили сведения о новой модели.
+  const catalogKeyState = useRef({ path: contentPath, pathKey: catalogPathKey, key: catalogPathKey });
+  if (isCatalogPath(contentPath)) {
+    const state = catalogKeyState.current;
+    if (catalogFilterMoveTarget === contentPath) {
+      state.path = contentPath;
+      state.pathKey = catalogPathKey;
+    } else if (parseModelLandingPath(state.path) && parseModelLandingPath(contentPath) && state.path !== contentPath && catalogPathKey === contentPath) {
+      // С одной модели на другую (первая страница списка): тот же экземпляр каталога,
+      // он сам сменит отбор (см. adoptedLandingPath в Catalog) — без мигания.
+      state.path = contentPath;
+      state.pathKey = catalogPathKey;
+    } else if (state.path !== contentPath || state.pathKey !== catalogPathKey) {
+      state.path = contentPath;
+      state.pathKey = catalogPathKey;
+      state.key = catalogPathKey;
+    }
+  }
+  const catalogKey = catalogKeyState.current.key;
   useEffect(() => {
     catalogFilterMoveTarget = null;
   });
@@ -14641,9 +14775,6 @@ export function App() {
       <BlogPostPage post={findBlogPost(contentPath)} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : findToolPage(contentPath) ? (
       <ToolPage tool={findToolPage(contentPath)} navigate={navigate} />
-    ) : findModelPage(contentPath) ? (
-      // Страница модели запрашивает свой срез каталога сама и не ждёт boot-запроса.
-      <ModelPage modelPage={findModelPage(contentPath)} navigate={navigate} favorites={favorites} toggleFavorite={toggleFavorite} />
     ) : null;
   const page =
     contentPath === "/analytics" ? (
@@ -14656,6 +14787,10 @@ export function App() {
       staticPage
     ) : !showAccountFromAuthRoute && contentPath === "/" && !loadError ? (
       <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} catalogUpdatedAt={catalogUpdatedAt} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} />
+    ) : !showAccountFromAuthRoute && parseModelLandingPath(contentPath) && !modelLanding.landing && !modelLanding.provisional ? (
+      // Раздел модели ещё не известен (переход внутри сайта): без имени модели каталог
+      // не соберёт запрос. Неизвестная модель — «страницы нет».
+      modelLanding.failed === "missing" ? <NotFound navigate={navigate} /> : modelLanding.failed ? <MaintenancePage onRetry={retryCatalog} /> : <AppLoader />
     ) : !showAccountFromAuthRoute && isCatalogPath(contentPath) ? (
       // Catalog issues its own filtered query, so it starts at mount rather than queueing
       // behind the boot request it never reads.
@@ -14666,7 +14801,7 @@ export function App() {
       // создании, а при переходе с одного раздела на другой React оставил бы тот же
       // экземпляр: заголовок менялся, а выдача оставалась от прежней марки. С разным
       // ключом каждый раздел создаётся заново и читает свой фильтр.
-      <Catalog key={catalogKey.current} navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} deleteSavedSearch={deleteSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath)} />
+      <Catalog key={catalogKey} navigate={navigate} cars={cars} apiMode={apiMode} favorites={favorites} toggleFavorite={toggleFavorite} saveSearch={saveSearch} updateSavedSearch={updateSavedSearch} deleteSavedSearch={deleteSavedSearch} savedSearches={savedSearches} landing={findCatalogLanding(contentPath) || modelLanding.landing || modelLanding.provisional} />
     ) : !showAccountFromAuthRoute && detailId && findCarByListing(cars, detailId) ? (
       // Машина уже известна (встроена в страницу или успела прийти) — карточку
       // рисуем сразу, не дожидаясь остального каталога: его ждёт только блок
@@ -14701,7 +14836,7 @@ export function App() {
      <OrderedListingsContext.Provider value={orderedListings}>
      <SetOrderedListingsContext.Provider value={publishOrderedListings}>
      <AvailabilityContext.Provider value={availability}>
-      <ClientSeo path={path} car={findCarByListing(cars, detailId)} landing={findCatalogLanding(path)} />
+      <ClientSeo path={path} car={findCarByListing(cars, detailId)} landing={findCatalogLanding(path) || modelLanding.landing || modelLanding.provisional} />
       <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}

@@ -894,6 +894,7 @@ const draftKind = (row) => {
 export async function getAnalyticsLeads() {
   const [draftsResult, ordersResult] = await Promise.all([
     pool.query(`SELECT d.id,d.listing_id,d.customer_name,d.contact,d.calculation,d.status,d.created_at,
+      d.phone_verified_at,d.phone_verified_via,
       l.title,l.estimated_total_usd,l.mileage_km,l.city,
       v.brand,v.model,v.model_year,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=d.listing_id ORDER BY m.position LIMIT 1) AS image
@@ -928,6 +929,11 @@ export async function getAnalyticsLeads() {
       phone:leadPhone(row.contact),
       contact:String(row.contact || ""),
       methods:Array.isArray(row.calculation?.contactMethods) ? row.calculation.contactMethods : [],
+      // Подтверждён ли номер через бота (25.09.2026): менеджер видит, что звонить
+      // можно наверняка.
+      phoneVerified:Boolean(row.phone_verified_at),
+      phoneVerifiedAt:row.phone_verified_at || null,
+      phoneVerifiedVia:row.phone_verified_via || null,
       email:"",
       telegram:"",
       city:"",

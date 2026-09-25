@@ -17,7 +17,7 @@ import { brandNotice } from "../src/brand-notice.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
 import { landingFaq, landingFaqTitle } from "../src/landing-faq.js";
 import { carFaq, carFaqTitle } from "../src/car-faq.js";
-import { brandLandingPath, landingHeading } from "../src/catalog-landings.js";
+import { CATALOG_INDEX_SEO, brandLandingPath, landingHeading, landingSeoDescription, modelLandingPath } from "../src/catalog-landings.js";
 import { brandGuideConfig, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, ZEEKR_BUDGETS } from "../src/brand-guide.js";
 
 // Заголовок каталога и его разделов: две половины отдельными кусками, между ними пробел.
@@ -347,7 +347,6 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       telephone: COMPANY.phoneHref || COMPANY.phone,
       address: {
         "@type": "PostalAddress",
-        streetAddress: COMPANY.street,
         addressLocality: COMPANY.city,
         addressCountry: COMPANY.countryCode,
       },
@@ -401,8 +400,12 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   // первый экран из `boot-screen.mjs`. Поисковику и браузеру без скриптов видно всё.
   function renderHtml({ title, description, canonical, body, image = `${base}/og.jpg`, type, indexable = allowIndexing, schemas = [], boot = "header", prev = null, next = null, appRoot = null, appRootPath = null, bootData = null }) {
     const head = metadata({ title, description, canonical, image, type, indexable, schemas, prev, next });
+    // Адрес, для которого сервер собрал заголовок и описание: приложение при первом
+    // запуске их не переписывает (ClientSeo в App.jsx) — у сервера живые цифры, которых
+    // в браузере нет.
+    const seoPath = canonical ? (() => { try { const url = new URL(canonical); return `${url.pathname.replace(/\/+$/, "") || "/"}${url.search}`; } catch { return ""; } })() : "";
     const page = stripSeoHead(shell)
-      .replace(/<html\s+lang="ru"[^>]*>/i, `<html lang="ru" data-seo-indexing="${indexable}">`)
+      .replace(/<html\s+lang="ru"[^>]*>/i, `<html lang="ru" data-seo-indexing="${indexable}"${seoPath ? ` data-seo-path="${escapeHtml(seoPath)}"` : ""}>`)
       .replace("</head>", `${head}\n  </head>`);
     // Обычная страница: заглушка первого экрана и текст для поисковика, приложение
     // потом рисует себя с нуля.
@@ -465,7 +468,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * каталогу, которого иначе нет: списки в приложении рисует скрипт).
    * `modelPage` — обзор модели из `src/model-pages.js`, если он есть.
    */
-  function carPage({ car, related = [], modelPage = null, sections = [], indexable = allowIndexing, appRoot = null, appRootPath = null, bootData = null }) {
+  function carPage({ car, related = [], modelPage = null, sections = [], journal = [], indexable = allowIndexing, appRoot = null, appRootPath = null, bootData = null }) {
     const titleText = carTitle(car);
     const route = carRoute(car);
     const canonical = routeUrl(route);
@@ -536,13 +539,18 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const sectionBlock = sections.length
       ? `<section><h2>Похожие подборки</h2><ul>${sections.map((item) => `<li><a href="${hrefRoute(item.path)}">${escapeHtml(item.h1)}</a></li>`).join("")}</ul></section>`
       : "";
+    // Материалы журнала про эту модель — сравнения с соседями по классу: тот, кто
+    // смотрит карточку, как раз выбирает между двумя машинами.
+    const journalBlock = journal.length
+      ? pathwayLinks({ heading: "Об этой модели в журнале", links: journal.map((post) => [`${post.path}/`, post.name, post.teaser || null]) })
+      : "";
     // Частые вопросы про эту машину: числа в ответах — её собственные (см. src/car-faq.js).
     // У проданной машины блока нет: её страница живёт только ради прямых ссылок.
     const questions = carFaq(car, landed);
     const faqBlock = questions.length
       ? `<section><h2>${escapeHtml(carFaqTitle(car))}</h2>${questions.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${faqBlock}${relatedBlock}${sectionBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${faqBlock}${relatedBlock}${sectionBlock}${journalBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({
@@ -623,9 +631,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
 
   const CATALOG_INDEX = {
     route: "/catalog/",
-    title: "Купить б/у авто из Китая — каталог и цены | abcars.by",
+    title: CATALOG_INDEX_SEO.title,
+    h1: CATALOG_INDEX_SEO.h1,
+    descriptionBase: CATALOG_INDEX_SEO.description,
     description: "Каталог б/у авто из Китая: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь.",
-    h1: "Б/у авто из Китая",
     lead: "Выберите автомобиль, изучите характеристики и получите предварительный расчёт стоимости до Минска.",
   };
 
@@ -668,7 +677,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       canonical,
       html: renderHtml({
         title: page > 1 ? `${CATALOG_INDEX.h1} — страница ${page} | abcars.by` : CATALOG_INDEX.title,
-        description: page > 1 ? `${CATALOG_INDEX.description} Страница ${page} из ${pages}.` : CATALOG_INDEX.description,
+        // Сначала живые цифры (число машин и вилка цен), потом постоянный текст.
+        description: page > 1 ? `${CATALOG_INDEX.descriptionBase} Страница ${page} из ${pages}.` : landingSeoDescription({ seoDescription: CATALOG_INDEX.descriptionBase }, { total, priceFrom: spread?.from, priceTo: spread?.to }),
         canonical,
         body,
         type: "website",
@@ -710,7 +720,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * и переходы на соседние разделы. Приложение поверх этого рисует обычный каталог с
    * выставленным фильтром.
    */
-  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null, guide = null }) {
+  function landingPage({ landing, cars: items = [], total = 0, modelPages = [], models = [], others = [], indexable = allowIndexing, page = 1, pages = 1, perPage = items.length, edges = null, priced = [], changedAt = null, guide = null, seo = null }) {
     const canonical = routeUrl(pageRoute(landing.path, page));
     const first = (page - 1) * perPage;
     const spread = priceSpread(edges, priced);
@@ -740,8 +750,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       <p>В каталоге ${guideNumber(guide.total)} ${guidePlural(guide.total, "автомобиль", "автомобиля", "автомобилей")} ${escapeHtml(brand)}, ${guideNumber(guide.modelCount)} ${guidePlural(guide.modelCount, "модель", "модели", "моделей")} ${guideYears(guide)} годов выпуска. Среди ${guideNumber(guide.pricedCount)} объявлений с рассчитанной стоимостью минимальная цена — ${guidePrice(guide.priceMin)}, медианная — ${guidePrice(guide.priceMedian)}, максимальная — ${guidePrice(guide.priceMax)}. Центральная половина этих предложений стоит от ${guidePrice(guide.priceP25)} до ${guidePrice(guide.priceP75)} с доставкой до Минска.</p>
       <h3>Модели ${escapeHtml(brand)} в каталоге</h3>
       <table><thead><tr><th>Модель</th><th>В наличии</th><th>Годы</th><th>Тип</th><th>Цена от</th><th>Медианная цена</th></tr></thead><tbody>${guide.models.map((row) => {
-        const reviewPath = modelReview.get(row.model);
-        const href = reviewPath ? `${reviewPath}/` : `${landing.path}?model=${encodeURIComponent(row.model)}`;
+        // У каждой модели своя каталожная страница — обзор написан или нет.
+        const href = modelLandingPath(brand, row.model) || modelReview.get(row.model) || `${landing.path}?model=${encodeURIComponent(row.model)}`;
         return `<tr><th><a href="${hrefRoute(href)}">${escapeHtml(brand)} ${escapeHtml(row.model)}</a></th><td>${guideNumber(row.count)}</td><td>${guideYears(row)}</td><td>${escapeHtml(guidePowertrains(row.powertrains))}</td><td>${guidePrice(row.priceMin)}</td><td>${guidePrice(row.priceMedian)}</td></tr>`;
       }).join("")}</tbody></table>
       <h3>Что можно выбрать по бюджету</h3>
@@ -759,13 +769,25 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const notes = brandedGuide ? brandNotes : `<section><h2>${escapeHtml(landing.name)} из Китая: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}${
       page > 1 ? "" : toolPageLinks({ electric: landing.path === "/catalog/electric" || /^\/catalog\/electric-/.test(landing.path) })
     }</section>`;
-    const reviews = !brandedGuide && modelPages.length
-      ? `<section><h2>Обзоры моделей ${escapeHtml(landing.brand || landing.name)}</h2><ul>${modelPages.map((page) => `<li><a href="${hrefRoute(`${page.path}/`)}">${escapeHtml(page.name)}</a></li>`).join("")}</ul></section>`
+    // Модели марки в наличии — ссылками на их каталожные страницы (с числом машин);
+    // у марок без списка моделей (база недоступна) — хотя бы обзоры.
+    const modelRows = landing.brand && models.length
+      ? models.map((row) => ({ path: modelLandingPath(landing.brand, row.model), name: `${landing.brand} ${row.model}`, count: row.count })).filter((row) => row.path)
+      : modelPages.map((page) => ({ path: page.path, name: page.name, count: null }));
+    const reviews = !brandedGuide && modelRows.length
+      ? `<section><h2>Модели ${escapeHtml(landing.brand || landing.name)} в каталоге</h2><ul>${modelRows.map((row) => `<li><a href="${hrefRoute(`${row.path}/`)}">${escapeHtml(row.name)}</a>${row.count ? ` — ${number(row.count)} ${plural(row.count, "автомобиль", "автомобиля", "автомобилей")}` : ""}</li>`).join("")}</ul></section>`
       : "";
     // Ссылки на все остальные разделы, а не только на однотипные: у типов двигателя
     // их всего два, и раздел электромобилей — самый ценный на сайте — получал ровно
     // одну входящую ссылку.
-    const near = !brandedGuide && others.length ? sectionLinks(others, { skip: landing.path, heading: "Другие разделы каталога" }) : "";
+    // У марок с гидом соседние разделы не показываем (их место занимает таблица
+    // моделей и «с чем сравнить»), но ценовые полосы оставляем: это единственные
+    // ссылки на них с этой страницы.
+    const near = others.length
+      ? brandedGuide
+        ? sectionLinks(others.filter((item) => item.kind === "price"), { skip: landing.path, heading: "Автомобили по цене до Минска" })
+        : sectionLinks(others, { skip: landing.path, heading: "Другие разделы каталога" })
+      : "";
     // Вопросы — только на первой странице раздела: на страницах 2–50 это был бы один
     // и тот же блок пятьдесят раз, а вместе с ним и пятьдесят одинаковых разметок FAQ.
     const questions = page > 1 ? [] : landingFaq(landing, { total, guide });
@@ -776,7 +798,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // другой его кусок. Номер страницы стоит рядом, в строке с количеством.
     // Длинный заголовок раздела разложен на две строки и подпись под ними — тем же
     // правилом, что и в приложении: слова остаются те же, меняется только размер.
-    const parts = landingHeading(landing.h1);
+    const parts = landingHeading(landing.h1, landing);
     const subtitle = parts.subtitle;
     const heading = `${headingLines(parts)}${page > 1 ? ` — страница ${page}` : ""}`;
     const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>${heading}</h1>${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}${countLine}${freshnessLine(changedAt)}${list}${notes}${faq}${reviews}${near}</main>${footer()}`;
@@ -801,8 +823,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     return {
       canonical,
       html: renderHtml({
-        title: page > 1 ? `${landing.h1} — страница ${page} | abcars.by` : landing.seoTitle,
-        description: page > 1 ? `${landing.seoDescription} Страница ${page} из ${pages}.` : landing.seoDescription,
+        // `seo` — заголовок и описание с живыми цифрами (server/catalog-page.mjs); без
+        // них — постоянные из справочника разделов.
+        title: page > 1 ? `${landing.h1} — страница ${page} | abcars.by` : seo?.title || landing.seoTitle,
+        description: page > 1 ? `${landing.seoDescription} Страница ${page} из ${pages}.` : seo?.description || landing.seoDescription,
         canonical,
         body,
         type: "website",
@@ -1015,5 +1039,5 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     });
   }
 
-  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, sectionLinks, modelLinks, pathwayLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, catalogIndexPage, carPage, carGonePage, carDescription, landingPage, landingMissingPage, notFoundPage, modelPageArticle, modelPage };
+  return { routeUrl, hrefRoute, metadata, navigation, footer, carLinks, carListItem, freshnessLine, sectionLinks, modelLinks, pathwayLinks, breadcrumbsSchema, organizationSchema, webSiteSchema, faqSchema, renderHtml, catalogIndexPage, carPage, carGonePage, carDescription, landingPage, landingMissingPage, notFoundPage, modelPageArticle, modelPage };
 }

@@ -11,7 +11,8 @@ test("полноценные заглушки страниц использую�
     "search-empty",
     "favorites-empty",
     "saved-searches-empty",
-    "model-page-catalog-empty",
+    // «model-page-catalog-empty» убрана 25.09.2026: страница модели стала обычным
+    // каталогом и пустую выдачу показывает его же заглушкой.
     "brand-directory-empty",
     "market-compare-empty-state",
   ]) {

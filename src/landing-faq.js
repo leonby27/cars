@@ -131,6 +131,11 @@ export function landingFaq(landing, { total = null, guide = null, currency = "US
   return items;
 }
 
+/** Вопрос про растаможку для типа двигателя (или общий, когда типов несколько) — его же задаёт страница модели. */
+export const landingFaqDuty = (powertrain = null) => dutyAnswer(powertrain && DUTY_ANSWERS[powertrain] ? DUTY_ANSWERS[powertrain] : DUTY_MIXED);
+/** Вопрос про сроки — тот же на разделах и на страницах моделей. */
+export const landingFaqDelivery = () => DELIVERY;
+
 /** Заголовок блока вопросов — своими словами для каждого раздела. */
 export const landingFaqTitle = (landing) =>
   landing?.kind === "brand" ? `Частые вопросы про ${landing.brand} из Китая` : `Частые вопросы: ${landing?.name || "раздел каталога"}`;

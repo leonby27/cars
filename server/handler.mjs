@@ -12,6 +12,7 @@ import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, norma
 import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
+import { issueVerification, verificationStatus } from "./lead-verify.mjs";
 
 const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 // Ограничение размера: через прокси идёт фотография объявления, а не файл в сотни
@@ -412,7 +413,18 @@ export async function handleApiRequest(request, response) {
         return html(response, status, fallback, { "cache-control":"no-store" });
       }
     }
-    // Готовый обзор модели: `/models/byd-han`. Текст статьи плюс живые предложения с ценами.
+    // Данные каталожной страницы модели для приложения: тот же ответ, из которого
+    // сервер собирает готовую страницу. Нужен переходам внутри сайта и смене
+    // сортировки, страницы и фильтров на самой странице.
+    if (request.method === "GET" && url.pathname === "/api/model-catalog") {
+      const { modelCatalogData } = await import("./model-page.mjs");
+      // `light=1` — без списка машин: каталог в приложении запрашивает список сам.
+      const data = await modelCatalogData({ brandSlug:String(url.searchParams.get("brand") || ""), modelSlug:String(url.searchParams.get("model") || ""), params:url.searchParams, light:url.searchParams.get("light") === "1" });
+      if (!data || data.invalid) return json(response, 404, { error:"model_not_found" });
+      return json(response, 200, data, catalogCache);
+    }
+    // Прежний адрес обзора модели `/models/byd-han`: с 25.09.2026 уводит на
+    // каталожную страницу модели `/catalog/byd/han`.
     if (["GET", "HEAD"].includes(request.method) && url.pathname === "/api/pages/model") {
       try {
         const { renderModelPage } = await import("./model-page.mjs");
@@ -456,6 +468,17 @@ export async function handleApiRequest(request, response) {
         const sectionParams = new URLSearchParams(url.searchParams);
         sectionParams.delete("path");
         sectionParams.delete("slug");
+        // Два звена в адресе — каталожная страница модели: `/catalog/byd/seal`.
+        const modelMatch = String(slug).match(/^([a-z0-9-]+)\/([a-z0-9-]+)\/?$/);
+        if (modelMatch) {
+          const { renderModelCatalogPage } = await import("./model-page.mjs");
+          const modelPage = await renderModelCatalogPage(modelMatch[1], modelMatch[2], sectionParams);
+          if (modelPage.location) {
+            response.writeHead(301, { location: modelPage.location, ...seoPageCache });
+            return response.end();
+          }
+          return html(response, modelPage.status, modelPage.html, modelPage.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+        }
         const page = await renderCatalogPage(slug, sectionParams);
         if (page.location) {
           response.writeHead(301, { location: page.location, ...seoPageCache });
@@ -538,7 +561,17 @@ export async function handleApiRequest(request, response) {
       }
       if (name.length > 120) return json(response, 400, { error:"name_too_long" });
       if (contact.length > 200) return json(response, 400, { error:"contact_too_long" });
-      return json(response, 201, await createOrderDraft({ listingId:body.listingId || null, name:name || null, contact, calculation }));
+      const draft = await createOrderDraft({ listingId:body.listingId || null, name:name || null, contact, calculation });
+      // Заявка уже сохранена; ссылка на бота — дополнение, без которого она не хуже
+      // прежней. Если телеграм не отвечает или бот не настроен, поля просто нет.
+      const verification = isAvailabilityCheck ? await issueVerification(draft.id).catch(() => null) : null;
+      return json(response, 201, verification ? { ...draft, verification } : draft);
+    }
+    // Опрос сайта: подтвердил ли человек номер в боте. Ключ — тот же, что в ссылке.
+    if (request.method === "GET" && url.pathname === "/api/order-drafts/verification") {
+      const limit = await checkRateLimit("leadVerification", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
+      return json(response, 200, await verificationStatus(url.searchParams.get("token")));
     }
     return json(response, 404, { error:"not_found" });
   } catch (error) {

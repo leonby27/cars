@@ -1,4 +1,5 @@
 import { rewriteEvDutyCopyDeep } from "./ev-duty-copy.js";
+import { modelLandingPath } from "./catalog-landings.js";
 // Страницы моделей: одна запись — одна страница /models/<slug> плюс блок «О модели»
 // в карточке каждой машины этой модели. Новая модель добавляется записью здесь,
 // без правок App.jsx: маршрут, заголовки для поисковиков, статическая страница в
@@ -6360,7 +6361,15 @@ const MODEL_PAGES_SOURCE = [
 // фразы про нулевую пошлину переписываются под новую ставку — иначе страницы
 // обещали бы то, чего в расчёте цены уже нет.
 export const MODELS_INDEX = rewriteEvDutyCopyDeep(MODELS_INDEX_SOURCE);
-export const MODEL_PAGES = rewriteEvDutyCopyDeep(MODEL_PAGES_SOURCE);
+// С 25.09.2026 обзор живёт на каталожной странице модели `/catalog/<марка>/<модель>`
+// (см. src/catalog-landings.js, modelLandingPath): `path` у каждого обзора — новый
+// адрес, а прежний `/models/<slug>` остаётся в `legacyPath` и уводит на новый
+// перебросом. Остальной код ссылается на `page.path` и переезжает вместе с ним.
+export const MODEL_PAGES = rewriteEvDutyCopyDeep(MODEL_PAGES_SOURCE).map((page) => ({
+  ...page,
+  legacyPath: page.path,
+  path: modelLandingPath(page.brand, page.model) || page.path,
+}));
 
 // Обзоры, у которых 26.08.2026 сменился адрес: китайские названия моделей заменены
 // беларускими (`config/model-names-by.mjs`), а адрес собирается из названия. Старые
@@ -6425,9 +6434,18 @@ export const MODEL_PAGE_REDIRECTS = Object.freeze({
 });
 
 /** Новый адрес обзора по старому или `null`, если адрес не менялся. */
+/** Обзор по прежнему слугу адреса `/models/<slug>` — или null. */
+export const findModelPageBySlug = (slug) => MODEL_PAGES.find((page) => page.slug === String(slug || "").trim()) || null;
+
+/**
+ * Куда уводит прежний адрес обзора `/models/<slug>`: на каталожную страницу модели.
+ * Понимает и слуги, переименованные раньше (MODEL_PAGE_REDIRECTS), — переброс один,
+ * сразу на конечный адрес, без цепочки.
+ */
 export const modelPageRedirect = (slug) => {
-  const target = MODEL_PAGE_REDIRECTS[String(slug || "").trim()];
-  return target ? `/models/${target}` : null;
+  const wanted = String(slug || "").trim();
+  const page = findModelPageBySlug(MODEL_PAGE_REDIRECTS[wanted] || wanted);
+  return page ? page.path : null;
 };
 
 export const findModelPage = (path) => MODEL_PAGES.find((page) => page.path === path) || null;
