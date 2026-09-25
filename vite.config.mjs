@@ -3,6 +3,9 @@ import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import { trimModelPages } from "./scripts/vite-trim-model-pages.mjs";
 
+// Сервер разработки — для расчёта популярных моделей теми же модулями, что и сборка.
+let server = null;
+
 export default defineConfig({
   base: "/",
   build: {
@@ -54,6 +57,30 @@ export default defineConfig({
     // приезжают внутри скрипта приложения, поэтому первая отрисовка успевает
     // пройти без них. Чтобы локальная версия вела себя как боевая, здесь те же
     // файлы дополнительно подключаются ссылкой. В сборку это не попадает.
+    // Популярные модели на главной во время разработки.
+    //
+    // В собранном сайте их список встроен в главную заранее (scripts/generate-seo-pages.mjs
+    // → prerender-home.mjs), а локальная страница — пустая заготовка, и блока на ней не
+    // было. Здесь тот же расчёт делается из локальной базы при открытии главной, и
+    // данные встраиваются так же, как в сборке. В сборку это не попадает.
+    {
+      name: "dev-home-popular-models",
+      apply: "serve",
+      async transformIndexHtml(html, ctx) {
+        if (new URL(ctx.originalUrl || ctx.path, "http://localhost").pathname !== "/") return;
+        try {
+          const facts = await fetch("http://127.0.0.1:8787/api/model-facts").then((answer) => (answer.ok ? answer.json() : null));
+          const { homePopularModels } = await server.ssrLoadModule("/src/home-popular-models.js");
+          const { models, brands } = homePopularModels(facts?.models || []);
+          if (!models.length) return;
+          const data = JSON.stringify({ popularModels: models, brandModelTabs: brands }).replace(/</g, "\\u003c");
+          return [{ tag: "script", children: `Object.assign(window.__boot = window.__boot || {}, ${data});`, injectTo: "head" }];
+        } catch {
+          // API ещё не поднялся — главная откроется без блока, как раньше.
+        }
+      },
+      configureServer(devServer) { server = devServer; },
+    },
     {
       name: "dev-blocking-css",
       apply: "serve",

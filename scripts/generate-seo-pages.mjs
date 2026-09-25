@@ -39,7 +39,7 @@ import { BLOG_TEXTS, blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
 // расходилась бы со статической при каждой правке.
-import { carTitle as carNameTitle } from "../src/car-title.js";
+import { homePopularModels } from "../src/home-popular-models.js";
 import { IMAGE_WIDTH_SCHEMA, carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, linkifyText, listingNumber, number, photoHref, plural, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -1035,38 +1035,14 @@ function publicPageBody(page) {
 // Живые данные читаем до отрисовки страниц: витрина и счётчики моделей нужны главной.
 const live = await readLiveCatalog();
 
-// Популярные модели для главной: сорок восемь моделей с наибольшим числом машин.
-// До 25.09.2026 с главной на модели не вело ни одной ссылки (у IM4CAR — 370).
-// Главная собирается при сборке (scripts/prerender-home.mjs), поэтому список считаем
-// здесь же и кладём рядом со сборкой: он попадёт и в готовую разметку, и в данные для
-// оживления — первый кадр в браузере совпадёт с сервером.
-const POPULAR_MODELS_ON_HOME = 48;
-// Вкладки марок: как у IM4CAR, главная — оглавление каталога. Крупные марки со всеми
-// своими моделями (от трёх машин), числом машин и ценой «от» — ссылками на страницы
-// моделей. До 25.09.2026 с главной на модели не вело ни одной ссылки, у них — 387.
-const BRAND_TABS_ON_HOME = 16;
-const modelEntries = [...live.models]
-  .map(([key, count]) => {
-    const [brand, model] = key.split("|");
-    const review = MODEL_PAGES.find((page) => page.brand === brand && page.model === model);
-    const price = Number(live.modelPrices?.get(key)) || null;
-    return { brand, path: modelLandingPath(brand, model), name: review?.name || carNameTitle(brand, model), count: Number(count) || 0, priceFrom: price ? Math.round(price / 50) * 50 : null };
-  })
-  .filter((item) => item.path && item.count >= 3)
-  .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, "ru"));
-const popularModels = modelEntries.slice(0, POPULAR_MODELS_ON_HOME).map(({ brand, ...item }) => item);
-const brandTotals = new Map();
-for (const item of modelEntries) brandTotals.set(item.brand, (brandTotals.get(item.brand) || 0) + item.count);
-const brandModelTabs = [...brandTotals]
-  .filter(([brand]) => brandLandingPath(brand))
-  .sort((left, right) => right[1] - left[1])
-  .slice(0, BRAND_TABS_ON_HOME)
-  .map(([brand, total]) => ({
-    brand,
-    path: brandLandingPath(brand),
-    total,
-    models: modelEntries.filter((item) => item.brand === brand).map(({ brand: _brand, ...item }) => item),
-  }));
+// Популярные модели для главной (src/home-popular-models.js). Главная собирается при
+// сборке (scripts/prerender-home.mjs), поэтому список считаем здесь же и кладём рядом со
+// сборкой: он попадёт и в готовую разметку, и в данные для оживления — первый кадр в
+// браузере совпадёт с сервером.
+const { models: popularModels, brands: brandModelTabs } = homePopularModels([...live.models].map(([key, count]) => {
+  const [brand, model] = key.split("|");
+  return { brand, model, count, priceMin: live.modelPrices?.get(key) };
+}));
 // Витрина главной — те же машины, что в списке для поисковика: приложение рисует их
 // в готовой разметке, и робот видит на главной машины с ценами, а не пустой блок.
 // Карточка витрины показывает не больше пяти кадров (HoverImagePreview) — остальные
