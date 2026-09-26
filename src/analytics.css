@@ -106,20 +106,20 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
    а не спорило с ним. У выбранной кнопки цвет наследуется от неё. */
 .analytics-visits-filter button b { color:var(--muted); font-weight:800; font-variant-numeric:tabular-nums; }
 .analytics-visits-filter button.active b { color:inherit; opacity:.75; }
-/* Полоска «Целевые / Квота»: две линии, длина — доля заходов. Кнопка выше самой
+/* Полоска «Целевые / Квота»: две линии, длина — доля заходов. Стоит всегда у
+   правого края панели: панель инструментов растянута, а полоска прижата вправо. Кнопка выше самой
    линии, чтобы по тонкой полосе было легко попасть курсором и пальцем. Цвета по
    образцу Сергея: слева фирменный красный, справа салатовый; в светлой теме салатовый
    темнее, иначе на белом его не видно. */
 .analytics-page { --quota-split-green:#65a30d; }
 html[data-theme="dark"] .analytics-page { --quota-split-green:#a3e635; }
-.analytics-visits-toolbar { flex-wrap:wrap; }
-.analytics-quota-split { width:240px; max-width:100%; display:flex; align-items:center; gap:6px; margin-left:14px; }
+.analytics-visits-toolbar { flex:1; flex-wrap:wrap; }
+.analytics-quota-split { width:140px; max-width:100%; display:flex; align-items:center; gap:6px; margin-left:auto; }
 .analytics-quota-split-part { position:relative; flex:1 1 0; min-width:10px; height:22px; padding:0; border:0; background:transparent; cursor:default; }
 .analytics-quota-split-part::before { content:""; position:absolute; inset:50% 0 auto; height:4px; margin-top:-2px; border-radius:999px; background:var(--accent); transition:height var(--motion-fast) var(--motion-ease), margin var(--motion-fast) var(--motion-ease); }
 .analytics-quota-split-part.is-quota::before { background:var(--quota-split-green); }
 .analytics-quota-split-part:hover::before, .analytics-quota-split-part:focus-visible::before { height:6px; margin-top:-3px; }
 .analytics-quota-split-part:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; }
-@media (max-width:620px) { .analytics-quota-split { width:100%; margin-left:0; } }
 .analytics-visits-filter-count { min-width:20px; color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums; }
 .analytics-visits-table th:first-child, .analytics-visits-table td:first-child { width:72px; }
 .analytics-visits-table th:nth-child(3), .analytics-visits-table td:nth-child(3) { width:52px; }
