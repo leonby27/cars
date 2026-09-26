@@ -22,6 +22,7 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
   const sourceLines = metric === "visits" ? [
     { id:"yandex", y:"yandexY", label:"Яндекс" },
     { id:"google", y:"googleY", label:"Google" },
+    { id:"chatgpt", y:"chatgptY", label:"ChatGPT" },
   ].filter((item) => sources.includes(item.id)) : [];
   return <div className="analytics-line-chart" aria-label={labels.chart}>
     <div className="analytics-chart-axis-title">{labels.axis}</div>

@@ -6,6 +6,7 @@ import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, Instagr
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
+import { quotaVisitSplit } from "./analytics-quota-pages.js";
 import { analyticsUpdatesUrl, sectionFreshCount, sectionTabs, watchAnalyticsExit } from "./analytics-updates.js";
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
 import { socialGeneration } from "./social-generations.js";
@@ -323,8 +324,9 @@ function OverviewSection({ data, period, updates = {} }) {
   const [trendMetric, setTrendMetric] = usePersistedChoice("analytics:trend-metric", trendMetricIds, "visits");
   const [showYandex, setShowYandex] = usePersistedChoice("analytics:trend-yandex", ["0", "1"], "0");
   const [showGoogle, setShowGoogle] = usePersistedChoice("analytics:trend-google", ["0", "1"], "0");
+  const [showChatgpt, setShowChatgpt] = usePersistedChoice("analytics:trend-chatgpt", ["0", "1"], "0");
   const daily = trendData?.daily || [];
-  const enabledSources = [showYandex === "1" ? "yandex" : "", showGoogle === "1" ? "google" : ""].filter(Boolean);
+  const enabledSources = [showYandex === "1" ? "yandex" : "", showGoogle === "1" ? "google" : "", showChatgpt === "1" ? "chatgpt" : ""].filter(Boolean);
   // Кроме смены периода график перезапрашивается и на каждом круге самообновления
   // страницы: `generatedAt` у свежего среза другой. Пока летит новый ответ, на экране
   // остаётся прежний график — мигания нет.
@@ -373,6 +375,7 @@ function OverviewSection({ data, period, updates = {} }) {
             {trendMetric === "visits" && <>
               <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
               <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
+              <label className="analytics-chart-source-toggle is-chatgpt"><input type="checkbox" checked={showChatgpt === "1"} onChange={(event) => setShowChatgpt(event.target.checked ? "1" : "0")} /><span>ChatGPT</span></label>
             </>}
           </div>
         </div>
@@ -490,17 +493,14 @@ const devicePlatformNames = {
   linux:"Linux",
 };
 
-function VisitDevice({ device, platform }) {
+// Подсказка при наведении: общая у иконки устройства и у полоски «Целевые / Квота».
+// Координаты ставим сами и выносим подсказку в body — иначе её обрезала бы панель
+// с прокруткой таблицы.
+function useHoverTooltip(label) {
   const anchor = useRef(null);
   const tooltip = useRef(null);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState(null);
-  const known = device === "mobile" || device === "desktop";
-  const mobile = device === "mobile";
-  const kind = mobile ? "Телефон или планшет" : "Компьютер";
-  const system = devicePlatformNames[platform] || "";
-  const label = known ? `${kind} · ${system || "Система не записана"}` : system || "Тип устройства не записан";
-  const Glyph = mobile ? DeviceMobile : Desktop;
   useLayoutEffect(() => {
     if (!open) return;
     const rect = anchor.current.getBoundingClientRect();
@@ -526,15 +526,63 @@ function VisitDevice({ device, platform }) {
       window.removeEventListener("resize", close);
     };
   }, [open]);
+  const handlers = {
+    onMouseEnter:() => setOpen(true), onMouseLeave:() => setOpen(false),
+    onFocus:() => setOpen(true), onBlur:() => setOpen(false), onClick:() => setOpen(true),
+  };
+  const node = open && createPortal(<span ref={tooltip} role="tooltip" className="detail-action-tooltip is-visible"
+    style={{ left:position?.left ?? 0, top:position?.top ?? 0, visibility:position ? "visible" : "hidden" }}>{label}</span>, document.body);
+  return { anchor, handlers, node };
+}
+
+function VisitDevice({ device, platform }) {
+  const known = device === "mobile" || device === "desktop";
+  const mobile = device === "mobile";
+  const kind = mobile ? "Телефон или планшет" : "Компьютер";
+  const system = devicePlatformNames[platform] || "";
+  const label = known ? `${kind} · ${system || "Система не записана"}` : system || "Тип устройства не записан";
+  const Glyph = mobile ? DeviceMobile : Desktop;
+  const { anchor, handlers, node } = useHoverTooltip(label);
   return <>
-    <button ref={anchor} type="button" className={`analytics-visit-device is-${known ? device : "unknown"}`} aria-label={label}
-      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(true)}>
+    <button ref={anchor} type="button" className={`analytics-visit-device is-${known ? device : "unknown"}`} aria-label={label} {...handlers}>
       {known ? <Glyph size={18} aria-hidden="true" /> : "—"}
     </button>
-    {open && createPortal(<span ref={tooltip} role="tooltip" className="detail-action-tooltip is-visible"
-      style={{ left:position?.left ?? 0, top:position?.top ?? 0, visibility:position ? "visible" : "hidden" }}>{label}</span>, document.body)}
+    {node}
   </>;
+}
+
+const visitsWord = (count) => {
+  const tens = count % 100;
+  const ones = count % 10;
+  if (tens >= 11 && tens <= 14) return "заходов";
+  if (ones === 1) return "заход";
+  if (ones >= 2 && ones <= 4) return "захода";
+  return "заходов";
+};
+
+// Одна часть полоски: ширина — доля заходов, в подсказке название, процент и число.
+function QuotaSplitPart({ kind, label, count, total }) {
+  const share = total ? Math.round((count / total) * 100) : 0;
+  const text = `${label} · ${share}% · ${formatNumber(count)} ${visitsWord(count)}`;
+  const { anchor, handlers, node } = useHoverTooltip(text);
+  return <>
+    <button ref={anchor} type="button" className={`analytics-quota-split-part is-${kind}`} style={{ flexGrow:count }} aria-label={text} {...handlers} />
+    {node}
+  </>;
+}
+
+/* Полоска справа от переключателя источников: слева «Целевые» — заходы на все страницы,
+   кроме квоты, справа «Квота» — только на страницы о квоте (список в
+   analytics-quota-pages.js). Считает то, что сейчас в таблице: при выборе «Яндекс»
+   показывает расклад только по Яндексу. Пустую часть не рисуем, иначе от неё
+   оставалась бы точка без смысла. */
+function QuotaSplit({ visits }) {
+  const { target, quota, total } = quotaVisitSplit(visits);
+  if (!total) return null;
+  return <div className="analytics-quota-split" aria-label="Целевые заходы и заходы на страницы квоты">
+    {target > 0 && <QuotaSplitPart kind="target" label="Целевые" count={target} total={total} />}
+    {quota > 0 && <QuotaSplitPart kind="quota" label="Квота" count={quota} total={total} />}
+  </div>;
 }
 
 function VisitRow({ visit, number, unread }) {
@@ -605,6 +653,7 @@ function VisitsSection({ visits, total, unread }) {
               </button>
             ))}
           </div>}
+          <QuotaSplit visits={filteredVisits.map(({ visit }) => visit)} />
         </div>
       </div>
       <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Просмотров</th><th>Дата</th></tr></thead>
@@ -942,7 +991,7 @@ function AnalyticsNavigationItems({ section, updates, onChoose, mobile = false }
       <button key={item.id} type="button" role={mobile ? "menuitem" : undefined} className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => onChoose(item.id)}>
         <Icon size={21} weight="duotone" />
         <span>{item.label}</span>
-        {fresh ? <b className="analytics-navigation-fresh" title={`Нового с прошлого захода: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}
+        {fresh ? <b className={`analytics-navigation-fresh${item.id === "leads" ? " is-leads" : ""}`} title={`Нового с прошлого захода: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}
       </button>
     );
   });

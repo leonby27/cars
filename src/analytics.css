@@ -1,4 +1,8 @@
 .analytics-page, .analytics-login { --analytics-block-radius:24px; }
+/* Счётчики нового («+1» у разделов, карточек и строк заходов) — инверсия текста:
+   в тёмной теме белая плашка с тёмной цифрой, в светлой наоборот. Красный оставлен
+   только заявкам, чтобы они выделялись среди остального нового. */
+:root { --fresh-bg:var(--ink); --fresh-ink:var(--panel); }
 .analytics-page { width:min(1240px,calc(100% - 48px)); margin-inline:auto; min-height:680px; padding-block:20px 72px; font-size:14px; }
 .analytics-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:20px; }
 .analytics-heading > div:first-child > span, .analytics-login-card > span { color:var(--accent); font-weight:800; }
@@ -18,7 +22,7 @@
 .analytics-overview-kpis { grid-template-columns:repeat(3,1fr); }
 .analytics-contact-kpis { grid-template-columns:repeat(3,1fr); }
 .analytics-kpis .analytics-contact-value { display:flex; align-items:center; gap:10px; }
-.analytics-kpis .analytics-contact-fresh { display:inline-grid; place-items:center; min-height:25px; padding:0 8px; border-radius:8px; background:var(--accent); color:#fff; font-size:16px; font-weight:800; letter-spacing:0; line-height:1; font-variant-numeric:tabular-nums; }
+.analytics-kpis .analytics-contact-fresh { display:inline-grid; place-items:center; min-height:25px; padding:0 8px; border-radius:8px; background:var(--fresh-bg); color:var(--fresh-ink); font-size:16px; font-weight:800; letter-spacing:0; line-height:1; font-variant-numeric:tabular-nums; }
 .analytics-kpis article, .analytics-panel, .analytics-login-card { border:0; border-radius:var(--analytics-block-radius); background:var(--panel); }
 html[data-theme="light"] .analytics-kpis article,
 html[data-theme="light"] .analytics-panel,
@@ -69,6 +73,8 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-chart-source-toggle { --source-color:var(--ink); min-height:34px; display:inline-flex; align-items:center; gap:7px; color:var(--muted); font-weight:700; cursor:pointer; white-space:nowrap; }
 .analytics-chart-source-toggle.is-yandex { --source-color:#b98500; }
 .analytics-chart-source-toggle.is-google { --source-color:#4285f4; }
+/* ChatGPT — его фирменный зелёный; в тёмной теме светлее, как и жёлтый Яндекса. */
+.analytics-chart-source-toggle.is-chatgpt { --source-color:var(--chart-chatgpt); }
 .analytics-chart-source-toggle input { width:16px; height:16px; margin:0; accent-color:var(--source-color); cursor:pointer; }
 .analytics-chart-source-toggle:has(input:checked) { color:var(--source-color); }
 .analytics-line-chart { margin-top:16px; }
@@ -100,6 +106,20 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
    а не спорило с ним. У выбранной кнопки цвет наследуется от неё. */
 .analytics-visits-filter button b { color:var(--muted); font-weight:800; font-variant-numeric:tabular-nums; }
 .analytics-visits-filter button.active b { color:inherit; opacity:.75; }
+/* Полоска «Целевые / Квота»: две линии, длина — доля заходов. Кнопка выше самой
+   линии, чтобы по тонкой полосе было легко попасть курсором и пальцем. Цвета по
+   образцу Сергея: слева фирменный красный, справа салатовый; в светлой теме салатовый
+   темнее, иначе на белом его не видно. */
+.analytics-page { --quota-split-green:#65a30d; }
+html[data-theme="dark"] .analytics-page { --quota-split-green:#a3e635; }
+.analytics-visits-toolbar { flex-wrap:wrap; }
+.analytics-quota-split { width:240px; max-width:100%; display:flex; align-items:center; gap:6px; margin-left:14px; }
+.analytics-quota-split-part { position:relative; flex:1 1 0; min-width:10px; height:22px; padding:0; border:0; background:transparent; cursor:default; }
+.analytics-quota-split-part::before { content:""; position:absolute; inset:50% 0 auto; height:4px; margin-top:-2px; border-radius:999px; background:var(--accent); transition:height var(--motion-fast) var(--motion-ease), margin var(--motion-fast) var(--motion-ease); }
+.analytics-quota-split-part.is-quota::before { background:var(--quota-split-green); }
+.analytics-quota-split-part:hover::before, .analytics-quota-split-part:focus-visible::before { height:6px; margin-top:-3px; }
+.analytics-quota-split-part:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; }
+@media (max-width:620px) { .analytics-quota-split { width:100%; margin-left:0; } }
 .analytics-visits-filter-count { min-width:20px; color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums; }
 .analytics-visits-table th:first-child, .analytics-visits-table td:first-child { width:72px; }
 .analytics-visits-table th:nth-child(3), .analytics-visits-table td:nth-child(3) { width:52px; }
@@ -114,7 +134,7 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-visit-device:focus-visible { outline:2px solid var(--focus-ring); outline-offset:4px; }
 .analytics-visit-device.is-unknown { color:var(--muted-contrast,var(--muted)); }
 .analytics-visit-number { display:inline-grid; min-width:34px; height:24px; place-items:center; padding:0 7px; box-sizing:border-box; border-radius:999px; font-variant-numeric:tabular-nums; }
-.analytics-visit-number.is-unread { background:var(--accent); color:#fff; font-weight:800; }
+.analytics-visit-number.is-unread { background:var(--fresh-bg); color:var(--fresh-ink); font-weight:800; }
 .analytics-visit-source { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
 .analytics-source-logo { width:20px; height:20px; display:inline-grid; flex:none; place-items:center; font:900 17px/1 Arial,sans-serif; font-style:normal; }
 .analytics-source-logo.is-yandex { color:#fc3f1d; }
@@ -136,7 +156,7 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 .analytics-sort span { font-size:12px; }
 .analytics-sort:focus-visible { outline:3px solid var(--focus-ring); outline-offset:3px; border-radius:4px; }
 .analytics-panel td a { color:var(--ink); font-weight:700; text-decoration-color:color-mix(in srgb,var(--accent) 45%,transparent); text-underline-offset:3px; }
-.analytics-range .analytics-tab-count { display:inline-grid; min-width:16px; height:16px; place-items:center; margin-left:5px; padding:0 3px; border-radius:99px; background:var(--accent); color:#fff; font-size:10px; font-weight:800; line-height:1; }
+.analytics-range .analytics-tab-count { display:inline-grid; min-width:16px; height:16px; place-items:center; margin-left:5px; padding:0 3px; border-radius:99px; background:var(--fresh-bg); color:var(--fresh-ink); font-size:10px; font-weight:800; line-height:1; }
 .analytics-trend + .analytics-panel { margin-top:16px; }
 /* Запрос, на который каталогу нечего ответить: подсвечиваем строку фоном. */
 .analytics-panel tr.analytics-row-warning { background:var(--accent-soft); }
@@ -176,11 +196,13 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
 .analytics-split-count { display:inline-flex; align-items:center; gap:5px; margin-left:auto; color:var(--muted); font-weight:800; font-variant-numeric:tabular-nums; line-height:1; white-space:nowrap; }
 .analytics-split-count > span { color:inherit; font:inherit; }
 .analytics-split-count > i { color:var(--muted); font-style:normal; font-size:.8em; }
-.analytics-split-count > b { min-width:22px; height:22px; display:inline-grid; place-items:center; box-sizing:border-box; padding:0 6px; border-radius:999px; background:var(--accent); color:#fff; font-size:13px; font-weight:800; line-height:1; }
-.analytics-navigation-fresh { min-width:22px; height:22px; display:grid; place-items:center; margin-left:auto; padding:0 6px; box-sizing:border-box; border-radius:999px; background:var(--accent); color:#fff; font-size:13px; font-weight:800; line-height:1; }
+.analytics-split-count > b { min-width:22px; height:22px; display:inline-grid; place-items:center; box-sizing:border-box; padding:0 6px; border-radius:999px; background:var(--fresh-bg); color:var(--fresh-ink); font-size:13px; font-weight:800; line-height:1; }
+.analytics-navigation-fresh { min-width:22px; height:22px; display:grid; place-items:center; margin-left:auto; padding:0 6px; box-sizing:border-box; border-radius:999px; background:var(--fresh-bg); color:var(--fresh-ink); font-size:13px; font-weight:800; line-height:1; }
+/* Заявки — единственное, что остаётся красным: их нельзя пропустить. */
+.analytics-navigation-fresh.is-leads { background:var(--accent); color:#fff; }
 .analytics-kpi-split-count { margin-left:0; gap:8px; color:var(--ink); font-size:inherit; }
 .analytics-kpi-split-count > span { color:var(--ink); }
-.analytics-kpi-split-count > i { color:var(--accent); font-size:18px; }
+.analytics-kpi-split-count > i { color:var(--muted); font-size:18px; }
 .analytics-kpi-split-count > b { min-width:27px; height:24px; padding-inline:6px; font-size:17px; }
 .analytics-sidebar-extra { margin-top:12px; }
 .analytics-sidebar-social { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }
@@ -378,6 +400,8 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
 
 .analytics-search-tables { display: grid; gap: 16px; }
 
+.analytics-trend { --chart-chatgpt:#0e8f6f; }
+html[data-theme="dark"] .analytics-trend { --chart-chatgpt:#19c37d; }
 .analytics-line-chart { --chart-highlight:var(--ink); --chart-yandex:#b98500; --chart-google:#4285f4; }
 html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-yandex:#f4d90e; }
 .analytics-chart-axis-title { margin-bottom:4px; color:var(--muted); font-size:12px; }
@@ -391,6 +415,7 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .analytics-chart-source { animation:analytics-chart-series-in .18s ease-out both; }
 .analytics-chart-source.is-yandex { stroke:var(--chart-yandex); }
 .analytics-chart-source.is-google { stroke:var(--chart-google); }
+.analytics-chart-source.is-chatgpt { stroke:var(--chart-chatgpt); }
 .analytics-chart-point { position:absolute; width:24px; height:24px; min-width:0; min-height:0; margin:0; padding:0; display:grid; place-items:center; border:0; background:transparent; color:var(--accent); transform:translate(-50%,-50%); cursor:pointer; border-radius:50%; corner-shape:round; }
 .analytics-chart-point.is-highlighted { color:var(--chart-highlight); }
 .analytics-chart-marker { display:block; width:10px; height:10px; box-sizing:border-box; border:2px solid currentColor; border-radius:50%; corner-shape:round; background:var(--panel); }
@@ -398,6 +423,7 @@ html[data-theme="dark"] .analytics-line-chart { --chart-highlight:#fff; --chart-
 .analytics-chart-source-point .analytics-chart-marker { width:8px; height:8px; }
 .analytics-chart-source-point.is-yandex { color:var(--chart-yandex); }
 .analytics-chart-source-point.is-google { color:var(--chart-google); }
+.analytics-chart-source-point.is-chatgpt { color:var(--chart-chatgpt); }
 .analytics-chart-point:hover, .analytics-chart-point:focus-visible { z-index:3; }
 .analytics-chart-point:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .analytics-chart-tooltip { display:none; position:absolute; z-index:4; bottom:calc(100% + 4px); left:50%; transform:translateX(-50%); padding:9px 12px; border-radius:9px; background:var(--ink); color:var(--panel); box-shadow:0 4px 16px #0002; font-size:13px; line-height:1.5; white-space:nowrap; text-align:left; pointer-events:none; }
