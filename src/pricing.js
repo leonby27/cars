@@ -3,7 +3,7 @@ import { engineVolume } from "./engine-spec.js";
 import { isEvQuotaOver } from "./ev-quota.js";
 
 export const PRICING = {
-  usdByn:3.0316, cnyBynPer10:4.5305, eurByn:3.4487, rateDate:"25.09.2026",
+  usdByn:3.0316, cnyBynPer10:4.5305, eurByn:3.4487, rateDate:"26.09.2026",
   serviceByn:2000,
   // «Подбор и сопровождение» — ориентир: точную сумму называют после расчёта
   // конкретной машины. serviceFeeEnabled:false убирает строку и сумму из итога.
