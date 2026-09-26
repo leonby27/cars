@@ -867,6 +867,8 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
 // таблицы приводятся к общей форме здесь, а не в браузере.
 const LEADS_LIMIT = 200;
 
+const leadSourceUrl = (value) => (/^https?:\/\//.test(String(value || "")) ? String(value).replace(/\.md$/, ".html") : "");
+
 const leadCar = (row) => (row.listing_id ? {
   id:row.listing_id,
   title:row.title || row.listing_id,
@@ -877,6 +879,8 @@ const leadCar = (row) => (row.listing_id ? {
   mileage:Number(row.mileage_km) || 0,
   estimatedTotalUsd:Number(row.estimated_total_usd) || null,
   image:row.image || null,
+  // Ссылка на объявление в Che168 — менеджер открывает машину у источника прямо из заявки.
+  sourceUrl:leadSourceUrl(row.source_url),
   // Объявление могли снять с продажи после заявки — тогда join не найдёт строку,
   // но идентификатор всё равно показываем, чтобы заявка не осталась безымянной.
   missing:!row.title,
@@ -897,7 +901,7 @@ const draftKind = (row) => {
 export async function getAnalyticsLeads() {
   const [draftsResult, ordersResult] = await Promise.all([
     pool.query(`SELECT d.id,d.listing_id,d.customer_name,d.contact,d.calculation,d.status,d.created_at,
-      l.title,l.estimated_total_usd,l.mileage_km,l.city,
+      l.title,l.estimated_total_usd,l.mileage_km,l.city,l.source_url,
       v.brand,v.model,v.model_year,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=d.listing_id ORDER BY m.position LIMIT 1) AS image
       FROM order_drafts d
@@ -910,7 +914,7 @@ export async function getAnalyticsLeads() {
       o.inspection_status,o.contract_status,o.payment_status,o.created_at,o.updated_at,
       a.name AS account_name,a.phone AS account_phone,a.email AS account_email,a.telegram AS account_telegram,
       a.city AS account_city,a.preferred_contact,
-      l.title,l.estimated_total_usd,l.mileage_km,l.city,
+      l.title,l.estimated_total_usd,l.mileage_km,l.city,l.source_url,
       v.brand,v.model,v.model_year,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=o.listing_id ORDER BY m.position LIMIT 1) AS image
       FROM customer_orders o

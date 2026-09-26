@@ -1,7 +1,9 @@
+import "./storage-guard.js";
 import React from "react";
 import { captureCatalogFallback } from "./catalog-fallback.js";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { App } from "./App.jsx";
+import { CrashGuard } from "./crash-guard.jsx";
 import { installRussianTypography } from "./typography.js";
 import { loadModelText } from "./model-text-load.js";
 import { findModelPage } from "./model-pages.js";
@@ -52,7 +54,9 @@ const dropSeoBody = () => {
 function start() {
   const app = (
     <React.StrictMode>
-      <App />
+      <CrashGuard>
+        <App />
+      </CrashGuard>
     </React.StrictMode>
   );
   // Главную страницу сборка кладёт в #root уже нарисованной (scripts/prerender-home.mjs):
@@ -83,7 +87,9 @@ function start() {
       root,
       <React.StrictMode>
         <AfterHydration onReady={ready}>
-          <App />
+          <CrashGuard>
+            <App />
+          </CrashGuard>
         </AfterHydration>
       </React.StrictMode>,
     );

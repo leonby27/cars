@@ -35,7 +35,9 @@
     <title>Б/у авто из Китая в Беларусь — доставка и проверка | abcars.by</title>
     <script>
       (() => {
-        const savedTheme = localStorage.getItem("abcars-theme");
+        let savedTheme = null;
+        // Запрет хранить данные сайта бросает ошибку уже на чтении — тогда тема по системе.
+        try { savedTheme = localStorage.getItem("abcars-theme"); } catch {}
         const theme = savedTheme === "light" || savedTheme === "dark" ? savedTheme : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
         document.documentElement.dataset.theme = theme;
         document.documentElement.style.colorScheme = theme;

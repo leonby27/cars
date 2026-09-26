@@ -57,6 +57,7 @@ export function leadMessage(lead) {
     lines.push("");
     lines.push(`Машина: ${lead.car.title}${facts ? ` (${facts})` : ""}`);
     lines.push(`${siteUrl}/cars/${listingNumber(lead.car.id)}`);
+    if (lead.car.sourceUrl) lines.push(`Che168: ${lead.car.sourceUrl}`);
   } else if (lead.listingId) {
     // Объявление успели снять с продажи — заявка всё равно должна назвать машину.
     lines.push("");
@@ -93,12 +94,13 @@ async function isStaffContact(contact) {
 async function carFacts(listingId) {
   if (!listingId) return null;
   const result = await pool.query(
-    `SELECT l.id, l.title, l.mileage_km, l.estimated_total_usd
+    `SELECT l.id, l.title, l.mileage_km, l.estimated_total_usd, l.source_url
       FROM listings l WHERE l.id = $1`,
     [listingId],
   );
   const row = result.rows[0];
-  return row ? { id:row.id, title:row.title, mileage:Number(row.mileage_km) || 0, price:Number(row.estimated_total_usd) || 0 } : null;
+  const sourceUrl = /^https?:\/\//.test(String(row?.source_url || "")) ? String(row.source_url).replace(/\.md$/, ".html") : "";
+  return row ? { id:row.id, title:row.title, mileage:Number(row.mileage_km) || 0, price:Number(row.estimated_total_usd) || 0, sourceUrl } : null;
 }
 
 // Сообщения уходят по очереди: библиотека отправки держит недоставленное в файле, и

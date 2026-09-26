@@ -1128,7 +1128,7 @@ function applyPageHead({ title, description, canonical, indexable }) {
   canonicalLink.href = canonical;
 }
 
-function ClientSeo({ path, car, landing }) {
+function ClientSeo({ path, car, landing, carPending = false }) {
   // Страница списка раздела («?page=2») — свой первоисточник и свой заголовок, как
   // отдаёт сервер; номер читаем при каждой отрисовке, а не только при смене пути.
   const listPageRaw = isCatalogPath(path) ? String(new URLSearchParams(window.location.search).get("page") || "") : "";
@@ -1142,6 +1142,8 @@ function ClientSeo({ path, car, landing }) {
       if (serverPath === `${path.replace(/\/+$/, "") || "/"}${listPage ? `?page=${listPage}` : ""}`) return;
       delete document.documentElement.dataset.seoPath;
     }
+    // Машина ещё грузится — заголовок «Страница не найдена» ставить рано.
+    if (carPending && !car) return;
     const privatePage = ["/favorites", "/searches", "/login", "/register", "/account", "/analytics"].includes(path) || path.startsWith("/orders/");
     const detailTitle = car?.title || (car ? carTitle(car.brand, car.model, car.year) : null);
     // Заголовок и описание страницы марки, типа двигателя или кузова лежат в её
@@ -1171,7 +1173,7 @@ function ClientSeo({ path, car, landing }) {
       || Boolean(landing?.kind === "model" && landing.facts && !landing.review && (Number(landing.facts.total) || 0) < 3);
     const indexable = indexingEnabled && !privatePage && !emptyLanding && Boolean(routeSeo[path] || detailTitle || landingSeo);
     applyPageHead({ title, description, canonical, indexable });
-  }, [path, car, landing, listPage]);
+  }, [path, car, landing, listPage, carPending]);
   return null;
 }
 
@@ -1589,12 +1591,12 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
           </button>
           <button
             className={`icon-label account-link${path === "/account" || path === "/login" || path === "/register" ? " selected" : ""}`}
-            aria-label={user ? `Личный кабинет — ${user.name.split(" ")[0]}` : "Войти"}
+            aria-label={user ? `Личный кабинет — ${String(user.name || "").split(" ")[0] || "Кабинет"}` : "Войти"}
             aria-current={path === "/account" ? "page" : undefined}
             onClick={() => user ? navigate("/account") : navigate("/login", { replace:true, preserveScroll:true })}
           >
             <UserCircle size={22} weight={user ? "fill" : "bold"} />
-            <span>{user ? user.name.split(" ")[0] : "Войти"}</span>
+            <span>{user ? String(user.name || "").split(" ")[0] || "Кабинет" : "Войти"}</span>
           </button>
         </div>
       </div>
@@ -4115,9 +4117,10 @@ function useModelText(slug) {
     setText(ready);
     if (ready) return undefined;
     let alive = true;
+    // Файл не пришёл (сеть) — страница остаётся без текста, следующий заход попробует снова.
     loadModelText(slug).then((loaded) => {
       if (alive) setText(loaded);
-    });
+    }).catch(() => {});
     return () => {
       alive = false;
     };
@@ -4393,7 +4396,12 @@ const brandCountsKey = "abcars-brand-counts";
 const readStoredBrandCounts = () => {
   try {
     const stored = JSON.parse(window.localStorage.getItem(brandCountsKey) || "null");
-    return stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+    // Запись могла оставить прежняя версия сайта: берём только списки марок с именем,
+    // иначе плитка марок на главной падала бы на первом кадре.
+    return Object.fromEntries(Object.entries(stored)
+      .filter(([, brands]) => Array.isArray(brands))
+      .map(([type, brands]) => [type, brands.filter((item) => typeof item?.brand === "string")]));
   } catch {
     return {};
   }
@@ -7330,7 +7338,9 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
 
 function VehicleGallery({ car }) {
   if (car.available === false) return <SoldVehiclePhoto car={car} detail />;
-  return <ActiveVehicleGallery car={car} />;
+  // Ключ по машине: при переходе с машины на машину карточка остаётся той же, и
+  // без него галерея держала номер снимка прежней машины («16 из 5», пустой кадр).
+  return <ActiveVehicleGallery key={car.id} car={car} />;
 }
 
 function ActiveVehicleGallery({ car }) {
@@ -8084,14 +8094,17 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   const openModel = () => openFilteredCatalog(true);
   // Адреса крошек — страницы марки и модели; адрес с фильтром остаётся только
   // у марки без своего раздела (туда же ведёт и нажатие).
-  const brandCrumbHref = brandLandingPath(car.brand) || `/catalog?brand=${encodeURIComponent(car.brand)}`;
-  const modelCrumbHref = modelLandingPath(car.brand, car.model) || `/catalog?brand=${encodeURIComponent(car.brand)}&model=${encodeURIComponent(car.model)}`;
   const { openQuickView, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
   const openSimilarCar = (candidate) => {
     if (openQuickView(candidate)) return;
     navigate(carHref(candidate));
   };
+  // Машины может ещё не быть: при переходе внутри сайта первый кадр рисуется до
+  // того, как загрузчик карточки успел включиться. Всё, что читает car, — ниже
+  // этой проверки, иначе падение роняет всю страницу в чёрный экран.
   if (!car) return <NotFound navigate={navigate} />;
+  const brandCrumbHref = brandLandingPath(car.brand) || `/catalog?brand=${encodeURIComponent(car.brand)}`;
+  const modelCrumbHref = modelLandingPath(car.brand, car.model) || `/catalog?brand=${encodeURIComponent(car.brand)}&model=${encodeURIComponent(car.model)}`;
   return (
     <main className="detail page-width">
       <div className="breadcrumbs">
@@ -8438,7 +8451,7 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
         <div className="auth-modal-heading">
           <h1 id="availability-lead-title">Оставить заявку</h1>
         </div>
-        <p className="availability-lead-note">Заявку получит проверенная компания-импортёр: она уточнит у продавца, что автомобиль ещё в продаже, цена и комплектация не изменились, и свяжется с вами.</p>
+        <p className="availability-lead-note">Заявку получит компания-импортёр и уточнит все детали.</p>
         <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
         <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
         <label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
@@ -10580,7 +10593,9 @@ function DeliveryCalculator() {
 
   useEffect(() => {
     if (!window.history?.replaceState) return;
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+    // Ползунок и ввод цифр дают десятки записей в секунду — Safari после ~100 бросает
+    // ошибку, без обёртки она роняла страницу (см. patchHistoryState).
+    replaceHistoryEntry(window.history.state, `${window.location.pathname}${search ? `?${search}` : ""}`);
   }, [search]);
   useEffect(() => {
     if (!model?.value || model.custom || knownSize) return undefined;
@@ -10797,7 +10812,9 @@ function CustomsCalculator() {
   });
   useEffect(() => {
     if (!window.history?.replaceState) return;
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}${shareSearch ? `?${shareSearch}` : ""}`);
+    // Ползунок и ввод цифр дают десятки записей в секунду — Safari после ~100 бросает
+    // ошибку, без обёртки она роняла страницу (см. patchHistoryState).
+    replaceHistoryEntry(window.history.state, `${window.location.pathname}${shareSearch ? `?${shareSearch}` : ""}`);
   }, [shareSearch]);
   const shareUrl = `${window.location.origin}${appHref("/customs")}${shareSearch ? `?${shareSearch}` : ""}`;
   const copyShareLink = async () => {
@@ -11577,7 +11594,9 @@ function RangeCalculator() {
   });
   useEffect(() => {
     if (!window.history?.replaceState) return;
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}${shareSearch ? `?${shareSearch}` : ""}`);
+    // Ползунок и ввод цифр дают десятки записей в секунду — Safari после ~100 бросает
+    // ошибку, без обёртки она роняла страницу (см. patchHistoryState).
+    replaceHistoryEntry(window.history.state, `${window.location.pathname}${shareSearch ? `?${shareSearch}` : ""}`);
   }, [shareSearch]);
   const shareUrl = `${window.location.origin}${appHref("/range")}${shareSearch ? `?${shareSearch}` : ""}`;
   const copyShareLink = async () => {
@@ -14047,6 +14066,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         if (!response.ok) throw new Error(payload.error || "order_update_failed");
         updated = payload.order;
       }
+      if (!updated) throw new Error("order_update_failed");
       setOrders((values) => values.map((order) => order.id === updated.id ? updated : order));
       if (action !== "save_order_contact") setExpandedStage(activeOrderStage(updated));
       return true;
@@ -14606,6 +14626,10 @@ export function App() {
   }, []);
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(() => Boolean(targetId) && !bootCarSync(targetId));
+  // Машина, которую загрузить не удалось: только для неё показываем «страницы нет».
+  // Без этой отметки первый кадр после перехода из каталога (загрузчик карточки
+  // ещё не включился) рисовал 404, и Метрика записывала заход с этим заголовком.
+  const [missingTargetId, setMissingTargetId] = useState(null);
   const [loadError, setLoadError] = useState(false);
   // Счётчик попыток загрузить каталог. Меняется — загрузчик ниже запускается заново,
   // без перезагрузки всей страницы: заглушка «идут технические работы» пробует сама.
@@ -14894,12 +14918,15 @@ export function App() {
         const normalized = normalizeImportedCar(car);
         return current.some((item) => item.id === car.id) ? current.map((item) => (item.id === car.id ? normalized : item)) : [...current, normalized];
       }))
-      .catch(() => {})
+      .catch(() => {
+        if (!controller.signal.aborted) setMissingTargetId(targetId);
+      })
       .finally(() => {
         if (!controller.signal.aborted) setRouteLoading(false);
       });
     return () => controller.abort();
   }, [apiMode, targetId, cars, loading]);
+  const awaitingTarget = Boolean(targetId) && !findCarByListing(cars, targetId) && missingTargetId !== targetId;
   const toggleFavorite = (id) => {
     // Saving without an account would strand the list in this browser, so the
     // heart offers registration instead of storing anything — and the car is held
@@ -15340,7 +15367,7 @@ export function App() {
       // главной и каталога: без неё вошедший со страницы машины видел бы карточку
       // вместо личного кабинета — detailId на адресах входа берётся из фона.
       <Detail car={findCarByListing(cars, detailId)} cars={cars} apiMode={apiMode} navigate={navigate} backToCatalog={backToCatalog} favorite={hasFavoriteListing(favorites, detailId)} favorites={favorites} toggleFavorite={toggleFavorite} />
-    ) : loading || routeLoading ? (
+    ) : loading || routeLoading || awaitingTarget ? (
       <AppLoader />
     ) : loadError ? (
       <MaintenancePage onRetry={retryCatalog} />
@@ -15367,7 +15394,7 @@ export function App() {
      <OrderedListingsContext.Provider value={orderedListings}>
      <SetOrderedListingsContext.Provider value={publishOrderedListings}>
      <AvailabilityContext.Provider value={availability}>
-      <ClientSeo path={path} car={findCarByListing(cars, detailId)} landing={findCatalogLanding(path) || modelLanding.landing || modelLanding.provisional} />
+      <ClientSeo path={path} car={findCarByListing(cars, detailId)} carPending={Boolean(detailId) && (loading || routeLoading || awaitingTarget)} landing={findCatalogLanding(path) || modelLanding.landing || modelLanding.provisional} />
       <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}

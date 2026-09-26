@@ -26,6 +26,10 @@ export const loadToolPageTexts = () => {
     promise = import("./tool-page-texts.js").then((module) => {
       cache = module.TOOL_PAGE_TEXTS;
       return cache;
+    }, (error) => {
+      // Не запоминаем неудачу: иначе тексты не появились бы до перезагрузки.
+      promise = null;
+      throw error;
     });
   }
   return promise;

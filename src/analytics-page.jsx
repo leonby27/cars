@@ -66,12 +66,6 @@ const leadKindLabels = {
 };
 const leadSourceLabels = { account:"Личный кабинет", site:"Форма на сайте" };
 const contactMethodLabels = { phone:"Телефон", viber:"Viber", telegram:"Telegram" };
-const stageLabels = {
-  availability:{ decision:"Актуальность не запрошена", requested:"Ждёт проверки актуальности", confirmed:"Актуальность подтверждена" },
-  inspection:{ decision:"Осмотр не выбран", requested:"Заказан осмотр", skipped:"Без осмотра" },
-  contract:{ locked:"", available:"Договор доступен", confirmed:"Договор подтверждён" },
-  payment:{ locked:"", available:"Оплата доступна", invoice_requested:"Запрошен счёт" },
-};
 // Заявку, где клиент уже что-то попросил, надо разбирать первой — красим её акцентом,
 // а просто отложенный автомобиль оставляем спокойным.
 const stageTone = (lead) => {
@@ -139,9 +133,6 @@ function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
   const [deleteError, setDeleteError] = useState("");
   const phoneHref = lead.customer.phone ? `tel:${lead.customer.phone.replace(/[^+\d]/g, "")}` : "";
   const methods = (lead.customer.methods || []).map((method) => contactMethodLabels[method] || method).join(", ");
-  const stages = lead.stages
-    ? Object.entries(lead.stages).map(([key, value]) => stageLabels[key]?.[value]).filter(Boolean)
-    : [];
   const filters = lead.filters ? Object.entries(lead.filters).filter(([, value]) => (Array.isArray(value) ? value.length : value && value !== "any" && value !== "all")) : [];
   return (
     <article className={`lead-card tone-${stageTone(lead)}`}>
@@ -175,7 +166,7 @@ function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
         {lead.customer.telegram && <div><dt>Telegram</dt><dd>@{lead.customer.telegram.replace(/^@/, "")}</dd></div>}
         {lead.customer.email && <div><dt>Email</dt><dd><a href={`mailto:${lead.customer.email}`}>{lead.customer.email}</a></dd></div>}
         {lead.customer.city && <div><dt>Город</dt><dd>{lead.customer.city}</dd></div>}
-        <div><dt>Источник</dt><dd>{leadSourceLabels[lead.source]}{lead.orderNumber ? ` · ${lead.orderNumber}` : ""}</dd></div>
+        <div><dt>Источник</dt><dd>{lead.car?.sourceUrl ? <a href={lead.car.sourceUrl} target="_blank" rel="nofollow noopener noreferrer">Объявление на Che168</a> : leadSourceLabels[lead.source]}</dd></div>
       </dl>
       {lead.comment && <blockquote className="lead-comment">{lead.comment}</blockquote>}
       {!!filters.length && (
@@ -183,7 +174,6 @@ function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
           {filters.map(([key, value]) => <span key={key}><b>{filterLabels[key] || key}:</b> {Array.isArray(value) ? value.join(", ") : value}</span>)}
         </div>
       )}
-      {!!stages.length && <div className="lead-stages">{stages.map((stage) => <span key={stage}>{stage}</span>)}</div>}
     </article>
   );
 }

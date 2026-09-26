@@ -9,7 +9,7 @@ test("заявка с карточки называет клиента, теле
     name:"Алексей",
     contact:"+375291234567",
     methods:["phone","telegram"],
-    car:{ id:"che168-59370942", title:"BYD Song Plus 2023", mileage:23400, price:18900 },
+    car:{ id:"che168-59370942", title:"BYD Song Plus 2023", mileage:23400, price:18900, sourceUrl:"https://global.che168.com/en/detail/59370942" },
   });
   assert.match(text, /Запрос актуальности/);
   assert.match(text, /Клиент: Алексей/);
@@ -18,6 +18,8 @@ test("заявка с карточки называет клиента, теле
   assert.match(text, /BYD Song Plus 2023/);
   // Ссылка ведёт на короткий номер объявления — тот же адрес, что у карточки на сайте.
   assert.match(text, /\/cars\/59370942$/m);
+  // И сразу объявление у источника — менеджер проверяет машину на Che168 без поиска.
+  assert.match(text, /^Che168: https:\/\/global\.che168\.com\/en\/detail\/59370942$/m);
   assert.match(text, /\/analytics$/m);
 });
 
