@@ -471,6 +471,11 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
       count(*) FILTER (
         WHERE (${VISIT_STARTS}) AND entry_source ~ '(^|\\.)google\\.'
       )::int AS google,
+      -- То же правило, что у подписи «ChatGPT» в таблице заходов: реферер chatgpt.com
+      -- или метка utm_source=chatgpt, которую подставляет сам чат-бот.
+      count(*) FILTER (
+        WHERE (${VISIT_STARTS}) AND entry_source ~ '^chatgpt$|(^|\\.)(chatgpt\\.com|chat\\.openai\\.com|openai\\.com)$'
+      )::int AS chatgpt,
       count(*) FILTER (WHERE event_name = 'vehicle_view')::int AS views,
       count(*) FILTER (WHERE (${VISIT_STARTS}) AND second_of_day < $3)::int AS visits_to_now,
       count(*) FILTER (WHERE event_name = 'vehicle_view' AND second_of_day < $3)::int AS views_to_now

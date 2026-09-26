@@ -207,7 +207,7 @@ test("мобильная навигация использует два каст
   // Сброс аналитики из кабинета убран 17.09.2026 — в меню остались разделы и выход.
   assert.match(source, /analytics-mobile-section-menu[\s\S]*?Посты соц сетей[\s\S]*?Выйти/);
   assert.doesNotMatch(source, /sectionTotals|totals\[item\.id\]/);
-  assert.match(source, /className="analytics-navigation-fresh"/);
+  assert.match(source, /className=\{`analytics-navigation-fresh\$\{item\.id === "leads" \? " is-leads" : ""\}`\}/);
   assert.match(styles, /\.analytics-actions, \.analytics-side-rail \{ display:none; \}/);
   assert.match(styles, /\.analytics-mobile-navigation \{[^}]*display:flex;[^}]*justify-content:space-between/);
 });
@@ -614,7 +614,9 @@ test("новые действия в интересе к контактам по
   assert.match(server, /contact_interest_details:contactInterestDetails/);
   assert.match(page, /setContactFresh\(updates\.contact_interest_details \|\| \{\}\)/);
   assert.match(page, /className="analytics-contact-fresh"[^>]*>\+\{formatNumber\(newAmount\)\}/);
-  assert.match(styles, /\.analytics-kpis \.analytics-contact-fresh \{[^}]*background:var\(--accent\)/);
+  // Новое подсвечивается нейтральной инверсией, красный оставлен только заявкам.
+  assert.match(styles, /\.analytics-kpis \.analytics-contact-fresh \{[^}]*background:var\(--fresh-bg\)/);
+  assert.match(styles, /\.analytics-navigation-fresh\.is-leads \{[^}]*background:var\(--accent\)/);
 });
 
 // Приём событий открыт без пароля, поэтому записываем только то, что прислала
