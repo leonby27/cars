@@ -4438,7 +4438,9 @@ function HomePriceBands({ navigate }) {
         const example = models.find((item) => item.priceFrom > floor && item.priceFrom <= band.landedMax);
         return (
           <AppLink key={band.path} href={band.path} navigate={navigate}>
-            <b>{band.name}</b>
+            {/* «Б/у авто» вместо «Автомобили» — той же длины, но со словами, которыми ищут
+                (26.09.2026): название самого раздела каталога не меняется. */}
+            <b>{band.name.replace(/^Автомобили/, "Б/у авто")}</b>
             <small>{example ? `${example.name} и другие` : "С доставкой до Минска"}</small>
           </AppLink>
         );
@@ -4919,7 +4921,7 @@ function HomeConversionSections({ navigate }) {
     <div className="home-conversion page-width">
       <section className="home-order" aria-labelledby="home-order-title">
         <div className="home-order-intro">
-          <h2 id="home-order-title">Понятный путь к автомобилю из Китая</h2>
+          <h2 id="home-order-title">Пригон авто из Китая: понятный путь</h2>
           <p>До каждого платежа вы понимаете, что уже проверено, сколько стоит следующий этап и какие документы получите.</p>
           <div className="home-order-actions">
             <button type="button" className="primary" onClick={() => navigate("/catalog")}>Выбрать автомобиль <ArrowRight size={18} weight="bold" /></button>
@@ -5469,7 +5471,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             <Illustration src="/services/delivery-control.png" width="512" height="341" alt="" aria-hidden="true" />
           </span>
           <p>
-            <b>На связи до выдачи</b>
+            <b>Под ключ до выдачи</b>
             <small>От подбора до получения</small>
           </p>
         </div>
@@ -5488,7 +5490,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           </span>
           <p>
             <b>Показываем обе цены</b>
-            <small>Цена в Китае и с доставкой</small>
+            <small>Цена в Китае и до Минска</small>
           </p>
         </div>
         <div>
@@ -5496,7 +5498,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             <Illustration src="/trust-strip/fixed-terms.png" width="100" height="100" alt="" aria-hidden="true" />
           </span>
           <p>
-            <b>Условия в договоре</b>
+            <b>Заказ по договору</b>
             <small>Цена, сроки и ответственность</small>
           </p>
         </div>

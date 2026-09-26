@@ -523,7 +523,7 @@ function infoArticle(route) {
   const list = (items) => `<dl>${items.map(([term, text]) => `<dt>${escapeHtml(term)}</dt><dd>${escapeHtml(text)}</dd>`).join("")}</dl>`;
   if (route === "/") {
     // Главная — самая массовая страница по запросам и была самой пустой: 44 слова.
-    return `<section><h2>Как проходит покупка</h2>${HOME_ORDER_STEPS.map(
+    return `<section><h2>Пригон авто из Китая: понятный путь</h2>${HOME_ORDER_STEPS.map(
       (step) => `<h3>${escapeHtml(step.number)}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.description)}</p>`,
     ).join("")}</section><section><h2>Частые вопросы о покупке и доставке б/у авто из Китая</h2><p>${escapeHtml(HOME_FAQ_LEAD)}</p>${HOME_FAQ.map(
       (item) => `<h3>${escapeHtml(item.question)}</h3><p>${linkifyText(item.answer, hrefRoute)}</p>`,
