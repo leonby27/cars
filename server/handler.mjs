@@ -7,7 +7,7 @@ import { authenticateAccount, clearSessionCookie, createAccount, createSession, 
 import { brandCatalogGuide, brandStock, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelPriceStats, modelPriceStatsForQuota, modelSummary, soldListingVisible } from "./repository.mjs";
 import { marketComparison } from "./market-compare-data.mjs";
 import { priceRating } from "./price-rating.mjs";
-import { createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
+import { claimGuestAvailabilityLeads, createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
 import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
@@ -132,6 +132,16 @@ const readJson = async (request) => {
 };
 
 // Один ответ на все превышения: сколько именно попыток осталось, снаружи знать незачем.
+// Перенос гостевых заявок в кабинет — удобство, а не условие входа: если он сорвётся,
+// человек всё равно входит, а заявка остаётся в «Заявках» как была.
+const claimGuestLeads = async (user) => {
+  try {
+    await claimGuestAvailabilityLeads(user.id, user.phone);
+  } catch (error) {
+    console.error("guest lead claim failed", error);
+  }
+};
+
 const tooManyRequests = (response, retryAfter) =>
   json(response, 429, { error:"too_many_requests" }, { "retry-after":String(retryAfter) });
 
@@ -274,6 +284,7 @@ export async function handleApiRequest(request, response) {
       const result = await createAccount({ name, phone, password });
       if (result.error) return json(response, 409, result);
       const token = await createSession(result.user.id);
+      await claimGuestLeads(result.user);
       return json(response, 201, { user:result.user }, { "set-cookie":sessionCookie(token, request) });
     }
     if (request.method === "POST" && url.pathname === "/api/auth/login") {
@@ -284,6 +295,7 @@ export async function handleApiRequest(request, response) {
       const user = await authenticateAccount({ phone:body.phone, password:String(body.password || "") });
       if (!user) return json(response, 401, { error:"invalid_credentials" });
       const token = await createSession(user.id);
+      await claimGuestLeads(user);
       return json(response, 200, { user }, { "set-cookie":sessionCookie(token, request) });
     }
     if (request.method === "GET" && url.pathname === "/api/auth/me") {

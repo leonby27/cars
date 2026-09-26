@@ -83,6 +83,45 @@ export async function createCustomerOrder(request, listingId) {
   return { order:await getOrder(account.id, result.rows[0].id) };
 }
 
+// Гость оставил заявку с карточки, а потом завёл кабинет или вошёл в него с тем же
+// телефоном. Без переноса кабинет пуст, кнопка карточки снова зовёт «Уточнить
+// актуальность», и человек отправляет ту же машину второй раз — так 26.09.2026
+// задвоилась заявка на Lynk & Co 900. Заявка становится заказом с уже отправленным
+// запросом и исчезает из форм, чтобы в «Заявках» и счётчиках она была одна. В
+// телеграм второй раз не пишем: менеджер получил её, когда гость её оставил.
+const GUEST_LEAD_CLAIM_DAYS = 30;
+
+export async function claimGuestAvailabilityLeads(customerId, phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!customerId || digits.length < 11) return 0;
+  const result = await pool.query(
+    `WITH guest AS (
+        SELECT d.id,d.listing_id,d.customer_name,d.contact,d.created_at
+        FROM order_drafts d
+        JOIN listings l ON l.id=d.listing_id
+        WHERE d.calculation->>'requestType'='availability_check'
+          AND regexp_replace(d.contact,'\\D','','g')=$2
+          AND d.created_at > now() - ($3 * interval '1 day')
+      ), latest AS (
+        SELECT DISTINCT ON (listing_id) * FROM guest ORDER BY listing_id, created_at DESC
+      ), claimed AS (
+        INSERT INTO customer_orders (customer_id,listing_id,availability_status,availability_requested_at,
+          contact_name,contact_phone,contact_methods,contact_saved_at,contact_consent_at,created_at,updated_at)
+        SELECT $1,listing_id,'requested',created_at,
+          CASE WHEN char_length(customer_name) BETWEEN 2 AND 80 THEN customer_name END,
+          contact,ARRAY['phone'],created_at,created_at,created_at,now()
+        FROM latest
+        ON CONFLICT (customer_id,listing_id) DO UPDATE
+          SET availability_status='requested',availability_requested_at=EXCLUDED.availability_requested_at,updated_at=now()
+          WHERE customer_orders.availability_status='decision'
+        RETURNING listing_id
+      )
+      DELETE FROM order_drafts WHERE id IN (SELECT id FROM guest) RETURNING id`,
+    [customerId, digits, GUEST_LEAD_CLAIM_DAYS],
+  );
+  return result.rowCount;
+}
+
 const actionUpdates = {
   order_inspection:{
     where:"availability_status='confirmed' AND inspection_status='decision'",
