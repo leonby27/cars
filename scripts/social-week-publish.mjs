@@ -13,7 +13,6 @@ import {
   hasRequiredVisual,
   publicationActuallyPublished,
   publicationFinished,
-  soldSingleCarTexts,
   threadsTimeline,
   weekKey,
   weeklyManifestUrl,
@@ -35,7 +34,6 @@ for (const network of networks) {
 }
 const stateFile = process.env.SOCIAL_WEEK_PUBLISH_STATE_FILE || path.join(ROOT, "runtime", "social-week-published.json");
 const workRoot = process.env.SOCIAL_WEEK_PUBLISH_WORK_ROOT || path.join(ROOT, "runtime", "social-week-publish");
-const catalogOrigin = String(process.env.SOCIAL_CATALOG_ORIGIN || "https://abcars.by").replace(/\/$/, "");
 
 const readJson = async (file, fallback) => {
   try { return JSON.parse(await fs.readFile(file, "utf8")); } catch { return fallback; }
@@ -71,20 +69,6 @@ async function downloadImage(url, file) {
   return file;
 }
 
-async function inspectCars(cars) {
-  if (!cars?.length) return [];
-  return Promise.all(cars.map(async (car) => {
-    const prefix = car.source === "Che168" ? "che168" : car.source === "Guazi" ? "guazi" : String(car.source || "").toLowerCase();
-    const response = await fetch(`${catalogOrigin}/api/cars/${encodeURIComponent(`${prefix}-${car.externalId}`)}`, {
-      signal:AbortSignal.timeout(20_000),
-    });
-    if (!response.ok) throw new Error(`карточка ${car.externalId} ответила ${response.status}`);
-    const live = await response.json();
-    const active = live.available !== false && live.statusTone !== "red" && live.status !== "Продано";
-    return { car, active, status:live.status || "", statusTone:live.statusTone || "" };
-  }));
-}
-
 const due = (item) => publishAllNow || Date.parse(item.publishAt) <= Date.now();
 const manifest = await fetchJson(process.env.SOCIAL_WEEK_MANIFEST_URL || weeklyManifestUrl(week));
 if (!manifest) {
@@ -98,9 +82,7 @@ const config = dryRun ? null : await refreshSocialTokens({ log:console.log });
 async function publishVisual(post, targetNetworks) {
   if (!targetNetworks.length || !due(post)) return false;
   const existing = state.visual[post.id];
-  // Старые пропуски из-за продажи можно безопасно переоценить после обновления
-  // механизма: одиночная карточка теперь имеет честный режим «уже продано».
-  if (existing?.status === "skipped" && existing?.reason !== "inactive_car") return false;
+  if (existing?.status === "skipped") return false;
   if (targetNetworks.every((network) => existing?.networks?.[network]?.status === "published")) {
     return targetNetworks.includes("threads") && existing?.networks?.threads?.status === "published";
   }
@@ -110,36 +92,8 @@ async function publishVisual(post, targetNetworks) {
     console.log(`${post.id}: пропущена — нет готовой сгенерированной обложки`);
     return false;
   }
-  const carChecks = await inspectCars(post.cars);
-  const inactiveCars = carChecks.filter((item) => !item.active);
-  let publicationTexts = post.texts;
-  let publicationPhotos = post.photos || [];
-  let publicationMode = "live";
-  if (inactiveCars.length) {
-    const soldTexts = inactiveCars.length === 1 && carChecks.length === 1
-      ? soldSingleCarTexts(post, { site:catalogOrigin })
-      : null;
-    if (!soldTexts) {
-      state.visual[post.id] = {
-        status:"needs_refresh",
-        reason:"inactive_car",
-        carIds:inactiveCars.map(({ car }) => car.externalId),
-        at:new Date().toISOString(),
-      };
-      await saveState();
-      console.log(`${post.id}: требует обновления — одна из машин больше не активна`);
-      return false;
-    }
-    publicationTexts = soldTexts;
-    // Для проданной машины достаточно готовой обложки. Исходную галерею не
-    // отправляем: фотографии карточки очищаются после продажи, а подпись уже
-    // ведёт на сохранённую страницу с актуальными аналогами.
-    publicationPhotos = [];
-    publicationMode = "sold_fallback";
-  }
   if (dryRun) {
-    const suffix = publicationMode === "sold_fallback" ? ", машина уже продана" : "";
-    console.log(`${post.id}: готова к публикации в ${targetNetworks.join(", ")} (${post.rubric}${suffix}), обложка ${post.cover.url}`);
+    console.log(`${post.id}: готова к публикации в ${targetNetworks.join(", ")} (${post.rubric}), обложка ${post.cover.url}`);
     return targetNetworks.includes("threads");
   }
 
@@ -152,7 +106,7 @@ async function publishVisual(post, targetNetworks) {
     // Отсутствующая обложка пропускает запись целиком. Обычная фотография машины
     // никогда не занимает её место.
     await downloadImage(post.cover.url, cover);
-    frames = await prepareFrames(publicationPhotos, { dir, prefix:"gallery", mode:"crop", shape:"vertical", log:console.log });
+    frames = await prepareFrames(post.photos || [], { dir, prefix:"gallery", mode:"crop", shape:"vertical", log:console.log });
     const files = [cover, ...frames].slice(0, 10);
     const coverStage = await stageBuffers([{ name:path.basename(cover), data:await fs.readFile(cover) }], { carNumber:`${post.id}-cover`, log:console.log });
     if (coverStage.links.length !== 1) throw new Error("сгенерированная обложка не попала в хранилище Meta");
@@ -165,18 +119,15 @@ async function publishVisual(post, targetNetworks) {
 
     const record = state.visual[post.id] || { status:"publishing", networks:{} };
     record.networks ||= {};
-    record.status = "publishing";
-    record.mode = publicationMode;
-    if (inactiveCars.length) record.inactiveCarIds = inactiveCars.map(({ car }) => car.externalId);
     state.visual[post.id] = record;
     const actions = {
-      instagram:() => publishToInstagram({ caption:publicationTexts.instagram, photos:links, config, log:console.log }),
-      threads:() => publishToThreads({ text:publicationTexts.threads, photos:links, config, log:console.log }),
-      telegram:() => publishToTelegram({ text:publicationTexts.telegram, files, config, log:console.log }),
+      instagram:() => publishToInstagram({ caption:post.texts.instagram, photos:links, config, log:console.log }),
+      threads:() => publishToThreads({ text:post.texts.threads, photos:links, config, log:console.log }),
+      telegram:() => publishToTelegram({ text:post.texts.telegram, files, config, log:console.log }),
     };
     for (const network of targetNetworks) {
       if (record.networks[network]?.status === "published") continue;
-      if (!publicationTexts?.[network]) throw new Error(`нет текста для ${network}`);
+      if (!post.texts?.[network]) throw new Error(`нет текста для ${network}`);
       try {
         const result = await actions[network]();
         record.networks[network] = { status:"published", at:new Date().toISOString(), url:result.url || "", id:result.id, ...(result.ids ? { ids:result.ids } : {}) };

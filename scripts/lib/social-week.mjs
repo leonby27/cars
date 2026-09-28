@@ -204,51 +204,6 @@ export function publicationActuallyPublished(record) {
   return record?.status === "published";
 }
 
-const escapedHtml = (value) => String(value ?? "")
-  .replaceAll("&", "&amp;")
-  .replaceAll("<", "&lt;")
-  .replaceAll(">", "&gt;")
-  .replaceAll('"', "&quot;");
-
-// Если единственная машина была продана уже после подготовки недели, публикация
-// всё равно остаётся полезной: прямая карточка хранится 14 дней и показывает
-// актуальные похожие автомобили. Текст обязан честно снять все утверждения о
-// текущем наличии и пояснить, что цена на готовой обложке историческая.
-export function soldSingleCarTexts(post, { site = "abcars.by" } = {}) {
-  const cars = Array.isArray(post?.cars) ? post.cars : [];
-  if (cars.length !== 1) return null;
-  const car = cars[0];
-  const number = String(car?.externalId || "").trim();
-  if (!number) return null;
-  const label = [car?.brand, car?.model].filter(Boolean).join(" ") || "Машина";
-  const page = `https://${String(site).replace(/^https?:\/\//, "").replace(/\/$/, "")}/cars/${encodeURIComponent(number)}`;
-  const common = [
-    `🚗 ${label} из этой публикации уже продан.`,
-    "Цена на обложке — расчёт на момент подготовки публикации.",
-  ];
-  return {
-    instagram:[
-      ...common,
-      `🔎 Карточка №${number} сохранена: в ней можно посмотреть характеристики и актуальные похожие автомобили.`,
-      "Актуальные варианты — по ссылке в шапке профиля.",
-      "✍️ Пишите в Директ — подберём похожую машину.",
-      "",
-      "#абкарс #автоизкитая #авторынокбеларуси",
-    ].join("\n"),
-    threads:[
-      ...common,
-      `🔎 Карточка с характеристиками сохранена: ${page}`,
-      "На странице есть актуальные похожие автомобили.",
-      "✍️ Пишите в Директ — подберём похожую машину.",
-    ].join("\n"),
-    telegram:[
-      ...common.map(escapedHtml),
-      `🔎 <a href="${escapedHtml(page)}">Карточка №${escapedHtml(number)}</a> сохранена; на странице есть актуальные похожие автомобили.`,
-      "✍️ Пишите в личные сообщения — подберём похожую машину.",
-    ].join("\n"),
-  };
-}
-
 // Снимки, из которых собрана AI-обложка. Их не повторяем сразу следом в сыром
 // виде: обложка уже является первым кадром карусели.
 export function coverSourcePhotos(draft) {
