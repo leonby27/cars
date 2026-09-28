@@ -15,7 +15,7 @@ import { marketComparison } from "./market-compare-data.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { claimGuestAvailabilityLeads, createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
-import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, deviceKindFromHeaders, devicePlatformFromHeaders, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
@@ -224,11 +224,11 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/dashboard") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
-      return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("period") || url.searchParams.get("days")));
+      return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("period") || url.searchParams.get("days"), { device:url.searchParams.get("device") }));
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/trend") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
-      return json(response, 200, await getAnalyticsTrend(url.searchParams.get("period")));
+      return json(response, 200, await getAnalyticsTrend(url.searchParams.get("period"), { device:url.searchParams.get("device") }));
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
@@ -606,6 +606,9 @@ export async function handleApiRequest(request, response) {
       }
       if (name.length > 120) return json(response, 400, { error:"name_too_long" });
       if (contact.length > 200) return json(response, 400, { error:"contact_too_long" });
+      // С какого устройства оставили заявку — для раздела «Заявки». Определяет сервер по
+      // заголовкам, присланное браузером в теле перезаписывается.
+      calculation = { ...calculation, device:deviceKindFromHeaders(request.headers) || null, platform:devicePlatformFromHeaders(request.headers) || null };
       const draft = await createOrderDraft({ listingId:body.listingId || null, name:name || null, contact, calculation });
       return json(response, 201, draft);
     }

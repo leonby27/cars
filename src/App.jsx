@@ -8988,7 +8988,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               <span className="availability-primary-title">
                 {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
               </span>
-              {!inOrder && <span className="availability-primary-note">Бесплатно <span aria-hidden="true">•</span> Ни к чему не обязывает</span>}
+              {!inOrder && <span className="availability-primary-note">Консультация бесплатно</span>}
             </button>
           )}
           {!sold && (
@@ -9001,7 +9001,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                 <span className="availability-primary-title">
                   {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
                 </span>
-                {!inOrder && <span className="availability-primary-note">Бесплатно <span aria-hidden="true">•</span> Ни к чему не обязывает</span>}
+                {!inOrder && <span className="availability-primary-note">Консультация бесплатно</span>}
               </button>
             </div>
           )}

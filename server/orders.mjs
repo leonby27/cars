@@ -1,6 +1,7 @@
 import { pool } from "./db.mjs";
 import { getSessionAccount } from "./auth.mjs";
 import { notifyLead } from "./lead-notify.mjs";
+import { deviceKindFromHeaders, devicePlatformFromHeaders } from "./analytics.mjs";
 
 const orderSelect = `SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,o.availability_confirmed_at,
   o.contact_name,o.contact_phone,o.contact_methods,o.contact_saved_at,o.contact_consent_at,
@@ -74,11 +75,13 @@ export async function createCustomerOrder(request, listingId) {
   if (!account) return { error:"unauthorized" };
   const listing = await pool.query("SELECT 1 FROM catalog_listings WHERE id=$1 AND status='active'", [listingId]);
   if (!listing.rowCount) return { error:"listing_not_found" };
+  // Устройство заявки — для раздела «Заявки»; у уже заведённой машины не меняем.
   const result = await pool.query(
-    `INSERT INTO customer_orders (customer_id,listing_id) VALUES ($1,$2)
-     ON CONFLICT (customer_id,listing_id) DO UPDATE SET updated_at=now()
+    `INSERT INTO customer_orders (customer_id,listing_id,device,platform) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (customer_id,listing_id) DO UPDATE SET updated_at=now(),
+       device=COALESCE(customer_orders.device,EXCLUDED.device),platform=COALESCE(customer_orders.platform,EXCLUDED.platform)
      RETURNING id`,
-    [account.id,listingId],
+    [account.id,listingId,deviceKindFromHeaders(request.headers) || null,devicePlatformFromHeaders(request.headers) || null],
   );
   return { order:await getOrder(account.id, result.rows[0].id) };
 }
@@ -96,7 +99,8 @@ export async function claimGuestAvailabilityLeads(customerId, phone) {
   if (!customerId || digits.length < 11) return 0;
   const result = await pool.query(
     `WITH guest AS (
-        SELECT d.id,d.listing_id,d.customer_name,d.contact,d.created_at
+        SELECT d.id,d.listing_id,d.customer_name,d.contact,d.created_at,
+          nullif(d.calculation->>'device','') AS device,nullif(d.calculation->>'platform','') AS platform
         FROM order_drafts d
         JOIN catalog_listings l ON l.id=d.listing_id
         WHERE d.calculation->>'requestType'='availability_check'
@@ -106,10 +110,10 @@ export async function claimGuestAvailabilityLeads(customerId, phone) {
         SELECT DISTINCT ON (listing_id) * FROM guest ORDER BY listing_id, created_at DESC
       ), claimed AS (
         INSERT INTO customer_orders (customer_id,listing_id,availability_status,availability_requested_at,
-          contact_name,contact_phone,contact_methods,contact_saved_at,contact_consent_at,created_at,updated_at)
+          contact_name,contact_phone,contact_methods,contact_saved_at,contact_consent_at,created_at,updated_at,device,platform)
         SELECT $1,listing_id,'requested',created_at,
           CASE WHEN char_length(customer_name) BETWEEN 2 AND 80 THEN customer_name END,
-          contact,ARRAY['phone'],created_at,created_at,created_at,now()
+          contact,ARRAY['phone'],created_at,created_at,created_at,now(),device,platform
         FROM latest
         ON CONFLICT (customer_id,listing_id) DO UPDATE
           SET availability_status='requested',availability_requested_at=EXCLUDED.availability_requested_at,updated_at=now()

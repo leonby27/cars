@@ -429,6 +429,14 @@ const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND 
 // действием, а не просто отметкой «живой»: одно лишь время на странице выжидает
 // обходчик, который ходит через домашние адреса и по адресу неотличим от людей.
 const LIVE_VISITOR = `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE human_action AND ${PUBLIC_EVENT})`;
+// Срез по устройству: компьютер или телефон, как их определил сервер при записи
+// события (deviceKindFromHeaders). Пусто — все устройства. Значение только из списка,
+// поэтому его можно вставить в запрос строкой. Условие ставится на сами события
+// выборки, а не на проверку живого посетителя (LIVE_VISITOR): живой он или робот,
+// от устройства не зависит. У событий до появления этой пометки устройства нет —
+// в срезах по устройству их не будет.
+export const analyticsDeviceKind = (value) => (value === "mobile" || value === "desktop" ? value : "");
+const deviceCondition = (device) => (analyticsDeviceKind(device) ? ` AND properties->>'device' = '${analyticsDeviceKind(device)}'` : "");
 // Сутки везде минские: Беларусь круглый год живёт по UTC+3, а база хранит время
 // по Гринвичу — без перевода события с полуночи до трёх ночи попадали бы во вчера.
 const MINSK_DAY = "(created_at AT TIME ZONE 'Europe/Minsk')::date";
@@ -447,8 +455,9 @@ const VISIT_STARTS = "gap IS NULL OR gap > interval '30 minutes' OR previous_day
 // величины, а считать их вторым запросом смысла нет. Заходы — это только первые шаги
 // захода, поэтому они отбираются условием в самом счётчике, а не в WHERE: иначе
 // просмотры внутри захода выпали бы из выборки вместе с остальными шагами.
-export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now() } = {}) {
+export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(), device = "" } = {}) {
   const range = normalizeAnalyticsRange(rangeValue);
+  const DEVICE = deviceCondition(device);
   const from = range.from.toISOString();
   const to = range.to.toISOString();
   // Рядом с итогом дня подсказка показывает, сколько набралось к текущему часу —
@@ -461,7 +470,7 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
         created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
         lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
       FROM analytics_events
-      WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+      WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
     )
     SELECT day::text AS day,
       count(*) FILTER (WHERE ${VISIT_STARTS})::int AS visits,
@@ -499,8 +508,9 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
 // словами, что и в карточке и на графике, чтобы числа сходились между собой.
 const VISITS_BENCHMARK_DAYS = 7;
 
-export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now() } = {}) {
+export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now(), device = "" } = {}) {
   const range = typeof rangeValue === "string" ? normalizeAnalyticsRange(rangeValue, now) : rangeValue;
+  const DEVICE = deviceCondition(device);
   // У многодневных срезов «в это время» смысла не имеет: там карточка показывает
   // среднее за день внутри самого периода, и сравнивать не с чем.
   if (range.days !== 1) return { visits_previous:null, visits_average:null, visits_benchmark_days:0 };
@@ -512,7 +522,7 @@ export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now
         created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
         lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
       FROM analytics_events
-      WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+      WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
     )
     SELECT day::text AS day, count(*)::int AS visits
     FROM steps WHERE (${VISIT_STARTS}) AND second_of_day < $3
@@ -530,8 +540,12 @@ export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now
   };
 }
 
-export async function getAnalyticsDashboard(rangeValue) {
+export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
   const range = normalizeAnalyticsRange(rangeValue);
+  // Устройство режет только то, что считается по событиям сайта. Заявки, избранное
+  // и регистрации берутся из таблиц, где устройства нет, — они всегда по всем.
+  const deviceKind = analyticsDeviceKind(device);
+  const DEVICE = deviceCondition(deviceKind);
   const { days, period } = range;
   const from = range.from.toISOString();
   const to = range.to.toISOString();
@@ -566,7 +580,7 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts', '/contacts/') AND ${LIVE_VISITOR})::int AS contact_page_views,
       count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/how-it-works', '/how-it-works/') AND ${LIVE_VISITOR})::int AS about_page_views,
       count(DISTINCT visitor_id) FILTER (WHERE NOT (${LIVE_VISITOR}))::int AS robot_visits
-      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}`, [from, to]),
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE}`, [from, to]),
     // «Заход» считаем по паузе, а не по вкладке: страница помнит номер захода, пока
     // вкладка открыта, поэтому три карточки, открытые в трёх вкладках, выглядели бы
     // тремя разными заходами, а вкладка, забытая на сутки, — одним. Новый заход
@@ -577,10 +591,10 @@ export async function getAnalyticsDashboard(rangeValue) {
         SELECT ${MINSK_DAY} AS day,
           created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
           lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
-        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
       )
       SELECT count(*) FILTER (WHERE ${VISIT_STARTS})::int AS visits FROM steps`, [from, to]),
-    getVisitsBenchmark(range),
+    getVisitsBenchmark(range, { device:deviceKind }),
     pool.query(`SELECT
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int
         + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
@@ -594,7 +608,7 @@ export async function getAnalyticsDashboard(rangeValue) {
       count(DISTINCT visitor_id)::int AS visitors,
       count(*) FILTER (WHERE event_name='vehicle_view')::int AS vehicle_views,
       count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
-      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+      FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
       GROUP BY ${MINSK_DAY} ORDER BY ${MINSK_DAY}`, [from, to]),
     pool.query(`SELECT path,
         count(*)::int AS views,
@@ -603,7 +617,7 @@ export async function getAnalyticsDashboard(rangeValue) {
       FROM analytics_events
       WHERE event_name='page_view' AND created_at >= $1 AND created_at < $2
         AND (split_part(path, '?', 1) = '/catalog' OR split_part(path, '?', 1) LIKE '/catalog/%')
-        AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+        AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
       GROUP BY path
       ORDER BY max(created_at) DESC, count(*) DESC
       LIMIT 100`, [from, to]),
@@ -613,7 +627,7 @@ export async function getAnalyticsDashboard(rangeValue) {
           count(DISTINCT visitor_id) FILTER (WHERE event_name='vehicle_view')::int AS viewers,
           max(created_at) FILTER (WHERE event_name='vehicle_view') AS last_viewed,
           count(*) FILTER (WHERE event_name='availability_request_click')::int AS availability_requests
-        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR} GROUP BY listing_id
+        FROM analytics_events WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR} GROUP BY listing_id
       ), asks AS (
         SELECT listing_id, count(*)::int AS n FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND listing_id IS NOT NULL AND ${notStaffAccount("customer_id")} GROUP BY listing_id
       ), drafts AS (
@@ -678,7 +692,7 @@ export async function getAnalyticsDashboard(rangeValue) {
           btrim(properties->>'query') AS query,
           nullif(properties->>'found','')::int AS found
         FROM analytics_events
-        WHERE event_name='search_query' AND created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+        WHERE event_name='search_query' AND created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
           AND btrim(coalesce(properties->>'query','')) <> ''
       ), settled AS (
         SELECT * FROM asked a WHERE NOT EXISTS (
@@ -711,7 +725,7 @@ export async function getAnalyticsDashboard(rangeValue) {
           created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
           lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
         FROM analytics_events
-        WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+        WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
       ), marked AS (
         SELECT *, CASE WHEN ${VISIT_STARTS} THEN 1 ELSE 0 END AS starts_visit
         FROM ordered
@@ -760,6 +774,7 @@ export async function getAnalyticsDashboard(rangeValue) {
   return {
     days,
     period,
+    device:deviceKind || "all",
     from,
     to,
     generatedAt:new Date().toISOString(),
@@ -903,15 +918,35 @@ const draftKind = (row) => {
   return "listing_draft";
 };
 
+// Устройство у заявок записывается с 28.09.2026. У заявок до этого его подбираем по
+// нажатию кнопки заявки на той же машине: ближайшее такое событие за полчаса до
+// заявки (или минуту после — часы браузера и сервера могут расходиться). Устройство
+// у события пишет сервер, поэтому оно надёжно; события с устройством идут с 08.09.2026.
+const leadDeviceGuess = (listingColumn, momentColumn) => `LEFT JOIN LATERAL (
+      SELECT nullif(e.properties->>'device','') AS device, nullif(e.properties->>'platform','') AS platform
+      FROM analytics_events e
+      WHERE e.listing_id=${listingColumn} AND e.event_name='availability_request_click'
+        AND e.created_at BETWEEN ${momentColumn} - interval '30 minutes' AND ${momentColumn} + interval '1 minute'
+        AND nullif(e.properties->>'device','') IS NOT NULL
+      ORDER BY abs(extract(epoch FROM e.created_at - ${momentColumn})) LIMIT 1
+    ) guess ON true`;
+const leadDevice = (device, platform) => ({
+  device:device === "mobile" || device === "desktop" ? device : "",
+  platform:DEVICE_PLATFORMS.has(platform) ? platform : "",
+});
+
 export async function getAnalyticsLeads() {
   const [draftsResult, ordersResult] = await Promise.all([
     pool.query(`SELECT d.id,d.listing_id,d.customer_name,d.contact,d.calculation,d.status,d.created_at,
       l.title,l.estimated_total_usd,l.mileage_km,l.city,l.source_url,
       v.brand,v.model,v.model_year,
-      (SELECT m.url FROM listing_media m WHERE m.listing_id=d.listing_id ORDER BY m.position LIMIT 1) AS image
+      (SELECT m.url FROM listing_media m WHERE m.listing_id=d.listing_id ORDER BY m.position LIMIT 1) AS image,
+      coalesce(nullif(d.calculation->>'device',''), guess.device) AS device,
+      coalesce(nullif(d.calculation->>'platform',''), CASE WHEN nullif(d.calculation->>'device','') IS NULL THEN guess.platform END) AS platform
       FROM order_drafts d
       LEFT JOIN listings l ON l.id=d.listing_id
       LEFT JOIN vehicles v ON v.id=l.vehicle_id
+      ${leadDeviceGuess("d.listing_id", "d.created_at")}
       WHERE ${notStaffContact("d.contact")}
       ORDER BY d.created_at DESC LIMIT ${LEADS_LIMIT}`),
     pool.query(`SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,
@@ -921,11 +956,14 @@ export async function getAnalyticsLeads() {
       a.city AS account_city,a.preferred_contact,
       l.title,l.estimated_total_usd,l.mileage_km,l.city,l.source_url,
       v.brand,v.model,v.model_year,
-      (SELECT m.url FROM listing_media m WHERE m.listing_id=o.listing_id ORDER BY m.position LIMIT 1) AS image
+      (SELECT m.url FROM listing_media m WHERE m.listing_id=o.listing_id ORDER BY m.position LIMIT 1) AS image,
+      coalesce(o.device, guess.device) AS device,
+      coalesce(o.platform, CASE WHEN o.device IS NULL THEN guess.platform END) AS platform
       FROM customer_orders o
       JOIN customer_accounts a ON a.id=o.customer_id
       LEFT JOIN listings l ON l.id=o.listing_id
       LEFT JOIN vehicles v ON v.id=l.vehicle_id
+      ${leadDeviceGuess("o.listing_id", "coalesce(o.availability_requested_at, o.created_at)")}
       WHERE ${notStaffAccount("o.customer_id")}
       ORDER BY o.created_at DESC LIMIT ${LEADS_LIMIT}`),
   ]);
@@ -949,6 +987,7 @@ export async function getAnalyticsLeads() {
     // автомобиля в заявке нет.
     filters:row.calculation?.catalogFilters && typeof row.calculation.catalogFilters === "object" ? row.calculation.catalogFilters : null,
     stages:null,
+    ...leadDevice(row.device, row.platform),
   }));
   const orders = ordersResult.rows.map((row) => ({
     id:`order-${row.id}`,
@@ -977,6 +1016,7 @@ export async function getAnalyticsLeads() {
       contract:row.contract_status,
       payment:row.payment_status,
     },
+    ...leadDevice(row.device, row.platform),
   }));
   const leads = [...drafts, ...orders].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)).slice(0, LEADS_LIMIT);
   return { generatedAt:new Date().toISOString(), leads };

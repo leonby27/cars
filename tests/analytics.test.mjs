@@ -109,9 +109,11 @@ test("график и заходы постоянные, а баннер при 
   assert.doesNotMatch(source, /analytics:(?:trend|promo)-open/);
 });
 
-test("детализация заходов стоит после баннера и всегда открыта", async () => {
+test("детализация заходов стоит сразу после графика и всегда открыта", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
-  assert.match(source, /<PromoSection summary=\{summary\} \/>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{updates\.overview\} \/>/);
+  // Блок «Баннер в статьях» убран 28.09.2026.
+  assert.doesNotMatch(source, /PromoSection|Баннер в статьях/);
+  assert.match(source, /<\/section>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{updates\.overview\} \/>/);
   assert.match(source, /function VisitsSection[\s\S]*?<section className="analytics-panel analytics-visits-panel">/);
   for (const heading of ["Номер", "Источник", "Страница входа", "Просмотров", "Дата"]) assert.match(source, new RegExp(`<th>${heading}<\\/th>`));
   assert.doesNotMatch(source, /<th>Источник входа<\/th>/);
@@ -217,11 +219,13 @@ test("счётчики отделяют просмотренное от ново
   const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
   assert.match(source, /function AnalyticsSplitCount[\s\S]*?previousAmount = amount - newAmount/);
   assert.match(source, /analytics-split-count\$\{newAmount \? " has-fresh"/);
-  assert.match(source, /\["Заходы"[^\n]*updates\.overview\]/);
+  assert.match(source, /\["Заходы"[^\n]*updates\.overview : 0\]/);
   // Карточка «Просмотры авто» считает просмотры карточек машин (vehicle_cars),
   // а не открытия страниц каталога: у тех свой счётчик.
-  assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicle_cars\]/);
-  assert.match(source, /\["Регистрации"[^\n]*updates\.customers\]/);
+  assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicle_cars : 0\]/);
+  // «Регистрации» в обзоре заменены «Заявками» (28.09.2026), «+N» у них красный.
+  assert.match(source, /\["Заявки", leadsTotal,[^\n]*updates\.leads, "is-leads"\]/);
+  assert.doesNotMatch(source, /\["Регистрации"/);
   // Карточка «Машины в кабинете» убрана 18.09.2026: те же цифры показывает раздел
   // «Заявки», а в обзоре она держала нулевую колонку.
   assert.doesNotMatch(source, /"Машины в кабинете"/);
@@ -909,4 +913,39 @@ test("сообщения самого счётчика не подтвержда
   assert.match(handler, /if \(!url\.pathname\.startsWith\("\/api\/analytics\/"\)\) noteSiteRequest\(clientAddress\(request\)\)/);
   // Проверка стоит в обоих обработчиках счётчика: и у событий, и у подтверждения живого.
   assert.equal((handler.match(/if \(!hasRecentSiteRequest\(clientAddress\(request\)\)\)/g) || []).length, 2);
+});
+
+test("срез по устройству режет события, но не проверку живого посетителя", async () => {
+  const { analyticsDeviceKind } = await import("../server/analytics.mjs");
+  assert.equal(analyticsDeviceKind("mobile"), "mobile");
+  assert.equal(analyticsDeviceKind("desktop"), "desktop");
+  // Всё, кроме двух значений, — «все устройства»: значение вставляется в запрос строкой.
+  assert.equal(analyticsDeviceKind("all"), "");
+  assert.equal(analyticsDeviceKind("mobile' OR 1=1 --"), "");
+  const calls = [];
+  const db = { query:async (sql, params) => { calls.push({ sql, params }); return { rows:[] }; } };
+  const now = Date.parse("2026-09-28T12:00:00Z");
+  await getVisitsBenchmark("today", { db, now, device:"mobile" });
+  await getAnalyticsTrend("7", { db, now, device:"desktop" });
+  await getVisitsBenchmark("today", { db, now, device:"tablet" });
+  assert.match(calls[0].sql, /\$2 AND path <> '\/analytics'[\s\S]*? AND properties->>'device' = 'mobile' AND visitor_id IN \(SELECT/);
+  assert.match(calls[1].sql, /AND properties->>'device' = 'desktop' AND visitor_id IN \(SELECT/);
+  assert.doesNotMatch(calls[2].sql, /properties->>'device'/);
+  // Внутри проверки живого посетителя устройства нет.
+  assert.doesNotMatch(calls[0].sql, /human_action AND[^)]*properties->>'device'/);
+});
+
+test("у заявки видно, с какого устройства её оставили", async () => {
+  const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  const handler = await readFile(new URL("../server/handler.mjs", import.meta.url), "utf8");
+  const orders = await readFile(new URL("../server/orders.mjs", import.meta.url), "utf8");
+  // Новые заявки: устройство определяет сервер по заголовкам и кладёт в саму заявку.
+  assert.match(handler, /calculation = \{ \.\.\.calculation, device:deviceKindFromHeaders\(request\.headers\)/);
+  assert.match(orders, /INSERT INTO customer_orders \(customer_id,listing_id,device,platform\)/);
+  // Старые — по нажатию кнопки заявки на той же машине рядом по времени.
+  assert.match(server, /leadDeviceGuess\("d\.listing_id", "d\.created_at"\)/);
+  assert.match(server, /e\.event_name='availability_request_click'/);
+  assert.match(page, /<time dateTime=\{lead\.createdAt\}>\{formatLeadDate\(lead\.createdAt\)\}\{leadDeviceText\(lead\)/);
+  assert.match(page, /`с \$\{lead\.device === "mobile" \? "телефона" : "компьютера"\}/);
 });

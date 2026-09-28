@@ -69,7 +69,7 @@ test("local Guazi preview keeps the availability button without sending a test r
 
 test("availability action is green below the information and has a floating repeat", () => {
   assert.ok(app.indexOf('className={`delivery-disclosure delivery-card') < app.indexOf('className={`primary report-order-cta availability-primary-cta'));
-  assert.ok(app.includes('Бесплатно <span aria-hidden="true">•</span> Ни к чему не обязывает'));
+  assert.equal(app.split('<span className="availability-primary-note">Консультация бесплатно</span>').length - 1, 2);
   assert.match(styles, /\.primary\.availability-primary-cta\s*\{[^}]*min-height:\s*52px;[^}]*background:\s*linear-gradient\(90deg, #36b055 0%, #23883c 100%\);[^}]*box-shadow:/s);
   assert.match(styles, /\.availability-primary-note\s*\{[^}]*opacity:\s*0\.75;/s);
 });

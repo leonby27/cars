@@ -204,6 +204,14 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
 .analytics-kpi-split-count > span { color:var(--ink); }
 .analytics-kpi-split-count > i { color:var(--muted); font-size:18px; }
 .analytics-kpi-split-count > b { min-width:27px; height:24px; padding-inline:6px; font-size:17px; }
+/* «+N» у заявок в обзоре — красный, как у пункта «Заявки» в меню. */
+.analytics-kpi-split-count.is-leads > b { background:var(--accent); color:#fff; }
+/* Переключатель устройств — значками, та же «таблетка», что у периода. */
+.analytics-device-switch { flex:0 0 auto; }
+.analytics-device-switch button { display:grid; place-items:center; flex:0 0 auto; padding:7px 10px; }
+/* В мобильной полосе — той же высоты 42px, что выбор раздела и периода. */
+.analytics-mobile-navigation .analytics-device-switch { height:42px; box-sizing:border-box; padding:3px; }
+.analytics-mobile-navigation .analytics-device-switch button { padding:0 8px; }
 .analytics-sidebar-extra { margin-top:12px; }
 .analytics-sidebar-social { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }
 html[data-theme="light"] .analytics-sidebar-social { border:1px solid var(--line); }
@@ -229,6 +237,8 @@ html[data-theme="light"] .analytics-sidebar-social { border:1px solid var(--line
 .lead-kind.kind-availability { background:color-mix(in srgb,var(--accent) 16%,var(--panel)); color:var(--accent-dark); }
 .lead-kind.kind-custom_search { background:color-mix(in srgb,var(--accent-secondary) 24%,var(--panel)); }
 .lead-card-head time { color:var(--muted); font-weight:700; white-space:nowrap; }
+/* «· с телефона, iOS» после даты — тем же серым, но легче самой даты. */
+.lead-card-head time .lead-card-device { font-weight:500; }
 .lead-delete-button { width:34px; height:34px; min-width:34px; padding:0; display:grid; place-items:center; border:1px solid transparent; border-radius:calc(9px * var(--corner-scale)); background:transparent; color:var(--muted); }
 .lead-delete-button:hover { border-color:color-mix(in srgb,var(--accent) 35%,var(--line)); background:var(--accent-soft); color:var(--accent); }
 .lead-delete-button:focus-visible, .lead-delete-confirm button:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
