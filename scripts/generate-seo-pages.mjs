@@ -1110,9 +1110,13 @@ for (const page of publicPages) {
   // очередная страница каталога. Дата обновления — день сборки: список машин и
   // цифры в тексте действительно пересобираются каждую ночь.
   if (page.post) {
+    // Картинка и логотип издателя: без них Google не показывает статью с превью
+    // (нашла проверка 28.09.2026). Картинка — та же, что в соцсетях и наверху статьи.
+    const postImage = blogPostImage(page.post);
     schemas.push({
       "@context": "https://schema.org",
       "@type": "BlogPosting",
+      ...(postImage ? { image: [postImage] } : {}),
       headline: page.post.h1,
       description: page.post.seoDescription,
       inLanguage: "ru-BY",
@@ -1120,7 +1124,7 @@ for (const page of publicPages) {
       datePublished: page.post.published,
       dateModified: isoDate(blogUpdatedAt(page.post, live.collections.get(page.post.slug)?.changedAt)) || page.post.published,
       author: { "@type": "Organization", name: COMPANY.schemaName, url: routeUrl("/") },
-      publisher: { "@type": "Organization", name: COMPANY.schemaName, url: routeUrl("/") },
+      publisher: { "@type": "Organization", name: COMPANY.schemaName, url: routeUrl("/"), logo: { "@type": "ImageObject", url: routeUrl("/icon-512.png") } },
     });
     if (page.post.faq?.length) schemas.push(renderer.faqSchema(page.post.faq));
   }
@@ -1663,7 +1667,7 @@ const llmsFull = () => {
     "",
     "## Доставка",
     "",
-    "- Обычный срок от подписания договора до Минска — 30–50 дней.",
+    "- Обычный срок от подписания договора до Минска — 30–55 дней.",
     "- Этапы: выкуп у продавца, экспортные документы, доставка до границы, таможенное оформление, путь до Минска.",
     "- Стоимость доставки зависит от города отправления в Китае; разбор по этапам есть на странице стоимости доставки.",
     "",

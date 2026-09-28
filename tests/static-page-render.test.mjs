@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { findRoot, hoistLinks, injectAppRoot } from "../server/root-inject.mjs";
 import { renderWithApi } from "../server/api-replay.mjs";
-import { isStaticAppPath } from "../server/static-page.mjs";
+import { dropHeadFaqIfRendered, isStaticAppPath } from "../server/static-page.mjs";
 import { embeddedApiValue } from "../src/boot-api.js";
 
 // С 26.09.2026 журнал, инструменты и справочные страницы сервер рисует тем же
@@ -50,4 +50,17 @@ test("отрисовка с ответами останавливается, к�
   assert.equal(markup, "<main></main>");
   assert.deepEqual(api, {});
   assert.equal(passes, 1);
+});
+
+// Проверка 28.09.2026 нашла на /customs и в журнале два одинаковых FAQPage: один из
+// шапки сборки, второй — от блока вопросов приложения.
+test("вопросы размечены один раз: копия из шапки уходит, когда их разметило приложение", () => {
+  const faq = '<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[]}</script>';
+  const post = '<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting"}</script>';
+  const html = `<html><head>${post}\n    ${faq}</head><body><div id="root"><main>${faq}</main></div></body></html>`;
+  const out = dropHeadFaqIfRendered(html, `<main>${faq}</main>`);
+  assert.equal(out.match(/"FAQPage"/g).length, 1);
+  assert.match(out.slice(0, out.indexOf("</head>")), /BlogPosting/);
+  // Приложение вопросов не разметило — шапка остаётся как есть.
+  assert.equal(dropHeadFaqIfRendered(html, "<main></main>"), html);
 });

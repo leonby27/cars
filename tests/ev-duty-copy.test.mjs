@@ -6,6 +6,7 @@ import { MODEL_TEXTS_RAW } from "../src/model-texts.js";
 // Тексты журнала переписываются теми же правилами: обещание нулевой пошлины не должно
 // пережить конец льготы ни в обзоре модели, ни в подборке.
 import { BLOG_TEXTS_RAW } from "../src/blog-texts.js";
+import { AFTER_QUOTA_BLOG_SENTENCES } from "../src/ev-duty-copy-blog.js";
 
 const sentences = (value, found = []) => {
   if (typeof value === "string") found.push(...value.split(/(?<=[.!?])\s+/));
@@ -41,4 +42,18 @@ test("keeps the hybrid rule intact — only the electric half changes", () => {
   const before = "У электрической версии пошлина нулевая, у гибрида её считают по объёму двигателя и возрасту машины.";
   const after = rewriteEvDutyCopy(before, { quotaOver:true });
   assert.equal(after, "У электрической версии пошлина 15% от стоимости, у гибрида её считают по объёму двигателя и возрасту машины.");
+});
+
+// Замены журнала — точные фразы. Если статью переписали и фразы в ней больше нет,
+// замена молча перестанет работать; тест ловит такую пару.
+test("every blog replacement still matches its article", () => {
+  const all = [];
+  const collect = (value) => {
+    if (typeof value === "string") all.push(value);
+    else if (Array.isArray(value)) value.forEach(collect);
+    else if (value && typeof value === "object") Object.values(value).forEach(collect);
+  };
+  collect(BLOG_TEXTS_RAW);
+  const missing = AFTER_QUOTA_BLOG_SENTENCES.filter(([from]) => !all.some((text) => text.includes(from))).map(([from]) => from);
+  assert.deepEqual(missing, []);
 });

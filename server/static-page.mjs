@@ -87,6 +87,19 @@ async function homeBoot() {
   }
 }
 
+// Вопросы-ответы в готовой разметке приложение размечает само (ArticleFaq и блок
+// пунктов расчёта в App.jsx), а шапка из сборки несёт свою копию — для запасного
+// ответа, когда отрисовка не удалась. Вместе выходило два одинаковых FAQPage на
+// странице (нашла проверка 28.09.2026 на /customs и в журнале). Когда в разметке
+// приложения вопросы уже размечены, копию из шапки убираем.
+const FAQ_SCRIPT = /<script type="application\/ld\+json">(?:(?!<\/script>)[\s\S])*?"@type":"FAQPage"[\s\S]*?<\/script>\s*/g;
+export const dropHeadFaqIfRendered = (html, markup) => {
+  if (!html || !/"@type":"FAQPage"/.test(markup || "")) return html;
+  const end = html.indexOf("</head>");
+  if (end === -1) return html;
+  return html.slice(0, end).replace(FAQ_SCRIPT, "") + html.slice(end);
+};
+
 /**
  * Страница по адресу: `{ status, html }`; `null` — такого адреса у модуля нет или
  * файла сборки нет (тогда отвечает обычное правило сайта).
@@ -104,11 +117,13 @@ export async function renderStaticPage(rawPath, search = "") {
     blogText: post ? BLOG_TEXTS[post.slug] || null : null,
     toolTexts: findToolPage(path) ? TOOL_PAGE_TEXTS : null,
   };
-  const extra = path === "/" ? await homeBoot() : {};
+  // «Как это работает» тоже называет размер каталога: без настоящей цифры сервер
+  // рисовал запасные «64 900», и робот видел их вместо живых 80 тысяч.
+  const extra = path === "/" ? await homeBoot() : path === "/how-it-works" ? await catalogFacts() : {};
   try {
     const { markup, api } = await renderWithApi((answers) => entry.renderStaticApp(path, search, { ...extra, api: answers }, options));
     // Цифры каталога — в данные страницы: первый кадр браузера рисует ту же строку.
-    const html = markup ? injectAppRoot(file, markup, { path, boot: { api, ...(extra.catalogFacts ? { catalogFacts: extra.catalogFacts } : {}) } }) : null;
+    const html = markup ? dropHeadFaqIfRendered(injectAppRoot(file, markup, { path, boot: { api, ...(extra.catalogFacts ? { catalogFacts: extra.catalogFacts } : {}) } }), markup) : null;
     return { status: 200, html: html || file };
   } catch (error) {
     console.error(`готовая страница ${path}: отрисовка упала, отдаём файл сборки`, error);
