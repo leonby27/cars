@@ -51,6 +51,7 @@
     "pilot:guazi": "node scripts/guazi-pilot.mjs",
     "importv2": "node scripts/import-v2.mjs",
     "refresh": "node scripts/refresh-che168.mjs",
+    "refresh:guazi": "node scripts/refresh-guazi.mjs",
     "night-watch": "node scripts/night-watch.mjs",
     "indexnow": "node scripts/indexnow.mjs",
     "feed": "node scripts/yandex-feed.mjs --db",

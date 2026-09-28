@@ -11,6 +11,9 @@ export function parseCommand(text) {
   // «Круг 1» — Che168, «Круг 2» — Guazi. Просто «круг» по-прежнему значит Che168.
   if (/^(?:круг|весь|всё|все|полный круг)(?:\s*(?:№|n|#)?\s*1)?[.!]?$/.test(t)) return { kind: "circle" };
   if (/^(?:круг|полный круг)\s*(?:№|n|#)?\s*2[.!]?$/.test(t)) return { kind: "guazi" };
+  if (/^(?:продолжить|продолжи|доделать|доделай|дальше)\s*(?:№|n|#)?\s*2[.!]?$/.test(t)) return { kind: "guazi-resume" };
+  if (/^(?:стоп|стой|хватит)\s*(?:№|n|#)?\s*2[.!]?$/.test(t)) return { kind: "guazi-stop" };
+  if (/^(?:статус|как дела|что там)\s*(?:№|n|#)?\s*2[.!]?$/.test(t)) return { kind: "guazi-status" };
   if (/^(продолжить|продолжи|доделать|доделай|дальше)$/.test(t)) return { kind: "resume" };
   if (/^(стоп|стой|хватит)$/.test(t)) return { kind: "stop" };
   if (/^(статус|как дела|что там)$/.test(t)) return { kind: "status" };

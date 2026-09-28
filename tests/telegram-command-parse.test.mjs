@@ -9,3 +9,10 @@ test("«круг», «круг 1» и их варианты запускают �
   assert.deepEqual(parseCommand("продолжить"), { kind: "resume" });
   assert.equal(parseCommand("марка BMW").kind, "brands");
 });
+
+test('numbered Guazi controls are isolated from legacy Che168 commands', () => {
+  for (const [text, kind] of [['Статус 2', 'guazi-status'], ['статус №2.', 'guazi-status'], ['Стоп 2', 'guazi-stop'], ['продолжить2', 'guazi-resume'], ['Доделать #2!', 'guazi-resume']]) assert.deepEqual(parseCommand(text), { kind });
+  for (const text of ['статус 22', 'стоп 21', 'продолжить 3', 'круг 2; rm -rf /']) assert.equal(parseCommand(text), null);
+  assert.deepEqual(parseCommand('стоп'), { kind: 'stop' });
+  assert.deepEqual(parseCommand('статус'), { kind: 'status' });
+});

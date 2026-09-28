@@ -20,7 +20,7 @@ export function verificationBudget({ now = Date.now, windowMs = 3600000, maxAtte
 
 // The request context shares the server browser's cookies. Dispose every response:
 // Playwright otherwise retains its body until the context closes (too much for a bulk run).
-export async function readSessionCard(request, url, { timeout = 25000 } = {}) {
+export async function readSessionCard(request, url, { timeout = 25000, allowMissing = false } = {}) {
   const id = productId(url);
   const response = await request.get(url, { timeout, maxRedirects: 0 }).catch(e => {
     // Playwright's multi-line call log can include private request headers.
@@ -37,7 +37,8 @@ export async function readSessionCard(request, url, { timeout = 25000 } = {}) {
       }
       throw error;
     }
-    if (status < 200 || status >= 300) throw new Error(`Card HTTP ${status}`);
+    const missing = allowMissing && [404, 410].includes(status);
+    if (!missing && (status < 200 || status >= 300)) throw new Error(`Card HTTP ${status}`);
     if (productId(response.url()) !== id) throw new Error('Unexpected product redirect');
     const maxBytes = 8 * 1024 * 1024;
     if (Number(response.headers()['content-length']) > maxBytes) throw new Error('Card response too large');
@@ -46,6 +47,16 @@ export async function readSessionCard(request, url, { timeout = 25000 } = {}) {
     const html = body.toString('utf8');
     const title = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '';
     if (isChallenge({ title })) throw new SourceBlocked(url, status, 'challenge_html');
+    if (missing) {
+      // Only an ordinary, first-party Next.js missing page is evidence. Proxy
+      // errors, redirects and challenges must never remove a catalog record.
+      const visibleText = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<[^>]*>/g, ' ');
+      if (isChallenge({ title, text: visibleText }) || !/text\/html/i.test(response.headers()['content-type'] || '')
+        || !html.includes('self.__next_f.push(') || !/\b(?:404|410|not found|no longer available)\b/i.test(visibleText)) {
+        throw new SourceBlocked(url, status, 'unverified_missing_page');
+      }
+      return { url: response.url(), observedAt: new Date().toISOString(), unavailable: true, httpStatus: status };
+    }
     const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
     if (!scripts.some(s => s.trim().startsWith('self.__next_f.push('))) throw new SourceBlocked(url, status, 'missing_product_payload');
     return { url: response.url(), observedAt: new Date().toISOString(), rawData: extractRawData(scripts, id) };
@@ -321,10 +332,10 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
       return payload;
     } finally { await response.dispose(); }
   }
-  const fetchCard = async url => { const result = await readSessionCard(context.request, url, { timeout }); metrics.httpCards++; return result; };
+  const fetchCard = async (url, options) => { const result = await readSessionCard(context.request, url, { timeout, ...options }); metrics.httpCards++; return result; };
   const requestWorker = async () => {
     let lastVisit = 0;
-    return { async card(url) {
+    return { async card(url, options) {
       productId(url);
       if (!ready) await renew(url);
       if (refresh) await refresh;
@@ -333,13 +344,13 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
       await paceRequest();
       if (refresh) await refresh;
       const seen = generation;
-      try { return await fetchCard(url); }
+      try { return await fetchCard(url, options); }
       catch (e) {
         if (e.code !== 'SOURCE_BLOCKED') throw e;
         if (refresh) await refresh;
         else if (seen === generation) await renew(url, e);
         await paceRequest();
-        return fetchCard(url);
+        return fetchCard(url, options);
       }
     } };
   };

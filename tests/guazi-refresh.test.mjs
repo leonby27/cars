@@ -1,0 +1,192 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { runGuaziRefresh, refreshPaths } from '../scripts/lib/guazi-refresh.mjs';
+import { makeSegments } from '../scripts/lib/guazi-core.mjs';
+import { readJson } from '../scripts/lib/guazi-pilot-io.mjs';
+import { readSessionCard } from '../scripts/lib/guazi-pilot-browser.mjs';
+import { mergeRefreshedGuazi, createGuaziRefreshStore } from '../scripts/lib/guazi-refresh-store.mjs';
+
+const config = { ...JSON.parse(await fs.readFile(new URL('../config/guazi-core.json', import.meta.url))), priceBasis: 'FOB' };
+const { filters } = JSON.parse(await fs.readFile(new URL('../config/refresh-order.json', import.meta.url)));
+const segment = makeSegments([{ id: '102715', name: 'Tesla' }], filters, config)[0];
+const policy = { config, segments: [segment] };
+const a = 'y2ud7mtru4', b = 'bbbbbbbbbb', c = 'cccccccccc';
+const url = id => `https://en.guazi.com/products/tesla-${id}.html`;
+const snapshotRow = id => ({ id: `guazi-${id}`, externalId: id, sourceUrl: url(id), brand: 'Tesla' });
+const listing = id => ({ productId: id, seoUri: `tesla-${id}.html`, brandId: 102715, fuelTypeName: 'BEV', licenseDate: '20240901' });
+const capture = (id, price = '$28,748') => ({ url: url(id), observedAt: new Date().toISOString(), rawData: {
+  productId: id, clueId: 172877314, makeNameEn: 'Tesla', modelName: 'Model Y', title: 'Tesla Model Y',
+  vehicleDetails: [{ key: 'modelYear', value: '2024' }, { key: 'fuel', value: 'BEV' }, { key: 'regDate', value: '2024.09' }, { key: 'mileage', value: '60300' }],
+  images: [{ imgUrl: 'https://global-image-pub.guazistatic-global.com/car.jpg' }], prices: [{ price, enName: 'Horgos, China' }],
+} });
+const missing = id => ({ unavailable: true, httpStatus: 404, url: url(id), observedAt: new Date().toISOString() });
+const blocked = () => Object.assign(Error('Source access check'), { code: 'SOURCE_BLOCKED' });
+
+async function fixture(t, { active = [a], listed = [a, b] } = {}) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'guazi-refresh-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const rows = new Map(active.map(id => [id, { ...snapshotRow(id), status: 'active' }]));
+  const f = { root, rows, listed, reads: [], searches: [], writes: [], removals: [], messages: [], finalized: 0, releases: 0, closed: 0, snapshots: 0 };
+  f.store = {
+    target: 'test-only', acquire: async () => async () => { f.releases++; },
+    snapshot: async () => { f.snapshots++; return [...rows.values()].filter(x => x.status === 'active').map(({ status, ...row }) => row); },
+    upsert: async car => { const exists = rows.has(car.externalId); f.writes.push(car); rows.set(car.externalId, { ...snapshotRow(car.externalId), status: 'active' }); return exists ? 'updated' : 'added'; },
+    markUnavailable: async (row, evidence) => { f.removals.push({ row, evidence }); rows.get(row.externalId).status = 'unavailable'; },
+    finalize: async () => { f.finalized++; },
+  };
+  f.detail = async id => f.listed.includes(id) ? capture(id) : missing(id);
+  f.search = async body => {
+    const ids = body.exportPolicyEligible === 1 ? f.listed : [];
+    return { data: { totalCount: ids.length, list: body.clientScene === 'count' ? [] : ids.map(listing) } };
+  };
+  f.deps = {
+    store: f.store, policy, notify: async text => f.messages.push(text),
+    browserFactory: async options => {
+      assert.equal(options.publicOnly, true); assert.equal(options.authState, undefined); assert.equal(options.requestInterval, 750);
+      return { publicBootstrap: async () => {}, publicSearch: async body => { f.searches.push(body); return f.search(body); },
+        worker: async () => ({ card: async (href, options) => { assert.equal(options.allowMissing, true); const id = href.match(/-([a-z0-9]{10})\.html/)[1]; f.reads.push(id); return f.detail(id); } }),
+        close: async () => { f.closed++; },
+      };
+    },
+  };
+  f.run = (newCircle = true, signal) => runGuaziRefresh({ root, newCircle, signal }, f.deps);
+  f.state = () => readJson(refreshPaths(root).state);
+  return f;
+}
+
+test('new round refreshes existing FOB, adds discoveries, and removes only after absent list plus two missing pages', async t => {
+  const f = await fixture(t, { active: [a, c] });
+  const state = await f.run();
+  assert.equal(state.status, 'complete');
+  assert.deepEqual(state.counts, { checked: 3, updated: 1, added: 1, unavailable: 1, review: 0, rejected: 0 });
+  assert.equal(f.reads.filter(id => id === c).length, 2);
+  assert.equal(f.removals[0].evidence.observations.length, 2);
+  assert.ok(f.writes.every(car => car.source === 'Guazi' && car.fobPort === 'Horgos' && car.fobPriceUsd === 28748));
+  assert.equal(f.finalized, 1); assert.equal(f.releases, 1); assert.equal(f.closed, 1);
+  await assert.rejects(fs.stat(refreshPaths(f.root).lock), { code: 'ENOENT' });
+});
+
+test('next round actually rereads lists and cards; completed round cannot be resumed', async t => {
+  const f = await fixture(t, { listed: [a] });
+  const first = await f.run(); const n = f.searches.length;
+  await assert.rejects(f.run(false), /Незавершённого/);
+  f.detail = async id => capture(id, '$29,900');
+  const second = await f.run();
+  assert.notEqual(second.run, first.run); assert.equal(f.reads.length, 2); assert.equal(f.searches.length, n * 2);
+  assert.equal(f.writes.at(-1).fobPriceUsd, 29900); assert.equal(f.snapshots, 2);
+});
+
+test('blocked card saves committed checks; resume keeps initial snapshot and skips only those successes', async t => {
+  const f = await fixture(t);
+  f.detail = async id => { if (id === b) throw blocked(); return capture(id); };
+  await assert.rejects(f.run(), { code: 'SOURCE_BLOCKED' });
+  const state = await f.state(); assert.equal(state.status, 'blocked'); assert.equal(state.counts.updated, 1);
+  await assert.rejects(f.run(), /Предыдущ|Прошлый/);
+  assert.equal((await f.state()).run, state.run);
+  f.detail = async id => capture(id);
+  const resumed = await f.run(false);
+  assert.equal(resumed.status, 'complete'); assert.equal(resumed.run, state.run); assert.equal(f.snapshots, 1);
+  assert.equal(f.reads.filter(id => id === a).length, 1); assert.equal(f.reads.filter(id => id === b).length, 2);
+});
+
+test('catalog absence and a live detail only refresh price, keep active, and flag unverified availability', async t => {
+  const f = await fixture(t, { listed: [] });
+  f.detail = async id => capture(id);
+  const state = await f.run();
+  assert.equal(state.counts.review, 1); assert.equal(f.removals.length, 0); assert.equal(f.rows.get(a).status, 'active');
+  assert.equal(f.writes[0].availabilityStatus, 'unverified');
+});
+
+test('missing page for a listed car never removes it; incomplete discovery performs no writes', async t => {
+  const f = await fixture(t, { listed: [a] });
+  f.detail = async id => missing(id);
+  assert.equal((await f.run()).counts.review, 1); assert.equal(f.removals.length, 0);
+  f.search = async body => { if (body.clientScene !== 'count') throw blocked(); return { data: { totalCount: 1 } }; };
+  await assert.rejects(f.run(), { code: 'SOURCE_BLOCKED' });
+  assert.equal(f.writes.length, 0); assert.equal(f.removals.length, 0); assert.equal((await f.state()).status, 'blocked');
+});
+
+test('failed second missing-page check preserves the vehicle and remains resumable', async t => {
+  const f = await fixture(t, { listed: [] });
+  let calls = 0; f.detail = async id => { if (++calls === 2) throw blocked(); return missing(id); };
+  await assert.rejects(f.run(), { code: 'SOURCE_BLOCKED' });
+  assert.equal(f.removals.length, 0); assert.equal((await f.state()).counts.checked, 0);
+  f.detail = async id => capture(id);
+  assert.equal((await f.run(false)).counts.review, 1); assert.equal(f.rows.get(a).status, 'active');
+});
+
+test('zero census counts do not suppress fresh discovery', async t => {
+  const f = await fixture(t, { active: [], listed: [b] });
+  const normal = f.search; f.search = body => body.clientScene === 'count' ? { data: { totalCount: 0 } } : normal(body);
+  assert.equal((await f.run()).counts.added, 1);
+});
+
+test('SIGTERM equivalent finishes active work and resumes without discarding it', async t => {
+  const f = await fixture(t, { listed: [a] }); const controller = new AbortController();
+  f.detail = async id => { controller.abort(); return capture(id); };
+  await assert.rejects(f.run(true, controller.signal), { code: 'GUAZI_PAUSED' });
+  assert.equal((await f.state()).status, 'paused'); assert.equal(f.writes.length, 1);
+  assert.equal((await f.run(false)).status, 'complete'); assert.equal(f.reads.length, 1);
+});
+
+test('DB failure is not checkpointed; retry rereads the card, and incompatible database cannot resume', async t => {
+  const f = await fixture(t, { listed: [a] }); const normal = f.store.upsert;
+  f.store.upsert = async () => { throw Error('database failed'); };
+  await assert.rejects(f.run(), /database failed/); assert.equal((await f.state()).counts.checked, 0);
+  f.store.target = 'another-database'; await assert.rejects(f.run(false), /database changed/);
+  f.store.target = 'test-only'; f.store.upsert = normal;
+  assert.equal((await f.run(false)).counts.updated, 1); assert.equal(f.reads.length, 2);
+});
+
+test('missing Horgos quote retains existing FOB; unknown historical brand cannot be removed without a scan', async t => {
+  const f = await fixture(t, { listed: [a] });
+  f.detail = async id => { const value = capture(id); value.rawData.prices[0].enName = 'Shanghai, China'; return value; };
+  assert.equal((await f.run()).counts.review, 1); assert.equal(f.writes.length, 0);
+  f.rows.get(a).brand = 'Historical unknown'; f.listed = []; f.detail = async id => missing(id);
+  assert.equal((await f.run()).counts.review, 1); assert.equal(f.removals.length, 0);
+});
+
+test('live process lock prevents a second collector without deleting the lock', async t => {
+  const f = await fixture(t); await fs.mkdir(refreshPaths(f.root).base, { recursive: true });
+  await fs.writeFile(refreshPaths(f.root).lock, String(process.pid));
+  await assert.rejects(f.run(), /live PID/); assert.equal(f.snapshots, 0);
+  assert.equal(await fs.readFile(refreshPaths(f.root).lock, 'utf8'), String(process.pid));
+});
+
+test('normal 404/410 requires explicit opt-in and source HTML; challenges, redirects and 5xx remain errors', async () => {
+  let disposed = 0;
+  const request = (status, html, type = 'text/html', responseUrl = url(a)) => ({ get: async () => ({
+    status: () => status, url: () => responseUrl, headers: () => ({ 'content-type': type }), body: async () => Buffer.from(html), dispose: async () => { disposed++; },
+  }) });
+  const html = '<title>404: This page could not be found</title><h1>404</h1><script>self.__next_f.push([0])</script>';
+  for (const status of [404, 410]) assert.equal((await readSessionCard(request(status, html), url(a), { allowMissing: true })).httpStatus, status);
+  await assert.rejects(readSessionCard(request(404, html), url(a)), /HTTP 404/);
+  await assert.rejects(readSessionCard(request(404, html + '<p>verify you are human</p>'), url(a), { allowMissing: true }), { code: 'SOURCE_BLOCKED' });
+  await assert.rejects(readSessionCard(request(404, '<h1>404 proxy error</h1>'), url(a), { allowMissing: true }), { code: 'SOURCE_BLOCKED' });
+  await assert.rejects(readSessionCard(request(404, html, 'application/json'), url(a), { allowMissing: true }), { code: 'SOURCE_BLOCKED' });
+  await assert.rejects(readSessionCard(request(404, html, 'text/html', url(b)), url(a), { allowMissing: true }), /redirect/);
+  await assert.rejects(readSessionCard(request(503, html), url(a), { allowMissing: true }), /HTTP 503/);
+  assert.equal(disposed, 8);
+});
+
+test('store preserves enrichment and original import date but writes fresh FOB and price history', () => {
+  const old = { importedAt: '2026-09-26', conditionSummary: 'old report', appearanceScore: 85, fobPriceUsd: 28000, priceHistory: [{ at: '2026-01-01', priceCny: 1 }] };
+  const fresh = { ...snapshotRow(a), source: 'Guazi', priceBasis: 'FOB', fobPort: 'Horgos', fobPriceUsd: 29000, chinaPrice: 200000,
+    checkedAt: '2026-09-28', importedAt: '2026-09-28', appearanceScore: null, images: ['https://global-image-pub.guazistatic-global.com/new.jpg'] };
+  const merged = mergeRefreshedGuazi(old, fresh);
+  assert.equal(merged.appearanceScore, 85); assert.equal(merged.conditionSummary, 'old report'); assert.equal(merged.importedAt, '2026-09-26');
+  assert.equal(merged.fobPriceUsd, 29000); assert.deepEqual(merged.priceHistory, [{ at: '2026-09-28', priceCny: 200000 }]);
+  assert.throws(() => mergeRefreshedGuazi(old, { ...fresh, fobPort: 'Shanghai' }), /Invalid/);
+});
+
+test('database removal is source-scoped and rejects mismatched or single evidence', async () => {
+  const queries = [];
+  const store = createGuaziRefreshStore({ databaseUrl: 'postgres://test:secret@localhost/test', withTransaction: fn => fn({ query: async (sql, params) => { queries.push({ sql, params }); return { rows: [] }; } }) });
+  await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [missing(a)] }), /Unconfirmed/);
+  await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [missing(a), missing(b)] }), /Unconfirmed/);
+  await store.markUnavailable(snapshotRow(a), { run: 'test', observations: [missing(a), missing(a)] });
+  assert.match(queries[0].sql, /source='Guazi' AND status='active'/); assert.equal(queries[0].params[0], `guazi-${a}`);
+});

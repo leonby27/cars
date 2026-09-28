@@ -14,6 +14,7 @@ import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sendTelegram } from "./lib/telegram.mjs";
 import { parseCommand } from "./lib/telegram-command-parse.mjs";
+import { handleGuaziCommand } from "./lib/telegram-guazi.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OFFSET_PATH = path.join(ROOT, "runtime", "telegram-offset.json");
@@ -70,23 +71,21 @@ const HELP = [
   "Что я умею:",
   "",
   "• «круг 1» (или просто «круг») — обойти все марки Che168 заново, от мелких к крупным",
-  "• «круг 2» — Guazi: обновление пока не настроено",
-  "• «продолжить» — доделать только то, что не успел прошлый круг",
+  "• «круг 2» — обновить Guazi и найти новые машины",
+  "• «статус 2», «стоп 2», «продолжить 2» — управление Guazi",
+  "• «продолжить» — доделать только то, что не успел прошлый круг Che168",
   "• «марка BMW» или «марки BMW, Audi» — только названные",
-  "• «статус» — идёт ли прогон и сколько машин в каталоге",
-  "• «стоп» — остановить прогон (всё проверенное сохранится)",
+  "• «статус» — идёт ли Che168 и сколько машин в каталоге",
+  "• «стоп» — остановить Che168 (всё проверенное сохранится)",
 ].join("\n");
 
 async function handle(text) {
   const cmd = parseCommand(text);
   if (!cmd) return;
+  if (cmd.kind === 'guazi' || cmd.kind.startsWith('guazi-')) return handleGuaziCommand(cmd, { root: ROOT, say });
   const busy = await running();
 
   if (cmd.kind === "help") return say(HELP);
-
-  // Обновлять Guazi нечем: его экспортный сайт пускает программы только после
-  // проверки «я не робот», а проходить её автоматически мы не будем.
-  if (cmd.kind === "guazi") return say("Круг 2 (Guazi) пока не работает: обновление машин Guazi не настроено. Цены и наличие Guazi на сайте сейчас те, что были при загрузке 26–28 сентября.");
 
   if (cmd.kind === "status") {
     const tail = await fs

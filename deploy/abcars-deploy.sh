@@ -96,6 +96,12 @@ fi
 bash deploy/abcars-archive-assets.sh
 
 systemctl restart abcars
+# The command listener keeps imported modules in memory. Reload it so newly
+# deployed Telegram commands become available; do not enable a stopped bot or
+# start either catalog refresh. Its KillMode=process preserves detached workers.
+if systemctl is-active --quiet abcars-bot; then
+  systemctl restart abcars-bot
+fi
 find /var/cache/nginx/abcars -type f -delete
 systemctl reload nginx
 
