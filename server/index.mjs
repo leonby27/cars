@@ -1,6 +1,7 @@
 import http from "node:http";
 import { pool } from "./db.mjs";
 import { handleApiRequest } from "./handler.mjs";
+import { flushSiteRequests, loadSiteRequests } from "./analytics.mjs";
 
 const port = Number(process.env.API_PORT || 8787);
 const server = http.createServer(handleApiRequest);
@@ -17,7 +18,11 @@ const shutdown = async () => {
   force.unref();
   server.close();
   server.closeAllConnections?.();
+  clearInterval(siteRequestsTimer);
   try {
+    // Память о заходах — в базу, чтобы новый процесс поднял её и не открывал окно
+    // для накрутки счётчика.
+    await flushSiteRequests();
     await pool.end();
   } catch {}
   clearTimeout(force);
@@ -39,6 +44,13 @@ server.on("error", (error) => {
   retries += 1;
   setTimeout(() => server.listen(port, "0.0.0.0"), 250);
 });
+
+// Память «с этого адреса недавно открывали сайт» переживает перезапуск через базу:
+// поднимаем её до первых запросов и сбрасываем каждые 15 секунд.
+const SITE_REQUESTS_FLUSH_MS = 15 * 1000;
+await loadSiteRequests();
+const siteRequestsTimer = setInterval(() => { flushSiteRequests(); }, SITE_REQUESTS_FLUSH_MS);
+siteRequestsTimer.unref();
 
 server.listen(port, "0.0.0.0", () => console.log(`abcars.by API: http://127.0.0.1:${port}`));
 

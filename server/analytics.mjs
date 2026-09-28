@@ -250,6 +250,8 @@ export const isBotAgent = (agent = "") => {
 const SITE_VISIT_TTL_MS = 30 * 60 * 1000;
 const SITE_VISIT_LIMIT = 20_000;
 const siteVisits = new Map();
+// Адреса, отмеченные с последнего сброса в базу.
+const siteVisitsDirty = new Set();
 
 /** Запомнить, что с этого адреса к нам обратились. */
 export const noteSiteRequest = (address, now = Date.now()) => {
@@ -262,24 +264,76 @@ export const noteSiteRequest = (address, now = Date.now()) => {
     if (siteVisits.size >= SITE_VISIT_LIMIT) siteVisits.clear();
   }
   siteVisits.set(value, now);
+  siteVisitsDirty.add(value);
 };
 
 /**
  * Открывали ли с этого адреса сайт за последние полчаса.
  *
  * Адрес неизвестен — отвечаем «да»: потерять живого посетителя обиднее, чем пропустить
- * чужое сообщение. По той же причине «да» отвечаем и сразу после перезапуска сайта:
- * память о заходах живёт в процессе, и после выкладки она пуста, а люди на сайте
- * остаются. Первые полчаса после запуска проверка не работает и никого не режет.
+ * чужое сообщение. Память о заходах живёт в процессе, но переживает перезапуск: при
+ * старте она поднимается из таблицы `site_requests` (loadSiteRequests). Пока она не
+ * поднята — после выкладки, пока база не ответила, — тоже отвечаем «да», но не дольше
+ * получаса: раньше это окно открывалось при каждом перезапуске, и накрутчик карточек
+ * проходил в статистику именно в него.
  */
 const startedAt = Date.now();
+let siteVisitsLoaded = false;
 export const hasRecentSiteRequest = (address, now = Date.now()) => {
   const value = String(address || "").trim();
   if (!value || value === "unknown") return true;
-  if (now - startedAt < SITE_VISIT_TTL_MS) return true;
+  if (!siteVisitsLoaded && now - startedAt < SITE_VISIT_TTL_MS) return true;
   const at = siteVisits.get(value);
   return at !== undefined && now - at < SITE_VISIT_TTL_MS;
 };
+
+/**
+ * Поднять память о заходах из базы после перезапуска. Берём только свежие строки —
+ * старше получаса всё равно не считаются. Сбой базы — не повод падать: память
+ * останется пустой, и проверка ещё полчаса будет вести себя как раньше.
+ */
+export async function loadSiteRequests({ db = pool, now = Date.now() } = {}) {
+  try {
+    const result = await db.query("SELECT address, seen_at FROM site_requests WHERE seen_at > now() - interval '30 minutes'");
+    for (const row of result.rows) {
+      const at = new Date(row.seen_at).getTime();
+      if (!Number.isFinite(at) || now - at >= SITE_VISIT_TTL_MS) continue;
+      const known = siteVisits.get(row.address);
+      if (known === undefined || known < at) siteVisits.set(row.address, at);
+    }
+    siteVisitsLoaded = true;
+    return result.rows.length;
+  } catch (error) {
+    console.error("Не удалось поднять память о заходах:", error?.message || error);
+    return -1;
+  }
+}
+
+/**
+ * Сбросить в базу адреса, отмеченные с прошлого раза, и подчистить устаревшие строки.
+ * Вызывается по таймеру и при остановке; повторный вызов без новых адресов ничего не пишет.
+ */
+export async function flushSiteRequests({ db = pool } = {}) {
+  if (!siteVisitsDirty.size) return 0;
+  const addresses = [...siteVisitsDirty];
+  const seenAt = addresses.map((address) => new Date(siteVisits.get(address) || Date.now()).toISOString());
+  siteVisitsDirty.clear();
+  try {
+    await db.query(`INSERT INTO site_requests (address, seen_at)
+      SELECT address, seen_at::timestamptz FROM unnest($1::text[], $2::text[]) AS t(address, seen_at)
+      ON CONFLICT (address) DO UPDATE SET seen_at = GREATEST(site_requests.seen_at, EXCLUDED.seen_at)`, [addresses, seenAt]);
+    await db.query("DELETE FROM site_requests WHERE seen_at < now() - interval '30 minutes'");
+    return addresses.length;
+  } catch (error) {
+    // Не записалось — вернём адреса в очередь, допишем в следующий раз.
+    for (const address of addresses) siteVisitsDirty.add(address);
+    console.error("Не удалось сохранить память о заходах:", error?.message || error);
+    return -1;
+  }
+}
+
+/** Только для тестов: сбросить состояние памяти о заходах. */
+export const resetSiteRequestsForTests = () => { siteVisits.clear(); siteVisitsDirty.clear(); siteVisitsLoaded = false; };
 
 const DATACENTER_CACHE_TTL_MS = 10 * 60 * 1000;
 const DATACENTER_CACHE_LIMIT = 5000;
@@ -773,7 +827,12 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
         (array_agg(nullif(properties->>'platform','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'platform','') IS NOT NULL))[1] AS platform,
         (array_agg(nullif(properties->>'country','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'country','') IS NOT NULL))[1] AS country,
         count(*) FILTER (WHERE event_name='page_view')::int AS page_views,
-        min(created_at) AS created_at
+        min(created_at) AS created_at,
+        -- Не в первый раз: у посетителя были события до начала этого захода, за любой
+        -- срок. По этому признаку кабинет собирает вкладку «Вернулись».
+        EXISTS (SELECT 1 FROM analytics_events first_seen
+          WHERE first_seen.visitor_id = numbered.visitor_id AND first_seen.created_at < min(numbered.created_at)
+            AND first_seen.path <> '/analytics' AND first_seen.path NOT LIKE '/analytics/%' AND first_seen.path !~* '(^|[?&])nocount=1(&|$)') AS came_back
       FROM numbered
       GROUP BY visitor_id, visit_number
       ORDER BY min(created_at) DESC`, [from, to]),
@@ -821,7 +880,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
     searches:searchesResult.rows.map((row) => ({ query:row.query, asked:row.asked, people:row.people, found:row.found, lastAskedAt:row.last_asked })),
-    visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", device:row.device || "", platform:row.platform || "", country:row.country || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at })),
+    visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", device:row.device || "", platform:row.platform || "", country:row.country || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at, returning:Boolean(row.came_back) })),
   };
 }
 

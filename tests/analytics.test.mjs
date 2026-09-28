@@ -48,10 +48,11 @@ test("в переключателе заходов только источник
   assert.doesNotMatch(source, /\[\["all", "Все"\], \["yandex", "Яндекс"\], \["google", "Google"\]\]/);
   assert.match(source, /const sourceButtons = useMemo/);
   // Набор кнопок задан списком и не пляшет от данных: Яндекс, Google, ChatGPT,
-  // Threads, Instagram, Telegram и «Остальное» — всё прочее, включая прямые заходы.
-  assert.match(source, /const NAMED_SOURCES = \["yandex", "google", "chatgpt", "threads", "instagram", "telegram"\]/);
-  assert.match(source, /key === "rest" \? "Остальное" : sourceKeyLabel\(key\)/);
-  assert.match(source, /sourceFilter === "rest" \? !NAMED_SOURCES\.includes\(key\) : key === sourceFilter/);
+  // Threads, Instagram, Telegram, «Вернулись» (прямые заходы людей с историей) и
+  // «Остальное» — всё прочее, включая первые прямые заходы.
+  assert.match(source, /const NAMED_SOURCES = \["yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"\]/);
+  assert.match(source, /BUCKET_LABELS\[key\] \|\| sourceKeyLabel\(key\)/);
+  assert.match(source, /const BUCKET_LABELS = \{ returning:"Вернулись", rest:"Остальное" \}/);
   // Пустые источники в переключателе не показываем, а при единственном источнике
   // переключателя нет вовсе: выбирать не из чего.
   assert.match(source, /\.filter\(\(\[, , count\]\) => count > 0\)/);
@@ -908,6 +909,71 @@ test("счётчик верит сообщению только после на�
   assert.equal(hasRecentSiteRequest("unknown", later), true);
   // Сразу после запуска проверка молчит.
   assert.equal(hasRecentSiteRequest("203.0.113.9", Date.now()), true);
+});
+
+// Память о заходах переживает перезапуск: до 28.09.2026 она жила только в процессе, и
+// первые полчаса после каждой выкладки проверка пропускала всех подряд — накрутчик
+// карточек попадал в статистику ровно в эти окна (98 перезапусков за две недели).
+test("память о заходах поднимается из базы и после этого окно после запуска закрыто", async () => {
+  const { noteSiteRequest, hasRecentSiteRequest, loadSiteRequests, flushSiteRequests, resetSiteRequestsForTests } = await import("../server/analytics.mjs");
+  resetSiteRequestsForTests();
+  const now = Date.now();
+  // До подъёма из базы — как раньше: сразу после запуска никого не режем.
+  assert.equal(hasRecentSiteRequest("203.0.113.20", now), true);
+  const queries = [];
+  const db = { query:async (sql, params) => {
+    queries.push([sql, params]);
+    if (/^SELECT address, seen_at FROM site_requests/.test(sql)) return { rows:[
+      { address:"203.0.113.21", seen_at:new Date(now - 5 * 60 * 1000).toISOString() },
+      // Устаревшую строку база не должна отдавать, но и подняв её, мы её не считаем.
+      { address:"203.0.113.22", seen_at:new Date(now - 40 * 60 * 1000).toISOString() },
+    ] };
+    return { rows:[] };
+  } };
+  assert.equal(await loadSiteRequests({ db, now }), 2);
+  // Память поднята: чужой адрес больше не проходит даже сразу после запуска.
+  assert.equal(hasRecentSiteRequest("203.0.113.20", now), false);
+  assert.equal(hasRecentSiteRequest("203.0.113.21", now), true);
+  assert.equal(hasRecentSiteRequest("203.0.113.22", now), false);
+  // Новые адреса уходят в базу одним запросом, повторный сброс без новых — пустой.
+  noteSiteRequest("203.0.113.23", now);
+  noteSiteRequest("203.0.113.24", now);
+  assert.equal(await flushSiteRequests({ db }), 2);
+  const insert = queries.find(([sql]) => /INSERT INTO site_requests/.test(sql));
+  assert.ok(insert);
+  assert.deepEqual(insert[1][0], ["203.0.113.23", "203.0.113.24"]);
+  assert.ok(queries.some(([sql]) => /DELETE FROM site_requests WHERE seen_at < now\(\) - interval '30 minutes'/.test(sql)));
+  assert.equal(await flushSiteRequests({ db }), 0);
+  // База не ответила — адреса остаются в очереди на следующий раз.
+  noteSiteRequest("203.0.113.25", now);
+  const broken = { query:async () => { throw new Error("нет связи"); } };
+  assert.equal(await flushSiteRequests({ db:broken }), -1);
+  assert.equal(await flushSiteRequests({ db }), 1);
+  resetSiteRequestsForTests();
+});
+
+test("сервер поднимает память о заходах при старте и сбрасывает её по таймеру и при остановке", async () => {
+  const index = await readFile(new URL("../server/index.mjs", import.meta.url), "utf8");
+  assert.match(index, /await loadSiteRequests\(\);/);
+  assert.match(index, /setInterval\(\(\) => \{ flushSiteRequests\(\); \}, SITE_REQUESTS_FLUSH_MS\)/);
+  // При остановке — сначала сброс, потом закрытие базы.
+  assert.match(index, /await flushSiteRequests\(\);\s*await pool\.end\(\);/);
+  const migration = await readFile(new URL("../db/migrations/043_site_requests.sql", import.meta.url), "utf8");
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS site_requests \(\s*address TEXT PRIMARY KEY,\s*seen_at TIMESTAMPTZ NOT NULL/);
+});
+
+// Вкладка «Вернулись»: прямые заходы людей с историей. Сервер отмечает заход, если у
+// посетителя были события до его начала; кабинет собирает такие в отдельную кнопку
+// и убирает их из «Остального».
+test("прямые заходы вернувшихся людей собираются во вкладку «Вернулись»", async () => {
+  const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
+  assert.match(server, /EXISTS \(SELECT 1 FROM analytics_events first_seen\s*WHERE first_seen\.visitor_id = numbered\.visitor_id AND first_seen\.created_at < min\(numbered\.created_at\)/);
+  assert.match(server, /createdAt:row\.created_at, returning:Boolean\(row\.came_back\) \}\)\)/);
+  const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
+  assert.match(page, /const NAMED_SOURCES = \["yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"\];/);
+  assert.match(page, /returning:"Вернулись"/);
+  assert.match(page, /if \(key === "direct" && visit\.returning\) return "returning";/);
+  assert.match(page, /sourceFilter === "all" \|\| visitBucket\(visit\) === sourceFilter/);
 });
 
 test("сообщения самого счётчика не подтверждают заход", async () => {

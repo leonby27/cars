@@ -658,16 +658,25 @@ function VisitsSection({ visits, total, unread }) {
   // при каждой смене периода и нужную приходилось бы искать глазами заново. А вот
   // пустые каналы не показываем совсем — ряд кнопок с нулями занимал всю ширину
   // панели и не давал ничего, кроме шума.
-  const NAMED_SOURCES = ["yandex", "google", "chatgpt", "threads", "instagram", "telegram"];
+  //
+  // «Вернулись» — прямые заходы людей, которые у нас уже были: набрали адрес или открыли
+  // закладку. Это половина всех прямых заходов и самые глубокие сеансы; без отдельной
+  // вкладки они тонули в «Остальном» вместе с первыми заходами неизвестно откуда.
+  const NAMED_SOURCES = ["yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"];
+  const BUCKET_LABELS = { returning:"Вернулись", rest:"Остальное" };
+  const visitBucket = (visit) => {
+    const key = visitSourceKey(visit.source, visit.landingPath);
+    if (key === "direct" && visit.returning) return "returning";
+    return NAMED_SOURCES.includes(key) ? key : "rest";
+  };
   const sourceButtons = useMemo(() => {
     const counts = new Map();
     for (const visit of visits) {
-      const key = visitSourceKey(visit.source, visit.landingPath);
-      const bucket = NAMED_SOURCES.includes(key) ? key : "rest";
+      const bucket = visitBucket(visit);
       counts.set(bucket, (counts.get(bucket) || 0) + 1);
     }
     const present = [...NAMED_SOURCES, "rest"]
-      .map((key) => [key, key === "rest" ? "Остальное" : sourceKeyLabel(key), counts.get(key) || 0])
+      .map((key) => [key, BUCKET_LABELS[key] || sourceKeyLabel(key), counts.get(key) || 0])
       .filter(([, , count]) => count > 0);
     // Один-единственный источник — выбирать не из чего, «Все» и он же дадут одну и ту
     // же таблицу. Тогда переключателя не показываем вовсе.
@@ -680,11 +689,7 @@ function VisitsSection({ visits, total, unread }) {
   }, [sourceButtons, sourceFilter]);
   const filteredVisits = visits
     .map((visit, index) => ({ visit, index }))
-    .filter(({ visit }) => {
-      if (sourceFilter === "all") return true;
-      const key = visitSourceKey(visit.source, visit.landingPath);
-      return sourceFilter === "rest" ? !NAMED_SOURCES.includes(key) : key === sourceFilter;
-    });
+    .filter(({ visit }) => sourceFilter === "all" || visitBucket(visit) === sourceFilter);
   return (
     <section className="analytics-panel analytics-visits-panel">
       <div className="analytics-visits-heading">
