@@ -36,6 +36,7 @@ export function buildVehicleQuickInfo(car = {}) {
   const combinedRange = positiveNumber(car.combinedRange);
   const battery = positiveNumber(car.battery);
   const horsepower = positiveNumber(car.horsepower ?? car.powerHp ?? car.enginePowerHp ?? car.hp);
+  const acceleration = positiveNumber(car.acceleration);
   return [
     positiveNumber(car.year) ? `${Number(car.year)} г.` : null,
     mileage ? `пробег ${formatNumber(mileage)} км` : null,
@@ -45,5 +46,6 @@ export function buildVehicleQuickInfo(car = {}) {
     driveLabel(car.drive),
     battery ? `батарея ${formatNumber(battery)} кВт·ч` : null,
     horsepower ? `${formatNumber(horsepower)} сил` : null,
+    acceleration ? `0–100 км/ч за ${acceleration.toLocaleString("ru-RU")} с` : null,
   ].filter(Boolean);
 }

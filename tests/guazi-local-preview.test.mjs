@@ -34,6 +34,8 @@ test('public sample works without reading the full report and preserves only pub
   const galleryPhotos = photos.filter(photo => galleryUrls.has(photo.url));
   const card = buildGuaziPreviewCard(source, galleryPhotos);
   assert.deepEqual(card, buildGuaziPreviewCard(publicSource, galleryPhotos));
+  assert.equal(card.id, 'guazi-y2ud7mtru4');
+  assert.equal(card.localPreview, undefined);
   assert.equal(card.images.length, 27);
   assert.equal(card.technicalSpecs.count, 89);
   assert.equal(card.conditionGrade, 'A'); assert.equal(card.chinaGrade, 'B');

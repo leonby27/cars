@@ -954,10 +954,10 @@ function PriceChangeMark({ car }) {
 // решают стили того места, где цена нарисована.
 const PRICE_FIT_STEPS = [0.92, 0.84, 0.76, 0.68];
 
-function TotalPrice({ car, price, currency, className = "" }) {
+function TotalPrice({ car, price, currency, className = "", approximate = true, compactApproximation = false }) {
   const boxRef = useRef(null);
   const lineRef = useRef(null);
-  const text = `≈ ${money(price.totalUsd, currency)}`;
+  const text = `${approximate ? "≈ " : ""}${money(price.totalUsd, currency)}`;
   useLayoutEffect(() => {
     const box = boxRef.current;
     const line = lineRef.current;
@@ -1003,7 +1003,7 @@ function TotalPrice({ car, price, currency, className = "" }) {
           Класс на ней — чтобы правила вида «любой span внутри цены — серый и мелкий»
           (а такие есть и в строке каталога, и в карточке на главной) не покрасили
           саму цену: см. .price-line в стилях. */}
-      <span ref={lineRef} className="price-line">{text}<PriceChangeMark car={car} /></span>
+      <span ref={lineRef} className="price-line">{approximate && compactApproximation ? <><span className="price-approximation">≈</span>{" "}{money(price.totalUsd, currency)}</> : text}<PriceChangeMark car={car} /></span>
     </strong>
   );
 }
@@ -7882,8 +7882,7 @@ function TechnicalSpecs({ car }) {
   }, [searching]);
   if (!groups.length) return null;
   return (
-    <section className="detail-facts-section technical-specs">
-      <h2>Полные данные</h2>
+    <section className="detail-facts-section technical-specs" aria-label="Характеристики автомобиля">
       <div className="spec-search-box" ref={searchBoxRef}>
         <SearchField
           className="spec-search"
@@ -8175,7 +8174,8 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   const modelCrumbHref = modelLandingPath(car.brand, car.model) || `/catalog?brand=${encodeURIComponent(car.brand)}&model=${encodeURIComponent(car.model)}`;
   return (
     <main className="detail page-width">
-      <div className="breadcrumbs">
+      <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} priceRatingPending={apiMode !== false && car.priceRating === undefined} breadcrumbs={
+        <div className="breadcrumbs">
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         <CrumbLink href="/catalog" onOpen={() => backToCatalog(car.id)}>Каталог авто из Китая</CrumbLink>
@@ -8186,7 +8186,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         <CaretRight size={13} />
         {car.model} {car.year}
       </div>
-      <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} priceRatingPending={apiMode !== false && car.priceRating === undefined} />
+      } />
       <SimilarCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       {quickViewModal}
     </main>
@@ -8380,12 +8380,12 @@ function ListingIdRow({ car }) {
   if (!id) return null;
   const copy = async () => setState((await copyToClipboard(String(id))) ? "copied" : "failed");
   return (
-    <div className="listing-id-row">
+    <span className="listing-id-row">
       <span>{state === "copied" ? "ID скопирован" : state === "failed" ? "Не удалось скопировать" : `ID объявления: ${id}`}</span>
       <button type="button" aria-label="Копировать ID объявления" onClick={copy}>
         {state === "copied" ? <Check size={15} /> : <Copy size={15} />}
       </button>
-    </div>
+    </span>
   );
 }
 
@@ -8542,13 +8542,35 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   );
 }
 
-function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false }) {
+function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumbs = null, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false }) {
   const currency = useCurrency();
   const [priceOpen, setPriceOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const priceDisclosureId = useId();
-  // Повтор кнопки прячем, когда настоящая кнопка уже на экране или осталась выше:
-  // ниже неё повтор только мешает, а на прокрутке вверх он мигал на пустом месте.
+  const priceDropdownRef = useRef(null);
+  const priceTriggerRef = useRef(null);
+  useEffect(() => {
+    if (!priceOpen) return undefined;
+    const dismissOutside = (event) => {
+      if (!priceDropdownRef.current?.contains(event.target)) setPriceOpen(false);
+    };
+    const dismissEscape = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPriceOpen(false);
+      priceTriggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("focusin", dismissOutside);
+    window.addEventListener("keydown", dismissEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("focusin", dismissOutside);
+      window.removeEventListener("keydown", dismissEscape, true);
+    };
+  }, [priceOpen]);
+  useEffect(() => { setPriceOpen(false); }, [car.id]);
   const [floatingCtaHidden, setFloatingCtaHidden] = useState(true);
   const availabilityCtaRef = useRef(null);
   // По этой машине заказ уже создан — тогда кнопка не заводит второй, а ведёт в кабинет.
@@ -8566,14 +8588,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   useEffect(() => {
     const cta = availabilityCtaRef.current;
     if (!cta) return undefined;
-    // В быстром просмотре содержимое прокручивается своим окном, а не страницей, —
-    // тогда и мерить надо по нему, иначе «ниже экрана» считалось бы по окну браузера.
     const scroller = cta.closest(".quick-view-scroll");
     const source = scroller || window;
-    // Считаем сами, а не наблюдателем за появлением: тот сообщает только о переходах
-    // через границу видимости, и при быстрой прокрутке кнопка успевала перескочить
-    // из «ниже экрана» в «выше экрана» без единого сообщения — повтор оставался в
-    // старом состоянии и мигал на пустом месте.
     let frame = 0;
     const update = () => {
       frame = 0;
@@ -8586,9 +8602,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
     update();
     source.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule, { passive: true });
-    // Сворачиваемые блоки меняют положение основной кнопки без прокрутки страницы.
-    // Следим за высотой колонки, чтобы плавающий повтор сразу исчезал, когда
-    // настоящая кнопка оказалась в видимой области.
     const sidebar = cta.closest(".detail-sidebar");
     const resizeObserver = typeof ResizeObserver === "undefined" || !sidebar
       ? null
@@ -8658,19 +8671,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   ].filter((landing) => landing.path !== currentAppPath());
   // Материалы журнала про модель этой машины: сравнения с соседями по классу.
   const journal = BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [];
-  // Все восемь плашек сохраняют место, даже если источник не указал значение.
-  const specs = [
-    [CalendarBlank, "Год", car.year],
-    [Gauge, "Пробег", `${number(car.mileage)} км`],
-    [Lightning, "Тип", powertrainName(car.type)],
-    [CarProfile, "Привод", car.drive],
-    powertrainName(car.type) === "Бензин"
-      ? [Scales, "Масса", Number.isFinite(Number(car.curbWeight)) && Number(car.curbWeight) > 0 ? `${number(Number(car.curbWeight))} кг` : "Не указана"]
-      : [BatteryHigh, "Батарея", car.battery ? `${car.battery} кВт·ч` : "Не указана"],
-    [CarProfile, "Кузов", car.bodyType],
-    [Palette, "Цвет", translateColor(car.bodyColor)],
-    [Timer, "0–100 км/ч", Number.isFinite(Number(car.acceleration)) && Number(car.acceleration) > 0 ? `${Number(car.acceleration).toLocaleString("ru-RU")} с` : "Не указан"],
-  ].map(([icon, label, value]) => [icon, label, value || "Не указано"]);
   // Блок отчёта продавца заполнен только у Guazi; у Che168 все поля пусты, а тип
   // батареи и так виден в «Полных характеристиках». Пустые строки не показываем,
   // а без единой строки исчезает и весь блок — вместе с дисклеймером-заглушкой.
@@ -8688,6 +8688,16 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   ].filter(([, , value]) => value);
   return (
     <>
+      <div className="detail-topbar">
+        {breadcrumbs}
+        <div className="detail-actions">
+          <CopyLinkButton car={car} />
+          <button disabled={localGuaziPreview} aria-label={favoriteHint} className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}>
+            <Heart size={21} weight={favorite ? "fill" : "regular"} />
+            <ActionTooltip text={favoriteHint} />
+          </button>
+        </div>
+      </div>
       <div className="detail-title">
         <div>
           {/* Ярлыка о новизне здесь нет: под заголовком и так стоит строка «Добавлено
@@ -8708,107 +8718,26 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </AppLink>
             )}
           </div>
-          <div className="detail-mobile-price-row">
-            <TotalPrice car={car} price={price} currency={currency} className="detail-mobile-price" />
-          </div>
           {/* Тип, привод и пробег из подзаголовка убраны: они и так стоят
               строкой ниже, в «Характеристиках». Остались только даты. */}
           {datesLine && <p>{datesLine}</p>}
         </div>
-        <div className="detail-actions">
-          <CopyLinkButton car={car} />
-          <button disabled={localGuaziPreview} aria-label={favoriteHint} className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}>
-            <Heart size={21} weight={favorite ? "fill" : "regular"} />
-            <ActionTooltip text={favoriteHint} />
-          </button>
-        </div>
-      </div>
-      <div className="detail-main">
-        {/* Фотографии отдельным блоком от остального содержания: на узком экране
-            правая колонка перестаёт быть колонкой, и между галереей и
-            характеристиками встаёт шкала «Цена среди похожих». */}
-        <div className="detail-gallery">
-          <VehicleGallery car={car} />
-        </div>
-        {/* Когда добавлено и обновлено — строка только для телефона (на широком
-            экране скрыта стилями). Стоит отдельным блоком сетки, чтобы на узком
-            экране встать после шкалы цены, а не между фотографиями и ней. */}
-        {datesLine && <p className="detail-dates">{datesLine}</p>}
-        <div className="detail-content">
-          <section className="detail-facts-section" aria-label="Основные характеристики">
-            <FactList items={specs} tiles />
-          </section>
-          {!localGuaziPreview && conditionFacts.length > 0 && (
-            <section className="detail-facts-section condition-card">
-              <div className="detail-facts-heading">
-                <h2>Что указано в объявлении</h2>
-              </div>
-              <FactList items={conditionFacts} />
-            </section>
-          )}
-          <TechnicalSpecs car={car} />
-          <VehicleFaq car={car} navigate={navigate} />
-          {/* Куда идти за объяснением сметы — в самом низу карточки, строками с
-              иконками. Раньше эти ссылки стояли внутри разбора цены и терялись в
-              нём; человек, который дочитал страницу, дальше либо считает другую
-              машину, либо разбирается с растаможкой. */}
-          {sections.length > 0 && (
-            <nav className="detail-section-links" aria-label="Разделы каталога">
-              <b>Смотреть в каталоге</b>
-              <div>
-                {sections.map((landing) => (
-                  <AppLink key={landing.path} href={landing.path} navigate={navigate}>{landing.name}</AppLink>
-                ))}
-              </div>
-            </nav>
-          )}
-          {journal.length > 0 && (
-            <nav className="detail-section-links" aria-label="Материалы журнала об этой модели">
-              <b>Об этой модели в журнале</b>
-              <div>
-                {journal.map((post) => (
-                  <AppLink key={post.path} href={post.path} navigate={navigate}>{post.name}</AppLink>
-                ))}
-              </div>
-            </nav>
-          )}
-          <div className="detail-tools-footer">
-            <nav className="detail-tool-links" aria-label="Страницы расчётов">
-              <AppLink href="/customs" navigate={navigate}><Calculator size={21} /><span>Калькулятор растаможки</span><CaretRight size={17} weight="bold" /></AppLink>
-              <AppLink href="/delivery-cost" navigate={navigate}><RoadHorizon size={21} /><span>Из чего складывается цена</span><CaretRight size={17} weight="bold" /></AppLink>
-              {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
-            </nav>
-            <p className="detail-source-note">{!localGuaziPreview && "Это сведения продавца и площадки, не наша независимая проверка. "}Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</p>
-          </div>
-        </div>
-        <div className="detail-sidebar">
-          {/* Итоговая цена стоит над плашками и без своей плашки: это главный ответ
-              страницы, и прятать его внутрь разбора по этапам незачем. На телефоне
-              она и так стоит крупно под названием, поэтому там эта строка скрыта. */}
-          <div className="price-total detail-sidebar-price" aria-label="Ориентировочная стоимость до Минска">
-            <TotalPrice car={car} price={price} currency={currency} />
+
+          <div ref={priceDropdownRef} className="detail-header-price" aria-label="Ориентировочная стоимость до Минска">
+            <div className="price-total"><TotalPrice car={car} price={price} currency={currency} compactApproximation /></div>
             {/* Что это за число: цена не за машину в Китае, а итог с доставкой и
                 растаможкой. Мелкой строкой под ценой — крупное число остаётся главным. */}
             <span className="detail-sidebar-price-note">
               Цена под ключ до Минска. {" "}
-              <button type="button" aria-controls={priceDisclosureId} aria-expanded={priceOpen} onClick={() => setPriceOpen((open) => !open)}>Детализация</button>
+              <button ref={priceTriggerRef} type="button" aria-controls={priceDisclosureId} aria-expanded={priceOpen} onClick={() => setPriceOpen((open) => !open)}>Детализация</button>
             </span>
-          </div>
-          {/* Цена среди таких же машин — своим блоком. Набор для сравнения приходит
-              с машиной от сервера; цену берём ту же, что показана крупно ниже, —
-              включая выбранный режим цен с квотой. */}
-          <PriceRatingScale
-            rating={car.priceRating}
-            priceUsd={price.totalUsd}
-            mileage={car.mileage}
-            battery={car.battery}
-            quotaPricingOn={quotaPricing?.on !== false}
-            formatMoney={(usd) => roughMoney(usd, currency)}
-            loading={priceRatingPending}
-          />
-          <div className="animated-disclosure price-disclosure-shell" aria-hidden={!priceOpen}>
-            <div>
-              <aside id={priceDisclosureId} className="order-card price-disclosure" aria-label="Детализация цены">
+            <aside
+              id={priceDisclosureId}
+              className={`order-card price-dropdown${priceOpen ? " open" : ""}`}
+              aria-label="Детализация цены"
+              aria-hidden={!priceOpen}
+              inert={priceOpen ? undefined : true}
+            >
                 <div className="price-disclosure-content">
                 <div className="price-breakdown">
               <div>
@@ -8851,9 +8780,77 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                   <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
                 </div>
                 </div>
-              </aside>
-            </div>
+            </aside>
           </div>
+      </div>
+      <div className="detail-main">
+        {/* Фотографии отдельным блоком от остального содержания: на узком экране
+            правая колонка перестаёт быть колонкой, и между галереей и
+            характеристиками встаёт шкала «Цена среди похожих». */}
+        <div className="detail-gallery">
+          <VehicleGallery car={car} />
+        </div>
+        {/* Когда добавлено и обновлено — строка только для телефона (на широком
+            экране скрыта стилями). Стоит отдельным блоком сетки, чтобы на узком
+            экране встать после шкалы цены, а не между фотографиями и ней. */}
+        {datesLine && <p className="detail-dates">{datesLine}</p>}
+        <div className="detail-content">
+          {!localGuaziPreview && conditionFacts.length > 0 && (
+            <section className="detail-facts-section condition-card">
+              <div className="detail-facts-heading">
+                <h2>Что указано в объявлении</h2>
+              </div>
+              <FactList items={conditionFacts} />
+            </section>
+          )}
+          <TechnicalSpecs car={car} />
+          <VehicleFaq car={car} navigate={navigate} />
+          {/* Куда идти за объяснением сметы — в самом низу карточки, строками с
+              иконками. Раньше эти ссылки стояли внутри разбора цены и терялись в
+              нём; человек, который дочитал страницу, дальше либо считает другую
+              машину, либо разбирается с растаможкой. */}
+          {sections.length > 0 && (
+            <nav className="detail-section-links" aria-label="Разделы каталога">
+              <b>Смотреть в каталоге</b>
+              <div>
+                {sections.map((landing) => (
+                  <AppLink key={landing.path} href={landing.path} navigate={navigate}>{landing.name}</AppLink>
+                ))}
+              </div>
+            </nav>
+          )}
+          {journal.length > 0 && (
+            <nav className="detail-section-links" aria-label="Материалы журнала об этой модели">
+              <b>Об этой модели в журнале</b>
+              <div>
+                {journal.map((post) => (
+                  <AppLink key={post.path} href={post.path} navigate={navigate}>{post.name}</AppLink>
+                ))}
+              </div>
+            </nav>
+          )}
+          <div className="detail-tools-footer">
+            <nav className="detail-tool-links" aria-label="Страницы расчётов">
+              <AppLink href="/customs" navigate={navigate}><Calculator size={21} /><span>Калькулятор растаможки</span><CaretRight size={17} weight="bold" /></AppLink>
+              <AppLink href="/delivery-cost" navigate={navigate}><RoadHorizon size={21} /><span>Из чего складывается цена</span><CaretRight size={17} weight="bold" /></AppLink>
+              {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
+            </nav>
+            <p className="detail-source-note">{!localGuaziPreview && "Это сведения продавца и площадки, не наша независимая проверка. "}Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно. <ListingIdRow car={car} /></p>
+          </div>
+        </div>
+        <div className="detail-sidebar">
+          {/* Цена среди таких же машин — своим блоком. Набор для сравнения приходит
+              с машиной от сервера; цену берём ту же, что показана крупно выше, —
+              включая выбранный режим цен с квотой. */}
+          <PriceRatingScale
+            rating={car.priceRating}
+            priceUsd={price.totalUsd}
+            mileage={car.mileage}
+            battery={car.battery}
+            quotaPricingOn={quotaPricing?.on !== false}
+            formatMoney={(usd) => roughMoney(usd, currency)}
+            loading={priceRatingPending}
+          />
           {quickInfo.length > 0 && (
             <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
               <span className="vehicle-quick-info-label">Основная информация</span>
@@ -8903,23 +8900,24 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           {sold ? (
             <div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>
           ) : (
-            <button ref={availabilityCtaRef} className={`primary report-order-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
-              {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+            <button ref={availabilityCtaRef} className={`primary report-order-cta availability-primary-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
+              <span className="availability-primary-title">
+                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+              </span>
+              {!inOrder && <span className="availability-primary-note">Бесплатно <span aria-hidden="true">•</span> Ни к чему не обязывает</span>}
             </button>
           )}
-          {!sold && !localGuaziPreview && (
-            <p className="report-order-note">Заявку получит наш проверенный партнёр и проконсультирует вас по этому автомобилю</p>
+          {!sold && (
+            <p className="report-order-note">Заявку получит наш проверенный партнёр</p>
           )}
           <BrandNotice car={car} />
-          <ListingIdRow car={car} />
-          {/* Пока настоящая кнопка ниже сгиба, её повторяет эта: на телефоне она
-              висит поверх страницы, на широком экране прилипает к низу окна, пока
-              правая колонка на виду. Стоит внутри колонки, чтобы на широком экране
-              совпадать с ней по ширине без подгонки цифрами. */}
           {floatingCta && !sold && (
             <div className={`detail-floating-availability${floatingCtaHidden ? " is-hidden" : ""}`} aria-hidden={floatingCtaHidden}>
-              <button className={`primary${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={floatingCtaHidden ? -1 : 0}>
-                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+              <button className={`primary availability-primary-cta${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={floatingCtaHidden ? -1 : 0}>
+                <span className="availability-primary-title">
+                  {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+                </span>
+                {!inOrder && <span className="availability-primary-note">Бесплатно <span aria-hidden="true">•</span> Ни к чему не обязывает</span>}
               </button>
             </div>
           )}

@@ -1,4 +1,4 @@
-export const GUAZI_PREVIEW_ID = 'guazi-preview-y2ud7mtru4';
+export const GUAZI_PREVIEW_ID = 'guazi-y2ud7mtru4';
 export const GUAZI_PREVIEW_PATH = '/cars/preview-y2ud7mtru4';
 
 /** Keep only fields from the public product page and matched Chinese description. */
@@ -38,7 +38,7 @@ export function buildGuaziPreviewCard(input, photos) {
   const summary = (condition.repairExcerpts || []).map(text => publicRepairTranslations.get(text)).filter(Boolean).join(' ');
   return {
     id: GUAZI_PREVIEW_ID, source: 'Guazi', sourceId: source.productId, sourceUrl: source.sourceUrl,
-    localPreview: true, title: 'Tesla Model Y 2024', brand: source.brand, model: source.model, trim: 'Rear-Wheel-Drive',
+    title: 'Tesla Model Y 2024', brand: source.brand, model: source.model, trim: 'Rear-Wheel-Drive',
     year: source.modelYear, type: 'Электромобиль', bodyType: 'Кроссовер', city: 'Чэнду',
     mileage: source.mileageKm, manufactureDate: source.manufactureDate, firstRegistration: source.firstRegistration,
     vin: source.vin, ...source.catalogFields, batteryHealth: source.batteryHealth,
