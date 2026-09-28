@@ -283,7 +283,15 @@ async function listCarsPage(searchParams) {
   const [itemsResult, countResult] = await Promise.all([
     beyondCap
       ? Promise.resolve({ rows:[] })
-      : pool.query(`${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
+      // Сортируем только номера, строки целиком берём для выбранной страницы. Иначе база
+      // перекладывает каждую машину вместе с source_payload: на 80 тыс. машин сортировка
+      // «по умолчанию» не влезала в память и писала на диск ~48 МБ на каждый запрос.
+      // Порядок у всех сортировок завершается l.id, поэтому внешний ORDER BY его повторяет.
+      : pool.query(`WITH picked AS (
+          SELECT l.id FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
+          ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+        )
+        ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`, [...values,limit,offset]),
     // max(last_seen_at) едет в том же скане, что и count(*): отдельного запроса дата не стоит.
     pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at, ${SECTION_CHANGED_AT} AS changed_at FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
@@ -803,43 +811,82 @@ export async function modelClassStock() {
   return value;
 }
 
+/**
+ * Справочник фильтров двумя проходами по каталогу вместо шести. Раньше счёт, марки,
+ * модели, кузова, приводы и набор доступных фильтров были отдельными запросами, и
+ * каждый заново перебирал все машины: после открытия Guazi (80 тыс.) на двух ядрах
+ * сервера справочник стоил 1,2–1,9 с, а мимо кэша его просит каждая страница каталога.
+ * Теперь каждый проход группирует сразу по нескольким признакам (GROUPING SETS):
+ *   общий — по всему каталогу: марки (отбор по топливу и кузову, без марки — в списке
+ *     марок видны все) и приводы (без отбора);
+ *   узкий — только машины выбранного топлива и марки: счёт и модели (плюс кузов),
+ *     кузова и доступные фильтры (без кузова), число видов топлива — как число
+ *     непустых групп по топливу (count DISTINCT).
+ * Узкий проход при выбранной марке перебирает сотни машин, а не весь каталог; оба идут
+ * параллельно. Условия те же, что были у отдельных запросов; порядок строк задаёт база,
+ * как и раньше, — у неё своё правило сравнения строк.
+ */
 export async function getCatalogMeta(type, brand, bodyType) {
   const selectedBodyTypes = multiParamValues(bodyType, "Все кузова", { splitCommas:true });
-  const values = [];
-  const filters = ["l.status='active'"];
-  if (type && type !== "Все") { values.push(type); filters.push(`v.powertrain=$${values.length}`); }
-  const brandValues = [...values];
-  const brandFilters = [...filters];
-  if (selectedBodyTypes.length) { brandValues.push(selectedBodyTypes); brandFilters.push(`v.specifications->>'bodyType'=ANY($${brandValues.length})`); }
-  if (brand && brand !== "Все марки") { values.push(brand); filters.push(`v.brand=$${values.length}`); }
-  const bodyFilters = [...filters];
-  const bodyValues = [...values];
-  if (selectedBodyTypes.length) { bodyValues.push(selectedBodyTypes); bodyFilters.push(`v.specifications->>'bodyType'=ANY($${bodyValues.length})`); }
-  const where = `WHERE ${filters.join(" AND ")}`;
-  const bodyWhere = `WHERE ${bodyFilters.join(" AND ")}`;
-  const brandWhere = `WHERE ${brandFilters.join(" AND ")}`;
-  const [count, brands, models, bodyTypes, drives, availability] = await Promise.all([
-    pool.query(`SELECT count(*)::int total FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere}`, bodyValues),
-    pool.query(`SELECT v.brand, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${brandWhere} GROUP BY v.brand ORDER BY v.brand`, brandValues),
-    pool.query(`SELECT v.model, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
-    pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
-    pool.query("SELECT v.drivetrain drive, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
-    // Какие фильтры вообще показывать. Считается по тому же отбору, что и остальной
-    // справочник (топливо и марка), — иначе на бензиновой вкладке висел бы фильтр по
-    // батарее, а на электрической по объёму двигателя.
-    pool.query(`SELECT count(*)::int total, count(v.drivetrain)::int drive, count(l.owners)::int owners, count(v.battery_kwh)::int battery, count(l.condition_grade)::int condition,
-      count(COALESCE(v.electric_range_km, v.combined_range_km))::int AS "range",
-      count(NULLIF(v.specifications->>'acceleration',''))::int accel, count(NULLIF(v.specifications->>'tireRim',''))::int tire,
-      count(${ENGINE_VOLUME_SQL})::int engine, count(${ENGINE_POWER_SQL})::int power, count(${GEARBOX_SQL})::int gearbox,
-      count(DISTINCT ${FUEL_SQL})::int fuel
-      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
-  ]);
-  const driveCounts = drives.rows.reduce((totals, row) => {
+  // У каждого прохода свой набор подстановок, номера $n в каждом идут подряд.
+  const filters = () => {
+    const values = [];
+    const param = (value) => { values.push(value); return `$${values.length}`; };
+    return {
+      values,
+      type: () => (type && type !== "Все" ? `v.powertrain=${param(type)}` : "true"),
+      brand: () => (brand && brand !== "Все марки" ? `v.brand=${param(brand)}` : "true"),
+      body: () => (selectedBodyTypes.length ? `v.specifications->>'bodyType'=ANY(${param(selectedBodyTypes)})` : "true"),
+    };
+  };
+  const w = filters();
+  const wide = { values:w.values, text:`SELECT * FROM (
+      SELECT GROUPING(v.brand) AS g_brand, v.brand, v.drivetrain AS drive,
+        count(*) FILTER (WHERE ${w.type()} AND ${w.body()})::int AS brand_count,
+        count(*) FILTER (WHERE v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан')::int AS drive_count
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
+      WHERE l.status='active'
+      GROUP BY GROUPING SETS ((v.brand), (v.drivetrain))
+    ) counted ORDER BY g_brand, brand, drive` };
+  const n = filters();
+  const narrow = { values:n.values, text:`SELECT * FROM (
+      SELECT GROUPING(v.model) AS g_model, GROUPING(v.specifications->>'bodyType') AS g_body, GROUPING(${FUEL_SQL}) AS g_fuel,
+        v.model, v.specifications->>'bodyType' AS body_type,
+        count(*) FILTER (WHERE ${n.body()})::int AS body_count,
+        count(*) FILTER (WHERE v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён')::int AS known_body_count,
+        count(${FUEL_SQL})::int AS fuel_count,
+        -- Какие фильтры вообще показывать. Считается по тому же отбору, что и остальной
+        -- справочник (топливо и марка), — иначе на бензиновой вкладке висел бы фильтр по
+        -- батарее, а на электрической по объёму двигателя.
+        count(*)::int AS total, count(v.drivetrain)::int AS drive, count(l.owners)::int AS owners, count(v.battery_kwh)::int AS battery,
+        count(l.condition_grade)::int AS condition, count(COALESCE(v.electric_range_km, v.combined_range_km))::int AS "range",
+        count(NULLIF(v.specifications->>'acceleration',''))::int AS accel, count(NULLIF(v.specifications->>'tireRim',''))::int AS tire,
+        count(${ENGINE_VOLUME_SQL})::int AS engine, count(${ENGINE_POWER_SQL})::int AS power, count(${GEARBOX_SQL})::int AS gearbox
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
+      WHERE l.status='active' AND ${n.type()} AND ${n.brand()}
+      GROUP BY GROUPING SETS ((v.model), (v.specifications->>'bodyType'), (${FUEL_SQL}), ())
+    ) counted ORDER BY g_model, model, g_body, CASE WHEN g_body=0 THEN known_body_count END DESC, body_type` };
+  const [wideRows, narrowRows] = await Promise.all([pool.query(wide.text, wide.values), pool.query(narrow.text, narrow.values)]);
+  const brands = wideRows.rows.filter((row) => row.g_brand === 0 && row.brand_count > 0).map((row) => ({ brand:row.brand, count:row.brand_count }));
+  const drives = wideRows.rows.filter((row) => row.g_brand === 1 && row.drive_count > 0);
+  const part = (name) => narrowRows.rows.filter((row) => ["g_model", "g_body", "g_fuel"].every((key) => row[key] === (key === name ? 0 : 1)));
+  // Строка итога есть всегда (пустая группировка отвечает и на пустой выборке); запас —
+  // на случай подменённой базы в тестах.
+  const all = narrowRows.rows.find((row) => row.g_model && row.g_body && row.g_fuel) || {};
+  const sum = (key) => all[key] ?? 0;
+  const models = part("g_model").filter((row) => row.body_count > 0).map((row) => ({ model:row.model, count:row.body_count }));
+  const bodyTypes = part("g_body").filter((row) => row.known_body_count > 0).map((row) => ({ body_type:row.body_type, count:row.known_body_count }));
+  const driveCounts = drives.reduce((totals, row) => {
     const drive = normalizeDrive(row.drive);
-    return drive === UNKNOWN_DRIVE ? totals : totals.set(drive, (totals.get(drive) || 0) + Number(row.count));
+    return drive === UNKNOWN_DRIVE ? totals : totals.set(drive, (totals.get(drive) || 0) + Number(row.drive_count));
   }, new Map());
   const driveRows = orderDrives([...driveCounts.keys()]).map((drive) => ({ drive, count:driveCounts.get(drive) }));
-  return { total:count.rows[0].total, brands:brands.rows, models:models.rows, bodyTypes:bodyTypes.rows, drives:driveRows, availability:availability.rows[0] };
+  const availability = {
+    total:sum("total"), drive:sum("drive"), owners:sum("owners"), battery:sum("battery"), condition:sum("condition"),
+    range:sum("range"), accel:sum("accel"), tire:sum("tire"), engine:sum("engine"), power:sum("power"), gearbox:sum("gearbox"),
+    fuel:part("g_fuel").filter((row) => row.fuel_count > 0).length,
+  };
+  return { total:sum("body_count"), brands, models, bodyTypes, drives:driveRows, availability };
 }
 
 // Список обзоров на странице «О моделях авто» показывает по каждой модели фото,
