@@ -12,6 +12,7 @@ import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer } from "./seo-render.mjs";
 import { CATALOG_LANDINGS, CATALOG_PAGE_SIZE, catalogLandingMoved, catalogLandingRedirect, catalogPageCount, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingSeoDescription, landingSeoTitle, modelLandingRedirect, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
 import { MODEL_PAGES } from "../src/model-pages.js";
+import { withoutTrackingParams } from "../src/tracking-params.js";
 // Вычеркнутые марки: из наличия их убрали, но раздел оставили с предложением
 // привезти под заказ — см. ветку «раздел без единой машины» ниже.
 import { EXCLUDED_BRANDS } from "../config/import-policy.mjs";
@@ -116,13 +117,13 @@ async function catalogBoot({ path, filters, query, list, seed, guide = null, bra
 
 /**
  * Готовая разметка приложения для страницы списка; null — отдаём простую версию.
- * Рисуем по полному адресу запроса (`query`), а не только по странице и порядку: каталог
+ * Рисуем по адресу запроса (`query`), а не только по странице и порядку: каталог
  * в браузере читает из адреса фильтры, а сверку встроенного списка ведёт по всей строке
- * запроса. С метками рекламы (utm, yclid) встроенный список поэтому не берут обе
- * стороны — и сервер, и браузер рисуют заготовку, а список приходит запросом.
+ * запроса. Метки переходов (utm, yclid, nocount) отбрасывают обе стороны — выдачу они
+ * не меняют; до 28.09.2026 с ними вместо машин рисовались пустые заготовки.
  */
 async function catalogApp(path, boot, query) {
-  const appRoot = await renderCatalogAppMarkup(path, query.toString(), boot);
+  const appRoot = await renderCatalogAppMarkup(path, withoutTrackingParams(query).toString(), boot);
   return appRoot ? { appRoot, appRootPath: path, bootData: boot } : null;
 }
 

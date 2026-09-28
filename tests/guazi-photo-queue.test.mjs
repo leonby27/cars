@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {createHash} from 'node:crypto';
+import {writeJson,readJson} from '../scripts/lib/guazi-pilot-io.mjs';
+test('photo queue drains new batches while importer is stopped and finishes only when producer is complete',async t=>{
+ const run=`guazi-import-${String(process.pid).padStart(8,'0')}`,out=path.resolve('runtime',run),cache=path.join(out,'cache');
+ await fs.mkdir(out);await fs.mkdir(path.join(out,'accepted'));await fs.mkdir(cache);
+ let child;t.after(async()=>{if(child&&child.exitCode===null){child.kill('SIGTERM');await once(child,'close');}await fs.rm(out,{recursive:true,force:true});});
+ const url='https://global-image-pub.guazistatic-global.com/queue-test.jpg',key=createHash('sha256').update(url).digest('hex');await fs.writeFile(path.join(cache,key),Buffer.from([255,216,255,0]));await writeJson(path.join(cache,key+'.json'),{contentType:'image/jpeg'});
+ await writeJson(path.join(out,'local-state.json'),{status:'stopped'});await writeJson(path.join(out,'accepted/first.json'),{id:'first',images:[url]});
+ child=spawn(process.execPath,['scripts/guazi-photos-local.mjs',run],{env:{...process.env,GUAZI_IMAGE_CACHE_DIR:cache},stdio:'ignore'});const ended=once(child,'close');
+ const until=async predicate=>{for(let i=0;i<120;i++){const s=await readJson(path.join(out,'photos-state.json'));if(s&&predicate(s))return s;if(child.exitCode!==null)throw Error('Photo worker exited prematurely');await new Promise(r=>setTimeout(r,100));}throw Error('Photo queue progress timeout');};
+ await until(s=>s.status==='waiting_for_import'&&s.done['first.json']);assert.equal(child.exitCode,null);
+ await writeJson(path.join(out,'accepted/second.json'),{id:'second',images:[url]});await until(s=>s.done['second.json']);
+ await writeJson(path.join(out,'local-state.json'),{status:'complete'});const [code]=await ended;assert.equal(code,0);const final=await readJson(path.join(out,'photos-state.json'));assert.equal(final.status,'complete');assert.equal(Object.keys(final.done).length,2);
+});

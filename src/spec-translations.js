@@ -1,3 +1,4 @@
+import { guaziGroups, guaziNames, guaziValues } from './guazi-spec-vocabulary.js';
 // Russian rendering of the source's technical spec sheet.
 //
 // The catalog stores every Che168 spec sheet verbatim in English
@@ -382,9 +383,9 @@ const GEARBOX_TAILS = {
 // but preserve original codes, proper names and unknown values verbatim.
 const vocabularyKey = (text) => String(text ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 const vocabulary = (entries) => new Map(Object.entries(entries).map(([key, value]) => [vocabularyKey(key), value]));
-const groupVocabulary = vocabulary(GROUPS);
-const nameVocabulary = vocabulary(NAMES);
-const valueVocabulary = vocabulary(VALUES);
+const groupVocabulary = vocabulary({ ...guaziGroups, ...GROUPS });
+const nameVocabulary = vocabulary({ ...guaziNames, ...NAMES });
+const valueVocabulary = vocabulary({ ...guaziValues, ...VALUES });
 
 export function translateSpecGroup(name) {
   return groupVocabulary.get(vocabularyKey(name)) || name;

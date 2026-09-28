@@ -1,9 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PHOTO_BROWSER_CACHE_VERSION, vehiclePhotoHref, retryVehiclePhoto, socialPhotoHref } from "../src/photo-source.js";
+import { PHOTO_BROWSER_CACHE_VERSION, vehiclePhotoHref, retryVehiclePhoto, socialPhotoHref, vehiclePhotoPrefetchSources } from "../src/photo-source.js";
 import { createSeoRenderer } from "../server/seo-render.mjs";
 
 const source = "https://erscglobal2.autoimg.cn/escimg/auto/g34/1400x0_c42_car.jpg.webp";
+
+test('Guazi prefetch is limited to two, while remaining gallery photos retain their on-demand cache URL',()=>{
+ const images=Array.from({length:5},(_,i)=>`https://global-image-pub.guazistatic-global.com/${i}.jpg`);
+ assert.deepEqual(vehiclePhotoPrefetchSources(images),images.slice(0,2));
+ assert.equal(vehiclePhotoHref(images[4]),`/api/image?src=${encodeURIComponent(images[4])}&v=${PHOTO_BROWSER_CACHE_VERSION}`);
+ assert.equal(images.length,5);
+ const che=Array.from({length:5},()=>source);assert.deepEqual(vehiclePhotoPrefetchSources(che),che);
+});
 
 test("все размеры Che168 и оригинал идут через сервер, включая превью без прокси", () => {
   for (const width of [240, 600, 900, 1400, "original"]) {
@@ -19,10 +27,11 @@ test("все размеры Che168 и оригинал идут через се�
 });
 
 test("Guazi использует наш API; обычные локальные изображения сохраняются", () => {
-  for (const host of ["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]) {
+  for (const host of ["image-public.guazistatic.com", "image-oversea.guazistatic-global.com", "global-image1.guazistatic-global.com"]) {
     const image = `https://${host}/photo.jpg?x=1&y=2`;
     assert.equal(vehiclePhotoHref(image), `/api/image?src=${encodeURIComponent(image)}&v=${PHOTO_BROWSER_CACHE_VERSION}`);
     assert.equal(vehiclePhotoHref(image, 0, { cacheVersion:"" }), `/api/image?src=${encodeURIComponent(image)}`);
+    assert.deepEqual(vehiclePhotoPrefetchSources([image, image, image]), [image, image]);
   }
   for (const image of ["/photo/escimg/a.webp", "/logo.svg", "https://example.com/a.jpg", null])
     assert.equal(vehiclePhotoHref(image, 600), image);

@@ -59,6 +59,7 @@ test("charges the 15% duty once the quota is gone", () => {
   assert.equal(dutied.customsUsd, Math.round((dutied.customsValueUsd * 0.15 + free.customsUsd) / 50) * 50);
   assert.equal(dutied.customsNote, "Пошлина 15% · оформление и сборы");
   assert.equal(dutied.customsAlert, "Без квоты на льготный ввоз");
+  assert.equal(dutied.customsAlertTone, "warn");
   assert.ok(dutied.totalUsd > free.totalUsd);
 });
 
@@ -329,4 +330,28 @@ test("страна ввоза на таможенный платёж не вли
   const a = customsPayment({ customsValueUsd: 20000, kind: "ice", engineCc: 1500, ageYears: 4 });
   const b = customsPayment({ customsValueUsd: 20000, kind: "ice", engineCc: 1500, ageYears: 4 });
   assert.deepEqual(a, b);
+});
+
+test("FOB Horgos uses the exact dollar quote and removes only the covered China leg", () => {
+  const car = {source:"Guazi",priceBasis:"FOB",fobPriceUsd:28748,fobPort:"Horgos",chinaPrice:181000,year:2024,type:"Электромобиль",city:"Чэнду"};
+  const price = estimateLandedCost(car,{quotaOver:true});
+  assert.equal(price.chinaUsd,28748);
+  assert.equal(price.chinaLegLow,0);assert.equal(price.chinaLegHigh,0);
+  assert.equal(price.intlLow,PRICING.intlDeliveryUsd[0]);
+  assert.ok(price.buyoutLow>0);assert.ok(price.serviceUsd>0);assert.ok(price.customsUsd>0);
+  assert.equal(price.basePriceLabel,"Авто и логистика по Китаю");
+  assert.match(price.basePriceNote,/FOB Хоргос.*доставку по Китаю до Хоргоса.*экспортное оформление.*до Минска считается отдельно/);
+  assert.match(price.customsBasisNote,/Предварительный.*FOB/);
+  const round50=n=>Math.round(n/50)*50;
+  assert.equal(price.totalLow,round50(28748+price.buyoutLow+price.intlLow+price.svhLow+price.customsLow+price.serviceUsd));
+  assert.equal(price.totalHigh,round50(28748+price.buyoutHigh+price.intlHigh+price.svhHigh+price.customsHigh+price.serviceUsd));
+  assert.deepEqual(estimateLandedCost({...car,chinaPrice:undefined},{quotaOver:true}),price);
+  for(const patch of [{fobPort:'Shanghai'},{fobPriceUsd:0},{fobPriceUsd:NaN},{fobPriceUsd:'28748'}])assert.throws(()=>estimateLandedCost({...car,...patch}),/FOB estimate/);
+});
+
+test("unmarked legacy Guazi USD values are not automatically treated as FOB",()=>{
+ const car={source:'Guazi',chinaPrice:181000,year:2024,type:'Электромобиль'};
+ assert.deepEqual(estimateLandedCost({...car,usdPrice:28748}),estimateLandedCost(car));
+ assert.ok(estimateLandedCost(car).chinaLegLow>0);
+ const che=estimateLandedCost({...car,source:'Che168',usdPrice:27000});assert.equal(che.chinaUsd,27000);assert.ok(che.chinaLegLow>0);
 });

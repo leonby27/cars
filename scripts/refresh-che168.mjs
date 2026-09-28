@@ -54,7 +54,7 @@ import { extractChe168ListPayload, extractChe168DetailPayload, buildChe168Car } 
 import { discoveryCandidate } from "./lib/che168-discovery.mjs";
 import { FLIGHT_SHAPE, FLIGHT_MIN_LENGTH } from "./lib/che168-flight-shape.mjs";
 import { SHIFT_ORDER, shiftForDate, feedsForShift, petrolShiftByBrand, shiftOfCar } from "./lib/refresh-shifts.mjs";
-import { PENDING_CYCLE_SQL, resumeRefreshCycle, readCheckLimit, checkPendingListings, finishRefreshCycle } from "./lib/refresh-cycle.mjs";
+import { PENDING_CYCLE_SQL, resumeRefreshCycle, startNewRefreshCycle, readCheckLimit, checkPendingListings, finishRefreshCycle } from "./lib/refresh-cycle.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, sourceBrandOf, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
@@ -702,7 +702,10 @@ const { importCars } = await import("../server/repository.mjs");
 // Use the database clock, which also writes last_checked_at. Persist BEFORE
 // checking any card; an abrupt exit then cannot lose the cycle boundary.
 const cycleNow = (await pool.query("SELECT now() AS at")).rows[0].at;
-let cursor = resumeRefreshCycle(await loadCursor(), cycleNow);
+// --new-circle: начать круг заново со всех марок (команда «круг» в боте). Без
+// него прогон продолжает незакрытый круг с того места, где тот остановился.
+const newCircle = args.get("new-circle") === "true";
+let cursor = (newCircle ? startNewRefreshCycle : resumeRefreshCycle)(await loadCursor(), cycleNow);
 await saveCursor(cursor);
 const unverifiedSql = onlyUnverified
   ? "AND (last_checked_at IS NULL OR date_trunc('day', last_checked_at) <= date_trunc('day', first_seen_at))"
@@ -1554,6 +1557,21 @@ try {
       remaining: (await pool.query("SELECT count(*)::int AS n FROM listings WHERE source='Che168' AND status='active'")).rows[0].n,
       hours: Math.round((Date.now() - startedAt) / 360000) / 10,
     });
+  } else if (!wantedBrands && !brandLimit && !tgQuiet) {
+    // Прогон по всей очереди кончился, а круг не закрыт — раньше об этом молчали,
+    // и казалось, что круг прошёл. Говорим, какие марки не доделаны и что делать.
+    const unfinished = allBrands.filter((item) => !doneNow.has(item.brand)).map((item) => item.brand);
+    const lines = [
+      `⏸ Круг №${cursor.round} пройден не до конца`,
+      "",
+      `Доделано марок: ${doneNow.size} из ${allBrands.length}`,
+      ...(unfinished.length ? [`Не до конца: ${unfinished.slice(0, 15).join(", ")}${unfinished.length > 15 ? ` и ещё ${unfinished.length - 15}` : ""}`] : []),
+      `Машин ждут проверки: ${remainingListings}`,
+      ...(stopped ? ["", "Прогон остановлен (стоп или источник перестал отвечать)."] : []),
+      "",
+      "«продолжить» — доделать только хвост, «круг» — начать заново со всех марок.",
+    ];
+    await sendTelegram(lines.join("\n"), { root: ROOT, log: console.log }).catch(() => {});
   } else {
     console.log("[tg] круг не закрыт — общего сообщения не отправляю, отбивки по маркам уже ушли");
   }

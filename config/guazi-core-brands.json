@@ -1,0 +1,1426 @@
+{
+  "sourceUrl": "https://en.guazi.com/os/product/filter/queryBrandList?language=en",
+  "observedAt": "2026-09-26",
+  "brands": [
+    {
+      "id": "103885",
+      "name": "AION"
+    },
+    {
+      "id": "103819",
+      "name": "Ankai Bus"
+    },
+    {
+      "id": "1289",
+      "name": "Acura"
+    },
+    {
+      "id": "104055",
+      "name": "Aishang"
+    },
+    {
+      "id": "104032",
+      "name": "ARMADILLO"
+    },
+    {
+      "id": "103919",
+      "name": "ARCFOX"
+    },
+    {
+      "id": "103923",
+      "name": "AM Xiaoao"
+    },
+    {
+      "id": "1218",
+      "name": "AstonMartin"
+    },
+    {
+      "id": "104029",
+      "name": "Anhui Liebao"
+    },
+    {
+      "id": "103764",
+      "name": "Alpina"
+    },
+    {
+      "id": "103888",
+      "name": "Aiways"
+    },
+    {
+      "id": "103925",
+      "name": "AUXUN"
+    },
+    {
+      "id": "1199",
+      "name": "Audi"
+    },
+    {
+      "id": "1217",
+      "name": "Alfa Romeo"
+    },
+    {
+      "id": "103803",
+      "name": "AC Schnitzer"
+    },
+    {
+      "id": "103969",
+      "name": "Avatr"
+    },
+    {
+      "id": "104030",
+      "name": "Buffett Auto"
+    },
+    {
+      "id": "104000",
+      "name": "Brave warrior"
+    },
+    {
+      "id": "1225",
+      "name": "Bestune"
+    },
+    {
+      "id": "2270",
+      "name": "BAIC Off-Road"
+    },
+    {
+      "id": "103852",
+      "name": "BAIC Daoda"
+    },
+    {
+      "id": "104037",
+      "name": "BAIC TAP"
+    },
+    {
+      "id": "2272",
+      "name": "Baojun"
+    },
+    {
+      "id": "103902",
+      "name": "Bochi"
+    },
+    {
+      "id": "1212",
+      "name": "BYD"
+    },
+    {
+      "id": "1206",
+      "name": "Buick"
+    },
+    {
+      "id": "2259",
+      "name": "Bugatti"
+    },
+    {
+      "id": "103890",
+      "name": "Bidewen"
+    },
+    {
+      "id": "103826",
+      "name": "BAIC New Energy"
+    },
+    {
+      "id": "103807",
+      "name": "Bisu"
+    },
+    {
+      "id": "103779",
+      "name": "BAIC Weiwang"
+    },
+    {
+      "id": "103896",
+      "name": "BAIC Changhe"
+    },
+    {
+      "id": "1198",
+      "name": "BMW"
+    },
+    {
+      "id": "103940",
+      "name": "BAIC Ruixiang"
+    },
+    {
+      "id": "103886",
+      "name": "BAIC"
+    },
+    {
+      "id": "103944",
+      "name": "Brilliance Xinri"
+    },
+    {
+      "id": "103798",
+      "name": "BORGWARD"
+    },
+    {
+      "id": "1315",
+      "name": "Brilliance"
+    },
+    {
+      "id": "103951",
+      "name": "Baizhi New Energy"
+    },
+    {
+      "id": "103921",
+      "name": "Bak"
+    },
+    {
+      "id": "1222",
+      "name": "Bentley"
+    },
+    {
+      "id": "103960",
+      "name": "BAW"
+    },
+    {
+      "id": "103987",
+      "name": "Brabus"
+    },
+    {
+      "id": "104046",
+      "name": "CAVAN"
+    },
+    {
+      "id": "103775",
+      "name": "Cowin"
+    },
+    {
+      "id": "102474",
+      "name": "CIIMO"
+    },
+    {
+      "id": "104041",
+      "name": "Chevoo"
+    },
+    {
+      "id": "1268",
+      "name": "Cadillac"
+    },
+    {
+      "id": "1307",
+      "name": "Chevrolet"
+    },
+    {
+      "id": "1269",
+      "name": "Chrysler"
+    },
+    {
+      "id": "102706",
+      "name": "Carlsson"
+    },
+    {
+      "id": "103952",
+      "name": "Chery New Energy"
+    },
+    {
+      "id": "103856",
+      "name": "Cenntroauto"
+    },
+    {
+      "id": "1201",
+      "name": "Chery"
+    },
+    {
+      "id": "104007",
+      "name": "Cao Cao"
+    },
+    {
+      "id": "1213",
+      "name": "Citroen"
+    },
+    {
+      "id": "102707",
+      "name": "CHTC"
+    },
+    {
+      "id": "104024",
+      "name": "Cyberspace"
+    },
+    {
+      "id": "103986",
+      "name": "Chengshi"
+    },
+    {
+      "id": "104056",
+      "name": "Chery QQ"
+    },
+    {
+      "id": "1227",
+      "name": "CHANGAN"
+    },
+    {
+      "id": "103812",
+      "name": "CHANGAN KUAYUE"
+    },
+    {
+      "id": "103840",
+      "name": "CHANGAN OSHAN"
+    },
+    {
+      "id": "103931",
+      "name": "CHANGAN KAICHENG"
+    },
+    {
+      "id": "104023",
+      "name": "CHANGAN NEVO"
+    },
+    {
+      "id": "104057",
+      "name": "Chery Fengyun"
+    },
+    {
+      "id": "104059",
+      "name": "Chinese territory"
+    },
+    {
+      "id": "102717",
+      "name": "Denza"
+    },
+    {
+      "id": "1235",
+      "name": "Dodge"
+    },
+    {
+      "id": "1233",
+      "name": "Daihatsu"
+    },
+    {
+      "id": "103765",
+      "name": "DS"
+    },
+    {
+      "id": "104004",
+      "name": "Dongfeng Yufeng"
+    },
+    {
+      "id": "103905",
+      "name": "Dayun"
+    },
+    {
+      "id": "103769",
+      "name": "Dongfeng Fengdu"
+    },
+    {
+      "id": "103861",
+      "name": "Dongfeng Ruitaite"
+    },
+    {
+      "id": "2262",
+      "name": "Dongfeng Aeolus"
+    },
+    {
+      "id": "103864",
+      "name": "DORCEN"
+    },
+    {
+      "id": "102712",
+      "name": "Dongfeng Xiaokang"
+    },
+    {
+      "id": "1230",
+      "name": "Dongfeng"
+    },
+    {
+      "id": "103932",
+      "name": "Dongfeng Fukang"
+    },
+    {
+      "id": "103870",
+      "name": "Dongfeng Fengon"
+    },
+    {
+      "id": "103847",
+      "name": "Dearcc"
+    },
+    {
+      "id": "104034",
+      "name": "Dongfeng eπ"
+    },
+    {
+      "id": "103954",
+      "name": "Dongfeng NAMMI"
+    },
+    {
+      "id": "104014",
+      "name": "Deepal"
+    },
+    {
+      "id": "2269",
+      "name": "Everus"
+    },
+    {
+      "id": "103941",
+      "name": "Electric House"
+    },
+    {
+      "id": "103875",
+      "name": "EXEED"
+    },
+    {
+      "id": "103877",
+      "name": "ENOVATE"
+    },
+    {
+      "id": "104063",
+      "name": "East China Automobile"
+    },
+    {
+      "id": "103784",
+      "name": "FAW Yingzhi"
+    },
+    {
+      "id": "1240",
+      "name": "Fiat"
+    },
+    {
+      "id": "1239",
+      "name": "FORTHING"
+    },
+    {
+      "id": "103881",
+      "name": "Farizon"
+    },
+    {
+      "id": "103899",
+      "name": "FAW FAC Linghe"
+    },
+    {
+      "id": "1205",
+      "name": "Ford"
+    },
+    {
+      "id": "1210",
+      "name": "FAW"
+    },
+    {
+      "id": "104047",
+      "name": "firefly"
+    },
+    {
+      "id": "104031",
+      "name": "Formula Leopard"
+    },
+    {
+      "id": "1237",
+      "name": "Ferrari"
+    },
+    {
+      "id": "103917",
+      "name": "Feidi"
+    },
+    {
+      "id": "1215",
+      "name": "Foton"
+    },
+    {
+      "id": "1236",
+      "name": "Foday"
+    },
+    {
+      "id": "104062",
+      "name": "FREELANDER Freelander"
+    },
+    {
+      "id": "103860",
+      "name": "GAC Group"
+    },
+    {
+      "id": "1242",
+      "name": "GMC"
+    },
+    {
+      "id": "103846",
+      "name": "George Barton"
+    },
+    {
+      "id": "1228",
+      "name": "Great Wall"
+    },
+    {
+      "id": "1260",
+      "name": "GAC Gonow"
+    },
+    {
+      "id": "103837",
+      "name": "Green Wheel"
+    },
+    {
+      "id": "104042",
+      "name": "Guangtong Auto"
+    },
+    {
+      "id": "103772",
+      "name": "GAC Trumpchi"
+    },
+    {
+      "id": "104012",
+      "name": "Geely Galaxy"
+    },
+    {
+      "id": "104003",
+      "name": "Guoji Commercial Vehicle"
+    },
+    {
+      "id": "103827",
+      "name": "GLEAGLE"
+    },
+    {
+      "id": "103912",
+      "name": "Geometry"
+    },
+    {
+      "id": "103804",
+      "name": "Golden Dragon"
+    },
+    {
+      "id": "1200",
+      "name": "Geely Auto"
+    },
+    {
+      "id": "103927",
+      "name": "Genesis"
+    },
+    {
+      "id": "1255",
+      "name": "Hongqi"
+    },
+    {
+      "id": "103955",
+      "name": "Hengchi"
+    },
+    {
+      "id": "103795",
+      "name": "Huasong"
+    },
+    {
+      "id": "1208",
+      "name": "Hyundai"
+    },
+    {
+      "id": "1252",
+      "name": "Haima"
+    },
+    {
+      "id": "103898",
+      "name": "Hunkt"
+    },
+    {
+      "id": "103950",
+      "name": "Hima"
+    },
+    {
+      "id": "104050",
+      "name": "HEDMOS"
+    },
+    {
+      "id": "103942",
+      "name": "Hengrun"
+    },
+    {
+      "id": "103782",
+      "name": "Higer"
+    },
+    {
+      "id": "103780",
+      "name": "HYOSOW"
+    },
+    {
+      "id": "103915",
+      "name": "HiPhi"
+    },
+    {
+      "id": "1196",
+      "name": "Honda"
+    },
+    {
+      "id": "103904",
+      "name": "Hycan"
+    },
+    {
+      "id": "104026",
+      "name": "HORKI"
+    },
+    {
+      "id": "103808",
+      "name": "Huakai"
+    },
+    {
+      "id": "1256",
+      "name": "Huatai"
+    },
+    {
+      "id": "103778",
+      "name": "Haval"
+    },
+    {
+      "id": "103977",
+      "name": "HUALI"
+    },
+    {
+      "id": "103797",
+      "name": "Hanteng"
+    },
+    {
+      "id": "1253",
+      "name": "Hummer"
+    },
+    {
+      "id": "102471",
+      "name": "Huanghai"
+    },
+    {
+      "id": "103946",
+      "name": "Huazi Auto"
+    },
+    {
+      "id": "103823",
+      "name": "Huatai New Energy"
+    },
+    {
+      "id": "104017",
+      "name": "Hyptec"
+    },
+    {
+      "id": "1248",
+      "name": "Hafei"
+    },
+    {
+      "id": "104061",
+      "name": "Huo La La Duo La Automobile"
+    },
+    {
+      "id": "1310",
+      "name": "Infiniti"
+    },
+    {
+      "id": "104045",
+      "name": "Ineos Grenadier"
+    },
+    {
+      "id": "103913",
+      "name": "IMSA"
+    },
+    {
+      "id": "104035",
+      "name": "iCAR"
+    },
+    {
+      "id": "1304",
+      "name": "Isuzu"
+    },
+    {
+      "id": "1311",
+      "name": "Iveco"
+    },
+    {
+      "id": "103962",
+      "name": "IM"
+    },
+    {
+      "id": "104060",
+      "name": "Initiate the realm"
+    },
+    {
+      "id": "104020",
+      "name": "Jenhoo New Energy"
+    },
+    {
+      "id": "103871",
+      "name": "JETOUR"
+    },
+    {
+      "id": "2261",
+      "name": "Jonway"
+    },
+    {
+      "id": "104054",
+      "name": "Jetour Zongheng"
+    },
+    {
+      "id": "104002",
+      "name": "JMMC"
+    },
+    {
+      "id": "103873",
+      "name": "Juntian"
+    },
+    {
+      "id": "104001",
+      "name": "Jiangnan"
+    },
+    {
+      "id": "103824",
+      "name": "JDMC"
+    },
+    {
+      "id": "104053",
+      "name": "JETOUR Shanhai"
+    },
+    {
+      "id": "1262",
+      "name": "Jaguar"
+    },
+    {
+      "id": "2265",
+      "name": "Joylong"
+    },
+    {
+      "id": "103883",
+      "name": "Jetta"
+    },
+    {
+      "id": "103906",
+      "name": "Jinguan"
+    },
+    {
+      "id": "103825",
+      "name": "JMEV"
+    },
+    {
+      "id": "104011",
+      "name": "JAC Yiwei"
+    },
+    {
+      "id": "104019",
+      "name": "Jiyue"
+    },
+    {
+      "id": "1265",
+      "name": "JMC"
+    },
+    {
+      "id": "1216",
+      "name": "Jeep"
+    },
+    {
+      "id": "1261",
+      "name": "Jinbei"
+    },
+    {
+      "id": "104052",
+      "name": "Junchi"
+    },
+    {
+      "id": "104022",
+      "name": "JAC Refine"
+    },
+    {
+      "id": "1264",
+      "name": "JAC"
+    },
+    {
+      "id": "104021",
+      "name": "JAC Group"
+    },
+    {
+      "id": "103832",
+      "name": "KTM"
+    },
+    {
+      "id": "103982",
+      "name": "KMULLER"
+    },
+    {
+      "id": "102705",
+      "name": "Kawei"
+    },
+    {
+      "id": "103805",
+      "name": "King Long"
+    },
+    {
+      "id": "103964",
+      "name": "Kunchi"
+    },
+    {
+      "id": "1292",
+      "name": "Kia"
+    },
+    {
+      "id": "102464",
+      "name": "Koenigsegg"
+    },
+    {
+      "id": "2258",
+      "name": "Karry"
+    },
+    {
+      "id": "103983",
+      "name": "KEDE"
+    },
+    {
+      "id": "103809",
+      "name": "Kama"
+    },
+    {
+      "id": "103830",
+      "name": "Karson"
+    },
+    {
+      "id": "103796",
+      "name": "Know Beans"
+    },
+    {
+      "id": "103958",
+      "name": "Livan"
+    },
+    {
+      "id": "104013",
+      "name": "Linxys"
+    },
+    {
+      "id": "104044",
+      "name": "Lingxi"
+    },
+    {
+      "id": "103922",
+      "name": "LUMMA"
+    },
+    {
+      "id": "1273",
+      "name": "Land"
+    },
+    {
+      "id": "1244",
+      "name": "LARK AUTO"
+    },
+    {
+      "id": "1276",
+      "name": "Land Rover"
+    },
+    {
+      "id": "104005",
+      "name": "Landian"
+    },
+    {
+      "id": "103834",
+      "name": "Lorinser"
+    },
+    {
+      "id": "103833",
+      "name": "LOCAL MOTORS"
+    },
+    {
+      "id": "1278",
+      "name": "Lexus"
+    },
+    {
+      "id": "103841",
+      "name": "LITE"
+    },
+    {
+      "id": "103930",
+      "name": "LongCheng"
+    },
+    {
+      "id": "103863",
+      "name": "LinkTour"
+    },
+    {
+      "id": "103907",
+      "name": "LINGBOX"
+    },
+    {
+      "id": "103973",
+      "name": "LIMGENE"
+    },
+    {
+      "id": "104028",
+      "name": "Longzhi"
+    },
+    {
+      "id": "103845",
+      "name": "Lada"
+    },
+    {
+      "id": "103876",
+      "name": "Li Auto"
+    },
+    {
+      "id": "1277",
+      "name": "Lincoln"
+    },
+    {
+      "id": "1274",
+      "name": "Lifan Auto"
+    },
+    {
+      "id": "2271",
+      "name": "Luxgen"
+    },
+    {
+      "id": "103869",
+      "name": "Leapmotor"
+    },
+    {
+      "id": "1271",
+      "name": "Lamborghini"
+    },
+    {
+      "id": "103889",
+      "name": "Levdeo"
+    },
+    {
+      "id": "103959",
+      "name": "LEVC"
+    },
+    {
+      "id": "103849",
+      "name": "Lynk & Co"
+    },
+    {
+      "id": "1275",
+      "name": "Lotus"
+    },
+    {
+      "id": "1270",
+      "name": "Leopaard"
+    },
+    {
+      "id": "104058",
+      "name": "Link REIT"
+    },
+    {
+      "id": "103882",
+      "name": "MyCar"
+    },
+    {
+      "id": "1211",
+      "name": "Mazda"
+    },
+    {
+      "id": "1282",
+      "name": "Maybach"
+    },
+    {
+      "id": "103818",
+      "name": "Morgan"
+    },
+    {
+      "id": "1204",
+      "name": "Mitsubishi"
+    },
+    {
+      "id": "1284",
+      "name": "MINI"
+    },
+    {
+      "id": "102716",
+      "name": "McLaren"
+    },
+    {
+      "id": "1241",
+      "name": "Mitsuoka"
+    },
+    {
+      "id": "103948",
+      "name": "Morden"
+    },
+    {
+      "id": "1197",
+      "name": "Mercedes-Benz"
+    },
+    {
+      "id": "103878",
+      "name": "Mansory"
+    },
+    {
+      "id": "1285",
+      "name": "Maserati"
+    },
+    {
+      "id": "103989",
+      "name": "Maiyue"
+    },
+    {
+      "id": "103788",
+      "name": "MG"
+    },
+    {
+      "id": "103971",
+      "name": "Minan"
+    },
+    {
+      "id": "103961",
+      "name": "Niutron"
+    },
+    {
+      "id": "103866",
+      "name": "NETA"
+    },
+    {
+      "id": "103985",
+      "name": "New Gonow"
+    },
+    {
+      "id": "103994",
+      "name": "Neomor"
+    },
+    {
+      "id": "103972",
+      "name": "Nlmmotor"
+    },
+    {
+      "id": "103872",
+      "name": "NEVS"
+    },
+    {
+      "id": "103822",
+      "name": "Nio"
+    },
+    {
+      "id": "1202",
+      "name": "Nissan"
+    },
+    {
+      "id": "103929",
+      "name": "OULLIM"
+    },
+    {
+      "id": "103968",
+      "name": "OBBIN"
+    },
+    {
+      "id": "1288",
+      "name": "Opel"
+    },
+    {
+      "id": "103859",
+      "name": "ORA"
+    },
+    {
+      "id": "104039",
+      "name": "ONVO"
+    },
+    {
+      "id": "102481",
+      "name": "Oley"
+    },
+    {
+      "id": "104036",
+      "name": "Ouling"
+    },
+    {
+      "id": "103858",
+      "name": "Polestar"
+    },
+    {
+      "id": "1226",
+      "name": "Peugeot"
+    },
+    {
+      "id": "103945",
+      "name": "Pocco"
+    },
+    {
+      "id": "102482",
+      "name": "Pagani"
+    },
+    {
+      "id": "104018",
+      "name": "Polestones"
+    },
+    {
+      "id": "1224",
+      "name": "Porsche"
+    },
+    {
+      "id": "102708",
+      "name": "Qoros"
+    },
+    {
+      "id": "103855",
+      "name": "QXEV"
+    },
+    {
+      "id": "103821",
+      "name": "Qiantu"
+    },
+    {
+      "id": "103979",
+      "name": "Radar"
+    },
+    {
+      "id": "102701",
+      "name": "RUF"
+    },
+    {
+      "id": "2260",
+      "name": "Riich"
+    },
+    {
+      "id": "103867",
+      "name": "Rolfhartge"
+    },
+    {
+      "id": "103918",
+      "name": "Rising"
+    },
+    {
+      "id": "1293",
+      "name": "Roewe"
+    },
+    {
+      "id": "103838",
+      "name": "Ruichi"
+    },
+    {
+      "id": "2264",
+      "name": "RELY"
+    },
+    {
+      "id": "103857",
+      "name": "Red Star"
+    },
+    {
+      "id": "103981",
+      "name": "Rhine"
+    },
+    {
+      "id": "1281",
+      "name": "Rolls-Royce"
+    },
+    {
+      "id": "1279",
+      "name": "Renault"
+    },
+    {
+      "id": "104016",
+      "name": "REACH"
+    },
+    {
+      "id": "103988",
+      "name": "RAM"
+    },
+    {
+      "id": "2255",
+      "name": "Seat"
+    },
+    {
+      "id": "1294",
+      "name": "Subaru"
+    },
+    {
+      "id": "103862",
+      "name": "SITECH"
+    },
+    {
+      "id": "103978",
+      "name": "Sunlong"
+    },
+    {
+      "id": "103850",
+      "name": "SINOGOLD"
+    },
+    {
+      "id": "103914",
+      "name": "Suda"
+    },
+    {
+      "id": "103911",
+      "name": "Shenzhou"
+    },
+    {
+      "id": "1234",
+      "name": "Soueast"
+    },
+    {
+      "id": "103909",
+      "name": "SERES"
+    },
+    {
+      "id": "1296",
+      "name": "Shuanghuan"
+    },
+    {
+      "id": "103802",
+      "name": "SWM"
+    },
+    {
+      "id": "103801",
+      "name": "Saleen"
+    },
+    {
+      "id": "103920",
+      "name": "SONGSAN MOTORS"
+    },
+    {
+      "id": "103893",
+      "name": "SHELBY"
+    },
+    {
+      "id": "103995",
+      "name": "Shengtang"
+    },
+    {
+      "id": "104033",
+      "name": "Sinotruk"
+    },
+    {
+      "id": "1214",
+      "name": "SAAB"
+    },
+    {
+      "id": "1299",
+      "name": "SsangYong"
+    },
+    {
+      "id": "103874",
+      "name": "Speed"
+    },
+    {
+      "id": "1209",
+      "name": "Suzuki"
+    },
+    {
+      "id": "1254",
+      "name": "SMA"
+    },
+    {
+      "id": "2273",
+      "name": "SAIC MAXUS"
+    },
+    {
+      "id": "2253",
+      "name": "Spyker"
+    },
+    {
+      "id": "103938",
+      "name": "Sinotruk VGV"
+    },
+    {
+      "id": "103993",
+      "name": "Saloon"
+    },
+    {
+      "id": "103975",
+      "name": "Small Sports Car"
+    },
+    {
+      "id": "102476",
+      "name": "smart"
+    },
+    {
+      "id": "103984",
+      "name": "Skywell"
+    },
+    {
+      "id": "103894",
+      "name": "SOL"
+    },
+    {
+      "id": "1297",
+      "name": "Skoda"
+    },
+    {
+      "id": "103901",
+      "name": "SHENZER"
+    },
+    {
+      "id": "103897",
+      "name": "SRM"
+    },
+    {
+      "id": "103936",
+      "name": "Skyworth"
+    },
+    {
+      "id": "102715",
+      "name": "Tesla"
+    },
+    {
+      "id": "1195",
+      "name": "Toyota"
+    },
+    {
+      "id": "103836",
+      "name": "TECHART"
+    },
+    {
+      "id": "104048",
+      "name": "The Durant Guild"
+    },
+    {
+      "id": "103933",
+      "name": "Tank"
+    },
+    {
+      "id": "103967",
+      "name": "Tuoruisite"
+    },
+    {
+      "id": "103851",
+      "name": "TRAUM"
+    },
+    {
+      "id": "102700",
+      "name": "Tongjia"
+    },
+    {
+      "id": "103992",
+      "name": "U-Belief"
+    },
+    {
+      "id": "103887",
+      "name": "UAZ"
+    },
+    {
+      "id": "103939",
+      "name": "VOYAH"
+    },
+    {
+      "id": "1203",
+      "name": "Volvo"
+    },
+    {
+      "id": "103966",
+      "name": "Venus"
+    },
+    {
+      "id": "103996",
+      "name": "Vi"
+    },
+    {
+      "id": "1207",
+      "name": "Volkswagen"
+    },
+    {
+      "id": "102478",
+      "name": "Venucia"
+    },
+    {
+      "id": "103799",
+      "name": "Victory"
+    },
+    {
+      "id": "103965",
+      "name": "WEVI"
+    },
+    {
+      "id": "103976",
+      "name": "Wanxiang"
+    },
+    {
+      "id": "103947",
+      "name": "WEIHAO AUTO"
+    },
+    {
+      "id": "1305",
+      "name": "Wuling"
+    },
+    {
+      "id": "103928",
+      "name": "Winnerway"
+    },
+    {
+      "id": "103829",
+      "name": "Wey"
+    },
+    {
+      "id": "103854",
+      "name": "WM Motor"
+    },
+    {
+      "id": "102714",
+      "name": "Wiesmann"
+    },
+    {
+      "id": "103926",
+      "name": "WALD"
+    },
+    {
+      "id": "103865",
+      "name": "XPeng"
+    },
+    {
+      "id": "103957",
+      "name": "Xiaohu"
+    },
+    {
+      "id": "1308",
+      "name": "Xinkai"
+    },
+    {
+      "id": "104038",
+      "name": "Xiaomi Auto"
+    },
+    {
+      "id": "104009",
+      "name": "Yuanhang"
+    },
+    {
+      "id": "103937",
+      "name": "Yasheng"
+    },
+    {
+      "id": "103844",
+      "name": "Yulue"
+    },
+    {
+      "id": "104008",
+      "name": "Yangwang"
+    },
+    {
+      "id": "103839",
+      "name": "Yutong Bus"
+    },
+    {
+      "id": "103843",
+      "name": "Yudo"
+    },
+    {
+      "id": "103831",
+      "name": "YOGOMO"
+    },
+    {
+      "id": "104049",
+      "name": "Yufeng"
+    },
+    {
+      "id": "104010",
+      "name": "Yunliang"
+    },
+    {
+      "id": "103879",
+      "name": "Yinlong New Energy"
+    },
+    {
+      "id": "103991",
+      "name": "Yuejie"
+    },
+    {
+      "id": "2266",
+      "name": "Yema"
+    },
+    {
+      "id": "104027",
+      "name": "Yema New Energy"
+    },
+    {
+      "id": "104064",
+      "name": "Yijing"
+    },
+    {
+      "id": "103820",
+      "name": "Zinoro"
+    },
+    {
+      "id": "1318",
+      "name": "Zotye"
+    },
+    {
+      "id": "103963",
+      "name": "ZD AUTO"
+    },
+    {
+      "id": "103934",
+      "name": "Zeekr"
+    },
+    {
+      "id": "1319",
+      "name": "Zxauto"
+    },
+    {
+      "id": "103884",
+      "name": "ZEDRIV"
+    }
+  ]
+}

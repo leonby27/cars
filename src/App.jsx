@@ -1,9 +1,10 @@
 import { prepareServiceVideo } from "./service-video-loading.js";
 import { readCatalogFallback } from "./catalog-fallback.js";
+import { withoutTrackingParams } from "./tracking-params.js";
 import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "./auth-route.js";
 import { Phone, SortAscending, Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
-import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
+import { vehiclePhotoHref, retryVehiclePhoto, vehiclePhotoPrefetchSources } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
@@ -47,6 +48,7 @@ import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
 import { PriceRatingScale } from "./price-rating-scale.jsx";
 import { brandNotice } from "./brand-notice.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
+import { conditionGradeMeta, worstConditionGrade } from "./condition-grade.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
@@ -59,7 +61,7 @@ import { BRAND_POWERTRAINS, CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-bra
 import { BRAND_PRICE_SEGMENTS, brandMatchesPriceSegment } from "./brand-directory-filters.js";
 import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
 import { deliveryBodyClass, deliveryModelSize, deliveryPrecisionPrompt, estimateDeliveryCip } from "./delivery-estimate.js";
-import { BLOG_ENABLED, REVIEWS_ENABLED } from "./feature-flags.js";
+import { BLOG_ENABLED, REVIEWS_ENABLED, GUAZI_PREVIEW_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
@@ -1567,6 +1569,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
           <EvQuotaButton quotas={quotas} navigate={navigate} />
         </div>
         <div className="header-actions">
+          {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-currency-switch" />}
           <button
             className={`icon-label searches-link${path === "/searches" ? " selected" : ""}`}
             aria-label="Мои поиски"
@@ -3345,6 +3348,7 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
   }, [cover]);
 
   const previewKey = JSON.stringify(images.map(src => imageSource(src, frameWidth)));
+  const prefetchKey = JSON.stringify(vehiclePhotoPrefetchSources(images).map(src => imageSource(src, frameWidth)));
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame || !window.matchMedia("(hover: hover) and (pointer: fine)").matches || typeof IntersectionObserver === "undefined") return undefined;
@@ -3353,9 +3357,9 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
     const inCatalog = Boolean(frame.closest("main.catalog"));
     const ahead = inCatalog ? Math.min(1600, Math.max(600, window.innerHeight * 1.5)) : 300;
     // В каталоге готовим и обложку следующей машины, ещё до её lazy-загрузки.
-    const urls = JSON.parse(previewKey).slice(inCatalog ? 0 : 1);
+    const urls = JSON.parse(prefetchKey).slice(inCatalog ? 0 : 1);
     return observeHoverPhotos(frame, urls, { ahead });
-  }, [previewKey]);
+  }, [prefetchKey]);
   // Карточку целиком перекрывает ссылка-подложка, поэтому до самого превью события
   // мыши не доходят: слушаем их на карточке, а кадр считаем по границам картинки.
   useEffect(() => {
@@ -6226,7 +6230,8 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const bootList = (() => {
     const boot = window.__boot;
     if (!boot?.catalogValue || boot.catalogPath !== listPath || restoredCatalog) return null;
-    return String(boot.catalogSearch || "") === window.location.search.replace(/^\?/, "") ? boot.catalogValue : null;
+    // Метки переходов (utm, yclid, nocount) не считаются: сервер отбросил их так же.
+    return String(boot.catalogSearch || "") === withoutTrackingParams(window.location.search).toString() ? boot.catalogValue : null;
   })();
   // Порядок «по умолчанию» перемешан по ключу. Для встроенного списка ключ выбрал
   // сервер (один на сутки): со случайным ключом браузер переставил бы машины, и
@@ -6608,7 +6613,9 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const currentPage = Math.floor(startOffset / pageSize) + 1;
   const nextPage = Math.floor((startOffset + displayed.length) / pageSize) + 1;
   const pageHref = (n) => {
-    const query = new URLSearchParams(window.location.search);
+    // Без меток переходов: ссылка на следующую страницу не должна разносить utm по
+    // сайту, и сервер рисует её по адресу без меток — иначе разметка разошлась бы.
+    const query = withoutTrackingParams(window.location.search);
     if (n > 1) query.set("page", String(n));
     else query.delete("page");
     const tail = query.toString();
@@ -7814,6 +7821,14 @@ const SPEC_GROUP_ICONS = {
   "Трансмиссия": Gear,
   "Шасси и рулевое управление": SteeringWheel,
   "Колёса и тормоза": Tire,
+  "Безопасность": ShieldCheck,
+  "Помощь водителю": SteeringWheel,
+  "Оснащение кузова": Sparkle,
+  "Оснащение салона": SlidersHorizontal,
+  "Сиденья": UsersThree,
+  "Мультимедиа": Desktop,
+  "Освещение": Lightbulb,
+  "Стёкла и зеркала": Eye,
 };
 
 function TechnicalSpecs({ car }) {
@@ -7916,6 +7931,57 @@ function TechnicalSpecs({ car }) {
         </details>
         );
       })}
+    </section>
+  );
+}
+
+function VehicleConditionSummary({ car }) {
+  const detailsId = useId();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const grade = /^[A-D]$/.test(car.conditionGrade || "") ? car.conditionGrade : null;
+  const descriptionGrade = /^[A-D]$/.test(car.chinaGrade || "") ? car.chinaGrade : null;
+  const displayedGrade = worstConditionGrade(grade, descriptionGrade);
+  const displayedGradeMeta = conditionGradeMeta(displayedGrade);
+  const hasNumber = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
+  const points = (car.inspectionReport?.inspectionSections || []).flatMap((section) => section.points || []);
+  const facts = [
+    ["Оценка внешнего вида", hasNumber(car.appearanceScore) ? `${car.appearanceScore}/100` : null],
+    ["Здоровье батареи", hasNumber(car.batteryHealth) ? `${car.batteryHealth}%` : null],
+    ["Страховые обращения", hasNumber(car.insuranceClaims) ? String(car.insuranceClaims) : null],
+    ["Переоформления", hasNumber(car.transfers) ? String(car.transfers) : null],
+    ["Пункты с замечаниями", points.length ? `${points.filter((point) => point.status === "attention").length} из ${points.length}` : null],
+  ].filter(([, value]) => value !== null);
+  const sourceConditionSummary = car.conditionSummary
+    ? `Согласно данным источника, ${car.conditionSummary.replace(/^В описании\s+/u, "").replace(/^./u, (letter) => letter.toLowerCase())}`
+    : "";
+  if (!grade && !descriptionGrade && !facts.length && !car.conditionSummary) return null;
+  return (
+    <section className="vehicle-condition-summary" aria-label="Состояние согласно источнику">
+      {displayedGradeMeta && (
+        <div className="vehicle-condition-grade">
+          <strong className={`condition-grade-badge condition-grade-${displayedGradeMeta.tone}`} aria-label={displayedGradeMeta.label}>{displayedGradeMeta.label}</strong>
+        </div>
+      )}
+      {sourceConditionSummary && <p className="vehicle-condition-description">{sourceConditionSummary}</p>}
+      {facts.length > 0 && (
+        <>
+          <button
+            type="button"
+            className="vehicle-condition-details-toggle"
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
+            onClick={() => setDetailsOpen((open) => !open)}
+          >
+            Подробнее <CaretDown size={15} aria-hidden="true" />
+          </button>
+          <div className="animated-disclosure vehicle-condition-details" aria-hidden={!detailsOpen}>
+            <div id={detailsId}>
+              <dl>{facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+            </div>
+          </div>
+        </>
+      )}
+      {car.inspectionReport && <a href="#guazi-full-report" className="vehicle-condition-report-link">Полный отчёт осмотра <ArrowDown size={16} aria-hidden="true" /></a>}
     </section>
   );
 }
@@ -8376,7 +8442,7 @@ function ChineseNameMark({ car }) {
 // в кабинет, и человек попадал неизвестно куда. Теперь запрос уходит с самой страницы,
 // а окно подтверждает, что заявка принята. Собрано тем же набором, что и остальные
 // такие окна сайта: значок, заголовок, строка текста и кнопка.
-function AvailabilityRequestModal({ onClose }) {
+function AvailabilityRequestModal({ onClose, preview = false }) {
   useEffect(() => {
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -8389,8 +8455,10 @@ function AvailabilityRequestModal({ onClose }) {
       <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal availability-request-modal" role="dialog" aria-modal="true" aria-labelledby="availability-request-title" aria-describedby="availability-request-description">
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
         <Illustration className="availability-request-icon" src="/illustrations/catalog-service-shield.png" width="80" height="80" alt="" aria-hidden="true" />
-        <h2 id="availability-request-title">Заявка принята</h2>
-        <p id="availability-request-description">Мы передали запрос проверенной компании-импортёру: она уточнит у продавца наличие и цену и свяжется с вами.</p>
+        <h2 id="availability-request-title">{preview ? "Карточка в предпросмотре" : "Заявка принята"}</h2>
+        <p id="availability-request-description">{preview
+          ? "Кнопка показана для проверки интерфейса. Заявки по локальной тестовой карточке не отправляются."
+          : "Мы передали запрос проверенной компании-импортёру: она уточнит у продавца наличие и цену и свяжется с вами."}</p>
         <div className="order-removal-actions availability-paused-actions">
           <button className="invert-button" type="button" onClick={onClose} autoFocus>Закрыть</button>
         </div>
@@ -8476,8 +8544,9 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
 
 function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false }) {
   const currency = useCurrency();
-  const setCurrency = useSetCurrency();
+  const [priceOpen, setPriceOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const priceDisclosureId = useId();
   // Повтор кнопки прячем, когда настоящая кнопка уже на экране или осталась выше:
   // ниже неё повтор только мешает, а на прокрутке вверх он мигал на пустом месте.
   const [floatingCtaHidden, setFloatingCtaHidden] = useState(true);
@@ -8490,8 +8559,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // открывается сразу, запрос идёт параллельно.
   const [availabilityStatus, setAvailabilityStatus] = useState("");
   const sold = car.available === false;
+  const localGuaziPreview = GUAZI_PREVIEW_ENABLED && car.localPreview === true;
   useEffect(() => {
-    if (car) trackEvent("vehicle_view", { listingId:car.id, listingTitle:car.title });
+    if (car && !car.localPreview) trackEvent("vehicle_view", { listingId:car.id, listingTitle:car.title });
   }, [car?.id]);
   useEffect(() => {
     const cta = availabilityCtaRef.current;
@@ -8516,8 +8586,17 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
     update();
     source.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule, { passive: true });
+    // Сворачиваемые блоки меняют положение основной кнопки без прокрутки страницы.
+    // Следим за высотой колонки, чтобы плавающий повтор сразу исчезал, когда
+    // настоящая кнопка оказалась в видимой области.
+    const sidebar = cta.closest(".detail-sidebar");
+    const resizeObserver = typeof ResizeObserver === "undefined" || !sidebar
+      ? null
+      : new ResizeObserver(schedule);
+    resizeObserver?.observe(sidebar);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
+      resizeObserver?.disconnect();
       source.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
     };
@@ -8529,6 +8608,10 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
   // Дальше вошедшему запрос уходит из самого окна, гостя ведём заводить аккаунт.
   const requestAvailability = () => {
     if (sold) return;
+    if (localGuaziPreview) {
+      setAvailabilityStatus("preview");
+      return;
+    }
     // Машина уже в заказе — заводить второй не нужно. Обычно ведём в кабинет, но если
     // карточку и открыли из самого заказа, идти некуда: просто закрываем превью.
     if (inOrder) {
@@ -8634,7 +8717,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
         </div>
         <div className="detail-actions">
           <CopyLinkButton car={car} />
-          <button aria-label={favoriteHint} className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}>
+          <button disabled={localGuaziPreview} aria-label={favoriteHint} className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}>
             <Heart size={21} weight={favorite ? "fill" : "regular"} />
             <ActionTooltip text={favoriteHint} />
           </button>
@@ -8655,7 +8738,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
           <section className="detail-facts-section" aria-label="Основные характеристики">
             <FactList items={specs} tiles />
           </section>
-          {conditionFacts.length > 0 && (
+          {!localGuaziPreview && conditionFacts.length > 0 && (
             <section className="detail-facts-section condition-card">
               <div className="detail-facts-heading">
                 <h2>Что указано в объявлении</h2>
@@ -8695,19 +8778,21 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               <AppLink href="/delivery-cost" navigate={navigate}><RoadHorizon size={21} /><span>Из чего складывается цена</span><CaretRight size={17} weight="bold" /></AppLink>
               {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
             </nav>
-            <p className="detail-source-note">Это сведения продавца и площадки, не наша независимая проверка. Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</p>
+            <p className="detail-source-note">{!localGuaziPreview && "Это сведения продавца и площадки, не наша независимая проверка. "}Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно.</p>
           </div>
         </div>
         <div className="detail-sidebar">
           {/* Итоговая цена стоит над плашками и без своей плашки: это главный ответ
               страницы, и прятать его внутрь разбора по этапам незачем. На телефоне
               она и так стоит крупно под названием, поэтому там эта строка скрыта. */}
-          <div className={`price-total detail-sidebar-price${setCurrency ? " price-total-with-currency" : ""}`} aria-label="Ориентировочная стоимость до Минска">
+          <div className="price-total detail-sidebar-price" aria-label="Ориентировочная стоимость до Минска">
             <TotalPrice car={car} price={price} currency={currency} />
-            {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch" />}
             {/* Что это за число: цена не за машину в Китае, а итог с доставкой и
                 растаможкой. Мелкой строкой под ценой — крупное число остаётся главным. */}
-            <span className="detail-sidebar-price-note">Цена под ключ до Минска</span>
+            <span className="detail-sidebar-price-note">
+              Цена под ключ до Минска. {" "}
+              <button type="button" aria-controls={priceDisclosureId} aria-expanded={priceOpen} onClick={() => setPriceOpen((open) => !open)}>Детализация</button>
+            </span>
           </div>
           {/* Цена среди таких же машин — своим блоком. Набор для сравнения приходит
               с машиной от сервера; цену берём ту же, что показана крупно ниже, —
@@ -8721,28 +8806,25 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
             formatMoney={(usd) => roughMoney(usd, currency)}
             loading={priceRatingPending}
           />
-          {quickInfo.length > 0 && (
-            <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
-              <span className="vehicle-quick-info-label">Основная информация</span>
-              <p>{quickInfo.slice(0, 3).join(", ")}{quickInfo.length <= 3 ? "." : ""}</p>
-              {quickInfo.length > 3 && <p>{quickInfo.slice(3).join(", ")}.</p>}
-            </section>
-          )}
-          <aside className="order-card" aria-label="Из чего складывается цена">
-            <span className="order-card-label">Из чего складывается цена</span>
-            <div className="price-breakdown">
+          <div className="animated-disclosure price-disclosure-shell" aria-hidden={!priceOpen}>
+            <div>
+              <aside id={priceDisclosureId} className="order-card price-disclosure" aria-label="Детализация цены">
+                <div className="price-disclosure-content">
+                <div className="price-breakdown">
               <div>
-                <PriceLabel label="Автомобиль в Китае" description={`${number(car.chinaPrice)} ¥ · данные источника`} />
+                <PriceLabel label={price.basePriceLabel} description={price.basePriceNote || `${number(car.chinaPrice)} ¥${localGuaziPreview ? "" : " · данные источника"}`} />
                 <strong>{money(price.chinaUsd, currency)}</strong>
               </div>
               <div>
-                <PriceLabel label="Выкуп и перевод денег" description="Платёжный агент и комиссии банка" />
+                <PriceLabel label={price.buyoutLabel} description="Платёжный агент и комиссии банка" />
                 <strong>{approximateMoney(price.buyoutLow, price.buyoutHigh, currency)}</strong>
               </div>
-              <div>
-                <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
-                <strong>{approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)}</strong>
-              </div>
+              {!price.isFob && (
+                <div>
+                  <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
+                  <strong>{approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)}</strong>
+                </div>
+              )}
               <div>
                 <PriceLabel label="Доставка до Минска" description={price.intlNote} />
                 <strong>{approximateMoney(price.intlLow, price.intlHigh, currency)}</strong>
@@ -8753,7 +8835,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               </div>
               <div>
                 <div className="price-customs-copy">
-                  <PriceLabel label="Растаможка и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText].filter(Boolean).join(" ")} />
+                  <PriceLabel label="Растаможка и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText, price.customsBasisNote].filter(Boolean).join(" ")} />
                   {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
                 </div>
                 <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
@@ -8764,23 +8846,35 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 <strong>≈ {money(price.serviceUsd, currency)}</strong>
               </div>
               )}
-            </div>
-            <div className="price-assumption">
-              <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
-            </div>
-            <section className={`delivery-disclosure${deliveryOpen ? " open" : ""}`}>
-              <button type="button" className="delivery-card-heading" aria-expanded={deliveryOpen} onClick={() => setDeliveryOpen((open) => !open)}>
-                <div className="delivery-card-icon">
-                  <Clock size={23} weight="duotone" />
                 </div>
-                <div>
-                  <span>Срок доставки до Минска</span>
-                  <h2>{daysRange(timing.totalDays)}</h2>
+                <div className="price-assumption">
+                  <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
                 </div>
-                <CaretDown className="disclosure-caret" size={20} weight="bold" />
-              </button>
-              <div className="animated-disclosure" aria-hidden={!deliveryOpen}>
-                <div className="disclosure-content delivery-disclosure-content">
+                </div>
+              </aside>
+            </div>
+          </div>
+          {quickInfo.length > 0 && (
+            <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
+              <span className="vehicle-quick-info-label">Основная информация</span>
+              <p>{quickInfo.slice(0, 3).join(", ")}{quickInfo.length <= 3 ? "." : ""}</p>
+              {quickInfo.length > 3 && <p>{quickInfo.slice(3).join(", ")}.</p>}
+            </section>
+          )}
+          {car.source === "Guazi" && <VehicleConditionSummary car={car} />}
+          <section className={`delivery-disclosure delivery-card${deliveryOpen ? " open" : ""}`} aria-label="Срок доставки до Минска">
+            <button type="button" className="delivery-card-heading" aria-expanded={deliveryOpen} onClick={() => setDeliveryOpen((open) => !open)}>
+              <div className="delivery-card-icon">
+                <Clock size={23} weight="duotone" />
+              </div>
+              <div>
+                <span>Срок доставки до Минска</span>
+                <h2>{daysRange(timing.totalDays)}</h2>
+              </div>
+              <CaretDown className="disclosure-caret" size={20} weight="bold" />
+            </button>
+            <div className="animated-disclosure" aria-hidden={!deliveryOpen}>
+              <div className="disclosure-content delivery-disclosure-content">
                 <p className="delivery-intro">От договора до выдачи авто в Минске.</p>
                 <div className="delivery-stages">
                   <div>
@@ -8803,20 +8897,19 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
                 <div className="price-assumption delivery-note">
                   <span>Срок зависит от очереди на границе и загрузки перевозчика.</span>
                 </div>
-                </div>
               </div>
-            </section>
-            {sold ? (
-              <div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>
-            ) : (
-              <button ref={availabilityCtaRef} className={`primary report-order-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
-                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
-              </button>
-            )}
-            {!sold && (
-              <p className="report-order-note">Заявку получит наш проверенный партнёр и проконсультирует вас по этому автомобилю</p>
-            )}
-          </aside>
+            </div>
+          </section>
+          {sold ? (
+            <div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>
+          ) : (
+            <button ref={availabilityCtaRef} className={`primary report-order-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
+              {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+            </button>
+          )}
+          {!sold && !localGuaziPreview && (
+            <p className="report-order-note">Заявку получит наш проверенный партнёр и проконсультирует вас по этому автомобилю</p>
+          )}
           <BrandNotice car={car} />
           <ListingIdRow car={car} />
           {/* Пока настоящая кнопка ниже сгиба, её повторяет эта: на телефоне она
@@ -8838,10 +8931,15 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, goBack = n
               onDone={() => setAvailabilityStatus("sent")}
             />
           ) : availabilityStatus ? (
-            <AvailabilityRequestModal onClose={() => setAvailabilityStatus("")} />
+            <AvailabilityRequestModal preview={availabilityStatus === "preview"} onClose={() => setAvailabilityStatus("")} />
           ) : null}
         </div>
       </div>
+      {localGuaziPreview && car.inspectionReport && (
+        <div id="guazi-full-report" className="vehicle-guazi-report">
+          <InspectionReport report={car.inspectionReport} />
+        </div>
+      )}
     </>
   );
 }
@@ -9155,10 +9253,10 @@ function OrderDraft({ car, navigate }) {
         </div>
         <div className="order-source-price">
           <span>
-            Цена в Китае <DataTag type="source" />
+            {price.isFob ? "Цена FOB · Хоргос" : "Цена в Китае"} <DataTag type="source" />
           </span>
-          <b>{number(car.chinaPrice)} ¥</b>
-          <small>≈ {money(price.chinaUsd, currency)} по расчётному курсу</small>
+          <b>{price.isFob ? money(price.chinaUsd, currency) : `${number(car.chinaPrice)} ¥`}</b>
+          <small>{price.isFob ? price.basePriceNote : `≈ ${money(price.chinaUsd, currency)} по расчётному курсу`}</small>
         </div>
       </section>
       <div className="order-layout">
@@ -9173,17 +9271,19 @@ function OrderDraft({ car, navigate }) {
             </div>
             <div className="order-cost-list">
               <div>
-                <PriceLabel label="Автомобиль в Китае" description={`${number(car.chinaPrice)} ¥ · данные источника`} />
+                <PriceLabel label={price.basePriceLabel} description={price.basePriceNote || `${number(car.chinaPrice)} ¥ · данные источника`} />
                 <b>{money(price.chinaUsd, currency)}</b>
               </div>
               <div>
-                <PriceLabel label="Выкуп и перевод денег" description="Платёжный агент и комиссии банка" />
+                <PriceLabel label={price.buyoutLabel} description="Платёжный агент и комиссии банка" />
                 <b>{approximateMoney(price.buyoutLow, price.buyoutHigh, currency)}</b>
               </div>
-              <div>
-                <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
-                <b>{approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)}</b>
-              </div>
+              {!price.isFob && (
+                <div>
+                  <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
+                  <b>{approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)}</b>
+                </div>
+              )}
               <div>
                 <PriceLabel label="Доставка до Минска" description={price.intlNote} />
                 <b>{approximateMoney(price.intlLow, price.intlHigh, currency)}</b>
@@ -9194,7 +9294,7 @@ function OrderDraft({ car, navigate }) {
               </div>
               <div>
                 <div className="price-customs-copy">
-                  <PriceLabel label="Таможня и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText].filter(Boolean).join(" ")} />
+                  <PriceLabel label="Таможня и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText, price.customsBasisNote].filter(Boolean).join(" ")} />
                   {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
                 </div>
                 <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>

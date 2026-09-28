@@ -1,0 +1,19 @@
+[Unit]
+Description=First two Guazi photos for hidden server inventory
+After=network-online.target abcars-guazi-collect.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/abcars-guazi-pilot
+Environment=GUAZI_IMAGE_CACHE_DIR=/srv/abcars-guazi-media
+ExecStart=/usr/bin/node scripts/guazi-photos-local.mjs guazi-import-20260926 --server
+Restart=no
+TimeoutStopSec=120
+UMask=0077
+Nice=15
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

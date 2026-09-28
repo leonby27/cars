@@ -59,3 +59,46 @@ test("sold vehicle replaces every gallery with one blurred, inert cover", () => 
   assert.match(app, /\{floatingCta && !sold && \(/);
   assert.ok(app.includes('<div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>'));
 });
+
+test("local Guazi preview keeps the availability button without sending a test request", () => {
+  assert.ok(app.includes('if (localGuaziPreview) {'));
+  assert.ok(app.includes('setAvailabilityStatus("preview");'));
+  assert.ok(app.includes('preview={availabilityStatus === "preview"}'));
+});
+
+test("price breakdown is a collapsed sidebar disclosure before the main information", () => {
+  assert.ok(app.includes('const [priceOpen, setPriceOpen] = useState(false);'));
+  assert.ok(app.includes('Цена под ключ до Минска. {" "}'));
+  assert.ok(app.includes('onClick={() => setPriceOpen((open) => !open)}>Детализация</button>'));
+  assert.ok(app.includes('className="animated-disclosure price-disclosure-shell" aria-hidden={!priceOpen}'));
+  assert.ok(app.includes('className="order-card price-disclosure"'));
+  assert.ok(app.indexOf('className="order-card price-disclosure"') < app.indexOf('className="vehicle-quick-info"'));
+  assert.ok(app.includes('{!price.isFob && ('));
+  assert.ok(app.indexOf('className={`delivery-disclosure delivery-card') < app.indexOf('ref={availabilityCtaRef} className={`primary report-order-cta'));
+  assert.match(styles, /\.price-disclosure-content\s*\{\s*padding-top:\s*0;/);
+  assert.match(styles, /\.detail-sidebar-price-note button\s*\{[^}]*text-decoration:\s*none;/s);
+  assert.match(styles, /\.detail-sidebar-price-note button\[aria-expanded="true"\]\s*\{\s*color:\s*var\(--accent\);/);
+  assert.match(styles, /\.detail-sidebar > \.report-order-cta\s*\{[^}]*margin:\s*16px 0 0;/s);
+  assert.match(styles, /grid-template-columns:\s*minmax\(0, 1fr\) 386px;/);
+  assert.ok(app.includes('className="header-currency-switch"'));
+  assert.ok(app.indexOf('className="header-currency-switch"') < app.indexOf('className={`icon-label searches-link'));
+  assert.ok(!app.includes('className="price-currency-switch"'));
+});
+
+test("condition summary uses readable grades and hides facts in an animated disclosure", () => {
+  const summary = app.slice(app.indexOf("function VehicleConditionSummary"), app.indexOf("function PriceLabel"));
+  assert.ok(summary.includes('aria-label="Состояние согласно источнику"'));
+  assert.doesNotMatch(summary, /<h2>Состояние согласно источнику<\/h2>/);
+  assert.ok(summary.includes("Согласно данным источника,"));
+  assert.ok(summary.includes("conditionGradeMeta(displayedGrade)"));
+  assert.doesNotMatch(summary, /Оценка в описании|displayedGradeLabel/);
+  assert.ok(summary.includes('className="vehicle-condition-details-toggle"'));
+  assert.ok(summary.includes('className="animated-disclosure vehicle-condition-details" aria-hidden={!detailsOpen}'));
+  assert.ok(summary.includes("setDetailsOpen((open) => !open)"));
+  assert.doesNotMatch(summary, /Шкала A–D/);
+  assert.match(styles, /\.condition-grade-excellent,\s*\.condition-grade-good\s*\{[^}]*background:\s*#217a47;[^}]*color:\s*#fff;/s);
+  assert.match(styles, /\.condition-grade-badge\s*\{[^}]*min-height:\s*28px;[^}]*padding:\s*5px 9px;[^}]*font-size:\s*13px;/s);
+  assert.match(styles, /\.vehicle-condition-details-toggle\[aria-expanded="true"\] svg\s*\{\s*transform:\s*rotate\(180deg\);/s);
+  assert.match(styles, /\.vehicle-condition-details-toggle\s*\{[^}]*color:\s*var\(--accent-dark\);/s);
+  assert.match(styles, /\.vehicle-condition-details-toggle\[aria-expanded="true"\]\s*\{\s*color:\s*var\(--accent\);/s);
+});

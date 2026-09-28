@@ -110,6 +110,7 @@ export function buildCarFilters(searchParams) {
   const clauses = ["l.status='active'"];
   const values = [];
   const add = (sql, value) => { values.push(value); clauses.push(sql.replace("?", `$${values.length}`)); };
+  if (["Guazi", "Che168"].includes(searchParams.get("source"))) add("l.source=?", searchParams.get("source"));
   if (searchParams.get("type") && searchParams.get("type") !== "Все") add("v.powertrain=?", searchParams.get("type"));
   if (searchParams.get("brand") && searchParams.get("brand") !== "Все марки") add("v.brand=?", searchParams.get("brand"));
   const models = multiParamValues(searchParams.getAll("model"), "Все модели");
@@ -270,11 +271,11 @@ async function listCarsPage(searchParams) {
     const [itemsResult, countResult] = await Promise.all([
       pool.query(`WITH sample AS (
         SELECT DISTINCT ON (v.brand, v.model) l.id
-        FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
+        FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
         ORDER BY v.brand, v.model, random()
       ), picked AS (SELECT id FROM sample ORDER BY random() LIMIT $${values.length + 1})
-      ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY random()`, [...values, limit]),
-      pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+      ${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY random()`, [...values, limit]),
+      pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
     ]);
     // Витрина главной — одна выдача без листания: следующей страницы у неё нет.
     return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, refreshedAt:countResult.rows[0].refreshed_at, limit, offset:0, hasMore:false };
@@ -282,9 +283,9 @@ async function listCarsPage(searchParams) {
   const [itemsResult, countResult] = await Promise.all([
     beyondCap
       ? Promise.resolve({ rows:[] })
-      : pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
+      : pool.query(`${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values,limit,offset]),
     // max(last_seen_at) едет в том же скане, что и count(*): отдельного запроса дата не стоит.
-    pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at, ${SECTION_CHANGED_AT} AS changed_at FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+    pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at, ${SECTION_CHANGED_AT} AS changed_at FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
   const total = countResult.rows[0].total;
   const items = itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row)));
@@ -316,12 +317,12 @@ export async function listCarPage(searchParams, { limit = 100, offset = 0 } = {}
     // не нужен: в списке показывается один кадр на машину.
     pool.query(`SELECT l.id, l.title, l.mileage_km, v.brand, v.model, v.model_year,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=l.id AND m.position=0) AS image
-      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
       ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, offset]),
     // Дата последнего изменения набора едет в том же скане, что и подсчёт: страница
     // раздела показывает её подписью и отдаёт в карту сайта, а отдельного запроса
     // она не стоит.
-    pool.query(`SELECT count(*)::int AS total, ${SECTION_CHANGED_AT} AS changed_at FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+    pool.query(`SELECT count(*)::int AS total, ${SECTION_CHANGED_AT} AS changed_at FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
   return {
     items: itemsResult.rows.map((row) => ({ id:row.id, title:row.title, brand:row.brand, model:row.model, year:row.model_year, mileage:row.mileage_km, image:row.image || null })),
@@ -366,7 +367,7 @@ export async function modelSummary(searchParams) {
       max(${powerSql}) AS power_max,
       max(${spec("torqueNm")}) AS torque_max,
       min(${spec("acceleration")}) AS accel_min
-    FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
+    FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
   const row = result.rows[0] || {};
   const value = (name) => (row[name] == null ? null : Number(row[name]));
   return {
@@ -405,7 +406,7 @@ export async function brandCatalogGuide(brand) {
         min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY NULLIF(l.mileage_km, 0))::numeric AS mileage_median,
         ${SECTION_CHANGED_AT} AS changed_at
-      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
       WHERE l.status='active' AND v.brand=$1`, [name]),
     pool.query(`SELECT v.model, count(*)::int AS count,
         min(v.model_year)::int AS year_min, max(v.model_year)::int AS year_max,
@@ -415,7 +416,7 @@ export async function brandCatalogGuide(brand) {
         percentile_cont(0.5) WITHIN GROUP (ORDER BY NULLIF(l.mileage_km, 0))::numeric AS mileage_median,
         array_agg(DISTINCT v.powertrain ORDER BY v.powertrain) FILTER (WHERE v.powertrain IS NOT NULL) AS powertrains,
         (array_agg(m.url ORDER BY l.listed_at DESC NULLS LAST, l.id) FILTER (WHERE m.url IS NOT NULL))[1] AS image
-      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
       LEFT JOIN listing_media m ON m.listing_id=l.id AND m.position=0
       WHERE l.status='active' AND v.brand=$1
       GROUP BY v.model ORDER BY count(*) DESC, v.model`, [name]),
@@ -426,7 +427,7 @@ export async function brandCatalogGuide(brand) {
           ELSE 'over50' END AS band,
         count(*)::int AS count,
         array_agg(DISTINCT v.model ORDER BY v.model) AS models
-      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
       WHERE l.status='active' AND v.brand=$1 AND l.estimated_total_usd > 0
       GROUP BY band`, [name]),
   ]);
@@ -485,7 +486,7 @@ export const SECTION_CHANGED_AT = "max(GREATEST(COALESCE(l.content_changed_at, l
 export async function sectionStats(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
   const result = await pool.query(`SELECT count(*)::int AS total, ${SECTION_CHANGED_AT} AS changed_at
-    FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
+    FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
   return { total: result.rows[0].total, changedAt: result.rows[0].changed_at || null };
 }
 
@@ -502,7 +503,7 @@ export async function sectionStats(searchParams) {
  */
 export async function priceEdges(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
-  const half = (direction) => `(${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY l.estimated_total_usd ${direction} NULLS LAST, l.id LIMIT 1)`;
+  const half = (direction) => `(${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} ORDER BY l.estimated_total_usd ${direction} NULLS LAST, l.id LIMIT 1)`;
   const result = await pool.query(`${half("ASC")} UNION ALL ${half("DESC")}`, values);
   const cars = result.rows.map((row) => withoutDetailPayload(rowToCar(row)));
   return { cheapest: cars[0] || null, dearest: cars[1] || cars[0] || null };
@@ -518,13 +519,13 @@ export async function priceEdges(searchParams) {
 export async function carsByIds(ids) {
   const list = [...new Set((ids || []).map((id) => String(id)))];
   if (!list.length) return [];
-  const result = await pool.query(`${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id = ANY($1)`, [list]);
+  const result = await pool.query(`${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id = ANY($1)`, [list]);
   const cars = new Map(result.rows.map((row) => [String(row.id), withoutDetailPayload(rowToCar(row))]));
   return list.map((id) => cars.get(id)).filter(Boolean);
 }
 
 export async function getCar(id) {
-  const result = await pool.query(`${carSelect}, COALESCE((SELECT json_agg(json_build_object('at',p.observed_at,'priceCny',p.price_cny) ORDER BY p.observed_at) FROM price_history p WHERE p.listing_id=l.id), '[]'::json) AS price_history FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id=$1 OR l.external_id=$1 ORDER BY (l.id=$1) DESC LIMIT 1`, [id]);
+  const result = await pool.query(`${carSelect}, COALESCE((SELECT json_agg(json_build_object('at',p.observed_at,'priceCny',p.price_cny) ORDER BY p.observed_at) FROM price_history p WHERE p.listing_id=l.id), '[]'::json) AS price_history FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id=$1 OR l.external_id=$1 ORDER BY (l.id=$1) DESC LIMIT 1`, [id]);
   return result.rows[0] ? { ...rowToCar(result.rows[0]), priceHistory:result.rows[0].price_history } : null;
 }
 
@@ -546,7 +547,7 @@ let brandStockCache = { at: 0, value: null };
  */
 export async function brandModels(brand) {
   const result = await pool.query(
-    `SELECT v.model, count(*)::int AS count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+    `SELECT v.model, count(*)::int AS count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
      WHERE l.status='active' AND v.brand=$1 GROUP BY v.model ORDER BY count DESC, v.model`,
     [brand],
   );
@@ -577,9 +578,9 @@ export async function modelCatalogFacts(brand, model) {
         max(COALESCE(v.electric_range_km, v.combined_range_km))::int AS range_max,
         max(${powerSql}) AS power_max,
         min(${spec("acceleration")}) AS accel_min
-      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, [brand, model]),
-    pool.query(`SELECT v.powertrain AS type, count(*)::int AS count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.powertrain IS NOT NULL GROUP BY 1 ORDER BY 2 DESC`, [brand, model]),
-    pool.query(`SELECT v.specifications->>'bodyType' AS name, count(*)::int AS count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY 1 ORDER BY 2 DESC`, [brand, model]),
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, [brand, model]),
+    pool.query(`SELECT v.powertrain AS type, count(*)::int AS count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.powertrain IS NOT NULL GROUP BY 1 ORDER BY 2 DESC`, [brand, model]),
+    pool.query(`SELECT v.specifications->>'bodyType' AS name, count(*)::int AS count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY 1 ORDER BY 2 DESC`, [brand, model]),
   ]);
   const row = summary.rows[0] || {};
   const value = (name) => (row[name] == null ? null : Number(row[name]));
@@ -600,7 +601,7 @@ export async function modelCatalogFacts(brand, model) {
 export async function brandStock() {
   const now = Date.now();
   if (brandStockCache.value && now - brandStockCache.at < BRAND_STOCK_TTL_MS) return brandStockCache.value;
-  const { rows } = await pool.query("SELECT v.brand, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' GROUP BY v.brand");
+  const { rows } = await pool.query("SELECT v.brand, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' GROUP BY v.brand");
   const value = new Map(rows.map((row) => [row.brand, row.count]));
   brandStockCache = { at: now, value };
   return value;
@@ -624,7 +625,7 @@ export async function modelPriceMedians() {
   const { rows } = await pool.query(`SELECT v.brand, v.model, v.model_year AS year, count(*)::int AS count,
       percentile_cont(0.5) WITHIN GROUP (ORDER BY l.estimated_total_usd)::int AS median,
       percentile_cont(0.1) WITHIN GROUP (ORDER BY l.estimated_total_usd)::int AS low
-    FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+    FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
     WHERE l.status='active' AND l.estimated_total_usd IS NOT NULL AND v.model_year >= 2020
     GROUP BY v.brand, v.model, v.model_year
     HAVING count(*) >= 3`);
@@ -642,6 +643,9 @@ export async function modelPriceStats() {
   const { rows } = await pool.query(`SELECT l.id, v.brand, v.model, v.model_year AS year,
       l.mileage_km, l.price_cny, l.source, l.city, v.powertrain AS type,
       l.source_payload->>'usdPrice' AS usd_price,
+    l.source_payload->>'priceBasis' AS price_basis,
+    l.source_payload->>'fobPriceUsd' AS fob_price_usd,
+    l.source_payload->>'fobPort' AS fob_port,
       l.source_payload->>'sourceFuelType' AS fuel_type,
       COALESCE(l.source_payload->>'transmission', v.specifications->>'transmission') AS transmission,
       COALESCE(l.source_payload->>'engine', v.specifications->>'engine') AS engine,
@@ -649,7 +653,7 @@ export async function modelPriceStats() {
       l.source_payload->>'dimensions' AS dimensions,
       l.source_payload->>'curbWeight' AS curb_weight,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=l.id ORDER BY m.position LIMIT 1) AS image
-    FROM listings l
+    FROM catalog_listings l
     JOIN vehicles v ON v.id=l.vehicle_id
     WHERE l.status='active'
       AND l.price_cny > 0
@@ -685,7 +689,7 @@ export async function modelPriceStatsStored() {
         round(avg(l.estimated_total_usd))::int AS mean,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY l.estimated_total_usd)::int AS median,
         max(l.estimated_total_usd)::int AS max
-      FROM listings l
+      FROM catalog_listings l
       JOIN vehicles v ON v.id=l.vehicle_id
       CROSS JOIN mileage_limits limits
       WHERE l.status='active'
@@ -701,7 +705,7 @@ export async function modelPriceStatsStored() {
           CASE WHEN v.powertrain='Бензин' THEN 'ДВС' ELSE v.powertrain END
         ) l.id, v.brand, v.model, v.model_year AS year,
           CASE WHEN v.powertrain='Бензин' THEN 'ДВС' ELSE v.powertrain END AS type
-        FROM listings l
+        FROM catalog_listings l
         JOIN vehicles v ON v.id=l.vehicle_id
         WHERE l.status='active' AND l.estimated_total_usd > 0 AND v.model_year IS NOT NULL
         ORDER BY v.brand, v.model, v.model_year,
@@ -744,13 +748,16 @@ export async function modelPriceStatsForQuota(quotaPricingOn = false) {
   const { rows } = await pool.query(`SELECT v.brand, v.model, v.model_year AS year,
       l.mileage_km, l.price_cny, l.source, l.city, v.powertrain AS type,
       l.source_payload->>'usdPrice' AS usd_price,
+    l.source_payload->>'priceBasis' AS price_basis,
+    l.source_payload->>'fobPriceUsd' AS fob_price_usd,
+    l.source_payload->>'fobPort' AS fob_port,
       l.source_payload->>'sourceFuelType' AS fuel_type,
       COALESCE(l.source_payload->>'transmission', v.specifications->>'transmission') AS transmission,
       COALESCE(l.source_payload->>'engine', v.specifications->>'engine') AS engine,
       l.source_payload->>'manufactureDate' AS manufacture_date,
       l.source_payload->>'dimensions' AS dimensions,
       l.source_payload->>'curbWeight' AS curb_weight
-    FROM listings l
+    FROM catalog_listings l
     JOIN vehicles v ON v.id=l.vehicle_id
     WHERE l.status='active'
       AND l.price_cny > 0
@@ -787,7 +794,7 @@ export async function modelClassStock() {
   if (modelClassCache.value && now - modelClassCache.at < MODEL_CLASS_TTL_MS) return modelClassCache.value;
   const { rows } = await pool.query(`SELECT v.brand, v.model, v.powertrain,
       NULLIF(v.specifications->>'bodyType','') AS body_type, count(*)::int AS count
-    FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+    FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
     WHERE l.status='active'
     GROUP BY v.brand, v.model, v.powertrain, v.specifications->>'bodyType'
     ORDER BY count DESC`);
@@ -812,11 +819,11 @@ export async function getCatalogMeta(type, brand, bodyType) {
   const bodyWhere = `WHERE ${bodyFilters.join(" AND ")}`;
   const brandWhere = `WHERE ${brandFilters.join(" AND ")}`;
   const [count, brands, models, bodyTypes, drives, availability] = await Promise.all([
-    pool.query(`SELECT count(*)::int total FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere}`, bodyValues),
-    pool.query(`SELECT v.brand, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${brandWhere} GROUP BY v.brand ORDER BY v.brand`, brandValues),
-    pool.query(`SELECT v.model, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
-    pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
-    pool.query("SELECT v.drivetrain drive, count(*)::int count FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
+    pool.query(`SELECT count(*)::int total FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere}`, bodyValues),
+    pool.query(`SELECT v.brand, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${brandWhere} GROUP BY v.brand ORDER BY v.brand`, brandValues),
+    pool.query(`SELECT v.model, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${bodyWhere} GROUP BY v.model ORDER BY v.model`, bodyValues),
+    pool.query(`SELECT v.specifications->>'bodyType' body_type, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where} AND v.specifications->>'bodyType' IS NOT NULL AND v.specifications->>'bodyType'<>'Не определён' GROUP BY body_type ORDER BY count DESC, body_type`, values),
+    pool.query("SELECT v.drivetrain drive, count(*)::int count FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан' GROUP BY v.drivetrain ORDER BY v.drivetrain"),
     // Какие фильтры вообще показывать. Считается по тому же отбору, что и остальной
     // справочник (топливо и марка), — иначе на бензиновой вкладке висел бы фильтр по
     // батарее, а на электрической по объёму двигателя.
@@ -825,7 +832,7 @@ export async function getCatalogMeta(type, brand, bodyType) {
       count(NULLIF(v.specifications->>'acceleration',''))::int accel, count(NULLIF(v.specifications->>'tireRim',''))::int tire,
       count(${ENGINE_VOLUME_SQL})::int engine, count(${ENGINE_POWER_SQL})::int power, count(${GEARBOX_SQL})::int gearbox,
       count(DISTINCT ${FUEL_SQL})::int fuel
-      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
   ]);
   const driveCounts = drives.rows.reduce((totals, row) => {
     const drive = normalizeDrive(row.drive);
@@ -849,7 +856,7 @@ export async function getModelFacts() {
         -- Когда у модели в последний раз что-то менялось: нужно карте сайта, чтобы
         -- у 449 обзоров стояла своя дата, а не пустое место.
         GREATEST(COALESCE(l.content_changed_at, l.imported_at), l.first_seen_at) AS changed_at
-      FROM listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'
+      FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active'
     ), summary AS (
       SELECT brand, model, count(*)::int AS count, min(price) AS price_min, max(price) AS price_max,
         min(year) AS year_min, max(year) AS year_max, min(accel) AS accel, max(range) AS range, max(changed_at) AS changed_at,
@@ -895,7 +902,14 @@ export async function createOrderDraft({ listingId, name = null, contact, calcul
     filters:calculation.catalogFilters || null,
   });
   await pool.query(`INSERT INTO crawl_jobs (source, listing_id, job_type, url, priority)
-    SELECT source, id, 'refresh_listing', source_url, 100 FROM listings WHERE id=$1
+    SELECT source, id, 'refresh_listing', source_url, 100 FROM catalog_listings WHERE id=$1
+      AND NOT (source='Guazi' AND COALESCE(source_payload->>'priceBasis','')='FOB')
     ON CONFLICT (job_type, listing_id) WHERE status IN ('queued','running') DO UPDATE SET priority=GREATEST(crawl_jobs.priority,100), available_at=LEAST(crawl_jobs.available_at,now())`, [listingId]);
   return result.rows[0];
+}
+
+export function clearCatalogCaches() {
+  brandStockCache={at:0,value:null};
+  storedMarketStatsCache={at:0,value:null};
+  modelClassCache={at:0,value:null};
 }

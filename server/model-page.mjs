@@ -18,6 +18,7 @@ import { MODEL_PAGES, modelPageRedirect } from "../src/model-pages.js";
 import { modelPageWithText } from "../src/model-texts.js";
 import { brandForSlug, brandLandingPath, landingsForCar, modelFromSlug, modelLandingPath, priceBandsForCar } from "../src/catalog-landings.js";
 import { modelSlug } from "../src/model-slug.js";
+import { isTrackingParam, withoutTrackingParams } from "../src/tracking-params.js";
 import { modelAutoText, modelCatalogSeo, modelFaq, modelFaqTitle, modelPageIndexable, modelStockLine } from "../src/model-landing.js";
 import { estimateLandedCost } from "../src/pricing.js";
 import { CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, catalogPageCount } from "../src/catalog-landings.js";
@@ -85,8 +86,9 @@ export function modelListQuery(params) {
 // Готовую первую страницу выдачи встраиваем только для адреса без своих фильтров
 // (кроме страницы и порядка): фильтры каталог разбирает сам, и совпасть байт в байт
 // список с ними не обязан — тогда обе стороны рисуют заглушку, а список приходит запросом.
+// Метки переходов (utm, yclid, nocount…) фильтрами не считаются: выдачу они не меняют.
 const PLAIN_KEYS = new Set(["page", "sort"]);
-export const plainModelSearch = (params) => [...params.keys()].every((key) => PLAIN_KEYS.has(key));
+export const plainModelSearch = (params) => [...params.keys()].every((key) => PLAIN_KEYS.has(key) || isTrackingParam(key));
 
 /**
  * Данные каталожной страницы модели — то же, что отдаёт `/api/model-catalog` и что
@@ -206,10 +208,9 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
   };
   // Текст обзора в том же виде, в каком его подгружает браузер (см. model-text-load.js).
   const text = review ? { intro: review.intro, stats: review.stats, sections: review.sections, versions: review.versions, faq: review.faq, disclaimer: review.disclaimer } : null;
-  // Рисуем по полному адресу запроса: с метками рекламы встроенный список не берут обе
-  // стороны (сверка идёт по всей строке запроса), иначе сервер нарисовал бы список, а
-  // браузер — заготовку, и страница перерисовалась бы целиком.
-  const appRoot = await renderModelAppMarkup(path, params.toString(), boot, text);
+  // Рисуем по адресу запроса без меток переходов: браузер сверяет встроенный список
+  // с адресом так же, без меток (src/tracking-params.js), и обе стороны рисуют машины.
+  const appRoot = await renderModelAppMarkup(path, withoutTrackingParams(params).toString(), boot, text);
   const first = (data.page - 1) * CATALOG_PAGE_SIZE;
   const itemList = {
     "@context": "https://schema.org",

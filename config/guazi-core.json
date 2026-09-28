@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "source": "Guazi",
+  "publicOnly": true,
+  "priceBasis": "domestic_vehicle_cny",
+  "sharedFilterFile": "config/refresh-order.json",
+  "countryCode": "RU",
+  "fuels": [
+    { "key": "electric", "queryCode": 2, "sourceNames": ["BEV"] },
+    { "key": "plug-in", "queryCode": 4, "sourceNames": ["PHEV"] },
+    { "key": "range-extended", "queryCode": 3, "sourceNames": ["REEV", "EREV"] },
+    { "key": "gasoline", "queryCode": 1, "sourceNames": ["Gasoline", "HEV"] }
+  ],
+  "sourceBrandAliases": {
+    "Geely Auto": "Geely",
+    "Chery New Energy": "Chery",
+    "Chery QQ": "Chery",
+    "Chery Fengyun": "Chery"
+  },
+  "parentBrandCoverage": {
+    "AITO": ["Luxeed", "Stelato", "Shangjie", "Maextro"],
+    "Chery": ["Jaecoo", "Omoda"]
+  },
+  "requestIntervalMs": 500,
+  "cardWorkers": 4,
+  "photoWorkers": 4,
+  "pageSize": 20,
+  "exportEligibilityPartitions": [1, 0],
+  "notes": "URL price/priceStart/priceEnd are deliberately absent: Guazi's list price is FOB. Vehicle-only price is read from matched Chinese full_payment and then filtered with the site's CNY/USD rate. No account, full reports, database writes or schedule."
+}

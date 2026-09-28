@@ -17,7 +17,7 @@ const summarize = (values) => ({
 });
 
 const carFromRow = (row) => ({
-  source:row.source,
+  source:row.source,priceBasis:row.price_basis,fobPriceUsd:Number(row.fob_price_usd)||undefined,fobPort:row.fob_port,
   usdPrice:Number(row.usd_price) || 0,
   chinaPrice:Number(row.price_cny) || 0,
   year:Number(row.year) || null,

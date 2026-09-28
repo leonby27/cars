@@ -1,0 +1,19 @@
+[Unit]
+Description=Hidden Guazi collection, independent of the laptop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/abcars-guazi-pilot
+ExecStart=/usr/bin/xvfb-run -a /usr/bin/node scripts/guazi-collect-server.mjs guazi-import-20260926
+Restart=no
+KillMode=control-group
+TimeoutStopSec=90
+UMask=0077
+Nice=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

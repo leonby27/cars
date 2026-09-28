@@ -16,6 +16,6 @@ test("customs warning stays inside the customs row in both price breakdowns", ()
 
 test("customs details stay in the tooltip instead of the visible row", () => {
   assert.equal((app.match(/className="price-customs-includes"/g) || []).length, 0);
-  assert.equal((app.match(/description=\{\[price\.customsHint \|\| price\.customsNote, price\.customsIncludedText\]/g) || []).length, 2);
+  assert.equal((app.match(/description=\{\[price\.customsHint \|\| price\.customsNote, price\.customsIncludedText, price\.customsBasisNote\]/g) || []).length, 2);
   assert.doesNotMatch(styles, /\.price-customs-includes\s*\{/);
 });

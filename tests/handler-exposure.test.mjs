@@ -11,7 +11,7 @@ const requestHealth = async (headers = {}) => {
   const previousQuery = pool.query;
   pool.query = async (config) => {
     const sql = typeof config === "string" ? config : String(config?.text || "");
-    if (/FROM listings/.test(sql)) return { rows:[{ cars:32916 }] };
+    if (/FROM catalog_listings/.test(sql)) return { rows:[{ cars:32916 }] };
     if (/crawl_jobs/.test(sql)) return { rows:[{ queued:1, running:0, failed:2 }] };
     return { rows:[{ source:"Che168", status:"blocked", last_error:"http://user:secret@proxy.example:8080 failed" }] };
   };

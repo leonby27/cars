@@ -63,6 +63,9 @@ const cache = new Map();
 // тысячами объявлений это десятки мегабайт на один запрос.
 const COMPARABLES_SQL = `SELECT l.id, l.price_cny, l.city, l.mileage_km, l.source, l.description,
     l.source_payload->>'usdPrice' AS usd_price,
+    l.source_payload->>'priceBasis' AS price_basis,
+    l.source_payload->>'fobPriceUsd' AS fob_price_usd,
+    l.source_payload->>'fobPort' AS fob_port,
     l.source_payload->>'manufactureDate' AS manufacture_date,
     l.source_payload->>'dimensions' AS dimensions,
     l.source_payload->>'curbWeight' AS curb_weight,
@@ -70,7 +73,7 @@ const COMPARABLES_SQL = `SELECT l.id, l.price_cny, l.city, l.mileage_km, l.sourc
     v.model_year, v.powertrain, v.battery_kwh,
     v.specifications->>'engine' AS engine,
     v.specifications->>'transmission' AS transmission
-  FROM listings l JOIN vehicles v ON v.id = l.vehicle_id
+  FROM catalog_listings l JOIN vehicles v ON v.id = l.vehicle_id
   WHERE l.status = 'active' AND v.brand = $1 AND v.model = $2 AND l.price_cny > 0`;
 
 // Строка выборки — в такой же вид, какой ждёт расчёт цены. Цены обоих режимов
@@ -79,7 +82,7 @@ const COMPARABLES_SQL = `SELECT l.id, l.price_cny, l.city, l.mileage_km, l.sourc
 const comparableFromRow = (row) => {
   const car = {
     id:row.id,
-    source:row.source,
+    source:row.source,priceBasis:row.price_basis,fobPriceUsd:Number(row.fob_price_usd)||undefined,fobPort:row.fob_port,
     chinaPrice:Number(row.price_cny) || 0,
     usdPrice:Number(row.usd_price) || null,
     city:row.city,

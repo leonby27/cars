@@ -248,19 +248,29 @@ export const isSeriesHybrid = (car) => {
 export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
-  // Che168 quotes its export price in dollars; storing it as yuan at 7.15 and
-  // converting back at the display cross-rate (~6.68 ¥/$) marked every card up
-  // by ~7%. The source's own dollar figure is shown when the card carries one.
-  // Guazi's usdPrice is a FOB quote with delivery baked in, so it stays out.
-  const chinaUsd = (car.source === "Che168" && Number(car.usdPrice)) || round50(car.chinaPrice * cnyUsd);
+  // FOB must explicitly name the quote and handover point. The current onward
+  // tariff starts in Horgos; a Shanghai quote cannot silently use that route.
+  const isFob = car.priceBasis === "FOB";
+  if (isFob && (car.fobPort !== "Horgos" || !Number.isFinite(car.fobPriceUsd) || car.fobPriceUsd <= 0)) {
+    throw new Error("FOB estimate requires a valid USD quote for Horgos");
+  }
+  const chinaUsd = isFob ? car.fobPriceUsd
+    : (car.source === "Che168" && Number(car.usdPrice)) || round50(car.chinaPrice * cnyUsd);
+  const basePriceLabel = isFob ? "Авто и логистика по Китаю" : "Автомобиль в Китае";
+  const basePriceNote = isFob
+    ? "Цена FOB Хоргос включает автомобиль, доставку по Китаю до Хоргоса и экспортное оформление. Доставка от Хоргоса до Минска считается отдельно"
+    : null;
 
+  // Payment-agent/bank fees are separate from seller-side FOB handling.
   const buyoutLow = Math.max(PRICING.buyoutMinUsd[0], round50(chinaUsd * PRICING.buyoutPercent[0]));
   const buyoutHigh = Math.max(PRICING.buyoutMinUsd[1], round50(chinaUsd * PRICING.buyoutPercent[1]));
+  const buyoutLabel = isFob ? "Перевод денег" : "Выкуп и перевод денег";
 
   const transit = chinaTransitFor(car.city);
-  const chinaLegLow = PRICING.exportDocsUsd[0] + transit.usd[0];
-  const chinaLegHigh = PRICING.exportDocsUsd[1] + transit.usd[1];
-  const chinaLegNote = `Документы и автовоз до Хоргоса · ${transit.label}`;
+  const chinaLegLow = isFob ? 0 : PRICING.exportDocsUsd[0] + transit.usd[0];
+  const chinaLegHigh = isFob ? 0 : PRICING.exportDocsUsd[1] + transit.usd[1];
+  const chinaLegNote = isFob ? "Доставка до Хоргоса и экспортное оформление уже включены в FOB"
+    : `Документы и автовоз до Хоргоса · ${transit.label}`;
 
   const lengthMm = Number(String(car.dimensions || "").match(/^\d{4}/)?.[0]) || 0;
   const bigCar = lengthMm >= 4950 || Number(car.curbWeight) >= 2300;
@@ -275,7 +285,12 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   // сюда прибавлялась доставка до границы, и карточка завышала платёж там, где он
   // считается процентом: у электромобилей после квоты и у машин младше трёх лет.
   // На ставку за кубический сантиметр это не влияло никогда.
+  // Until the invoice separates vehicle and bundled expenses, FOB is a
+  // conservative provisional base. Do not invent a freight deduction.
   const customsValueUsd = chinaUsd;
+  const customsBasisNote = isFob
+    ? "Предварительный расчёт от полной цены FOB. Стоимость автомобиля без включённых расходов и таможенную базу уточним по документам."
+    : null;
   // Нулевой НДС дают только машинам не старше пяти лет с даты выпуска (указ № 92
   // с правками указа № 428). Машина старше — НДС 20% от стоимости вместе с пошлиной,
   // даже когда льготная квота ещё действует.
@@ -297,7 +312,7 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     : overFiveYears ? "Старше 5 лет — НДС 20% сверху" : null;
   // Тон подписи под строкой: красная — про квоту на электромобили, оранжевая — всё
   // остальное. Разный цвет нужен, чтобы эти случаи не читались как один.
-  let customsAlertTone = quotaOver ? "quota" : overFiveYears ? "warn" : null;
+  let customsAlertTone = quotaOver || overFiveYears ? "warn" : null;
   // Подробное объяснение для подсказки. Пусто — в подсказке остаётся короткая строка.
   let customsHint = overFiveYears
     ? (quotaOver
@@ -358,7 +373,7 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const totalLow = round50(chinaUsd + buyoutLow + chinaLegLow + intlLow + PRICING.svhUsd[0] + customsLow + PRICING.serviceUsd);
   const totalHigh = round50(chinaUsd + buyoutHigh + chinaLegHigh + intlHigh + PRICING.svhUsd[1] + customsHigh + PRICING.serviceUsd);
   return {
-    chinaUsd,
+    chinaUsd, isFob, basePriceLabel, basePriceNote, buyoutLabel, customsBasisNote,
     buyoutLow, buyoutHigh,
     chinaLegLow, chinaLegHigh, chinaLegNote,
     intlLow, intlHigh, intlNote,

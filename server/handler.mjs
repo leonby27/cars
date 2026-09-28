@@ -1,3 +1,9 @@
+import {cachedGuaziImage} from './guazi-image-cache.mjs';
+import {imageUrl} from '../scripts/lib/guazi-pilot-data.mjs';
+import {catalogSources,setCatalogSource,sameOriginSettingRequest} from './catalog-sources.mjs';
+import {clearCatalogCaches} from './repository.mjs';
+import {clearPriceRatingCache} from './price-rating.mjs';
+import {clearMarketComparisonCache} from './market-compare-data.mjs';
 import { getSearchTraffic } from './search-traffic.mjs';
 import { Readable } from "node:stream";
 import { gzip } from "node:zlib";
@@ -13,11 +19,10 @@ import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyti
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
-const imageHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
 // Ограничение размера: через прокси идёт фотография объявления, а не файл в сотни
 // мегабайт. Без предела чужой сервер мог бы гнать поток через нашу функцию.
 const maxImageBytes = 12 * 1024 * 1024;
-const allowedImageSource = (source) => source.protocol === "https:" && imageHosts.has(source.hostname);
+const allowedImageSource = (source) => { try { imageUrl(source.href); return true; } catch { return false; } };
 
 // Перенаправления проходим сами, проверяя каждый следующий адрес по тому же списку.
 // С автоматическим `redirect: "follow"` разрешённый сервер источника мог перебросить
@@ -200,6 +205,19 @@ export async function handleApiRequest(request, response) {
     if (request.method === "POST" && url.pathname === "/api/analytics/logout") {
       return json(response, 200, { ok:true }, { "set-cookie":clearAnalyticsCookie(request) });
     }
+    if (url.pathname === "/api/analytics/catalog-sources") {
+      if (!hasAnalyticsSession(request)) return json(response,401,{error:"unauthorized"});
+      if (request.method === "GET") return json(response,200,await catalogSources());
+      if (request.method === "PATCH") {
+        if (!sameOriginSettingRequest(request.headers)) return json(response,403,{error:"origin_required"});
+        const body=await readJson(request);
+        if(body.source!=="Guazi" || typeof body.enabled!=="boolean")return json(response,400,{error:"invalid_setting"});
+        const result=await setCatalogSource(body.source,body.enabled);
+        clearCatalogCaches();clearPriceRatingCache();clearMarketComparisonCache();
+        return json(response,200,result);
+      }
+      return json(response,405,{error:"method_not_allowed"});
+    }
     if (request.method === "GET" && url.pathname === "/api/analytics/search-traffic") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
       return json(response, 200, await getSearchTraffic(url.searchParams.get("period")));
@@ -235,19 +253,16 @@ export async function handleApiRequest(request, response) {
       let source;
       try { source = new URL(url.searchParams.get("src") || ""); } catch { return json(response, 400, { error:"invalid_image_url" }); }
       if (!allowedImageSource(source)) return json(response, 403, { error:"image_host_not_allowed" });
-      const upstream = await fetchAllowedImage(source);
-      if (upstream.error) return json(response, upstream.status, { error:upstream.error });
-      const bytes = Number(upstream.response.headers.get("content-length")) || 0;
-      if (bytes > maxImageBytes) return json(response, 502, { error:"image_too_large" });
-      response.writeHead(200, { "content-type":upstream.contentType, "cache-control":"public, max-age=21600, stale-while-revalidate=86400", "x-content-type-options":"nosniff" });
-      return Readable.fromWeb(upstream.response.body).pipe(response);
+      const cached = await cachedGuaziImage(source.href);
+      response.writeHead(200, {"content-type":cached.contentType,"content-length":String(cached.bytes.length),"cache-control":"public, max-age=21600, stale-while-revalidate=86400","x-content-type-options":"nosniff"});
+      return response.end(cached.bytes);
     }
     if (request.method === "GET" && url.pathname === "/api/health") {
       // Без пароля — только «сайт жив» и размер каталога. Очередь задач, состояние
       // источников и тексты ошибок наружу не отдаём: это внутренняя кухня импорта,
       // а в текст ошибки однажды может попасть адрес прокси. Всё это остаётся
       // доступным по той же куке, что и раздел аналитики.
-      const cars = await pool.query("SELECT count(*)::int AS cars FROM listings WHERE status='active'");
+      const cars = await pool.query("SELECT count(*)::int AS cars FROM catalog_listings WHERE status='active'");
       const publicHealth = { ok:true, cars:cars.rows[0].cars };
       if (!hasAnalyticsSession(request)) return json(response, 200, publicHealth);
       const [jobs,sources] = await Promise.all([

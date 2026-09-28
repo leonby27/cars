@@ -15,6 +15,20 @@ export function resumeRefreshCycle(saved, now) {
   };
 }
 
+// «Круг» по команде Сергея — всегда новый: все марки с первой. Хвост прошлого
+// незакрытого круга не теряется: его машины проверены раньше новой отметки
+// времени и попадут в этот же обход вместе со всеми остальными.
+export function startNewRefreshCycle(saved, now) {
+  const current = resumeRefreshCycle(saved, now);
+  const unfinished = saved?.version === 2 && Number.isFinite(Date.parse(saved.startedAt));
+  return {
+    version: 2,
+    round: unfinished ? current.round + 1 : current.round,
+    startedAt: new Date(now).toISOString(),
+    brandsDone: [],
+  };
+}
+
 export function readCheckLimit(value) {
   if (value === undefined || value === null) return Infinity;
   const limit = Number(value);

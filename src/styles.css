@@ -6338,7 +6338,7 @@ html[data-theme="dark"] #root .load-more {
   }
 }
 .detail-main {
-  grid-template-columns: minmax(0, 1fr) 370px;
+  grid-template-columns: minmax(0, 1fr) 386px;
 }
 .detail-sidebar {
   align-self: start;
@@ -6381,6 +6381,24 @@ html[data-theme="dark"] #root .load-more {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
+}
+.detail-sidebar-price-note button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.detail-sidebar-price-note button:hover,
+.detail-sidebar-price-note button[aria-expanded="true"] {
+  color: var(--accent);
+}
+.detail-sidebar-price-note button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 /* Когда рядом с ценой стоит переключатель валюты, строка становится флексом —
    подпись переносим под неё целой строкой, а не третьей клеткой в ряд. */
@@ -6600,9 +6618,6 @@ html[data-theme="dark"] #root .load-more {
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-.delivery-disclosure {
-  border-bottom: 1px solid var(--line);
-}
 .disclosure-caret {
   flex: 0 0 auto;
   color: var(--muted);
@@ -6611,10 +6626,21 @@ html[data-theme="dark"] #root .load-more {
 .delivery-disclosure.open > .delivery-card-heading .disclosure-caret {
   transform: rotate(180deg);
 }
+.price-disclosure.open > .order-card-heading .disclosure-caret {
+  transform: rotate(180deg);
+}
 .delivery-disclosure .delivery-card-heading:hover .disclosure-caret {
   color: var(--accent-dark);
 }
+.price-disclosure .order-card-heading:hover .disclosure-caret {
+  color: var(--accent-dark);
+}
 .delivery-disclosure .delivery-card-heading:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 5px;
+  border-radius: calc(8px * var(--corner-scale));
+}
+.price-disclosure .order-card-heading:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 5px;
   border-radius: calc(8px * var(--corner-scale));
@@ -6747,8 +6773,16 @@ html[data-theme="dark"] #root .load-more {
   font-size: 13px;
   line-height: 1.45;
 }
-.order-card > .report-order-cta {
-  margin: 18px 0 0;
+.detail-sidebar > .report-order-cta {
+  width: 100%;
+  margin: 16px 0 0;
+}
+.order-card.price-disclosure {
+  margin: 0 0 12px;
+  padding: 18px 20px;
+}
+.price-disclosure-shell[aria-hidden="false"] {
+  overflow: visible;
 }
 /* Подпись под кнопкой заявки: кто её получит. Только у настоящей кнопки —
    плавающий повтор идёт без неё. */
@@ -6759,10 +6793,16 @@ html[data-theme="dark"] #root .load-more {
   line-height: 1.45;
   text-align: center;
 }
-.delivery-disclosure {
-  padding: 20px 0;
+.delivery-disclosure.delivery-card {
+  margin: 12px 0 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgba(23, 25, 28, 0.05);
 }
-.delivery-card-heading {
+.delivery-card-heading,
+.order-card-heading {
   width: 100%;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -6772,8 +6812,10 @@ html[data-theme="dark"] #root .load-more {
   border: 0;
   background: transparent;
   text-align: left;
+  margin: 0;
 }
-.delivery-card-icon {
+.delivery-card-icon,
+.order-card-icon {
   width: 44px;
   height: 44px;
   display: grid;
@@ -6783,19 +6825,27 @@ html[data-theme="dark"] #root .load-more {
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
-.delivery-card-heading span {
+.delivery-card-heading span,
+.order-card-heading span {
   color: var(--muted);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
 }
-.delivery-card-heading h2 {
+.delivery-card-heading h2,
+.order-card-heading h2 {
   margin: 1px 0 0;
   font-size: 18px;
   line-height: 1.2;
   letter-spacing: -0.3px;
 }
+.price-disclosure-content {
+  padding-top: 0;
+}
 .delivery-disclosure-content {
+  padding-top: 0;
+}
+.delivery-disclosure.open .delivery-disclosure-content {
   padding-top: 2px;
 }
 .delivery-intro {
@@ -6852,7 +6902,7 @@ html[data-theme="dark"] #root .load-more {
     /* Всё, чему порядок не назначен явно (приписка о марке, номер объявления),
        идёт в конец страницы — там же, где стояло в колонке. Без этой строки такие
        плашки получали нулевой порядок и уезжали в самый верх, выше фотографий. */
-    order: 7;
+    order: 8;
   }
   .detail-gallery {
     order: 1;
@@ -6866,14 +6916,21 @@ html[data-theme="dark"] #root .load-more {
   .detail-content {
     order: 4;
   }
-  .detail-main .detail-sidebar > .vehicle-quick-info {
+  /* Итог и подробности цены идут раньше основной информации, как и в боковой
+     колонке на широком экране. */
+  .detail-main .detail-sidebar > .detail-sidebar-price,
+  .detail-main .detail-sidebar > .price-disclosure {
     order: 5;
   }
-  /* Цена и блок подробностей идут одной парой: у обоих порядок 6, а кто из них
-     первый, решает разметка — там цена стоит выше. */
-  .detail-main .detail-sidebar > .detail-sidebar-price,
-  .detail-main .detail-sidebar > .order-card {
+  .detail-main .detail-sidebar > .vehicle-quick-info,
+  .detail-main .detail-sidebar > .vehicle-condition-summary {
     order: 6;
+  }
+  .detail-main .detail-sidebar > .delivery-card,
+  .detail-main .detail-sidebar > .report-order-cta,
+  .detail-main .detail-sidebar > .sold-order-state,
+  .detail-main .detail-sidebar > .report-order-note {
+    order: 7;
   }
   .order-card {
     display: block;
@@ -6884,10 +6941,14 @@ html[data-theme="dark"] #root .load-more {
     display: block;
     padding: 18px;
   }
+  .delivery-disclosure.delivery-card {
+    padding: 18px;
+  }
   .price-total strong {
     font-size: calc(23px * var(--price-fit, 1));
   }
-  .delivery-card-heading h2 {
+  .delivery-card-heading h2,
+  .order-card-heading h2 {
     font-size: 18px;
   }
 }
@@ -8740,8 +8801,18 @@ footer {
   .detail-main .detail-sidebar > * {
     order: 10;
   }
-  .detail-main .detail-sidebar > .order-card {
+  .detail-main .detail-sidebar > .price-disclosure {
+    order: 5;
+  }
+  .detail-main .detail-sidebar > .vehicle-quick-info,
+  .detail-main .detail-sidebar > .vehicle-condition-summary {
     order: 6;
+  }
+  .detail-main .detail-sidebar > .delivery-card,
+  .detail-main .detail-sidebar > .report-order-cta,
+  .detail-main .detail-sidebar > .sold-order-state,
+  .detail-main .detail-sidebar > .report-order-note {
+    order: 7;
   }
   .detail-content > .detail-section-links {
     order: 8;
@@ -13348,7 +13419,8 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .featured-card,
   .side-card,
   .vehicle-quick-info,
-  .order-card
+  .order-card,
+  .delivery-card
 ) {
   border-color: transparent;
 }
@@ -23389,4 +23461,88 @@ html body #root .market-compare-sort,
 html body #root .market-compare-sort .select-trigger {
   min-height: 48px;
   height: 48px;
+}
+
+/* Локальная полная карточка Guazi использует общий шаблон отчёта. */
+.vehicle-guazi-report { scroll-margin-top: 100px; margin: 48px 0; }
+.vehicle-guazi-report .service-report-example.page-width { width: 100%; max-width: none; margin-inline: 0; }
+.service-report-inspection-result { display: block; margin-top: 4px; color: var(--report-ink); font-size: 14px; line-height: 1.45; }
+.service-report-inspection-icon.unknown,
+.service-report-inspection-status.unknown { color: var(--warn-ink); }
+.service-report-marked-photo-stage { display: flex; justify-content: center; background: #090a0c; }
+.service-report-marked-photo { position: relative; width: 100%; }
+.service-report-marked-photo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.service-report-photo-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #c82828;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 1px 5px #0008;
+}
+.service-report-photo-viewer-card:has(.service-report-marked-photo-stage) { overflow-y: auto; }
+
+.vehicle-condition-summary {
+  margin: 0 0 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 10px 28px rgba(23, 25, 28, 0.05);
+}
+.vehicle-condition-grade { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.condition-grade-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.condition-grade-excellent,
+.condition-grade-good { background: #217a47; color: #fff; }
+.condition-grade-average { background: #996000; color: #fff; }
+.condition-grade-poor { background: #b4232d; color: #fff; }
+.vehicle-condition-description { margin: 12px 0 0; font-size: 14px; font-weight: 500; line-height: 1.55; }
+.vehicle-condition-details-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vehicle-condition-details-toggle:hover,
+.vehicle-condition-details-toggle:focus-visible,
+.vehicle-condition-details-toggle[aria-expanded="true"] { color: var(--accent); }
+.vehicle-condition-details-toggle svg { transition: transform var(--motion-medium) var(--motion-ease); }
+.vehicle-condition-details-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.vehicle-condition-details dl { margin: 10px 0 0; }
+.vehicle-condition-summary dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.4; }
+.vehicle-condition-summary dt { color: var(--muted); }
+.vehicle-condition-summary dd { margin: 0; font-weight: 750; text-align: right; white-space: nowrap; }
+.vehicle-condition-report-link { display: flex; align-items: center; gap: 7px; margin-top: 12px; color: var(--ink); font-size: 14px; font-weight: 700; }
+:root[data-theme="dark"] .vehicle-condition-summary { border-color: transparent; }
+:root[data-theme="dark"] .condition-grade-excellent,
+:root[data-theme="dark"] .condition-grade-good { background: #287e4d; color: #fff; }
+:root[data-theme="dark"] .condition-grade-average { background: #9f6507; color: #fff; }
+:root[data-theme="dark"] .condition-grade-poor { background: #b8323c; color: #fff; }
+@media (max-width: 980px) {
+  .detail-main .detail-sidebar > .vehicle-condition-summary { order: 6; }
 }

@@ -11,6 +11,7 @@
 // вызывающий отдаёт простую версию страницы: хуже, но живую.
 import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isTrackingParam } from "../src/tracking-params.js";
 
 const entryServerPath = fileURLToPath(new URL("../dist/ssr/entry-server.js", import.meta.url));
 let entryServerPromise = null;
@@ -49,8 +50,9 @@ export const dailyShuffleSeed = (now = Date.now()) => `s${Math.floor((now + 3 * 
 // Готовую первую страницу выдачи встраиваем только для адреса без своих фильтров
 // (кроме страницы и порядка): фильтры каталог разбирает сам, и совпасть байт в байт
 // список с ними не обязан — тогда обе стороны рисуют заглушку, а список приходит запросом.
+// Метки переходов (utm, yclid, nocount…) фильтрами не считаются: выдачу они не меняют.
 const PLAIN_KEYS = new Set(["page", "sort"]);
-export const plainCatalogSearch = (params) => [...params.keys()].every((key) => PLAIN_KEYS.has(key));
+export const plainCatalogSearch = (params) => [...params.keys()].every((key) => PLAIN_KEYS.has(key) || isTrackingParam(key));
 
 // Порядки из выпадающего списка каталога (sortOptions в src/App.jsx).
 export const CATALOG_SORTS = new Set(["default", "price_asc", "price_desc", "newest", "mileage_asc", "range_desc", "year_desc", "year_asc"]);

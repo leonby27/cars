@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import { trimModelPages } from "./scripts/vite-trim-model-pages.mjs";
+import { guaziLocalPreview } from "./scripts/vite-guazi-preview.mjs";
 
 // Сервер разработки — для расчёта популярных моделей теми же модулями, что и сборка.
 let server = null;
@@ -18,7 +19,7 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: ["terminal.local"],
     proxy: {
-      "/api": "http://127.0.0.1:8787",
+      "/api": { target: "http://127.0.0.1:8787", changeOrigin: false },
       // Фотографии машин сайт просит со своего адреса /photo/… — на боевом сервере
       // их отдаёт nginx, забирая кадр у китайского хранилища и складывая на диск
       // (snippets/abcars-photo-location.conf). Локально nginx нет, и без этой
@@ -42,6 +43,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    guaziLocalPreview(),
     {
       name: "legal-pdf-viewer",
       configureServer(server) { server.middlewares.use(legalPdfResponse); },

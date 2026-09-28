@@ -56,3 +56,5 @@ export async function marketComparison(stats, _stock, cacheKey = "full") {
   cache.set(cacheKey, { at:now, value });
   return value;
 }
+
+export const clearMarketComparisonCache = () => cache.clear();

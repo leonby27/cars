@@ -10,7 +10,7 @@ const orderSelect = `SELECT o.id,o.listing_id,o.availability_status,o.availabili
   v.brand,v.model,v.model_year,v.powertrain,v.drivetrain,v.battery_kwh,v.electric_range_km,
   (SELECT m.url FROM listing_media m WHERE m.listing_id=o.listing_id ORDER BY m.position LIMIT 1) AS image
   FROM customer_orders o
-  JOIN listings l ON l.id=o.listing_id
+  JOIN catalog_listings l ON l.id=o.listing_id
   JOIN vehicles v ON v.id=l.vehicle_id`;
 
 const orderNumber = (row) => {
@@ -72,7 +72,7 @@ export async function listCustomerOrders(request) {
 export async function createCustomerOrder(request, listingId) {
   const account = await getSessionAccount(request);
   if (!account) return { error:"unauthorized" };
-  const listing = await pool.query("SELECT 1 FROM listings WHERE id=$1 AND status='active'", [listingId]);
+  const listing = await pool.query("SELECT 1 FROM catalog_listings WHERE id=$1 AND status='active'", [listingId]);
   if (!listing.rowCount) return { error:"listing_not_found" };
   const result = await pool.query(
     `INSERT INTO customer_orders (customer_id,listing_id) VALUES ($1,$2)
@@ -98,7 +98,7 @@ export async function claimGuestAvailabilityLeads(customerId, phone) {
     `WITH guest AS (
         SELECT d.id,d.listing_id,d.customer_name,d.contact,d.created_at
         FROM order_drafts d
-        JOIN listings l ON l.id=d.listing_id
+        JOIN catalog_listings l ON l.id=d.listing_id
         WHERE d.calculation->>'requestType'='availability_check'
           AND regexp_replace(d.contact,'\\D','','g')=$2
           AND d.created_at > now() - ($3 * interval '1 day')

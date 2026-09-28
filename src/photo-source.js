@@ -1,4 +1,12 @@
-const guaziHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com"]);
+const guaziHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com", "global-image-pub.guazistatic-global.com", "global-image1.guazistatic-global.com"]);
+
+export function vehiclePhotoPrefetchSources(sources) {
+  try {
+    const url = new URL(sources[0]?.replace(/^\/\//, "https://"));
+    if (guaziHosts.has(url.hostname)) return sources.slice(0, 2);
+  } catch {}
+  return sources;
+}
 
 // Source photo URLs are stable most of the time, but a browser can occasionally
 // cache a broken response under that stable URL. Bumping this value gives every

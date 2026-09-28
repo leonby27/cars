@@ -21,6 +21,7 @@
 // страниц поисковика; в боевом окружении задавать нужно обе, иначе сайт и поисковик
 // увидят разное.
 const FLAGS = Object.freeze({
+  GUAZI_PREVIEW_ENABLED: { production: false, local: true },
   // production — виден ли раздел на боевом сайте; local — виден ли на локальной версии.
   // Журнал включён на боевом сайте 27.08.2026 по решению владельца.
   BLOG_ENABLED: { production: true, local: true },
@@ -62,3 +63,6 @@ export const BLOG_DRAFTS_VISIBLE = flag("BLOG_DRAFTS_VISIBLE");
 
 /** Видимость блока отзывов в разделе «О сервисе». */
 export const REVIEWS_ENABLED = flag("REVIEWS_ENABLED");
+
+/** Полная пробная карточка Guazi доступна только в локальной версии. */
+export const GUAZI_PREVIEW_ENABLED = flag("GUAZI_PREVIEW_ENABLED");

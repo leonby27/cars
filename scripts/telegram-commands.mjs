@@ -49,11 +49,14 @@ const running = () =>
     execFile("/bin/bash", ["-c", "pgrep -f '[r]efresh-che168.mjs' | head -1"], (error, out) => resolve(String(out || "").trim()));
   });
 
-async function startRun(brands) {
+async function startRun(brands, { newCircle = false } = {}) {
   // Актуализация существующего каталога должна доходить до каждой машины.
   // Ограничиваем только пополнение новыми карточками, а не поштучные проверки.
   const args = ["scripts/refresh-che168.mjs", "--new-per-brand=100"];
   if (brands?.length) args.push(`--brands=${brands.join(",")}`);
+  // «Круг» — всегда все марки с первой. Без этого прогон продолжал незакрытый
+  // прошлый круг: доделывал хвост одной марки и на этом заканчивался.
+  if (newCircle) args.push("--new-circle");
   const child = spawn("xvfb-run", ["-a", "node", ...args], {
     cwd: ROOT,
     detached: true,
@@ -69,6 +72,7 @@ function parse(text) {
   const t = String(text || "").trim().toLowerCase();
   if (!t) return null;
   if (/^(круг|весь|всё|все|полный круг)$/.test(t)) return { kind: "circle" };
+  if (/^(продолжить|продолжи|доделать|доделай|дальше)$/.test(t)) return { kind: "resume" };
   if (/^(стоп|стой|хватит)$/.test(t)) return { kind: "stop" };
   if (/^(статус|как дела|что там)$/.test(t)) return { kind: "status" };
   if (/^(помощь|команды|\/start|\/help)$/.test(t)) return { kind: "help" };
@@ -90,7 +94,8 @@ function parse(text) {
 const HELP = [
   "Что я умею:",
   "",
-  "• «круг» — обойти все марки по очереди",
+  "• «круг» — обойти все марки заново, от мелких к крупным",
+  "• «продолжить» — доделать только то, что не успел прошлый круг",
   "• «марка BMW» или «марки BMW, Audi» — только названные",
   "• «статус» — идёт ли прогон и сколько машин в каталоге",
   "• «стоп» — остановить прогон (всё проверенное сохранится)",
@@ -119,14 +124,25 @@ async function handle(text) {
   if (cmd.kind === "stop") {
     if (!busy) return say("Прогон и так не запущен.");
     await new Promise((resolve) => execFile("/bin/bash", ["-c", `kill ${busy}`], () => resolve()));
-    return say("Останавливаю. Всё проверенное сохранится, курсор запомнит пройденные марки.");
+    return say("Останавливаю. Всё проверенное сохранится. Доделать остаток — «продолжить», начать заново — «круг».");
   }
 
   if (busy) return say("Прогон уже идёт — сначала «стоп» или дождитесь конца.");
 
   if (cmd.kind === "circle") {
-    await startRun(null);
+    await startRun(null, { newCircle: true });
     return say("Запускаю полный круг: все марки, от мелких к крупным. По каждой пришлю отбивку.");
+  }
+
+  if (cmd.kind === "resume") {
+    const cursor = await fs
+      .readFile(path.join(ROOT, "runtime", "refresh-cursor.json"), "utf8")
+      .then((raw) => JSON.parse(raw))
+      .catch(() => null);
+    if (!cursor?.startedAt) return say("Прошлый круг закрыт, доделывать нечего. Напишите «круг», чтобы начать новый.");
+    await startRun(null);
+    const done = cursor.brandsDone?.length || 0;
+    return say(`Продолжаю круг №${cursor.round}: доделаны ${done} марок, беру остальные и непроверенные машины.`);
   }
 
   if (cmd.kind === "brands") {

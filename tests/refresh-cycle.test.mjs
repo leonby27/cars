@@ -142,3 +142,16 @@ test("Telegram full-circle command does not cap existing listing checks", () => 
   assert.doesNotMatch(startRun, /--detail-limit|--detail-per-brand|--skip-detail|--only-unverified/);
   assert.match(startRun, /--new-per-brand=100/);
 });
+
+test("the «круг» command starts a fresh cycle over all brands instead of finishing the old tail", async () => {
+  const { startNewRefreshCycle } = await import("../scripts/lib/refresh-cycle.mjs");
+  const now = "2026-09-28T03:25:00.000Z";
+  const unfinished = { version: 2, round: 6, startedAt: "2026-09-22T05:09:18.685Z", brandsDone: ["Kia", "Audi"] };
+  assert.deepEqual(startNewRefreshCycle(unfinished, now), { version: 2, round: 7, startedAt: now, brandsDone: [] });
+  // Closed cycles already carry the next round number.
+  const closed = { version: 2, round: 7, startedAt: null, brandsDone: [] };
+  assert.deepEqual(startNewRefreshCycle(closed, now), { version: 2, round: 7, startedAt: now, brandsDone: [] });
+  assert.equal(startNewRefreshCycle(null, now).round, 1);
+  // Resume keeps the unfinished tail.
+  assert.deepEqual(resumeRefreshCycle(unfinished, now).brandsDone, ["Kia", "Audi"]);
+});

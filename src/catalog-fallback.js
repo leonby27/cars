@@ -1,4 +1,6 @@
 // Preserve only server-rendered catalog content, never a previous SPA route.
+import { isTrackingParam } from './tracking-params.js';
+
 let snapshot = null;
 
 export function catalogFallbackKey(href) {
@@ -6,7 +8,7 @@ export function catalogFallbackKey(href) {
   const pathname = url.pathname.replace(/\/+$/, '');
   if (!/^\/catalog(?:\/[^/]+)?$/.test(pathname)) return null;
   for (const key of url.searchParams.keys()) {
-    if (key !== 'page' && key !== 'nocount' && key !== 'ysclid' && key !== 'gclid' && key !== 'fbclid' && !key.startsWith('utm_')) return null;
+    if (key !== 'page' && !isTrackingParam(key)) return null;
   }
   const page = url.searchParams.get('page') || '1';
   if (!/^[1-9]\d{0,4}$/.test(page)) return null;

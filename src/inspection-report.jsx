@@ -23,9 +23,10 @@ const INSPECTION_STATUS_LABELS = Object.freeze({
   attention: "Есть замечание",
   limited: "Осмотр ввиду конструкции авто ограничен",
   "not-applicable": "Не предусмотрено",
+  unknown: "Нет однозначного результата",
 });
 
-const isInspectionIssue = (point) => point.status === "attention" || point.status === "limited";
+const isInspectionIssue = (point) => point.status === "attention" || point.status === "limited" || point.status === "unknown";
 const PHOTO_EVIDENCE_SECTION_KEY = "photo-evidence";
 
 function StatusIcon({ tone, size = 19 }) {
@@ -35,13 +36,13 @@ function StatusIcon({ tone, size = 19 }) {
 
 function InspectionStatusIcon({ status, size = 18 }) {
   if (status === "attention") return <Info size={size} weight="fill" />;
-  if (status === "limited") return <Info size={size} weight="fill" />;
+  if (status === "limited" || status === "unknown") return <Info size={size} weight="fill" />;
   if (status === "not-applicable") return <span aria-hidden="true">—</span>;
   return <CheckCircle size={size} weight="fill" />;
 }
 
 function InspectionPointRow({ point, photoIndexById, onOpenPhotos }) {
-  const status = INSPECTION_STATUS_LABELS[point.status] ? point.status : "clear";
+  const status = INSPECTION_STATUS_LABELS[point.status] ? point.status : "unknown";
   const linkedPhotoIds = [...new Set(asList(point.photoIds).filter((photoId) => photoIndexById.has(photoId)))];
   const linkedPhotoCount = linkedPhotoIds.length;
   const hasPhotos = linkedPhotoCount > 0;
@@ -53,6 +54,7 @@ function InspectionPointRow({ point, photoIndexById, onOpenPhotos }) {
       <span className="service-report-inspection-copy">
         <strong>{point.label}</strong>
         <span className={`service-report-inspection-status ${status}`}>{INSPECTION_STATUS_LABELS[status]}</span>
+        {point.result && <span className="service-report-inspection-result">{point.result}</span>}
       </span>
       {hasPhotos && (
         <span className="service-report-inspection-photo-link" aria-hidden="true">
@@ -366,13 +368,24 @@ export function InspectionReport({ report }) {
             <button className="service-report-photo-viewer-close" type="button" onClick={() => setViewer(null)} aria-label="Закрыть фотографию" autoFocus>
               <X size={22} weight="bold" />
             </button>
-            <img src={activePhoto.src} width={activePhoto.width || 960} height={activePhoto.height || 720} alt={activePhoto.alt} />
+            {Array.isArray(activePhoto.markers) ? (
+              <div className="service-report-marked-photo-stage">
+                <div className="service-report-marked-photo" style={{ aspectRatio: `${activePhoto.width || 750} / ${activePhoto.height || 500}`, maxWidth: `min(100%, calc(58vh * ${(activePhoto.width || 750) / (activePhoto.height || 500)}))` }}>
+                  <img src={activePhoto.src} width={activePhoto.width || 750} height={activePhoto.height || 500} alt={activePhoto.alt} />
+                  {activePhoto.markers.map((marker, index) => (
+                    <span key={index} className="service-report-photo-marker" style={{ left: `${marker.x}%`, top: `${marker.y}%` }} title={marker.label} aria-label={marker.label}>{index + 1}</span>
+                  ))}
+                </div>
+              </div>
+            ) : <img src={activePhoto.src} width={activePhoto.width || 960} height={activePhoto.height || 720} alt={activePhoto.alt} />}
             <footer>
               <div>
                 <span>{(viewer?.position || 0) + 1} / {viewerPhotoIndexes.length}</span>
                 <p id={`${sectionId}-viewer-caption`}>
                   <span>{viewer?.description || activePhoto.caption}</span>
                   {viewer?.description && <small>{activePhoto.caption}</small>}
+                  {asList(activePhoto.findings).length > 0 && <small>{activePhoto.findings.join('; ')}</small>}
+                  {asList(activePhoto.markers).length > 0 && <small>Отметки на фото: {activePhoto.markers.map((marker, index) => `${index + 1} — ${marker.label}`).join('; ')}</small>}
                 </p>
               </div>
               {viewerPhotoIndexes.length > 1 && (
