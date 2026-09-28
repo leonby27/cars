@@ -22,6 +22,14 @@ test('Guazi cache stores verified images, reuses bytes and coalesces simultaneou
  const url='https://global-image-pub.guazistatic-global.com/example.jpg';await Promise.all([cachedGuaziImage(url,{fetchImpl}),cachedGuaziImage(url,{fetchImpl})]);assert.equal(requests,1);const hit=await cachedGuaziImage(url,{fetchImpl});assert.equal(hit.cached,true);assert.equal(requests,1);
  await assert.rejects(cachedGuaziImage('http://127.0.0.1/private',{fetchImpl}));
 });
+test('Guazi images are served without persistence when the disk reserve would be crossed',async t=>{
+ const dir=await fs.mkdtemp(new URL('../runtime/guazi-cache-disk-test-',import.meta.url));const prior=process.env.GUAZI_IMAGE_CACHE_DIR;process.env.GUAZI_IMAGE_CACHE_DIR=dir;t.after(async()=>{if(prior===undefined)delete process.env.GUAZI_IMAGE_CACHE_DIR;else process.env.GUAZI_IMAGE_CACHE_DIR=prior;await fs.rm(dir,{recursive:true,force:true});});
+ let requests=0;const fetchImpl=async()=>{requests++;return new Response(new Uint8Array([255,216,255,0]),{headers:{'content-type':'image/jpeg'}});};const statfsImpl=async()=>({bavail:1,bsize:1024});
+ const url='https://global-image-pub.guazistatic-global.com/disk-guard.jpg';
+ assert.equal((await cachedGuaziImage(url,{fetchImpl,statfsImpl,minFreeBytes:2048})).cached,false);
+ assert.equal((await cachedGuaziImage(url,{fetchImpl,statfsImpl,minFreeBytes:2048})).cached,false);
+ assert.equal(requests,2);assert.deepEqual(await fs.readdir(dir),[]);
+});
 test('bulk stops on a failed detail, resumes the same page and replays accepted cars without refetching',async t=>{
  const {runBulk}=await import('../scripts/guazi-bulk.mjs');
  const {makeSegments}=await import('../scripts/lib/guazi-core.mjs');
