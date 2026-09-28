@@ -9,7 +9,15 @@ import path from "node:path";
 import { cleanupStalePhotos, stageBuffers, unstagePhotos } from "./lib/social-media-store.mjs";
 import { dropFrames, prepareFrames } from "./lib/photo-local.mjs";
 import { publishToInstagram, publishToTelegram, publishToThreads, refreshSocialTokens } from "./lib/social.mjs";
-import { hasRequiredVisual, threadsTimeline, weekKey, weeklyManifestUrl } from "./lib/social-week.mjs";
+import {
+  hasRequiredVisual,
+  publicationActuallyPublished,
+  publicationFinished,
+  soldSingleCarTexts,
+  threadsTimeline,
+  weekKey,
+  weeklyManifestUrl,
+} from "./lib/social-week.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 try { process.loadEnvFile?.(path.join(ROOT, ".env.local")); } catch {}
@@ -63,22 +71,21 @@ async function downloadImage(url, file) {
   return file;
 }
 
-async function carsStillActive(cars) {
-  if (!cars?.length) return true;
-  const checks = await Promise.all(cars.map(async (car) => {
+async function inspectCars(cars) {
+  if (!cars?.length) return [];
+  return Promise.all(cars.map(async (car) => {
     const prefix = car.source === "Che168" ? "che168" : car.source === "Guazi" ? "guazi" : String(car.source || "").toLowerCase();
     const response = await fetch(`${catalogOrigin}/api/cars/${encodeURIComponent(`${prefix}-${car.externalId}`)}`, {
       signal:AbortSignal.timeout(20_000),
     });
-    if (!response.ok) return false;
+    if (!response.ok) throw new Error(`карточка ${car.externalId} ответила ${response.status}`);
     const live = await response.json();
-    return live.available !== false && live.statusTone !== "red" && live.status !== "Продано";
+    const active = live.available !== false && live.statusTone !== "red" && live.status !== "Продано";
+    return { car, active, status:live.status || "", statusTone:live.statusTone || "" };
   }));
-  return checks.every(Boolean);
 }
 
 const due = (item) => publishAllNow || Date.parse(item.publishAt) <= Date.now();
-const done = (record) => record?.status === "published" || record?.status === "skipped";
 const manifest = await fetchJson(process.env.SOCIAL_WEEK_MANIFEST_URL || weeklyManifestUrl(week));
 if (!manifest) {
   console.log(`Готового недельного пакета ${week} ещё нет.`);
@@ -91,7 +98,9 @@ const config = dryRun ? null : await refreshSocialTokens({ log:console.log });
 async function publishVisual(post, targetNetworks) {
   if (!targetNetworks.length || !due(post)) return false;
   const existing = state.visual[post.id];
-  if (existing?.status === "skipped") return false;
+  // Старые пропуски из-за продажи можно безопасно переоценить после обновления
+  // механизма: одиночная карточка теперь имеет честный режим «уже продано».
+  if (existing?.status === "skipped" && existing?.reason !== "inactive_car") return false;
   if (targetNetworks.every((network) => existing?.networks?.[network]?.status === "published")) {
     return targetNetworks.includes("threads") && existing?.networks?.threads?.status === "published";
   }
@@ -101,14 +110,36 @@ async function publishVisual(post, targetNetworks) {
     console.log(`${post.id}: пропущена — нет готовой сгенерированной обложки`);
     return false;
   }
-  if (!(await carsStillActive(post.cars))) {
-    state.visual[post.id] = { status:"skipped", reason:"inactive_car", at:new Date().toISOString() };
-    await saveState();
-    console.log(`${post.id}: пропущена — одна из машин больше не активна`);
-    return false;
+  const carChecks = await inspectCars(post.cars);
+  const inactiveCars = carChecks.filter((item) => !item.active);
+  let publicationTexts = post.texts;
+  let publicationPhotos = post.photos || [];
+  let publicationMode = "live";
+  if (inactiveCars.length) {
+    const soldTexts = inactiveCars.length === 1 && carChecks.length === 1
+      ? soldSingleCarTexts(post, { site:catalogOrigin })
+      : null;
+    if (!soldTexts) {
+      state.visual[post.id] = {
+        status:"needs_refresh",
+        reason:"inactive_car",
+        carIds:inactiveCars.map(({ car }) => car.externalId),
+        at:new Date().toISOString(),
+      };
+      await saveState();
+      console.log(`${post.id}: требует обновления — одна из машин больше не активна`);
+      return false;
+    }
+    publicationTexts = soldTexts;
+    // Для проданной машины достаточно готовой обложки. Исходную галерею не
+    // отправляем: фотографии карточки очищаются после продажи, а подпись уже
+    // ведёт на сохранённую страницу с актуальными аналогами.
+    publicationPhotos = [];
+    publicationMode = "sold_fallback";
   }
   if (dryRun) {
-    console.log(`${post.id}: готова к публикации в ${targetNetworks.join(", ")} (${post.rubric}), обложка ${post.cover.url}`);
+    const suffix = publicationMode === "sold_fallback" ? ", машина уже продана" : "";
+    console.log(`${post.id}: готова к публикации в ${targetNetworks.join(", ")} (${post.rubric}${suffix}), обложка ${post.cover.url}`);
     return targetNetworks.includes("threads");
   }
 
@@ -121,7 +152,7 @@ async function publishVisual(post, targetNetworks) {
     // Отсутствующая обложка пропускает запись целиком. Обычная фотография машины
     // никогда не занимает её место.
     await downloadImage(post.cover.url, cover);
-    frames = await prepareFrames(post.photos || [], { dir, prefix:"gallery", mode:"crop", shape:"vertical", log:console.log });
+    frames = await prepareFrames(publicationPhotos, { dir, prefix:"gallery", mode:"crop", shape:"vertical", log:console.log });
     const files = [cover, ...frames].slice(0, 10);
     const coverStage = await stageBuffers([{ name:path.basename(cover), data:await fs.readFile(cover) }], { carNumber:`${post.id}-cover`, log:console.log });
     if (coverStage.links.length !== 1) throw new Error("сгенерированная обложка не попала в хранилище Meta");
@@ -134,15 +165,18 @@ async function publishVisual(post, targetNetworks) {
 
     const record = state.visual[post.id] || { status:"publishing", networks:{} };
     record.networks ||= {};
+    record.status = "publishing";
+    record.mode = publicationMode;
+    if (inactiveCars.length) record.inactiveCarIds = inactiveCars.map(({ car }) => car.externalId);
     state.visual[post.id] = record;
     const actions = {
-      instagram:() => publishToInstagram({ caption:post.texts.instagram, photos:links, config, log:console.log }),
-      threads:() => publishToThreads({ text:post.texts.threads, photos:links, config, log:console.log }),
-      telegram:() => publishToTelegram({ text:post.texts.telegram, files, config, log:console.log }),
+      instagram:() => publishToInstagram({ caption:publicationTexts.instagram, photos:links, config, log:console.log }),
+      threads:() => publishToThreads({ text:publicationTexts.threads, photos:links, config, log:console.log }),
+      telegram:() => publishToTelegram({ text:publicationTexts.telegram, files, config, log:console.log }),
     };
     for (const network of targetNetworks) {
       if (record.networks[network]?.status === "published") continue;
-      if (!post.texts?.[network]) throw new Error(`нет текста для ${network}`);
+      if (!publicationTexts?.[network]) throw new Error(`нет текста для ${network}`);
       try {
         const result = await actions[network]();
         record.networks[network] = { status:"published", at:new Date().toISOString(), url:result.url || "", id:result.id, ...(result.ids ? { ids:result.ids } : {}) };
@@ -201,8 +235,8 @@ if (networks.includes("threads")) {
     // реально опубликованная запись тоже была текстовой, ждём следующую успешную
     // визуальную публикацию вместо двух текстов подряд.
     if (post.kind !== "threads-file") continue;
-    if (done(state.threadsFile[post.id])) {
-      lastKind = "text";
+    if (publicationFinished(state.threadsFile[post.id])) {
+      if (publicationActuallyPublished(state.threadsFile[post.id])) lastKind = "text";
       continue;
     }
     if (lastKind === "text") {

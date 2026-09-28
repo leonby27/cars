@@ -16,7 +16,10 @@ import {
   nextThreadPosts,
   parseThreadsFile,
   preparationMonday,
+  publicationActuallyPublished,
+  publicationFinished,
   promptNumbers,
+  soldSingleCarTexts,
   threadsTimeline,
   weekKey,
 } from "../scripts/lib/social-week.mjs";
@@ -88,6 +91,26 @@ test("визуальная запись без сгенерированной JP
   assert.equal(hasRequiredVisual({ kind:"visual", cover:{ asset:"cover.png", url:"https://example.com/cover.png" } }), false);
   assert.equal(hasRequiredVisual({ kind:"threads-file" }), false);
   assert.equal(hasRequiredVisual({ kind:"visual", cover:{ asset:"cover.jpg", url:"https://example.com/cover.jpg" } }), true);
+});
+
+test("проданная одиночная машина получает честные тексты вместо отмены поста", () => {
+  const texts = soldSingleCarTexts({
+    cars:[{ brand:"Zeekr", model:"007GT", externalId:"59883285" }],
+  });
+  assert.match(texts.instagram, /уже продан/);
+  assert.match(texts.instagram, /Цена на обложке — расчёт на момент подготовки/);
+  assert.match(texts.instagram, /ссылке в шапке профиля/);
+  assert.doesNotMatch(texts.instagram, /https?:\/\//);
+  assert.match(texts.threads, /https:\/\/abcars\.by\/cars\/59883285/);
+  assert.match(texts.telegram, /<a href="https:\/\/abcars\.by\/cars\/59883285">/);
+  assert.equal(soldSingleCarTexts({ cars:[] }), null);
+  assert.equal(soldSingleCarTexts({ cars:[{ externalId:"1" }, { externalId:"2" }] }), null);
+});
+
+test("пропущенный Threads-пост не считается реально опубликованным", () => {
+  assert.equal(publicationFinished({ status:"skipped" }), true);
+  assert.equal(publicationActuallyPublished({ status:"skipped" }), false);
+  assert.equal(publicationActuallyPublished({ status:"published" }), true);
 });
 
 test("низкоуровневая отправка запрещает голый текст, кроме явного исключения Threads", async () => {
