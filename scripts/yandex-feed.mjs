@@ -106,7 +106,7 @@ const { rows } = await pool.query(
      NULLIF(v.specifications->>'enginePower','') AS engine_power,
      l.source_payload->>'horsepower' AS horsepower,
      ARRAY(SELECT m.url FROM listing_media m WHERE m.listing_id = l.id ORDER BY m.position LIMIT ${photosPerCar}) AS photos
-   FROM listings l JOIN vehicles v ON v.id = l.vehicle_id
+   FROM catalog_listings l JOIN vehicles v ON v.id = l.vehicle_id
    WHERE l.status = 'active' AND l.estimated_total_usd > 0 AND l.last_seen_at > now() - ($1 || ' days')::interval`,
   [String(freshDays)],
 );

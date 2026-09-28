@@ -46,6 +46,7 @@
     "import:guazi": "node scripts/import-guazi.mjs",
     "import:guazi-global": "node scripts/import-guazi-global.mjs",
     "publish:guazi-staged": "node scripts/publish-guazi-staged.mjs",
+    "dedupe:catalog": "node scripts/deduplicate-cross-source.mjs",
     "pilot:guazi": "node scripts/guazi-pilot.mjs",
     "importv2": "node scripts/import-v2.mjs",
     "refresh": "node scripts/refresh-che168.mjs",

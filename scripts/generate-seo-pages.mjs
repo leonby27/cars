@@ -1288,14 +1288,14 @@ async function readLiveCatalog() {
                 ORDER BY EXISTS (SELECT 1 FROM listing_media m WHERE m.listing_id = l.id) DESC,
                   COALESCE(l.content_changed_at, l.imported_at) DESC
               ) AS place
-            FROM listings l JOIN vehicles v ON v.id = l.vehicle_id
+            FROM catalog_listings l JOIN vehicles v ON v.id = l.vehicle_id
             WHERE l.status = 'active'
           )
           SELECT id, changed_at, image FROM ranked WHERE place <= $1`, [carsPerModelInSitemap])).rows
         // Все живые объявления; сначала те, что менялись недавно, — так первый файл
         // карты всегда держит самое свежее.
         : (await pool.query(`SELECT l.id, COALESCE(l.content_changed_at, l.imported_at) AS changed_at, ${firstPhoto} AS image
-            FROM listings l WHERE l.status='active'
+            FROM catalog_listings l WHERE l.status='active'
             ORDER BY COALESCE(l.content_changed_at, l.imported_at) DESC, l.id`)).rows;
     // Сколько страниц в каждом разделе. Нужно карте сайта: страницы списка робот иначе
     // находит только переходами «дальше», а в разделе электромобилей их две сотни —

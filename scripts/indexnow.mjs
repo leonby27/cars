@@ -64,7 +64,7 @@ async function collect() {
   // `last_seen_at` не берём — она обновляется у всех проверенных машин, и список
   // раздулся бы до всего каталога, ничего не сообщая о содержании.
   const changedCars = await pool.query(
-    `SELECT l.id FROM listings l
+    `SELECT l.id FROM catalog_listings l
      WHERE l.status='active' AND GREATEST(COALESCE(l.content_changed_at, l.imported_at), l.first_seen_at) >= $1
      ORDER BY GREATEST(COALESCE(l.content_changed_at, l.imported_at), l.first_seen_at) DESC
      LIMIT $2`,
@@ -78,7 +78,7 @@ async function collect() {
     `SELECT v.brand, v.model, v.powertrain, NULLIF(v.specifications->>'bodyType','') AS body_type,
        count(*)::int AS count,
        max(GREATEST(COALESCE(l.content_changed_at, l.imported_at), l.first_seen_at)) AS changed_at
-     FROM listings l JOIN vehicles v ON v.id=l.vehicle_id
+     FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
      WHERE l.status='active' GROUP BY 1,2,3,4`,
   );
   const fresh = (value) => value && new Date(value).toISOString() >= since;
