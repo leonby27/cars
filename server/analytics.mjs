@@ -305,11 +305,44 @@ export async function isDatacenterAddress(address, { db = pool, now = Date.now()
   }
 }
 
-export async function recordAnalyticsEvent(body, { db = pool, headers = null } = {}) {
+// Страна посетителя для флага в «Заходах»: BY, RU или other. Пустая строка — не
+// знаем: адрес не пришёл, он из внутренней сети или таблица стран ещё не заполнена
+// (тогда «другая страна» была бы неправдой у каждого захода). Сам адрес не храним,
+// в событие ложится только этот код.
+const COUNTRY_CACHE_TTL_MS = 60 * 60 * 1000;
+const COUNTRY_CACHE_LIMIT = 5000;
+const countryCache = new Map();
+export const VISIT_COUNTRIES = new Set(["BY", "RU", "other"]);
+
+export async function visitorCountry(address, { db = pool, now = Date.now() } = {}) {
+  const value = String(address || "").trim().replace(/^::ffff:/i, "");
+  if (!value || value === "unknown") return "";
+  const cached = countryCache.get(value);
+  if (cached && now - cached.at < COUNTRY_CACHE_TTL_MS) return cached.country;
+  try {
+    const result = await db.query(`SELECT
+        (SELECT country FROM country_ranges WHERE network >>= $1::inet LIMIT 1) AS country,
+        EXISTS (SELECT 1 FROM country_ranges) AS ready,
+        ($1::inet << '10.0.0.0/8' OR $1::inet << '172.16.0.0/12' OR $1::inet << '192.168.0.0/16'
+          OR $1::inet << '127.0.0.0/8' OR $1::inet <<= '::1/128' OR $1::inet << 'fc00::/7') AS internal`, [value]);
+    const row = result.rows[0] || {};
+    const country = row.internal || !row.ready ? "" : VISIT_COUNTRIES.has(row.country) ? row.country : "other";
+    if (countryCache.size >= COUNTRY_CACHE_LIMIT) countryCache.clear();
+    countryCache.set(value, { at:now, country });
+    return country;
+  } catch {
+    // Таблицы ещё нет или адрес непонятного вида — страну просто не пишем.
+    return "";
+  }
+}
+
+export async function recordAnalyticsEvent(body, { db = pool, headers = null, country = "" } = {}) {
   const event = normalizeAnalyticsEvent(body, {
     device:headers ? deviceKindFromHeaders(headers) : "",
     platform:headers ? devicePlatformFromHeaders(headers) : "",
   });
+  // Страну, как и устройство, определяет сервер; из тела события её не берём.
+  if (event.properties && VISIT_COUNTRIES.has(country)) event.properties.country = country;
   if (event.ignored) return { ok:true, recorded:false };
   if (event.error) return event;
   const result = await db.query(INSERT_EVENT_SQL,
@@ -738,6 +771,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
         (array_agg(nullif(properties->>'entrySource','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'entrySource','') IS NOT NULL))[1] AS entry_source,
         (array_agg(nullif(properties->>'device','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'device','') IS NOT NULL))[1] AS device,
         (array_agg(nullif(properties->>'platform','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'platform','') IS NOT NULL))[1] AS platform,
+        (array_agg(nullif(properties->>'country','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'country','') IS NOT NULL))[1] AS country,
         count(*) FILTER (WHERE event_name='page_view')::int AS page_views,
         min(created_at) AS created_at
       FROM numbered
@@ -787,7 +821,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
     searches:searchesResult.rows.map((row) => ({ query:row.query, asked:row.asked, people:row.people, found:row.found, lastAskedAt:row.last_asked })),
-    visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", device:row.device || "", platform:row.platform || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at })),
+    visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", device:row.device || "", platform:row.platform || "", country:row.country || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at })),
   };
 }
 
@@ -834,10 +868,17 @@ export async function getAnalyticsUpdates({ viewing = "" } = {}, { now = Date.no
     // Ярлык и красные номера считают именно заходы по той же 30-минутной границе,
     // что верхняя карточка. Иначе два новых захода одного человека давали бы одну
     // плашку, а таблица и счётчик расходились бы.
+    // Шаги берём с запасом в полчаса до отметки «просмотрено»: иначе у человека,
+    // который как раз ходил по сайту, первый шаг после отметки терял предыдущий и
+    // выглядел новым заходом — после обновления страницы вылезал «+1», хотя
+    // карточка «Заходы» не росла.
     pool.query(`WITH steps AS (
-        SELECT created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap
-        FROM analytics_events WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
-      ) SELECT count(*) FILTER (WHERE gap IS NULL OR gap > interval '30 minutes')::int AS n FROM steps`, [since.overview]),
+        SELECT created_at,
+          created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
+          ${MINSK_DAY} AS day,
+          lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
+        FROM analytics_events WHERE created_at > $1::timestamptz - interval '30 minutes' AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
+      ) SELECT count(*) FILTER (WHERE created_at > $1 AND (${VISIT_STARTS}))::int AS n FROM steps`, [since.overview]),
     pool.query(`SELECT count(*)::int AS n FROM analytics_events
       WHERE event_name='page_view' AND created_at > $1
         AND (split_part(path, '?', 1) = '/catalog' OR split_part(path, '?', 1) LIKE '/catalog/%')

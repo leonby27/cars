@@ -379,9 +379,10 @@ function OverviewSection({ data, period, device = "all", updates = {} }) {
     ["Заходы", summary.visits, visitsNote(summary, period, data.days), device === "all" ? updates.overview : 0],
     ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, device === "all" ? updates.vehicle_cars : 0],
     // Заявки — тем же счётом, что раздел «Заявки»: на машину и на подбор вместе.
-    // У заявок устройство не записывается, поэтому они всегда по всем устройствам.
+    // У заявок устройство не записывается, поэтому они всегда по всем устройствам,
+    // и подпись при смене устройства не меняется, чтобы карточка не скакала.
     // «+N» у них красный, как у пункта «Заявки» в меню: их нельзя пропустить.
-    ["Заявки", leadsTotal, device === "all" ? `${formatNumber(summary.availability_clicks)} на машину, ${formatNumber(summary.custom_searches)} на подбор` : "По всем устройствам: у заявок устройство не записывается", updates.leads, "is-leads"],
+    ["Заявки", leadsTotal, `${formatNumber(summary.availability_clicks)} на машину, ${formatNumber(summary.custom_searches)} на подбор`, updates.leads, "is-leads"],
   ];
   return (
     <>
@@ -558,6 +559,41 @@ function VisitDevice({ device, platform }) {
   </>;
 }
 
+// Страна захода — только флагом, название в подсказке. Флаги нарисованы здесь же:
+// значки-эмодзи флагов на Windows показываются буквами «BY», «RU».
+const visitCountryNames = { BY:"Беларусь", RU:"Россия", other:"Другая страна" };
+
+function CountryGlyph({ country }) {
+  if (country === "BY") return <svg viewBox="0 0 18 12" width="20" height="14" aria-hidden="true">
+    <rect width="18" height="8" fill="#c8313e" />
+    <rect y="8" width="18" height="4" fill="#4aa657" />
+    <rect width="3" height="12" fill="#fff" />
+    <path d="M1.5 1 2.5 2.5 1.5 4 .5 2.5ZM1.5 5 2.5 6.5 1.5 8 .5 6.5ZM1.5 9 2.5 10.5 1.5 12 .5 10.5Z" fill="#c8313e" />
+  </svg>;
+  if (country === "RU") return <svg viewBox="0 0 18 12" width="20" height="14" aria-hidden="true">
+    <rect width="18" height="4" fill="#fff" />
+    <rect y="4" width="18" height="4" fill="#0039a6" />
+    <rect y="8" width="18" height="4" fill="#d52b1e" />
+  </svg>;
+  return <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    <circle cx="10" cy="10" r="8" />
+    <ellipse cx="10" cy="10" rx="3.4" ry="8" />
+    <path d="M2 10h16M3.3 5.8h13.4M3.3 14.2h13.4" />
+  </svg>;
+}
+
+function VisitCountry({ country }) {
+  const known = Boolean(visitCountryNames[country]);
+  const label = known ? visitCountryNames[country] : "Страна не записана";
+  const { anchor, handlers, node } = useHoverTooltip(label);
+  return <>
+    <button ref={anchor} type="button" className={`analytics-visit-country is-${known ? country.toLowerCase() : "unknown"}`} aria-label={label} {...handlers}>
+      {known ? <CountryGlyph country={country} /> : "—"}
+    </button>
+    {node}
+  </>;
+}
+
 const visitsWord = (count) => {
   const tens = count % 100;
   const ones = count % 10;
@@ -600,6 +636,7 @@ function VisitRow({ visit, number, unread }) {
     <td className={sourceUnknown ? "analytics-visit-source-unknown" : undefined}><VisitSource visit={visit} /></td>
     <td><VisitDevice device={visit.device} platform={visit.platform} /></td>
     <td><a href={analyticsNoCountHref(landingPath)} target="_blank" rel="nofollow noopener noreferrer" title={landingPath === "/" ? "Главная" : landingPath || "—"}>{landingPath === "/" ? "Главная" : landingPath || "—"}</a></td>
+    <td><VisitCountry country={visit.country} /></td>
     <td>{formatNumber(visit.pageViews)}</td>
     <td>{formatVisitDate(visit.createdAt)}</td>
   </tr>;
@@ -663,8 +700,8 @@ function VisitsSection({ visits, total, unread }) {
           <QuotaSplit visits={filteredVisits.map(({ visit }) => visit)} />
         </div>
       </div>
-      <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Просмотров</th><th>Дата</th></tr></thead>
-        <tbody>{filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="6">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</td></tr>}</tbody></table></div>
+      <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Страна</th><th>Просмотров</th><th>Дата</th></tr></thead>
+        <tbody>{filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="7">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</td></tr>}</tbody></table></div>
     </section>
   );
 }

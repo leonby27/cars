@@ -125,7 +125,8 @@ html[data-theme="dark"] .analytics-page { --quota-split-green:#a3e635; }
 .analytics-visits-table th:nth-child(3), .analytics-visits-table td:nth-child(3) { width:52px; }
 .analytics-visits-table th:nth-child(4), .analytics-visits-table td:nth-child(4) { width:280px; max-width:280px; }
 .analytics-visits-table td:nth-child(4) a { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.analytics-visits-table th:nth-child(5), .analytics-visits-table td:nth-child(5),
+.analytics-visits-table th:nth-child(5), .analytics-visits-table td:nth-child(5) { width:64px; }
+.analytics-visits-table th:nth-child(6), .analytics-visits-table td:nth-child(6),
 .analytics-visits-table th:last-child, .analytics-visits-table td:last-child { white-space:nowrap; }
 /* Иконка устройства встаёт на ту же строку, что текст соседних столбцов: коробка
    ровно в одну строку высотой, иконка в ней по центру. Ширина фиксированная, поэтому
@@ -133,6 +134,10 @@ html[data-theme="dark"] .analytics-page { --quota-split-green:#a3e635; }
 .analytics-visit-device { display:grid; place-items:center; width:20px; height:20px; height:1lh; padding:0; border:0; border-radius:4px; background:transparent; color:var(--muted); font:inherit; cursor:help; }
 .analytics-visit-device:focus-visible { outline:2px solid var(--focus-ring); outline-offset:4px; }
 .analytics-visit-device.is-unknown { color:var(--muted-contrast,var(--muted)); }
+.analytics-visit-country { display:grid; place-items:center; width:22px; height:1lh; padding:0; border:0; background:transparent; color:var(--muted); font:inherit; cursor:help; }
+.analytics-visit-country:is(.is-by, .is-ru) svg { border-radius:2px; box-shadow:0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent); }
+.analytics-visit-country:focus-visible { outline:2px solid var(--focus-ring); outline-offset:4px; }
+.analytics-visit-country.is-unknown { color:var(--muted-contrast,var(--muted)); }
 .analytics-visit-number { display:inline-grid; min-width:34px; height:24px; place-items:center; padding:0 7px; box-sizing:border-box; border-radius:999px; font-variant-numeric:tabular-nums; }
 .analytics-visit-number.is-unread { background:var(--fresh-bg); color:var(--fresh-ink); font-weight:800; }
 .analytics-visit-source { display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
