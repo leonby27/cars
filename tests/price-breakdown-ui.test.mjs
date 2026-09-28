@@ -7,15 +7,18 @@ const styles = await readFile(new URL("../src/styles.css", import.meta.url), "ut
 
 test("customs warning stays inside the customs row in both price breakdowns", () => {
   const alerts = [...app.matchAll(/<div className="price-customs-copy">[\s\S]*?price-customs-alert[\s\S]*?<\/div>/g)];
-  assert.equal(alerts.length, 2);
-  assert.match(alerts[0][0], /Растаможка и сборы/);
-  assert.match(alerts[1][0], /Таможня и сборы/);
+  // В карточке машины предупреждение ушло в подсказку растаможки (28.09.2026);
+  // строкой под названием оно осталось только в оформлении заказа.
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0][0], /Таможня и сборы/);
+  assert.ok(app.includes('description={<CustomsTooltip price={price} withAlert />}'));
   assert.match(styles, /\.price-customs-copy\s*\{[\s\S]*?display:\s*grid;/);
   assert.match(styles, /\.price-customs-alert\s*\{[\s\S]*?margin:\s*1px 0 0;/);
 });
 
 test("customs details stay in the tooltip instead of the visible row", () => {
   assert.equal((app.match(/className="price-customs-includes"/g) || []).length, 0);
-  assert.equal((app.match(/description=\{\[price\.customsHint \|\| price\.customsNote, price\.customsIncludedText, price\.customsBasisNote\]/g) || []).length, 2);
+  assert.equal((app.match(/<CustomsTooltip price=\{price\}/g) || []).length, 2);
+  assert.ok(app.includes("[price.customsHint || price.customsNote, price.customsIncludedText, price.customsBasisNote]"));
   assert.doesNotMatch(styles, /\.price-customs-includes\s*\{/);
 });

@@ -1,4 +1,5 @@
 import { belarusianName } from "./model-names-by.mjs";
+import { guaziModelName } from "./guazi-model-names.mjs";
 
 export const IMPORT_MIN_YEAR = 2020;
 
@@ -340,6 +341,9 @@ export function canonicalImportModel(brandValue, modelValue, details = {}) {
 // каталога зовут именно эту функцию, иначе марка и модель разойдутся.
 export function canonicalImportName(brandValue, modelValue, powertrain, details = {}) {
   const sourceBrand = canonicalImportBrand(brandValue);
+  // Guazi пишет те же модели иначе, чем Che168 («Zeekr 8X», «CS35PLUS», «Geome»);
+  // сначала приводим к написанию каталога, дальше — общий путь.
+  if (details?.source === "Guazi") modelValue = guaziModelName(sourceBrand, modelValue, powertrain, details);
   if (civicTypeR(sourceBrand, modelValue, details)) return { brand:sourceBrand, model:"Civic Type R" };
   // Сначала пробуем то, что пришло, как есть: у части моделей вместе с именем меняется
   // и марка, а словарь марок к этому моменту успел бы её подменить. «HIMA / Luxeed R7»

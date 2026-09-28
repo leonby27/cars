@@ -61,6 +61,7 @@ export const MODEL_RENAMES = Object.freeze([
   { brand: "Chery", model: "Tiggo 8 PRO EV", toModel: "Tiggo 8 PRO EV", byPowertrain: { "Гибрид": "Tiggo 8 PRO PHEV" } },
   { brand: "Changan", model: "Ruicheng CC", toModel: "Raeton CC", zh: "锐程CC", pinyin: "Ruicheng CC" },
   { brand: "Jetour", model: "Dasheng", toModel: "Dashing", zh: "大圣", pinyin: "Dasheng" },
+  { brand: "Jetour", model: "Dasheng i-DM", toModel: "Dashing i-DM", zh: "大圣i-DM", pinyin: "Dasheng i-DM" },
   { brand: "Jetour", model: "Traveler", toModel: "T2", zh: "旅行者", pinyin: "Lüxingzhe" },
   { brand: "Great Wall", model: "Pao", toModel: "Poer", zh: "炮", pinyin: "Pao" },
 
@@ -78,6 +79,7 @@ export const MODEL_RENAMES = Object.freeze([
   { brand: "HIMA", model: "M9", toBrand: "AITO", toModel: "M9", zh: "问界M9", pinyin: "Wenjie M9" },
   { brand: "HIMA", model: "Luxeed R7", toBrand: "Luxeed", toModel: "R7", zh: "智界R7", pinyin: "Zhijie R7" },
   { brand: "HIMA", model: "Zhijie S7", toBrand: "Luxeed", toModel: "S7", zh: "智界S7", pinyin: "Zhijie S7" },
+  { brand: "HIMA", model: "Zhijie V9", toBrand: "Luxeed", toModel: "V9", zh: "智界V9", pinyin: "Zhijie V9" },
   { brand: "HIMA", model: "Enjoy World S9", toBrand: "Stelato", toModel: "S9", zh: "享界S9", pinyin: "Xiangjie S9" },
   { brand: "HIMA", model: "Enjoy World S9T", toBrand: "Stelato", toModel: "S9T", zh: "享界S9T", pinyin: "Xiangjie S9T" },
   // Те же машины, но с именем подмарки, уже приклеенным к модели: так они лежали в базе
@@ -277,11 +279,14 @@ export const MODEL_RENAMES = Object.freeze([
 
   // 猛龙 в России продаётся как Haval Raptor — так его называет и завод, и дилеры.
   { brand: "Haval", model: "Meng Long NEV", toModel: "Raptor", zh: "猛龙", pinyin: "Menglong" },
+  // Так 猛龙 пишет английская серия Che168; Guazi присылает эту же машину как Raptor.
+  { brand: "Haval", model: "Menglong", toModel: "Raptor", zh: "猛龙", pinyin: "Menglong" },
   { brand: "Haval", model: "Menglong PLUS", toModel: "Raptor Plus", zh: "猛龙PLUS", pinyin: "Menglong PLUS" },
 
   // 昂希诺 — китайское имя Kona, 菲斯塔 — Lafesta. На av.by есть Kona.
   { brand: "Hyundai", model: "Encino Pure Electric", toModel: "Kona EV", zh: "昂希诺纯电动", pinyin: "Angxinuo" },
   { brand: "Hyundai", model: "Fista EV", toModel: "Lafesta EV", zh: "菲斯塔纯电", pinyin: "Feisita" },
+  { brand: "Hyundai", model: "Fista", toModel: "Lafesta", zh: "菲斯塔", pinyin: "Feisita" },
 
   // MINI: источник приклеивает «Electric MINI» к каждой электричке. На av.by марка
   // знает Cooper SE и Aceman — так их здесь и ищут.
@@ -293,6 +298,9 @@ export const MODEL_RENAMES = Object.freeze([
   // Прошлое поколение RX источник помечает словом Classic; на av.by поколения
   // не разводят, там просто RX.
   { brand: "Lexus", model: "RX Classic", toModel: "RX" },
+
+  // 小鹏GX до выхода Che168 подписывал рабочим кодом G01; Guazi и завод зовут машину GX.
+  { brand: "XPeng", model: "G01", toModel: "GX", zh: "小鹏GX", pinyin: "Xiaopeng GX" },
 
   // MG4 бывает только электрическим, приставка ничего не добавляет.
   { brand: "MG", model: "MG4 EV", toModel: "MG4" },

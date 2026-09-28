@@ -3185,7 +3185,9 @@ body.header-menu-open .detail-floating-availability {
   opacity: 0;
   transform: translateY(14px);
 }
-.detail-title p {
+/* Только подзаголовок с датами: в шапке лежит и выпадающее окно «Цена среди
+   похожих», его абзацы эти правила задевать не должны. */
+.detail-title > div:first-child > p {
   margin: 0;
   color: var(--muted);
   font-size: 16px;
@@ -6204,7 +6206,7 @@ html[data-theme="dark"] #root .load-more {
     line-height: 1.12;
     letter-spacing: -1px;
   }
-  .detail-title p {
+  .detail-title > div:first-child > p {
     display: none;
   }
   /* Даты идут следующим абзацем после текста шкалы цены — тем же шрифтом и вплотную
@@ -6420,6 +6422,73 @@ html[data-theme="dark"] #root .load-more {
 .vehicle-quick-info p + p {
   margin-top: 10px;
 }
+/* «Основная информация» и детализация цены — один вид строки (.facts-row):
+   название серое слева, лёгкий пунктир, значение обычным цветом у правого края,
+   а в расчёте ещё значок «i» справа от суммы. Пунктир тянется на всё свободное
+   место, но не короче 12px; что не помещается — и название, и значение, —
+   обрезается многоточием, а не переносится. Шаг строк общий: строка 24px
+   (столько занимает кружок значка «i») и 8px между строками. Порядок в строке
+   задан через order: пунктир — это ::after самой строки, он встаёт между
+   названием и значением. */
+.vehicle-quick-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+/* Селектор с родителем — сильнее общего .price-breakdown > div (там flex-start,
+   зазор 14px и разнос по краям): при нём пунктир уезжал со строки текста. */
+:is(.vehicle-quick-facts, .price-breakdown, .delivery-stages, .vehicle-condition-details dl) > .facts-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 24px;
+}
+.facts-row > :first-child {
+  order: 1;
+  flex: 0 1 auto;
+  color: var(--muted);
+  font-weight: 500;
+}
+/* Точки рисуем сами: у рамки «dotted» не задать ни размер точки, ни шаг. Здесь
+   точка 2px через каждые 6px; низ полосы стоит на линии текста, сдвиг поднимает
+   точки к середине строчных букв. */
+.facts-row::after {
+  content: "";
+  order: 2;
+  flex: 1 1 12px;
+  min-width: 12px;
+  height: 2px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--muted) 32%, transparent) 1px, transparent 1.2px) left center / 6px 2px repeat-x;
+  transform: translateY(-4px);
+}
+.facts-row > :nth-child(2) {
+  order: 3;
+  flex: 0 1 auto;
+  max-width: 60%;
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+  text-align: right;
+}
+.facts-row > :is(:first-child, :nth-child(2)) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Кружок значка шире самой иконки на 8px — сдвигаем, чтобы иконка вставала
+   вровень с правым краем текста в соседнем блоке. */
+.facts-row > .price-info {
+  order: 4;
+  flex: 0 0 auto;
+  align-self: center;
+  /* Иконка 16px в кружке 24px: слева отрицательный отступ съедает и зазор строки,
+     и пустоту кружка — иконка стоит почти вплотную к сумме. */
+  margin: 0 -4px 0 -9px;
+}
 .sold-order-state {
   display: grid;
   place-items: center;
@@ -6480,6 +6549,9 @@ html[data-theme="dark"] #root .load-more {
   font-size: 14px;
   font-weight: 800;
   line-height: 1.4;
+  /* Блок открывается внутри строки с ценой, а там у <strong> свой кегль и
+     сжатая разрядка (.price-total strong) — возвращаем обычную. */
+  letter-spacing: normal;
   white-space: nowrap;
 }
 .price-rating .price-rating-track {
@@ -6496,22 +6568,7 @@ html[data-theme="dark"] #root .load-more {
   transition: background var(--motion-fast) var(--motion-ease);
 }
 .price-rating .price-rating-track i.is-active {
-  background: var(--price-rating-step);
-}
-.price-rating .price-rating-step-0 {
-  --price-rating-step: #12a150;
-}
-.price-rating .price-rating-step-1 {
-  --price-rating-step: #7cbf1f;
-}
-.price-rating .price-rating-step-2 {
-  --price-rating-step: #e8a90c;
-}
-.price-rating .price-rating-step-3 {
-  --price-rating-step: #f07316;
-}
-.price-rating .price-rating-step-4 {
-  --price-rating-step: #e23b30;
+  background: linear-gradient(90deg, var(--price-from), var(--price-to));
 }
 /* Бегунок — треугольник над шкалой; сдвигаем на половину ширины, чтобы острие
    смотрело точно в свою точку. */
@@ -6782,13 +6839,14 @@ html[data-theme="dark"] #root .load-more {
   flex-direction: column;
   gap: 0;
   padding: 4px 18px;
-  background: linear-gradient(90deg, #38b65a 0%, #2fa64d 100%);
+  /* Тон — от прежнего наведения, перепад градиента сильнее. */
+  background: linear-gradient(90deg, #36b055 0%, #23883c 100%);
   color: #ffffff;
-  box-shadow: 0 4px 0 #217c39, 0 8px 16px rgba(31, 116, 57, 0.18);
+  box-shadow: 0 4px 0 #1a6a30, 0 8px 16px rgba(31, 116, 57, 0.2);
 }
 .primary.availability-primary-cta:hover {
-  background: linear-gradient(90deg, #31a94f 0%, #288f42 100%);
-  box-shadow: 0 4px 0 #1c6e33, 0 9px 18px rgba(31, 116, 57, 0.22);
+  background: linear-gradient(90deg, #2c9f4a 0%, #1b7532 100%);
+  box-shadow: 0 4px 0 #145a27, 0 9px 18px rgba(31, 116, 57, 0.26);
 }
 .primary.availability-primary-cta:active {
   transform: translateY(2px);
@@ -6812,6 +6870,30 @@ html[data-theme="dark"] #root .load-more {
 .order-card.price-disclosure {
   margin: 0 0 12px;
   padding: 18px 20px;
+}
+/* Детализация цены в колонке перед сроком доставки — плашкой того же вида, что
+   «Основная информация» над ней: на светлой теме белая, с обводкой и тенью, на
+   тёмной — фон панели без обводки. Строки плотнее, чем в прежнем выпадающем окне. */
+.price-breakdown-card {
+  margin: 0 0 12px;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--line);
+  border-radius: calc(16px * var(--corner-scale));
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgba(23, 25, 28, 0.05);
+}
+:root[data-theme="dark"] .price-breakdown-card {
+  border-color: transparent;
+}
+/* Строки расчёта — с тем же зазором 8px, что в «Основной информации»; верхнее
+   поле плашки то же (18px), поэтому первые строки обоих блоков на одной высоте. */
+.price-breakdown-card .price-breakdown {
+  display: grid;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+.price-breakdown-card .price-breakdown > .facts-row {
+  padding: 0;
 }
 .price-disclosure-shell[aria-hidden="false"] {
   overflow: visible;
@@ -6886,9 +6968,15 @@ html[data-theme="dark"] #root .load-more {
   font-size: 16px;
   line-height: 1.55;
 }
-/* Список сроков повторяет вид разбивки цены: название слева, значение справа. */
+/* Список сроков — тем же видом строки, что детализация цены (.facts-row):
+   серое название, пунктир, значение справа, зазор 8px. */
 .delivery-stages {
-  padding: 2px 0 8px;
+  display: grid;
+  gap: 8px;
+  padding: 2px 0 12px;
+}
+.delivery-stages > .facts-row {
+  padding: 0;
 }
 .delivery-stages > div {
   display: flex;
@@ -6907,6 +6995,7 @@ html[data-theme="dark"] #root .load-more {
 /* Сам текст — как у приписки про курс НБРБ (.price-assumption), тут только отступ. */
 .delivery-note {
   margin: 4px 0 0;
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
 }
 @media (max-width: 980px) {
   .detail-main {
@@ -6957,8 +7046,13 @@ html[data-theme="dark"] #root .load-more {
   .detail-main .detail-sidebar > .delivery-card,
   .detail-main .detail-sidebar > .report-order-cta,
   .detail-main .detail-sidebar > .sold-order-state,
-  .detail-main .detail-sidebar > .report-order-note {
+  .detail-main .detail-sidebar > .report-order-note,
+  .detail-main .detail-sidebar > .price-breakdown-card {
     order: 7;
+  }
+  /* Отбивку в одной колонке задаёт шаг сетки. */
+  .detail-main .detail-sidebar > .price-breakdown-card {
+    margin-top: 0;
   }
   .order-card {
     display: block;
@@ -7762,7 +7856,7 @@ html body #root .result-controls .sort-custom-select.open .select-trigger {
 .detail-kicker {
   font-size: 16px;
 }
-.detail-title p {
+.detail-title > div:first-child > p {
   font-size: 16px;
 }
 .gallery-panel > span {
@@ -8839,7 +8933,8 @@ footer {
   .detail-main .detail-sidebar > .delivery-card,
   .detail-main .detail-sidebar > .report-order-cta,
   .detail-main .detail-sidebar > .sold-order-state,
-  .detail-main .detail-sidebar > .report-order-note {
+  .detail-main .detail-sidebar > .report-order-note,
+  .detail-main .detail-sidebar > .price-breakdown-card {
     order: 7;
   }
   .detail-content > .detail-section-links {
@@ -13471,9 +13566,6 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
 }
 
 @media (max-width: 700px) {
-  .vehicle-quick-info {
-    display: none;
-  }
   .detail-floating-availability {
     position: fixed;
     z-index: 45;
@@ -13803,9 +13895,41 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
   padding: 12px 14px 12px 24px;
   border-bottom: 1px solid var(--line);
 }
-.quick-view-bar span {
+.quick-view-bar > span {
   color: var(--muted);
   font-size: 16px;
+}
+/* «Ссылка» и «избранное» переехали сюда из строки над названием машины: так
+   содержимое окна начинается сразу с названия. У кнопок подпись — в полосе
+   места хватает, и подсказка при наведении не нужна. */
+.quick-view-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.quick-view-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.quick-view-action:hover {
+  background: color-mix(in srgb, var(--ink) 8%, var(--surface));
+}
+.quick-view-action:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .quick-view-close {
   display: grid;
@@ -13841,6 +13965,17 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
 /* На тёмном фоне обычная линия панели слишком заметна для служебной полосы. */
 :root[data-theme="dark"] .quick-view-bar {
   border-bottom-color: color-mix(in srgb, var(--line) 45%, transparent);
+}
+/* В тёмной теме обычный тон панели почти сливается с фоном окна — кнопкам полосы
+   и кружкам у названия (стрелка на полную страницу и знак китайского имени,
+   они читаются парой) подмешиваем цвет текста. В светлой контраста хватает и так. */
+:root[data-theme="dark"] :is(.quick-view-close, .quick-view-action),
+:root[data-theme="dark"] .quick-view-modal :is(.detail-back, .chinese-name-mark) {
+  background: color-mix(in srgb, var(--ink) 10%, var(--surface));
+}
+:root[data-theme="dark"] :is(.quick-view-close, .quick-view-action):hover,
+:root[data-theme="dark"] .quick-view-modal .detail-back:hover {
+  background: color-mix(in srgb, var(--ink) 17%, var(--surface));
 }
 /* В тёмной теме модалка чуть светлее страницы под ней, но темнее панелей внутри,
    иначе карточки расчёта и галерея перестают читаться как отдельные блоки. */
@@ -13880,6 +14015,15 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
     transform var(--motion-fast) var(--motion-ease),
     visibility var(--motion-fast) var(--motion-ease);
   pointer-events: none;
+}
+/* Предупреждение внутри подсказки. Фон подсказки обратный теме (тёмный на
+   светлой, светлый на тёмной), поэтому и оранжевый берём наоборот. */
+.detail-action-tooltip .tooltip-warn {
+  color: #f0a34a;
+  font-weight: 700;
+}
+:root[data-theme="dark"] .detail-action-tooltip .tooltip-warn {
+  color: #b45309;
 }
 /* Снизу подсказка выезжает в другую сторону. */
 .detail-action-tooltip.is-below {
@@ -18079,6 +18223,7 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
     .customer-order-stage-heading > b,
     .account-avatar,
     .quick-view-close,
+    .quick-view-action,
     .quick-view-toggle .quick-view-toggle-track,
     .quick-view-toggle .quick-view-toggle-track i,
     .model-page-back,
@@ -23530,20 +23675,34 @@ html body #root .market-compare-sort .select-trigger {
   box-shadow: 0 10px 28px rgba(23, 25, 28, 0.05);
 }
 .vehicle-condition-grade { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* Размер — как у плашки оценки цены у суммы: высоту задают поля. */
 .condition-grade-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 3px 7px;
+  padding: 8px 13px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.2;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
 }
-.condition-grade-excellent,
-.condition-grade-good { background: #217a47; color: #fff; }
-.condition-grade-average { background: #996000; color: #fff; }
-.condition-grade-poor { background: #b4232d; color: #fff; }
+/* Плашка состояния — как плашка оценки цены у суммы: приглушённый градиент
+   фоном, яркий градиент в тексте, цвет подмешан к цвету надписей для
+   читаемости в обеих темах. Селектор из двух классов — сильнее общего правила
+   переменных у .price-rating-badge, которое стоит ниже по файлу. */
+.condition-grade-badge {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--price-from) 30%, transparent), color-mix(in srgb, var(--price-to) 21%, transparent));
+  color: var(--price-text-to);
+}
+.condition-grade-badge > span {
+  background: linear-gradient(90deg, var(--price-text-from), var(--price-text-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.condition-grade-badge.condition-grade-excellent,
+.condition-grade-badge.condition-grade-good { --price-from: #2cc56f; --price-to: #14a052; }
+.condition-grade-badge.condition-grade-average { --price-from: #ffb13d; --price-to: #ee8a0e; }
+.condition-grade-badge.condition-grade-poor { --price-from: #f7645a; --price-to: #dc3027; }
 .vehicle-condition-description { margin: 12px 0 0; font-size: 14px; font-weight: 500; line-height: 1.55; }
 .vehicle-condition-details-toggle {
   display: inline-flex;
@@ -23569,11 +23728,55 @@ html body #root .market-compare-sort .select-trigger {
 .vehicle-condition-summary dt { color: var(--muted); }
 .vehicle-condition-summary dd { margin: 0; font-weight: 750; text-align: right; white-space: nowrap; }
 .vehicle-condition-report-link { display: flex; align-items: center; gap: 7px; margin-top: 12px; color: var(--ink); font-size: 14px; font-weight: 700; }
+/* Плашка оценки, которая открывает подробности: та же плашка, только со стрелкой. */
+.condition-grade-toggle {
+  gap: 4px;
+  padding: 8px 11px 8px 13px;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.condition-grade-toggle:hover,
+.condition-grade-toggle[aria-expanded="true"] {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--price-from) 40%, transparent), color-mix(in srgb, var(--price-to) 30%, transparent));
+}
+.condition-grade-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.condition-grade-toggle svg { transition: transform var(--motion-medium) var(--motion-ease); }
+.condition-grade-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* Пояснение источника под плашкой оценки — сноской: мельче и серым, с отступом
+   от плашки. Селектор с родителем — сильнее .vehicle-quick-info p (16px, жирный). */
+.vehicle-condition-summary p.vehicle-condition-description {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+/* Подробности состояния — тем же видом строки, что «Основная информация» и
+   детализация (.facts-row): без разделителей, пунктир, зазор 8px. */
+.vehicle-condition-summary .vehicle-condition-details dl {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+.vehicle-condition-summary .vehicle-condition-details dl > .facts-row {
+  padding: 0;
+  border: 0;
+}
+/* Внутри «Основной информации» у состояния своей плашки нет — только отбивка сверху. */
+.vehicle-quick-info > .vehicle-condition-summary {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
 :root[data-theme="dark"] .vehicle-condition-summary { border-color: transparent; }
-:root[data-theme="dark"] .condition-grade-excellent,
-:root[data-theme="dark"] .condition-grade-good { background: #287e4d; color: #fff; }
-:root[data-theme="dark"] .condition-grade-average { background: #9f6507; color: #fff; }
-:root[data-theme="dark"] .condition-grade-poor { background: #b8323c; color: #fff; }
+
 @media (max-width: 980px) {
   .detail-main .detail-sidebar > .vehicle-condition-summary { order: 6; }
 }
@@ -23607,11 +23810,103 @@ html body #root .market-compare-sort .select-trigger {
   margin-top: 10px;
 }
 .detail-header-price > .price-total {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
   margin: 0;
 }
-.detail-header-price > .price-dropdown {
+.detail-header-price > .price-total > strong {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/* Цвета ступеней оценки цены — одна пара «от–до» на ступень, общая для плашки у
+   цены, активного деления шкалы, слова оценки и треугольника над шкалой.
+   Деление залито градиентом во всю силу; у плашки фон — тот же градиент, но
+   приглушённый, а яркий градиент уходит в текст. Для текста цвет подмешан к цвету
+   надписей: так светло-зелёный и жёлтый читаются и на белом, и на тёмном фоне. */
+:is(.price-rating-badge, .price-rating, .condition-grade-badge) {
+  --price-from: var(--muted);
+  --price-to: var(--muted);
+  --price-text-from: color-mix(in srgb, var(--price-from) 82%, var(--ink));
+  --price-text-to: color-mix(in srgb, var(--price-to) 82%, var(--ink));
+}
+:is(.price-rating-badge-0, .price-rating .price-rating-step-0, .price-rating.is-step-0) { --price-from: #2cc56f; --price-to: #14a052; }
+:is(.price-rating-badge-1, .price-rating .price-rating-step-1, .price-rating.is-step-1) { --price-from: #a6dc48; --price-to: #7fc023; }
+:is(.price-rating-badge-2, .price-rating .price-rating-step-2, .price-rating.is-step-2) { --price-from: #ffcb3d; --price-to: #eeaa0e; }
+:is(.price-rating-badge-3, .price-rating .price-rating-step-3, .price-rating.is-step-3) { --price-from: #ff9442; --price-to: #ef6c10; }
+:is(.price-rating-badge-4, .price-rating .price-rating-step-4, .price-rating.is-step-4) { --price-from: #f7645a; --price-to: #dc3027; }
+.price-rating[class*="is-step-"] {
+  --price-rating-color: var(--price-to);
+}
+/* Слово оценки в блоке — тем же градиентом, что и деление под ним. */
+.price-rating[class*="is-step-"] .price-rating-verdict {
+  background: linear-gradient(90deg, var(--price-text-from), var(--price-text-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+/* Плашка с оценкой цены рядом с итоговой суммой: открывает «Цену среди похожих». */
+.price-rating-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* Высота — от полей, а не заданная: вровень с цифрами цены рядом. */
+  padding: 8px 11px 8px 13px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--price-from) 30%, transparent), color-mix(in srgb, var(--price-to) 21%, transparent));
+  /* Цвет — для стрелки; у надписи свой градиент. */
+  color: var(--price-text-to);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: normal;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.price-rating-badge > span {
+  background: linear-gradient(90deg, var(--price-text-from), var(--price-text-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.price-rating-badge:hover,
+.price-rating-badge[aria-expanded="true"] {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--price-from) 40%, transparent), color-mix(in srgb, var(--price-to) 30%, transparent));
+}
+.price-rating-badge:focus-visible {
+  outline: 2px solid var(--price-to);
+  outline-offset: 2px;
+}
+.price-rating-badge svg {
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.price-rating-badge[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+/* Внутри выпадающего окна у блока своей плашки нет: фон, рамку и поля даёт окно. */
+.detail-header-price .price-dropdown.price-rating-dropdown > .price-rating {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .price-rating-badge,
+  .price-rating-badge svg {
+    transition: none;
+  }
+}
+.detail-header-price .price-dropdown {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 60;
   width: 100%;
@@ -23622,8 +23917,10 @@ html body #root .market-compare-sort .select-trigger {
   margin: 0;
   padding: 18px 20px;
   background: var(--panel);
-  border: 1px solid var(--line);
-  box-shadow: 0 16px 48px rgb(0 0 0 / 22%);
+  /* Окно лежит поверх карточек того же фона — отделяем его заметной обводкой и
+     тенью, иначе оно с ними сливается. */
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, var(--panel));
+  box-shadow: 0 2px 6px rgb(23 25 28 / 8%), 0 18px 48px rgb(23 25 28 / 22%);
   transform-origin: top center;
   opacity: 0;
   visibility: hidden;
@@ -23634,7 +23931,13 @@ html body #root .market-compare-sort .select-trigger {
     transform var(--motion-medium) var(--motion-ease),
     visibility 0s linear var(--motion-medium);
 }
-.detail-header-price > .price-dropdown.open {
+/* В тёмной теме общее правило для карточек снимает с .order-card тень, а обычная
+   линия почти не отличается от фона — здесь их возвращаем, правилом сильнее общего. */
+html[data-theme="dark"] :is(#root, body) .detail-header-price .price-dropdown {
+  border-color: color-mix(in srgb, var(--ink) 20%, var(--panel));
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%), 0 20px 56px rgb(0 0 0 / 60%);
+}
+.detail-header-price .price-dropdown.open {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -23671,9 +23974,17 @@ html body #root .market-compare-sort .select-trigger {
   .detail-title > .detail-header-price {
     margin-top: 0;
   }
-  .detail-header-price > .price-dropdown {
+  .detail-header-price .price-dropdown {
     width: 100%;
     padding: 16px;
+  }
+  /* Цена на телефоне набрана 16px — плашка рядом с ней ниже и мельче. */
+  .detail-header-price > .price-total {
+    gap: 8px;
+  }
+  .price-rating-badge {
+    padding: 4px 7px 4px 9px;
+    font-size: 12px;
   }
 }
 
@@ -23739,11 +24050,184 @@ html body #root .market-compare-sort .select-trigger {
   vertical-align: 0.12em;
   color: inherit;
 }
+/* Знак «≈» перед суммами по всему сайту приглушён — сумма читается первой. */
+.approx-sign,
+.price-approximation {
+  opacity: 0.7;
+}
 
 /* Все пояснения внутри детализации цены набраны одинаково; цвет предупреждения
    сохраняется, меняется только типографика. */
-.detail-header-price :is(.price-customs-alert, .price-assumption) {
+.price-breakdown-card .price-assumption {
   font-size: 13px;
   font-weight: 400;
   line-height: 1.5;
+}
+.price-breakdown-card .price-assumption {
+  margin-bottom: 0;
+  /* Сноска тише строк расчёта: серый, ещё и притушенный к фону. */
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+
+
+/* Карточка машины на телефоне (28.09.2026) — один сквозной порядок блоков:
+   название с датами → фотографии → цена с плашкой оценки → «Основная информация»
+   → детализация цены → срок доставки → кнопка заявки с припиской → то, что на
+   компьютере стоит под фотографиями (характеристики, вопросы, ссылки).
+   Название с ценой и тело карточки лежат в разных контейнерах, поэтому оба
+   раскрываются (display: contents) в общую сетку .detail-layout, и порядок
+   задаётся через order. Отбивку задаёт шаг сетки; тесно связанные блоки (цена
+   под фото, приписка под кнопкой) подтянуты отрицательным отступом. Селекторы длиннее
+   прежних телефонных правил порядка — эти должны побеждать. */
+@media (max-width: 700px) {
+  /* Браузер при раскрытии блока держит на месте «опорный» элемент, выбирая его по
+     порядку в разметке, а не на экране. Характеристики в разметке идут раньше
+     плашек колонки, хотя стоят ниже, — браузер держал их, и раскрытый «Срок
+     доставки» рос вверх. Высоты блоков над экраном здесь не прыгают (фото —
+     фиксированной высоты), поэтому удержание на странице машины выключено. */
+  html:has(.detail-layout),
+  html:has(.detail-layout) body {
+    overflow-anchor: none;
+  }
+  .detail-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 16px;
+  }
+  .detail-layout > .detail-title,
+  .detail-layout > .detail-main {
+    display: contents;
+  }
+  .detail-layout .detail-title > div:first-child {
+    order: 1;
+    margin-bottom: 4px;
+  }
+  /* Даты — под названием, второй строкой рядом со стрелкой «назад». Отдельная
+     строка дат под ценой на телефоне больше не нужна. */
+  .detail-layout .detail-title > div:first-child > p {
+    display: block;
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  /* Со стрелкой «назад» даты начинаются с линии названия: кружок 36px + зазор
+     строки 12px. Без стрелки — от края. */
+  .detail-layout .detail-title > div:first-child:has(> .detail-title-line > .detail-back) > p {
+    padding-left: 48px;
+  }
+  .detail-layout .detail-main > .detail-dates {
+    display: none;
+  }
+  .detail-layout .detail-main > .detail-gallery {
+    order: 2;
+  }
+  .detail-layout .detail-title > .detail-header-price {
+    order: 3;
+    margin-top: -2px;
+  }
+  .detail-layout .detail-header-price > .detail-sidebar-price-note {
+    font-size: 13px;
+  }
+  /* Свои отступы плашек колонки (у срока доставки 12px сверху, у кнопки 16px)
+     в сетке не схлопываются и прибавлялись к шагу — промежутки выходили разными. */
+  .detail-layout .detail-main .detail-sidebar > * {
+    order: 20;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  .detail-layout .detail-main .detail-sidebar > :is(.vehicle-quick-info, .vehicle-condition-summary) {
+    order: 5;
+  }
+  .detail-layout .detail-main .detail-sidebar > .price-breakdown-card {
+    order: 6;
+  }
+  .detail-layout .detail-main .detail-sidebar > .delivery-card {
+    order: 7;
+  }
+  .detail-layout .detail-main .detail-sidebar > :is(.report-order-cta, .sold-order-state) {
+    order: 8;
+  }
+  /* Приписка «Заявку получит…» — вплотную под кнопкой, а не через шаг сетки. */
+  .detail-layout .detail-main .detail-sidebar > .report-order-note {
+    order: 9;
+    margin-top: -6px;
+  }
+  /* Черта от края до края экрана между заявкой и характеристиками: блоки
+     колонки кончились, дальше — подробности. Это ::before самой сетки, он встаёт
+     на своё место через order; поля страницы на телефоне — 14px. */
+  .detail-layout::before {
+    content: "";
+    order: 10;
+    height: 1px;
+    margin: 8px -14px;
+    background: var(--line);
+  }
+  .detail-layout .detail-main .detail-content > * {
+    order: 11;
+  }
+  .detail-layout .detail-main .detail-content > .detail-section-links {
+    order: 12;
+  }
+  .detail-layout .detail-main .detail-content > .detail-tools-footer {
+    order: 13;
+  }
+  /* Название — крупно, как главный заголовок экрана. */
+  .detail-layout .detail-title .detail-title-line h1 {
+    font-size: 22px;
+    font-weight: 750;
+    line-height: 1.25;
+    letter-spacing: -0.4px;
+  }
+  /* Цена под фото — крупно, плашка оценки у правого края той же строки. */
+  .detail-layout .detail-header-price > .price-total {
+    justify-content: space-between;
+  }
+  .detail-layout .detail-header-price > .price-total > strong {
+    font-size: calc(28px * var(--price-fit, 1));
+    font-weight: 750;
+    line-height: 1.2;
+    letter-spacing: -0.8px;
+  }
+  .detail-layout .detail-header-price .price-rating-badge {
+    padding: 6px 9px 6px 11px;
+    font-size: 13px;
+  }
+  /* Разделы полных характеристик — плотнее и мельче: на телефоне их десяток
+     подряд, и крупные строки растягивали список на несколько экранов. */
+  .detail-layout .spec-group summary {
+    gap: 10px;
+    min-height: 46px;
+    padding: 9px 4px;
+    font-size: 15px;
+  }
+  .detail-layout .spec-group summary small {
+    font-size: 14px;
+  }
+  .detail-layout .spec-group summary > svg:first-child {
+    width: 18px;
+    height: 18px;
+  }
+  .detail-layout .spec-group summary .spec-caret {
+    width: 16px;
+    height: 16px;
+  }
+  .detail-layout .spec-rows {
+    padding: 0 4px 12px;
+  }
+  /* Строки внутри разделов: значению — сколько ему нужно, но не больше половины
+     строки, названию — всё остальное. Прежние колонки «1 к 1,15» отдавали короткому
+     «Да» больше места, чем названию, и названия переносились в три строки. */
+  .detail-layout .spec-row {
+    grid-template-columns: minmax(0, 1fr) fit-content(50%);
+    gap: 16px;
+    padding: 7px 0;
+  }
+  .detail-layout .spec-row :is(span, b) {
+    font-size: 14px;
+    line-height: 1.4;
+  }
 }

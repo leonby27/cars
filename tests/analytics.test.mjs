@@ -238,7 +238,8 @@ test("в разделе каталога вкладка авто стоит пе
   assert.match(source, /const vehicleModes = \[\s*\{ id:"cars", label:"Авто" \},\s*\{ id:"catalog", label:"Каталог" \}/);
   assert.match(source, /function VehiclesSection[\s\S]*?useState\("cars"\)/);
   assert.match(source, /const viewedIds = \[\.\.\.new Set\(\[\.\.\.sectionTabs\(id\)/);
-  assert.match(source, /section === "vehicles" \? <><CatalogSourceControls \/><VehiclesSection/);
+  assert.match(source, /section === "vehicles" \? <VehiclesSection/);
+  assert.doesNotMatch(source, /CatalogSourceControls/);
   assert.match(source, /id:"vehicles", label:"Каталог"/);
   assert.match(source, /data\.catalogPages/);
   assert.match(server, /catalogPages:catalogPagesResult\.rows/);

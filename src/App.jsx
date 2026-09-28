@@ -44,8 +44,8 @@ import { carTitle, carTitleDetails } from "./car-title.js";
 import { chineseModelName } from "../config/model-names-by.mjs";
 import { splitInlineLinks, plainInlineText } from "./inline-links.js";
 import { loadModelText, loadedModelText } from "./model-text-load.js";
-import { buildVehicleQuickInfo } from "./vehicle-quick-info.js";
-import { PriceRatingScale } from "./price-rating-scale.jsx";
+import { buildVehicleQuickFacts } from "./vehicle-quick-info.js";
+import { PriceRatingScale, priceRatingVerdictFor } from "./price-rating-scale.jsx";
 import { brandNotice } from "./brand-notice.js";
 import { translateTechnicalSpecs } from "./spec-translations.js";
 import { conditionGradeMeta, worstConditionGrade } from "./condition-grade.js";
@@ -167,6 +167,10 @@ const useAvailability = () => useContext(AvailabilityContext) || EMPTY_AVAILABIL
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? usdToByn(usd) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
+// Знак «≈» перед суммой приглушён (.approx-sign): первой читается сама сумма.
+// withApprox выделяет знак в строке вида «≈ $1 200», прочие значения отдаёт как есть.
+const ApproxSign = () => <span className="approx-sign">≈</span>;
+const withApprox = (value) => (typeof value === "string" && value.startsWith("≈ ") ? <><ApproxSign />{value.slice(1)}</> : value);
 // Суммы в блоке «Цена среди похожих» — крупным шагом (сотня рублей, полсотни
 // долларов): это оценка, а не смета, и точность до рубля обещала бы больше, чем
 // расчёт может дать.
@@ -1003,7 +1007,7 @@ function TotalPrice({ car, price, currency, className = "", approximate = true, 
           Класс на ней — чтобы правила вида «любой span внутри цены — серый и мелкий»
           (а такие есть и в строке каталога, и в карточке на главной) не покрасили
           саму цену: см. .price-line в стилях. */}
-      <span ref={lineRef} className="price-line">{approximate && compactApproximation ? <><span className="price-approximation">≈</span>{" "}{money(price.totalUsd, currency)}</> : text}<PriceChangeMark car={car} /></span>
+      <span ref={lineRef} className="price-line">{approximate && compactApproximation ? <><span className="price-approximation">≈</span>{" "}{money(price.totalUsd, currency)}</> : withApprox(text)}<PriceChangeMark car={car} /></span>
     </strong>
   );
 }
@@ -3624,7 +3628,7 @@ function SimilarCars({ car, cars, onOpenCar }) {
           </div>
         )}
       </div>
-      <div className="featured-grid">
+      <div className="featured-grid mobile-cards-grid">
         {shown.slice(0, visibleCount).map((candidate) => (
           <FeaturedCard key={candidate.id} car={candidate} onClick={() => onOpenCar(candidate)} />
         ))}
@@ -3842,7 +3846,7 @@ function ModelPageSection({ section, navigate }) {
               </thead>
               <tbody>
                 {section.table.rows.map((row) => (
-                  <tr key={row.join("|")}>{row.map((cell, index) => (index ? <td key={cell + index}>{cell}</td> : <th key={cell} scope="row">{cell}</th>))}</tr>
+                  <tr key={row.join("|")}>{row.map((cell, index) => (index ? <td key={cell + index}>{withApprox(cell)}</td> : <th key={cell} scope="row">{cell}</th>))}</tr>
                 ))}
               </tbody>
             </table>
@@ -4164,7 +4168,7 @@ function ModelLandingNotes({ landing, page, navigate }) {
           <div className="model-page-numbers">
             {text.stats.map((stat) => (
               <div key={stat.label}>
-                <strong>{stat.value}</strong>
+                <strong>{withApprox(stat.value)}</strong>
                 <span>{stat.label}</span>
               </div>
             ))}
@@ -6028,7 +6032,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
                           aria-label={`Открыть ${car.title}`}
                         >
                           <HoverImagePreview car={car} className="saved-search-preview-image" />
-                          <span className="saved-search-preview-price">≈ {money(estimateLandedCost(car).totalUsd, currency)}</span>
+                          <span className="saved-search-preview-price"><ApproxSign /> {money(estimateLandedCost(car).totalUsd, currency)}</span>
                         </article>
                       ))}
                       <button type="button" className="saved-search-more" onClick={() => openSearch(item)} aria-label={`Показать все ${number(preview.total)} авто по поиску «${item.title}»`}>
@@ -7954,16 +7958,41 @@ function VehicleConditionSummary({ car }) {
     ? `Согласно данным источника, ${car.conditionSummary.replace(/^В описании\s+/u, "").replace(/^./u, (letter) => letter.toLowerCase())}`
     : "";
   if (!grade && !descriptionGrade && !facts.length && !car.conditionSummary) return null;
+  // Подробности открывает сама плашка оценки — со стрелкой, как у цены в шапке;
+  // пояснение источника («Согласно данным источника…») тоже прячется под неё.
+  // Без оценки остаётся прежняя ссылка «Подробнее», а пояснение стоит открыто.
+  const gradeToggles = Boolean(displayedGradeMeta) && (facts.length > 0 || Boolean(sourceConditionSummary));
+  const description = sourceConditionSummary && <p className="vehicle-condition-description">{sourceConditionSummary}</p>;
+  // Под раскрытыми цифрами пояснение источника их только повторяло — там остаётся
+  // короткая ссылка на источник. Полный текст нужен, лишь когда цифр нет.
+  const sourceNote = facts.length > 0
+    ? <p className="vehicle-condition-description">Согласно данным источника объявления</p>
+    : description;
   return (
     <section className="vehicle-condition-summary" aria-label="Состояние согласно источнику">
       {displayedGradeMeta && (
         <div className="vehicle-condition-grade">
-          <strong className={`condition-grade-badge condition-grade-${displayedGradeMeta.tone}`} aria-label={displayedGradeMeta.label}>{displayedGradeMeta.label}</strong>
+          {gradeToggles ? (
+            <button
+              type="button"
+              className={`condition-grade-badge condition-grade-toggle condition-grade-${displayedGradeMeta.tone}`}
+              aria-expanded={detailsOpen}
+              aria-controls={detailsId}
+              aria-label={`${displayedGradeMeta.label}: подробнее`}
+              onClick={() => setDetailsOpen((open) => !open)}
+            >
+              <span>{displayedGradeMeta.label}</span>
+              <CaretDown size={13} weight="bold" aria-hidden="true" />
+            </button>
+          ) : (
+            <strong className={`condition-grade-badge condition-grade-${displayedGradeMeta.tone}`} aria-label={displayedGradeMeta.label}><span>{displayedGradeMeta.label}</span></strong>
+          )}
         </div>
       )}
-      {sourceConditionSummary && <p className="vehicle-condition-description">{sourceConditionSummary}</p>}
-      {facts.length > 0 && (
+      {!gradeToggles && description}
+      {(facts.length > 0 || gradeToggles) && (
         <>
+          {!gradeToggles && (
           <button
             type="button"
             className="vehicle-condition-details-toggle"
@@ -7973,15 +8002,47 @@ function VehicleConditionSummary({ car }) {
           >
             Подробнее <CaretDown size={15} aria-hidden="true" />
           </button>
+          )}
           <div className="animated-disclosure vehicle-condition-details" aria-hidden={!detailsOpen}>
             <div id={detailsId}>
-              <dl>{facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+              {facts.length > 0 && <dl>{facts.map(([label, value]) => <div key={label} className="facts-row"><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+              {gradeToggles && sourceNote}
             </div>
           </div>
         </>
       )}
       {car.inspectionReport && <a href="#guazi-full-report" className="vehicle-condition-report-link">Полный отчёт осмотра <ArrowDown size={16} aria-hidden="true" /></a>}
     </section>
+  );
+}
+
+// Подсказка к растаможке: что это за платёж, что в него входит и что сумма
+// предварительная — обычными словами. С withAlert первой строкой идёт
+// предупреждение («Без квоты на льготный ввоз») оранжевым: в карточке оно живёт
+// только здесь, в оформлении заказа стоит строкой под растаможкой.
+function CustomsTooltip({ price, withAlert = false }) {
+  const alert = withAlert && price.customsAlert ? price.customsAlert.replace(/\.$/u, "") : null;
+  const text = [price.customsHint || price.customsNote, price.customsIncludedText, price.customsBasisNote].filter(Boolean).join(" ");
+  return (
+    <>
+      {alert && <><b className="tooltip-warn">{alert}.</b>{" "}</>}
+      {text}
+    </>
+  );
+}
+
+// Строка детализации цены в карточке: название, пунктир до суммы, сумма и значок
+// «i» справа от неё. Вид общий со списком «Основной информации» (.facts-row).
+function PriceBreakdownRow({ label, value, description }) {
+  return (
+    <div className="facts-row">
+      <b>{label}</b>
+      <strong>{withApprox(value)}</strong>
+      <span className="price-info" tabIndex={0} aria-label={`Подробнее: ${label}`}>
+        <Info size={16} />
+        <ActionTooltip text={description} />
+      </span>
+    </div>
   );
 }
 
@@ -8389,7 +8450,9 @@ function ListingIdRow({ car }) {
   );
 }
 
-function CopyLinkButton({ car }) {
+// С подписью (labelled) — в полосе быстрого просмотра: там кнопка стоит с текстом,
+// и подсказка при наведении ей не нужна.
+function CopyLinkButton({ car, labelled = false, className }) {
   const [state, setState] = useState("idle");
   useEffect(() => {
     if (state === "idle") return undefined;
@@ -8401,6 +8464,14 @@ function CopyLinkButton({ car }) {
     const link = new URL(appHref(carHref(car)), window.location.origin).href;
     setState((await copyToClipboard(link)) ? "copied" : "failed");
   };
+  if (labelled) {
+    return (
+      <button type="button" className={className} onClick={copy} aria-live="polite">
+        {state === "copied" ? <Check size={19} weight="bold" /> : <LinkSimple size={19} weight="bold" />}
+        <span>{hint}</span>
+      </button>
+    );
+  }
   return (
     <button type="button" aria-label={hint} onClick={copy}>
       <LinkSimple size={21} />
@@ -8542,24 +8613,28 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   );
 }
 
-function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumbs = null, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false }) {
+function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumbs = null, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false, actions = true }) {
   const currency = useCurrency();
-  const [priceOpen, setPriceOpen] = useState(false);
+  // У цены в шапке выпадает «Цена среди похожих»; детализация стоит открытой в
+  // правой колонке.
+  const [pricePanel, setPricePanel] = useState(null);
+  const ratingOpen = pricePanel === "rating";
+  const togglePricePanel = (panel) => setPricePanel((open) => (open === panel ? null : panel));
   const [deliveryOpen, setDeliveryOpen] = useState(false);
-  const priceDisclosureId = useId();
+  const ratingDisclosureId = useId();
   const priceDropdownRef = useRef(null);
-  const priceTriggerRef = useRef(null);
+  const ratingTriggerRef = useRef(null);
   useEffect(() => {
-    if (!priceOpen) return undefined;
+    if (!pricePanel) return undefined;
     const dismissOutside = (event) => {
-      if (!priceDropdownRef.current?.contains(event.target)) setPriceOpen(false);
+      if (!priceDropdownRef.current?.contains(event.target)) setPricePanel(null);
     };
     const dismissEscape = (event) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      setPriceOpen(false);
-      priceTriggerRef.current?.focus();
+      setPricePanel(null);
+      ratingTriggerRef.current?.focus();
     };
     document.addEventListener("pointerdown", dismissOutside);
     document.addEventListener("focusin", dismissOutside);
@@ -8569,8 +8644,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
       document.removeEventListener("focusin", dismissOutside);
       window.removeEventListener("keydown", dismissEscape, true);
     };
-  }, [priceOpen]);
-  useEffect(() => { setPriceOpen(false); }, [car.id]);
+  }, [pricePanel]);
+  useEffect(() => { setPricePanel(null); }, [car.id]);
   const [floatingCtaHidden, setFloatingCtaHidden] = useState(true);
   const availabilityCtaRef = useRef(null);
   // По этой машине заказ уже создан — тогда кнопка не заводит второй, а ведёт в кабинет.
@@ -8616,6 +8691,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   }, [car?.id]);
   const price = estimateLandedCost(car);
   const quotaPricing = useQuotaPricing();
+  const quotaPricingOn = quotaPricing?.on !== false;
+  const priceVerdict = priceRatingVerdictFor({ rating:car.priceRating, priceUsd:price.totalUsd, mileage:car.mileage, quotaPricingOn });
   const timing = estimateDeliveryDays(car.city);
   // Кнопка не уводит со страницы: сначала окно объясняет, что именно мы проверим.
   // Дальше вошедшему запрос уходит из самого окна, гостя ведём заводить аккаунт.
@@ -8649,7 +8726,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
     if (!await sendAvailabilityRequest?.(car)) setAvailabilityStatus("");
   };
   const favoriteHint = favorite ? "Удалить из избранного" : "Добавить в избранное";
-  const quickInfo = buildVehicleQuickInfo(car);
+  const quickInfo = buildVehicleQuickFacts(car);
   // Обзор модели (если написан) — для материалов журнала про неё. Отдельного блока
   // «О модели» в карточке нет с 25.09.2026: он вёл на ту же страницу модели, что и
   // первая ссылка «Все … в наличии» ниже.
@@ -8672,24 +8749,26 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   // Материалы журнала про модель этой машины: сравнения с соседями по классу.
   const journal = BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [];
   // Блок отчёта продавца заполнен только у Guazi; у Che168 все поля пусты, а тип
-  // батареи и так виден в «Полных характеристиках». Пустые строки не показываем,
-  // а без единой строки исчезает и весь блок — вместе с дисклеймером-заглушкой.
-  const sourceClaims = translateClaims(car.claims || car.incident);
+  // батареи и так виден в «Полных характеристиках». Оценка внешнего вида, здоровье
+  // батареи и страховые случаи сюда не входят: они уже есть в блоке «Состояние» в
+  // правой колонке. Пустые строки не показываем, а без единой строки исчезает и
+  // весь блок — вместе с дисклеймером-заглушкой.
   // Когда машина появилась в каталоге и когда мы её последний раз сверяли.
   // На широком экране строка идёт в подзаголовке, на телефоне подзаголовок скрыт —
   // там та же строка стоит отдельно, между фотографиями и характеристиками.
   const datesLine = carDatesLine(car);
   const conditionFacts = [
     [CarProfile, "Владельцы в Китае", car.owners],
-    [ShieldCheck, "Страховые случаи", sourceClaims === "Отчёт источника может быть неполным" ? null : sourceClaims],
-    [Sparkle, "Оценка внешнего вида", car.appearanceScore ? `${car.appearanceScore}/100` : null],
     [BatteryHigh, "Тип батареи", car.technicalSpecs?.count ? null : translateBattery(car.batteryType)],
-    [Gauge, "Здоровье батареи", car.batteryHealth ? `${car.batteryHealth}%` : null],
   ].filter(([, , value]) => value);
   return (
     <>
+      {/* В быстром просмотре хлебных крошек нет, а «ссылка» и «избранное» стоят в
+          полосе окна рядом с крестиком — пустая строка над названием не нужна. */}
+      {(breadcrumbs || actions) && (
       <div className="detail-topbar">
         {breadcrumbs}
+        {actions && (
         <div className="detail-actions">
           <CopyLinkButton car={car} />
           <button disabled={localGuaziPreview} aria-label={favoriteHint} className={favorite ? "selected" : ""} onClick={() => toggleFavorite(car.id)}>
@@ -8697,7 +8776,13 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             <ActionTooltip text={favoriteHint} />
           </button>
         </div>
+        )}
       </div>
+      )}
+      {/* Общая обёртка названия с ценой и тела карточки. На компьютере ни на что
+          не влияет; на телефоне через неё все блоки встают в один порядок: цена
+          под фотографиями, затем плашки правой колонки, затем характеристики. */}
+      <div className="detail-layout">
       <div className="detail-title">
         <div>
           {/* Ярлыка о новизне здесь нет: под заголовком и так стоит строка «Добавлено
@@ -8724,63 +8809,49 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
         </div>
 
           <div ref={priceDropdownRef} className="detail-header-price" aria-label="Ориентировочная стоимость до Минска">
-            <div className="price-total"><TotalPrice car={car} price={price} currency={currency} compactApproximation /></div>
+            <div className="price-total">
+              <TotalPrice car={car} price={price} currency={currency} compactApproximation />
+              {priceVerdict && (
+                <button
+                  ref={ratingTriggerRef}
+                  type="button"
+                  className={`price-rating-badge price-rating-badge-${priceVerdict.step}`}
+                  aria-controls={ratingDisclosureId}
+                  aria-expanded={ratingOpen}
+                  aria-label={`Цена среди похожих: ${priceVerdict.badge.toLowerCase()}`}
+                  onClick={() => togglePricePanel("rating")}
+                >
+                  <span>{priceVerdict.badge}</span>
+                  <CaretDown size={13} weight="bold" aria-hidden="true" />
+                </button>
+              )}
+              {/* Цена среди таких же машин. Раньше блок стоял первым в правой колонке;
+                  теперь его открывает плашка у цены. Окно лежит внутри строки с суммой,
+                  чтобы открываться сразу под ней, поверх подписи «Цена под ключ».
+                  Набор для сравнения приходит с машиной от сервера; цену берём ту же,
+                  что показана крупно, — включая выбранный режим цен с квотой. */}
+              {priceVerdict && (
+                <aside
+                  id={ratingDisclosureId}
+                  className={`order-card price-dropdown price-rating-dropdown${ratingOpen ? " open" : ""}`}
+                  aria-label="Цена среди похожих"
+                  aria-hidden={!ratingOpen}
+                  inert={ratingOpen ? undefined : true}
+                >
+                  <PriceRatingScale
+                    rating={car.priceRating}
+                    priceUsd={price.totalUsd}
+                    mileage={car.mileage}
+                    battery={car.battery}
+                    quotaPricingOn={quotaPricingOn}
+                    formatMoney={(usd) => roughMoney(usd, currency)}
+                  />
+                </aside>
+              )}
+            </div>
             {/* Что это за число: цена не за машину в Китае, а итог с доставкой и
                 растаможкой. Мелкой строкой под ценой — крупное число остаётся главным. */}
-            <span className="detail-sidebar-price-note">
-              Цена под ключ до Минска. {" "}
-              <button ref={priceTriggerRef} type="button" aria-controls={priceDisclosureId} aria-expanded={priceOpen} onClick={() => setPriceOpen((open) => !open)}>Детализация</button>
-            </span>
-            <aside
-              id={priceDisclosureId}
-              className={`order-card price-dropdown${priceOpen ? " open" : ""}`}
-              aria-label="Детализация цены"
-              aria-hidden={!priceOpen}
-              inert={priceOpen ? undefined : true}
-            >
-                <div className="price-disclosure-content">
-                <div className="price-breakdown">
-              <div>
-                <PriceLabel label={price.basePriceLabel} description={price.basePriceNote || `${number(car.chinaPrice)} ¥${localGuaziPreview ? "" : " · данные источника"}`} />
-                <strong>{money(price.chinaUsd, currency)}</strong>
-              </div>
-              <div>
-                <PriceLabel label={price.buyoutLabel} description="Платёжный агент и комиссии банка" />
-                <strong>{approximateMoney(price.buyoutLow, price.buyoutHigh, currency)}</strong>
-              </div>
-              {!price.isFob && (
-                <div>
-                  <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
-                  <strong>{approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)}</strong>
-                </div>
-              )}
-              <div>
-                <PriceLabel label="Доставка до Минска" description={price.intlNote} />
-                <strong>{approximateMoney(price.intlLow, price.intlHigh, currency)}</strong>
-              </div>
-              <div>
-                <PriceLabel label="СВХ в Минске" description="Разгрузка и хранение до оформления" />
-                <strong>{approximateMoney(price.svhLow, price.svhHigh, currency)}</strong>
-              </div>
-              <div>
-                <div className="price-customs-copy">
-                  <PriceLabel label="Растаможка и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText, price.customsBasisNote].filter(Boolean).join(" ")} />
-                  {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
-                </div>
-                <strong>{approximateMoney(price.customsLow, price.customsHigh, currency)}</strong>
-              </div>
-              {price.serviceUsd > 0 && (
-              <div>
-                <PriceLabel label="Подбор и сопровождение" description="Ориентировочно. Точную сумму назовут после расчёта конкретной машины — она может быть немного больше или меньше" />
-                <strong>≈ {money(price.serviceUsd, currency)}</strong>
-              </div>
-              )}
-                </div>
-                <div className="price-assumption">
-                  <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
-                </div>
-                </div>
-            </aside>
+            <span className="detail-sidebar-price-note">Цена под ключ до Минска.</span>
           </div>
       </div>
       <div className="detail-main">
@@ -8839,26 +8910,39 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
           </div>
         </div>
         <div className="detail-sidebar">
-          {/* Цена среди таких же машин — своим блоком. Набор для сравнения приходит
-              с машиной от сервера; цену берём ту же, что показана крупно выше, —
-              включая выбранный режим цен с квотой. */}
-          <PriceRatingScale
-            rating={car.priceRating}
-            priceUsd={price.totalUsd}
-            mileage={car.mileage}
-            battery={car.battery}
-            quotaPricingOn={quotaPricing?.on !== false}
-            formatMoney={(usd) => roughMoney(usd, currency)}
-            loading={priceRatingPending}
-          />
+          {/* Состояние по данным источника — последней строкой «Основной информации»,
+              а не отдельной плашкой. Нет основной информации — состояние стоит само. */}
           {quickInfo.length > 0 && (
             <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
-              <span className="vehicle-quick-info-label">Основная информация</span>
-              <p>{quickInfo.slice(0, 3).join(", ")}{quickInfo.length <= 3 ? "." : ""}</p>
-              {quickInfo.length > 3 && <p>{quickInfo.slice(3).join(", ")}.</p>}
+              <dl className="vehicle-quick-facts">
+                {/* Подсказка с полным текстом — на случай, если значение не влезло и
+                    обрезано многоточием. */}
+                {quickInfo.map(({ label, value }) => <div key={label} className="facts-row"><dt>{label}</dt><dd title={value}>{value}</dd></div>)}
+              </dl>
+              {car.source === "Guazi" && <VehicleConditionSummary car={car} />}
             </section>
           )}
-          {car.source === "Guazi" && <VehicleConditionSummary car={car} />}
+          {car.source === "Guazi" && quickInfo.length === 0 && <VehicleConditionSummary car={car} />}
+          {/* Детализация цены — перед сроком доставки, и всегда открыта: ссылку
+              на неё искать не нужно. */}
+          <aside className="price-breakdown-card" aria-label="Детализация цены">
+                <div className="price-disclosure-content">
+                <div className="price-breakdown">
+                  <PriceBreakdownRow label={price.basePriceLabel} value={money(price.chinaUsd, currency)} description={price.basePriceNote || `${number(car.chinaPrice)} ¥${localGuaziPreview ? "" : " · данные источника"}`} />
+                  <PriceBreakdownRow label={price.buyoutLabel} value={approximateMoney(price.buyoutLow, price.buyoutHigh, currency)} description="Платёжный агент и комиссии банка" />
+                  {!price.isFob && <PriceBreakdownRow label="Логистика по Китаю" value={approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)} description={price.chinaLegNote} />}
+                  <PriceBreakdownRow label="Доставка до Минска" value={approximateMoney(price.intlLow, price.intlHigh, currency)} description={price.intlNote} />
+                  <PriceBreakdownRow label="СВХ в Минске" value={approximateMoney(price.svhLow, price.svhHigh, currency)} description="Разгрузка и хранение до оформления" />
+                  {/* Предупреждение о пошлине («Без квоты на льготный ввоз») — первой
+                      фразой подсказки: строкой под растаможкой оно ломало ровный ряд. */}
+                  <PriceBreakdownRow label="Растаможка и сборы" value={approximateMoney(price.customsLow, price.customsHigh, currency)} description={<CustomsTooltip price={price} withAlert />} />
+                  {price.serviceUsd > 0 && <PriceBreakdownRow label="Подбор и сопровождение" value={`≈ ${money(price.serviceUsd, currency)}`} description="Ориентировочно. Точную сумму назовут после расчёта конкретной машины — она может быть немного больше или меньше" />}
+                </div>
+                <div className="price-assumption">
+                  <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
+                </div>
+                </div>
+          </aside>
           <section className={`delivery-disclosure delivery-card${deliveryOpen ? " open" : ""}`} aria-label="Срок доставки до Минска">
             <button type="button" className="delivery-card-heading" aria-expanded={deliveryOpen} onClick={() => setDeliveryOpen((open) => !open)}>
               <div className="delivery-card-icon">
@@ -8874,19 +8958,19 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               <div className="disclosure-content delivery-disclosure-content">
                 <p className="delivery-intro">От договора до выдачи авто в Минске.</p>
                 <div className="delivery-stages">
-                  <div>
+                  <div className="facts-row">
                     <b>Выкуп и экспорт</b>
                     <strong>{daysRange(timing.buyoutDays)}</strong>
                   </div>
-                  <div>
+                  <div className="facts-row">
                     <b>Логистика по Китаю</b>
                     <strong>{daysRange(timing.chinaDays)}</strong>
                   </div>
-                  <div>
+                  <div className="facts-row">
                     <b>Маршрут до Минска</b>
                     <strong>{daysRange(timing.intlDays)}</strong>
                   </div>
-                  <div>
+                  <div className="facts-row">
                     <b>СВХ и оформление</b>
                     <strong>{daysRange(timing.svhDays)}</strong>
                   </div>
@@ -8932,6 +9016,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             <AvailabilityRequestModal preview={availabilityStatus === "preview"} onClose={() => setAvailabilityStatus("")} />
           ) : null}
         </div>
+      </div>
       </div>
       {localGuaziPreview && car.inspectionReport && (
         <div id="guazi-full-report" className="vehicle-guazi-report">
@@ -8994,13 +9079,21 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [onClose]);
+  const localGuaziPreview = GUAZI_PREVIEW_ENABLED && car.localPreview === true;
   return (
     <div className="quick-view-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="quick-view-modal" role="dialog" aria-modal="true" aria-label={`Быстрый просмотр: ${car.title}`}>
         <header className="quick-view-bar">
           <span>Быстрый просмотр</span>
+          <div className="quick-view-actions">
+            <CopyLinkButton car={car} labelled className="quick-view-action" />
+            <button type="button" disabled={localGuaziPreview} aria-pressed={favorite} className={`quick-view-action${favorite ? " selected" : ""}`} onClick={() => toggleFavorite(car.id)}>
+              <Heart size={19} weight={favorite ? "fill" : "bold"} />
+              <span>{favorite ? "В избранном" : "В избранное"}</span>
+            </button>
+          </div>
           <button ref={closeRef} className="quick-view-close" type="button" onClick={onClose} aria-label="Закрыть быстрый просмотр">
-            <X size={19} />
+            <X size={19} weight="bold" />
           </button>
         </header>
         <div className="quick-view-scroll">
@@ -9008,7 +9101,7 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
               окном, и настоящая кнопка так же уходит вниз. Копия прилипает к низу
               прокрутки — модалка бывает только на широком экране, где повтор и
               задуман прилипающим, а не висящим поверх страницы. */}
-          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} onOpenOrder={onOpenOrder} priceRatingPending={priceRatingPending} />
+          <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} openFull={onOpenFull} onOpenOrder={onOpenOrder} priceRatingPending={priceRatingPending} actions={false} />
         </div>
       </section>
     </div>
@@ -9254,7 +9347,7 @@ function OrderDraft({ car, navigate }) {
             {price.isFob ? "Цена FOB · Хоргос" : "Цена в Китае"} <DataTag type="source" />
           </span>
           <b>{price.isFob ? money(price.chinaUsd, currency) : `${number(car.chinaPrice)} ¥`}</b>
-          <small>{price.isFob ? price.basePriceNote : `≈ ${money(price.chinaUsd, currency)} по расчётному курсу`}</small>
+          <small>{withApprox(price.isFob ? price.basePriceNote : `≈ ${money(price.chinaUsd, currency)} по расчётному курсу`)}</small>
         </div>
       </section>
       <div className="order-layout">
@@ -9274,39 +9367,39 @@ function OrderDraft({ car, navigate }) {
               </div>
               <div>
                 <PriceLabel label={price.buyoutLabel} description="Платёжный агент и комиссии банка" />
-                <b>{approximateMoney(price.buyoutLow, price.buyoutHigh, currency)}</b>
+                <b>{withApprox(approximateMoney(price.buyoutLow, price.buyoutHigh, currency))}</b>
               </div>
               {!price.isFob && (
                 <div>
                   <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
-                  <b>{approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)}</b>
+                  <b>{withApprox(approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency))}</b>
                 </div>
               )}
               <div>
                 <PriceLabel label="Доставка до Минска" description={price.intlNote} />
-                <b>{approximateMoney(price.intlLow, price.intlHigh, currency)}</b>
+                <b>{withApprox(approximateMoney(price.intlLow, price.intlHigh, currency))}</b>
               </div>
               <div>
                 <PriceLabel label="СВХ в Минске" description="Разгрузка и хранение до оформления" />
-                <b>{approximateMoney(price.svhLow, price.svhHigh, currency)}</b>
+                <b>{withApprox(approximateMoney(price.svhLow, price.svhHigh, currency))}</b>
               </div>
               <div>
                 <div className="price-customs-copy">
-                  <PriceLabel label="Таможня и сборы" description={[price.customsHint || price.customsNote, price.customsIncludedText, price.customsBasisNote].filter(Boolean).join(" ")} />
+                  <PriceLabel label="Таможня и сборы" description={<CustomsTooltip price={price} />} />
                   {price.customsAlert && <p className={`price-customs-alert${price.customsAlertTone === "warn" ? " price-customs-alert-warn" : ""}`}>{price.customsAlert}</p>}
                 </div>
-                <b>{approximateMoney(price.customsLow, price.customsHigh, currency)}</b>
+                <b>{withApprox(approximateMoney(price.customsLow, price.customsHigh, currency))}</b>
               </div>
               {price.serviceUsd > 0 && (
               <div>
                 <PriceLabel label="Подбор и сопровождение" description="Ориентировочно. Точную сумму назовут после расчёта конкретной машины — она может быть немного больше или меньше" />
-                <b>≈ {money(price.serviceUsd, currency)}</b>
+                <b><ApproxSign /> {money(price.serviceUsd, currency)}</b>
               </div>
               )}
             </div>
             <div className="order-grand-total">
               <PriceLabel label="Ориентировочно до Минска" description="Без постановки на учёт и страховки" />
-              <b>≈ {money(price.totalUsd, currency)}</b>
+              <b><ApproxSign /> {money(price.totalUsd, currency)}</b>
             </div>
             <div className="order-disclaimer">
               <Info size={18} />
@@ -10413,7 +10506,7 @@ function ToolPage({ tool, navigate }) {
                 <div className="model-page-numbers">
                   {stats.map((stat) => (
                     <div key={stat.label}>
-                      <strong>{stat.value}</strong>
+                      <strong>{withApprox(stat.value)}</strong>
                       <span>{stat.label}</span>
                     </div>
                   ))}
@@ -10549,7 +10642,7 @@ function ToolPageDataTable({ table }) {
           <tbody>
             {table.rows.map((row) => (
               <tr key={row[0]}>
-                {row.map((cell, index) => (index ? <td key={cell + index}>{cell}</td> : <th key={cell} scope="row">{cell}</th>))}
+                {row.map((cell, index) => (index ? <td key={cell + index}>{withApprox(cell)}</td> : <th key={cell} scope="row">{cell}</th>))}
               </tr>
             ))}
           </tbody>
@@ -10761,7 +10854,7 @@ function DeliveryCalculator() {
           <div className="tool-calc-total">
             <span>Доставка CIP до Минска</span>
             <span className="tool-calc-sum">
-              <strong>≈ {amount(estimate.total)}</strong>
+              <strong><ApproxSign /> {amount(estimate.total)}</strong>
               <SelectField
                 className="tool-calc-money-select"
                 label="Валюта расчёта"
@@ -10778,7 +10871,7 @@ function DeliveryCalculator() {
             {estimate.rows.map((row) => (
               <div key={row.label}>
                 <dt>{row.label}</dt>
-                <dd>≈ {money(row.amount)}</dd>
+                <dd><ApproxSign /> {money(row.amount)}</dd>
               </div>
             ))}
           </dl>
@@ -12552,7 +12645,7 @@ function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpe
           {/* «Под ключ в Минске» ушло в подсказку у значка: в карточке эта строчка
               повторялась десять раз и занимала место, а объяснение нужно один раз. */}
           <span className="blog-top-price">
-            ≈ {money(estimateLandedCost(car).totalUsd, currency)}
+            <ApproxSign /> {money(estimateLandedCost(car).totalUsd, currency)}
             <span className="price-info" tabIndex={0} aria-label="Из чего складывается цена">
               <Info size={16} />
               <ActionTooltip text="Итог в Минске: выкуп машины, доставка, таможня и оформление. Предварительный расчёт по открытым тарифам." />
@@ -12563,7 +12656,7 @@ function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpe
         {figure ? (
           <span className="blog-top-figure">
             <i>{figure.label}</i>
-            <b>{figure.value}</b>
+            <b>{withApprox(figure.value)}</b>
           </span>
         ) : null}
       </span>
@@ -12729,9 +12822,9 @@ function BlogDuelTable({ post, data, navigate }) {
                 уходит смотреть каталог, но статья остаётся открытой — так же сделаны
                 кнопки расчётов в боковом меню журнала. */}
             {target ? (
-              <a href={appHref(target)} target="_blank" rel="noreferrer">{cell(value)}</a>
+              <a href={appHref(target)} target="_blank" rel="noreferrer">{withApprox(cell(value))}</a>
             ) : (
-              cell(value)
+              withApprox(cell(value))
             )}
           </td>
         );
@@ -12967,7 +13060,7 @@ function BlogFigure({ car, index, navigate, onOpen = null, eager = false }) {
       <figcaption>
         <AppLink href={carHref(car)} navigate={navigate} onClick={open}>{title}</AppLink>
         <span>
-          {car.mileage ? `${number(car.mileage)} км · ` : ""}≈ {money(estimateLandedCost(car).totalUsd, currency)} под ключ в Минске
+          {car.mileage ? `${number(car.mileage)} км · ` : ""}<ApproxSign /> {money(estimateLandedCost(car).totalUsd, currency)} под ключ в Минске
         </span>
       </figcaption>
     </figure>
@@ -13256,7 +13349,7 @@ function BlogCollectionPage({ post, navigate, favorites, toggleFavorite }) {
         <div className="model-page-numbers">
           {stats.map((stat) => (
             <div key={stat.label}>
-              <strong>{stat.value}</strong>
+              <strong>{withApprox(stat.value)}</strong>
               <span>{stat.label}</span>
             </div>
           ))}
@@ -14284,7 +14377,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         <img src={imageSource(order.car.image, IMAGE_WIDTH_TILE)} alt={order.car.title} onError={(event) => retryWithFullImage(event, order.car.image)} />
         <div className="customer-order-car-copy">
           <div className="customer-order-car-heading"><h2><a href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer" onClick={openCarPreview}>{order.car.title}</a></h2><p>{shortOrderNumber(order.orderNumber)}</p></div>
-          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b>≈ {money(order.car.estimatedTotalUsd, currency)}</b></div> : null}
+          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b><ApproxSign /> {money(order.car.estimatedTotalUsd, currency)}</b></div> : null}
         </div>
         <div className="customer-order-card-controls">
           <details className="order-car-menu">
@@ -14343,7 +14436,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
             {order.paymentStatus === "invoice_requested" ? (
               <div className="customer-order-notice"><CheckCircle size={21} weight="fill" /><p><b>Запрос на счёт получен.</b><span>После проверки цены продавца счёт появится здесь.</span></p></div>
             ) : (
-              <><p>Сначала подтвердим актуальную цену продавца, затем подготовим счёт.</p>{order.car.estimatedTotalUsd && <div className="order-estimate"><span>Ориентировочно до Минска</span><b>≈ {money(order.car.estimatedTotalUsd, currency)}</b></div>}<button className="primary" type="button" disabled={saving} onClick={() => applyAction("request_invoice")}>Запросить счёт</button></>
+              <><p>Сначала подтвердим актуальную цену продавца, затем подготовим счёт.</p>{order.car.estimatedTotalUsd && <div className="order-estimate"><span>Ориентировочно до Минска</span><b><ApproxSign /> {money(order.car.estimatedTotalUsd, currency)}</b></div>}<button className="primary" type="button" disabled={saving} onClick={() => applyAction("request_invoice")}>Запросить счёт</button></>
             )}
           </OrderStageRow>
         </>)}

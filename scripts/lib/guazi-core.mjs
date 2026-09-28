@@ -52,7 +52,7 @@ export function normalizeCoreCard(capture, config) {
   const card = normalizeCard(capture.rawData, capture.url, capture.observedAt);
   const sourceBrand = coreBrand(capture.rawData.makeNameEn, config);
   const type = publicFuel(card.fuel);
-  const name = canonicalImportName(config.sourceBrandAliases[capture.rawData.makeNameEn] || capture.rawData.makeNameEn, card.model, type, {rawModel:card.title});
+  const name = canonicalImportName(config.sourceBrandAliases[capture.rawData.makeNameEn] || capture.rawData.makeNameEn, card.model, type, {...card.catalogFields, rawModel:card.title, source:'Guazi'});
   const provisional = {brand:name.brand,model:name.model,year:card.modelYear,type};
   const violation = importPolicyViolation(provisional);
   // Pilot selection was BEV-only; core policy is explicit and covers all four feeds.

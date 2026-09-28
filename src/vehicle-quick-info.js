@@ -49,3 +49,33 @@ export function buildVehicleQuickInfo(car = {}) {
     acceleration ? `0–100 км/ч за ${acceleration.toLocaleString("ru-RU")} с` : null,
   ].filter(Boolean);
 }
+
+const capitalize = (value) => value.replace(/^./u, (letter) => letter.toLocaleUpperCase("ru-RU"));
+
+/**
+ * Те же факты парами «название — значение» для списка в две колонки. Набор и
+ * порядок совпадают с короткой строкой выше; пустые пары не показываем.
+ */
+export function buildVehicleQuickFacts(car = {}) {
+  const mileage = positiveNumber(car.mileage);
+  const electricRange = positiveNumber(car.electricRange ?? car.range);
+  const combinedRange = positiveNumber(car.combinedRange);
+  const battery = positiveNumber(car.battery);
+  const horsepower = positiveNumber(car.horsepower ?? car.powerHp ?? car.enginePowerHp ?? car.hp);
+  const acceleration = positiveNumber(car.acceleration);
+  const powertrain = powertrainLabel(car);
+  const drive = driveLabel(car.drive);
+  const range = electricRange
+    ? [`${formatNumber(electricRange)} км`, combinedRange && combinedRange !== electricRange ? `${formatNumber(combinedRange)} км` : null].filter(Boolean).join(" / ")
+    : null;
+  return [
+    ["Год выпуска", positiveNumber(car.year) ? String(Number(car.year)) : null],
+    ["Пробег", mileage ? `${formatNumber(mileage)} км` : null],
+    ["Двигатель", powertrain ? capitalize(powertrain) : null],
+    ["Запас хода", range],
+    ["Привод", drive ? capitalize(drive.replace(/\s*привод$/u, "")) : null],
+    ["Батарея", battery ? `${formatNumber(battery)} кВт·ч` : null],
+    ["Мощность", horsepower ? `${formatNumber(horsepower)} л. с.` : null],
+    ["Разгон до 100 км/ч", acceleration ? `${acceleration.toLocaleString("ru-RU")} с` : null],
+  ].filter(([, value]) => value).map(([label, value]) => ({ label, value }));
+}

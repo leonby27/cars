@@ -288,8 +288,9 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   // Until the invoice separates vehicle and bundled expenses, FOB is a
   // conservative provisional base. Do not invent a freight deduction.
   const customsValueUsd = chinaUsd;
+  // Подсказка в карточке — для покупателя, без таможенных терминов.
   const customsBasisNote = isFob
-    ? "Предварительный расчёт от полной цены FOB. Стоимость автомобиля без включённых расходов и таможенную базу уточним по документам."
+    ? "Сумма предварительная: точную посчитаем по документам на машину."
     : null;
   // Нулевой НДС дают только машинам не старше пяти лет с даты выпуска (указ № 92
   // с правками указа № 428). Машина старше — НДС 20% от стоимости вместе с пошлиной,
@@ -318,7 +319,9 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     ? (quotaOver
       ? "Нулевой НДС дают только машинам не старше пяти лет с даты выпуска, а этой уже больше. Поэтому пошлина 15% от цены машины и НДС 20% сверху, плюс сборы за оформление."
       : "Пошлины на эту машину нет — льготная квота ещё действует. Но нулевой НДС дают только машинам не старше пяти лет с даты выпуска, а этой больше, поэтому добавляется НДС 20% и сборы за оформление.")
-    : null;
+    : quotaOver
+      ? "Льготная квота на ввоз электромобилей закончилась, поэтому пошлина — 15% от цены машины."
+      : "Машина ввозится по льготе: пошлины и НДС нет, платятся только сборы за оформление.";
   let engineAssumed = false;
   const seriesHybrid = isSeriesHybrid(car);
   if (seriesHybrid) {
@@ -368,7 +371,10 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     `утильсбор ${utilFeeLabel} BYN`,
     `таможенный сбор ${PRICING.clearanceFeeByn} BYN`,
   ].filter(Boolean);
-  const customsIncludedText = `Уже внутри этой строки: ${includedPayments.join(", ")}. Повторно в итог они не добавляются.`;
+  const includedList = includedPayments.length > 1
+    ? `${includedPayments.slice(0, -1).join(", ")} и ${includedPayments.at(-1)}`
+    : includedPayments[0];
+  const customsIncludedText = `В сумму уже входят ${includedList}.`;
 
   const totalLow = round50(chinaUsd + buyoutLow + chinaLegLow + intlLow + PRICING.svhUsd[0] + customsLow + PRICING.serviceUsd);
   const totalHigh = round50(chinaUsd + buyoutHigh + chinaLegHigh + intlHigh + PRICING.svhUsd[1] + customsHigh + PRICING.serviceUsd);

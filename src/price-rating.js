@@ -67,12 +67,14 @@ export const priceRatingPosition = (priceUsd, medianUsd) => {
   return (step + share) / PRICE_RATING_STEPS;
 };
 
+// badge — надпись плашки рядом с ценой в шапке карточки: она стоит без слов «цена
+// среди похожих» вокруг, поэтому договорена до конца.
 const VERDICTS = [
-  { label:"намного ниже", tone:"low" },
-  { label:"ниже средней", tone:"low" },
-  { label:"средняя", tone:"mid" },
-  { label:"выше средней", tone:"high" },
-  { label:"намного выше", tone:"high" },
+  { label:"намного ниже", badge:"Сильно дешевле", tone:"low" },
+  { label:"ниже средней", badge:"Ниже рынка", tone:"low" },
+  { label:"средняя", badge:"Средняя цена", tone:"mid" },
+  { label:"выше средней", badge:"Выше рынка", tone:"high" },
+  { label:"намного выше", badge:"Сильно дороже", tone:"high" },
 ];
 
 /** Название цены словами и её сторона: дешёвая, обычная, дорогая. */

@@ -38,6 +38,16 @@ const PriceRatingSkeleton = () => (
 );
 
 /**
+ * Оценка цены для плашки рядом с ценой: та же, что рисует шкала, — одна логика на
+ * слово, цвет и бегунок. Нет сравнения — нет и плашки.
+ */
+export function priceRatingVerdictFor({ rating, priceUsd, mileage, quotaPricingOn = true }) {
+  if (!rating) return null;
+  const mode = quotaPricingOn ? rating.quotaOn : rating.quotaOff;
+  return priceRatingAssessment(rating, mode, priceUsd, mileage)?.verdict || null;
+}
+
+/**
  * `priceUsd` — та же цена до Минска, что показана крупно в карточке, поэтому шкала и
  * цена всегда говорят об одном и том же, включая режим цен с квотой.
  */
@@ -60,12 +70,13 @@ export function PriceRatingScale({ rating, priceUsd, mileage, battery, quotaPric
   // см. PRICE_RATING_DAMAGE_WARNING_SHOWN.
   const damageWarning = PRICE_RATING_DAMAGE_WARNING_SHOWN ? priceRatingDamageWarning(assessment) : null;
   return (
-    <PriceRatingCard className={`is-${verdict.tone}`} title={hint || undefined}>
+    <PriceRatingCard className={`is-${verdict.tone} is-step-${verdict.step}`} title={hint || undefined}>
       <div className="price-rating-heading">
         <span className="price-rating-label">Цена среди похожих</span>
-        <strong className="price-rating-verdict">{verdict.label}</strong>
+        {/* Та же надпись, что на плашке у цены, которая открывает этот блок. */}
+        <strong className="price-rating-verdict">{verdict.badge}</strong>
       </div>
-      <div className="price-rating-track" role="img" aria-label={`Цена ${verdict.label} среди похожих машин. ${text}`}>
+      <div className="price-rating-track" role="img" aria-label={`${verdict.badge} среди похожих машин. ${text}`}>
         <span className="price-rating-marker" style={{ left:`${(position * 100).toFixed(1)}%` }} aria-hidden="true" />
         {Array.from({ length:PRICE_RATING_STEPS }, (unused, step) => (
           <i key={step} className={`price-rating-step-${step}${step === verdict.step ? " is-active" : ""}`} aria-hidden="true" />

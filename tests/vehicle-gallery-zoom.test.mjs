@@ -70,30 +70,39 @@ test("local Guazi preview keeps the availability button without sending a test r
 test("availability action is green below the information and has a floating repeat", () => {
   assert.ok(app.indexOf('className={`delivery-disclosure delivery-card') < app.indexOf('className={`primary report-order-cta availability-primary-cta'));
   assert.ok(app.includes('Бесплатно <span aria-hidden="true">•</span> Ни к чему не обязывает'));
-  assert.match(styles, /\.primary\.availability-primary-cta\s*\{[^}]*min-height:\s*52px;[^}]*background:\s*linear-gradient\(90deg, #38b65a 0%, #2fa64d 100%\);[^}]*box-shadow:/s);
+  assert.match(styles, /\.primary\.availability-primary-cta\s*\{[^}]*min-height:\s*52px;[^}]*background:\s*linear-gradient\(90deg, #36b055 0%, #23883c 100%\);[^}]*box-shadow:/s);
   assert.match(styles, /\.availability-primary-note\s*\{[^}]*opacity:\s*0\.75;/s);
 });
 
-test("price breakdown opens as a dropdown beside the vehicle title", () => {
-  assert.ok(app.includes('const [priceOpen, setPriceOpen] = useState(false);'));
-  assert.ok(app.includes('Цена под ключ до Минска. {" "}'));
-  assert.ok(app.includes('onClick={() => setPriceOpen((open) => !open)}>Детализация</button>'));
-  assert.ok(app.includes('className={`order-card price-dropdown${priceOpen ? " open" : ""}`}'));
+test("price breakdown stands open before the delivery block", () => {
+  assert.ok(app.includes('<span className="detail-sidebar-price-note">Цена под ключ до Минска.</span>'));
+  assert.ok(!app.includes('>Детализация</button>'));
+  assert.ok(app.includes('<aside className="price-breakdown-card" aria-label="Детализация цены">'));
+  assert.ok(app.indexOf('className="price-breakdown-card"') < app.indexOf('className={`delivery-disclosure delivery-card'));
+  assert.ok(app.indexOf('className="vehicle-quick-info"') < app.indexOf('className="price-breakdown-card"'));
+  assert.match(styles, /\.price-breakdown-card\s*\{[^}]*background:\s*var\(--panel\);[^}]*box-shadow:/s);
   assert.ok(app.includes('currency={currency} compactApproximation'));
   assert.ok(app.indexOf('className="detail-topbar"') < app.indexOf('className="detail-title"'));
-  assert.ok(app.indexOf('className={`order-card price-dropdown') < app.indexOf('className="detail-main"'));
-  assert.match(styles, /\.detail-header-price > \.price-dropdown\s*\{[^}]*position:\s*absolute;/s);
-  assert.match(styles, /\.detail-header-price > \.price-dropdown\.open\s*\{[^}]*opacity:\s*1;/s);
+  assert.match(styles, /\.detail-header-price \.price-dropdown\s*\{[^}]*position:\s*absolute;/s);
+  assert.match(styles, /\.detail-header-price \.price-dropdown\.open\s*\{[^}]*opacity:\s*1;/s);
   assert.ok(app.includes('{!price.isFob && ('));
   assert.ok(app.indexOf('className={`delivery-disclosure delivery-card') < app.indexOf('className={`primary report-order-cta availability-primary-cta'));
   assert.match(styles, /\.price-disclosure-content\s*\{\s*padding-top:\s*0;/);
-  assert.match(styles, /\.detail-sidebar-price-note button\s*\{[^}]*text-decoration:\s*none;/s);
-  assert.match(styles, /\.detail-sidebar-price-note button\[aria-expanded="true"\]\s*\{\s*color:\s*var\(--accent\);/);
   assert.match(styles, /\.detail-sidebar > \.report-order-cta\s*\{[^}]*margin:\s*16px 0 0;/s);
   assert.match(styles, /grid-template-columns:\s*minmax\(0, 1fr\) 386px;/);
   assert.ok(app.includes('className="header-currency-switch"'));
   assert.ok(app.indexOf('className="header-currency-switch"') < app.indexOf('className={`icon-label searches-link'));
   assert.ok(!app.includes('className="price-currency-switch"'));
+});
+
+test("price rating opens from a badge beside the price instead of the sidebar", () => {
+  const body = app.slice(app.indexOf("function VehicleDetailBody"), app.indexOf("function VehicleQuickViewModal"));
+  assert.ok(body.includes('onClick={() => togglePricePanel("rating")}'));
+  assert.ok(body.includes('className={`order-card price-dropdown price-rating-dropdown${ratingOpen ? " open" : ""}`}'));
+  assert.ok(body.indexOf("price-rating-badge") < body.indexOf("price-rating-dropdown"));
+  assert.ok(body.indexOf("<PriceRatingScale") < body.indexOf('className="detail-main"'));
+  assert.equal(body.split("<PriceRatingScale").length - 1, 1);
+  for (let step = 0; step < 5; step += 1) assert.match(styles, new RegExp(`:is\\(\\.price-rating-badge-${step}, \\.price-rating \\.price-rating-step-${step}, \\.price-rating\\.is-step-${step}\\) \\{ --price-from: #[0-9a-f]{6}; --price-to: #[0-9a-f]{6}; \\}`));
 });
 
 test("condition summary uses readable grades and hides facts in an animated disclosure", () => {
@@ -107,8 +116,8 @@ test("condition summary uses readable grades and hides facts in an animated disc
   assert.ok(summary.includes('className="animated-disclosure vehicle-condition-details" aria-hidden={!detailsOpen}'));
   assert.ok(summary.includes("setDetailsOpen((open) => !open)"));
   assert.doesNotMatch(summary, /Шкала A–D/);
-  assert.match(styles, /\.condition-grade-excellent,\s*\.condition-grade-good\s*\{[^}]*background:\s*#217a47;[^}]*color:\s*#fff;/s);
-  assert.match(styles, /\.condition-grade-badge\s*\{[^}]*min-height:\s*24px;[^}]*padding:\s*3px 7px;[^}]*font-size:\s*12px;/s);
+  assert.match(styles, /\.condition-grade-badge\.condition-grade-excellent,\s*\.condition-grade-badge\.condition-grade-good\s*\{\s*--price-from:\s*#[0-9a-f]{6};\s*--price-to:\s*#[0-9a-f]{6};/s);
+  assert.match(styles, /\.condition-grade-badge\s*\{[^}]*padding:\s*8px 13px;[^}]*font-size:\s*14px;/s);
   assert.match(styles, /\.vehicle-condition-details-toggle\[aria-expanded="true"\] svg\s*\{\s*transform:\s*rotate\(180deg\);/s);
   assert.match(styles, /\.vehicle-condition-details-toggle\s*\{[^}]*color:\s*var\(--accent-dark\);/s);
   assert.match(styles, /\.vehicle-condition-details-toggle\[aria-expanded="true"\]\s*\{\s*color:\s*var\(--accent\);/s);

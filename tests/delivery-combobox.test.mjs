@@ -32,7 +32,7 @@ test("delivery combobox uses the customs-calculator field typography and caret g
 });
 
 test("delivery total stays visible while selected-model dimensions are loading", () => {
-  assert.match(deliveryCalculator, /<strong>≈ \{amount\(estimate\.total\)\}<\/strong>/);
+  assert.match(deliveryCalculator, /<strong><ApproxSign \/> \{amount\(estimate\.total\)\}<\/strong>/);
   assert.doesNotMatch(deliveryCalculator, /sizeLoading \? "…"/);
 });
 

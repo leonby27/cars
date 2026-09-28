@@ -305,7 +305,7 @@ test("в цене под ключ таможенные платежи и сбо�
     assert.equal(price.totalLow, Math.round(lowerComponents / 50) * 50);
     assert.equal(price.customsFeesUsd, price.utilUsd + price.clearanceUsd);
     assert.match(price.customsIncludedText, /утильсбор/);
-    assert.match(price.customsIncludedText, /Повторно в итог они не добавляются/);
+    assert.match(price.customsIncludedText, /^В сумму уже входят .+ и таможенный сбор \d+ BYN\.$/);
   }
 });
 
@@ -341,7 +341,8 @@ test("FOB Horgos uses the exact dollar quote and removes only the covered China 
   assert.ok(price.buyoutLow>0);assert.ok(price.serviceUsd>0);assert.ok(price.customsUsd>0);
   assert.equal(price.basePriceLabel,"Авто и логистика по Китаю");
   assert.match(price.basePriceNote,/FOB Хоргос.*доставку по Китаю до Хоргоса.*экспортное оформление.*до Минска считается отдельно/);
-  assert.match(price.customsBasisNote,/Предварительный.*FOB/);
+  assert.match(price.customsBasisNote,/предварительная.*по документам/);
+  assert.doesNotMatch(price.customsBasisNote,/FOB/);
   const round50=n=>Math.round(n/50)*50;
   assert.equal(price.totalLow,round50(28748+price.buyoutLow+price.intlLow+price.svhLow+price.customsLow+price.serviceUsd));
   assert.equal(price.totalHigh,round50(28748+price.buyoutHigh+price.intlHigh+price.svhHigh+price.customsHigh+price.serviceUsd));

@@ -672,15 +672,6 @@ const vehicleModes = [
 const modelTitle = (title) => String(title || "").replace(/\s+\d{4}\s*$/, "").trim() || title || "—";
 const favoriteOwners = (item) => Array.isArray(item.owners) && item.owners.length ? item.owners.join(", ") : "Имя не указано";
 
-function CatalogSourceControls() {
-  const [sources,setSources]=useState(null);
-  const [pending,setPending]=useState(false);
-  const [error,setError]=useState("");
-  useEffect(()=>{let live=true;fetch("/api/analytics/catalog-sources",{cache:"no-store"}).then(async r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{if(live)setSources(data.sources);}).catch(()=>{if(live)setError("Не удалось загрузить настройки источников");});return()=>{live=false;};},[]);
-  async function toggle(row){setPending(true);setError("");try{const response=await fetch("/api/analytics/catalog-sources",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:row.source,enabled:!row.enabled})});if(!response.ok)throw Error();setSources((await response.json()).sources);}catch{setError("Не удалось изменить видимость. Настройка не подтверждена — обновите страницу.");}finally{setPending(false);}}
-  return <section className="analytics-panel"><h2>Источники каталога</h2><p>Внутренняя настройка. Скрытие не удаляет машины и действует также на новые поступления.</p>{sources?.map(row=><div key={row.source} className="analytics-actions"><span><b>{row.source}</b> · {formatNumber(row.active)} активных · {row.enabled?"Показываются":"Скрыты"}</span><button type="button" className="secondary" disabled={pending} aria-pressed={row.enabled} onClick={()=>toggle(row)}>{pending?"Сохраняем…":row.enabled?"Скрыть Guazi с сайта":"Показать Guazi на сайте"}</button></div>)}{error&&<p role="alert">{error}</p>}</section>;
-}
-
 function VehiclesSection({ data, updates, markViewed }) {
   const [mode, setMode] = useState("cars");
   // Во всех представлениях сначала показываем то, что смотрели последним.
@@ -1313,7 +1304,7 @@ function Dashboard({ data, period, setPeriod, reload, logout, leads, leadsLoadin
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} updates={updates} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} removeLead={removeLead} period={period} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <><CatalogSourceControls /><VehiclesSection data={data} updates={updates} markViewed={markViewed} /></> : null}</div>
+          <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} updates={updates} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "seo-positions"}><SeoPositionsSection /></div>

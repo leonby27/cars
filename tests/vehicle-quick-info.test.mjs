@@ -48,3 +48,21 @@ test("без объёма остаётся одно слово, у электр�
     "2025 г., электро, батарея 94,5 кВт·ч",
   );
 });
+
+test("пары «название — значение» для списка в две колонки", async () => {
+  const { buildVehicleQuickFacts } = await import("../src/vehicle-quick-info.js");
+  assert.deepEqual(
+    buildVehicleQuickFacts({ year:2024, mileage:20000, type:"ДВС", engine:"2.0T 184HP L4", drive:"Передний", acceleration:8.7 }),
+    [
+      { label:"Год выпуска", value:"2024" },
+      { label:"Пробег", value:"20\u00a0000 км" },
+      { label:"Двигатель", value:"Бензин 2.0 л" },
+      { label:"Привод", value:"Передний" },
+      { label:"Разгон до 100 км/ч", value:"8,7 с" },
+    ],
+  );
+  assert.deepEqual(
+    buildVehicleQuickFacts({ type:"Электромобиль", electricRange:650, combinedRange:1000, drive:"AWD", battery:94.5, horsepower:568 }).map(({ value }) => value),
+    ["Электро", "650 км / 1\u00a0000 км", "Полный", "94,5 кВт·ч", "568 л. с."],
+  );
+});
