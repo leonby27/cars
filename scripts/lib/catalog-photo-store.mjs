@@ -1,22 +1,59 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { vehiclePhotoHref } from '../../src/photo-source.js';
+import { vehiclePhotoHref, allowedGuaziPhotoQuery } from '../../src/photo-source.js';
+import { guaziImageCacheFile } from '../../server/guazi-image-key.mjs';
+
+const che168PhotoHref = href => /^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) && !href.split('/').includes('..');
+
+// Кадры Guazi идут через /api/image: сайт сам кладёт копию в свой кэш
+// (server/guazi-image-cache.mjs), поэтому второй копии здесь не нужно.
+export function guaziPhotoSource(href) {
+  if (typeof href !== 'string' || !href.startsWith('/api/image?src=')) return null;
+  try {
+    const params = new URLSearchParams(href.slice('/api/image?'.length));
+    if ([...params.keys()].join() !== 'src') return null;
+    const source = new URL(params.get('src'));
+    if (source.protocol !== 'https:' || source.port || source.username || source.password || source.hash) return null;
+    if (!/^[a-z0-9-]+\.guazistatic(?:-global)?\.com$/.test(source.hostname) || !allowedGuaziPhotoQuery(source)) return null;
+    return source;
+  } catch { return null; }
+}
+
+export const storablePhotoHref = href => che168PhotoHref(href) || Boolean(guaziPhotoSource(href));
 
 export function catalogPhotoPaths(car, { previewCount = 1 } = {}) {
   return [...new Set((car.images?.length ? car.images : [car.image]).filter(Boolean).slice(0, previewCount === 5 ? 5 : 1)
     // Disk paths stay unversioned: the query marker exists only to refresh a
     // visitor's browser and must never become part of the stored filename.
     .map(source => vehiclePhotoHref(source,600,{cacheVersion:''}))
-    .filter(href => /^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) && !href.split('/').includes('..')))];
+    .filter(storablePhotoHref))];
+}
+
+const noSpace = () => Object.assign(new Error('Photo storage paused: low disk space'), { code:'PHOTO_DISK_FULL' });
+
+async function storeGuaziPhoto(href, source, { directory, site, fetcher, minFreeBytes }) {
+  const file = guaziImageCacheFile(source.href);
+  const saved = async () => { try { return (await fs.stat(file)).size > 0; } catch (error) { if(error.code === 'ENOENT') return false; throw error; } };
+  if (await saved()) return { stored: false, bytes: 0 };
+  const disk = await fs.statfs(directory);
+  if (disk.bavail * disk.bsize < minFreeBytes + 8 * 1024**2) throw noSpace();
+  const response = await fetcher(new URL(href,site), { signal:AbortSignal.timeout(40_000), headers:{'user-agent':'abcars-photo-store/1.0'}, redirect:'error' });
+  if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) { await response.body?.cancel(); throw new Error(`Photo HTTP ${response.status}`); }
+  const size = (await response.arrayBuffer()).byteLength;
+  // Сайт не пишет копию, если на диске тесно; тогда кадр не считается сохранённым.
+  if (!await saved()) throw new Error('Guazi photo was served but not stored');
+  return { stored: true, bytes: size };
 }
 
 export async function storeCatalogPhoto(href, { directory, site = 'https://abcars.by', fetcher = fetch, minFreeBytes = 5 * 1024**3 } = {}) {
-  if (!/^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) || href.split('/').includes('..')) throw new Error('Invalid photo path');
+  const guazi = guaziPhotoSource(href);
+  if (guazi) return storeGuaziPhoto(href, guazi, { directory, site, fetcher, minFreeBytes });
+  if (!che168PhotoHref(href)) throw new Error('Invalid photo path');
   const file = path.join(directory,href);
   try { if ((await fs.stat(file)).size > 0) return { stored: false, bytes: 0 }; } catch (error) { if(error.code !== 'ENOENT') throw error; }
   const disk = await fs.statfs(directory);
-  if (disk.bavail * disk.bsize < minFreeBytes + 8 * 1024**2) throw Object.assign(new Error('Photo storage paused: low disk space'), { code:'PHOTO_DISK_FULL' });
+  if (disk.bavail * disk.bsize < minFreeBytes + 8 * 1024**2) throw noSpace();
   const response = await fetcher(new URL(href,site), { signal:AbortSignal.timeout(40_000), headers:{'user-agent':'abcars-photo-store/1.0'}, redirect:'error' });
   if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) { await response.body?.cancel(); throw new Error(`Photo HTTP ${response.status}`); }
   const chunks=[]; let size=0;

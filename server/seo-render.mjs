@@ -523,14 +523,15 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const description = sold
       ? `${titleText} продан. Объявление временно сохранено для избранного и прямых ссылок; актуальные похожие автомобили есть в каталоге abcars.by.`
       : carDescription(car, landed);
-    const image = /^https:\/\//.test(String(car.image || "")) ? car.image : null;
+    // У проданной машины фото нет ни на странице, ни в разметке: снимки удаляются.
+    const image = !sold && /^https:\/\//.test(String(car.image || "")) ? car.image : null;
     // Тот же снимок, что откроет галерея после запуска приложения, — и просим его
     // по тому же адресу (свой кэш фотографий, /photo/…), иначе браузер скачает
     // одну и ту же фотографию дважды.
     const proxiedPhoto = photoHref(image, "original");
     const imageOnPage = proxiedPhoto?.startsWith("/") ? `${siteBasePath}${proxiedPhoto}` : proxiedPhoto;
     // Снимок для разметки и для ссылки в соцсетях — тоже со своего адреса: см. carPhoto.
-    const schemaPhoto = carPhoto(car);
+    const schemaPhoto = sold ? null : carPhoto(car);
     const modelName = [car.brand, car.model].filter(Boolean).join(" ");
     const schema = {
       "@context": "https://schema.org",

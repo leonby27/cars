@@ -4,7 +4,7 @@ import { withoutTrackingParams } from "./tracking-params.js";
 import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "./auth-route.js";
 import { Phone, SortAscending, Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
-import { vehiclePhotoHref, retryVehiclePhoto, vehiclePhotoPrefetchSources } from "./photo-source.js";
+import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
@@ -3311,18 +3311,18 @@ const NARROW_VIEWPORT = "(max-width: 700px)";
 
 const useNarrowViewport = () => useMediaQuery(NARROW_VIEWPORT);
 
+// Фото проданной машины не показываем и не храним (решение владельца 28.09.2026):
+// вместо кадра — серый блок с плашкой, чтобы чистка могла удалять снимки сразу.
 function SoldVehiclePhoto({ car, className = "", detail = false }) {
-  const source = car.images?.[0] || car.image;
   return (
-    <div className={`${className} sold-vehicle-photo${detail ? " gallery-panel" : " hover-image-preview"}`} aria-label={`${car.title}: продано`}>
-      {source && <img src={imageSource(source, detail ? IMAGE_ORIGINAL : IMAGE_WIDTH_CARD)} alt={car.title} draggable="false" onError={(event) => retryWithFullImage(event, source)} />}
+    <div className={`${className} sold-vehicle-photo${detail ? " gallery-panel" : " hover-image-preview"}`} role="img" aria-label={`${car.title}: продано`}>
       <strong>Продано</strong>
     </div>
   );
 }
 
-// У проданной машины карточка тоже перестаёт быть мини-галереей: только первая
-// фотография с тем же состоянием, которое посетитель увидит на полной странице.
+// У проданной машины карточка тоже перестаёт быть мини-галереей: серый блок
+// с тем же состоянием, которое посетитель увидит на полной странице.
 function HoverImagePreview(props) {
   if (props.car.available === false) return <SoldVehiclePhoto car={props.car} className={props.className} />;
   return <ActiveHoverImagePreview {...props} />;
@@ -3352,7 +3352,6 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
   }, [cover]);
 
   const previewKey = JSON.stringify(images.map(src => imageSource(src, frameWidth)));
-  const prefetchKey = JSON.stringify(vehiclePhotoPrefetchSources(images).map(src => imageSource(src, frameWidth)));
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame || !window.matchMedia("(hover: hover) and (pointer: fine)").matches || typeof IntersectionObserver === "undefined") return undefined;
@@ -3361,9 +3360,9 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
     const inCatalog = Boolean(frame.closest("main.catalog"));
     const ahead = inCatalog ? Math.min(1600, Math.max(600, window.innerHeight * 1.5)) : 300;
     // В каталоге готовим и обложку следующей машины, ещё до её lazy-загрузки.
-    const urls = JSON.parse(prefetchKey).slice(inCatalog ? 0 : 1);
+    const urls = JSON.parse(previewKey).slice(inCatalog ? 0 : 1);
     return observeHoverPhotos(frame, urls, { ahead });
-  }, [prefetchKey]);
+  }, [previewKey]);
   // Карточку целиком перекрывает ссылка-подложка, поэтому до самого превью события
   // мыши не доходят: слушаем их на карточке, а кадр считаем по границам картинки.
   useEffect(() => {
@@ -7938,6 +7937,8 @@ function TechnicalSpecs({ car }) {
   );
 }
 
+const CONDITION_SOURCE_HINT = "Информация о состоянии авто предоставлена источником объявления";
+
 function VehicleConditionSummary({ car }) {
   const detailsId = useId();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -7985,7 +7986,18 @@ function VehicleConditionSummary({ car }) {
               <CaretDown size={13} weight="bold" aria-hidden="true" />
             </button>
           ) : (
-            <strong className={`condition-grade-badge condition-grade-${displayedGradeMeta.tone}`} aria-label={displayedGradeMeta.label}><span>{displayedGradeMeta.label}</span></strong>
+            // Раскрывать нечего — вместо стрелки значок «i», а подсказка при наведении
+            // (на телефоне — по касанию) говорит, чья это оценка.
+            <span
+              className={`condition-grade-badge condition-grade-info condition-grade-${displayedGradeMeta.tone}`}
+              role="img"
+              aria-label={`${displayedGradeMeta.label}. ${CONDITION_SOURCE_HINT}`}
+              tabIndex="0"
+            >
+              <span>{displayedGradeMeta.label}</span>
+              <Info size={14} weight="bold" aria-hidden="true" />
+              <ActionTooltip className="condition-grade-tooltip" text={CONDITION_SOURCE_HINT} tapToOpen />
+            </span>
           )}
         </div>
       )}

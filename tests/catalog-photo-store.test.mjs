@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {catalogPhotoPaths,storeCatalogPhoto} from '../scripts/lib/catalog-photo-store.mjs';
+import {galleryPhotoPaths} from '../scripts/lib/gallery-photo-store.mjs';
+import {guaziImageCacheFile} from '../server/guazi-image-key.mjs';
 const images=Array.from({length:8},(_,i)=>`https://erscglobal2.autoimg.cn/escimg/auto/1400x0_c42_${i}.webp`);
 const webp=Buffer.from('RIFF0000WEBPtest');
 test('сохраняются первые пять кадров в единственном размере каталога 600px без оригиналов',()=>{
@@ -30,4 +32,28 @@ test('весь каталог получает только обложку; пя
  assert.equal(catalogPhotoPaths({images},{previewCount:900}).length,1);
  assert.deepEqual(catalogPhotoPaths({images:[],image:images[0]}),catalogPhotoPaths({images}));
  assert.equal(catalogPhotoPaths({images},{previewCount:5}).length,5);
+});
+
+test('Guazi: пять превью 600 через сайт, копию хранит сам сайт; без копии кадр не засчитан',async t=>{
+ const guazi=Array.from({length:7},(_,i)=>`https://global-image-pub.guazistatic-global.com/${i}.jpg?x-bce-process=image/format,f_jpg`);
+ const urls=catalogPhotoPaths({images:guazi},{previewCount:5});
+ assert.equal(urls.length,5);
+ assert.ok(urls.every(u=>u.startsWith('/api/image?src=')&&decodeURIComponent(u).includes('w_600/format,f_webp')));
+ const gallery=galleryPhotoPaths({images:guazi.slice(0,2)});
+ assert.equal(gallery.length,4);
+ assert.ok(gallery.some(u=>decodeURIComponent(u).endsWith('format,f_jpg')));
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'guazi-photos-'));
+ const previous=process.env.GUAZI_IMAGE_CACHE_DIR;process.env.GUAZI_IMAGE_CACHE_DIR=directory;
+ t.after(async()=>{if(previous===undefined)delete process.env.GUAZI_IMAGE_CACHE_DIR;else process.env.GUAZI_IMAGE_CACHE_DIR=previous;await fs.rm(directory,{recursive:true,force:true});});
+ const href=urls[0],file=guaziImageCacheFile(new URLSearchParams(href.split('?')[1]).get('src'));
+ let calls=0,writes=true;
+ const fetcher=async url=>{calls++;assert.equal(url.pathname,'/api/image');if(writes)await fs.writeFile(file,webp);return new Response(webp,{headers:{'content-type':'image/webp'}});};
+ const options={directory,minFreeBytes:0,fetcher};
+ writes=false;await assert.rejects(storeCatalogPhoto(href,options),/not stored/);
+ writes=true;assert.deepEqual(await storeCatalogPhoto(href,options),{stored:true,bytes:webp.length});
+ assert.equal((await storeCatalogPhoto(href,options)).stored,false);assert.equal(calls,2);
+ await assert.rejects(storeCatalogPhoto(urls[1],{...options,minFreeBytes:Number.MAX_SAFE_INTEGER}),{code:'PHOTO_DISK_FULL'});
+ const odd='/api/image?src='+encodeURIComponent('https://global-image-pub.guazistatic-global.com/0.jpg?x-bce-process=image/resize,w_50');
+ await assert.rejects(storeCatalogPhoto(odd,options),/Invalid photo path/);
+ await assert.rejects(storeCatalogPhoto('/api/image?src='+encodeURIComponent('https://example.com/a.jpg'),options),/Invalid photo path/);
 });

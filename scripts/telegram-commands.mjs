@@ -13,7 +13,7 @@ import https from "node:https";
 import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sendTelegram } from "./lib/telegram.mjs";
-import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand } from "../config/import-policy.mjs";
+import { parseCommand } from "./lib/telegram-command-parse.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OFFSET_PATH = path.join(ROOT, "runtime", "telegram-offset.json");
@@ -23,7 +23,6 @@ const CHAT = String(process.env.TELEGRAM_CHAT_ID || "");
 if (!TOKEN || !CHAT) throw new Error("нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID");
 
 const say = (text) => sendTelegram(text, { root: ROOT, log: console.log }).catch(() => {});
-const allowedBrands = IMPORT_BRANDS.filter((b) => !EXCLUDED_BRANDS.includes(b));
 
 // Долгое ожидание вместо частых опросов: телеграм сам держит соединение до 50 с.
 function poll(offset) {
@@ -67,34 +66,11 @@ async function startRun(brands, { newCircle = false } = {}) {
   return child.pid;
 }
 
-// Разбираем сообщение. Всё, что не команда, молча пропускаем — бот не болтает.
-function parse(text) {
-  const t = String(text || "").trim().toLowerCase();
-  if (!t) return null;
-  if (/^(круг|весь|всё|все|полный круг)$/.test(t)) return { kind: "circle" };
-  if (/^(продолжить|продолжи|доделать|доделай|дальше)$/.test(t)) return { kind: "resume" };
-  if (/^(стоп|стой|хватит)$/.test(t)) return { kind: "stop" };
-  if (/^(статус|как дела|что там)$/.test(t)) return { kind: "status" };
-  if (/^(помощь|команды|\/start|\/help)$/.test(t)) return { kind: "help" };
-  const m = t.match(/^(?:марк[аи]|бренд[ы]?)\s+(.+)$/);
-  if (m) {
-    const asked = m[1].split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
-    const found = [];
-    const missing = [];
-    for (const name of asked) {
-      const hit = allowedBrands.find((b) => b.toLowerCase() === canonicalImportBrand(name).toLowerCase() || b.toLowerCase() === name);
-      if (hit) found.push(hit);
-      else missing.push(name);
-    }
-    return { kind: "brands", found, missing };
-  }
-  return null;
-}
-
 const HELP = [
   "Что я умею:",
   "",
-  "• «круг» — обойти все марки заново, от мелких к крупным",
+  "• «круг 1» (или просто «круг») — обойти все марки Che168 заново, от мелких к крупным",
+  "• «круг 2» — Guazi: обновление пока не настроено",
   "• «продолжить» — доделать только то, что не успел прошлый круг",
   "• «марка BMW» или «марки BMW, Audi» — только названные",
   "• «статус» — идёт ли прогон и сколько машин в каталоге",
@@ -102,11 +78,15 @@ const HELP = [
 ].join("\n");
 
 async function handle(text) {
-  const cmd = parse(text);
+  const cmd = parseCommand(text);
   if (!cmd) return;
   const busy = await running();
 
   if (cmd.kind === "help") return say(HELP);
+
+  // Обновлять Guazi нечем: его экспортный сайт пускает программы только после
+  // проверки «я не робот», а проходить её автоматически мы не будем.
+  if (cmd.kind === "guazi") return say("Круг 2 (Guazi) пока не работает: обновление машин Guazi не настроено. Цены и наличие Guazi на сайте сейчас те, что были при загрузке 26–28 сентября.");
 
   if (cmd.kind === "status") {
     const tail = await fs

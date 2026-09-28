@@ -1,5 +1,6 @@
 import {cachedGuaziImage} from './guazi-image-cache.mjs';
 import {imageUrl} from '../scripts/lib/guazi-pilot-data.mjs';
+import {allowedGuaziPhotoQuery} from '../src/photo-source.js';
 import {catalogSources,setCatalogSource,sameOriginSettingRequest} from './catalog-sources.mjs';
 import {clearCatalogCaches} from './repository.mjs';
 import {clearPriceRatingCache} from './price-rating.mjs';
@@ -15,7 +16,7 @@ import { marketComparison } from "./market-compare-data.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { claimGuestAvailabilityLeads, createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
-import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, deviceKindFromHeaders, devicePlatformFromHeaders, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword } from "./analytics.mjs";
+import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, deviceKindFromHeaders, devicePlatformFromHeaders, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword, visitorCountry } from "./analytics.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
@@ -177,7 +178,7 @@ export async function handleApiRequest(request, response) {
       // Свой человек, вошедший в кабинет служебным аккаунтом, статистику не наполняет:
       // метку «не считать» браузер помнит не везде, а вход — надёжный признак своего.
       if (await isStaffVisit(request)) return json(response, 202, { ok:true, recorded:false });
-      const result = await recordAnalyticsEvent(body, { headers:request.headers });
+      const result = await recordAnalyticsEvent(body, { headers:request.headers, country:await visitorCountry(clientAddress(request)) });
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
     // Страница сообщает, что за заходом стоит живой человек: он подвигал мышью,
@@ -253,6 +254,7 @@ export async function handleApiRequest(request, response) {
       let source;
       try { source = new URL(url.searchParams.get("src") || ""); } catch { return json(response, 400, { error:"invalid_image_url" }); }
       if (!allowedImageSource(source)) return json(response, 403, { error:"image_host_not_allowed" });
+      if (!allowedGuaziPhotoQuery(source)) return json(response, 403, { error:"image_variant_not_allowed" });
       const cached = await cachedGuaziImage(source.href);
       response.writeHead(200, {"content-type":cached.contentType,"content-length":String(cached.bytes.length),"cache-control":"public, max-age=21600, stale-while-revalidate=86400","x-content-type-options":"nosniff"});
       return response.end(cached.bytes);

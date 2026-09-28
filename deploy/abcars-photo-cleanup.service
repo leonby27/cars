@@ -10,5 +10,8 @@ ExecStart=/usr/bin/flock -n /srv/abcars/runtime/photo-store/cleanup.lock /usr/bi
 Nice=15
 CPUWeight=20
 IOWeight=20
-MemoryHigh=300M
+# Список всех файлов и адресов фото занимает около гигабайта; при 300 МБ node сам
+# урезал себе память под этот предел и 27.09.2026 падал, ничего не удалив.
+Environment=NODE_OPTIONS=--max-old-space-size=1536
+MemoryHigh=2G
 TimeoutStartSec=30min

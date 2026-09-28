@@ -6030,9 +6030,6 @@ html[data-theme="dark"] #root .load-more {
   .car-row-image.hover-image-preview > img, .car-row-image.hover-image-preview > picture > img {
     display: none;
   }
-  .car-row-image.sold-vehicle-photo > img, .car-row-image.sold-vehicle-photo > picture > img {
-    display: block;
-  }
   .car-row-mobile-image-strip {
     height: 100%;
     display: flex;
@@ -9303,25 +9300,7 @@ html[data-theme="dark"] #root .spec-search,
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: var(--surface);
-}
-.sold-vehicle-photo::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: rgba(12, 14, 18, 0.28);
-  pointer-events: none;
-}
-.sold-vehicle-photo > img, .sold-vehicle-photo > picture > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(12px);
-  transform: scale(1.05);
-  user-select: none;
-  pointer-events: none;
+  background: var(--line);
 }
 .sold-vehicle-photo > strong {
   position: absolute;
@@ -23742,6 +23721,11 @@ html body #root .market-compare-sort .select-trigger {
   background: linear-gradient(90deg, color-mix(in srgb, var(--price-from) 40%, transparent), color-mix(in srgb, var(--price-to) 30%, transparent));
 }
 .condition-grade-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Плашка без подробностей: вместо стрелки значок «i» и подсказка источника. */
+.condition-grade-info { gap: 5px; padding: 8px 11px 8px 13px; cursor: help; }
+.condition-grade-info:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.condition-grade-info > svg { flex: none; }
+.condition-grade-tooltip { max-width: min(280px, calc(100vw - 20px)); text-align: left; }
 .condition-grade-toggle svg { transition: transform var(--motion-medium) var(--motion-ease); }
 .condition-grade-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 /* Пояснение источника под плашкой оценки — сноской: мельче и серым, с отступом

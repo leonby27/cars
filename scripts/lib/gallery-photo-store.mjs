@@ -1,10 +1,10 @@
 import { vehiclePhotoHref } from '../../src/photo-source.js';
-import { storeCatalogPhoto } from './catalog-photo-store.mjs';
+import { storeCatalogPhoto, storablePhotoHref } from './catalog-photo-store.mjs';
 
 export function galleryPhotoPaths(car) {
   return [...new Set((car.images?.length ? car.images : [car.image]).filter(Boolean)
     .flatMap(source => [600, 'original'].map(width => vehiclePhotoHref(source, width, { cacheVersion:'' })))
-    .filter(href => /^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) && !href.split('/').includes('..')))];
+    .filter(storablePhotoHref))];
 }
 
 // A later view does not reset an existing failure's backoff or remove queued work.

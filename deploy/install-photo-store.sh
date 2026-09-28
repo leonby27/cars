@@ -13,7 +13,7 @@ install -m644 "$repo_dir/scripts/lib/catalog-photo-store.mjs" "$service_dir/scri
 install -m644 "$repo_dir/scripts/store-viewed-galleries.mjs" "$service_dir/scripts/"
 install -m644 "$repo_dir/scripts/lib/gallery-photo-store.mjs" "$service_dir/scripts/lib/"
 install -m644 "$repo_dir/src/photo-source.js" "$service_dir/src/"
-install -m644 "$repo_dir/server/db.mjs" "$service_dir/server/"
+install -m644 "$repo_dir/server/db.mjs" "$repo_dir/server/guazi-image-key.mjs" "$service_dir/server/"
 install -m644 "$repo_dir/package.json" "$service_dir/"
 ln -sfn /srv/abcars/node_modules "$service_dir/node_modules"
 cp -a /etc/nginx/snippets/abcars-photo-location.conf /etc/nginx/snippets/abcars-photo-location.conf.photo-store-backup

@@ -50,12 +50,12 @@ test("desktop inline gallery is 15 percent shorter than the 4:3 source photo", (
   assert.match(styles, /@media \(max-width: 980px\) \{[\s\S]*?\.gallery-panel \{\s*aspect-ratio: auto;\s*height: 450px;/);
 });
 
-test("sold vehicle replaces every gallery with one blurred, inert cover", () => {
+test("sold vehicle replaces every gallery with one inert gray block without a photo", () => {
   assert.ok(app.includes('if (car.available === false) return <SoldVehiclePhoto car={car} detail />;'));
   assert.ok(app.includes('<strong>Продано</strong>'));
-  assert.match(styles, /\.sold-vehicle-photo > img[^{]*\{[^}]*filter: blur\(12px\);/s);
+  assert.doesNotMatch(styles, /\.sold-vehicle-photo > img/);
   const soldComponent = app.slice(app.indexOf("function SoldVehiclePhoto"), app.indexOf("function HoverImagePreview"));
-  assert.doesNotMatch(soldComponent, /onClick|onPointer|zoom|GalleryModal/);
+  assert.doesNotMatch(soldComponent, /onClick|onPointer|zoom|GalleryModal|<img|imageSource/);
   assert.match(app, /\{floatingCta && !sold && \(/);
   assert.ok(app.includes('<div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>'));
 });
@@ -116,6 +116,9 @@ test("condition summary uses readable grades and hides facts in an animated disc
   assert.ok(summary.includes('className="animated-disclosure vehicle-condition-details" aria-hidden={!detailsOpen}'));
   assert.ok(summary.includes("setDetailsOpen((open) => !open)"));
   assert.doesNotMatch(summary, /Шкала A–D/);
+  // Плашка без подробностей: значок «i» и подсказка, что оценка — от источника.
+  assert.ok(app.includes('const CONDITION_SOURCE_HINT = "Информация о состоянии авто предоставлена источником объявления";'));
+  assert.match(summary, /condition-grade-info[\s\S]*<Info [^>]*\/>\s*<ActionTooltip className="condition-grade-tooltip" text=\{CONDITION_SOURCE_HINT\} tapToOpen \/>/);
   assert.match(styles, /\.condition-grade-badge\.condition-grade-excellent,\s*\.condition-grade-badge\.condition-grade-good\s*\{\s*--price-from:\s*#[0-9a-f]{6};\s*--price-to:\s*#[0-9a-f]{6};/s);
   assert.match(styles, /\.condition-grade-badge\s*\{[^}]*padding:\s*8px 13px;[^}]*font-size:\s*14px;/s);
   assert.match(styles, /\.vehicle-condition-details-toggle\[aria-expanded="true"\] svg\s*\{\s*transform:\s*rotate\(180deg\);/s);

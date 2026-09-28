@@ -23,4 +23,7 @@ test('global-image1 goes through the image API and persistent cache; unsafe URLs
  assert.equal(calls,1);
  for(const bad of [source.replace('.com/','.com.evil.test/'),source.replace('https:','http:'),source.replace('.com/','.com:444/'),source.replace('https://','https://user:pass@')])assert.equal((await request(bad)).status,403);
  assert.equal(calls,1);
+ // Другой размер того же кадра — ещё одна копия на диске; такие адреса не принимаются.
+ for(const variant of ['?imageMogr2/thumbnail/601x/format/webp','?imageMogr2/format/jpg&x=1'])assert.equal((await request(source.split('?')[0]+variant)).status,403);
+ assert.equal(calls,1);
 });

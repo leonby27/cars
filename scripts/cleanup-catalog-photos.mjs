@@ -3,7 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pool } from '../server/db.mjs';
 import { atomicPhotoState } from './lib/catalog-photo-store.mjs';
-import { observeListing, recordPhotoOwnership, storedPhotoFiles, removeUnchangedPhoto } from './lib/photo-cleanup.mjs';
+import { observeListing, recordPhotoOwnership, storedPhotoFiles, storedGuaziFiles, removeUnchangedPhoto } from './lib/photo-cleanup.mjs';
+import { imageCacheRoot } from '../server/guazi-image-key.mjs';
 const directory=process.env.PHOTO_STORE_DIR || '/srv/abcars-media';
 const stateDirectory=process.env.PHOTO_STORE_STATE_DIR || '/srv/abcars/runtime/photo-store';
 const apply=process.argv.includes('--apply');
@@ -19,7 +20,7 @@ try {
     if(saved.version!==1 || !saved.unavailable || typeof saved.unavailable!=='object') throw new Error('Invalid cleanup state');
     previous=saved.unavailable;
   }
-  const files=await storedPhotoFiles(directory);
+  const files=[...await storedPhotoFiles(directory), ...await storedGuaziFiles(imageCacheRoot())];
   const keys=new Set(files.map(file=>file.key));
   const observations={};
   async function scan(wanted, record) {
@@ -48,8 +49,8 @@ try {
   if(apply) {
     await atomicPhotoState(stateFile,{version:1,unavailable:observations,updatedAt:new Date(now).toISOString()});
     for(const file of selected) {
-      if(await removeUnchangedPhoto(file,directory)) {deleted++;bytes+=file.size;}
+      if(await removeUnchangedPhoto(file,file.base || directory)) {deleted++;bytes+=file.size;}
     }
   }
-  console.log(JSON.stringify({mode:apply?'apply':'dry-run',storedFiles:files.length,trackedUnavailable:Object.keys(observations).length,eligibleFiles:selected.length,eligibleBytes:selected.reduce((sum,file)=>sum+file.size,0),deleted,bytes}));
+  console.log(JSON.stringify({mode:apply?'apply':'dry-run',storedFiles:files.length,guaziFiles:files.filter(file=>file.base).length,trackedUnavailable:Object.keys(observations).length,eligibleFiles:selected.length,eligibleBytes:selected.reduce((sum,file)=>sum+file.size,0),deleted,bytes}));
 } finally { await pool.end(); }

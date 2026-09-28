@@ -1,11 +1,31 @@
 const guaziHosts = new Set(["image-public.guazistatic.com", "image-oversea.guazistatic-global.com", "global-image-pub.guazistatic-global.com", "global-image1.guazistatic-global.com"]);
 
-export function vehiclePhotoPrefetchSources(sources) {
-  try {
-    const url = new URL(sources[0]?.replace(/^\/\//, "https://"));
-    if (guaziHosts.has(url.hostname)) return sources.slice(0, 2);
-  } catch {}
-  return sources;
+// Хранилища Guazi сами ужимают кадр по параметру в адресе, как Che168 по размеру
+// в имени файла. Размеров два, чтобы копия на сервере не дробилась: 600 для
+// каталога и 1200 для экранов с двойной плотностью. Webp с качеством 90 весит
+// ~34 и ~92 КБ против ~275 КБ оригинального JPEG. «original» и 0 — сам оригинал:
+// открытая галерея показывает его без пережатия.
+const guaziResizers = {
+  "global-image-pub.guazistatic-global.com": width => `x-bce-process=image/resize,m_lfit,w_${width}/format,f_webp/quality,q_90`,
+  "global-image1.guazistatic-global.com": width => `imageMogr2/thumbnail/${width}x/format/webp/quality/90`,
+};
+export const GUAZI_PHOTO_WIDTHS = [600, 1200];
+
+function guaziSizedHref(url, width) {
+  const resize = guaziResizers[url.hostname];
+  if (!resize || typeof width !== "number" || width <= 0) return url.href;
+  const sized = new URL(url.href);
+  sized.search = `?${resize(width <= GUAZI_PHOTO_WIDTHS[0] ? GUAZI_PHOTO_WIDTHS[0] : GUAZI_PHOTO_WIDTHS[1])}`;
+  return sized.href;
+}
+
+// Сервер отдаёт и хранит только эти формы адреса: оригинал из объявления и два
+// размера выше. Любой другой параметр был бы новой копией того же кадра на диске.
+export function allowedGuaziPhotoQuery(url) {
+  const resize = guaziResizers[url.hostname];
+  const allowed = new Set(["", "?x-bce-process=image/format,f_jpg", "?imageMogr2/format/jpg"]);
+  if (resize) for (const width of GUAZI_PHOTO_WIDTHS) allowed.add(`?${resize(width)}`);
+  return allowed.has(url.search);
 }
 
 // Source photo URLs are stable most of the time, but a browser can occasionally
@@ -27,7 +47,7 @@ export function vehiclePhotoHref(source, width = 0, { mirrorOrigin = "", cacheVe
     if (!/^https?:$/.test(url.protocol)) return source;
     if (guaziHosts.has(url.hostname)) {
       url.protocol = "https:";
-      return versionedPhotoHref(`${mirrorOrigin}/api/image?src=${encodeURIComponent(url.href)}`, cacheVersion);
+      return versionedPhotoHref(`${mirrorOrigin}/api/image?src=${encodeURIComponent(guaziSizedHref(url, width))}`, cacheVersion);
     }
     if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return source;
     const path = width === "original"

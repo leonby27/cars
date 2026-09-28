@@ -1,16 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PHOTO_BROWSER_CACHE_VERSION, vehiclePhotoHref, retryVehiclePhoto, socialPhotoHref, vehiclePhotoPrefetchSources } from "../src/photo-source.js";
+import { PHOTO_BROWSER_CACHE_VERSION, vehiclePhotoHref, retryVehiclePhoto, socialPhotoHref, allowedGuaziPhotoQuery } from "../src/photo-source.js";
 import { createSeoRenderer } from "../server/seo-render.mjs";
 
 const source = "https://erscglobal2.autoimg.cn/escimg/auto/g34/1400x0_c42_car.jpg.webp";
 
-test('Guazi prefetch is limited to two, while remaining gallery photos retain their on-demand cache URL',()=>{
- const images=Array.from({length:5},(_,i)=>`https://global-image-pub.guazistatic-global.com/${i}.jpg`);
- assert.deepEqual(vehiclePhotoPrefetchSources(images),images.slice(0,2));
- assert.equal(vehiclePhotoHref(images[4]),`/api/image?src=${encodeURIComponent(images[4])}&v=${PHOTO_BROWSER_CACHE_VERSION}`);
- assert.equal(images.length,5);
- const che=Array.from({length:5},()=>source);assert.deepEqual(vehiclePhotoPrefetchSources(che),che);
+test("Guazi: превью 600 и 1200 в webp у хранилища, оригинал без пережатия", () => {
+  const bce = "https://global-image-pub.guazistatic-global.com/a.jpg?x-bce-process=image/format,f_jpg";
+  const mogr = "https://global-image1.guazistatic-global.com/b.jpg?imageMogr2/format/jpg";
+  const src = href => new URL(new URL(href, "https://abcars.by").searchParams.get("src"));
+  const sized = { 240:600, 600:600, 800:1200, 1200:1200, 1400:1200 };
+  for (const [width, expected] of Object.entries(sized)) {
+    assert.equal(src(vehiclePhotoHref(bce, Number(width))).href, `https://global-image-pub.guazistatic-global.com/a.jpg?x-bce-process=image/resize,m_lfit,w_${expected}/format,f_webp/quality,q_90`);
+    assert.equal(src(vehiclePhotoHref(mogr, Number(width))).href, `https://global-image1.guazistatic-global.com/b.jpg?imageMogr2/thumbnail/${expected}x/format/webp/quality/90`);
+  }
+  for (const width of [0, "original"]) {
+    assert.equal(src(vehiclePhotoHref(bce, width)).href, bce);
+    assert.equal(src(vehiclePhotoHref(mogr, width)).href, mogr);
+  }
+  for (const source of [bce, mogr]) for (const width of [0, 600, 1200]) assert.ok(allowedGuaziPhotoQuery(src(vehiclePhotoHref(source, width))));
+  assert.equal(allowedGuaziPhotoQuery(new URL("https://global-image-pub.guazistatic-global.com/a.jpg?x-bce-process=image/resize,m_lfit,w_601/format,f_webp")), false);
+  assert.equal(allowedGuaziPhotoQuery(new URL("https://global-image-pub.guazistatic-global.com/a.jpg?x-bce-process=image/format,f_jpg&n=1")), false);
 });
 
 test("все размеры Che168 и оригинал идут через сервер, включая превью без прокси", () => {
@@ -31,7 +41,6 @@ test("Guazi использует наш API; обычные локальные �
     const image = `https://${host}/photo.jpg?x=1&y=2`;
     assert.equal(vehiclePhotoHref(image), `/api/image?src=${encodeURIComponent(image)}&v=${PHOTO_BROWSER_CACHE_VERSION}`);
     assert.equal(vehiclePhotoHref(image, 0, { cacheVersion:"" }), `/api/image?src=${encodeURIComponent(image)}`);
-    assert.deepEqual(vehiclePhotoPrefetchSources([image, image, image]), [image, image]);
   }
   for (const image of ["/photo/escimg/a.webp", "/logo.svg", "https://example.com/a.jpg", null])
     assert.equal(vehiclePhotoHref(image, 600), image);
@@ -95,7 +104,7 @@ test("новый снимок сбрасывает попытки; адреса 
   assert.equal(image.attrs.src, vehiclePhotoHref(next, 0, options));
 });
 
-test("у Guazi нет других размеров: ошибка не запускает цикл", () => {
+test("у старых адресов Guazi без обработки в хранилище других размеров нет: ошибка не запускает цикл", () => {
   const source = "https://image-public.guazistatic.com/a.jpg";
   const image = mockImage(vehiclePhotoHref(source));
   retryVehiclePhoto(image, source);
@@ -108,4 +117,13 @@ test("поисковая разметка старых Guazi тоже испол
   const { html } = renderer.carPage({ car: { id: "guazi-123", title: "Car", image, chinaPrice: 100000 } });
   assert.match(html, /<img src="\/api\/image\?src=/);
   assert.match(html, /<meta property="og:image" content="https:\/\/abcars.by\/api\/image\?src=/);
+});
+
+test("сломанное превью Guazi переключается на оригинал", () => {
+  const source = "https://global-image-pub.guazistatic-global.com/a.jpg?x-bce-process=image/format,f_jpg";
+  const image = mockImage(vehiclePhotoHref(source, 600));
+  retryVehiclePhoto(image, source);
+  assert.equal(image.attrs.src, vehiclePhotoHref(source));
+  retryVehiclePhoto(image, source);
+  assert.equal(image.attrs.src, vehiclePhotoHref(source));
 });

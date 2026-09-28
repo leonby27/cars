@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { photoIdentity,observeListing,eligibleListing,PHOTO_RETENTION_MS,recordPhotoOwnership,storedPhotoFiles,removeUnchangedPhoto } from '../scripts/lib/photo-cleanup.mjs';
+import { photoIdentity,guaziPhotoKeys,observeListing,eligibleListing,PHOTO_RETENTION_MS,recordPhotoOwnership,storedPhotoFiles,storedGuaziFiles,removeUnchangedPhoto } from '../scripts/lib/photo-cleanup.mjs';
+import { guaziImageCacheFile } from '../server/guazi-image-key.mjs';
+import { vehiclePhotoHref } from '../src/photo-source.js';
 const source='https://erscglobal2.autoimg.cn/escimg/auto/1400x0_c42_car.webp';
 const key='/photo/escimg/auto/car.webp';
 const now=1800000000000;
 const removed={id:'car',status:'unavailable',last_seen_at:'2026-09-01',images:[source]};
-test('fourteen days start on observation, reset on reactivation or changed last-seen date',()=>{
+test('a week starts on observation, resets on reactivation or changed last-seen date',()=>{
+ assert.equal(PHOTO_RETENTION_MS,7*86400_000);
  const observed=observeListing(removed,undefined,now);
  assert.equal(eligibleListing(observed,now),false);
  assert.equal(eligibleListing(observed,now+PHOTO_RETENTION_MS-1),false);
@@ -55,4 +58,31 @@ test('cleanup ignores unrelated files and symlinks; only deletes unchanged regul
   assert.equal(await fs.readFile(target,'utf8'),'keep');
   assert.equal(await fs.readFile(path.join(directory,'unrelated.webp'),'utf8'),'keep');
  } finally {await fs.rm(directory,{recursive:true,force:true});await fs.rm(outside,{recursive:true,force:true});}
+});
+
+test('Guazi: оригинал и оба превью принадлежат машине; снятая через неделю теряет все три копии',async t=>{
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'guazi-cleanup-'));
+ const previous=process.env.GUAZI_IMAGE_CACHE_DIR;process.env.GUAZI_IMAGE_CACHE_DIR=directory;
+ t.after(async()=>{if(previous===undefined)delete process.env.GUAZI_IMAGE_CACHE_DIR;else process.env.GUAZI_IMAGE_CACHE_DIR=previous;await fs.rm(directory,{recursive:true,force:true});});
+ const image='https://global-image-pub.guazistatic-global.com/a.jpg?x-bce-process=image/format,f_jpg';
+ const src=width=>new URLSearchParams(vehiclePhotoHref(image,width,{cacheVersion:''}).split('?')[1]).get('src');
+ const cached=[0,600,1200].map(width=>guaziImageCacheFile(src(width)));
+ for(const file of cached){await fs.writeFile(file,'photo');await fs.writeFile(file+'.json','{}');}
+ await fs.writeFile(path.join(directory,'a'.repeat(64)+'.123.tmp'),'temporary');
+ await fs.writeFile(path.join(directory,'unrelated.jpg'),'keep');
+ const keys=guaziPhotoKeys(image);assert.equal(keys.length,3);
+ assert.deepEqual(guaziPhotoKeys(source),[]);
+ const files=await storedGuaziFiles(directory);
+ assert.deepEqual(files.map(file=>file.key).sort(),[...keys].sort());
+ const wanted=new Set(files.map(file=>file.key));
+ const listing={id:'guazi-1',status:'unavailable',last_seen_at:'2026-09-01',images:[image]};
+ const kept=new Set(),keptProtected=new Set();
+ recordPhotoOwnership(listing,{since:now,lastSeen:listing.last_seen_at},now,wanted,kept,keptProtected);
+ assert.equal(keptProtected.size,3);
+ const owned=new Set(),protectedKeys=new Set();
+ recordPhotoOwnership(listing,{since:now-PHOTO_RETENTION_MS,lastSeen:listing.last_seen_at},now,wanted,owned,protectedKeys);
+ assert.equal(owned.size,3);assert.equal(protectedKeys.size,0);
+ for(const file of files)assert.equal(await removeUnchangedPhoto(file,file.base),true);
+ for(const file of cached){await assert.rejects(fs.stat(file),{code:'ENOENT'});await assert.rejects(fs.stat(file+'.json'),{code:'ENOENT'});}
+ assert.equal(await fs.readFile(path.join(directory,'unrelated.jpg'),'utf8'),'keep');
 });
