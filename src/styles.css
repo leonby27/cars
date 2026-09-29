@@ -1764,6 +1764,9 @@ html[data-theme="dark"] .heading-country.open .heading-country-trigger {
   font-size: 17px;
   font-weight: 500;
   letter-spacing: normal;
+  /* Сдвиг, который держит открытый список на месте, когда слова в кнопке меняются
+     (считается в HeadingCountryMenu). Отдельным свойством, чтобы не мешать появлению. */
+  translate: var(--heading-menu-dx, 0px) var(--heading-menu-dy, 0px);
 }
 .heading-country-menu .select-options button {
   display: flex;
@@ -5997,8 +6000,11 @@ html[data-theme="dark"] #root .load-more {
   /* Только на телефоне заголовок каталога встаёт двумя строками: у всех разделов
      перенос в одном и том же месте — перед «с пробегом из Китая». На компьютере
      фраза помещается в строку целиком, и половинки идут через пробел. */
+  /* 29.09.2026 (Сергей): если заголовок помещается, он идёт одной строкой; а если нет —
+     переносится только между половинками, ровно перед «из Китая». Каждая половинка
+     неразрывная, поэтому браузер не ломает фразу в случайном месте. */
   .catalog-heading h1 > span {
-    display: block;
+    display: inline-block;
   }
   .catalog-heading > span {
     display: none;

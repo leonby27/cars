@@ -12273,6 +12273,29 @@ const HEADING_FROM = /из(\s|\u00a0)(Китая|Кореи)((\s|\u00a0)и(\s|\u
 function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
+  const menuRef = useRef(null);
+  const anchorRef = useRef(null);
+  const match = HEADING_FROM.exec(String(tail || ""));
+  const selected = match ? countryKey(value) : null;
+  // Слова в кнопке — по выбранной стране, а без выбора — обе, как в заголовке страницы.
+  const words = selected ? originOf(selected).genitive : siteCountriesGenitive();
+  // Пока список открыт, он стоит на месте (Сергей, 29.09.2026): выбор страны меняет
+  // слова в кнопке, заголовок по центру переезжает, а с ним уезжал и список. Запоминаем,
+  // где кнопка была при открытии, и сдвигаем список обратно на ту же разницу.
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const menu = menuRef.current;
+    if (!open || !box || !menu) {
+      anchorRef.current = null;
+      return;
+    }
+    const rect = box.getBoundingClientRect();
+    const x = rect.left + window.scrollX;
+    const y = rect.top + window.scrollY;
+    if (!anchorRef.current) anchorRef.current = { x, y };
+    menu.style.setProperty("--heading-menu-dx", `${Math.round(anchorRef.current.x - x)}px`);
+    menu.style.setProperty("--heading-menu-dy", `${Math.round(anchorRef.current.y - y)}px`);
+  }, [open, words]);
   useEffect(() => {
     if (!open) return undefined;
     const close = (event) => {
@@ -12285,13 +12308,9 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
       document.removeEventListener("keydown", close);
     };
   }, [open]);
-  const match = HEADING_FROM.exec(String(tail || ""));
   if (!match) return <span>{tail}</span>;
   const prefix = tail.slice(0, match.index);
   const suffix = tail.slice(match.index + match[0].length);
-  const selected = countryKey(value);
-  // Слова в кнопке — по выбранной стране, а без выбора — обе, как в заголовке страницы.
-  const words = selected ? originOf(selected).genitive : siteCountriesGenitive();
   // Список — выбор одного пункта: «Все страны», Китай, Корея (Сергей, 29.09.2026
   // вечером; до этого были галочки, и нажатый Китай при выбранной Корее давал «все
   // страны» — выглядело как сброс фильтра). Остальные фильтры при выборе не трогаются.
@@ -12310,7 +12329,7 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
           {/* Своя стрелка: толще и короче, чем у значков сайта, с круглыми концами. */}
           <svg className="heading-country-caret" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
-        <div className="select-menu heading-country-menu" role="menu" aria-hidden={!open} inert={open ? undefined : true}>
+        <div ref={menuRef} className="select-menu heading-country-menu" role="menu" aria-hidden={!open} inert={open ? undefined : true}>
           <div className="select-options">
             {options.map(({ key, label }) => (
               <button key={key || "all"} type="button" role="menuitemradio" aria-checked={checked(key)} className={checked(key) ? "selected" : ""} onClick={() => choose(key)}>
