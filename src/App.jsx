@@ -12299,10 +12299,8 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
           <div className="select-options">
             {options.map(({ key, label }) => (
               <button key={key || "all"} type="button" role="menuitemradio" aria-checked={checked(key)} className={checked(key) ? "selected" : ""} onClick={() => choose(key)}>
-                <span className="select-option-label">
-                  <span className={`select-option-check${checked(key) ? " checked" : ""}`} aria-hidden="true">{checked(key) && <Check size={12} weight="bold" />}</span>
-                  <span>{label}</span>
-                </span>
+                {/* Без галочек (Сергей, 29.09.2026): выбранный пункт выделен подложкой, слева только слово. */}
+                <span className="select-option-label"><span>{label}</span></span>
                 {/* Флаг справа — из public/flags, чтобы не зависеть от эмодзи системы; у «Всех стран» — свой «флаг» с глобусом. */}
                 <img className="heading-country-flag" src={`/flags/${key || "all"}.svg`} alt="" aria-hidden="true" width="24" height="16" loading="lazy" />
               </button>
