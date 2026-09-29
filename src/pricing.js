@@ -76,7 +76,7 @@ export const logisticsFor = (car) => LOGISTICS[car?.origin] || LOGISTICS[originF
 export const sourceCurrencyOf = (car) => String(car?.sourceCurrency || logisticsFor(car).currency).toUpperCase();
 
 export const PRICING = {
-  usdByn:3.0276, cnyBynPer10:4.5145, eurByn:3.4487, krwBynPer1000:2.2349, rateDate:"28.09.2026",
+  usdByn:3.0276, cnyBynPer10:4.5145, eurByn:3.4487, krwBynPer1000:2.2349, rubBynPer100:3.5891, rateDate:"28.09.2026",
   serviceByn:2000,
   // «Подбор и сопровождение» — ориентир: точную сумму называют после расчёта
   // конкретной машины. serviceFeeEnabled:false убирает строку и сумму из итога.
@@ -132,6 +132,9 @@ const round50 = (value) => Math.round(value / 50) * 50;
 // Рублёвая цена остаётся ориентиром: после пересчёта по курсу показываем её с
 // точностью до сотни, а не создаём ложное ощущение точности до одного рубля.
 export const usdToByn = (usd) => Math.round((usd * PRICING.usdByn) / 100) * 100;
+// Российские рубли — третья валюта переключателя (Сергей, 29.09.2026): НБРБ котирует
+// их за 100; сумму округляем до тысячи — это тот же порядок точности, что сотня BYN.
+export const usdToRub = (usd) => Math.round((usd * PRICING.usdByn) / (PRICING.rubBynPer100 / 100) / 1000) * 1000;
 
 // Объём, по которому считается пошлина, когда в объявлении его нет. Такая карточка
 // помечается предупреждением: у мотора побольше платёж будет выше.

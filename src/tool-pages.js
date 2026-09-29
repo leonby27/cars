@@ -386,6 +386,7 @@ export const CALC_CURRENCIES = Object.freeze([
   { id: "usd", name: "$", label: "доллары" },
   { id: "eur", name: "€", label: "евро" },
   { id: "byn", name: "BYN", label: "белорусские рубли" },
+  { id: "rub", name: "₽", label: "российские рубли" },
 ]);
 
 /** Годы выпуска в списке: десять последних, свежий сверху. */

@@ -18,7 +18,7 @@ const fetchRate = async (code) => {
   return { perOne, date: String(data.Date || "").slice(0, 10) };
 };
 
-const [usd, cny, eur, krw] = await Promise.all(["USD", "CNY", "EUR", "KRW"].map(fetchRate));
+const [usd, cny, eur, krw, rub] = await Promise.all(["USD", "CNY", "EUR", "KRW", "RUB"].map(fetchRate));
 
 // Диапазоны здравого смысла: если Нацбанк вдруг отдаст мусор (смена формата,
 // ошибка на их стороне), лучше остаться на вчерашнем курсе, чем переписать
@@ -31,6 +31,8 @@ sane(cny.perOne, 0.2, 1, "CNY");
 sane(eur.perOne, 2, 7, "EUR");
 // Вона: НБРБ котирует за 1 000 вон (≈ 2,2 BYN осенью 2026).
 sane(krw.perOne, 0.001, 0.01, "KRW");
+// Российский рубль: НБРБ котирует за 100 (≈ 3,6 BYN осенью 2026).
+sane(rub.perOne, 0.01, 0.1, "RUB");
 
 const [year, month, day] = usd.date.split("-");
 const rateDate = `${day}.${month}.${year}`;
@@ -40,6 +42,7 @@ const next = {
   cnyBynPer10: Number((cny.perOne * 10).toFixed(4)),
   eurByn: Number(eur.perOne.toFixed(4)),
   krwBynPer1000: Number((krw.perOne * 1000).toFixed(4)),
+  rubBynPer100: Number((rub.perOne * 100).toFixed(4)),
 };
 
 const source = await readFile(pricingPath, "utf8");
@@ -48,9 +51,10 @@ let updated = source
   .replace(/cnyBynPer10:\s*[\d.]+/, `cnyBynPer10:${next.cnyBynPer10}`)
   .replace(/eurByn:\s*[\d.]+/, `eurByn:${next.eurByn}`)
   .replace(/krwBynPer1000:\s*[\d.]+/, `krwBynPer1000:${next.krwBynPer1000}`)
+  .replace(/rubBynPer100:\s*[\d.]+/, `rubBynPer100:${next.rubBynPer100}`)
   .replace(/rateDate:\s*"[^"]*"/, `rateDate:"${rateDate}"`);
 
-for (const key of ["usdByn", "cnyBynPer10", "eurByn", "krwBynPer1000", "rateDate"]) {
+for (const key of ["usdByn", "cnyBynPer10", "eurByn", "krwBynPer1000", "rubBynPer100", "rateDate"]) {
   if (!updated.includes(`${key}:`)) throw new Error(`В pricing.js не нашлось поле ${key} — формат файла изменился, обновите скрипт`);
 }
 
@@ -58,5 +62,5 @@ if (updated === source) {
   console.log(`Курс НБРБ на ${rateDate} уже актуален, файл не менялся.`);
 } else {
   await writeFile(pricingPath, updated);
-  console.log(`Курс НБРБ обновлён на ${rateDate}: USD ${next.usdByn}, CNY(за 10) ${next.cnyBynPer10}, EUR ${next.eurByn}, KRW(за 1000) ${next.krwBynPer1000}.`);
+  console.log(`Курс НБРБ обновлён на ${rateDate}: USD ${next.usdByn}, CNY(за 10) ${next.cnyBynPer10}, EUR ${next.eurByn}, KRW(за 1000) ${next.krwBynPer1000}, RUB(за 100) ${next.rubBynPer100}.`);
 }

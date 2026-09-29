@@ -30,7 +30,7 @@ import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
+import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, usdToRub, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
 import { evQuotaPricingAvailable, evQuotaState, holdQuotaChoice, isEvQuotaOver, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -167,8 +167,10 @@ const AvailabilityContext = createContext(EMPTY_AVAILABILITY);
 const orderedListingsFrom = (orders) => new Set((orders || []).map((order) => listingNumber(order?.listingId)).filter(Boolean));
 const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORDERED_LISTINGS;
 const useAvailability = () => useContext(AvailabilityContext) || EMPTY_AVAILABILITY;
-const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? usdToByn(usd) : usd);
-const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : `$${number(usd)}`);
+// Три валюты показа: доллары, белорусские и российские рубли (₽ добавлен 29.09.2026).
+const CURRENCIES = [["USD", "$"], ["BYN", "BYN"], ["RUB", "₽"]];
+const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? usdToByn(usd) : currency === "RUB" ? usdToRub(usd) : usd);
+const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : currency === "RUB" ? `${number(toDisplayCurrency(usd, currency))} ₽` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
 // Знак «≈» перед суммой приглушён (.approx-sign): первой читается сама сумма.
 // withApprox выделяет знак в строке вида «≈ $1 200», прочие значения отдаёт как есть.
@@ -178,7 +180,7 @@ const withApprox = (value) => (typeof value === "string" && value.startsWith("�
 // долларов): это оценка, а не смета, и точность до рубля обещала бы больше, чем
 // расчёт может дать.
 const roughMoney = (usd, currency) => {
-  const step = currency === "BYN" ? 100 / PRICING.usdByn : 50;
+  const step = currency === "BYN" ? 100 / PRICING.usdByn : currency === "RUB" ? 1000 * (PRICING.rubBynPer100 / 100) / PRICING.usdByn : 50;
   return money(Math.round(usd / step) * step, currency);
 };
 
@@ -1210,7 +1212,7 @@ function ClientSeo({ path, car, landing, carPending = false }) {
 function CurrencySwitch({ currency, setCurrency, className = "" }) {
   return (
     <div className={`currency-switch${className ? ` ${className}` : ""}`} role="group" aria-label="Валюта цен">
-      {[["USD", "$"], ["BYN", "BYN"]].map(([code, label]) => (
+      {CURRENCIES.map(([code, label]) => (
         <button key={code} type="button" className={currency === code ? "active" : ""} aria-pressed={currency === code} onClick={() => setCurrency(code)}>
           {label}
         </button>
@@ -10845,8 +10847,8 @@ function DeliveryCalculator() {
     lengthMm: modelSize.lengthMm,
     curbWeight: modelSize.curbWeight,
   }), [model, modelSize.lengthMm, modelSize.curbWeight, location]);
-  const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn }[outCurrency] || 1;
-  const sign = { usd: "$", eur: "€", byn: "BYN" }[outCurrency] || "$";
+  const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn, rub: PRICING.usdByn / (PRICING.rubBynPer100 / 100) }[outCurrency] || 1;
+  const sign = { usd: "$", eur: "€", byn: "BYN", rub: "₽" }[outCurrency] || "$";
   const amount = (value) => number(Math.round(value * fromUsd));
   const money = (value) => `${amount(value)} ${sign}`;
   const shareSearch = new URLSearchParams();
@@ -10980,7 +10982,7 @@ function CustomsCalculator() {
   const isElectric = kindItem.id === "ev";
   const years = calcYears();
   // Цена приходит в той валюте, которую выбрал человек, а расчёт живёт в долларах.
-  const toUsd = { usd: 1, eur: PRICING.eurByn / PRICING.usdByn, byn: 1 / PRICING.usdByn }[currency];
+  const toUsd = { usd: 1, eur: PRICING.eurByn / PRICING.usdByn, byn: 1 / PRICING.usdByn, rub: (PRICING.rubBynPer100 / 100) / PRICING.usdByn }[currency];
   const priceUsd = Math.max(0, (Number(String(priceValue).replace(/\s/g, "")) || 0) * toUsd);
   const cc = Math.max(0, Math.round(Number(engineCc) || 0));
 
@@ -11009,11 +11011,11 @@ function CustomsCalculator() {
   // подпись под цифрой. Платят на таможне всё равно в рублях, и об этом сказано
   // прямо под суммой.
   const outCurrency = resultCurrency || currency;
-  const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn }[outCurrency] || 1;
+  const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn, rub: PRICING.usdByn / (PRICING.rubBynPer100 / 100) }[outCurrency] || 1;
   // Знак берём тот же, что написан на кнопке валюты: нажал BYN — и в цифрах стоит
   // BYN, а не «р.». В связном тексте ниже рубли остаются рублями: там это слово,
   // а не обозначение валюты в колонке цифр.
-  const sign = { usd: "$", eur: "€", byn: "BYN" }[outCurrency] || "$";
+  const sign = { usd: "$", eur: "€", byn: "BYN", rub: "₽" }[outCurrency] || "$";
   const amount = (value) => number(Math.round(value * fromUsd));
   const money = (value) => `${amount(value)} ${sign}`;
   // Вторая строка — та же сумма в другой валюте. Рублёвую цифру показываем всем,
@@ -14952,7 +14954,8 @@ export function App() {
   // хранилища нет: прочитай мы их прямо в первом рисовании, серверная и браузерная
   // разметка разошлись бы, и React перерисовал бы всю страницу заново.
   useEffect(() => {
-    if (window.localStorage.getItem("navostok-currency") === "USD") setCurrency("USD");
+    const storedCurrency = window.localStorage.getItem("navostok-currency");
+    if (storedCurrency === "USD" || storedCurrency === "RUB") setCurrency(storedCurrency);
     const storedTotal = Number(window.localStorage.getItem(catalogTotalKey)) || 0;
     if (storedTotal) setCatalogTotal((current) => current || storedTotal);
     const storedUpdatedAt = window.localStorage.getItem(catalogUpdatedKey) || "";
