@@ -117,7 +117,7 @@
   min-height: 48px;
 }
 .availability-lead-modal {
-  width: min(520px, 100%);
+  width: min(480px, 100%);
 }
 .availability-lead-modal > h2,
 .availability-lead-modal > p {

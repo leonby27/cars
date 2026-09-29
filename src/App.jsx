@@ -8580,7 +8580,7 @@ function ChineseNameMark({ car }) {
   );
 }
 
-// Что делает кнопка «Уточнить актуальность авто» в карточке: раньше она молча уводила
+// Что делает кнопка «Узнать точную цену и наличие» в карточке: раньше она молча уводила
 // в кабинет, и человек попадал неизвестно куда. Теперь запрос уходит с самой страницы,
 // а окно подтверждает, что заявка принята. Собрано тем же набором, что и остальные
 // такие окна сайта: значок, заголовок, строка текста и кнопка.
@@ -8661,7 +8661,7 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
       <form className="auth-card auth-modal availability-lead-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="availability-lead-title">
         <button className="modal-close" type="button" onClick={onClose} disabled={pending} aria-label="Закрыть"><X size={19} /></button>
         <div className="auth-modal-heading">
-          <h1 id="availability-lead-title">Оставить заявку</h1>
+          <h1 id="availability-lead-title">Узнать точную цену и наличие авто</h1>
         </div>
         <p className="availability-lead-note">Заявку получит компания-импортёр и уточнит все детали.</p>
         <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
@@ -8675,7 +8675,7 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
           </div>
         </div>
         {error && <div className="auth-error" role="alert">{error}</div>}
-        <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Получить консультацию"}<ArrowRight size={18} /></button>
+        <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Получить точную цену"}<ArrowRight size={18} /></button>
         {!withAccount && (
           <p className="availability-lead-legal">Нажимая кнопку, вы соглашаетесь с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой конфиденциальности</a>.</p>
         )}
@@ -8792,7 +8792,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   const sendAvailability = async () => {
     setAvailabilityStatus("sent");
     // Не дошло — окно закрываем и ничем больше не пугаем: кнопка карточки остаётся
-    // жёлтой «Уточнить актуальность авто», а не зелёной «Перейти в заказ», так что
+    // жёлтой «Узнать точную цену и наличие», а не зелёной «Перейти в заказ», так что
     // человек видит, что отправить надо ещё раз, и может просто нажать её снова.
     if (!await sendAvailabilityRequest?.(car)) setAvailabilityStatus("");
   };
@@ -9057,7 +9057,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
           ) : (
             <button ref={availabilityCtaRef} className={`primary report-order-cta availability-primary-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
               <span className="availability-primary-title">
-                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+                {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Узнать точную цену и наличие"}
               </span>
               {!inOrder && <span className="availability-primary-note">Консультация бесплатно</span>}
             </button>
@@ -9067,7 +9067,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             <div className={`detail-floating-availability${floatingCtaHidden ? " is-hidden" : ""}`} aria-hidden={floatingCtaHidden}>
               <button className={`primary availability-primary-cta${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={floatingCtaHidden ? -1 : 0}>
                 <span className="availability-primary-title">
-                  {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Уточнить актуальность авто"}
+                  {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Узнать точную цену и наличие"}
                 </span>
                 {!inOrder && <span className="availability-primary-note">Консультация бесплатно</span>}
               </button>
@@ -13847,7 +13847,7 @@ const accountFavoritesKey = (userId) => `navostok-account-favorites:${userId}`;
 // заказ заводился уже в кабинете. Сейчас заявка уходит прямо со страницы, но у тех, кто
 // нажал кнопку до обновления и с тех пор не заходил, отметка ещё лежит в браузере.
 const pendingOrderKey = "abcars-pending-order-listing";
-// Клик по «Уточнить актуальность» — ключевое действие воронки и считается всегда:
+// Клик по «Узнать точную цену и наличие» — ключевое действие воронки и считается всегда:
 // и когда человек нажал кнопку в кабинете, и когда запрос ушёл сам из карточки.
 const trackAvailabilityRequest = (order, comment = "") => {
   trackEvent("availability_request_click", {
@@ -14545,7 +14545,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
               </label>
             )}
             <div className="availability-check-actions">
-              <button className="primary" type="submit" disabled={saving || availabilityRequested}>Уточнить актуальность</button>
+              <button className="primary" type="submit" disabled={saving || availabilityRequested}>Узнать точную цену и наличие</button>
               {availabilityRequested && (
                 <p className="availability-check-status"><CheckCircle size={20} weight="fill" />{availabilityConfirmed ? "Актуальность подтверждена." : "Запрос отправлен, с вами скоро свяжутся."}</p>
               )}

@@ -228,7 +228,7 @@ test("счётчики отделяют просмотренное от ново
   assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicle_cars : 0\]/);
   // «Регистрации» в обзоре заменены «Заявками» (28.09.2026), «+N» у них красный.
   // С 29.09.2026 карточка — воронка «открытий окна / заявок»: слева открытия окна по
-  // кнопке «Уточнить актуальность авто» (событие availability_click), справа заявки.
+  // кнопке «Узнать точную цену и наличие» (событие availability_click), справа заявки.
   assert.match(source, /\["Заявки", <LeadsFunnelCount opens=\{leadModalOpens\} total=\{leadsTotal\} fresh=\{updates\.leads\} \/>,[^\n]*updates\.leads, "is-leads"\]/);
   assert.match(source, /открытие окна", "открытия окна", "открытий окна"/);
   assert.match(server, /event_name='availability_click' AND \$\{LIVE_VISITOR\}\)::int AS availability_modal_opens/);

@@ -648,7 +648,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
       count(*) FILTER (WHERE event_name='vehicle_view' AND ${LIVE_VISITOR})::int AS vehicle_views,
       count(*) FILTER (WHERE event_name='availability_request_click' AND ${LIVE_VISITOR})::int AS availability_requests,
       count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_request_click' AND ${LIVE_VISITOR})::int AS availability_request_people,
-      -- Окно по кнопке «Уточнить актуальность авто» в карточке: сколько раз его открыли.
+      -- Окно по кнопке «Узнать точную цену и наличие» в карточке: сколько раз его открыли.
       -- Событие уходит в момент нажатия, до формы и до записи в базу, — это верх
       -- воронки, а заявки ниже (availability_clicks) — её низ.
       count(*) FILTER (WHERE event_name='availability_click' AND ${LIVE_VISITOR})::int AS availability_modal_opens,
@@ -689,7 +689,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
     pool.query(`SELECT
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int
         + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
-      -- Машины, добавленные в кабинет: заказ заводится кнопкой «Уточнить актуальность»
+      -- Машины, добавленные в кабинет: заказ заводится кнопкой «Узнать точную цену и наличие»
       -- в карточке. Отдельно от строки выше, где к ним прибавлены заявки с форм.
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int AS cabinet_orders,
       (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS form_requests,
