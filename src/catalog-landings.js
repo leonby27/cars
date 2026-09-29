@@ -97,11 +97,17 @@ const brand = (slug, name, notes, options = {}) => {
 // `powertrain` — значение из базы («Электромобиль»), `filterLabel` — подпись, которой
 // тот же фильтр называется в адресе каталога («Электромобили»). Расхождение историческое:
 // без него страница типа молча показывала бы весь каталог.
+// Раздел «Бензин» — только бензиновые машины: дизели с корейского рынка в него не
+// входят (решение Сергея 29.09.2026: бензин и дизель — разные вещи), у них свой пункт
+// «Дизель» в фильтре. Топливо у раздела появляется вместе с типом «ДВС».
+const petrolFuel = (type) => (type === "ДВС" ? { fuel: "Бензин" } : {});
+
 const powertrain = (slug, type, filterLabel, { name, h1, seoTitle, seoDescription, lead, notes }) => ({
   kind: "powertrain",
   path: `/catalog/${slug}`,
   slug,
   powertrain: type,
+  ...petrolFuel(type),
   filterLabel,
   name,
   h1,
@@ -133,6 +139,7 @@ const combo = (slug, { powertrain: type, filterLabel, bodyType: body, name, h1, 
   path: `/catalog/${slug}`,
   slug,
   powertrain: type,
+  ...petrolFuel(type),
   filterLabel,
   bodyType: body,
   name,
@@ -168,7 +175,7 @@ const priceBand = (slug, landedMax, { name, h1, seoTitle, seoDescription, lead, 
   path: `/catalog/${slug}`,
   slug,
   landedMax,
-  ...(type ? { powertrain: type, filterLabel: filterLabel || type } : {}),
+  ...(type ? { powertrain: type, ...petrolFuel(type), filterLabel: filterLabel || type } : {}),
   name,
   h1,
   seoTitle,
@@ -2026,6 +2033,7 @@ export const landingFilterParams = (landing) => {
   // Каталожная страница модели — раздел марки с выбранной моделью.
   if (landing.model) params.set("model", landing.model);
   if (landing.powertrain) params.set("type", landing.filterLabel || landing.powertrain);
+  if (landing.fuel) params.set("fuel", landing.fuel);
   if (landing.bodyType) params.set("body", landing.bodyType);
   // Верхняя граница цены — в долларах итоговой суммы до Минска, как её показывает
   // карточка и как её понимает фильтр каталога.
@@ -2045,6 +2053,7 @@ export const landingApiParams = (landing) => {
   if (landing.origin) params.set("country", landing.origin);
   if (landing.model) params.set("model", landing.model);
   if (landing.powertrain) params.set("type", landing.powertrain);
+  if (landing.fuel) params.set("fuel", landing.fuel);
   if (landing.bodyType) params.set("bodyType", landing.bodyType);
   if (landing.landedMax) params.set("landedMax", String(landing.landedMax));
   return params;

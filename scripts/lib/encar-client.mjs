@@ -10,8 +10,10 @@
 // и правила у неё строгие (research/encar-2026-09-28/README.md).
 import {
   ENCAR_MANUFACTURERS, ENCAR_MAX_OFFSET, ENCAR_PAGE_SIZE, buildEncarCar, encarCandidate, encarDetailUrl,
-  encarInspectionUrl, encarListQuery, encarListUrl, encarModelGroups, encarRecordUrl,
+  encarInspectionUrl, encarListQuery, encarListUrl, encarModelGroups, encarRecordUrl, ENCAR_API,
 } from "./encar-parser.mjs";
+
+const encarBatteryUrl = (vehicleId) => `${ENCAR_API}/v1/readside/vehicle/ev-battery/${vehicleId}`;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -72,24 +74,32 @@ export class EncarClient {
   /** Карточка с историей: { status, detail, record, inspection }. 404 — машина снята. */
   async vehicle(id, { history = true } = {}) {
     const detail = await this.json(encarDetailUrl(id));
-    if (detail.status !== 200 || !detail.json) return { status: detail.status, detail: null, record: null, inspection: null };
+    if (detail.status !== 200 || !detail.json) return { status: detail.status, detail: null, record: null, inspection: null, battery: null };
     const vehicleId = detail.json.vehicleId;
     let record = null;
     let inspection = null;
+    let battery = null;
     if (history && vehicleId) {
       // История и осмотр необязательны: без них машина заводится с пустыми полями.
-      const [recordResult, inspectionResult] = await Promise.all([this.json(encarRecordUrl(vehicleId)), this.json(encarInspectionUrl(vehicleId))]);
+      // Данные о батарее площадка отдаёт только там, где сама их показывает.
+      const wantsBattery = Boolean(detail.json.view?.hasEvBatteryInfo || detail.json.view?.isBatteryPass);
+      const [recordResult, inspectionResult, batteryResult] = await Promise.all([
+        this.json(encarRecordUrl(vehicleId)),
+        this.json(encarInspectionUrl(vehicleId)),
+        wantsBattery ? this.json(encarBatteryUrl(vehicleId)) : Promise.resolve(null),
+      ]);
       record = recordResult.status === 200 ? recordResult.json : null;
       inspection = inspectionResult.status === 200 ? inspectionResult.json : null;
+      battery = batteryResult?.status === 200 ? batteryResult.json : null;
     }
-    return { status: 200, detail: detail.json, record, inspection };
+    return { status: 200, detail: detail.json, record, inspection, battery };
   }
 
   /** Запись каталога по номеру объявления. `car: null` + status 404 — снята; status 200 и car null — не наша. */
   async car(id, { usdPerKrw, importedAt, history = true } = {}) {
     const fetched = await this.vehicle(id, { history });
     if (fetched.status !== 200) return { ...fetched, car: null };
-    const car = buildEncarCar(fetched.detail, { id: String(id), record: fetched.record, inspection: fetched.inspection, importedAt, usdPerKrw });
+    const car = buildEncarCar(fetched.detail, { id: String(id), record: fetched.record, inspection: fetched.inspection, battery: fetched.battery, importedAt, usdPerKrw });
     return { ...fetched, car };
   }
 

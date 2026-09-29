@@ -13,13 +13,17 @@ const brands = valuesOf("brand", "brand");
 const types = valuesOf("powertrain", "type");
 const bodies = valuesOf("bodyType", "body");
 
+// Пункт «Бензин» в фильтре с 29.09.2026 — тип «ДВС» плюс топливо «Бензин» (tabSelection в
+// src/App.jsx): топливо идёт в адрес вместе с типом и меняется вместе с ним.
+const fuelOf = (type) => (type === "Бензин" ? [["fuel", "Бензин"]] : []);
+
 function filterLinks(page) {
-  const base = page.path === "/catalog" ? [] : [...landingFilterParams(page)].filter(([key]) => ["brand", "type", "body"].includes(key));
+  const base = page.path === "/catalog" ? [] : [...landingFilterParams(page)].filter(([key]) => ["brand", "type", "fuel", "body"].includes(key));
   const links = [];
   for (const [key, options] of [["brand", brands], ["type", types], ["body", bodies]]) {
     for (const option of options) {
-      const params = base.filter(([name]) => name !== key);
-      params.push([key, option]);
+      const params = base.filter(([name]) => name !== key && (key !== "type" || name !== "fuel"));
+      params.push([key, option], ...(key === "type" ? fuelOf(option) : []));
       const target = catalogLandingForFilters(new URLSearchParams(params).toString(), page.path)?.path;
       if (target && target !== page.path) links.push(target);
     }

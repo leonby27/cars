@@ -159,6 +159,15 @@ How it works:
   `claims` / `claimsCount` / `owners` from the insurance summary, `incident` from the
   inspection sheet; photos as plain `https://ci.encar.com/carpicture…jpg` URLs, exterior
   frames first (the photo store keeps the first five on disk).
+- Full sheet (`technicalSpecs`, same shape as the Che168 sheet, `sourceLocale: "ru"`):
+  options from the source dictionary (only unambiguous codes — 001–008 repeat across
+  sections), the inspection sheet by unit and by body panel, the insurance summary and
+  EV battery data (`ev-battery`, fetched when the card says it exists: SOH → `batteryHealth`,
+  capacity → `battery`, range → `electricRange`). Korean cars imported before this
+  existed are completed with `import:encar -- --repair --limit=N`.
+- Age: EAEU rules count a car's age from its production date; Encar publishes none, so
+  `manufactureDate` is the first-registration month (later than production by weeks).
+  The card shows the Korean model year (`formYear`).
 - Writes go to PostgreSQL only (`importCars`, batches of `--batch`, default 50); the
   static `public/data/cars.json` is not touched. Reports: `runtime/encar-import-report.json`,
   `runtime/encar-refresh-report.json`.

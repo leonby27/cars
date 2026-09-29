@@ -250,3 +250,44 @@ test("запись в базу не теряет вон, курс и истор�
   assert.equal(specs.bodyType, "SUV / кроссовер");
   assert.deepEqual(queries.find((query) => query.sql.startsWith("INSERT INTO listing_media")).values[1], saved.images);
 });
+
+test("полная техкарта: опции, лист осмотра по узлам, кузовные панели, страховая история", () => {
+  const car = build("santafe_diesel");
+  const sheet = car.technicalSpecs;
+  assert.ok(sheet && sheet.count > 20, "техкарта собрана");
+  assert.equal(sheet.sourceLocale, "ru");
+  const names = sheet.groups.map((group) => group.name);
+  assert.ok(names.includes("Опции") && names.includes("Осмотр: итог") && names.includes("Осмотр: Двигатель") && names.includes("Осмотр: кузовные панели") && names.includes("Страховая история"), names.join(", "));
+  const options = sheet.groups.find((group) => group.name === "Опции").items.map((item) => item.name);
+  assert.ok(options.includes("Кожаный салон") && options.includes("Смарт-ключ") && options.includes("Камера заднего вида"), options.join(", "));
+  assert.ok(!options.some((name) => /^\d+$/.test(name)), "кодов без перевода в опциях нет");
+  const summary = Object.fromEntries(sheet.groups.find((group) => group.name === "Осмотр: итог").items.map((item) => [item.name, item.value]));
+  assert.equal(summary["ДТП по листу осмотра"], "нет");
+  assert.equal(summary["Мелкий ремонт"], "да");
+  assert.equal(summary["Первая регистрация"], "03.12.2020");
+  const engine = sheet.groups.find((group) => group.name === "Осмотр: Двигатель").items;
+  assert.ok(engine.some((item) => item.name === "Течь масла · Клапанная крышка" && item.value === "нет"), JSON.stringify(engine.slice(0, 3)));
+  assert.ok(engine.some((item) => item.name === "Уровень масла" && item.value === "норма"));
+  const panels = sheet.groups.find((group) => group.name === "Осмотр: кузовные панели").items;
+  assert.deepEqual(panels[0], { name: "Переднее крыло (левое)", value: "рихтовка или сварка" });
+  const record = Object.fromEntries(sheet.groups.find((group) => group.name === "Страховая история").items.map((item) => [item.name, item.value]));
+  assert.equal(record["ДТП по своей вине"], "4");
+  assert.equal(record["Смен владельца"], "1");
+  assert.deepEqual(car.optionCodes.slice(0, 3), ["001", "004", "005"]);
+  // Без истории и осмотра техкарты нет, а машина есть.
+  const bare = buildEncarCar(sample("santafe_diesel").detail, { id: "1", usdPerKrw });
+  assert.ok(bare && bare.technicalSpecs.groups.every((group) => group.name === "Опции"));
+});
+
+test("батарея электромобиля попадает в запись, когда площадка её отдаёт", () => {
+  const battery = { ensolRawInfo: null, jatoBatteryInfo: { batteryCapacityKwh: 77.4, range: 458 }, encarComputedInfo: { soh: 96.5 } };
+  const car = buildEncarCar(sample("ioniq5").detail, { id: "1", usdPerKrw, battery });
+  assert.equal(car.battery, 77.4);
+  assert.equal(car.batteryHealth, 96.5);
+  assert.equal(car.electricRange, 458);
+  const group = car.technicalSpecs.groups.find((item) => item.name === "Батарея");
+  assert.deepEqual(group.items.map((item) => item.value), ["96.5 %", "77.4 кВт·ч", "458 км"]);
+  const empty = buildEncarCar(sample("ioniq5").detail, { id: "1", usdPerKrw, battery: { ensolRawInfo: null, jatoBatteryInfo: null, encarComputedInfo: null } });
+  assert.equal(empty.battery, null);
+  assert.equal(empty.evBattery, null);
+});

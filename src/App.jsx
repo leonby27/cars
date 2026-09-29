@@ -216,17 +216,18 @@ const ANY_FUEL = "Топливо";
 // В базе бензиновые машины лежат под сокращением «ДВС», а покупателю показываем
 // «Бензин»: сокращение он не набирает в поиске и не всегда понимает. Старую подпись
 // принимаем по-прежнему — с ней остались ссылки на сайте и в закладках.
-// «Дизель» в этом же списке — не отдельный тип машины, а машины с двигателем (тип
-// «ДВС») плюс фильтр топлива: так дизельные машины из Кореи выбираются одним
-// пунктом, а в базе и адресах ничего нового не появляется (решение Сергея 29.09.2026).
-// Пункт «Бензин» по-прежнему значит «с двигателем» — в него попадают и дизели; как
-// его назвать — вопрос к Сергею.
+// «Бензин» и «Дизель» в этом списке — не отдельные типы машины, а машины с двигателем
+// (тип «ДВС») плюс фильтр топлива: так дизели с корейского рынка выбираются одним
+// пунктом, а в базе и адресах ничего нового не появляется. Бензин и дизель — разные
+// вещи (решение Сергея 29.09.2026): «Бензин» — только бензиновые, «Дизель» — только
+// дизельные; старые ссылки `type=Бензин` без топлива читаются как бензин.
 const DIESEL_TAB = "Дизель";
+const PETROL_TAB = "Бензин";
 const POWERTRAIN_TABS = ["Все", "Электромобили", "Гибриды", "Бензин", DIESEL_TAB];
 const typeLabel = (value) => (value === "Электромобиль" ? "Электромобили" : value === "Гибрид" ? "Гибриды" : value === "ДВС" ? "Бензин" : "Все");
 const typeValue = (label) => (label === "Электромобили" ? "Электромобиль" : label === "Гибриды" ? "Гибрид" : label === "Бензин" || label === "ДВС" || label === DIESEL_TAB ? "ДВС" : "Все");
 // Выбор пункта списка → тип машины и топливо; и обратно — какой пункт показать.
-const tabSelection = (label) => (label === DIESEL_TAB ? { type: "ДВС", fuel: "Дизель" } : { type: typeValue(label), fuel: ANY_FUEL });
+const tabSelection = (label) => (label === DIESEL_TAB ? { type: "ДВС", fuel: "Дизель" } : label === PETROL_TAB ? { type: "ДВС", fuel: "Бензин" } : { type: typeValue(label), fuel: ANY_FUEL });
 const tabLabel = (type, fuel) => (type === "ДВС" && fuel === "Дизель" ? DIESEL_TAB : typeLabel(type));
 // Тот же тип в карточке машины: там он стоит в единственном числе и рядом с пробегом.
 const powertrainName = (value) => (value === "ДВС" ? "Бензин" : value);
@@ -3129,7 +3130,7 @@ const savedSearchChips = (filters) => {
   if (filters.engine && filters.engine !== ANY_ENGINE) chips.push(`объём ${filters.engine}`);
   if (filters.power && filters.power !== ANY_POWER) chips.push(`мощность ${filters.power}`);
   if (filters.gearbox && filters.gearbox !== ANY_GEARBOX) chips.push(filters.gearbox.toLowerCase());
-  if (filters.fuel && filters.fuel !== ANY_FUEL && tabLabel(filters.type, filters.fuel) !== DIESEL_TAB) chips.push(filters.fuel.toLowerCase());
+  if (filters.fuel && filters.fuel !== ANY_FUEL && !(filters.type === "ДВС" && FUEL_TYPES.includes(filters.fuel))) chips.push(filters.fuel.toLowerCase());
   const excluded = EXCLUDE_KEYS.flatMap((key) => exclusionValues(filters, key));
   if (excluded.length) chips.push(`кроме ${excluded.join(", ").toLowerCase()}`);
   if (savedSearchSortLabels[filters.sort]) chips.push(savedSearchSortLabels[filters.sort]);
@@ -6212,7 +6213,7 @@ function catalogFiltersFromParams(params) {
     engine: engineBounds(rawEngine) ? rawEngine : ANY_ENGINE,
     power: powerBounds(rawPower) ? rawPower : ANY_POWER,
     gearbox: GEARBOX_TYPES.includes(rawGearbox) ? rawGearbox : ANY_GEARBOX,
-    fuel: FUEL_TYPES.includes(rawFuel) ? rawFuel : rawType === DIESEL_TAB ? "Дизель" : ANY_FUEL,
+    fuel: FUEL_TYPES.includes(rawFuel) ? rawFuel : rawType === DIESEL_TAB ? "Дизель" : typeValue(rawType) === "ДВС" ? "Бензин" : ANY_FUEL,
     // Свободный текст из поиска на главной: комплектация и характеристики, которых
     // нет в выпадающих списках. В сохранённые поиски он не попадает — там набор
     // полей фиксирован, и лишний ключ сломал бы сравнение «такой поиск уже есть».

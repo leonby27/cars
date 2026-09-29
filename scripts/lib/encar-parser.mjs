@@ -235,7 +235,7 @@ export function encarHistory(record, inspection) {
  * `usdPerKrw` — курс НБРБ (sourceUsdRate("KRW") из src/pricing.js): без него нет
  * `usdPrice`, а от него зависят стрелка цены и «прошлая цена».
  */
-export function buildEncarCar(detail, { id = null, record = null, inspection = null, importedAt = new Date().toISOString(), usdPerKrw } = {}) {
+export function buildEncarCar(detail, { id = null, record = null, inspection = null, battery = null, importedAt = new Date().toISOString(), usdPerKrw } = {}) {
   const category = detail?.category;
   const spec = detail?.spec;
   const advertisement = detail?.advertisement;
@@ -269,6 +269,8 @@ export function buildEncarCar(detail, { id = null, record = null, inspection = n
   const yearMonth = String(category.yearMonth || "").match(/^(\d{4})(\d{2})$/);
   const registration = yearMonth ? `${yearMonth[1]}-${yearMonth[2]}` : null;
   const history = encarHistory(record, inspection);
+  const technicalSpecs = encarTechnicalSpecs(detail, { record, inspection, battery });
+  const batteryInfo = encarBatteryInfo(battery);
   const gradeName = [category.gradeEnglishName || category.gradeName, category.gradeDetailEnglishName || category.gradeDetailName].filter(Boolean).join(" ").trim();
   const city = encarCity(detail.contact?.address);
 
@@ -313,11 +315,15 @@ export function buildEncarCar(detail, { id = null, record = null, inspection = n
     type: fuel.type,
     sourceFuelType: fuel.fuel,
     drive: encarDrive(brand, category.gradeEnglishName, category.gradeName) || "Не указан",
-    battery: null,
+    battery: batteryInfo?.capacity ?? null,
+    batteryHealth: batteryInfo?.soh ?? null,
     batteryType: null,
-    electricRange: null,
+    electricRange: batteryInfo?.range ?? null,
     combinedRange: null,
-    range: null,
+    range: batteryInfo?.range ?? null,
+    evBattery: battery && Object.values(battery).some((value) => value !== null) ? battery : null,
+    optionCodes: [...new Set([...(detail.options?.standard || []), ...(detail.options?.choice || [])].map(String))],
+    technicalSpecs,
     horsepower: null,
     engine,
     engineCc,
@@ -406,4 +412,179 @@ export function encarCandidate(item, { minYear = 2020 } = {}) {
     modelGroup: String(item.Model || ""),
     modifiedAt: item.ModifiedDate || null,
   };
+}
+
+// ---------- Полные данные: опции, осмотр, страховая история, батарея ----------
+//
+// Площадка не даёт мощности и батареи, зато даёт то, чего нет у Che168: лист осмотра
+// по узлам, кузовные панели с отметками ремонта, страховую историю и список опций.
+// Всё это складывается в `technicalSpecs` в том же виде, что и техкарта Che168
+// (группы → строки «название — значение»), поэтому карточка показывает их без
+// доработок: названия уже по-русски, незнакомые остаются по-корейски.
+
+// Опции площадки (справочник /v1/readside/vehicles/car/options/standard). Коды 001–008
+// повторяются в разных разделах справочника (001 — это и «фары», и ABS), а карточка
+// отдаёт только код, поэтому такие коды не переводятся и не показываются.
+const OPTION_NAMES = new Map([
+  ["010", "Люк"], ["059", "Электропривод багажника"], ["080", "Доводчики дверей"], ["024", "Электроскладывание зеркал"],
+  ["017", "Легкосплавные диски"], ["062", "Рейлинги на крыше"], ["082", "Подогрев руля"], ["083", "Электрорегулировка руля"],
+  ["084", "Подрулевые лепестки"], ["031", "Кнопки на руле"], ["030", "Салонное зеркало с автозатемнением"], ["074", "Модуль оплаты дорог Hi-Pass"],
+  ["020", "Боковые подушки безопасности"], ["056", "Шторки безопасности"], ["019", "Антипробуксовочная система"], ["055", "Система стабилизации"],
+  ["033", "Датчики давления в шинах"], ["088", "Предупреждение о выезде из полосы"], ["086", "Контроль слепых зон"], ["058", "Камера заднего вида"],
+  ["087", "Круговой обзор 360°"], ["095", "Проекция на лобовое стекло"], ["094", "Электронный стояночный тормоз"], ["023", "Климат-контроль"],
+  ["057", "Смарт-ключ"], ["015", "Дистанционное запирание"], ["081", "Датчик дождя"], ["097", "Датчик света"],
+  ["054", "Мониторы для задних пассажиров"], ["096", "Bluetooth"], ["072", "Разъём USB"], ["071", "Разъём AUX"],
+  ["014", "Кожаный салон"], ["089", "Электропривод задних сидений"], ["009", "Вентиляция сидений"], ["090", "Вентиляция задних сидений"], ["091", "Массаж сидений"],
+]);
+
+// Пункты листа осмотра (성능점검기록부) — по корейскому названию.
+const INSPECTION_NAMES = new Map([
+  ["자기진단", "Самодиагностика"], ["원동기", "Двигатель"], ["변속기", "Коробка передач"], ["작동상태(공회전)", "Работа на холостом ходу"],
+  ["오일누유", "Течь масла"], ["실린더 커버(로커암 커버)", "Клапанная крышка"], ["실린더 헤드 / 개스킷", "Головка блока / прокладка"],
+  ["실린더 블록 / 오일팬", "Блок цилиндров / поддон"], ["오일 유량", "Уровень масла"], ["냉각수누수", "Течь охлаждающей жидкости"],
+  ["워터펌프", "Помпа"], ["라디에이터", "Радиатор"], ["냉각수 수량", "Уровень антифриза"], ["커먼레일", "Топливная рампа (Common Rail)"],
+  ["자동변속기(A/T)", "Автоматическая коробка"], ["수동변속기(M/T)", "Механическая коробка"], ["오일유량 및 상태", "Уровень и состояние масла"],
+  ["기어변속장치", "Механизм переключения"], ["동력전달", "Трансмиссия"], ["클러치 어셈블리", "Сцепление"], ["등속조인트", "ШРУСы"],
+  ["추친축 및 베어링", "Карданный вал и подшипники"], ["디피렌셜 기어", "Дифференциал"], ["조향", "Рулевое управление"],
+  ["동력조향 작동 오일 누유", "Течь жидкости усилителя руля"], ["작동상태", "Работа"], ["스티어링 펌프", "Насос усилителя руля"],
+  ["스티어링 기어(MDPS포함)", "Рулевой механизм (в т. ч. электроусилитель)"], ["스티어링 조인트", "Рулевые шарниры"], ["파워고압호스", "Шланг высокого давления"],
+  ["타이로드엔드 및 볼 조인트", "Наконечники тяг и шаровые опоры"], ["제동", "Тормоза"], ["브레이크 마스터 실린더오일 누유", "Течь главного тормозного цилиндра"],
+  ["브레이크 오일 누유", "Течь тормозной жидкости"], ["배력장치 상태", "Усилитель тормозов"], ["전기", "Электрика"], ["발전기 출력", "Генератор"],
+  ["시동 모터", "Стартер"], ["와이퍼 모터 기능", "Мотор стеклоочистителя"], ["실내송풍 모터", "Мотор вентилятора салона"],
+  ["라디에이터 팬 모터", "Вентилятор радиатора"], ["윈도우 모터", "Стеклоподъёмники"], ["연료", "Топливная система"], ["연료누출(LP가스포함)", "Утечка топлива"],
+  ["고전원전기장치", "Высоковольтная система"], ["충전구 절연 상태", "Изоляция зарядного порта"], ["구동축전지 격리 상태", "Изоляция тяговой батареи"],
+  ["고전원전기배선 상태", "Высоковольтная проводка"],
+]);
+const INSPECTION_STATUSES = new Map([
+  ["양호", "в норме"], ["불량", "неисправно"], ["없음", "нет"], ["있음", "есть"], ["미세누유", "незначительная течь"], ["누유", "течь"],
+  ["미세누수", "незначительная течь"], ["누수", "течь"], ["적정", "норма"], ["부족", "недостаточно"], ["과다", "избыток"],
+]);
+// Кузовные панели и отметки ремонта на схеме осмотра.
+const PANEL_NAMES = new Map([
+  ["후드", "Капот"], ["프론트 휀더", "Переднее крыло"], ["프론트 도어", "Передняя дверь"], ["리어 도어", "Задняя дверь"], ["트렁크 리드", "Крышка багажника"],
+  ["라디에이터 서포트 (볼트체결부품)", "Рамка радиатора"], ["라디에이터 서포트", "Рамка радиатора"], ["루프패널", "Крыша"], ["쿼터패널(리어휀더)", "Заднее крыло"],
+  ["사이드실패널", "Порог"], ["프론트패널", "Передняя панель"], ["크로스멤버", "Поперечина"], ["인사이드패널", "Внутренняя панель"],
+  ["사이드멤버", "Лонжерон"], ["휠하우스", "Колёсная арка"], ["필러패널", "Стойка кузова"], ["대쉬패널", "Щит моторного отсека"],
+  ["플로어패널", "Пол"], ["트렁크플로어", "Пол багажника"], ["리어패널", "Задняя панель"], ["패키지트레이", "Полка багажника"],
+]);
+const PANEL_STATUSES = new Map([
+  ["판금/용접", "рихтовка или сварка"], ["교환", "замена"], ["부식", "коррозия"], ["흠집", "царапины"], ["요철", "вмятины"], ["손상", "повреждение"],
+]);
+const SIDES = new Map([["좌", "левое"], ["우", "правое"], ["앞", "переднее"], ["뒤", "заднее"], ["앞좌", "переднее левое"], ["앞우", "переднее правое"], ["뒤좌", "заднее левое"], ["뒤우", "заднее правое"]]);
+
+const inspectionName = (title) => INSPECTION_NAMES.get(String(title || "").trim()) || String(title || "").trim();
+const inspectionStatus = (title) => INSPECTION_STATUSES.get(String(title || "").trim()) || String(title || "").trim();
+const panelName = (title) => {
+  const text = String(title || "").trim();
+  const match = text.match(/^(.*?)\s*\(([좌우앞뒤]+)\)\s*$/);
+  const base = match ? match[1].trim() : text;
+  const side = match ? SIDES.get(match[2]) || match[2] : "";
+  const name = PANEL_NAMES.get(base) || base;
+  return side ? `${name} (${side})` : name;
+};
+
+const yesNo = (value) => (value ? "да" : "нет");
+const ymd = (value) => {
+  const match = String(value || "").match(/^(\d{4})(\d{2})(\d{2})$/);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : null;
+};
+
+/** Группы листа осмотра: общие отметки, затем по узлам и кузовные панели. */
+export function encarInspectionGroups(inspection) {
+  const master = inspection?.master;
+  if (!master) return [];
+  const detail = master.detail || {};
+  const groups = [];
+  const summary = [
+    ["ДТП по листу осмотра", yesNo(master.accdient ?? master.accident)],
+    ["Мелкий ремонт", yesNo(master.simpleRepair)],
+    ["Затопление", yesNo(detail.waterlog)],
+    ["Тюнинг", yesNo(detail.tuning)],
+    ["Общее состояние", detail.carStateType?.title ? inspectionStatus(detail.carStateType.title) : null],
+    ["Первая регистрация", ymd(detail.firstRegistrationDate)],
+    ["Пробег при осмотре", Number.isFinite(Number(detail.mileage)) && Number(detail.mileage) > 0 ? `${Number(detail.mileage).toLocaleString("ru-RU")} км` : null],
+    ["Осмотр действителен до", ymd(detail.validityEndDate)],
+    ["Кто осматривал", detail.inspName || null],
+  ].filter(([, value]) => value !== null && value !== undefined && value !== "");
+  if (summary.length) groups.push({ name: "Осмотр: итог", items: summary.map(([name, value]) => ({ name, value })) });
+  const walk = (items, prefix) => items.flatMap((item) => {
+    const name = [prefix, inspectionName(item?.type?.title)].filter(Boolean).join(" · ");
+    const rows = item?.statusType?.title ? [{ name, value: inspectionStatus(item.statusType.title) }] : [];
+    return [...rows, ...walk(item?.children || [], item?.statusType?.title ? prefix : name)];
+  });
+  for (const section of inspection.inners || []) {
+    const rows = walk(section.children || [], "");
+    if (rows.length) groups.push({ name: `Осмотр: ${inspectionName(section?.type?.title)}`, items: rows });
+  }
+  const panels = (inspection.outers || [])
+    .map((panel) => ({ name: panelName(panel?.type?.title), value: (panel?.statusTypes || []).map((status) => PANEL_STATUSES.get(status?.title) || status?.title).filter(Boolean).join(", ") }))
+    .filter((row) => row.name && row.value);
+  if (panels.length) groups.push({ name: "Осмотр: кузовные панели", items: panels });
+  return groups;
+}
+
+/** Страховая история одной группой. */
+export function encarRecordGroup(record) {
+  if (!record || typeof record !== "object") return null;
+  const count = (value) => (Number.isFinite(Number(value)) ? String(Number(value)) : null);
+  const items = [
+    ["Первая регистрация", record.firstDate ? String(record.firstDate).replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$3.$2.$1") : null],
+    ["ДТП по своей вине", count(record.myAccidentCnt)],
+    ["ДТП по чужой вине", count(record.otherAccidentCnt)],
+    ["Смен владельца", count(record.ownerChangeCnt)],
+    ["Смен госномера", count(record.carNoChangeCnt)],
+    ["Угоны", count(record.robberCnt)],
+    ["Списание страховой (тотал)", count(record.totalLossCnt)],
+    ["Затопление", count(record.floodTotalLossCnt)],
+    ["Служебное использование", record.government ? "да" : null],
+    ["Коммерческое использование", record.business ? "да" : null],
+    ["Прокат или аренда", record.loan ? "да" : null],
+  ].filter(([, value]) => value !== null && value !== undefined);
+  return items.length ? { name: "Страховая история", items: items.map(([name, value]) => ({ name, value })) } : null;
+}
+
+/** Опции по справочнику площадки (только однозначные коды). */
+export function encarOptionsGroup(options) {
+  const codes = [...new Set([...(options?.standard || []), ...(options?.choice || [])].map(String))];
+  const items = codes.filter((code) => OPTION_NAMES.has(code)).map((code) => ({ name: OPTION_NAMES.get(code), value: "есть" }));
+  return items.length ? { name: "Опции", items } : null;
+}
+
+// Данные о батарее (ev-battery) у площадки есть у малой части электромобилей и в
+// нескольких формах; берём числа по смыслу ключей, остальное храним как есть.
+const numberLeaves = (value, prefix = "") => {
+  if (value === null || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, item]) => {
+    const name = prefix ? `${prefix}.${key}` : key;
+    if (item !== null && typeof item === "object") return numberLeaves(item, name);
+    return Number.isFinite(Number(item)) && item !== "" && item !== null && typeof item !== "boolean" ? [[name, Number(item)]] : [];
+  });
+};
+export function encarBatteryInfo(battery) {
+  if (!battery || typeof battery !== "object") return null;
+  const leaves = numberLeaves(battery);
+  if (!leaves.length) return null;
+  const pick = (pattern, low, high) => leaves.find(([key, value]) => pattern.test(key) && value >= low && value <= high)?.[1] ?? null;
+  const soh = pick(/soh|health/i, 30, 100);
+  const capacity = pick(/capacity|kwh/i, 10, 200);
+  const range = pick(/range|distance/i, 50, 1000);
+  const items = [
+    ["Состояние батареи (SOH)", soh !== null ? `${soh} %` : null],
+    ["Ёмкость батареи", capacity !== null ? `${capacity} кВт·ч` : null],
+    ["Запас хода", range !== null ? `${range} км` : null],
+  ].filter(([, value]) => value !== null);
+  return { soh, capacity, range, group: items.length ? { name: "Батарея", items: items.map(([name, value]) => ({ name, value })) } : null };
+}
+
+/** Полная техкарта корейской машины в виде техкарты Che168. */
+export function encarTechnicalSpecs(detail, { record = null, inspection = null, battery = null } = {}) {
+  const info = encarBatteryInfo(battery);
+  const groups = [
+    encarOptionsGroup(detail?.options),
+    ...encarInspectionGroups(inspection),
+    encarRecordGroup(record),
+    info?.group || null,
+  ].filter(Boolean);
+  const count = groups.reduce((total, group) => total + group.items.length, 0);
+  return count ? { sourceLocale: "ru", count, groups } : null;
 }

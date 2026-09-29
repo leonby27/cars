@@ -22,6 +22,8 @@
 //                                                            выгрузка принятых машин в файл (на сервере)
 //   npm run import:encar -- --from=runtime/encar-export.json  запись машин из файла в базу (локально,
 //                                                            где площадка недоступна)
+//   npm run import:encar -- --repair --limit=10000            перечитать уже заведённые машины без полной
+//                                                            техкарты (опции, осмотр, история) и дописать её
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +60,8 @@ const useDiscoveries = args.get("discoveries") === "true";
 // так машины, собранные на сервере, попадают в локальную базу, где площадка закрыта.
 const outPath = args.get("out") ? path.resolve(ROOT, args.get("out")) : null;
 const fromPath = args.get("from") ? path.resolve(ROOT, args.get("from")) : null;
+// `--repair` перечитывает машины, заведённые до появления полной техкарты, и переписывает их.
+const repair = args.get("repair") === "true";
 
 const usdPerKrw = sourceUsdRate("KRW");
 if (!(usdPerKrw > 0)) throw new Error("курс воны не задан (src/pricing.js PRICING.krwBynPer1000)");
@@ -75,6 +79,7 @@ if (writeDatabase) {
   const { rows } = await pool.query("SELECT external_id FROM listings WHERE source='Encar'");
   for (const row of rows) knownIds.add(String(row.external_id));
   log(`[skip] в базе уже ${knownIds.size} корейских объявлений`);
+
 }
 
 const accepted = [];
@@ -149,6 +154,13 @@ const enqueue = (candidate) => {
 };
 
 async function discover() {
+  if (repair) {
+    if (!pool) throw new Error("--repair работает только с базой (--database=0 не сочетается)");
+    const missing = await pool.query("SELECT external_id FROM listings WHERE source='Encar' AND status='active' AND (source_payload->'technicalSpecs') IS NULL ORDER BY first_seen_at DESC LIMIT $1", [limit]);
+    for (const row of missing.rows) { knownIds.delete(String(row.external_id)); candidates.push({ externalId: String(row.external_id) }); }
+    log(`[repair] без полной техкарты ${missing.rows.length} машин — перечитываю`);
+    return;
+  }
   if (fromPath) {
     const file = JSON.parse(await fs.readFile(fromPath, "utf8"));
     let known = 0;
