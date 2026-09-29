@@ -10421,7 +10421,7 @@ html[data-theme="dark"] #root .spec-search,
 .currency-switch {
   display: grid;
   /* Три валюты: доллар, BYN, российский рубль (29.09.2026). */
-  grid-template-columns: 42px 58px 42px;
+  grid-template-columns: 42px 42px 42px;
   height: 38px;
   padding: 3px;
   border: 1px solid var(--line);
@@ -10467,7 +10467,7 @@ html[data-theme="dark"] #root .spec-search,
 }
 @media (max-width: 700px) {
   .currency-switch {
-    grid-template-columns: 34px 49px 34px;
+    grid-template-columns: 34px 34px 34px;
     height: 36px;
   }
   .header-actions .currency-switch button {
@@ -24295,13 +24295,20 @@ html[data-theme="dark"] :is(#root, body) .detail-header-price .price-dropdown {
 }
 
 /* Знак белорусского рубля: «Б» с горизонтальной чертой (Нацбанк, 2026). Пока его нет
-   в шрифтах, знак рисуется маской в цвете текста и масштабируется вместе с ним. */
+   в шрифтах, это обычная буква «Б» тем же шрифтом, размером и жирностью, что и цифры
+   рядом (как ₽), а черта дорисована поверх в цвете текста. */
 .byn-sign {
+  position: relative;
   display: inline-block;
-  width: 0.66em;
-  height: 0.86em;
-  vertical-align: -0.06em;
+  line-height: 1;
+}
+.byn-sign::after {
+  content: "";
+  position: absolute;
+  left: -0.14em;
+  top: 0.6em;
+  width: 0.52em;
+  height: 0.1em;
+  border-radius: 0.05em;
   background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 28'%3E%3Cpath fill='none' stroke='%23000' stroke-width='3.6' stroke-linecap='round' stroke-linejoin='round' d='M6 26V2h14M6 13h8a6.5 6.5 0 0 1 0 13H6M1.5 19.5h10'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 28'%3E%3Cpath fill='none' stroke='%23000' stroke-width='3.6' stroke-linecap='round' stroke-linejoin='round' d='M6 26V2h14M6 13h8a6.5 6.5 0 0 1 0 13H6M1.5 19.5h10'/%3E%3C/svg%3E") center / contain no-repeat;
 }

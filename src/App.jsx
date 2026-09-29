@@ -176,7 +176,7 @@ const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low +
 // буква «Б» с горизонтальной чертой. В Юникоде знака пока нет, поэтому он рисуется
 // стилем (.byn-sign в styles.css), а в строках — для адресов, заголовков и поисковика —
 // остаётся «BYN». Проба Сергея 29.09.2026: как смотрится вместо букв.
-const BynSign = () => <span className="byn-sign" role="img" aria-label="BYN" />;
+const BynSign = () => <span className="byn-sign" role="img" aria-label="BYN">Б</span>;
 // Текст с суммой, где «BYN» заменён знаком; строки без «BYN» возвращаются как есть.
 const bynify = (value) => {
   if (typeof value !== "string" || !value.includes("BYN")) return value;
