@@ -5,12 +5,13 @@
 import { PRICING } from "./pricing.js";
 
 const CNY_USD = PRICING.cnyBynPer10 / 10 / PRICING.usdByn;
+const KRW_USD = PRICING.krwBynPer1000 / 1000 / PRICING.usdByn;
 
 // Суммы приводятся к долларам «под ключ» — в них хранится и фильтруется цена
 // каталога. Валюта без явного знака — та, что выбрана переключателем на сайте,
 // её передают параметром currency.
 const toUsd = (amount, currency) =>
-  currency === "BYN" ? amount / PRICING.usdByn : currency === "CNY" ? amount * CNY_USD : currency === "EUR" ? amount * (PRICING.eurByn / PRICING.usdByn) : amount;
+  currency === "BYN" ? amount / PRICING.usdByn : currency === "CNY" ? amount * CNY_USD : currency === "KRW" ? amount * KRW_USD : currency === "EUR" ? amount * (PRICING.eurByn / PRICING.usdByn) : amount;
 
 // Годом считается только правдоподобный: «2050» и «1234» — суммы, а не годы.
 const isYearLike = (digits) => /^(19|20)\d{2}$/.test(digits) && Number(digits) >= 1990 && Number(digits) <= 2030;
@@ -23,6 +24,8 @@ const currencyOf = (word) =>
       ? "BYN"
       : word.startsWith("юан") || word === "cny" || word === "rmb"
         ? "CNY"
+        : word.startsWith("вон") || word === "krw" || word === "won" || word === "₩"
+          ? "KRW"
         : word === "евро" || word === "eur"
           ? "EUR"
           : "";

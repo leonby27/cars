@@ -2,6 +2,8 @@
 // Города каталога сгруппированы в зоны по удалённости от границы; ставка за место
 // на автовозе растёт с расстоянием. Ориентиры — открытые тарифы перевозчиков
 // (30–80 тыс. ₽ за внутрикитайское плечо, лето 2026) и расстояния до Хоргоса.
+import { estimateKoreaDeliveryDays } from "./korea-logistics.js";
+
 export const CHINA_TRANSIT_ZONES = {
   border: { label: "Синьцзян, рядом с границей", usd: [150, 300], days: [1, 2] },
   west: { label: "запад Китая", usd: [400, 600], days: [3, 5] },
@@ -19,7 +21,10 @@ export const DELIVERY_STAGE_DAYS = {
   svh: [2, 5], // разгрузка, оформление и выдача на СВХ
 };
 
-export function estimateDeliveryDays(city) {
+// `origin` — страна машины: для Кореи сроки считает src/korea-logistics.js тем же
+// набором полей (`chinaDays` там — перегон до порта; имя историческое).
+export function estimateDeliveryDays(city, origin = "china") {
+  if (origin === "korea") return estimateKoreaDeliveryDays(city);
   const transit = chinaTransitFor(city);
   const stages = [DELIVERY_STAGE_DAYS.buyout, transit.days, DELIVERY_STAGE_DAYS.intl, DELIVERY_STAGE_DAYS.svh];
   return {

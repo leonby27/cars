@@ -1,6 +1,6 @@
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, isValidElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, InstagramLogo, MagnifyingGlass, SignOut, SquaresFour, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
@@ -18,7 +18,7 @@ import { buildSeoPositionRows } from "./seo-keywords.js";
 // приставку снимаем: иначе из кабинета уходит и попадает в переписку адрес,
 // которого у нас на сайте быть не должно (страница по нему открывается, но
 // каноническим считается короткий).
-const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
+import { listingNumber } from "./listing-id.js";
 const carHref = (id) => `/cars/${encodeURIComponent(listingNumber(id))}`;
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
 const formatDate = (value, withTime = false) => {
@@ -59,6 +59,15 @@ const usePersistedChoice = (key, choices, fallback) => {
 // Фотохранилище Che168 отдаёт снимок любой ширины: она стоит в адресе перед именем
 // файла. В списке заявок фото размером с ноготь, полноразмерный кадр здесь ни к чему.
 const leadPhoto = (source, width = 240) => vehiclePhotoHref(source, width) || "";
+// Название площадки для ссылки на объявление — из адреса, а не словом: с Кореей
+// источников стало больше одного (che168.com, encar.com).
+const leadSourceHost = (url) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "площадке";
+  }
+};
 const leadKindLabels = {
   availability:"Запрос актуальности",
   order_started:"Автомобиль отложен",
@@ -167,7 +176,7 @@ function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
         {lead.customer.telegram && <div><dt>Telegram</dt><dd>@{lead.customer.telegram.replace(/^@/, "")}</dd></div>}
         {lead.customer.email && <div><dt>Email</dt><dd><a href={`mailto:${lead.customer.email}`}>{lead.customer.email}</a></dd></div>}
         {lead.customer.city && <div><dt>Город</dt><dd>{lead.customer.city}</dd></div>}
-        <div><dt>Источник</dt><dd>{lead.car?.sourceUrl ? <a href={lead.car.sourceUrl} target="_blank" rel="nofollow noopener noreferrer">Объявление на Che168</a> : leadSourceLabels[lead.source]}</dd></div>
+        <div><dt>Источник</dt><dd>{lead.car?.sourceUrl ? <a href={lead.car.sourceUrl} target="_blank" rel="nofollow noopener noreferrer">Объявление на {leadSourceHost(lead.car.sourceUrl)}</a> : leadSourceLabels[lead.source]}</dd></div>
       </dl>
       {lead.comment && <blockquote className="lead-comment">{lead.comment}</blockquote>}
       {!!filters.length && (
@@ -282,6 +291,27 @@ function TrendPeriodSelect({ value, onChange }) {
   </div>;
 }
 
+// Русское склонение для подписей: 1 открытие, 2 открытия, 5 открытий.
+const pluralRu = (value, one, few, many) => {
+  const abs = Math.abs(Math.round(Number(value) || 0)) % 100;
+  const last = abs % 10;
+  if (abs > 10 && abs < 20) return many;
+  if (last > 1 && last < 5) return few;
+  return last === 1 ? one : many;
+};
+
+// Карточка «Заявки» в обзоре — воронка в два числа: слева сколько раз открыли окно
+// по зелёной кнопке «Уточнить актуальность авто», справа сколько заявок в итоге
+// пришло. Открытия считаются по событию из браузера, заявки — по таблицам сайта,
+// и «+N» новых относится только к заявкам.
+function LeadsFunnelCount({ opens = 0, total = 0, fresh = 0 }) {
+  return <span className="analytics-kpi-funnel">
+    <span>{formatNumber(opens)}</span>
+    <i aria-hidden="true">/</i>
+    {Number(fresh) ? <AnalyticsSplitCount total={total} fresh={fresh} className="analytics-kpi-split-count is-leads" /> : <span>{formatNumber(total)}</span>}
+  </span>;
+}
+
 function AnalyticsSplitCount({ total = 0, fresh = 0, className = "" }) {
   const amount = Math.max(0, Number(total) || 0);
   const newAmount = Math.min(amount, Math.max(0, Number(fresh) || 0));
@@ -366,6 +396,9 @@ function OverviewSection({ data, period, device = "all", updates = {} }) {
   // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
   // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
   const leadsTotal = (Number(summary.availability_clicks) || 0) + (Number(summary.custom_searches) || 0);
+  // Открытия окна по кнопке «Уточнить актуальность авто» — событие из браузера, как
+  // просмотры, поэтому срез по устройству к ним применяется; к заявкам — нет.
+  const leadModalOpens = Number(summary.availability_modal_opens) || 0;
   const cards = [
     // Заход, на котором никто не двинул мышью, не прокрутил и не нажал ни одной
     // клавиши, в счёт не идёт: это машинный обход. Просто время на странице человеком
@@ -378,15 +411,16 @@ function OverviewSection({ data, period, device = "all", updates = {} }) {
     // устройству их не показываем — иначе «было» вышло бы меньше настоящего.
     ["Заходы", summary.visits, visitsNote(summary, period, data.days), device === "all" ? updates.overview : 0],
     ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, device === "all" ? updates.vehicle_cars : 0],
-    // Заявки — тем же счётом, что раздел «Заявки»: на машину и на подбор вместе.
-    // У заявок устройство не записывается, поэтому они всегда по всем устройствам,
-    // и подпись при смене устройства не меняется, чтобы карточка не скакала.
+    // Заявки — воронка «открытий окна / заявок» (решение владельца 29.09.2026): первое
+    // число — сколько раз нажали «Уточнить актуальность авто» и увидели окно, второе —
+    // тем же счётом, что раздел «Заявки»: на машину и на подбор вместе.
+    // У заявок устройство не записывается, поэтому они всегда по всем устройствам.
     // «+N» у них красный, как у пункта «Заявки» в меню: их нельзя пропустить.
-    ["Заявки", leadsTotal, `${formatNumber(summary.availability_clicks)} на машину, ${formatNumber(summary.custom_searches)} на подбор`, updates.leads, "is-leads"],
+    ["Заявки", <LeadsFunnelCount opens={leadModalOpens} total={leadsTotal} fresh={updates.leads} />, `${formatNumber(leadModalOpens)} ${pluralRu(leadModalOpens, "открытие окна", "открытия окна", "открытий окна")} / ${formatNumber(leadsTotal)} ${pluralRu(leadsTotal, "заявка", "заявки", "заявок")}`, updates.leads, "is-leads"],
   ];
   return (
     <>
-      <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh,freshTone]) => <article key={label}><span>{label}</span><strong>{Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className={`analytics-kpi-split-count${freshTone ? ` ${freshTone}` : ""}`} /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
+      <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh,freshTone]) => <article key={label}><span>{label}</span><strong>{isValidElement(value) ? value : Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className={`analytics-kpi-split-count${freshTone ? ` ${freshTone}` : ""}`} /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
       <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
           <h2>График</h2>

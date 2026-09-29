@@ -82,7 +82,7 @@ test("страница раздела отдаётся с текстом, маш
   // каждую своей строкой.
   // С 25.09.2026 «б/у» и «с пробегом» ушли из заголовка в подзаголовок, а в нём же —
   // «китайские автомобили» (у китайской марки).
-  assert.match(html, /<h1><span>Автомобили BYD<\/span> <span>из Китая<\/span><\/h1><p>Китайские автомобили с пробегом — купить с доставкой в Беларусь<\/p>/);
+  assert.match(html, /<h1><span>Автомобили BYD<\/span> <span>из Китая и Кореи<\/span><\/h1><p>Китайские и корейские автомобили с пробегом — купить с доставкой в Беларусь<\/p>/);
   assert.match(html, /В наличии 5[^<]*673 автомобиля/);
   // Текст раздела лежит в самой странице, а не подгружается скриптом.
   assert.match(html, /собственный тип батареи Blade/);
@@ -101,7 +101,7 @@ test("страница раздела отдаётся с текстом, маш
 test("пустой раздел не показывает пустой список", () => {
   const { html } = render().landingPage({ landing: findCatalogLanding("/catalog/wagon"), cars: [], total: 0 });
   assert.doesNotMatch(html, /<ul><\/ul>/);
-  assert.match(html, /<a href="\/catalog">Все автомобили с пробегом из Китая<\/a>/);
+  assert.match(html, /<a href="\/catalog">Все автомобили с пробегом из Китая и Кореи<\/a>/);
 });
 
 test("несуществующий раздел не притворяется страницей", () => {
@@ -132,7 +132,7 @@ test("общая страница каталога показывает маши
   // Файлом она собиралась вхолостую: на хостинге дампа каталога нет, и в странице
   // не оставалось ни одной ссылки на машину. Сервер берёт список из базы.
   const { html } = render().catalogIndexPage({ cars, total: 32916, sections: CATALOG_LANDINGS });
-  assert.match(html, /<h1><span>Каталог авто<\/span> <span>из Китая<\/span><\/h1><p>Китайские автомобили с пробегом — купить с доставкой в Беларусь<\/p>/);
+  assert.match(html, /<h1><span>Авто<\/span> <span>из Китая и Кореи<\/span><\/h1><p>Китайские и корейские автомобили с пробегом — купить с доставкой в Беларусь<\/p>/);
   assert.match(html, /В каталоге 32[\s\u00a0\u202f]916 автомобилей/);
   assert.match(html, /<a href="\/cars\/1">BYD Han 2023<\/a>/);
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/catalog"/);
@@ -251,9 +251,12 @@ test("карточка машины в приложении ведёт в сво
   assert.ok(block.includes("detail-section-links"), "блок ссылок на разделы собирается не из landingsForCar");
   // С 25.09.2026 к разделам машины добавлена её ценовая полоса.
   assert.ok(block.includes("priceBandsForCar({ type: car.type"), "в карточке нет ссылки на ценовую полосу");
-  // У обычной машины разделов пять: марка, тип двигателя, кузов и два сочетания.
-  const forCar = landingsForCar({ brand: "BYD", type: "Электромобиль", bodyType: "SUV / кроссовер" });
-  assert.deepEqual(forCar.map((item) => item.path), ["/catalog/byd", "/catalog/electric", "/catalog/suv", "/catalog/electric-suv", "/catalog/byd-suv"]);
+  // У обычной машины разделов шесть: марка, тип двигателя, кузов, два сочетания и
+  // страница её страны (29.09.2026) — по полю `origin`, а без него по источнику.
+  const forCar = landingsForCar({ brand: "BYD", type: "Электромобиль", bodyType: "SUV / кроссовер", source: "Che168" });
+  assert.deepEqual(forCar.map((item) => item.path), ["/catalog/byd", "/catalog/electric", "/catalog/suv", "/catalog/electric-suv", "/catalog/byd-suv", "/catalog/china"]);
+  const korean = landingsForCar({ brand: "Hyundai", type: "ДВС", bodyType: "Седан", origin: "korea" });
+  assert.ok(korean.some((item) => item.path === "/catalog/korea") && !korean.some((item) => item.path === "/catalog/china"));
 });
 
 test("ссылки между разделами идут по смыслу, а не одним блоком на всех страницах", () => {
@@ -383,7 +386,7 @@ test("раздел марки без машин не показывается", 
 test("вопросы раздела зависят от типа двигателя и стоят только на первой странице", () => {
   const { html } = render().landingPage({ landing: findCatalogLanding("/catalog/petrol"), cars, total: 70629 });
   // Бензиновый раздел спрашивают про пошлину по объёму двигателя, а не про квоту.
-  assert.match(html, /Сколько добавляет растаможка к цене бензиновой машины\?/);
+  assert.match(html, /Сколько добавляет растаможка к цене машины с бензиновым или дизельным мотором\?/);
   assert.match(html, /по объёму двигателя и возрасту/);
   assert.match(html, /"@type":"FAQPage"/);
   // Число машин в ответе — настоящее, из этого же запроса.
@@ -442,14 +445,14 @@ test("заголовки разделов: «в Беларусь», без Ми�
 
 test("с живыми цифрами заголовок раздела называет число машин и цену «от»", () => {
   const byd = findCatalogLanding("/catalog/byd");
-  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ | abcars.by");
+  assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая и Кореи в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ | abcars.by");
   const description = landingSeoDescription(byd, { total: 5204, priceFrom: 9950, priceTo: 88000, yearMin: 2021, yearMax: 2025 });
   assert.match(description, /^В наличии 5\u00a0204 авто, цены от 9\u00a0950 до 88\u00a0000 \$ с доставкой до Минска, 2021–2025 годов выпуска\./);
   // Прежний текст — с «б/у» и Минском — остаётся после цифр.
   assert.match(description, /б\/у/);
 });
 
-test("у марки не из Китая подзаголовок без «китайских автомобилей»", () => {
-  assert.equal(landingSubtitle(findCatalogLanding("/catalog/audi")), "С пробегом — купить с доставкой в Беларусь");
-  assert.match(landingSubtitle(findCatalogLanding("/catalog/byd")), /^Китайские автомобили/);
+test("подзаголовок один на все разделы: «китайские и корейские» и у Audi, и у BYD", () => {
+  assert.equal(landingSubtitle(findCatalogLanding("/catalog/audi")), "Китайские и корейские автомобили с пробегом — купить с доставкой в Беларусь");
+  assert.match(landingSubtitle(findCatalogLanding("/catalog/byd")), /^Китайские и корейские автомобили/);
 });

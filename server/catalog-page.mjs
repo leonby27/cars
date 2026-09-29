@@ -98,12 +98,14 @@ async function catalogBoot({ path, filters, query, list, seed, guide = null, bra
   const type = filters.get("type");
   const brandFilter = filters.get("brand");
   const bodyType = filters.getAll("bodyType");
-  // Та же строка, что собирает catalogMetaQuery в приложении: тип, марка, кузов.
+  const country = filters.get("country") || null;
+  // Та же строка, что собирает catalogMetaQuery в приложении: тип, марка, кузов, страна.
   const metaQuery = new URLSearchParams();
   if (type) metaQuery.set("type", type);
   if (brandFilter) metaQuery.set("brand", brandFilter);
   for (const value of bodyType) metaQuery.append("bodyType", value);
-  const meta = await getCatalogMeta(type || null, brandFilter || null, bodyType);
+  if (country) metaQuery.set("country", country);
+  const meta = await getCatalogMeta(type || null, brandFilter || null, bodyType, country);
   return {
     catalogValue: plainCatalogSearch(query) ? { items: bootCars(list.items), total: list.total, hasMore: Boolean(list.hasMore), changedAt: list.changedAt || null } : null,
     catalogPath: path,
@@ -213,7 +215,9 @@ export async function renderCatalogPage(slug, searchParams) {
   // для посетителя нет. Но у вычеркнутых марок (31.08.2026) машин не будет никогда,
   // а привезти их под заказ мы можем: страница остаётся и честно это предлагает.
   // Иначе 21 раздел, уже отданный поисковику, разом превратился бы в 404.
-  if (!total && !droppedBrands.has(landing.brand)) return { status: 404, html: renderer.landingMissingPage() };
+  // Страница страны без машин (Корея до первого импорта) тоже остаётся: предлагает
+  // привезти под заказ, а от поиска закрыта — landingIndexable при нуле даёт noindex.
+  if (!total && !droppedBrands.has(landing.brand) && landing.kind !== "origin") return { status: 404, html: renderer.landingMissingPage() };
   const priced = items.slice(0, 24);
 
   // Обзоры моделей этой марки — сильные внутренние ссылки: у каждой такой страницы

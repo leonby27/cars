@@ -5,12 +5,15 @@ import { buildSeoPositionRows, normalizeSeoQuery, SEO_POSITION_CORE, SEO_WORDSTA
 
 test("SEO-ядро содержит все контрольные группы Wordstat для Беларуси", () => {
   assert.equal(SEO_WORDSTAT_UPDATED_AT, "2026-09-21");
-  assert.equal(SEO_POSITION_CORE.length, 120);
+  assert.equal(SEO_POSITION_CORE.length, 127);
   assert.deepEqual(SEO_POSITION_CORE[0], { group:"Общие коммерческие запросы", query:"авто из Китая", wordstatMonthly:5598 });
   assert.deepEqual(new Set(SEO_POSITION_CORE.map((row) => row.group)), new Set(["Общие коммерческие запросы", "Растаможка и расчёт", "Электромобили", "Гибриды", "Выбор и владение", "Марки и модели"]));
   assert.ok(SEO_POSITION_CORE.some((row) => row.query === "калькулятор растаможки авто в Беларуси" && row.wordstatMonthly === 2017));
   assert.ok(SEO_POSITION_CORE.some((row) => row.query === "электромобиль купить в Беларуси" && row.wordstatMonthly === 2326));
   assert.ok(SEO_POSITION_CORE.some((row) => row.query === "geely ex2 купить" && row.wordstatMonthly === 1523));
+  // Корейские запросы в ядре есть, частотность пока не снята.
+  assert.ok(SEO_POSITION_CORE.some((row) => row.query === "авто из Кореи в Беларусь" && row.wordstatMonthly === null));
+  assert.ok(SEO_POSITION_CORE.some((row) => row.query === "kia из Кореи"));
 });
 
 test("SEO-позиции точно сопоставляются с запросами поисковиков, а отсутствующие остаются пустыми", () => {

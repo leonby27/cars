@@ -18,7 +18,7 @@ const lightList = (answer) => (answer?.items ? { ...answer, items: answer.items.
 const RESOLVERS = [
   ["/api/cars", async (params) => lightList(await listCars(params))],
   ["/api/cars/summary", (params) => modelSummary(params)],
-  ["/api/catalog/meta", (params) => getCatalogMeta(params.get("type"), params.get("brand"), params.getAll("bodyType"))],
+  ["/api/catalog/meta", (params) => getCatalogMeta(params.get("type"), params.get("brand"), params.getAll("bodyType"), params.get("country"))],
   ["/api/model-facts", () => getModelFacts()],
   ["/api/brand-guide", (params) => brandCatalogGuide(params.get("brand"))],
   // Сравнение с белорусским рынком — так же, как в handler.mjs.

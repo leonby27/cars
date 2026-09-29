@@ -86,3 +86,19 @@ test('Guazi: оригинал и оба превью принадлежат ма
  for(const file of cached){await assert.rejects(fs.stat(file),{code:'ENOENT'});await assert.rejects(fs.stat(file+'.json'),{code:'ENOENT'});}
  assert.equal(await fs.readFile(path.join(directory,'unrelated.jpg'),'utf8'),'keep');
 });
+
+test('Encar: три размера одного кадра — один владелец, файл на диске узнаётся по пути без размера',async()=>{
+  const encar='https://ci.encar.com/carpicture02/pic4212/42124074_001.jpg';
+  assert.equal(photoIdentity(encar),'encar:/carpicture02/pic4212/42124074_001.jpg');
+  assert.equal(photoIdentity('/photo/encar/w600/carpicture02/pic4212/42124074_001.jpg'),photoIdentity('/photo/encar/w1920/carpicture02/pic4212/42124074_001.jpg'));
+  assert.equal(photoIdentity(vehiclePhotoHref(encar,600,{cacheVersion:''})),photoIdentity(encar));
+  assert.equal(photoIdentity('/photo/encar/w600/../x.jpg'),null);
+  assert.equal(photoIdentity('/photo/encar/w300/carpicture02/a.jpg'),null);
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'encar-photos-'));
+  const file=path.join(dir,'photo/encar/w600/carpicture02/pic4212/42124074_001.jpg');
+  await fs.mkdir(path.dirname(file),{recursive:true}); await fs.writeFile(file,'jpeg');
+  const files=await storedPhotoFiles(dir);
+  assert.equal(files.length,1);
+  assert.equal(files[0].key,'encar:/carpicture02/pic4212/42124074_001.jpg');
+  await fs.rm(dir,{recursive:true,force:true});
+});

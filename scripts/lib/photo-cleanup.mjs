@@ -10,7 +10,11 @@ export const PHOTO_RETENTION_MS = 7 * 86400_000;
 // All sizes of the same source share ownership, including old 900px copies.
 export function photoIdentity(source) {
   const href = source?.startsWith('/photo/') ? source : vehiclePhotoHref(source, 'original', { cacheVersion:'' });
-  if (typeof href !== 'string' || !/^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) || href.split('/').includes('..')) return null;
+  if (typeof href !== 'string' || href.split('/').includes('..')) return null;
+  // Кадры Encar: три размера в пути (/photo/encar/w600|w1200|w1920/…) — один владелец.
+  const encar = href.match(/^\/photo\/encar\/w(?:600|1200|1920)(\/[A-Za-z0-9/_.-]+\.jpe?g)$/i);
+  if (encar) return `encar:${encar[1]}`;
+  if (!/^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href)) return null;
   return href.replace(/\/\d+x\d+_c\d+_(?=[^/]*$)/, '/');
 }
 

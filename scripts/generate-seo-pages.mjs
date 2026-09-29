@@ -6,7 +6,12 @@ import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS, HOME_SEO, brandLandingPath, catalogPageCount, landingApiParams, landingsForCar, modelLandingPath } from "../src/catalog-landings.js";
-import { TOOL_PAGES, calcParamNames, calculatorFields, customsExample, deliveryStages, dutyRateTables, toolPageStats, toolUpdatedLabel } from "../src/tool-pages.js";
+// Заголовки информационных страниц — общие с приложением (routeSeo в src/App.jsx).
+import { INFO_PAGES_SEO } from "../src/info-pages-seo.js";
+// Страна: общие страницы говорят фразой сайта «из Китая и Кореи», снимок одной машины —
+// её страной. См. src/origin.js.
+import { fromPhrase, siteFromPhrase, siteInPhrase, siteMarketplacesPhrase } from "../src/origin.js";
+import { TOOL_PAGES, calcParamNames, calculatorFields, customsExample, deliveryStages, deliveryStagesKorea, dutyRateTables, toolPageStats, toolUpdatedLabel } from "../src/tool-pages.js";
 import { rangeParamNames } from "../src/range-estimate.js";
 // Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
 // отдельным файлом, а сборке нужны целиком — склеиваем запись с её текстами.
@@ -158,16 +163,16 @@ const marketBelarus = existsSync(marketPath) ? JSON.parse(readFileSync(marketPat
 // адрес с фильтрами (`/catalog?brand=BYD`) не дошёл бы до переброса на свой раздел.
 const publicPages = [
   { route: "/", title: HOME_SEO.title, description: HOME_SEO.description, h1: HOME_SEO.h1.replace(/\u00a0/g, " "), lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },
-  { route: "/how-it-works/", title: "О сервисе покупки автомобилей из Китая | abcars.by", description: "Подбор и проверка автомобиля, расчёт цены под ключ, договор, доставка и выдача автомобиля из Китая в Минске.", h1: "О сервисе abcars.by", lead: "Подбираем автомобиль, сверяем наличие, состояние и полную смету. После вашего согласования заключается договор, машину выкупают и доставляют в Минск." },
+  { route: "/how-it-works/", ...INFO_PAGES_SEO["how-it-works"] },
   // Страницы `/about` больше нет: у неё был тот же заголовок «О сервисе abcars.by», что
   // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
   // подход и «чего мы не обещаем» — перенесены вниз `/how-it-works`, а сам адрес
   // перебрасывается туда навсегда (правило в vercel.json).
-  { route: "/faq/", title: "Вопросы о покупке и доставке авто из Китая | abcars.by", description: "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси.", h1: "Вопросы о покупке автомобиля из Китая", lead: "Короткие ответы Абкарс (ABCars) о проверке, цене, договоре, оплате, доставке и о том, кто привозит машину." },
-  { route: "/tracking/", title: "Отслеживание автомобиля по VIN | abcars.by", description: "Статус автомобиля из Китая по VIN-номеру.", h1: "Отслеживание автомобиля", lead: "Введите VIN, чтобы узнать, на каком этапе находится ваш автомобиль." },
-  { route: "/contacts/", title: "Контакты abcars.by — автомобили из Китая в Минске", description: "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, расчёту и покупке автомобиля из Китая.", h1: "Контакты abcars.by", lead: "Обсудим бюджет, подбор, проверку и расчёт цены автомобиля из Китая в Беларусь." },
+  { route: "/faq/", ...INFO_PAGES_SEO.faq },
+  { route: "/tracking/", ...INFO_PAGES_SEO.tracking },
+  { route: "/contacts/", ...INFO_PAGES_SEO.contacts },
   { route: "/privacy/", title: "Политика конфиденциальности | abcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
-  { route: "/terms/", title: "Условия использования сайта | abcars.by", description: "Условия использования каталога abcars.by, предварительных расчётов и информации об автомобилях из Китая.", h1: "Условия использования сайта", lead: "Информация каталога и расчёты являются предварительными; финальные условия фиксируются после проверки и в договоре." },
+  { route: "/terms/", ...INFO_PAGES_SEO.terms },
   // Общая страница «О моделях авто». Сами обзоры файлами не собираются: их отдаёт
   // сервер, потому что в них нужны живые цены и наличие. Готовый файл по такому адресу
   // перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
@@ -262,10 +267,10 @@ const PATHWAYS = {
 
 const landingBySlug = new Map(CATALOG_LANDINGS.map((landing) => [landing.slug, landing]));
 // Текст ссылки. «BYD» само по себе поисковику почти ничего не говорит, а заголовок
-// раздела целиком — «Автомобили BYD из Китая с доставкой в Беларусь» — в списке из
-// восьми строк читается тяжело.
+// раздела целиком — «Автомобили BYD из Китая и Кореи с доставкой в Беларусь» — в списке
+// из восьми строк читается тяжело.
 const landingAnchor = (landing) =>
-  landing.kind === "brand" ? `Автомобили ${landing.name} из Китая` : landing.kind === "price" ? landing.name : `${landing.name} из Китая`;
+  landing.kind === "brand" ? `Автомобили ${landing.name} ${siteFromPhrase()}` : landing.kind === "price" ? landing.name : `${landing.name} ${siteFromPhrase()}`;
 
 /** Блок ссылок в каталог для одной информационной страницы или расчёта. */
 function pathwayFor(route) {
@@ -273,7 +278,7 @@ function pathwayFor(route) {
   if (!plan) return "";
   const links = plan.links
     .map((item) => {
-      if (item === "/catalog") return ["/catalog/", "Весь каталог автомобилей из Китая", null];
+      if (item === "/catalog") return ["/catalog/", `Весь каталог автомобилей ${siteFromPhrase()}`, null];
       if (item === "/models") return [`${MODELS_INDEX.path}/`, "Обзоры моделей", "Что за машина, чем отличаются версии и на что смотреть при выборе"];
       const tool = TOOL_PAGES.find((page) => page.path === item);
       if (tool) return [`${tool.path}/`, tool.name, tool.lead];
@@ -442,7 +447,7 @@ function toolArticle(tool) {
     );
   }
   const sections = sectionBlocks.join("");
-  if (tool.kind === "cost") live = table(deliveryStages());
+  if (tool.kind === "cost") live = `${table(deliveryStages())}${table(deliveryStagesKorea())}`;
   // Сравнение с белорусским рынком: таблица «модель, там, у нас, разница» и вывод.
   if (tool.kind === "market") {
     const { rows, summary, collectedAt, brands } = marketCompare();
@@ -452,10 +457,10 @@ function toolArticle(tool) {
     const thinBlock = thin.length
       ? `<section><h2>Марки, по которым сравнивать не с чем</h2><dl>${thin
         .map((item) => `<dt>${escapeHtml(item.brand)}</dt><dd>${number(item.cars)} ${plural(item.cars, "машина", "машины", "машин")} в каталоге — ${escapeHtml(coverageNote(item))}</dd>`)
-        .join("")}</dl><p>Это не пробел в данных: таких машин на белорусском рынке почти нет в продаже, и сравнивать их не с чем. Привезти из Китая — единственный способ такую купить.</p></section>`
+        .join("")}</dl><p>Это не пробел в данных: таких машин на белорусском рынке почти нет в продаже, и сравнивать их не с чем. Единственный способ такую купить — привезти под заказ ${siteFromPhrase()}.</p></section>`
       : "";
     live = rows.length
-      ? `<section><h2>Что это значит коротко</h2><p>Сравнили ${number(summary.models)} ${plural(summary.models, "набор", "набора", "наборов")} «модель и год выпуска», по которым предложения есть и в Беларуси, и у нас. Дешевле привезти из Китая ${number(summary.cheaper)} из них: там разница около ${summary.medianPercent}%. По остальным ${number(summary.dearer)} выгоднее купить машину, которая уже в Беларуси.${summary.bestSaving ? ` Больше всего выигрывает ${escapeHtml(`${summary.bestSaving.brand} ${summary.bestSaving.model}`)} ${summary.bestSaving.year} года: около ${number(summary.bestSaving.diff)} $.` : ""}</p></section>`
+      ? `<section><h2>Что это значит коротко</h2><p>Сравнили ${number(summary.models)} ${plural(summary.models, "набор", "набора", "наборов")} «модель и год выпуска», по которым предложения есть и в Беларуси, и у нас. Дешевле привезти ${siteFromPhrase()} ${number(summary.cheaper)} из них: там разница около ${summary.medianPercent}%. По остальным ${number(summary.dearer)} выгоднее купить машину, которая уже в Беларуси.${summary.bestSaving ? ` Больше всего выигрывает ${escapeHtml(`${summary.bestSaving.brand} ${summary.bestSaving.model}`)} ${summary.bestSaving.year} года: около ${number(summary.bestSaving.diff)} $.` : ""}</p></section>`
         + table(compareTable(rows.slice(0, STATIC_COMPARE_ROWS), {
           collectedAt,
           hidden: Math.max(0, rows.length - STATIC_COMPARE_ROWS),
@@ -523,9 +528,9 @@ function infoArticle(route) {
   const list = (items) => `<dl>${items.map(([term, text]) => `<dt>${escapeHtml(term)}</dt><dd>${escapeHtml(text)}</dd>`).join("")}</dl>`;
   if (route === "/") {
     // Главная — самая массовая страница по запросам и была самой пустой: 44 слова.
-    return `<section><h2>Пригон авто из Китая: понятный путь</h2>${HOME_ORDER_STEPS.map(
+    return `<section><h2>Пригон авто ${siteFromPhrase()}: понятный путь</h2>${HOME_ORDER_STEPS.map(
       (step) => `<h3>${escapeHtml(step.number)}. ${escapeHtml(step.title)}</h3><p>${escapeHtml(step.description)}</p>`,
-    ).join("")}</section><section><h2>Частые вопросы о покупке и доставке б/у авто из Китая</h2><p>${escapeHtml(HOME_FAQ_LEAD)}</p>${HOME_FAQ.map(
+    ).join("")}</section><section><h2>Частые вопросы о покупке и доставке б/у авто ${siteFromPhrase()}</h2><p>${escapeHtml(HOME_FAQ_LEAD)}</p>${HOME_FAQ.map(
       (item) => `<h3>${escapeHtml(item.question)}</h3><p>${linkifyText(item.answer, hrefRoute)}</p>`,
     ).join("")}<p><a href="${hrefRoute("/faq/")}">Все вопросы и ответы</a></p></section>`;
   }
@@ -544,7 +549,7 @@ function infoArticle(route) {
       ["Электронная почта", COMPANY.email],
       ["Telegram", COMPANY.telegram],
     ].filter(([, value]) => value);
-    return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля в Китае, договор, доставку и оформление в Минске. Ответим и без обязательства что-то покупать.</p><p>До обращения можно посмотреть <a href="${hrefRoute("/")}">автомобили из Китая с расчётом до Минска</a>.</p></section>`;
+    return `<section><h2>Как с нами связаться</h2>${list(rows)}<p>Расскажем про подбор, проверку автомобиля ${siteInPhrase()}, договор, доставку и оформление в Минске. Ответим и без обязательства что-то покупать.</p><p>До обращения можно посмотреть <a href="${hrefRoute("/")}">автомобили ${siteFromPhrase()} с расчётом до Минска</a>.</p></section>`;
   }
   if (route === "/how-it-works/") {
     const report = SERVICE_REPORT_EXAMPLE;
@@ -569,7 +574,7 @@ function infoArticle(route) {
       ? `<h3>${escapeHtml(report.recommendation.eyebrow)}</h3><h4>${escapeHtml(report.recommendation.title)}</h4><p>${escapeHtml(report.recommendation.summary)}</p><ol>${report.recommendation.steps.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`
       : "";
     const reportPowertrainNote = report.powertrainNote?.text ? `<p>${escapeHtml(report.powertrainNote.text)}</p>` : "";
-    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто из Китая с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что входит в сервис</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и связь</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Покупка авто: от выбора до ключей</h2>${list(PURCHASE_FLOW_STEPS.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(report.presentation.title)}</h2><h3>${escapeHtml(report.vehicle.name)}</h3><p><strong>${escapeHtml(report.verdict.title)}.</strong> ${escapeHtml(report.verdict.summary)}</p>${list(report.risks.map((item) => [item.title, [item.status, item.note].filter(Boolean).join(". ")]))}${reportInspection}<h3>${escapeHtml(report.labels.evidenceTitle)}</h3>${reportPhotoGroups}<h3>${escapeHtml(report.labels.factsTitle)}</h3>${list(report.facts.map((item) => [item.label, item.metric === "photoCount" ? String(reportPhotos.length) : item.value]))}<h3>${escapeHtml(report.labels.findingsTitle)}</h3><ul>${report.findings.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul>${reportLimitations}${reportRecommendation}${reportPowertrainNote}</section>`;
+    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто ${siteFromPhrase()} с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что входит в сервис</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и связь</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Покупка авто: от выбора до ключей</h2>${list(PURCHASE_FLOW_STEPS.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(report.presentation.title)}</h2><h3>${escapeHtml(report.vehicle.name)}</h3><p><strong>${escapeHtml(report.verdict.title)}.</strong> ${escapeHtml(report.verdict.summary)}</p>${list(report.risks.map((item) => [item.title, [item.status, item.note].filter(Boolean).join(". ")]))}${reportInspection}<h3>${escapeHtml(report.labels.evidenceTitle)}</h3>${reportPhotoGroups}<h3>${escapeHtml(report.labels.factsTitle)}</h3>${list(report.facts.map((item) => [item.label, item.metric === "photoCount" ? String(reportPhotos.length) : item.value]))}<h3>${escapeHtml(report.labels.findingsTitle)}</h3><ul>${report.findings.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul>${reportLimitations}${reportRecommendation}${reportPowertrainNote}</section>`;
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {
@@ -607,7 +612,7 @@ function blogFigure(car, index) {
   // Ширины те же, что в приложении: 800 точек показа и вдвое крупнее для экранов
   // с двойной плотностью (см. IMAGE_WIDTH_ARTICLE в src/App.jsx).
   const srcset = `${photoHref(source, 800)} 1x, ${photoHref(source, 1400)} 2x`;
-  return `<figure><a href="${escapeHtml(hrefRoute(carRoute(car)))}"><img src="${escapeHtml(photoHref(source, 800))}" srcset="${escapeHtml(srcset)}" alt="${escapeHtml(`${title} — автомобиль из Китая в наличии`)}" loading="lazy" /></a><figcaption><a href="${escapeHtml(hrefRoute(carRoute(car)))}">${escapeHtml(title)}</a> — ${escapeHtml(facts)}</figcaption></figure>`;
+  return `<figure><a href="${escapeHtml(hrefRoute(carRoute(car)))}"><img src="${escapeHtml(photoHref(source, 800))}" srcset="${escapeHtml(srcset)}" alt="${escapeHtml(`${title} — автомобиль ${fromPhrase(car.origin)} в наличии`)}" loading="lazy" /></a><figcaption><a href="${escapeHtml(hrefRoute(carRoute(car)))}">${escapeHtml(title)}</a> — ${escapeHtml(facts)}</figcaption></figure>`;
 }
 
 /**
@@ -620,7 +625,7 @@ function blogAdBlock() {
   const total = live.activeCars || 0;
   const listings = total >= 1000 ? `${number(Math.floor(total / 1000) * 1000)} объявлений` : "Смотреть каталог";
   const updated = catalogUpdatedLabel(live.catalogRefreshedAt);
-  return `<aside><p>abcars.by — это маркетплейс б/у авто из Китая. <a href="${hrefRoute("/catalog/")}">${escapeHtml(listings)}</a>${
+  return `<aside><p>abcars.by — это маркетплейс б/у авто ${siteFromPhrase()}. <a href="${hrefRoute("/catalog/")}">${escapeHtml(listings)}</a>${
     updated ? ` <span class="seo-updated">Каталог обновлён ${escapeHtml(updated)}.</span>` : ""
   }</p></aside>`;
 }
@@ -1025,7 +1030,7 @@ function publicPageBody(page) {
   // «электромобиль до 20 000» и «китайский кроссовер» — самые покупательские. Теперь
   // на главной и на странице обзоров стоит полный список.
   const sections = page.route === "/" || page.modelsIndex
-    ? renderer.sectionLinks(liveSections, { heading: page.modelsIndex ? "Разделы каталога" : "Автомобили из Китая по маркам, типам и цене" })
+    ? renderer.sectionLinks(liveSections, { heading: page.modelsIndex ? "Разделы каталога" : `Автомобили ${siteFromPhrase()} по маркам, типам и цене` })
     : "";
   const models = page.route === "/" ? popularModelLinks() : "";
   const journal = page.route === "/" ? blogHomeLinks() : "";
@@ -1203,10 +1208,10 @@ writeFileSync(appShellPath, appShellHtml);
 // здесь общий, по `SEO_ALLOW_INDEXING`: оставить `noindex` в готовом HTML насовсем
 // нельзя — поисковик выбрасывает страницу, не дожидаясь, пока скрипт запрет снимет.
 const carShellHtml = renderHtml({
-  title: "Автомобиль с пробегом из Китая — цена до Минска | abcars.by",
-  description: "Характеристики, пробег, состояние и ориентировочная стоимость автомобиля с пробегом из Китая с доставкой в Минск.",
+  title: "Автомобиль с пробегом — цена с доставкой до Минска | abcars.by",
+  description: "Характеристики, пробег, состояние и ориентировочная стоимость автомобиля с пробегом с доставкой в Минск.",
   canonical: null,
-  body: `${navigation(MODELS_INDEX.path)}<main class="page-width"><h1>Автомобиль с пробегом из Китая</h1><p>Загружаем карточку автомобиля: характеристики, фотографии и ориентировочную стоимость до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Все автомобили в каталоге</a></p></main>${footer()}`,
+  body: `${navigation(MODELS_INDEX.path)}<main class="page-width"><h1>Автомобиль с пробегом</h1><p>Загружаем карточку автомобиля: характеристики, фотографии и ориентировочную стоимость до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Все автомобили в каталоге</a></p></main>${footer()}`,
   type: "product",
 });
 writeFileSync(path.join(clientDir, "car.html"), carShellHtml);
@@ -1625,10 +1630,10 @@ const llmsFull = () => {
   // это отбивка между разделами, без неё файл слипается в одну простыню.
   const block = (...lines) => lines.filter((item) => item !== null && item !== undefined).join("\n");
   return `${block(
-    "# abcars.by — б/у автомобили из Китая в Беларусь: факты для пересказа",
+    `# abcars.by — б/у автомобили ${siteFromPhrase()} в Беларусь: факты для пересказа`,
     "",
-    "Сервис подбора подержанных машин с китайского рынка с расчётом цены до Минска. У каждой",
-    "машины показаны цена продавца в Китае и расчётная стоимость до Минска: доставка, таможенные",
+    `Сервис подбора подержанных машин ${siteMarketplacesPhrase()} с расчётом цены до Минска. У каждой`,
+    "машины показаны цена продавца и расчётная стоимость до Минска: доставка, таможенные",
     "платежи, утилизационный сбор, подбор и сопровождение. Ввоз организуют компании-импортёры, с которыми",
     "работает сервис. Сайт на русском языке.",
     "",
@@ -1669,13 +1674,13 @@ const llmsFull = () => {
     "",
     "- Обычный срок от подписания договора до Минска — 30–55 дней.",
     "- Этапы: выкуп у продавца, экспортные документы, доставка до границы, таможенное оформление, путь до Минска.",
-    "- Стоимость доставки зависит от города отправления в Китае; разбор по этапам есть на странице стоимости доставки.",
+    "- Стоимость доставки зависит от страны и города отправления; разбор по этапам есть на странице стоимости доставки.",
     "",
     "## Куда смотреть за подробностями",
     "",
     ...TOOL_PAGES.map((page) => `- ${routeUrl(page.path)} — ${page.lead}`),
     `- ${routeUrl("/catalog")} — весь каталог с фильтрами по марке, типу двигателя, цене, году, пробегу, ёмкости батареи и запасу хода.`,
-    `- ${routeUrl("/models")} — обзоры моделей: чем китайская версия отличается от привычной, какие моторы и батареи ставили по годам.`,
+    `- ${routeUrl("/models")} — обзоры моделей: чем версия для домашнего рынка отличается от привычной, какие моторы и батареи ставили по годам.`,
     BLOG_ENABLED ? `- ${routeUrl(BLOG_INDEX.path)} — журнал: подборки, сравнения моделей и разборы правил ввоза.` : null,
     "",
     "## Как пересказывать наши данные",
@@ -1699,7 +1704,7 @@ writeFileSync(path.join(clientDir, "..", "blog-published.json"), `${JSON.stringi
 // Keep the initial static catalog small. Full records are loaded only when a
 // visitor opens a vehicle page on a host without the database API.
 const summaryKeys = [
-  "id", "externalId", "brand", "model", "year", "mileage", "chinaPrice", "usdPrice",
+  "id", "externalId", "source", "origin", "brand", "model", "year", "mileage", "chinaPrice", "sourcePrice", "sourceCurrency", "usdPrice",
   "city", "owners", "transfers", "type", "drive", "bodyType", "bodyStructure", "vehicleClass",
   "seats", "doors", "engine", "battery", "batteryType", "range", "electricRange",
   "combinedRange", "batteryHealth", "claims", "incident", "conditionGrade", "appearanceScore",

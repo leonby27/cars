@@ -4,7 +4,7 @@ export async function catalogSources(client=pool){
  return {sources:rows};
 }
 export async function setCatalogSource(source,enabled,client=pool){
- if(source!=='Guazi'||typeof enabled!=='boolean')throw new Error('Invalid catalog source setting');
+ if(!['Guazi','Encar'].includes(source)||typeof enabled!=='boolean')throw new Error('Invalid catalog source setting');
  await client.query('UPDATE catalog_sources SET enabled=$2,updated_at=now() WHERE source=$1',[source,enabled]);
  return catalogSources(client);
 }

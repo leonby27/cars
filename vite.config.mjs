@@ -3,6 +3,7 @@ import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import { trimModelPages } from "./scripts/vite-trim-model-pages.mjs";
 import { guaziLocalPreview } from "./scripts/vite-guazi-preview.mjs";
+import { encarResizeQuery } from "./src/photo-source.js";
 
 // Сервер разработки — для расчёта популярных моделей теми же модулями, что и сборка.
 let server = null;
@@ -25,6 +26,24 @@ export default defineConfig({
       // (snippets/abcars-photo-location.conf). Локально nginx нет, и без этой
       // переадресации каталог остаётся без снимков. Берём ту же серверную копию,
       // что и посетители сайта: прямой запрос в Китай обходил уже готовый кэш.
+      // Кадры Encar (Корея): пока блок nginx для /photo/encar/ не выложен на сервер,
+      // локально берём кадр прямо у хранилища площадки — размер из пути переводится
+      // в его параметры, как это делает nginx (deploy/nginx-abcars-photo-location.conf).
+      "/photo/encar": {
+        target: "https://ci.encar.com",
+        changeOrigin: true,
+        rewrite: (url) => {
+          const match = url.match(/^\/photo\/encar\/w(\d+)(\/[^?]*)/);
+          return match ? `${match[2]}?${encarResizeQuery(Number(match[1]))}` : url;
+        },
+        configure(proxy) {
+          proxy.on("proxyReq", (request) => {
+            request.removeHeader("cookie");
+            request.removeHeader("authorization");
+            request.setHeader("referer", "https://www.encar.com/");
+          });
+        },
+      },
       "/photo": {
         target: "https://abcars.by",
         changeOrigin: true,

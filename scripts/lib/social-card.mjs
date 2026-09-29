@@ -16,6 +16,8 @@
 // кнопка ведёт туда же.
 import { carTitle } from "../../src/car-title.js";
 import { socialPhotoHref } from "../../src/photo-source.js";
+// Подпись каталога — общая для сайта: «из Китая и Кореи» (src/origin.js).
+import { siteFromPhrase } from "../../src/origin.js";
 
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Math.round(Number(value) || 0));
 
@@ -56,16 +58,17 @@ const brandTag = (brand) => String(brand || "").toLocaleLowerCase("en-US").repla
 
 function hashtags(car) {
   const kind = car?.type === "Электромобиль" ? "электромобиль" : car?.type === "Гибрид" ? "гибрид" : "автоизкитая";
-  const tags = ["абкарс", "автоизкитая", kind, brandTag(car?.brand), "авторынокбеларуси"];
+  // Обе страны ввоза стоят метками у каждой записи: по ним ищут ленту, а не машину.
+  const tags = ["абкарс", "автоизкитая", "автоизкореи", kind, brandTag(car?.brand), "авторынокбеларуси"];
   return [...new Set(tags.filter(Boolean))].map((tag) => `#${tag}`).join(" ");
 }
 
 // Номер машины у источника: по нему её находят и в каталоге, и в адресе карточки.
-export const carNumber = (car) => String(car?.externalId || String(car?.id || "").replace(/^che168-/, "") || "").trim();
+export const carNumber = (car) => String(car?.externalId || String(car?.id || "").replace(/^(che168|guazi|encar)-/, "") || "").trim();
 
 const escapeHtml = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export const CATALOG_FOOTER = "Каталог авто с пробегом из Китая — abcars.by";
+export const CATALOG_FOOTER = `Каталог авто с пробегом ${siteFromPhrase()} — abcars.by`;
 
 // В Threads и Telegram запись без адреса сайта должна всё равно вести человека
 // к каталогу. Если ссылка или адрес уже есть, второй раз подпись не добавляем.

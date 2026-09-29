@@ -1,5 +1,7 @@
 import { belarusianName } from "./model-names-by.mjs";
 import { guaziModelName } from "./guazi-model-names.mjs";
+import { koreanModelName } from "./korean-model-names.mjs";
+import { originForSource } from "../src/origin.js";
 
 export const IMPORT_MIN_YEAR = 2020;
 
@@ -20,6 +22,9 @@ export const importMinYear = (type) => (type === "ДВС" ? ICE_IMPORT_MIN_YEAR 
 // 07.09.2026 (решение Сергея). Список нужен лишь затем, чтобы не отвергать
 // машину с неразобранным типом.
 export const IMPORTABLE_POWERTRAINS = Object.freeze(["Электромобиль", "Гибрид", "ДВС"]);
+// Газовые машины (LPG/LPi — в Корее их много: Sonata, K5, Grandeur для такси) не парсим:
+// решение Сергея 29.09.2026, вопрос вернётся при написании парсера Encar. Парсер
+// должен отбрасывать их сам — здесь тип топлива на въезд не влияет.
 
 // Марки, которые в Беларуси знают. Каталог источника наполовину состоит из марок,
 // которых здесь нет вообще (GAC Trumpchi, Roewe, Baojun, подбренды Dongfeng): такую
@@ -63,6 +68,11 @@ export const EXCLUDED_BRANDS = Object.freeze([
 // цене в Китае: покупателя интересует она. Машину дороже этого у нас не заказывают,
 // а карточка занимает место в каталоге, в выдаче и в ночном обходе.
 export const MAX_LANDED_USD = 100_000;
+
+// Марки, которые возим только из Кореи (29.09.2026): на китайском рынке их нет, а в
+// Беларуси знают. Chevrolet и Renault остаются вычеркнутыми и для Кореи: решение
+// 31.08.2026 было про Китай, корейские GM и Renault Korea пока не обсуждались.
+export const KOREA_IMPORT_BRANDS = Object.freeze(["Genesis", "KGM"]);
 
 // Sources retired from the catalog. Their existing listings stay in the
 // database as `unavailable` so orders that already reference them keep
@@ -219,10 +229,16 @@ const BRAND_ALIASES = new Map([
   // «Qiyuan A07», «Qiyuan Q05» — приставка живёт в названии модели, а не марки.
   ["changan qiyuan", "Changan"],
   ["qiyuan", "Changan"],
+  // Корея: SsangYong с 2023 года называется KG Mobility, на площадке встречаются оба имени.
+  ["ssangyong", "KGM"],
+  ["kg mobility", "KGM"],
+  ["kgm", "KGM"],
+  ["현대", "Hyundai"], ["기아", "Kia"], ["제네시스", "Genesis"], ["쌍용", "KGM"], ["kg모빌리티", "KGM"],
 ]);
 const allowedBrands = new Set(IMPORT_BRANDS);
+const allowedKoreaBrands = new Set([...IMPORT_BRANDS, ...KOREA_IMPORT_BRANDS]);
 const excludedBrands = new Set(EXCLUDED_BRANDS);
-const allowedBrandByLower = new Map(IMPORT_BRANDS.map((brand) => [brand.toLocaleLowerCase("en-US"), brand]));
+const allowedBrandByLower = new Map([...IMPORT_BRANDS, ...KOREA_IMPORT_BRANDS].map((brand) => [brand.toLocaleLowerCase("en-US"), brand]));
 
 export function canonicalImportBrand(value) {
   const brand = String(value || "").trim();
@@ -344,6 +360,8 @@ export function canonicalImportName(brandValue, modelValue, powertrain, details 
   // Guazi пишет те же модели иначе, чем Che168 («Zeekr 8X», «CS35PLUS», «Geome»);
   // сначала приводим к написанию каталога, дальше — общий путь.
   if (details?.source === "Guazi") modelValue = guaziModelName(sourceBrand, modelValue, powertrain, details);
+  // Encar пишет по-корейски и с кодами поколений — сначала беларуское имя (config/korean-model-names.mjs).
+  if (details?.source === "Encar" || details?.origin === "korea") modelValue = koreanModelName(sourceBrand, modelValue);
   if (civicTypeR(sourceBrand, modelValue, details)) return { brand:sourceBrand, model:"Civic Type R" };
   // Сначала пробуем то, что пришло, как есть: у части моделей вместе с именем меняется
   // и марка, а словарь марок к этому моменту успел бы её подменить. «HIMA / Luxeed R7»
@@ -371,10 +389,12 @@ export function sourceBrandOf(value) {
   return SOURCE_BRAND_BY_OUR_BRAND.get(brand) || brand;
 }
 
-export function isAllowedImportBrand(value) {
+// Список марок — по стране: из Кореи дополнительно едут Genesis и KGM (их в Китае нет),
+// вычеркнутые марки вычеркнуты для обеих стран.
+export function isAllowedImportBrand(value, origin = "china") {
   const brand = canonicalImportBrand(value);
   if (excludedBrands.has(brand)) return false;
-  return allowedBrands.has(brand);
+  return (origin === "korea" ? allowedKoreaBrands : allowedBrands).has(brand);
 }
 
 // Цена «под ключ» выше потолка — отказ. Значение приходит из расчёта (`totalUsd`),
@@ -388,7 +408,8 @@ export function isAbovePriceCeiling(landedUsd) {
 // Правила ввоза: марка, год и разобранный тип двигателя. Ключа `combustion` больше
 // нет — тип двигателя не решает, заводить машину или нет (07.09.2026).
 export function importPolicyViolation(car) {
-  if (!isAllowedImportBrand(car?.brand)) return "brand is outside the Belarus import list";
+  const origin = car?.origin || originForSource(car?.source);
+  if (!isAllowedImportBrand(car?.brand, origin)) return "brand is outside the Belarus import list";
   const minYear = importMinYear(car?.type);
   if (!Number.isFinite(Number(car?.year)) || Number(car.year) < minYear) return `model year is below ${minYear}`;
   if (!IMPORTABLE_POWERTRAINS.includes(car?.type)) return "unknown powertrain";

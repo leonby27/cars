@@ -67,7 +67,9 @@ if (!carArg) {
   process.exit(1);
 }
 
-const carId = carArg.startsWith("che168-") ? carArg : `che168-${carArg}`;
+// Номер с приставкой берём как есть; голый номер — китайский, `kr-<номер>` — корейский
+// (src/listing-id.js: адреса корейских машин идут с приставкой, чтобы номера не совпали).
+const carId = /^(che168|guazi|encar)-/.test(carArg) ? carArg : /^kr-/i.test(carArg) ? `encar-${carArg.slice(3)}` : `che168-${carArg}`;
 
 async function loadCar() {
   const failures = [];

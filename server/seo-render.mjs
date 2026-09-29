@@ -11,6 +11,9 @@ export { photoHref };
 // Здесь нет ни файловых операций, ни обращений к базе: на вход заготовка страницы и данные,
 // на выходе строка. Поэтому модуль проверяется тестами без сборки и без Postgres.
 import { estimateLandedCost, usdToByn, yuanToUsdAbout } from "../src/pricing.js";
+// Страна: у общих страниц — фраза сайта («из Китая и Кореи»), у одной машины — её
+// собственная (`car.origin`, по умолчанию Китай). См. src/origin.js.
+import { fromPhrase, inPhrase, siteFromPhrase, siteInPhrase } from "../src/origin.js";
 import { cityName } from "../src/city-names.js";
 import { normalizeBodyType } from "../src/body-types.js";
 import { translateColor } from "../src/colors.js";
@@ -89,7 +92,9 @@ export const trimRoute = (route) => {
 
 // Адрес карточки — короткий номер объявления, без приставки источника; сервер
 // понимает и полный идентификатор, поэтому старые ссылки не ломаются.
-export const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
+// Номер в адресе — общий помощник (src/listing-id.js): корейские адреса с «kr-».
+export { listingNumber } from "../src/listing-id.js";
+import { listingNumber } from "../src/listing-id.js";
 export const carRoute = (car) => `/cars/${encodeURIComponent(listingNumber(car.id))}/`;
 export const carTitle = (car) => car.title || [car.brand, car.model, car.year].filter(Boolean).join(" ");
 
@@ -225,7 +230,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       const source = photoHref(String(car.image || car.images?.[0] || ""), IMAGE_WIDTH_TILE);
       if (!source || !/^(https:\/\/|\/)/.test(source)) return "";
       const href = source.startsWith("/") ? `${siteBasePath}${source}` : source;
-      return `<img src="${escapeHtml(href)}" alt="${escapeHtml(carTitle(car))} из Китая" width="600" height="450" loading="lazy" decoding="async" />`;
+      return `<img src="${escapeHtml(href)}" alt="${escapeHtml(carTitle(car))} ${fromPhrase(car.origin)}" width="600" height="450" loading="lazy" decoding="async" />`;
     };
     // Цена у каждой машины — как на карточке сайта: рубли первыми (так стоит по
     // умолчанию в переключателе), доллары рядом. Без неё список раздела для поисковика
@@ -380,7 +385,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       "@context": "https://schema.org",
       "@type": "WebSite",
       name: COMPANY.schemaName,
-      alternateName: [...COMPANY.schemaAlternateNames, "Автомобили из Китая в Беларусь"],
+      alternateName: [...COMPANY.schemaAlternateNames, `Автомобили ${siteFromPhrase()} в Беларусь`],
       url: routeUrl("/"),
       publisher: { "@id": `${routeUrl("/")}#organization` },
       inLanguage: "ru-BY",
@@ -453,7 +458,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   // дампе каталога, сервер — на записи из базы; данные приходят в одном виде.
 
   function carDescription(car, landed) {
-    return `${carTitle(car)} из Китая: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}, ориентировочная цена до Минска — ${number(landed.totalUsd)} $. Проверка перед покупкой.`;
+    return `${carTitle(car)} ${fromPhrase(car.origin)}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}, ориентировочная цена до Минска — ${number(landed.totalUsd)} $. Проверка перед покупкой.`;
   }
 
   function carFacts(car, landed) {
@@ -468,7 +473,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       ["Владельцев", car.owners],
       // Город — по русскому справочнику. Если названия в нём нет, строку не показываем:
       // латиница на русской странице выглядит недоделкой.
-      ["Город в Китае", cityName(car.city)],
+      [`Город ${inPhrase(car.origin)}`, cityName(car.city)],
       ["Ориентировочная цена до Минска", `${number(landed.totalUsd)} $`],
     ].filter(([, value]) => value !== null && value !== undefined && value !== "");
     return `<dl>${rows.map(([term, value]) => `<dt>${escapeHtml(term)}</dt><dd>${escapeHtml(value)}</dd>`).join("")}</dl>`;
@@ -507,7 +512,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const modelPath = car.brand && car.model ? modelLandingPath(car.brand, car.model) : null;
     return [
       ["Главная", "/"],
-      ["Каталог авто из Китая", "/catalog/"],
+      [`Каталог авто ${siteFromPhrase()}`, "/catalog/"],
       ...(brandPath ? [[car.brand, brandPath]] : []),
       ...(modelPath ? [[[car.brand, car.model].join(" "), modelPath]] : []),
       [titleText, route],
@@ -545,7 +550,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       mileageFromOdometer: { "@type": "QuantitativeValue", value: Number(car.mileage) || 0, unitCode: "KMT" },
       // Китайское имя той же модели: помогает поисковику связать карточку с запросом,
       // в котором машину назвали по-китайски.
-      alternateName: chineseModelName(car.brand, car.model)?.zh || undefined,
+      alternateName: (car.origin === "korea" ? null : chineseModelName(car.brand, car.model))?.zh || undefined,
       fuelType: car.type || undefined,
       driveWheelConfiguration: car.drive || undefined,
       numberOfPreviousOwners: Number(car.owners) || undefined,
@@ -577,13 +582,14 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     // Preface), но в китайских объявлениях и обзорах имя другое. На готовой странице
     // оно нужно и человеку, который сверяет карточку с источником, и поисковику:
     // по китайскому имени эту машину тоже ищут.
-    const chinese = chineseModelName(car.brand, car.model);
+    // Китайское имя — только у машины из Китая.
+    const chinese = car.origin === "korea" ? null : chineseModelName(car.brand, car.model);
     const chineseBlock = chinese
       ? `<p>В Китае эта модель называется ${escapeHtml(chinese.zh)}${chinese.pinyin ? ` (${escapeHtml(chinese.pinyin)})` : ""}${chinese.note ? `: ${escapeHtml(chinese.note)}` : ""}.</p>`
       : "";
     const relatedBlock = related.length
-      ? `<section><h2>Другие ${escapeHtml(modelName || "автомобили")} в наличии</h2>${carLinks(related, 12)}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>`
-      : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
+      ? `<section><h2>Другие ${escapeHtml(modelName || "автомобили")} в наличии</h2>${carLinks(related, 12)}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей ${siteFromPhrase()}</a></p></section>`
+      : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом ${siteFromPhrase()}</a></p></section>`;
     // Разделы, к которым относится машина: её марка, тип двигателя, тип кузова. Без них
     // из карточки роботу некуда идти, кроме соседних машин той же модели.
     const sectionBlock = sections.length
@@ -600,7 +606,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const faqBlock = questions.length
       ? `<section><h2>${escapeHtml(carFaqTitle(car))}</h2>${questions.map((item) => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join("")}</section>`
       : "";
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Каталог авто из Китая</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} из Китая" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${faqBlock}${relatedBlock}${sectionBlock}${journalBlock}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Каталог авто ${siteFromPhrase()}</a></p><article><h1>${escapeHtml(titleText)}</h1>${imageOnPage ? `<img src="${escapeHtml(imageOnPage)}" alt="${escapeHtml(titleText)} ${fromPhrase(car.origin)}" width="750" height="500" />` : ""}<p>${escapeHtml(description)}</p>${sold ? "" : `<h2>Характеристики</h2>${carFacts(car, landed)}${chineseBlock}${noticeBlock}${modelLink}${toolPageLinks({ electric: car.type === "Электромобиль" })}`}</article>${faqBlock}${relatedBlock}${sectionBlock}${journalBlock}</main>${footer()}`;
     return {
       canonical,
       html: renderHtml({
@@ -634,6 +640,8 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    */
   function sectionLinks(sections, { skip = null, heading = "Разделы каталога" } = {}) {
     const groups = [
+      // Страницы стран — самый широкий срез, поэтому идут первыми.
+      ["Страна", sections.filter((item) => item.kind === "origin")],
       ["Марки", sections.filter((item) => item.kind === "brand")],
       ["Тип двигателя", sections.filter((item) => item.kind === "powertrain")],
       ["Тип кузова", sections.filter((item) => item.kind === "bodyType")],
@@ -687,7 +695,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     title: CATALOG_INDEX_SEO.title,
     h1: CATALOG_INDEX_SEO.h1,
     descriptionBase: CATALOG_INDEX_SEO.description,
-    description: "Каталог б/у авто из Китая: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь.",
+    description: `Каталог б/у авто ${siteFromPhrase()}: электромобили, гибриды и бензиновые машины с пробегом, ценами и ориентировочным расчётом доставки в Беларусь.`,
     lead: "Выберите автомобиль, изучите характеристики и получите предварительный расчёт стоимости до Минска.",
   };
 
@@ -708,7 +716,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       : "";
     const paging = paginationLinks({ route: CATALOG_INDEX.route, page, pages });
     const list = items.length ? `<section><h2>Актуальные предложения</h2>${carLinks(items)}${paging}</section>` : "";
-    const sectionBlock = sections.length ? sectionLinks(sections, { heading: "Автомобили из Китая по маркам и типам" }) : "";
+    const sectionBlock = sections.length ? sectionLinks(sections, { heading: `Автомобили ${siteFromPhrase()} по маркам и типам` }) : "";
     // Заголовок общего каталога разложен так же, как у разделов: две строки и общая
     // подпись под ними, чтобы при переходе в раздел верх страницы не дёргался.
     const index = landingHeading(CATALOG_INDEX.h1);
@@ -760,7 +768,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
   function toolPageLinks({ electric = false } = {}) {
     const parts = [
       `Другую цену, год и объём двигателя можно посчитать в <a href="${hrefRoute("/customs/")}">калькуляторе растаможки</a> — там же разобрано, из чего складывается таможенный платёж.`,
-      `Из чего складывается итоговая сумма до Минска — на странице <a href="${hrefRoute("/delivery-cost/")}">Стоимость доставки авто из Китая</a>.`,
+      `Из чего складывается итоговая сумма до Минска — на странице <a href="${hrefRoute("/delivery-cost/")}">Стоимость доставки авто ${siteFromPhrase()}</a>.`,
     ];
     // Про квоту говорим так, чтобы фраза оставалась верной и в карточке, и в разделе,
     // и после того, как льгота закончится: состояние квоты здесь не утверждается.
@@ -794,9 +802,9 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       // Пустой раздел без объяснения — тонкая страница и тупик. Часть марок мы
       // перестали возить из наличия, но привезти под заказ можем: так и пишем,
       // а ниже идут ссылки на соседние разделы и весь каталог.
-      : `<p><strong>Сейчас в этом разделе машин нет.</strong> Машину можно привезти под заказ: подберём подходящий вариант в Китае и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>. Или посмотрите <a href="${hrefRoute("/catalog/")}">весь каталог автомобилей из Китая</a>.</p>`;
+      : `<p><strong>Сейчас в этом разделе машин нет.</strong> Машину можно привезти под заказ: подберём подходящий вариант ${siteInPhrase()} и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>. Или посмотрите <a href="${hrefRoute("/catalog/")}">весь каталог автомобилей ${siteFromPhrase()}</a>.</p>`;
     const paging = paginationLinks({ route: landing.path, page, pages });
-    const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}${paging}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей из Китая</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом из Китая</a></p></section>`;
+    const list = items.length ? `<section><h2>${escapeHtml(landing.name)} в наличии</h2>${carLinks(items)}${paging}<p><a href="${hrefRoute("/catalog/")}">Весь каталог автомобилей ${siteFromPhrase()}</a></p></section>` : `<section><h2>Каталог</h2><p><a href="${hrefRoute("/catalog/")}">Все автомобили с пробегом ${siteFromPhrase()}</a></p></section>`;
     // Ссылки на расчёты — только на первой странице раздела: на страницах 2–50 это был
     // бы один и тот же блок пятьдесят раз подряд.
     const brandedGuide = page === 1 && isBrandGuide(landing, guide);
@@ -804,7 +812,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const guideChangedDate = brandedGuide ? guideDate(guide.changedAt) : "";
     const modelReview = new Map(modelPages.map((model) => [model.model, model.path]));
     const brand = landing.brand;
-    const brandNotes = brandedGuide ? `<section><h2>${escapeHtml(brand)} из Китая: цены и выбор по данным каталога</h2>
+    const brandNotes = brandedGuide ? `<section><h2>${escapeHtml(brand)} ${siteFromPhrase()}: цены и выбор по данным каталога</h2>
       <p>${escapeHtml(guideConfig.intro)}</p>
       <p>В каталоге ${guideNumber(guide.total)} ${guidePlural(guide.total, "автомобиль", "автомобиля", "автомобилей")} ${escapeHtml(brand)}, ${guideNumber(guide.modelCount)} ${guidePlural(guide.modelCount, "модель", "модели", "моделей")} ${guideYears(guide)} годов выпуска. Среди ${guideNumber(guide.pricedCount)} объявлений с рассчитанной стоимостью минимальная цена — ${guidePrice(guide.priceMin)}, медианная — ${guidePrice(guide.priceMedian)}, максимальная — ${guidePrice(guide.priceMax)}. Центральная половина этих предложений стоит от ${guidePrice(guide.priceP25)} до ${guidePrice(guide.priceP75)} с доставкой до Минска.</p>
       <h3>Модели ${escapeHtml(brand)} в каталоге</h3>
@@ -825,7 +833,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         const href = brandLandingPath(item.brand);
         return href ? `<li><a href="${hrefRoute(href)}">${escapeHtml(item.brand)}</a> — ${escapeHtml(item.note)}</li>` : "";
       }).join("")}</ul>${toolPageLinks()}</section>` : "";
-    const notes = brandedGuide ? brandNotes : `<section><h2>${escapeHtml(landing.name)} из Китая: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}${
+    const notes = brandedGuide ? brandNotes : `<section><h2>${escapeHtml(landing.kind === "origin" ? landing.name : `${landing.name} ${siteFromPhrase()}`)}: что важно знать</h2>${landing.notes.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}${
       page > 1 ? "" : toolPageLinks({ electric: landing.path === "/catalog/electric" || /^\/catalog\/electric-/.test(landing.path) })
     }</section>`;
     // Модели марки в наличии — ссылками на их каталожные страницы (с числом машин);
@@ -900,7 +908,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
         // Разметку вопросов в готовой странице ставит само приложение (блок вопросов
         // раздела) — вторая копия здесь дала бы на странице два одинаковых FAQPage.
         schemas: [
-          breadcrumbsSchema([["Главная", "/"], ["Каталог авто из Китая", "/catalog/"], [landing.name, pageRoute(landing.path, page)]]),
+          breadcrumbsSchema([["Главная", "/"], [`Каталог авто ${siteFromPhrase()}`, "/catalog/"], [landing.name, pageRoute(landing.path, page)]]),
           itemList,
           ...(questions.length && !app?.appRoot ? [faqSchema(questions)] : []),
         ],
@@ -910,10 +918,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
 
   /** Раздел каталога, которого нет: отвечаем 404, а не пустым каталогом. */
   function landingMissingPage() {
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Такого раздела каталога нет</h1><p>Возможно, ссылка устарела. Все автомобили с пробегом из Китая собраны в каталоге.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей из Китая</a></p></main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Такого раздела каталога нет</h1><p>Возможно, ссылка устарела. Все автомобили с пробегом ${siteFromPhrase()} собраны в каталоге.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей ${siteFromPhrase()}</a></p></main>${footer()}`;
     return renderHtml({
       title: "Раздел каталога не найден | abcars.by",
-      description: "Такого раздела каталога нет. Все автомобили с пробегом из Китая собраны в каталоге abcars.by.",
+      description: `Такого раздела каталога нет. Все автомобили с пробегом ${siteFromPhrase()} собраны в каталоге abcars.by.`,
       canonical: null,
       body,
       image: null,
@@ -934,10 +942,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * по устаревшей ссылке из поиска, чаще всего искал машину.
    */
   function notFoundPage({ sections = [] } = {}) {
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>Такой страницы нет</h1><p>Возможно, ссылка устарела или в адресе опечатка. Автомобили с пробегом из Китая собраны в каталоге — там же расчёт стоимости до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей из Китая</a></p><p><a href="${hrefRoute("/models/")}">Обзоры моделей</a> · <a href="${hrefRoute("/customs/")}">Растаможка</a> · <a href="${hrefRoute("/how-it-works/")}">Как это работает</a></p>${sections.length ? sectionLinks(sections, { heading: "Разделы каталога" }) : ""}</main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a></p><h1>Такой страницы нет</h1><p>Возможно, ссылка устарела или в адресе опечатка. Автомобили с пробегом ${siteFromPhrase()} собраны в каталоге — там же расчёт стоимости до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей ${siteFromPhrase()}</a></p><p><a href="${hrefRoute("/models/")}">Обзоры моделей</a> · <a href="${hrefRoute("/customs/")}">Растаможка</a> · <a href="${hrefRoute("/how-it-works/")}">Как это работает</a></p>${sections.length ? sectionLinks(sections, { heading: "Разделы каталога" }) : ""}</main>${footer()}`;
     return renderHtml({
       title: "Страница не найдена | abcars.by",
-      description: "Такой страницы на abcars.by нет. Автомобили с пробегом из Китая собраны в каталоге.",
+      description: `Такой страницы на abcars.by нет. Автомобили с пробегом ${siteFromPhrase()} собраны в каталоге.`,
       canonical: null,
       body,
       image: null,
@@ -1002,11 +1010,11 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
     const spread = priceSpread(edges, items);
     // Строка с наличием и ценой — то, чего человек ждёт от запроса «сколько стоит».
     const availability = total
-      ? `<p><strong>${escapeHtml(page.name)} в наличии: ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${spread ? `, ${spreadText(spread)} с доставкой до Минска` : ""}.</strong>${brandLanding ? ` Все <a href="${hrefRoute(brandLanding.path)}">автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`
+      ? `<p><strong>${escapeHtml(page.name)} в наличии: ${number(total)} ${plural(total, "автомобиль", "автомобиля", "автомобилей")}${spread ? `, ${spreadText(spread)} с доставкой до Минска` : ""}.</strong>${brandLanding ? ` Все <a href="${hrefRoute(brandLanding.path)}">автомобили ${escapeHtml(page.brand)} ${siteFromPhrase()}</a>.` : ""}</p>`
       // Пустая страница без выходов — тупик и для человека, и для поисковика.
       // Поэтому здесь честное «нет», предложение подбора под заказ и ссылки на
       // замену: раздел марки и её другие обзоры (они идут блоком ниже).
-      : `<p><strong>Сейчас ${escapeHtml(page.name)} в каталоге нет.</strong> Эту модель можно привезти под заказ: найдём подходящий вариант в Китае и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>.${brandLanding ? ` Или выберите другую модель: <a href="${hrefRoute(brandLanding.path)}">все автомобили ${escapeHtml(page.brand)} из Китая</a>.` : ""}</p>`;
+      : `<p><strong>Сейчас ${escapeHtml(page.name)} в каталоге нет.</strong> Эту модель можно привезти под заказ: найдём подходящий вариант ${siteInPhrase()} и рассчитаем цену до Минска — <a href="${hrefRoute("/how-it-works/")}">как это устроено</a>.${brandLanding ? ` Или выберите другую модель: <a href="${hrefRoute(brandLanding.path)}">все автомобили ${escapeHtml(page.brand)} ${siteFromPhrase()}</a>.` : ""}</p>`;
     const offers = items.length
       ? `<section><h2>${escapeHtml(page.name)} в наличии — цены до Минска</h2>${carLinks(items, 12)}${brandLanding ? `<p><a href="${hrefRoute(brandLanding.path)}">Все ${escapeHtml(page.brand)} в каталоге</a></p>` : ""}</section>`
       : "";
@@ -1092,10 +1100,10 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
    * отвечает «всё хорошо» и показывает пустую карточку.
    */
   function carGonePage() {
-    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Объявление больше не доступно</h1><p>Эта машина продана или снята с продажи в Китае. Похожие автомобили с пробегом есть в каталоге — там же можно получить расчёт стоимости до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей из Китая</a></p></main>${footer()}`;
+    const body = `${navigation()}<main class="page-width seo-prerender"><p><a href="${hrefRoute("/")}">Главная</a> → <a href="${hrefRoute("/catalog/")}">Автомобили</a></p><h1>Объявление больше не доступно</h1><p>Эта машина продана или снята с продажи у источника. Похожие автомобили с пробегом есть в каталоге — там же можно получить расчёт стоимости до Минска.</p><p><a href="${hrefRoute("/catalog/")}">Перейти в каталог автомобилей ${siteFromPhrase()}</a></p></main>${footer()}`;
     return renderHtml({
       title: "Объявление больше не доступно | abcars.by",
-      description: "Это объявление снято с продажи. Похожие автомобили с пробегом из Китая есть в каталоге abcars.by.",
+      description: `Это объявление снято с продажи. Похожие автомобили с пробегом ${siteFromPhrase()} есть в каталоге abcars.by.`,
       canonical: null,
       body,
       image: null,

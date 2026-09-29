@@ -41,6 +41,7 @@
 //
 // Считается по живым объявлениям каталога и говорит только о нём: это положение среди
 // наших цен, а не оценка рынка Беларуси.
+import { ORIGIN_SOURCES, originForSource } from "../src/origin.js";
 import { pool } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 
@@ -74,7 +75,7 @@ const COMPARABLES_SQL = `SELECT l.id, l.price_cny, l.city, l.mileage_km, l.sourc
     v.specifications->>'engine' AS engine,
     v.specifications->>'transmission' AS transmission
   FROM catalog_listings l JOIN vehicles v ON v.id = l.vehicle_id
-  WHERE l.status = 'active' AND v.brand = $1 AND v.model = $2 AND l.price_cny > 0`;
+  WHERE l.status = 'active' AND v.brand = $1 AND v.model = $2 AND l.price_cny > 0 AND l.source = ANY($3)`;
 
 // Строка выборки — в такой же вид, какой ждёт расчёт цены. Цены обоих режимов
 // считаем сразу и кладём рядом: набор лежит в памяти, а переключатель «Цены с
@@ -115,13 +116,15 @@ export const trimKey = (value) => String(value || "")
   .trim()
   .toLowerCase();
 
-const modelKey = (brand, model) => `${String(brand)}::${String(model)}`;
+// Сравниваем только внутри страны машины (29.09.2026): корейская Elantra на фоне
+// китайских Elantra читалась бы «дороже рынка», хотя рынок у неё другой.
+const modelKey = (brand, model, origin) => `${String(brand)}::${String(model)}::${origin}`;
 
-async function comparablesForModel(brand, model, { db = pool, now = Date.now() } = {}) {
-  const key = modelKey(brand, model);
+async function comparablesForModel(brand, model, origin, { db = pool, now = Date.now() } = {}) {
+  const key = modelKey(brand, model, origin);
   const cached = cache.get(key);
   if (cached && now - cached.at < CACHE_TTL_MS) return cached.rows;
-  const { rows } = await db.query(COMPARABLES_SQL, [brand, model]);
+  const { rows } = await db.query(COMPARABLES_SQL, [brand, model, [...ORIGIN_SOURCES[origin]]]);
   const value = rows.map(comparableFromRow).filter((item) => item.priceQuotaOn > 0);
   // Кэш ограничиваем: моделей в каталоге под семьсот, и держать их все в памяти
   // ради робота, который идёт по каталогу подряд, ни к чему.
@@ -303,7 +306,7 @@ export function priceRatingFrom(car, rows) {
 export async function priceRating(car, options = {}) {
   if (!car?.brand || !car?.model || !(Number(car.chinaPrice) > 0)) return null;
   try {
-    const rows = await comparablesForModel(car.brand, car.model, options);
+    const rows = await comparablesForModel(car.brand, car.model, car.origin || originForSource(car.source), options);
     return priceRatingFrom(car, rows);
   } catch (error) {
     console.error("положение цены: сравнение не посчиталось", error);

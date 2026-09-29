@@ -648,6 +648,10 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
       count(*) FILTER (WHERE event_name='vehicle_view' AND ${LIVE_VISITOR})::int AS vehicle_views,
       count(*) FILTER (WHERE event_name='availability_request_click' AND ${LIVE_VISITOR})::int AS availability_requests,
       count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_request_click' AND ${LIVE_VISITOR})::int AS availability_request_people,
+      -- Окно по кнопке «Уточнить актуальность авто» в карточке: сколько раз его открыли.
+      -- Событие уходит в момент нажатия, до формы и до записи в базу, — это верх
+      -- воронки, а заявки ниже (availability_clicks) — её низ.
+      count(*) FILTER (WHERE event_name='availability_click' AND ${LIVE_VISITOR})::int AS availability_modal_opens,
       count(*) FILTER (WHERE event_name='article_promo_shown' AND ${LIVE_VISITOR})::int AS promo_shown,
       count(*) FILTER (WHERE event_name='article_promo_click' AND ${LIVE_VISITOR})::int AS promo_clicks,
       count(DISTINCT visitor_id) FILTER (WHERE event_name='article_promo_click' AND ${LIVE_VISITOR})::int AS promo_click_people,
@@ -999,7 +1003,7 @@ const leadCar = (row) => (row.listing_id ? {
   mileage:Number(row.mileage_km) || 0,
   estimatedTotalUsd:Number(row.estimated_total_usd) || null,
   image:row.image || null,
-  // Ссылка на объявление в Che168 — менеджер открывает машину у источника прямо из заявки.
+  // Ссылка на объявление у источника — менеджер открывает машину на площадке прямо из заявки.
   sourceUrl:leadSourceUrl(row.source_url),
   // Объявление могли снять с продажи после заявки — тогда join не найдёт строку,
   // но идентификатор всё равно показываем, чтобы заявка не осталась безымянной.

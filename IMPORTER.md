@@ -122,6 +122,98 @@ Requires Playwright (`playwright` devDependency plus `npx playwright install chr
 
 Requested batch sizes are targets, not exact quotas. Import all valid cards found near the target when that avoids an artificial cutoff.
 
+## Encar (Korea) importer (2026-09-29)
+
+`npm run import:encar` (`scripts/import-encar.mjs`) and `npm run refresh:encar`
+(`scripts/refresh-encar.mjs`) read the source with plain HTTP — no browser. The API is
+geo-blocked for Belarus (CloudFront answers 404 to everything), so both scripts run
+**only on our server in St Petersburg**; locally they stop with a clear
+`ENCAR_GEO_BLOCKED` message. Parsing lives in `scripts/lib/encar-parser.mjs`, network
+and list walking in `scripts/lib/encar-client.mjs`, tests with sanitized live responses
+in `tests/encar-parser.test.mjs` (`tests/fixtures/encar-samples.json`).
+
+How it works:
+
+- Discovery walks slices «brand → model group → (year when a slice is deeper than
+  10 000)» through `search/car/list/premium` (500 rows per page). Filters at the list
+  layer: registration year ≥ 2020, price 700–13 000 만원 (≈ 5–96 k$), regular sale
+  only (`SellType.일반`, no lease/rent), fuel limited to petrol / diesel / petrol
+  hybrid / diesel hybrid / electric. **LPG, LPG+petrol, CNG, hydrogen are never
+  imported** (owner decision 2026-09-29). Trucks (`화물차`) are rejected on the card.
+- Every candidate costs three requests: the card (`/v1/readside/vehicle/<Id>`), the
+  insurance summary (`/record/vehicle/<vehicleId>/summary` → accidents, owner changes,
+  total loss) and the inspection sheet (`/inspection/vehicle/<vehicleId>` → accident /
+  simple repair / flood flags). The last two are optional (`--history=0`).
+- The card is the authority: brand via `canonicalImportBrand` (KG_Mobility_Ssangyong →
+  KGM, Mini → MINI), model via `config/korean-model-names.mjs` (Korean and English
+  spellings, generation prefixes and codes stripped, imported brands glued to the
+  Che168 catalog names: «5시리즈 (G30)» → «5 Series», «GLC-클래스» → «GLC», «Santafe» →
+  «Santa Fe», «쿠퍼» → «MINI»), then the usual `importPolicyViolation` (per-country
+  brand list, model year ≥ 2020) and the landed-price ceiling (100 000 $).
+- Record shape follows the contract below. Price: `sourcePrice` in won, `usdPrice` by
+  the NBRB rate at import; engine as `"2.2L"` for display plus exact `engineCc` (2151)
+  which `estimateLandedCost` prefers for the duty tiers; `manufactureDate` = first
+  registration month (`yearMonth`) — the source has no production date and the Korean
+  model year runs ahead of registration; `city` = the city word of the seller's address
+  (`부산`, `수원`), which `src/city-names.js` and `korea-logistics.js` understand;
+  `claims` / `claimsCount` / `owners` from the insurance summary, `incident` from the
+  inspection sheet; photos as plain `https://ci.encar.com/carpicture…jpg` URLs, exterior
+  frames first (the photo store keeps the first five on disk).
+- Writes go to PostgreSQL only (`importCars`, batches of `--batch`, default 50); the
+  static `public/data/cars.json` is not touched. Reports: `runtime/encar-import-report.json`,
+  `runtime/encar-refresh-report.json`.
+- Refresh (`refresh:encar`): one list walk gives every live Id and its price. Active
+  Encar rows seen with the same price get `last_seen_at`; rows with a changed price are
+  re-read and rewritten (price arrow); rows missing from the lists are checked by card —
+  404 or a non-`ADVERTISE` status means sold, otherwise the row is rewritten. Absence
+  from a list alone never marks a car sold. New matching Ids are saved to
+  `runtime/encar-discoveries.json`; `import:encar -- --discoveries` imports them without
+  a second walk. There is no timer: the owner runs both scripts by hand (decision
+  2026-09-29); `expireUnseenListings` keeps skipping `Encar` rows.
+
+Commands (on the server, from `/srv/abcars`):
+
+- `npm run import:encar -- --limit=50 --database=0` — dry run, nothing written
+- `npm run import:encar -- --limit=2000 --brands=Hyundai,Kia,Genesis` — targeted import
+- `npm run import:encar -- --limit=10000 --max-minutes=240` — long run, stops on time
+- `npm run refresh:encar` — prices, sold cars, discoveries
+- `npm run import:encar -- --discoveries --limit=600` — import what the refresh found
+- `--concurrency` (default 2), `--pace` ms between requests (300), `--price-max` in 만원,
+  `--year-from`, `--history=0`, `--detail-limit` (refresh only)
+
+Before the first import: deploy the nginx block for `/photo/encar/` (it is in
+`deploy/nginx-abcars-photo-location.conf` but on 2026-09-29 was **not yet on the
+server**), and switch the source on in the cabinet when the catalog is ready
+(`catalog_sources` has `('Encar', false)`). Disk: the photo store keeps **only the cover
+frame** of Korean cars (≈ 50 KB each, 60–70 k cars ≈ 3.5 GB) until the disk is enlarged
+(owner decision 2026-09-29); the other frames come through the bounded nginx cache. To
+store five frames, set `PHOTO_STORE_ENCAR_FRAMES=5` in `/srv/abcars/.env.local` and
+restart `abcars-photo-store` — the daily pass fetches the missing frames itself. Sold
+Korean cars lose their stored frames a week later like everyone else (`photo-cleanup`).
+
+### Record contract
+
+- `source: "Encar"` (exact spelling — `originForSource`, `ORIGIN_SOURCES`, SQL filters and
+  `SOURCE_CODES` all key on it), `id: "encar-<encar id>"`, `externalId: "<encar id>"`.
+  Public address becomes `/cars/kr-<id>` (`src/listing-id.js`); never strip the `kr-`.
+- Price: `sourcePrice` = price in KRW (integer won), `sourceCurrency: "KRW"`,
+  `chinaPrice` = the same won amount (legacy column `price_cny` stores the price in the
+  seller's currency; `NOT NULL`), `usdPrice` = USD at import by the NBRB rate
+  (`sourceUsdRate("KRW")`) — the price-change arrow and `previous_price_usd` need it.
+  Never store a CNY conversion: the estimate would come out ~190× too low.
+- `engine` as `"2.2L"` plus `engineCc`; `manufactureDate` `"YYYY-MM"`; `city` as a single
+  city word; `sourceListedAt` = Encar publication date in UTC (the source gives KST).
+- Fuel: `type` (`ДВС`/`Гибрид`/`Электромобиль`) with `sourceFuelType` `Gasoline` /
+  `Diesel` / `Hybrid` / `Diesel Hybrid` / `Electric` — the word «Hybrid» deliberately
+  lacks «gasoline» so hybrids stay out of the petrol fuel filter.
+- Claims: `claimsCount` (number) — the «без страховых случаев» filter accepts it next to
+  the Chinese `0次理赔` strings.
+- Photos: `ci.encar.com` frames go through our cache as `/photo/encar/w600|w1200|w1920/<path>`
+  (`src/photo-source.js`, store, warm-up) and the nginx block in
+  `deploy/nginx-abcars-photo-location.conf`.
+- Import policy: `importPolicyViolation` is per country; Korea additionally allows
+  Genesis and KGM; Chevrolet/Renault stay excluded for both countries.
+
 ## Local database and API
 
 1. Run `npm run db:setup` to start PostgreSQL, apply migrations, and seed the current JSON snapshot.

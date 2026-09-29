@@ -227,7 +227,11 @@ test("счётчики отделяют просмотренное от ново
   // а не открытия страниц каталога: у тех свой счётчик.
   assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicle_cars : 0\]/);
   // «Регистрации» в обзоре заменены «Заявками» (28.09.2026), «+N» у них красный.
-  assert.match(source, /\["Заявки", leadsTotal,[^\n]*updates\.leads, "is-leads"\]/);
+  // С 29.09.2026 карточка — воронка «открытий окна / заявок»: слева открытия окна по
+  // кнопке «Уточнить актуальность авто» (событие availability_click), справа заявки.
+  assert.match(source, /\["Заявки", <LeadsFunnelCount opens=\{leadModalOpens\} total=\{leadsTotal\} fresh=\{updates\.leads\} \/>,[^\n]*updates\.leads, "is-leads"\]/);
+  assert.match(source, /открытие окна", "открытия окна", "открытий окна"/);
+  assert.match(server, /event_name='availability_click' AND \$\{LIVE_VISITOR\}\)::int AS availability_modal_opens/);
   assert.doesNotMatch(source, /\["Регистрации"/);
   // Карточка «Машины в кабинете» убрана 18.09.2026: те же цифры показывает раздел
   // «Заявки», а в обзоре она держала нулевую колонку.

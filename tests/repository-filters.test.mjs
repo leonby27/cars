@@ -195,3 +195,15 @@ test("чужие значения коробки, топлива и пустые
   assert.deepEqual(result.values, []);
   assert.equal(result.where, "WHERE l.status='active'");
 });
+
+test("фильтр по стране идёт по источникам: country=korea → Encar, код KR тоже понимаем, мусор не сужает", () => {
+  const korea = buildCarFilters(new URLSearchParams({ country:"korea" }));
+  assert.match(korea.where, /l\.source=ANY\(\$1\)/);
+  assert.deepEqual(korea.values, [["Encar"]]);
+  const code = buildCarFilters(new URLSearchParams({ country:"KR" }));
+  assert.deepEqual(code.values, [["Encar"]]);
+  const china = buildCarFilters(new URLSearchParams({ country:"china" }));
+  assert.ok(china.values[0].includes("Che168") && china.values[0].includes("Guazi"));
+  const junk = buildCarFilters(new URLSearchParams({ country:"mars" }));
+  assert.doesNotMatch(junk.where, /source/);
+});

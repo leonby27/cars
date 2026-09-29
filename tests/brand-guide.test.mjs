@@ -6,6 +6,7 @@ import { createSeoRenderer } from "../server/seo-render.mjs";
 import { CATALOG_LANDINGS, brandLandingPath, findCatalogLanding } from "../src/catalog-landings.js";
 import { isBrandGuide, isBrandGuideLanding } from "../src/brand-guide.js";
 import { landingFaq } from "../src/landing-faq.js";
+import { siteFromPhrase } from "../src/origin.js";
 
 const guide = {
   brand:"Zeekr", calculatedAt:"2026-09-10T12:00:00.000Z", changedAt:"2026-09-06T12:00:00.000Z",
@@ -122,7 +123,7 @@ test("Xiaomi guide uses the catalog data, electric-only answer and model reviews
     { brand:"Xiaomi", model:"YU7", name:"Xiaomi YU7", path:"/models/xiaomi-yu7" },
     { brand:"Xiaomi", model:"SU7 Ultra", name:"Xiaomi SU7 Ultra", path:"/models/xiaomi-su7-ultra" },
   ] }).html;
-  assert.match(html, /Xiaomi из Китая: цены и выбор по данным каталога/);
+  assert.match(html, new RegExp(`Xiaomi ${siteFromPhrase()}: цены и выбор по данным каталога`));
   assert.match(html, /1[^<]*077 автомобилей Xiaomi/);
   assert.match(html, /href="\/models\/xiaomi-su7"/);
   assert.match(html, /С чем сравнить Xiaomi/);
@@ -152,7 +153,7 @@ test("all active catalog brands use the same data-driven guide", () => {
     };
     const html = renderer.landingPage({ landing, guide:sample, total:sample.total, cars:[] }).html;
     const htmlBrand = brand.replaceAll("&", "&amp;").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    assert.match(html, new RegExp(`${htmlBrand} из Китая: цены и выбор`));
+    assert.match(html, new RegExp(`${htmlBrand} ${siteFromPhrase()}: цены и выбор`));
     assert.match(html, new RegExp(`С чем сравнить ${htmlBrand}`));
     assert.doesNotMatch(html, /Другие разделы каталога/);
   }

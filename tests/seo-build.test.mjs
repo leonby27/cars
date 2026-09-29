@@ -107,7 +107,7 @@ test("удалённые страницы отсутствуют вместе с
 test("preview build ships public pages as noindex and no vehicle pages", async () => {
   const { read, missing } = await build();
   const [home, robots, sitemap] = await Promise.all([read("index.html"), read("robots.txt"), read(sitemapIndex)]);
-  assert.match(home, /<h1>Авто из Китая с доставкой в Беларусь<\/h1>/);
+  assert.match(home, /<h1>Авто из Китая и Кореи с доставкой в Беларусь<\/h1>/);
   assert.match(home, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   // Общая страница каталога файлом не собирается: её отдаёт сервер, а готовый файл
   // перекрыл бы и переброс адресов с фильтрами на разделы. В карте сайта она есть.
@@ -403,8 +403,8 @@ test("с информационных страниц и расчётов вед�
 
 test("с разных информационных страниц ведут контекстные ссылки на главную", async () => {
   const { read } = await build({ SEO_ALLOW_INDEXING: "1" });
-  assert.match(await read("how-it-works/index.html"), /<a href="\/">б\/у авто из Китая с доставкой в Беларусь<\/a>/);
-  assert.match(await read("contacts/index.html"), /<a href="\/">автомобили из Китая с расчётом до Минска<\/a>/);
+  assert.match(await read("how-it-works/index.html"), /<a href="\/">б\/у авто из Китая и Кореи с доставкой в Беларусь<\/a>/);
+  assert.match(await read("contacts/index.html"), /<a href="\/">автомобили из Китая и Кореи с расчётом до Минска<\/a>/);
 });
 
 test("на каждой странице ровно один заголовок первого уровня", async () => {
@@ -477,7 +477,7 @@ test("включённый журнал собирается страницам�
   assert.match(index, /href="\/blog\/electric-range-700"/);
   // Содержимое подборки лежит в разметке, а не подгружается скриптом: текст, вопросы
   // и разметка статьи с датой.
-  assert.match(post, /<h1>Топ 10 электромобилей из Китая с запасом хода от 700 километров<\/h1>/);
+  assert.match(post, /<h1>Топ 10 электромобилей из Китая и Кореи с запасом хода от 700 километров<\/h1>/);
   assert.match(post, /Что стоит за цифрой в паспорте/);
   assert.match(post, /"@type":"BlogPosting"/);
   assert.match(post, /"@type":"FAQPage"/);

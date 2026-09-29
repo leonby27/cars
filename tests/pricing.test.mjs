@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { customsPayment, estimateLandedCost, PRICING, CLEARANCE_MONTHS, usdToByn } from "../src/pricing.js";
+import { customsPayment, estimateLandedCost, LOGISTICS, PRICING, CLEARANCE_MONTHS, usdToByn } from "../src/pricing.js";
 import { engineVolume } from "../src/engine-spec.js";
 
 test("rounds converted Belarusian-ruble prices to the nearest hundred", () => {
@@ -355,4 +355,28 @@ test("unmarked legacy Guazi USD values are not automatically treated as FOB",()=
  assert.deepEqual(estimateLandedCost({...car,usdPrice:28748}),estimateLandedCost(car));
  assert.ok(estimateLandedCost(car).chinaLegLow>0);
  const che=estimateLandedCost({...car,source:'Che168',usdPrice:27000});assert.equal(che.chinaUsd,27000);assert.ok(che.chinaLegLow>0);
+});
+
+test("корейская машина считается по профилю Кореи: воны, порт, море, без Хоргоса", () => {
+  const car = { source: "Encar", origin: "korea", sourcePrice: 30_000_000, type: "ДВС", year: 2022, manufactureDate: "2022-03", engine: "2.0", city: "Seoul", dimensions: "4850x1860x1445" };
+  const price = estimateLandedCost(car);
+  assert.equal(price.origin, "korea");
+  assert.equal(price.sourceCurrency, "KRW");
+  // 30 млн вон по курсу НБРБ (за 1 000 вон) — около 22 тысяч долларов, а не 4 миллиона.
+  assert.ok(price.chinaUsd > 15000 && price.chinaUsd < 30000, `цена в долларах ${price.chinaUsd}`);
+  assert.equal(price.basePriceLabel, "Автомобиль в Корее");
+  assert.equal(price.domesticLegLabel, "Логистика по Корее");
+  assert.match(price.chinaLegNote, /порта Пусан/);
+  assert.match(price.intlNote, /Пусан → Владивосток/);
+  assert.doesNotMatch(`${price.chinaLegNote} ${price.intlNote} ${price.basePriceLabel}`, /Хоргос|Кита/);
+  assert.equal(price.intlLow, LOGISTICS.korea.intlDeliveryUsd[0]);
+  // Китайская машина с той же ценой в долларах — по прежним китайским ставкам.
+  const chinese = estimateLandedCost({ ...car, source: "Che168", origin: "china", sourcePrice: undefined, chinaPrice: 160000, usdPrice: price.chinaUsd });
+  assert.equal(chinese.intlLow, LOGISTICS.china.intlDeliveryUsd[0]);
+  assert.equal(chinese.basePriceLabel, "Автомобиль в Китае");
+  // Высокий корейский кроссовер — крупный кузов на пароме, даже если короче 4,95 м.
+  const tall = estimateLandedCost({ ...car, dimensions: "4700x1900x1870" });
+  assert.equal(tall.intlLow, LOGISTICS.korea.intlDeliveryUsd[0] + LOGISTICS.korea.bigCarExtraUsd[0]);
+  // FOB в Корее — только порт Пусан.
+  assert.throws(() => estimateLandedCost({ ...car, priceBasis: "FOB", fobPriceUsd: 20000, fobPort: "Horgos" }), /FOB estimate/);
 });

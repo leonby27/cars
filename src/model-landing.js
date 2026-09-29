@@ -11,7 +11,7 @@
 // той же разметки), поэтому здесь нет ни обращений к базе, ни к окну браузера:
 // только данные на входе и строки на выходе.
 import { landingFaqDelivery, landingFaqDuty } from "./landing-faq.js";
-import { fromPhrase } from "./origin.js";
+import { fromPhrase, siteCountriesGenitive, siteFromPhrase, siteWording, ORIGINS } from "./origin.js";
 
 const RU = new Intl.NumberFormat("ru-RU");
 export const number = (value) => RU.format(Math.round(Number(value) || 0));
@@ -51,12 +51,13 @@ export const priceSpan = (priceFrom, priceTo) => {
  */
 // Заголовок страницы модели без «б/у» и «с пробегом» и с Беларусью вместо Минска —
 // по тем же правилам, что заголовки разделов (src/catalog-landings.js).
-const cleanModelHeading = (h1) => String(h1 || "")
+const FROM_ORIGINS = Object.values(ORIGINS).map((origin) => origin.genitive).join("|");
+const cleanModelHeading = (h1) => siteWording(String(h1 || "")
   .replace(/\s+(б\/у|с пробегом)(?=\s)/gi, "")
-  .replace(/(доставк[а-яё]*|из Китая) в Минск(?![а-яё])/gi, "$1 в Беларусь")
+  .replace(new RegExp(`(доставк[а-яё]*|из (?:${FROM_ORIGINS})(?: и (?:${FROM_ORIGINS}))?) в Минск(?![а-яё])`, "gi"), "$1 в Беларусь")
   .replace(/цены до Минска/gi, "цены в Беларуси")
   .replace(/\s{2,}/g, " ")
-  .trim();
+  .trim());
 
 /** Первый вариант заголовка, который помещается в `limit` символов. */
 const fitModelTitle = (base, variants, limit = 80) => {
@@ -70,17 +71,18 @@ const fitModelTitle = (base, variants, limit = 80) => {
 /**
  * Заголовок вкладки, описание и заголовок страницы модели. `facts` — живые цифры
  * (modelCatalogFacts на сервере), `review` — обзор, если написан, `page` — номер
- * страницы списка, `origin` — страна (src/origin.js; пока у всех моделей Китай).
+ * страницы списка. Страна — фраза сайта «из Китая и Кореи» у всех моделей (решение
+ * 29.09.2026, src/origin.js); `origin` задаёт одну страну только страницам стран.
  * В заголовке — число машин и цена «от», как у разделов каталога (решение 25.09.2026).
  */
-export function modelCatalogSeo({ name, facts = null, review = null, page = 1, origin = "china" }) {
-  const from = fromPhrase(origin);
+export function modelCatalogSeo({ name, facts = null, review = null, page = 1, origin = null }) {
+  const from = origin ? fromPhrase(origin) : siteFromPhrase();
   const base = `${name} ${from} в Беларусь`;
   const h1 = cleanModelHeading(review?.h1) || `Купить ${name} ${from} с доставкой в Беларусь`;
   // Цифры ещё не пришли (переход внутри сайта): нейтральный заголовок, а не «под заказ».
   if (!facts) {
     return {
-      title: fitModelTitle(base, [" — цены и наличие"]),
+      title: fitModelTitle(base, [" — цены и наличие"], 70),
       description: `${name} ${from}: объявления с ценами до Минска.${review?.lead ? ` ${review.lead}` : ""}`,
       h1,
     };
@@ -95,7 +97,7 @@ export function modelCatalogSeo({ name, facts = null, review = null, page = 1, o
         price ? ` — от ${usd(price)}${pageTail}` : null,
         ` — ${number(total)} в наличии${pageTail}`,
       ].filter(Boolean))
-    : fitModelTitle(`${name} ${from}`, [" — под заказ в Беларусь, цены и характеристики", " — под заказ в Беларусь"]);
+    : fitModelTitle(`${name} ${from}`, [" — под заказ в Беларусь, цены и характеристики", " — под заказ в Беларусь", " — под заказ"], 70);
   // В описании — «б/у», Минск и годы: то, что ушло из заголовка.
   const years = yearsPhrase(facts?.yearMin, facts?.yearMax);
   const stock = total
@@ -116,7 +118,7 @@ export const modelPageIndexable = ({ facts = null, review = null } = {}) => Bool
 /** Строка под заголовком: что есть и почём — шапка списка, а не текст. */
 export function modelStockLine(facts, { page = 1, pages = 1, first = 0, shown = 0 } = {}) {
   const total = Number(facts?.total) || 0;
-  if (!total) return "Сейчас в наличии нет. Можно привезти под заказ: найдём вариант в Китае и рассчитаем цену до Минска.";
+  if (!total) return `Сейчас в наличии нет. Можно привезти под заказ: найдём вариант на площадках ${siteCountriesGenitive()} и рассчитаем цену до Минска.`;
   const parts = [`В наличии ${cars(total)}`];
   const span = priceSpan(facts?.priceFrom, facts?.priceTo);
   if (span) parts.push(`цены ${span} до Минска`);
@@ -147,7 +149,7 @@ export function modelAutoText({ name, facts }) {
   const total = Number(facts?.total) || 0;
   if (!total) {
     return [
-      `${name} сейчас в каталоге нет. Эту модель можно привезти под заказ: найдём подходящий вариант на площадках Китая, сверим историю и состояние и рассчитаем цену с доставкой до Минска.`,
+      `${name} сейчас в каталоге нет. Эту модель можно привезти под заказ: найдём подходящий вариант на площадках ${siteCountriesGenitive()}, сверим историю и состояние и рассчитаем цену с доставкой до Минска.`,
     ];
   }
   const paragraphs = [];
@@ -200,7 +202,7 @@ export function modelFaq({ name, facts, review = null }) {
   const span = priceSpan(facts?.priceFrom, facts?.priceTo);
   if (total && span && !covered(own, /сколько стоит|цен[аы]|стоимост/i)) {
     auto.push({
-      q: `Сколько стоит ${name} из Китая с доставкой в Минск?`,
+      q: `Сколько стоит ${name} ${siteFromPhrase()} с доставкой в Минск?`,
       a: `Сейчас в каталоге ${cars(total)}, цены ${span} — это итог до Минска: автомобиль, доставка, таможенные платежи и сборы. У каждой машины в карточке своя сумма и её разбор по этапам.`,
     });
   }

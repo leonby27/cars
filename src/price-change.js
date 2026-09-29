@@ -1,9 +1,6 @@
-import { estimateLandedCost } from "./pricing.js";
+import { estimateLandedCost, sourceCurrencyOf, sourceUsdRate } from "./pricing.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Курс, по которому цена источника хранится в юанях. Тот же, что в импорте и в
-// актуализации: цену в долларах источник отдаёт сам, юани — производная от неё.
-const USD_TO_CNY = 7.15;
 // Сколько дней стрелка держится на карточке. Дальше изменение уже не новость.
 export const PRICE_CHANGE_DAYS = 30;
 // Мелкие колебания курса дня источника — не переоценка (см. refresh-che168.mjs).
@@ -35,7 +32,9 @@ export function getPriceChange(car, now = Date.now()) {
   if (!previousUsd || !currentUsd || Number.isNaN(changedAt)) return null;
   if (now - changedAt > PRICE_CHANGE_DAYS * DAY_MS) return null;
   if (Math.abs(currentUsd - previousUsd) < MIN_STEP_USD) return null;
-  const previous = estimateLandedCost({ ...car, usdPrice: previousUsd, chinaPrice: Math.round((previousUsd * USD_TO_CNY) / 100) * 100 });
+  // Прошлая цена в валюте продавца — по курсу этой валюты (юани или воны).
+  const previousSource = Math.round(previousUsd / sourceUsdRate(sourceCurrencyOf(car)) / 100) * 100;
+  const previous = estimateLandedCost({ ...car, usdPrice: previousUsd, sourcePrice: previousSource, chinaPrice: previousSource });
   if (!Number.isFinite(previous?.totalUsd)) return null;
   const current = estimateLandedCost(car);
   return {

@@ -36,7 +36,10 @@ import { carTitle } from "../src/car-title.js";
 import { usdToByn } from "../src/pricing.js";
 import { COMPANY } from "../src/company-data.js";
 import { socialPhotoHref } from "../src/photo-source.js";
-import { fromPhrase } from "../src/origin.js";
+// Подборки марок и моделей — общие страницы, у них фраза сайта «из Китая и Кореи»;
+// описание машины называет её страну по источнику объявления.
+import { fromPhrase, originForSource, siteFromPhrase } from "../src/origin.js";
+import { listingNumber } from "../src/listing-id.js";
 import { CORE_MODELS } from "./lib/social-blocks.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -97,7 +100,7 @@ const modelName = (brand, model) => reviewByKey.get(`${brand}|${model}`)?.name |
 
 const started = Date.now();
 const { rows } = await pool.query(
-  `SELECT l.id, l.mileage_km, l.estimated_total_usd, l.first_seen_at, l.last_seen_at,
+  `SELECT l.id, l.source, l.mileage_km, l.estimated_total_usd, l.first_seen_at, l.last_seen_at,
      v.brand, v.model, v.model_year, v.powertrain, v.drivetrain, v.battery_kwh,
      v.specifications->>'bodyType' AS body_type,
      v.specifications->>'gearbox' AS gearbox,
@@ -141,7 +144,7 @@ for (const [brand, list] of [...brands].sort((left, right) => right[1].length - 
   if (!path_) continue;
   const id = `s${++setNumber}`;
   brandSetId.set(brand, id);
-  sets.push({ id, name: `${brand} ${fromPhrase()} в Беларусь`, url: `${siteUrl}${path_}` });
+  sets.push({ id, name: `${brand} ${siteFromPhrase()} в Беларусь`, url: `${siteUrl}${path_}` });
   const cheapest = list.reduce((best, row) => (!best || Number(row.estimated_total_usd) < Number(best.estimated_total_usd) ? row : best), null);
   collections.push({
     id: `brand-${path_.split("/").pop()}`,
@@ -153,7 +156,7 @@ for (const [brand, list] of [...brands].sort((left, right) => right[1].length - 
     categoryId: 1,
     setIds: [id],
     pictures: [photoUrl(cheapest.photos[0])].filter(Boolean),
-    description: `${brand} ${fromPhrase()} с доставкой в Беларусь: ${number(list.length)} авто в наличии, цены с доставкой до Минска`,
+    description: `${brand} ${siteFromPhrase()} с доставкой в Беларусь: ${number(list.length)} авто в наличии, цены с доставкой до Минска`,
     params: [["Конверсия", 5], ["Число объявлений", list.length]],
   });
 }
@@ -165,7 +168,7 @@ for (const [key, list] of [...byModel].sort((left, right) => right[1].length - l
   const id = `s${++setNumber}`;
   modelSetId.set(key, id);
   const name = modelName(brand, model);
-  sets.push({ id, name: `${name} ${fromPhrase()} в Беларусь`, url: `${siteUrl}${url}` });
+  sets.push({ id, name: `${name} ${siteFromPhrase()} в Беларусь`, url: `${siteUrl}${url}` });
   collections.push({
     id: `model-${url.split("/").slice(-2).join("-")}`,
     name,
@@ -176,7 +179,7 @@ for (const [key, list] of [...byModel].sort((left, right) => right[1].length - l
     categoryId: categoryOf.get(list[0].body_type) || 1,
     setIds: [brandSetId.get(brand)],
     pictures: list.slice(0, 2).map((row) => photoUrl(row.photos[0])).filter(Boolean),
-    description: `${name} ${fromPhrase()} с доставкой в Беларусь: ${number(list.length)} авто в наличии`,
+    description: `${name} ${siteFromPhrase()} с доставкой в Беларусь: ${number(list.length)} авто в наличии`,
     params: [["Конверсия", coreKeys.has(key) ? 6 : 4], ["Число объявлений", list.length]],
   });
 }
@@ -198,7 +201,7 @@ for (const [key, list] of orderedModels) {
 }
 
 const carOffer = ({ row, key }) => {
-  const number_ = String(row.id).replace(/^(che168|guazi|ch|gz)[-_]/i, "");
+  const number_ = listingNumber(row.id);
   const name = carTitle(row.brand, row.model, row.model_year);
   const priceByn = usdToByn(Number(row.estimated_total_usd));
   const power = Number(row.horsepower) || Number(row.engine_power) || null;
@@ -226,7 +229,7 @@ const carOffer = ({ row, key }) => {
     categoryId: categoryOf.get(row.body_type) || 1,
     setIds: [modelSetId.get(key) || brandSetId.get(row.brand)].filter(Boolean),
     pictures: row.photos.map(photoUrl).filter(Boolean),
-    description: `${name} ${fromPhrase()}: пробег ${number(row.mileage_km)} км, ${String(row.powertrain === "ДВС" ? "бензин" : row.powertrain || "").toLowerCase()}. Цена с доставкой до Минска ≈ ${number(priceByn)} BYN (≈ ${number(row.estimated_total_usd)} $): автомобиль, доставка, таможенные платежи и сборы. Проверка перед покупкой.`,
+    description: `${name} ${fromPhrase(originForSource(row.source))}: пробег ${number(row.mileage_km)} км, ${String(row.powertrain === "ДВС" ? "бензин" : row.powertrain || "").toLowerCase()}. Цена с доставкой до Минска ≈ ${number(priceByn)} BYN (≈ ${number(row.estimated_total_usd)} $): автомобиль, доставка, таможенные платежи и сборы. Проверка перед покупкой.`,
     params,
   };
 };

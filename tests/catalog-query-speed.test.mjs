@@ -69,7 +69,7 @@ test("справочник фильтров проходит по каталог
       const meta = await getCatalogMeta(...args);
       assert.equal(seen.length, 2, JSON.stringify(args));
       assert.ok(seen.every((sql) => /GROUPING SETS/.test(sql)));
-      assert.deepEqual(Object.keys(meta), ["total", "brands", "models", "bodyTypes", "drives", "availability"]);
+      assert.deepEqual(Object.keys(meta), ["total", "brands", "models", "bodyTypes", "drives", "countries", "availability"]);
     }
   } finally {
     pool.query = previousQuery;

@@ -32,8 +32,10 @@
 // Осторожно с обещаниями: наши ставки этапов — оценки по открытым тарифам, а не
 // согласованный с перевозчиками прайс. В текстах это сказано прямо, и итоговая сумма
 // везде названа ориентиром до договора.
-import { DUTY_RATE_TABLES, customsPayment, estimateLandedCost, PRICING } from "./pricing.js";
+import { DUTY_RATE_TABLES, LOGISTICS, PRICING, customsPayment, estimateLandedCost } from "./pricing.js";
+import { fromPhrase, siteFromPhrase } from "./origin.js";
 import { CHINA_TRANSIT_ZONES, DELIVERY_STAGE_DAYS } from "./china-logistics.js";
+import { KOREA_STAGE_DAYS, KOREA_TRANSIT_ZONES } from "./korea-logistics.js";
 import { EV_QUOTA, evQuotaState, isEvQuotaExhausted } from "./ev-quota.js";
 
 // Год в заголовках и описаниях. Запросы про растаможку и квоту почти всегда задают
@@ -61,7 +63,7 @@ export const TOOL_PAGES = Object.freeze([
     // вступлении — оттуда приходит почти весь наш спрос, — но сам расчёт подходит
     // и для Кореи, и для Европы, и для США.
     h1: `Калькулятор растаможки авто в Беларуси ${CURRENT_YEAR}`,
-    seoTitle: `Калькулятор растаможки авто из Китая в Беларусь ${CURRENT_YEAR} | abcars.by`,
+    seoTitle: `Калькулятор растаможки авто ${siteFromPhrase()} в Беларусь ${CURRENT_YEAR} | abcars.by`,
     // Описание держим короче 160 знаков: длинный хвост в выдаче всё равно обрезается
     // многоточием, и обрезается он ровно на том месте, где мы называем цифры.
     seoDescription: "Посчитайте растаможку авто: пошлина по объёму двигателя и возрасту, НДС, утильсбор и сборы. Ставки для электромобиля, гибрида и бензиновой машины.",
@@ -73,9 +75,9 @@ export const TOOL_PAGES = Object.freeze([
     path: "/delivery-cost",
     kind: "cost",
     name: "Стоимость доставки",
-    h1: "Стоимость доставки авто из Китая",
-    seoTitle: `Сколько стоит привезти авто из Китая в Беларусь ${CURRENT_YEAR} | abcars.by`,
-    seoDescription: `Из чего складывается итоговая цена авто из Китая в ${CURRENT_YEAR} году: выкуп, документы, автовоз до Минска, таможня, подбор и сопровождение — с ориентирами по этапам.`,
+    h1: `Стоимость доставки авто ${siteFromPhrase()}`,
+    seoTitle: `Сколько стоит привезти авто ${siteFromPhrase()} в Беларусь ${CURRENT_YEAR} | abcars.by`,
+    seoDescription: `Из чего складывается итоговая цена авто ${siteFromPhrase()} в ${CURRENT_YEAR} году: выкуп, документы, автовоз до Минска, таможня, подбор и сопровождение — с ориентирами по этапам.`,
     lead: "Считаем доставку CIP до Минска.",
   },
   {
@@ -104,10 +106,10 @@ export const TOOL_PAGES = Object.freeze([
   {
     path: "/price-belarus",
     kind: "market",
-    name: "Дешевле ли из Китая",
-    h1: "Где дешевле купить авто: из Китая или в Беларуси",
-    seoTitle: "Выгодно ли пригнать авто из Китая в Беларусь — сравнение цен | abcars.by",
-    seoDescription: "Одна и та же машина: сколько стоит в Беларуси и сколько выходит привезти из Китая под ключ. Сравнение по моделям и годам выпуска с разницей в деньгах.",
+    name: `Дешевле ли ${siteFromPhrase()}`,
+    h1: `Где дешевле купить авто: ${siteFromPhrase()} или в Беларуси`,
+    seoTitle: `Выгодно ли пригнать авто ${siteFromPhrase()} — сравнение цен | abcars.by`,
+    seoDescription: `Одна и та же машина: сколько стоит в Беларуси и сколько выходит привезти ${siteFromPhrase()} под ключ. Сравнение по моделям и годам выпуска с разницей в деньгах.`,
     lead: "Честно сравниваем цены на одинаковые машины.",
   },
 ]);
@@ -311,12 +313,39 @@ export function dutyRateTables() {
   ];
 }
 
-/** Таблица этапов на странице стоимости доставки: сколько и сколько по времени. */
+/** Таблица этапов из Кореи — вторая на той же странице: порт, море, суша. */
+export function deliveryStagesKorea() {
+  const korea = LOGISTICS.korea;
+  const zones = Object.values(KOREA_TRANSIT_ZONES);
+  const transitUsd = [Math.min(...zones.map((zone) => zone.usd[0])), Math.max(...zones.map((zone) => zone.usd[1]))];
+  const transitDays = [Math.min(...zones.map((zone) => zone.days[0])), Math.max(...zones.map((zone) => zone.days[1]))];
+  const seaAndLand = [KOREA_STAGE_DAYS.sea[0] + KOREA_STAGE_DAYS.intl[0], KOREA_STAGE_DAYS.sea[1] + KOREA_STAGE_DAYS.intl[1]];
+  const stages = [KOREA_STAGE_DAYS.buyout, transitDays, seaAndLand, KOREA_STAGE_DAYS.svh];
+  const total = [stages.reduce((sum, [low]) => sum + low, 0), stages.reduce((sum, [, high]) => sum + high, 0)];
+  return {
+    title: `Этапы доставки авто ${fromPhrase("korea")} и ориентиры по суммам`,
+    columns: ["Этап", "Ориентир", "Срок"],
+    rows: [
+      ["Автомобиль у продавца", "цена объявления", "—"],
+      ["Перевод денег", `${percentRange(korea.buyoutPercent)}, минимум ${moneyRange(korea.buyoutMinUsd)}`, daysRange(KOREA_STAGE_DAYS.buyout)],
+      ["Экспортёр, документы и порт", moneyRange(korea.exportDocsUsd), "вместе с выкупом"],
+      ["Перегон до порта Пусан", `${moneyRange(transitUsd)} по зоне`, daysRange(transitDays)],
+      ["Море до Владивостока и путь до Минска", moneyRange(korea.intlDeliveryUsd), daysRange(seaAndLand)],
+      ["Надбавка за крупный кузов", `+ ${moneyRange(korea.bigCarExtraUsd)}`, "—"],
+      ["Таможня и оформление", `от ${money(PRICING.customsFeesUsd.upTo3Years)}`, "вместе с выдачей"],
+      ["Склад в Минске и выдача", moneyRange(PRICING.svhUsd), daysRange(KOREA_STAGE_DAYS.svh)],
+      ...(PRICING.serviceUsd ? [["Подбор и сопровождение", `≈ ${money(PRICING.serviceUsd)}`, "—"]] : []),
+    ],
+    note: `Полный срок от выкупа до выдачи — ${daysRange(total)}; зимой и при отправке контейнером бывает до трёх месяцев. Ставки — ориентиры по открытым тарифам перевозчиков Корея → Владивосток → Минск (осень 2026), таможня посчитана как у китайской таблицы.`,
+  };
+}
+
+/** Таблица этапов из Китая на странице стоимости доставки: сколько и сколько по времени. */
 export function deliveryStages() {
   const transitUsd = transitRange("usd");
   const transitDays = transitRange("days");
   return {
-    title: "Этапы доставки авто из Китая и ориентиры по суммам",
+    title: `Этапы доставки авто ${fromPhrase("china")} и ориентиры по суммам`,
     columns: ["Этап", "Ориентир", "Срок"],
     rows: [
       ["Автомобиль у продавца", "цена объявления", "—"],

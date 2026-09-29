@@ -59,7 +59,7 @@ test("в Threads ссылка кликается и меток нет, в Instag
   assert.ok(threads.length <= 500, "запись в Threads не длиннее 500 знаков");
 
   const instagram = norm(buildPostText(electric, { totalUsd: 35100, totalByn: 106100 }));
-  assert.match(instagram, /#абкарс #автоизкитая #электромобиль #zeekr #авторынокбеларуси$/);
+  assert.match(instagram, /#абкарс #автоизкитая #автоизкореи #электромобиль #zeekr #авторынокбеларуси$/);
 });
 
 test("в телеграме ссылка прячется под словами, а рядом с кнопкой её нет совсем", () => {

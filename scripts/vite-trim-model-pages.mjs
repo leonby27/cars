@@ -29,16 +29,21 @@ export const TRIMMED_FIELDS = ["lead", "seoDescription"];
 export const trimFields = (code, fields = TRIMMED_FIELDS) => {
   let out = code;
   for (const field of fields) {
-    const marker = new RegExp(`^([ \\t]*)${field}:`, "m");
+    const marker = new RegExp(`^([ \\t]*)${field}:`, "gm");
     let guard = 0;
+    // Откуда искать следующее поле: не строковое значение (шаблон с фразой сайта у
+    // MODELS_INDEX) пропускаем и идём дальше, а не останавливаемся — иначе после первой
+    // такой записи ни одно поле обзоров не вырезалось бы.
+    let from = 0;
     for (;;) {
       if (guard++ > 5000) break;
+      marker.lastIndex = from;
       const match = marker.exec(out);
       if (!match) break;
       const start = match.index;
       let i = start + match[0].length;
       while (i < out.length && /\s/.test(out[i])) i += 1;
-      if (out[i] !== '"') break; // не строковое значение — не трогаем поле вовсе
+      if (out[i] !== '"') { from = i; continue; } // не строковое значение — оставляем поле
       i += 1;
       while (i < out.length) {
         if (out[i] === "\\") i += 2;
@@ -49,6 +54,7 @@ export const trimFields = (code, fields = TRIMMED_FIELDS) => {
       while (i < out.length && (out[i] === " " || out[i] === "\t")) i += 1;
       if (out[i] === "\n") i += 1;
       out = out.slice(0, start) + out.slice(i);
+      from = start;
     }
   }
   return out;

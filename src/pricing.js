@@ -1,9 +1,82 @@
 import { chinaTransitFor } from "./china-logistics.js";
+import { koreaTransitFor } from "./korea-logistics.js";
 import { engineVolume } from "./engine-spec.js";
 import { isEvQuotaOver } from "./ev-quota.js";
+import { originForSource, originOf } from "./origin.js";
+
+// Этапы до СВХ по странам, доллары [низ, верх]. Растаможка от страны не зависит
+// (см. customsPayment), а вот всё до границы — своё у каждой: выкуп и перевод денег в
+// валюте продавца, экспортные документы, перегон внутри страны, международное плечо
+// и его срок. Карточка и калькуляторы берут профиль по стране машины (`car.origin`,
+// а без него — по источнику), поэтому корейская машина никогда не посчитается по
+// ставкам Хоргоса.
+//
+// Китай: ориентиры — открытые тарифы перевозчиков Китай→Минск и платёжных агентов
+// (лето 2026): автовоз «под ключ» ≈ $3500, перевод через агента от 0,9%,
+// внутрикитайское плечо 30–80 тыс. ₽ по удалённости.
+// Корея: ориентиры — открытые тарифы Корея→Владивосток→Россия/Беларусь (осень 2026),
+// подробности и источники в research/korea-logistics-2026-09-29.md. Это оценки, не
+// договорные ставки; уточняются по первым реальным сделкам.
+export const LOGISTICS = Object.freeze({
+  china: Object.freeze({
+    key: "china",
+    currency: "CNY",
+    buyoutPercent: [0.011, 0.019], // платёжный агент и перевод юаней продавцу, % от цены
+    buyoutMinUsd: [150, 250],
+    exportDocsUsd: [250, 400], // экспортная декларация, снятие с учёта, страховка в пути
+    intlDeliveryUsd: [2350, 2750], // автовоз Хоргос → Минск через Казахстан и Россию
+    bigCarExtraUsd: [150, 250], // длина от 4,95 м или масса от 2,3 т занимает больше места на автовозе
+    clearanceMonths: 2, // от покупки до оформления на таможне
+    transitFor: chinaTransitFor,
+    labels: Object.freeze({
+      base: "Автомобиль в Китае",
+      baseFob: "Авто и логистика по Китаю",
+      fobNote: "Цена FOB Хоргос включает автомобиль, доставку по Китаю до Хоргоса и экспортное оформление. Доставка от Хоргоса до Минска считается отдельно",
+      domesticLeg: "Логистика по Китаю",
+      domesticLegNote: (transit) => `Документы и автовоз до Хоргоса · ${transit.label}`,
+      domesticLegFobNote: "Доставка до Хоргоса и экспортное оформление уже включены в FOB",
+      intlNote: "Хоргос → Минск, через Казахстан и Россию",
+      intlNoteBig: "Хоргос → Минск · крупный кузов, дороже место",
+      priceIn: "цена в Китае",
+    }),
+  }),
+  korea: Object.freeze({
+    key: "korea",
+    currency: "KRW",
+    buyoutPercent: [0.01, 0.02], // банк или агент за перевод вон продавцу, % от цены
+    buyoutMinUsd: [150, 250],
+    // Комиссия экспортёра 300–600, осмотр, сбор дилера, снятие с учёта, перегон в порт,
+    // портовые сборы и страховка моря — в Корее без экспортёра машину не купить.
+    exportDocsUsd: [800, 1300],
+    // Ролкер Пусан → Владивосток 800–1 200 плюс порт, транзит и автовоз/сетка до Минска
+    // 2 300–3 300; белорусские фирмы называют «доставка 3 300–4 500 $».
+    intlDeliveryUsd: [3100, 4500],
+    bigCarExtraUsd: [250, 450], // море считает по высоте (от 1,85 м), автовоз — по длине и массе
+    bigCarHeightMm: 1850,
+    clearanceMonths: 2, // медиана ≈ 55 дней от покупки до СВХ, зимой и контейнером до 3 месяцев
+    transitFor: koreaTransitFor,
+    labels: Object.freeze({
+      base: "Автомобиль в Корее",
+      baseFob: "Авто и логистика по Корее",
+      fobNote: "Цена FOB Пусан включает автомобиль, доставку до порта и экспортное оформление. Доставка от Пусана до Минска считается отдельно",
+      domesticLeg: "Логистика по Корее",
+      domesticLegNote: (transit) => `Документы и перегон до порта Пусан · ${transit.label}`,
+      domesticLegFobNote: "Доставка до порта и экспортное оформление уже включены в FOB",
+      intlNote: "Пусан → Владивосток морем, дальше по России до Минска",
+      intlNoteBig: "Пусан → Владивосток → Минск · крупный кузов, дороже место",
+      priceIn: "цена в Корее",
+    }),
+  }),
+});
+
+/** Профиль логистики для машины: по полю `origin`, а без него — по источнику. */
+export const logisticsFor = (car) => LOGISTICS[car?.origin] || LOGISTICS[originForSource(car?.source)] || LOGISTICS.china;
+
+/** Валюта цены продавца: у Китая юани, у Кореи воны; явное поле объявления главнее. */
+export const sourceCurrencyOf = (car) => String(car?.sourceCurrency || logisticsFor(car).currency).toUpperCase();
 
 export const PRICING = {
-  usdByn:3.0276, cnyBynPer10:4.5145, eurByn:3.4487, rateDate:"28.09.2026",
+  usdByn:3.0276, cnyBynPer10:4.5145, eurByn:3.4487, krwBynPer1000:2.2349, rateDate:"28.09.2026",
   serviceByn:2000,
   // «Подбор и сопровождение» — ориентир: точную сумму называют после расчёта
   // конкретной машины. serviceFeeEnabled:false убирает строку и сумму из итога.
@@ -31,15 +104,28 @@ export const PRICING = {
   },
   evDutyPercent:0.15, // пошлина на электромобиль после исчерпания квоты
   vatPercent:0.20, // НДС при ввозе: платят последовательные гибриды, у электромобилей ставка нулевая
-  // Этапы до СВХ, доллары [низ, верх]. Ориентиры — открытые тарифы перевозчиков
-  // Китай→Минск и платёжных агентов (лето 2026): автовоз «под ключ» ≈ $3500,
-  // перевод через агента от 0,9%, внутрикитайское плечо 30–80 тыс. ₽ по удалённости.
-  buyoutPercent:[0.011, 0.019], // платёжный агент и перевод юаней продавцу, % от цены
-  buyoutMinUsd:[150, 250],
-  exportDocsUsd:[250, 400], // экспортная декларация, снятие с учёта, страховка в пути
-  intlDeliveryUsd:[2350, 2750], // автовоз Хоргос → Минск через Казахстан и Россию
-  bigCarExtraUsd:[150, 250], // длина от 4,95 м или масса от 2,3 т занимает больше места на автовозе
-  svhUsd:[100, 200], // разгрузка и склад временного хранения в Минске до выдачи
+  // Этапы до СВХ для Китая — те же числа, что в LOGISTICS.china: страницу расчётов и
+  // старые тесты они устраивают под прежними именами, а расчёт цены берёт профиль страны.
+  buyoutPercent:LOGISTICS.china.buyoutPercent,
+  buyoutMinUsd:LOGISTICS.china.buyoutMinUsd,
+  exportDocsUsd:LOGISTICS.china.exportDocsUsd,
+  intlDeliveryUsd:LOGISTICS.china.intlDeliveryUsd,
+  bigCarExtraUsd:LOGISTICS.china.bigCarExtraUsd,
+  svhUsd:[100, 200], // разгрузка и склад временного хранения в Минске до выдачи — одинаково для всех стран
+};
+
+/** Цена продавца в его валюте: `sourcePrice`, а у старых записей — `chinaPrice`. */
+export const sourcePriceOf = (car) => Number(car?.sourcePrice ?? car?.chinaPrice) || 0;
+
+/** Знак валюты продавца: ¥ у Китая, ₩ у Кореи. */
+export const sourceCurrencySymbol = (car) => ({ KRW: "₩", USD: "$" })[sourceCurrencyOf(car)] || "¥";
+
+/** Курс валюты продавца к доллару по НБРБ: юань или вона. */
+export const sourceUsdRate = (currency) => {
+  const code = String(currency || "CNY").toUpperCase();
+  if (code === "KRW") return (PRICING.krwBynPer1000 / 1000) / PRICING.usdByn;
+  if (code === "USD") return 1;
+  return (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
 };
 const round50 = (value) => Math.round(value / 50) * 50;
 
@@ -56,16 +142,17 @@ const ASSUMED_ENGINE_CC = 1500;
 // а на ожидаемую дату оформления: иначе машина у самого пятилетнего порога
 // показывала бы дешёвую ставку, а к оформлению действовала бы дорогая — у
 // двухлитрового мотора это около пяти тысяч долларов сюрпризом после договора.
-export const CLEARANCE_MONTHS = 2;
+// Для Китая; у каждой страны свой срок в LOGISTICS[…].clearanceMonths.
+export const CLEARANCE_MONTHS = LOGISTICS.china.clearanceMonths;
 
 // Ожидаемая дата оформления: дата курса плюс срок доставки. Дата курса
 // обновляется вместе с курсами (npm run rates), поэтому цены не начинают тихо
 // ехать сами по себе между обновлениями.
-const [CLEARANCE_MONTH, CLEARANCE_YEAR] = (() => {
+const clearanceDate = (months = CLEARANCE_MONTHS) => {
   const [, month, year] = PRICING.rateDate.split(".").map(Number);
-  const shifted = month + CLEARANCE_MONTHS;
+  const shifted = month + months;
   return shifted > 12 ? [shifted - 12, year + 1] : [shifted, year];
-})();
+};
 
 /**
  * Сколько лет будет машине по документам таможни к дате оформления. Возраст
@@ -75,6 +162,7 @@ const [CLEARANCE_MONTH, CLEARANCE_YEAR] = (() => {
  * считалось раньше.
  */
 export const carAgeYears = (car) => {
+  const [CLEARANCE_MONTH, CLEARANCE_YEAR] = clearanceDate(logisticsFor(car).clearanceMonths);
   const parts = String(car?.manufactureDate || "").match(/(\d{4})[.\-/](\d{1,2})/);
   if (parts) {
     const months = (CLEARANCE_YEAR - Number(parts[1])) * 12 + (CLEARANCE_MONTH - Number(parts[2]));
@@ -245,38 +333,42 @@ export const isSeriesHybrid = (car) => {
   return /single[-\s]?speed/i.test(String(car.transmission || ""));
 };
 
+// Порт передачи при цене FOB — у каждой страны свой; чужой порт расчёт не принимает,
+// иначе шанхайская цена тихо поехала бы по тарифу Хоргоса.
+const FOB_PORTS = Object.freeze({ china: "Horgos", korea: "Busan" });
+
 export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
-  const cnyUsd = (PRICING.cnyBynPer10 / 10) / PRICING.usdByn;
+  const logistics = logisticsFor(car);
+  const currency = sourceCurrencyOf(car);
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
-  // FOB must explicitly name the quote and handover point. The current onward
-  // tariff starts in Horgos; a Shanghai quote cannot silently use that route.
+  // FOB must explicitly name the quote and handover point.
   const isFob = car.priceBasis === "FOB";
-  if (isFob && (car.fobPort !== "Horgos" || !Number.isFinite(car.fobPriceUsd) || car.fobPriceUsd <= 0)) {
-    throw new Error("FOB estimate requires a valid USD quote for Horgos");
+  if (isFob && (car.fobPort !== FOB_PORTS[logistics.key] || !Number.isFinite(car.fobPriceUsd) || car.fobPriceUsd <= 0)) {
+    throw new Error(`FOB estimate requires a valid USD quote for ${FOB_PORTS[logistics.key]}`);
   }
+  // Цена продавца в долларах: у Che168 она уже есть в объявлении, у остальных — цена
+  // в валюте продавца (`sourcePrice`, для юаней по-старому `chinaPrice`) по курсу НБРБ.
+  const sourcePrice = isFob ? null : Number(car.sourcePrice ?? car.chinaPrice) || 0;
   const chinaUsd = isFob ? car.fobPriceUsd
-    : (car.source === "Che168" && Number(car.usdPrice)) || round50(car.chinaPrice * cnyUsd);
-  const basePriceLabel = isFob ? "Авто и логистика по Китаю" : "Автомобиль в Китае";
-  const basePriceNote = isFob
-    ? "Цена FOB Хоргос включает автомобиль, доставку по Китаю до Хоргоса и экспортное оформление. Доставка от Хоргоса до Минска считается отдельно"
-    : null;
+    : (car.source === "Che168" && Number(car.usdPrice)) || round50(sourcePrice * sourceUsdRate(currency));
+  const basePriceLabel = isFob ? logistics.labels.baseFob : logistics.labels.base;
+  const basePriceNote = isFob ? logistics.labels.fobNote : null;
 
   // Payment-agent/bank fees are separate from seller-side FOB handling.
-  const buyoutLow = Math.max(PRICING.buyoutMinUsd[0], round50(chinaUsd * PRICING.buyoutPercent[0]));
-  const buyoutHigh = Math.max(PRICING.buyoutMinUsd[1], round50(chinaUsd * PRICING.buyoutPercent[1]));
+  const buyoutLow = Math.max(logistics.buyoutMinUsd[0], round50(chinaUsd * logistics.buyoutPercent[0]));
+  const buyoutHigh = Math.max(logistics.buyoutMinUsd[1], round50(chinaUsd * logistics.buyoutPercent[1]));
   const buyoutLabel = isFob ? "Перевод денег" : "Выкуп и перевод денег";
 
-  const transit = chinaTransitFor(car.city);
-  const chinaLegLow = isFob ? 0 : PRICING.exportDocsUsd[0] + transit.usd[0];
-  const chinaLegHigh = isFob ? 0 : PRICING.exportDocsUsd[1] + transit.usd[1];
-  const chinaLegNote = isFob ? "Доставка до Хоргоса и экспортное оформление уже включены в FOB"
-    : `Документы и автовоз до Хоргоса · ${transit.label}`;
+  const transit = logistics.transitFor(car.city);
+  const chinaLegLow = isFob ? 0 : logistics.exportDocsUsd[0] + transit.usd[0];
+  const chinaLegHigh = isFob ? 0 : logistics.exportDocsUsd[1] + transit.usd[1];
+  const chinaLegNote = isFob ? logistics.labels.domesticLegFobNote : logistics.labels.domesticLegNote(transit);
 
-  const lengthMm = Number(String(car.dimensions || "").match(/^\d{4}/)?.[0]) || 0;
-  const bigCar = lengthMm >= 4950 || Number(car.curbWeight) >= 2300;
-  const intlLow = PRICING.intlDeliveryUsd[0] + (bigCar ? PRICING.bigCarExtraUsd[0] : 0);
-  const intlHigh = PRICING.intlDeliveryUsd[1] + (bigCar ? PRICING.bigCarExtraUsd[1] : 0);
-  const intlNote = bigCar ? "Хоргос → Минск · крупный кузов, дороже место" : "Хоргос → Минск, через Казахстан и Россию";
+  const [lengthMm, , heightMm] = String(car.dimensions || "").split(/[x×х*]/i).map((part) => Number(String(part).match(/\d{4}/)?.[0]) || 0);
+  const bigCar = lengthMm >= 4950 || Number(car.curbWeight) >= 2300 || (logistics.bigCarHeightMm > 0 && heightMm >= logistics.bigCarHeightMm);
+  const intlLow = logistics.intlDeliveryUsd[0] + (bigCar ? logistics.bigCarExtraUsd[0] : 0);
+  const intlHigh = logistics.intlDeliveryUsd[1] + (bigCar ? logistics.bigCarExtraUsd[1] : 0);
+  const intlNote = bigCar ? logistics.labels.intlNoteBig : logistics.labels.intlNote;
 
   const age = carAgeYears(car);
   // Таможенная стоимость — цена машины по документам продавца, и только она.
@@ -337,8 +429,12 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     // (Mercedes A, CLA, GLA, GLB), а «6.75T» Bentley — как пятилитровый: пошлина
     // расходилась в разы, и фильтр показывал одно, а расчёт считал по другому.
     const parsedEngine = engineVolume(car);
-    const engineCc = parsedEngine ? Math.round(parsedEngine * 1000) : ASSUMED_ENGINE_CC;
-    engineAssumed = !parsedEngine;
+    // У Encar объём известен точно в кубиках (`engineCc`), а строка «2.2L» — округление
+    // для карточки и фильтра; пошлина считается по точному значению, чтобы 1 998 см³
+    // не превратились в 2 000 и не перескочили ступень ставки.
+    const exactCc = Number(car.engineCc);
+    const engineCc = exactCc >= 500 && exactCc <= 8000 ? Math.round(exactCc) : parsedEngine ? Math.round(parsedEngine * 1000) : ASSUMED_ENGINE_CC;
+    engineAssumed = !parsedEngine && !(exactCc >= 500 && exactCc <= 8000);
     payment = customsPayment({ customsValueUsd, kind: "ice", engineCc, ageYears: age });
     customsUsd = payment.totalUsd;
     customsNote = `Пошлина по объёму · ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (оценка)" : ""}`;
@@ -379,6 +475,10 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const totalLow = round50(chinaUsd + buyoutLow + chinaLegLow + intlLow + PRICING.svhUsd[0] + customsLow + PRICING.serviceUsd);
   const totalHigh = round50(chinaUsd + buyoutHigh + chinaLegHigh + intlHigh + PRICING.svhUsd[1] + customsHigh + PRICING.serviceUsd);
   return {
+    // Имена `chinaUsd`, `chinaLeg*` исторические — это цена продавца и плечо внутри
+    // страны продавца, для Кореи тоже; их читают карточка, заказ и рейтинг цены.
+    origin: logistics.key, sourceCurrency: currency, sourcePrice,
+    domesticLegLabel: logistics.labels.domesticLeg, priceInLabel: logistics.labels.priceIn,
     chinaUsd, isFob, basePriceLabel, basePriceNote, buyoutLabel, customsBasisNote,
     buyoutLow, buyoutHigh,
     chinaLegLow, chinaLegHigh, chinaLegNote,

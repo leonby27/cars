@@ -1,3 +1,4 @@
+import { siteFromPhrase } from "./origin.js";
 // Тексты страниц «О сервисе» и «О нас». Вынесены из App.jsx, потому что теми же
 // текстами заполняется страница для поисковика: в разметке /how-it-works и /about было
 // 43 и 41 слово — заголовок и одна фраза, — а всё остальное появлялось только после
@@ -55,7 +56,7 @@ export const PURCHASE_FLOW_STEPS = Object.freeze([
     },
   },
   {
-    title: "Логистика из Китая",
+    title: `Логистика ${siteFromPhrase()}`,
     text: "Экспорт и доставка в Беларусь",
     visual: {
       src: "/illustrations/purchase-delivery.png",

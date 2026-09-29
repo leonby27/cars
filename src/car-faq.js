@@ -15,6 +15,7 @@
 // Тот же набор показывают приложение и страница для поисковика (вместе с разметкой
 // FAQPage), поэтому файл лежит в общем коде, а не в одном из них.
 import { isEvQuotaExhausted } from "./ev-quota.js";
+import { fromPhrase, inPhrase } from "./origin.js";
 
 const RU = new Intl.NumberFormat("ru-RU");
 const number = (value) => RU.format(Math.round(Number(value) || 0));
@@ -29,13 +30,15 @@ const plural = (value, one, few, many) => {
 };
 
 const title = (car) => [car?.brand, car?.model, car?.year].filter(Boolean).join(" ") || "эта машина";
+// Страна машины приходит с сервера; у старых записей поля нет — это Китай.
+const originOf = (car) => car?.origin || "china";
 
 /** Из чего складывается итог: те же этапы, что и в разбивке под ценой. */
 function priceAnswer(car, landed) {
   const total = money(landed?.totalUsd);
   if (!total) return null;
   const parts = [
-    landed.chinaUsd ? `${money(landed.chinaUsd)} — цена продавца в Китае` : null,
+    landed.chinaUsd ? `${money(landed.chinaUsd)} — цена продавца ${inPhrase(originOf(car))}` : null,
     landed.customsUsd ? `${money(landed.customsUsd)} — таможенные платежи и сборы` : null,
     landed.intlHigh ? `около ${money((Number(landed.intlLow) + Number(landed.intlHigh)) / 2)} — доставка до Беларуси` : null,
     landed.serviceUsd ? `около ${money(landed.serviceUsd)} — подбор и сопровождение` : null,
@@ -81,7 +84,7 @@ function dutyAnswer(car, landed) {
       : "машине от трёх до пяти лет, поэтому ставка — от 1,5 до 3,6 евро за кубический сантиметр по возрастанию объёма";
   return {
     q,
-    a: `Пошлину на бензиновую машину считают не от цены, а по объёму двигателя и возрасту: ${byAge}. Сверху утилизационный сбор и сборы за оформление.${tail}`,
+    a: `Пошлину на машину с бензиновым или дизельным мотором считают не от цены, а по объёму двигателя и возрасту: ${byAge}. Сверху утилизационный сбор и сборы за оформление.${tail}`,
   };
 }
 
@@ -99,10 +102,15 @@ function checkAnswer(car, landed) {
   };
 }
 
-const DELIVERY = {
-  q: "Сколько ждать машину из Китая?",
-  a: "Обычно 30–55 дней от договора до Минска: выкуп у продавца, экспортные документы, доставка до границы, таможенное оформление и путь до Минска. Срок зависит от города отправления, перевозчика и очереди на границе; статус сообщают на каждом этапе.",
+// Срок — по стране машины: у Китая автовоз через Хоргос, у Кореи море до Владивостока.
+const DELIVERY_BY_ORIGIN = {
+  china: "Обычно 30–55 дней от договора до Минска: выкуп у продавца, экспортные документы, автовоз по Китаю до Хоргоса, дорога через Казахстан и Россию и оформление на складе в Минске. Срок зависит от города продавца и очереди на границе; статус сообщают на каждом этапе.",
+  korea: "Обычно 40–65 дней от договора до Минска: выкуп и снятие с учёта, перегон в порт Пусан, море до Владивостока, автовоз или железная дорога по России и оформление на складе в Минске. Зимой и при отправке контейнером — до трёх месяцев; статус сообщают на каждом этапе.",
 };
+const deliveryAnswer = (car) => ({
+  q: `Сколько ждать машину ${fromPhrase(originOf(car))}?`,
+  a: DELIVERY_BY_ORIGIN[originOf(car)] || DELIVERY_BY_ORIGIN.china,
+});
 
 /**
  * Вопросы и ответы для карточки машины.
@@ -115,8 +123,8 @@ const DELIVERY = {
  */
 export function carFaq(car, landed) {
   if (!car || car.available === false || !landed) return [];
-  return [priceAnswer(car, landed), dutyAnswer(car, landed), DELIVERY, checkAnswer(car, landed)].filter(Boolean);
+  return [priceAnswer(car, landed), dutyAnswer(car, landed), deliveryAnswer(car), checkAnswer(car, landed)].filter(Boolean);
 }
 
 /** Заголовок блока — с названием машины, чтобы он не был одинаковым на всех карточках. */
-export const carFaqTitle = (car) => `Частые вопросы: ${title(car)} из Китая`;
+export const carFaqTitle = (car) => `Частые вопросы: ${title(car)} ${fromPhrase(originOf(car))}`;

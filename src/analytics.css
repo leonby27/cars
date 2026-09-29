@@ -209,6 +209,9 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
 .analytics-kpi-split-count > span { color:var(--ink); }
 .analytics-kpi-split-count > i { color:var(--muted); font-size:18px; }
 .analytics-kpi-split-count > b { min-width:27px; height:24px; padding-inline:6px; font-size:17px; }
+/* Воронка в карточке «Заявки»: открытия окна / заявки, дробь приглушена. */
+.analytics-kpi-funnel { display:inline-flex; align-items:center; gap:8px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.analytics-kpi-funnel > i { color:var(--muted); font-style:normal; font-weight:600; }
 /* «+N» у заявок в обзоре — красный, как у пункта «Заявки» в меню. */
 .analytics-kpi-split-count.is-leads > b { background:var(--accent); color:#fff; }
 /* Переключатель устройств — значками, та же «таблетка», что у периода. */

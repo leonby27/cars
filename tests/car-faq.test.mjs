@@ -46,6 +46,9 @@ test("на странице машины есть блок вопросов и �
   assert.match(html, /"@type":"FAQPage"/);
   assert.equal((html.match(/"@type":"Question"/g) || []).length, faqOf(EV).length);
   assert.match(html, /<h2>Частые вопросы: Audi Q2L e-tron 2022 из Китая<\/h2>/);
+  // Заголовок и вопрос про срок — по стране машины, а не по общей фразе сайта.
+  assert.equal(carFaqTitle({ ...EV, origin: "korea" }), "Частые вопросы: Audi Q2L e-tron 2022 из Кореи");
+  assert.ok(faqOf({ ...EV, origin: "korea" }).some((item) => item.q === "Сколько ждать машину из Кореи?"));
 
   // Проданная машина: страница живёт только ради прямых ссылок и избранного,
   // отвечать на «сколько стоит доставка» в ней нечего.

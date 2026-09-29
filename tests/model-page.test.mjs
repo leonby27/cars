@@ -82,6 +82,7 @@ test("страница машины ведёт в разделы своей ма
   // Совпасть должны все условия раздела: электрический седан BYD попадает и в раздел
   // марки, и в раздел типа, и в раздел кузова, и в оба сочетания — но не в «гибридные
   // седаны» и не в «хэтчбеки BYD».
+  // Страницы страны тут нет: без `origin` и источника страну не угадываем (29.09.2026).
   assert.deepEqual(sections.map((item) => item.path).sort(), ["/catalog/byd", "/catalog/byd-sedan", "/catalog/electric", "/catalog/electric-sedan", "/catalog/sedan"]);
   const hybridSedan = landingsForCar({ ...car, type: "Гибрид" });
   assert.equal(hybridSedan.some((item) => item.path === "/catalog/electric-sedan"), false);

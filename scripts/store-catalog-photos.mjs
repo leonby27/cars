@@ -9,18 +9,23 @@ const stateDirectory=process.env.PHOTO_STORE_STATE_DIR || '/srv/abcars/runtime/p
 // в числе одновременных запросов. Служба идёт с низким приоритетом (Nice/IOWeight),
 // поэтому сайту эти потоки не мешают.
 const concurrency=Math.min(16,Math.max(1,Number(process.env.PHOTO_STORE_CONCURRENCY)||4));
+// Сколько кадров хранить корейским машинам (Encar): пока диск тесный — только обложку
+// (решение Сергея 29.09.2026). Когда хранилище расширят, поставить 5 в .env.local и
+// перезапустить службу: она сама докачает остальные кадры на ежедневном проходе.
+const encarFrames=Number(process.env.PHOTO_STORE_ENCAR_FRAMES)===5 ? 5 : 1;
+const framesFor=(car, previewCount)=>car.source==='Encar' ? Math.min(previewCount, encarFrames) : previewCount;
 await fs.mkdir(directory,{recursive:true}); await fs.mkdir(stateDirectory,{recursive:true});
 const stateFile=path.join(stateDirectory,'progress.json');
 let state={ cursor:'', recentAt:new Date().toISOString(), recentId:'', retries:{}, checked:0, stored:0, bytes:0 };
 try { state={...state,...JSON.parse(await fs.readFile(stateFile,'utf8'))}; } catch(error) { if(error.code!=='ENOENT') throw error; }
 let stopping=false;
 process.on('SIGTERM',()=>{stopping=true;}); process.on('SIGINT',()=>{stopping=true;});
-const select=`SELECT l.id, l.first_seen_at::text AS seen_at,
+const select=`SELECT l.id, l.source, l.first_seen_at::text AS seen_at,
  (SELECT array_agg(url ORDER BY position) FROM
  (SELECT url,position FROM listing_media WHERE listing_id=l.id ORDER BY position LIMIT 5) m) AS images
  FROM listings l WHERE l.status='active'`;
 async function storeCars(cars, previewCount = 5) {
-  const jobs=cars.flatMap(car=>catalogPhotoPaths(car, { previewCount }).map(href=>({id:car.id,href})));
+  const jobs=cars.flatMap(car=>catalogPhotoPaths(car, { previewCount:framesFor(car, previewCount) }).map(href=>({id:car.id,href})));
   const failed=new Set(); let cursor=0, fatal;
   await Promise.all(Array.from({length:concurrency},async()=>{
     while(cursor<jobs.length && !fatal){
@@ -32,8 +37,9 @@ async function storeCars(cars, previewCount = 5) {
   if(fatal) throw fatal;
   for(const car of cars){
     state.checked++;
-    if(failed.has(car.id))state.retries[car.id]={after:Date.now()+3600_000, previewCount:Math.max(previewCount,state.retries[car.id]?.previewCount || 1)};
-    else if (previewCount >= (state.retries[car.id]?.previewCount || 1)) delete state.retries[car.id];
+    const wanted=framesFor(car, previewCount);
+    if(failed.has(car.id))state.retries[car.id]={after:Date.now()+3600_000, previewCount:Math.max(wanted,state.retries[car.id]?.previewCount || 1)};
+    else if (wanted >= (state.retries[car.id]?.previewCount || 1)) delete state.retries[car.id];
   }
 }
 // Не более 60 машин витрины и 100 востребованных за один час. Кадры хранятся для всего

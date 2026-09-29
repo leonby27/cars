@@ -212,7 +212,7 @@ export async function handleApiRequest(request, response) {
       if (request.method === "PATCH") {
         if (!sameOriginSettingRequest(request.headers)) return json(response,403,{error:"origin_required"});
         const body=await readJson(request);
-        if(body.source!=="Guazi" || typeof body.enabled!=="boolean")return json(response,400,{error:"invalid_setting"});
+        if(!["Guazi","Encar"].includes(body.source) || typeof body.enabled!=="boolean")return json(response,400,{error:"invalid_setting"});
         const result=await setCatalogSource(body.source,body.enabled);
         clearCatalogCaches();clearPriceRatingCache();clearMarketComparisonCache();
         return json(response,200,result);
@@ -562,7 +562,7 @@ export async function handleApiRequest(request, response) {
         : modelPriceStats;
       return json(response, 200, await marketComparison(stats, brandStock, quotaMode || "full"), metaCache);
     }
-    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType")), metaCache);
+    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType"), url.searchParams.get("country")), metaCache);
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.
     // Стоит до разбора адреса машины — иначе «summary» приняли бы за номер объявления.
     if (request.method === "GET" && url.pathname === "/api/cars/summary") return json(response, 200, await modelSummary(url.searchParams), catalogCache);

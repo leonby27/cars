@@ -31,6 +31,13 @@ export const SEO_POSITION_CORE = Object.freeze([
   { group:"Общие коммерческие запросы", query:"авто из Китая в Беларуси купить", wordstatMonthly:97 },
   { group:"Общие коммерческие запросы", query:"авто из Китая в Беларусь под ключ", wordstatMonthly:70 },
   { group:"Общие коммерческие запросы", query:"б/у авто из Китая", wordstatMonthly:68 },
+  // Корея (с 29.09.2026 возим и оттуда). Частотность не снималась: в срезе Wordstat
+  // от 21.09 этих запросов не было — цифры появятся при следующем обновлении ядра.
+  { group:"Общие коммерческие запросы", query:"авто из Кореи", wordstatMonthly:null },
+  { group:"Общие коммерческие запросы", query:"авто из Кореи в Беларусь", wordstatMonthly:null },
+  { group:"Общие коммерческие запросы", query:"каталог авто из Кореи", wordstatMonthly:null },
+  { group:"Общие коммерческие запросы", query:"купить авто из Кореи", wordstatMonthly:null },
+  { group:"Общие коммерческие запросы", query:"авто из Кореи цены", wordstatMonthly:null },
 
   { group:"Растаможка и расчёт", query:"растаможка авто в Беларуси", wordstatMonthly:3825 },
   { group:"Растаможка и расчёт", query:"калькулятор растаможки авто в Беларуси", wordstatMonthly:2017 },
@@ -127,6 +134,8 @@ export const SEO_POSITION_CORE = Object.freeze([
   { group:"Марки и модели", query:"zeekr 001 купить", wordstatMonthly:137 },
   { group:"Марки и модели", query:"xiaomi su7", wordstatMonthly:450 },
   { group:"Марки и модели", query:"lixiang l7", wordstatMonthly:260 },
+  { group:"Марки и модели", query:"hyundai из Кореи", wordstatMonthly:null },
+  { group:"Марки и модели", query:"kia из Кореи", wordstatMonthly:null },
 ]);
 
 export const SEO_WORDSTAT_UPDATED_AT = "2026-09-21";

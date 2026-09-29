@@ -1713,6 +1713,79 @@ html body #root .app-search-field.home-popular-search {
   font-size: 33px;
   letter-spacing: -1.3px;
 }
+/* Страны в заголовке каталога — кнопка с нашим списком (29.09.2026): слова акцентом и
+   стрелка, сам список — обычный `.select-menu` сайта, только положение и шрифт свои. */
+.heading-country {
+  position: relative;
+  display: inline-block;
+}
+.heading-country-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  /* Слова стран красные сразу, а не по наведению (Сергей, 29.09.2026): наш фирменный
+     красный, в тёмной теме — его вариант для тёмного фона, как у остальных красных надписей. */
+  color: var(--accent);
+  cursor: pointer;
+}
+html[data-theme="dark"] .heading-country-trigger {
+  color: var(--accent-on-dark);
+}
+.heading-country-caret {
+  flex: none;
+  margin-top: 3px;
+  transition: transform var(--motion-fast) ease;
+}
+/* По наведению — другой красный, заметно отличный от покоя: в светлой теме темнее, в
+   тёмной светлее (смесь с белым), чтобы кнопка читалась кнопкой. */
+.heading-country-trigger:hover,
+.heading-country.open .heading-country-trigger {
+  color: var(--accent-dark);
+}
+html[data-theme="dark"] .heading-country-trigger:hover,
+html[data-theme="dark"] .heading-country.open .heading-country-trigger {
+  color: color-mix(in srgb, var(--accent-on-dark) 70%, #fff);
+}
+
+.heading-country.open .heading-country-caret {
+  transform: rotate(180deg);
+}
+.heading-country-menu {
+  left: 0;
+  /* Ширина списка одна при любых словах в кнопке и любом наборе стран. */
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: normal;
+}
+.heading-country-menu .select-options button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.heading-country-flag {
+  flex: none;
+  width: 24px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.heading-country.open .select-menu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(0, 0) scale(1);
+  transition-delay: 0s;
+}
 .catalog-heading p {
   margin: 7px 0 0;
   color: var(--muted);
@@ -6895,15 +6968,6 @@ html[data-theme="dark"] #root .load-more {
 .price-disclosure-shell[aria-hidden="false"] {
   overflow: visible;
 }
-/* Подпись под кнопкой заявки: кто её получит. Только у настоящей кнопки —
-   плавающий повтор идёт без неё. */
-.report-order-note {
-  margin: 10px 0 0;
-  color: var(--muted-contrast, var(--muted));
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: center;
-}
 .delivery-disclosure.delivery-card {
   margin: 12px 0 0;
   padding: 18px 20px;
@@ -7043,7 +7107,6 @@ html[data-theme="dark"] #root .load-more {
   .detail-main .detail-sidebar > .delivery-card,
   .detail-main .detail-sidebar > .report-order-cta,
   .detail-main .detail-sidebar > .sold-order-state,
-  .detail-main .detail-sidebar > .report-order-note,
   .detail-main .detail-sidebar > .price-breakdown-card {
     order: 7;
   }
@@ -7207,6 +7270,11 @@ html[data-theme="dark"] #root .load-more {
   max-height: 240px;
   overflow-y: auto;
   scrollbar-width: thin;
+  /* Пункты не слипаются: между ними 2px воздуха (Сергей, 29.09.2026) — во всех
+     выпадающих списках сайта, включая меню «поделиться» и выбор стран в заголовке. */
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .select-menu .select-options :is(button, a) {
   /* Пункт может быть и ссылкой (марка, тип двигателя, кузов — ведут на свои разделы). */
@@ -8930,7 +8998,6 @@ footer {
   .detail-main .detail-sidebar > .delivery-card,
   .detail-main .detail-sidebar > .report-order-cta,
   .detail-main .detail-sidebar > .sold-order-state,
-  .detail-main .detail-sidebar > .report-order-note,
   .detail-main .detail-sidebar > .price-breakdown-card {
     order: 7;
   }
@@ -11266,6 +11333,21 @@ html[data-theme="dark"] #root .spec-search,
   margin-top: 20px;
   color: var(--ink);
   white-space: normal;
+}
+/* Кнопка отправки — зелёная, в тон «Уточнить актуальность авто» в карточке:
+   посетитель нажал зелёную кнопку и продолжает тем же цветом. */
+.availability-lead-modal .primary.availability-lead-submit {
+  background: linear-gradient(90deg, #36b055 0%, #23883c 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 0 #1a6a30, 0 8px 16px rgba(31, 116, 57, 0.2);
+}
+.availability-lead-modal .primary.availability-lead-submit:hover {
+  background: linear-gradient(90deg, #2c9f4a 0%, #1b7532 100%);
+  box-shadow: 0 4px 0 #145a27, 0 9px 18px rgba(31, 116, 57, 0.26);
+}
+.availability-lead-modal .primary.availability-lead-submit:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #1c6e33, 0 5px 10px rgba(31, 116, 57, 0.18);
 }
 .availability-lead-modal .availability-lead-legal {
   margin: 14px 0 0;
@@ -24134,11 +24216,6 @@ html[data-theme="dark"] :is(#root, body) .detail-header-price .price-dropdown {
   }
   .detail-layout .detail-main .detail-sidebar > :is(.report-order-cta, .sold-order-state) {
     order: 8;
-  }
-  /* Приписка «Заявку получит…» — вплотную под кнопкой, а не через шаг сетки. */
-  .detail-layout .detail-main .detail-sidebar > .report-order-note {
-    order: 9;
-    margin-top: -6px;
   }
   /* Черта от края до края экрана между заявкой и характеристиками: блоки
      колонки кончились, дальше — подробности. Это ::before самой сетки, он встаёт

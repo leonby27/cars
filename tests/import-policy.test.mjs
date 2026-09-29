@@ -236,3 +236,16 @@ test("одна фотография под двумя именами не пок
   assert.deepEqual(uniquePhotos(null), []);
   assert.deepEqual(uniquePhotos([null, first, undefined]), [first]);
 });
+
+test("Корея: Genesis и KGM едут только из Кореи, имена моделей — беларуские", async () => {
+  const { importPolicyViolation, canonicalImportName, isAllowedImportBrand } = await import("../config/import-policy.mjs");
+  assert.equal(importPolicyViolation({ brand: "Genesis", year: 2022, type: "ДВС", source: "Encar" }), null);
+  assert.match(importPolicyViolation({ brand: "Genesis", year: 2022, type: "ДВС", source: "Che168" }) || "", /outside/);
+  assert.equal(isAllowedImportBrand("SsangYong", "korea"), true);
+  assert.equal(isAllowedImportBrand("Chevrolet", "korea"), false);
+  assert.deepEqual(canonicalImportName("Hyundai", "더 뉴 아반떼 (CN7)", "ДВС", { source: "Encar" }), { brand: "Hyundai", model: "Elantra" });
+  assert.deepEqual(canonicalImportName("기아", "Morning", "ДВС", { source: "Encar" }), { brand: "Kia", model: "Picanto" });
+  assert.deepEqual(canonicalImportName("쌍용", "토레스", "ДВС", { source: "Encar" }), { brand: "KGM", model: "Torres" });
+  // Китайская Elantra по-прежнему идёт своим путём.
+  assert.deepEqual(canonicalImportName("Hyundai", "Elantra", "ДВС", { source: "Che168" }), { brand: "Hyundai", model: "Elantra" });
+});

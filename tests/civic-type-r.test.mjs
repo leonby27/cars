@@ -69,7 +69,9 @@ test("catalog filtering and price comparison use the separate model", async () =
   let selection;
   const db = { query:async (sql, values) => { selection = { sql, values }; return { rows:[] }; } };
   assert.equal(await priceRating(normalizeCar(civic), { db }), null);
-  assert.deepEqual(selection.values, ["Honda", "Civic Type R"]);
+  // Третий параметр — источники страны машины (сравнение внутри страны, 29.09.2026).
+  assert.deepEqual(selection.values.slice(0, 2), ["Honda", "Civic Type R"]);
+  assert.ok(selection.values[2].includes("Che168"));
   assert.ok(selection.sql.includes("v.model = $2"));
   clearPriceRatingCache();
 });

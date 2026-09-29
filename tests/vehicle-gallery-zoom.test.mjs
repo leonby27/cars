@@ -64,7 +64,8 @@ test("local Guazi preview keeps the availability button without sending a test r
   assert.ok(app.includes('if (localGuaziPreview) {'));
   assert.ok(app.includes('setAvailabilityStatus("preview");'));
   assert.ok(app.includes('preview={availabilityStatus === "preview"}'));
-  assert.ok(app.includes('Заявку получит наш проверенный партнёр'));
+  assert.ok(!app.includes('Заявку получит наш проверенный партнёр'));
+  assert.ok(!app.includes('report-order-note'));
 });
 
 test("availability action is green below the information and has a floating repeat", () => {

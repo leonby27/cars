@@ -30,7 +30,7 @@ import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout } from "./pricing.js";
+import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
 import { evQuotaPricingAvailable, evQuotaState, holdQuotaChoice, isEvQuotaOver, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -54,10 +54,12 @@ import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
 import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EXAMPLE } from "./service-copy.js";
 import { InspectionReport } from "./inspection-report.jsx";
-import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
+import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, deliveryStagesKorea, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
 import { loadToolPageTexts, loadedToolPageTexts } from "./tool-page-text-load.js";
 import { REBUILT_HINT, aggregateComparisonPrices, bestComparisonYear, collapseSameModelCards, comparisonCatalogHref, comparisonOwnPrices, hasEnoughComparisonSample, hasEnoughMarketSample, hasRebuiltHint } from "./market-compare.js";
 import { BRAND_POWERTRAINS, CHINA_BRANDS, CHINA_MADE_FOREIGN } from "./china-brands.js";
+import { ACTIVE_ORIGINS, countryName, fromPhrase, inPhrase, originForSource, originFromParam, originOf, siteCountriesGenitive, siteFromPhrase, siteInPhrase } from "./origin.js";
+import { INFO_PAGES_SEO } from "./info-pages-seo.js";
 import { BRAND_PRICE_SEGMENTS, brandMatchesPriceSegment } from "./brand-directory-filters.js";
 import { RANGE_CHEMISTRY, RANGE_CYCLES, RANGE_MODES, rangeShareSearch, rangeStateFromSearch, rangeTable, realRange } from "./range-estimate.js";
 import { deliveryBodyClass, deliveryModelSize, deliveryPrecisionPrompt, estimateDeliveryCip } from "./delivery-estimate.js";
@@ -106,7 +108,8 @@ function ModelQuickLabel({ model }) {
 // приставка источника («che168-», «CH-») посетителю ничего не говорит. Внутри
 // приложения и в базе идентификатор остаётся полным, а сервер понимает оба вида,
 // поэтому старые ссылки и закладки продолжают открываться.
-const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
+// Номер в адресе: китайские — голый номер, корейские — с приставкой «kr-» (src/listing-id.js).
+import { listingNumber } from "./listing-id.js";
 const carHref = (car) => `/cars/${encodeURIComponent(listingNumber(car?.id))}`;
 // Заголовок страницы машины. Он же уходит в Метрику, когда карточку открывают
 // быстрым просмотром: в отчётах такой просмотр должен выглядеть ровно так же,
@@ -185,6 +188,15 @@ const ANY_PRICE_MIN = "Цена от";
 const ANY_PRICE_MAX = "До";
 const ANY_MILEAGE = "Пробег";
 const ANY_CONDITION = "Состояние";
+// Фильтр «Страна» (29.09.2026): значение в состоянии — название страны, в адресе и в
+// запросе к каталогу — ключ страны (`country=korea`, см. src/origin.js).
+const ANY_COUNTRY = "Все страны";
+const countryKey = (label) => ACTIVE_ORIGINS.find((key) => countryName(key) === label) || null;
+const countryLabel = (key) => (key ? countryName(key) : ANY_COUNTRY);
+const carOrigin = (car) => car?.origin || originForSource(car?.source);
+// Варианты фильтра — все страны, откуда возим, всегда (решение Сергея 29.09.2026): фильтр
+// стоит в панели постоянно, даже пока корейских машин в каталоге нет.
+const countryOptionsFor = () => [ANY_COUNTRY, ...ACTIVE_ORIGINS.map((key) => countryName(key))];
 const ANY_OWNERS = "Владельцы";
 const ANY_BATTERY = "Батарея";
 const ANY_BODY_TYPE = "Все кузова";
@@ -204,9 +216,18 @@ const ANY_FUEL = "Топливо";
 // В базе бензиновые машины лежат под сокращением «ДВС», а покупателю показываем
 // «Бензин»: сокращение он не набирает в поиске и не всегда понимает. Старую подпись
 // принимаем по-прежнему — с ней остались ссылки на сайте и в закладках.
-const POWERTRAIN_TABS = ["Все", "Электромобили", "Гибриды", "Бензин"];
+// «Дизель» в этом же списке — не отдельный тип машины, а машины с двигателем (тип
+// «ДВС») плюс фильтр топлива: так дизельные машины из Кореи выбираются одним
+// пунктом, а в базе и адресах ничего нового не появляется (решение Сергея 29.09.2026).
+// Пункт «Бензин» по-прежнему значит «с двигателем» — в него попадают и дизели; как
+// его назвать — вопрос к Сергею.
+const DIESEL_TAB = "Дизель";
+const POWERTRAIN_TABS = ["Все", "Электромобили", "Гибриды", "Бензин", DIESEL_TAB];
 const typeLabel = (value) => (value === "Электромобиль" ? "Электромобили" : value === "Гибрид" ? "Гибриды" : value === "ДВС" ? "Бензин" : "Все");
-const typeValue = (label) => (label === "Электромобили" ? "Электромобиль" : label === "Гибриды" ? "Гибрид" : label === "Бензин" || label === "ДВС" ? "ДВС" : "Все");
+const typeValue = (label) => (label === "Электромобили" ? "Электромобиль" : label === "Гибриды" ? "Гибрид" : label === "Бензин" || label === "ДВС" || label === DIESEL_TAB ? "ДВС" : "Все");
+// Выбор пункта списка → тип машины и топливо; и обратно — какой пункт показать.
+const tabSelection = (label) => (label === DIESEL_TAB ? { type: "ДВС", fuel: "Дизель" } : { type: typeValue(label), fuel: ANY_FUEL });
+const tabLabel = (type, fuel) => (type === "ДВС" && fuel === "Дизель" ? DIESEL_TAB : typeLabel(type));
 // Тот же тип в карточке машины: там он стоит в единственном числе и рядом с пробегом.
 const powertrainName = (value) => (value === "ДВС" ? "Бензин" : value);
 // Кузов и модель выбираются списком, поэтому их значение хранится массивом.
@@ -376,7 +397,8 @@ const appendPowerRange = (query, label) => {
   if (bounds?.min) query.set("powerMin", String(bounds.min));
   if (bounds?.max) query.set("powerMax", String(bounds.max));
 };
-const matchesAdvancedFilters = (car, { drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION, accel = ANY_ACCEL, tire = ANY_TIRE, range = ANY_RANGE, engine = ANY_ENGINE, power = ANY_POWER, gearbox = ANY_GEARBOX, fuel = ANY_FUEL }) =>
+const matchesAdvancedFilters = (car, { country = ANY_COUNTRY, drive, owners, battery = ANY_BATTERY, condition = ANY_CONDITION, accel = ANY_ACCEL, tire = ANY_TIRE, range = ANY_RANGE, engine = ANY_ENGINE, power = ANY_POWER, gearbox = ANY_GEARBOX, fuel = ANY_FUEL }) =>
+  (country === ANY_COUNTRY || carOrigin(car) === countryKey(country)) &&
   (drive === ANY_DRIVE || car.drive === drive) &&
   (owners === ANY_OWNERS || Number(car.owners) <= filterNumber(owners)) &&
   (battery === ANY_BATTERY || Number(car.battery) >= batteryFloor(battery)) &&
@@ -1060,12 +1082,10 @@ function ScrollToTopButton() {
 const routeSeo = {
   "/": [HOME_SEO.title, HOME_SEO.description],
   "/catalog": [CATALOG_INDEX_SEO.title, CATALOG_INDEX_SEO.description],
-  "/how-it-works": ["О сервисе покупки автомобилей из Китая | abcars.by", "Подбор и проверка автомобиля, расчёт цены под ключ, договор, доставка и выдача автомобиля из Китая в Минске."],
-  "/faq": ["Вопросы о покупке и доставке авто из Китая | abcars.by", "Ответы о проверке, стоимости, оплате, сроках доставки, таможенном оформлении и покупке автомобиля из Китая в Беларуси."],
-  "/tracking": ["Отслеживание автомобиля по VIN | abcars.by", "Статус автомобиля из Китая по VIN-номеру."],
-  "/contacts": ["Контакты abcars.by — автомобили из Китая в Минске", "Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, расчёту и покупке автомобиля из Китая."],
+  // Пять инфостраниц — из src/info-pages-seo.js: те же записи читает сборка
+  // поисковых копий, чтобы заголовки не расходились.
+  ...Object.fromEntries(Object.entries(INFO_PAGES_SEO).map(([key, page]) => [`/${key}`, [page.title, page.description]])),
   "/privacy": ["Политика конфиденциальности | abcars.by", "Политика обработки и защиты персональных данных пользователей сайта abcars.by."],
-  "/terms": ["Условия использования сайта | abcars.by", "Условия использования каталога abcars.by, предварительных расчётов и информации об автомобилях из Китая."],
 };
 // Страницы моделей описаны в model-pages.js; их заголовки попадают в ту же карту,
 // чтобы SEO-механика работала для них без отдельной ветки.
@@ -1157,7 +1177,7 @@ function ClientSeo({ path, car, landing, carPending = false }) {
     // собирает эту страницу для поисковика. Иначе два места писали бы по-разному.
     const landingSeo = landing ? [landing.seoTitle, landing.seoDescription] : null;
     const [baseTitle, baseDescription] = detailTitle
-      ? [carPageTitle(car), `${detailTitle} из Китая: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены с доставкой до Минска.`]
+      ? [carPageTitle(car), `${detailTitle} ${fromPhrase(carOrigin(car))}: пробег ${number(car.mileage)} км, ${String(car.type || "автомобиль").toLowerCase()}. Проверка и предварительный расчёт цены с доставкой до Минска.`]
       : landingSeo || privateRouteSeo[path] || (path.startsWith("/orders/") ? ["Заказ автомобиля | abcars.by", "Оформление и статус заказа автомобиля в личном кабинете abcars.by."] : null) || routeSeo[path] || ["Страница не найдена | abcars.by", "Запрошенная страница не найдена."];
     const title = listPage ? String(baseTitle).replace(/ \| abcars\.by$/, ` — страница ${listPage} | abcars.by`) : baseTitle;
     const description = listPage && baseDescription ? `${baseDescription} Страница ${listPage} списка.` : baseDescription;
@@ -2163,7 +2183,9 @@ const FILTER_POWERTRAINS = {
 };
 const filterAvailable = (availability, key, selectedType = "Все") => {
   const tabs = FILTER_POWERTRAINS[key];
-  if (tabs && selectedType !== "Все" && !tabs.includes(selectedType)) return false;
+  // Дизель — те же машины с двигателем, что и «Бензин»: объём и коробка у них есть.
+  const tab = selectedType === DIESEL_TAB ? "Бензин" : selectedType;
+  if (tabs && tab !== "Все" && !tabs.includes(tab)) return false;
   // Пустая вкладка (машин такого топлива в каталоге нет вовсе) не должна раздевать
   // панель: поля остаются на месте, просто выбирать в них нечего. А пока справочник
   // не пришёл, полей нет — появиться позже спокойнее, чем исчезнуть на глазах.
@@ -2263,22 +2285,26 @@ function FilterSheet({ title, onBack = null, onClose, footer = null, fill = fals
 // «Все» в списке типов двигателя само по себе ничего не говорит: подписываем полем.
 const powertrainLabel = (item) => (item === "Все" ? "Все типы двигателей" : item);
 
-// Группы марок в шторке выбора. Перечислены не китайские марки, а иностранные:
-// каталог собран на китайском рынке, местных марок там больше и они постоянно
-// прибавляются — незнакомое имя почти всегда китайское, поэтому всё, чего нет в
-// двух списках ниже, считается китайским.
+// Группы марок в шторке выбора: Китай — по справочнику китайских марок, Корея и
+// Германия — по спискам ниже, всё незнакомое — «Другое» (с 29.09.2026 каталог
+// собирается с двух рынков, и неизвестное имя больше не считается китайским).
 const GERMAN_BRANDS = new Set(["Audi", "BMW", "Mercedes-Benz", "MINI", "Porsche", "Volkswagen"]);
+// Корейские марки — те, что возят с корейского рынка; SsangYong с 2023 года
+// называется KGM, в каталоге могут встретиться оба имени.
+// Chevrolet и Renault здесь нет: они вычеркнуты из ввоза и для Кореи (config/import-policy.mjs).
+const KOREAN_BRANDS = new Set(["Hyundai", "Kia", "Genesis", "KGM", "SsangYong"]);
 // Спорные случаи решены так, как их ищут: MINI — марка BMW, поэтому она у немцев;
 // Volvo принадлежит Geely, но остаётся шведской и стоит в «Другом»; MG числится
 // китайской — марка британская, но принадлежит SAIC, а машины делают и продают
-// в Китае как местные.
-const FOREIGN_BRANDS = new Set([
-  "Alfa Romeo", "Buick", "Cadillac", "Chevrolet", "Citroen", "Ford", "Honda", "Hyundai",
-  "Infiniti", "Jaguar", "Jeep", "Kia", "Land Rover", "Lexus", "Lincoln", "Maserati",
-  "Mazda", "Mitsubishi", "Nissan", "Peugeot", "Skoda", "Subaru", "Tesla", "Toyota", "Volvo",
-]);
-const BRAND_GROUPS = ["Все", "Китай", "Германия", "Другое"];
-const brandGroupOf = (brand) => (GERMAN_BRANDS.has(brand) ? "Германия" : FOREIGN_BRANDS.has(brand) ? "Другое" : "Китай");
+// в Китае как местные (она есть в справочнике китайских марок).
+const CHINESE_BRAND_NAMES = new Set(CHINA_BRANDS.map((item) => item.brand));
+const BRAND_GROUPS = ["Все", countryName("china"), countryName("korea"), "Германия", "Другое"];
+const brandGroupOf = (brand) => (
+  GERMAN_BRANDS.has(brand) ? "Германия"
+    : KOREAN_BRANDS.has(brand) ? countryName("korea")
+      : CHINESE_BRAND_NAMES.has(brand) ? countryName("china")
+        : "Другое"
+);
 
 // `optionHrefs` — адреса разделов для пунктов марки, типа двигателя и кузова (каталог):
 // пункт, выбор которого ведёт на другой раздел, становится ссылкой (см. SelectField).
@@ -2340,6 +2366,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
     mileage: ["Пробег", () => <SelectField label="Пробег" icon={Gauge} value={values.mileage} onChange={actions.mileage} options={mileageOptions} />],
     bodyType: ["Кузов", () => <SelectField label="Кузов" icon={CarProfile} value={values.bodyType} onChange={actions.bodyType} options={options.bodyTypes} multiple optionHref={optionHrefs?.bodyType} />],
     color: ["Цвет", () => <SelectField label="Цвет" icon={Palette} value={values.color} onChange={actions.color} options={[ANY_COLOR, ...COLOR_LABELS]} multiple />],
+    country: ["Страна", () => <SelectField label="Страна" icon={MapPin} value={values.country || ANY_COUNTRY} onChange={actions.country} options={options.countries || [ANY_COUNTRY]} />],
     drive: ["Привод", () => <SelectField label="Привод" icon={SteeringWheel} value={values.drive} onChange={actions.drive} options={options.drives} />],
     owners: ["Владельцы", () => <SelectField label="Владельцы" icon={UsersThree} value={values.owners} onChange={actions.owners} options={ownerOptions} />],
     battery: ["Батарея", () => <SelectField label="Батарея" icon={BatteryHigh} value={values.battery} onChange={actions.battery} options={batteryOptions} />],
@@ -2357,6 +2384,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
   const extraChips = [
     ...multiValues(values.bodyType, ANY_BODY_TYPE).map((item) => ({ key: `body-${item}`, field: "bodyType", label: item, clear: () => actions.bodyType(multiValues(values.bodyType, ANY_BODY_TYPE).filter((entry) => entry !== item)) })),
     ...multiValues(values.color, ANY_COLOR).map((item) => ({ key: `color-${item}`, field: "color", label: item, clear: () => actions.color(multiValues(values.color, ANY_COLOR).filter((entry) => entry !== item)) })),
+    (values.country || ANY_COUNTRY) !== ANY_COUNTRY && { key: "country", field: "country", label: values.country, clear: () => actions.country(ANY_COUNTRY) },
     values.drive !== ANY_DRIVE && { key: "drive", field: "drive", label: values.drive, clear: () => actions.drive(ANY_DRIVE) },
     values.owners !== ANY_OWNERS && { key: "owners", field: "owners", label: values.owners, clear: () => actions.owners(ANY_OWNERS) },
     values.battery !== ANY_BATTERY && { key: "battery", field: "battery", label: values.battery, clear: () => actions.battery(ANY_BATTERY) },
@@ -2668,6 +2696,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [mileage, setMileage] = useState(ANY_MILEAGE);
   const [priceMin, setPriceMin] = useState(ANY_PRICE_MIN);
   const [priceMax, setPriceMax] = useState(ANY_PRICE_MAX);
+  const [country, setCountry] = useState(ANY_COUNTRY);
   const [drive, setDrive] = useState(ANY_DRIVE);
   const [owners, setOwners] = useState(ANY_OWNERS);
   const [battery, setBattery] = useState(ANY_BATTERY);
@@ -2679,7 +2708,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   const [power, setPower] = useState(ANY_POWER);
   const [gearbox, setGearbox] = useState(ANY_GEARBOX);
   const [fuel, setFuel] = useState(ANY_FUEL);
-  const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(typeValue(type), brand, bodyType)) || EMPTY_CATALOG_META);
+  const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(typeValue(type), brand, bodyType, country)) || EMPTY_CATALOG_META);
   // null — число для текущих фильтров ещё не посчитано: кнопка показывает
   // «Показать авто» без цифры вместо мгновенного «0 авто» при переключении.
   const [remoteCount, setRemoteCount] = useState(null);
@@ -2700,14 +2729,15 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   if (modelEntries.length) modelOptionCounts.set("Все модели", modelEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
   const bodyTypes = ["Все кузова", ...(apiMode ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
   const drives = [ANY_DRIVE, ...orderDrives(apiMode ? remoteMeta.drives.map((item) => item.drive) : cars.map((car) => car.drive))];
+  const countries = countryOptionsFor();
   const availability = apiMode ? remoteMeta.availability : localAvailability(typedCars);
-  const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesColorLabels(car.bodyColor, multiValues(color, ANY_COLOR)) && matchesYears(car, yearMin, yearMax) && matchesMileageRange(car, mileage) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { drive, owners, battery, condition, accel, tire, range, engine, power, gearbox, fuel })).length;
-  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || multiValues(color, ANY_COLOR).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION || accel !== ANY_ACCEL || tire !== ANY_TIRE || range !== ANY_RANGE || engine !== ANY_ENGINE || power !== ANY_POWER || gearbox !== ANY_GEARBOX || fuel !== ANY_FUEL;
+  const resultCount = modelCars.filter((car) => matchesMulti(car.model, model, ANY_MODEL) && matchesColorLabels(car.bodyColor, multiValues(color, ANY_COLOR)) && matchesYears(car, yearMin, yearMax) && matchesMileageRange(car, mileage) && matchesPriceRange(car, priceMin, priceMax) && matchesAdvancedFilters(car, { country, drive, owners, battery, condition, accel, tire, range, engine, power, gearbox, fuel })).length;
+  const hasActiveFilters = type !== "Все" || brand !== "Все марки" || multiValues(model, ANY_MODEL).length > 0 || multiValues(bodyType, ANY_BODY_TYPE).length > 0 || multiValues(color, ANY_COLOR).length > 0 || hasYearRange(yearMin, yearMax) || mileage !== ANY_MILEAGE || hasPriceRange(priceMin, priceMax) || country !== ANY_COUNTRY || drive !== ANY_DRIVE || owners !== ANY_OWNERS || battery !== ANY_BATTERY || condition !== ANY_CONDITION || accel !== ANY_ACCEL || tire !== ANY_TIRE || range !== ANY_RANGE || engine !== ANY_ENGINE || power !== ANY_POWER || gearbox !== ANY_GEARBOX || fuel !== ANY_FUEL;
   useEffect(() => {
     // Ждать загрузочный запрос незачем: справочник нужен сразу и уходит параллельно
     // с витриной. Останавливает его только выясненный статический режим.
     if (apiMode === false) return undefined;
-    const metaKey = catalogMetaQuery(normalizedType, brand, bodyType);
+    const metaKey = catalogMetaQuery(normalizedType, brand, bodyType, country);
     const carsQuery = new URLSearchParams({ limit: "1" });
     if (normalizedType !== "Все") carsQuery.set("type", normalizedType);
     if (brand !== "Все марки") carsQuery.set("brand", brand);
@@ -2717,6 +2747,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     appendYearRange(carsQuery, yearMin, yearMax);
     appendMileageRange(carsQuery, mileage);
     appendPriceRange(carsQuery, priceMin, priceMax);
+    if (country !== ANY_COUNTRY) carsQuery.set("country", countryKey(country));
     if (drive !== ANY_DRIVE) carsQuery.set("drive", drive);
     if (owners !== ANY_OWNERS) carsQuery.set("ownersMax", String(filterNumber(owners)));
     if (battery !== ANY_BATTERY) carsQuery.set("batteryMin", String(batteryFloor(battery)));
@@ -2772,7 +2803,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     setRange(ANY_RANGE);
     setEngine(ANY_ENGINE);
     setGearbox(ANY_GEARBOX);
-    setFuel(ANY_FUEL);
+    setFuel(tabSelection(value).fuel);
   };
   const changeBrand = (value) => {
     setBrand(value);
@@ -2789,6 +2820,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
     setMileage(ANY_MILEAGE);
     setPriceMin(ANY_PRICE_MIN);
     setPriceMax(ANY_PRICE_MAX);
+    setCountry(ANY_COUNTRY);
     setDrive(ANY_DRIVE);
     setOwners(ANY_OWNERS);
     setBattery(ANY_BATTERY);
@@ -2804,9 +2836,9 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
   return (
     <VehicleSearch
       constrained
-      selectedType={type}
+      selectedType={tabLabel(normalizedType, fuel)}
       onTypeChange={changeType}
-      values={{ brand, model, yearMin, yearMax, priceMin, priceMax, mileage, bodyType, color, drive, owners, battery, condition, accel, tire, range, engine, power, gearbox, fuel }}
+      values={{ brand, model, yearMin, yearMax, priceMin, priceMax, mileage, bodyType, color, country, drive, owners, battery, condition, accel, tire, range, engine, power, gearbox, fuel }}
       actions={{
         brand: changeBrand,
         model: setModel,
@@ -2823,6 +2855,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         mileage: setMileage,
         bodyType: setBodyType,
         color: setColor,
+        country: setCountry,
         drive: setDrive,
         owners: setOwners,
         battery: setBattery,
@@ -2835,7 +2868,7 @@ function QuickSearch({ navigate, cars, apiMode, totalCount }) {
         gearbox: setGearbox,
         fuel: setFuel,
       }}
-      options={{ brands, models, bodyTypes, drives }}
+      options={{ brands, models, bodyTypes, drives, countries }}
       optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }}
       availability={availability}
       resultCount={hasActiveFilters ? (apiMode ? remoteCount : resultCount) : (totalCount || cars.length) ? formatRoundedListingCount(totalCount || cars.length) : null}
@@ -2870,8 +2903,17 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
   // Сначала из запроса вынимаются цена, пробег и годы («от 25000 до 40000»,
   // «пробег до 50 тыс», «2021-2023»), остаток разбирается как марка и модель.
   const ranges = parseQueryRanges(rewriteQueryNames(query), { currency });
-  const tokens = searchNormalize(ranges.rest).split(" ").filter(Boolean);
-  if (!tokens.length && !ranges.hasRanges) return null;
+  const rawTokens = searchNormalize(ranges.rest).split(" ").filter(Boolean);
+  // Страна в запросе («bmw из кореи», «корейские авто», «китайский кроссовер») — это
+  // фильтр «Страна», а не слова для поиска по карточкам; предлог «из» перед ней тоже уходит.
+  const countryOf = (token) => (/^(кита[йяе]|китайск\w*|china|chinese|cn)$/i.test(token) ? "china" : /^(коре[яию]|корейск\w*|korea|korean|kr)$/i.test(token) ? "korea" : null);
+  let country = "";
+  const tokens = rawTokens.filter((token, index) => {
+    const key = countryOf(token);
+    if (key) { country = countryLabel(key); return false; }
+    return !(token === "из" && countryOf(rawTokens[index + 1]));
+  });
+  if (!tokens.length && !ranges.hasRanges && !country) return null;
   // Номер объявления (например, 59116012) — ищем эту конкретную машину.
   const idToken = tokens.find((token) => /^\d{6,}$/.test(token));
   if (idToken) return { matched: true, listingId: idToken, query: "", brand: "", models: [], yearFrom: "", yearTo: "", drive: "", bodyType: "", powertrain: "", gearbox: "", fuel: "", colors: [], priceMinUsd: null, priceMaxUsd: null, mileageMin: null, mileageMax: null, accelMax: null, batteryMin: null, rangeMin: null, engineMin: null, engineMax: null, powerMin: null, powerMax: null, ...emptyExclusions() };
@@ -2929,9 +2971,9 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
   }
 
   const text = translateModelWords(translateBrandWords(words)).join(" ");
-  const result = { matched: false, query: "", textOnly: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain, gearbox, fuel, colors, priceMinUsd: ranges.priceMinUsd, priceMaxUsd: ranges.priceMaxUsd, mileageMin: ranges.mileageMin, mileageMax: ranges.mileageMax, accelMax: ranges.accelMax, batteryMin: ranges.batteryMin, rangeMin: ranges.rangeMin, engineMin: ranges.engineMin, engineMax: ranges.engineMax, powerMin: ranges.powerMin, powerMax: ranges.powerMax, ...exclusions };
+  const result = { matched: false, query: "", textOnly: false, brand: "", models: [], yearFrom, yearTo, drive, bodyType, powertrain, gearbox, fuel, colors, country, priceMinUsd: ranges.priceMinUsd, priceMaxUsd: ranges.priceMaxUsd, mileageMin: ranges.mileageMin, mileageMax: ranges.mileageMax, accelMax: ranges.accelMax, batteryMin: ranges.batteryMin, rangeMin: ranges.rangeMin, engineMin: ranges.engineMin, engineMax: ranges.engineMax, powerMin: ranges.powerMin, powerMax: ranges.powerMax, ...exclusions };
   if (!text) {
-    result.matched = Boolean(ranges.hasRanges || drive || bodyType || powertrain || gearbox || fuel || colors.length || hasExclusions(exclusions));
+    result.matched = Boolean(ranges.hasRanges || drive || bodyType || powertrain || gearbox || fuel || colors.length || country || hasExclusions(exclusions));
     return result;
   }
 
@@ -2979,6 +3021,7 @@ const heroCatalogHref = (parsed) => {
   // подстановка сюда разобранного текста зациклила бы страницу саму на себя.
   if (parsed.query) params.set("text", parsed.query);
   if (parsed.powertrain) params.set("type", typeLabel(parsed.powertrain));
+  if (countryKey(parsed.country)) params.set("country", countryKey(parsed.country));
   if (parsed.brand) params.set("brand", parsed.brand);
   parsed.models.forEach((model) => params.append("model", model));
   if (parsed.bodyType) params.append("body", parsed.bodyType);
@@ -3017,6 +3060,7 @@ const savedFilterDefaults = {
   mileage: ANY_MILEAGE,
   priceMin: ANY_PRICE_MIN,
   priceMax: ANY_PRICE_MAX,
+  country: ANY_COUNTRY,
   drive: ANY_DRIVE,
   owners: ANY_OWNERS,
   battery: ANY_BATTERY,
@@ -3058,7 +3102,7 @@ const savedSearchKey = (filters) => JSON.stringify(normalizeSavedFilters(filters
 // поиска, и строка-подпись на его карточке. Цены — в долларах, как они и хранятся.
 const savedSearchChips = (filters) => {
   const chips = [];
-  if (filters.type !== "Все") chips.push(typeLabel(filters.type));
+  if (filters.type !== "Все") chips.push(tabLabel(filters.type, filters.fuel));
   const models = multiValues(filters.model, ANY_MODEL);
   if (filters.brand !== "Все марки") chips.push(models.length ? `${filters.brand} ${models.join(", ")}` : filters.brand);
   multiValues(filters.bodyType, ANY_BODY_TYPE).forEach((body) => chips.push(body));
@@ -3074,6 +3118,7 @@ const savedSearchChips = (filters) => {
   else if (priceFrom !== null) chips.push(`от $${number(priceFrom)}`);
   else if (priceTo !== null) chips.push(`до $${number(priceTo)}`);
   if (filters.mileage !== ANY_MILEAGE) chips.push(filters.mileage);
+  if (countryKey(filters.country)) chips.push(fromPhrase(countryKey(filters.country)));
   if (filters.drive !== ANY_DRIVE) chips.push(`${filters.drive} привод`);
   if (filters.owners !== ANY_OWNERS) chips.push(filters.owners.toLowerCase());
   if (filters.battery !== ANY_BATTERY) chips.push(`батарея ${filters.battery.toLowerCase()}`);
@@ -3084,7 +3129,7 @@ const savedSearchChips = (filters) => {
   if (filters.engine && filters.engine !== ANY_ENGINE) chips.push(`объём ${filters.engine}`);
   if (filters.power && filters.power !== ANY_POWER) chips.push(`мощность ${filters.power}`);
   if (filters.gearbox && filters.gearbox !== ANY_GEARBOX) chips.push(filters.gearbox.toLowerCase());
-  if (filters.fuel && filters.fuel !== ANY_FUEL) chips.push(filters.fuel.toLowerCase());
+  if (filters.fuel && filters.fuel !== ANY_FUEL && tabLabel(filters.type, filters.fuel) !== DIESEL_TAB) chips.push(filters.fuel.toLowerCase());
   const excluded = EXCLUDE_KEYS.flatMap((key) => exclusionValues(filters, key));
   if (excluded.length) chips.push(`кроме ${excluded.join(", ").toLowerCase()}`);
   if (savedSearchSortLabels[filters.sort]) chips.push(savedSearchSortLabels[filters.sort]);
@@ -3108,6 +3153,7 @@ const savedSearchCatalogHref = (filters) => {
   if (filters.mileage !== ANY_MILEAGE) params.set("mileage", filters.mileage);
   if (priceBound(filters.priceMin, ANY_PRICE_MIN) !== null) params.set("priceFrom", filters.priceMin);
   if (priceBound(filters.priceMax, ANY_PRICE_MAX) !== null) params.set("priceTo", filters.priceMax);
+  if (countryKey(filters.country)) params.set("country", countryKey(filters.country));
   if (filters.drive !== ANY_DRIVE) params.set("drive", filters.drive);
   if (filters.owners !== ANY_OWNERS) params.set("owners", filters.owners);
   if (filters.battery !== ANY_BATTERY) params.set("battery", filters.battery);
@@ -3146,7 +3192,8 @@ const savedSearchApiParams = (filters) => {
   appendMulti(query, "model", filters.model, ANY_MODEL);
   appendMulti(query, "bodyType", filters.bodyType, ANY_BODY_TYPE);
   colorValuesForLabels(multiValues(filters.color, ANY_COLOR)).forEach((value) => query.append("color", value));
-  if (filters.drive !== ANY_DRIVE) query.set("drive", filters.drive);
+  if (countryKey(filters.country)) query.set("country", countryKey(filters.country));
+    if (filters.drive !== ANY_DRIVE) query.set("drive", filters.drive);
   if (filters.owners !== ANY_OWNERS) query.set("ownersMax", String(filterNumber(filters.owners)));
   if (filters.battery !== ANY_BATTERY) query.set("batteryMin", String(batteryFloor(filters.battery)));
   if (filters.condition !== ANY_CONDITION) query.set("conditionGrade", conditionGrades[filters.condition]);
@@ -3180,6 +3227,7 @@ const heroApiParams = (parsed) => {
   const params = new URLSearchParams();
   if (parsed.query) params.set("text", parsed.query);
   if (parsed.powertrain) params.set("type", parsed.powertrain);
+  if (countryKey(parsed.country)) params.set("country", countryKey(parsed.country));
   if (parsed.brand) params.set("brand", parsed.brand);
   parsed.models.forEach((model) => params.append("model", model));
   if (parsed.bodyType) params.append("bodyType", parsed.bodyType);
@@ -3615,7 +3663,7 @@ function SimilarCars({ car, cars, onOpenCar }) {
   return (
     <section className="similar-cars" aria-labelledby="similar-cars-title">
       <div className="similar-cars-heading">
-        <h2 id="similar-cars-title">Похожие автомобили из Китая</h2>
+        <h2 id="similar-cars-title">Похожие автомобили {fromPhrase(carOrigin(car))}</h2>
         {sameModelReachable && (
           <div className="brand-type-switch similar-mode-switch" role="group" aria-label="Какие машины показывать">
             <button type="button" className={sameModelView ? "" : "active"} aria-pressed={!sameModelView} onClick={() => setSameModelOnly(false)}>
@@ -3880,7 +3928,7 @@ function ModelPagePromo({ navigate }) {
         <Illustration src="/illustrations/how-it-works-hero.png" alt="" />
       </div>
       <div className="model-page-promo-copy">
-        <strong>Как заказать авто из Китая</strong>
+        <strong>Как заказать авто {siteFromPhrase()}</strong>
         <p>Сначала подбор, проверка автомобиля и понятная смета, только потом решение, договор и оплата. Дальше машину выкупают, доставляют и выдают в Минске.</p>
         <AppLink className="primary" href="/how-it-works" navigate={navigate}>
           О сервисе <ArrowRight size={18} />
@@ -4230,7 +4278,7 @@ function ModelPageWays({ model, links, navigate, className = "model-page-ways pa
         <div className="catalog-landing-links">
           <b>Разделы каталога</b>
           <div>
-            {links?.brandPath && <AppLink href={links.brandPath} navigate={navigate}>Все {model.brand} из Китая</AppLink>}
+            {links?.brandPath && <AppLink href={links.brandPath} navigate={navigate}>Все {model.brand} {siteFromPhrase()}</AppLink>}
             {sections.map((landing) => (
               <AppLink key={landing.path} href={landing.path} navigate={navigate}>{landing.name}</AppLink>
             ))}
@@ -4386,7 +4434,8 @@ function BrandMark({ brand }) {
 const BRAND_SHOWCASE_ROWS = 5;
 // На кнопке «Все» блок называет себя целиком, поэтому подпись у неё длиннее.
 const brandSwitchLabel = (item) => (item === "Все" ? "Все марки авто" : item);
-const BRAND_SWITCH_OPTIONS = POWERTRAIN_TABS.map(brandSwitchLabel);
+// Переключатель на странице марки — только три настоящих типа, без пункта «Дизель».
+const BRAND_SWITCH_OPTIONS = POWERTRAIN_TABS.filter((item) => item !== DIESEL_TAB).map(brandSwitchLabel);
 const brandSwitchType = (label) => POWERTRAIN_TABS.find((item) => brandSwitchLabel(item) === label) || "Все";
 // Раздел под выбранный тип двигателя: у каждого из трёх есть своя страница.
 const powertrainLandingPath = (label) => CATALOG_LANDINGS.find((landing) => landing.kind === "powertrain" && landing.powertrain === typeValue(label))?.path || "/catalog";
@@ -4928,7 +4977,7 @@ function HomeConversionSections({ navigate }) {
     <div className="home-conversion page-width">
       <section className="home-order" aria-labelledby="home-order-title">
         <div className="home-order-intro">
-          <h2 id="home-order-title">Пригон авто из Китая: понятный путь</h2>
+          <h2 id="home-order-title">Пригон авто {siteFromPhrase()}: понятный путь</h2>
           <p>До каждого платежа вы понимаете, что уже проверено, сколько стоит следующий этап и какие документы получите.</p>
           <div className="home-order-actions">
             <button type="button" className="primary" onClick={() => navigate("/catalog")}>Выбрать автомобиль <ArrowRight size={18} weight="bold" /></button>
@@ -4954,7 +5003,7 @@ function HomeConversionSections({ navigate }) {
       <section className="home-faq" aria-labelledby="home-faq-title">
         <div className="home-faq-intro">
           <span className="home-section-kicker">Коротко о главном</span>
-          <h2 id="home-faq-title">Частые вопросы о покупке и доставке б/у авто из Китая</h2>
+          <h2 id="home-faq-title">Частые вопросы о покупке и доставке б/у авто {siteFromPhrase()}</h2>
           <p>{HOME_FAQ_LEAD}</p>
           <button type="button" className="primary home-faq-link" onClick={() => window.location.assign("/how-it-works#faq")}>Все вопросы и ответы <ArrowRight size={18} weight="bold" /></button>
         </div>
@@ -5497,7 +5546,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           </span>
           <p>
             <b>Показываем обе цены</b>
-            <small>Цена в Китае и до Минска</small>
+            <small>Цена {siteInPhrase()} — и до Минска</small>
           </p>
         </div>
         <div>
@@ -5523,7 +5572,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
 
 // Выбрано ли в фильтрах хоть что-то и «чистый» набор фильтров. Ими пользуются и сама
 // панель, и строка «Сохранить поиск / Сбросить» над ней в каталоге.
-const catalogFiltersActive = (filters) => filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL || hasExclusions(filters);
+const catalogFiltersActive = (filters) => filters.type !== "Все" || filters.brand !== "Все марки" || multiValues(filters.model, ANY_MODEL).length > 0 || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || hasYearRange(filters.yearMin, filters.yearMax) || filters.mileage !== ANY_MILEAGE || hasPriceRange(filters.priceMin, filters.priceMax) || (filters.country || ANY_COUNTRY) !== ANY_COUNTRY || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL || hasExclusions(filters);
 const emptyCatalogFilters = () => ({
   type: "Все",
   brand: "Все марки",
@@ -5535,6 +5584,7 @@ const emptyCatalogFilters = () => ({
   mileage: ANY_MILEAGE,
   priceMin: ANY_PRICE_MIN,
   priceMax: ANY_PRICE_MAX,
+  country: ANY_COUNTRY,
   drive: ANY_DRIVE,
   owners: ANY_OWNERS,
   battery: ANY_BATTERY,
@@ -5550,13 +5600,13 @@ const emptyCatalogFilters = () => ({
   ...emptyExclusions(),
 });
 
-function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null, currentPath = null, currentLanding = null }) {
+function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTypes, drives, countries = [ANY_COUNTRY], optionCounts, availability, onSaveSearch, searchSaved, searchUpdate, expanded = false, onExpandedChange = null, currentPath = null, currentLanding = null }) {
   const update = (key) => (value) => setFilters((old) => ({ ...old, [key]: value }));
   // Модель не сбрасываем: её выбирал посетитель, см. такой же changeType выше.
   const changeType = (value) => setFilters((old) => ({ ...old, type: value, ...POWERTRAIN_FILTER_RESET }));
   const changeBrand = (value) => setFilters((old) => ({ ...old, brand: value, model: [] }));
-  const selectedType = typeLabel(filters.type);
-  const selectType = (value) => changeType(typeValue(value));
+  const selectedType = tabLabel(filters.type, filters.fuel);
+  const selectType = (value) => setFilters((old) => ({ ...old, ...POWERTRAIN_FILTER_RESET, ...tabSelection(value) }));
   const hasActiveFilters = catalogFiltersActive(filters);
   // «Сбросить» очищает всё, кроме марки и модели (решение Сергея 25.09.2026): человек
   // пришёл на страницу Audi или Audi A6 и сбрасывает год, цену, пробег — а не уходит
@@ -5581,7 +5631,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
   };
   const optionHrefs = currentPath ? {
     brand: (value) => hrefFor({ ...filters, brand: value, model: [] }),
-    type: (label) => hrefFor({ ...filters, type: typeValue(label), ...POWERTRAIN_FILTER_RESET }),
+    type: (label) => hrefFor({ ...filters, ...POWERTRAIN_FILTER_RESET, ...tabSelection(label) }),
     bodyType: (value) => {
       const chosen = multiValues(filters.bodyType, ANY_BODY_TYPE);
       const next = value === ANY_BODY_TYPE ? [] : chosen.includes(value) ? chosen.filter((item) => item !== value) : [...chosen, value];
@@ -5605,6 +5655,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
         mileage: update("mileage"),
         bodyType: update("bodyType"),
         color: update("color"),
+        country: update("country"),
         drive: update("drive"),
         owners: update("owners"),
         battery: update("battery"),
@@ -5618,7 +5669,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
         fuel: update("fuel"),
         removeExclusion: (key, value) => setFilters((old) => ({ ...old, [key]: exclusionValues(old, key).filter((item) => item !== value) })),
       }}
-      options={{ brands: ["Все марки", ...brands], models, bodyTypes, drives }}
+      options={{ brands: ["Все марки", ...brands], models, bodyTypes, drives, countries }}
       optionCounts={optionCounts}
       availability={availability}
       resultCount={resultCount}
@@ -5628,7 +5679,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
       searchSaved={searchSaved}
       searchUpdate={searchUpdate}
       onExpandedChange={onExpandedChange}
-      initiallyExpanded={expanded || filters.type !== "Все" || filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL}
+      initiallyExpanded={expanded || filters.type !== "Все" || (filters.country || ANY_COUNTRY) !== ANY_COUNTRY || filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL}
     />
   );
 }
@@ -5729,8 +5780,8 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <div className="car-row-price">
         <TotalPrice car={car} price={price} currency={currency} />
         <span>Под ключ</span>
-        <b>{number(car.chinaPrice)} ¥</b>
-        <small>цена в Китае</small>
+        <b>{number(sourcePriceOf(car))} {sourceCurrencySymbol(car)}</b>
+        <small>цена {inPhrase(carOrigin(car))}</small>
       </div>
     </article>
   );
@@ -6120,6 +6171,7 @@ function catalogFiltersFromParams(params) {
   const legacyPriceAmount = legacyPrice ? String(filterNumber(legacyPrice)) : "";
   const legacyPriceFrom = legacyPrice && legacyPrice.includes("+") ? legacyPriceAmount : "";
   const legacyPriceTo = legacyPrice && !legacyPrice.includes("+") ? legacyPriceAmount : "";
+  const rawCountry = params.get("country");
   const rawDrive = params.get("drive");
   const rawOwners = params.get("owners");
   const rawBattery = params.get("battery");
@@ -6145,6 +6197,7 @@ function catalogFiltersFromParams(params) {
     mileage: mileageBounds(rawMileage) ? rawMileage : ANY_MILEAGE,
     priceMin: /^\d+$/.test(rawPriceFrom || legacyPriceFrom) && Number(rawPriceFrom || legacyPriceFrom) > 0 ? rawPriceFrom || legacyPriceFrom : ANY_PRICE_MIN,
     priceMax: /^\d+$/.test(rawPriceTo || legacyPriceTo) && Number(rawPriceTo || legacyPriceTo) > 0 ? rawPriceTo || legacyPriceTo : ANY_PRICE_MAX,
+    country: countryLabel(originFromParam(rawCountry)),
     drive: DRIVE_TYPES.includes(rawDrive) ? rawDrive : ANY_DRIVE,
     owners: ownerOptions.includes(rawOwners) ? rawOwners : ANY_OWNERS,
     battery: batteryOptions.includes(rawBattery) || FREE_BATTERY_LABEL.test(rawBattery || "") ? rawBattery : ANY_BATTERY,
@@ -6159,7 +6212,7 @@ function catalogFiltersFromParams(params) {
     engine: engineBounds(rawEngine) ? rawEngine : ANY_ENGINE,
     power: powerBounds(rawPower) ? rawPower : ANY_POWER,
     gearbox: GEARBOX_TYPES.includes(rawGearbox) ? rawGearbox : ANY_GEARBOX,
-    fuel: FUEL_TYPES.includes(rawFuel) ? rawFuel : ANY_FUEL,
+    fuel: FUEL_TYPES.includes(rawFuel) ? rawFuel : rawType === DIESEL_TAB ? "Дизель" : ANY_FUEL,
     // Свободный текст из поиска на главной: комплектация и характеристики, которых
     // нет в выпадающих списках. В сохранённые поиски он не попадает — там набор
     // полей фиксирован, и лишний ключ сломал бы сравнение «такой поиск уже есть».
@@ -6253,7 +6306,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // есть потолок глубины листания, и без его признака бесконечная прокрутка молотила
   // бы пустые страницы и показывала ошибку загрузки на ровном месте.
   const [remoteHasMore, setRemoteHasMore] = useState(Boolean(bootList?.hasMore));
-  const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType)) || EMPTY_CATALOG_META);
+  const [remoteMeta, setRemoteMeta] = useState(() => bootCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country)) || EMPTY_CATALOG_META);
   const [remoteLoading, setRemoteLoading] = useState(useApi && !bootList);
   const [remoteError, setRemoteError] = useState(false);
   // Сортировку может нести и ссылка (например, из сохранённого поиска); снимок
@@ -6451,6 +6504,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   if (modelEntries.length) modelOptionCounts.set("Все модели", modelEntries.reduce((total, item) => total + (Number(item.count) || 0), 0));
   const bodyTypes = ["Все кузова", ...(useApi ? remoteMeta.bodyTypes.map((item) => item.body_type) : BODY_TYPES.filter((item) => cars.some((car) => car.bodyType === item)))];
   const drives = [ANY_DRIVE, ...orderDrives(useApi ? remoteMeta.drives.map((item) => item.drive) : cars.map((car) => car.drive))];
+  const countries = countryOptionsFor();
   const availability = useApi ? remoteMeta.availability : localAvailability(typedCars);
   // Цена в статическом режиме считается здесь же, поэтому смена режима цен
   // (переключатель «Цены с квотами») должна пересчитать выдачу.
@@ -6497,6 +6551,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     appendMulti(query, "model", filters.model, ANY_MODEL);
     appendMulti(query, "bodyType", filters.bodyType, ANY_BODY_TYPE);
     colorValuesForLabels(multiValues(filters.color, ANY_COLOR)).forEach((value) => query.append("color", value));
+    if (countryKey(filters.country)) query.set("country", countryKey(filters.country));
     if (filters.drive !== ANY_DRIVE) query.set("drive", filters.drive);
     if (filters.owners !== ANY_OWNERS) query.set("ownersMax", String(filterNumber(filters.owners)));
     if (filters.battery !== ANY_BATTERY) query.set("batteryMin", String(batteryFloor(filters.battery)));
@@ -6532,7 +6587,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     // Справочник и список машин идут врозь: какие поля показывать, известно из
     // справочника, а он отвечает быстрее выдачи. Раньше их ждали вместе, и панель
     // фильтров достраивалась только после того, как загрузится каталог.
-    requestCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType))
+    requestCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country))
       .then((meta) => {
         if (!controller.signal.aborted) setRemoteMeta(meta);
       })
@@ -6683,7 +6738,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         <CaretRight size={13} />
         {landing ? (
           <>
-            <CrumbLink href="/catalog" onOpen={() => navigate("/catalog")}>Каталог авто из Китая</CrumbLink>
+            <CrumbLink href="/catalog" onOpen={() => navigate("/catalog")}>Каталог авто {siteFromPhrase()}</CrumbLink>
             <CaretRight size={13} />
             {landing.kind === "model" && landing.links?.brandPath && (
               <>
@@ -6694,7 +6749,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             {landing.name}
           </>
         ) : (
-          "Каталог авто из Китая"
+          `Каталог авто ${siteFromPhrase()}`
         )}
       </div>
       <div className="catalog-heading">
@@ -6708,10 +6763,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
               разделов был одной фразой на все 155 страниц, а строка наличия модели
               повторяла заголовок вкладки и блок «что есть и почём» под выдачей. К тому
               же ни то ни другое не менялось от фильтров. Число машин — над выдачей. */}
-          <h1>{Boolean(heading.tail) ? <><span>{heading.title}</span> <span>{heading.tail}</span></> : heading.title}</h1>
+          <h1>{Boolean(heading.tail) ? <><span>{heading.title}</span> <HeadingCountryMenu tail={heading.tail} value={filters.country} onChange={(country) => updateFilters((current) => ({ ...current, country }))} /></> : heading.title}</h1>
         </div>
       </div>
-      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
+      <FilterPanel filters={filters} setFilters={updateFilters} resultCount={knownResultCount} brands={brands} models={models} bodyTypes={bodyTypes} drives={drives} countries={countries} optionCounts={{ brands:brandOptionCounts, models:modelOptionCounts }} availability={availability} onSaveSearch={submitSearch} searchSaved={searchSaved} searchUpdate={searchUpdate} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded} currentPath={landingPath} currentLanding={landing} />
       {filters.brand !== "Все марки" && models.length > 1 && (
         <div className="model-quick-chips" aria-label={`Быстрый выбор модели ${filters.brand}`}>
           {quickModels.map((model) => {
@@ -6833,7 +6888,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             aria-hidden="true"
           />
           <h3>Как устроена покупка</h3>
-          <p>Весь путь автомобиля из Китая до выдачи в Минске — без скрытых этапов.</p>
+          <p>Весь путь автомобиля {siteFromPhrase()} до выдачи в Минске — без скрытых этапов.</p>
           <ul>
             <li>
               <Check size={15} />
@@ -6897,6 +6952,8 @@ function CatalogSectionLinks({ navigate }) {
   // фильтров — они свёрнуты, чтобы не было склада из сотни плашек.
   const prices = CATALOG_LANDINGS.filter((item) => item.kind === "price");
   const combos = [
+    // Страницы стран (29.09.2026): фильтр «Страна» ссылкой их не даёт.
+    ["Страна", CATALOG_LANDINGS.filter((item) => item.kind === "origin")],
     ["Двигатель и кузов", CATALOG_LANDINGS.filter((item) => item.kind === "combo")],
     ["Марка и кузов", CATALOG_LANDINGS.filter((item) => item.kind === "brandBody")],
   ];
@@ -6909,7 +6966,7 @@ function CatalogSectionLinks({ navigate }) {
   );
   return (
     <section className="catalog-landing-notes" aria-labelledby="catalog-sections-title">
-      <h2 id="catalog-sections-title">Автомобили из Китая по цене и кузову</h2>
+      <h2 id="catalog-sections-title">Автомобили {siteFromPhrase()} по цене и кузову</h2>
       <div className="catalog-landing-links">
         <b>По цене до Минска</b>
         {links(prices)}
@@ -6962,7 +7019,7 @@ function CatalogLandingNotes({ landing, navigate, total = null }) {
   );
   return (
     <section className="catalog-landing-notes catalog-landing-article" aria-labelledby="catalog-landing-notes-title">
-      <h2 id="catalog-landing-notes-title">{landing.name} из Китая: что важно знать</h2>
+      <h2 id="catalog-landing-notes-title">{landing.kind === "origin" ? landing.name : `${landing.name} ${siteFromPhrase()}`}: что важно знать</h2>
       {landing.notes.map((text) => (
         <p key={text.slice(0, 40)}>{text}</p>
       ))}
@@ -7010,7 +7067,7 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
   const alternatives = config.alternatives.map((item) => ({ ...item, href:brandLandingPath(item.brand) })).filter((item) => item.href);
   return (
     <section className="catalog-landing-notes catalog-landing-article brand-guide" aria-labelledby="catalog-landing-notes-title">
-      <h2 id="catalog-landing-notes-title">{brand} из Китая: цены и выбор по данным каталога</h2>
+      <h2 id="catalog-landing-notes-title">{brand} {siteFromPhrase()}: цены и выбор по данным каталога</h2>
       <p>{config.intro}</p>
       {!complete ? (
         <p className="brand-guide-loading">Загружаем актуальную сводку по марке…</p>
@@ -7336,7 +7393,7 @@ function GalleryModal({ car, images, initialIndex, onClose }) {
               }}
             >
               {!loadedImages.has(index) && <span className="gallery-modal-loading" aria-hidden="true">Загружаем фото…</span>}
-              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title} из Китая, фото ${index + 1}`} loading={index === initialIndex ? "eager" : "lazy"} fetchPriority={index === initialIndex ? "high" : "low"} decoding="async" onLoad={() => markImageLoaded(index)} onError={(event) => retryWithFullImage(event, image)} />
+              <img src={imageSource(image, IMAGE_ORIGINAL)} alt={`${car.title} ${fromPhrase(carOrigin(car))}, фото ${index + 1}`} loading={index === initialIndex ? "eager" : "lazy"} fetchPriority={index === initialIndex ? "high" : "low"} decoding="async" onLoad={() => markImageLoaded(index)} onError={(event) => retryWithFullImage(event, image)} />
               <figcaption>
                 {index + 1} из {images.length}
               </figcaption>
@@ -7735,7 +7792,7 @@ function ActiveVehicleGallery({ car }) {
                   <img
                     className="gallery-frame-full"
                     src={imageSource(image, IMAGE_ORIGINAL)}
-                    alt={`${car.title} из Китая, фото ${index + 1}`}
+                    alt={`${car.title} ${fromPhrase(carOrigin(car))}, фото ${index + 1}`}
                     fetchPriority={index === active ? "high" : "low"}
                     draggable="false"
                     onLoad={index === 0 ? () => setReady(true) : undefined}
@@ -8251,7 +8308,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         <div className="breadcrumbs">
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
-        <CrumbLink href="/catalog" onOpen={() => backToCatalog(car.id)}>Каталог авто из Китая</CrumbLink>
+        <CrumbLink href="/catalog" onOpen={() => backToCatalog(car.id)}>Каталог авто {siteFromPhrase()}</CrumbLink>
         <CaretRight size={13} />
         <CrumbLink href={brandCrumbHref} onOpen={openBrand}>{car.brand}</CrumbLink>
         <CaretRight size={13} />
@@ -8500,7 +8557,8 @@ function CopyLinkButton({ car, labelled = false, className }) {
 // Знак появляется только у переименованных моделей: где имя совпадает, показывать
 // нечего (`config/model-names-by.mjs`).
 function ChineseNameMark({ car }) {
-  const info = chineseModelName(car?.brand, car?.model);
+  // Китайское имя — только у машины из Китая: корейской Elantra оно ни к чему.
+  const info = carOrigin(car) === "china" ? chineseModelName(car?.brand, car?.model) : null;
   if (!info) return null;
   const spoken = info.pinyin ? `${info.zh} (${info.pinyin})` : info.zh;
   const hint = `В Китае эта модель называется ${spoken}`;
@@ -8616,7 +8674,7 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
           </div>
         </div>
         {error && <div className="auth-error" role="alert">{error}</div>}
-        <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Оставить заявку"}<ArrowRight size={18} /></button>
+        <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Получить консультацию"}<ArrowRight size={18} /></button>
         {!withAccount && (
           <p className="availability-lead-legal">Нажимая кнопку, вы соглашаетесь с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой конфиденциальности</a>.</p>
         )}
@@ -8705,7 +8763,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   const quotaPricing = useQuotaPricing();
   const quotaPricingOn = quotaPricing?.on !== false;
   const priceVerdict = priceRatingVerdictFor({ rating:car.priceRating, priceUsd:price.totalUsd, mileage:car.mileage, quotaPricingOn });
-  const timing = estimateDeliveryDays(car.city);
+  const timing = estimateDeliveryDays(car.city, carOrigin(car));
   // Кнопка не уводит со страницы: сначала окно объясняет, что именно мы проверим.
   // Дальше вошедшему запрос уходит из самого окна, гостя ведём заводить аккаунт.
   const requestAvailability = () => {
@@ -8770,7 +8828,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   // там та же строка стоит отдельно, между фотографиями и характеристиками.
   const datesLine = carDatesLine(car);
   const conditionFacts = [
-    [CarProfile, "Владельцы в Китае", car.owners],
+    [CarProfile, `Владельцы ${inPhrase(carOrigin(car))}`, car.owners],
     [BatteryHigh, "Тип батареи", car.technicalSpecs?.count ? null : translateBattery(car.batteryType)],
   ].filter(([, , value]) => value);
   return (
@@ -8940,9 +8998,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
           <aside className="price-breakdown-card" aria-label="Детализация цены">
                 <div className="price-disclosure-content">
                 <div className="price-breakdown">
-                  <PriceBreakdownRow label={price.basePriceLabel} value={money(price.chinaUsd, currency)} description={price.basePriceNote || `${number(car.chinaPrice)} ¥${localGuaziPreview ? "" : " · данные источника"}`} />
+                  <PriceBreakdownRow label={price.basePriceLabel} value={money(price.chinaUsd, currency)} description={price.basePriceNote || `${number(sourcePriceOf(car))} ${sourceCurrencySymbol(car)}${localGuaziPreview ? "" : " · данные источника"}`} />
                   <PriceBreakdownRow label={price.buyoutLabel} value={approximateMoney(price.buyoutLow, price.buyoutHigh, currency)} description="Платёжный агент и комиссии банка" />
-                  {!price.isFob && <PriceBreakdownRow label="Логистика по Китаю" value={approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)} description={price.chinaLegNote} />}
+                  {!price.isFob && <PriceBreakdownRow label={`Логистика ${inPhrase(carOrigin(car))}`} value={approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)} description={price.chinaLegNote} />}
                   <PriceBreakdownRow label="Доставка до Минска" value={approximateMoney(price.intlLow, price.intlHigh, currency)} description={price.intlNote} />
                   <PriceBreakdownRow label="СВХ в Минске" value={approximateMoney(price.svhLow, price.svhHigh, currency)} description="Разгрузка и хранение до оформления" />
                   {/* Предупреждение о пошлине («Без квоты на льготный ввоз») — первой
@@ -8975,7 +9033,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                     <strong>{daysRange(timing.buyoutDays)}</strong>
                   </div>
                   <div className="facts-row">
-                    <b>Логистика по Китаю</b>
+                    <b>Логистика {inPhrase(carOrigin(car))}</b>
                     <strong>{daysRange(timing.chinaDays)}</strong>
                   </div>
                   <div className="facts-row">
@@ -9002,9 +9060,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               </span>
               {!inOrder && <span className="availability-primary-note">Консультация бесплатно</span>}
             </button>
-          )}
-          {!sold && (
-            <p className="report-order-note">Заявку получит наш проверенный партнёр</p>
           )}
           <BrandNotice car={car} />
           {floatingCta && !sold && (
@@ -9356,9 +9411,9 @@ function OrderDraft({ car, navigate }) {
         </div>
         <div className="order-source-price">
           <span>
-            {price.isFob ? "Цена FOB · Хоргос" : "Цена в Китае"} <DataTag type="source" />
+            {price.isFob ? `Цена FOB · ${car.origin === "korea" ? "Пусан" : "Хоргос"}` : `Цена ${inPhrase(carOrigin(car))}`} <DataTag type="source" />
           </span>
-          <b>{price.isFob ? money(price.chinaUsd, currency) : `${number(car.chinaPrice)} ¥`}</b>
+          <b>{price.isFob ? money(price.chinaUsd, currency) : `${number(sourcePriceOf(car))} ${sourceCurrencySymbol(car)}`}</b>
           <small>{withApprox(price.isFob ? price.basePriceNote : `≈ ${money(price.chinaUsd, currency)} по расчётному курсу`)}</small>
         </div>
       </section>
@@ -9374,7 +9429,7 @@ function OrderDraft({ car, navigate }) {
             </div>
             <div className="order-cost-list">
               <div>
-                <PriceLabel label={price.basePriceLabel} description={price.basePriceNote || `${number(car.chinaPrice)} ¥ · данные источника`} />
+                <PriceLabel label={price.basePriceLabel} description={price.basePriceNote || `${number(sourcePriceOf(car))} ${sourceCurrencySymbol(car)} · данные источника`} />
                 <b>{money(price.chinaUsd, currency)}</b>
               </div>
               <div>
@@ -9383,7 +9438,7 @@ function OrderDraft({ car, navigate }) {
               </div>
               {!price.isFob && (
                 <div>
-                  <PriceLabel label="Логистика по Китаю" description={price.chinaLegNote} />
+                  <PriceLabel label={`Логистика ${inPhrase(carOrigin(car))}`} description={price.chinaLegNote} />
                   <b>{withApprox(approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency))}</b>
                 </div>
               )}
@@ -9685,7 +9740,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
   // modes; the selected site theme resumes after the capability cards.
 
   return (
-    <section className="service-video-story" ref={sceneRef} aria-label="Автомобиль прибывает из Китая">
+    <section className="service-video-story" ref={sceneRef} aria-label={`Автомобиль прибывает ${siteFromPhrase()}`}>
       <div className="service-video-sticky" ref={stickyRef}>
         <div className="service-scroll-media">
           <picture>
@@ -9699,7 +9754,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
         <div className="service-video-copy">
           <div className="service-video-copy-inner">
             <div className="service-video-copy-panel service-video-copy-panel-primary">
-              <h1>Авто из Китая под ключ.</h1>
+              <h1>Авто {siteFromPhrase()} под ключ.</h1>
               <p>Подберём, посчитаем и найдём, кто привезёт. На связи от выбора машины до получения ключей</p>
               <div className="service-video-copy-actions">
                 <button className="primary service-video-copy-cta" onClick={() => navigate("/catalog")}>
@@ -9711,7 +9766,9 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
               <h2>
                 Более {roundedListings} авто с пробегом напрямую из{" "}
                 <span className="service-video-country-mark">
-                  Китая
+                  {siteCountriesGenitive()}
+                  {/* TODO (Корея): здесь нужна картинка с двумя флагами — Китая и Кореи;
+                      пока стоит прежний флаг КНР, новый файл рисуется отдельно. */}
                   <img src="/services/china-flag.svg" alt="" aria-hidden="true" />
                 </span>
               </h2>
@@ -9719,7 +9776,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
             </div>
             <aside className="service-video-trust-card">
               <ShieldCheck className="service-video-trust-card-icon" size={28} weight="duotone" />
-              <h3>Всё по договору. Оплата напрямую в Китай.</h3>
+              <h3>Всё по договору. Оплата напрямую продавцу.</h3>
             </aside>
             <div className="service-video-checkline">
               <Check size={20} weight="bold" />
@@ -10292,7 +10349,7 @@ function ContactsPage({ navigate, theme }) {
             <span>Среднее время ответа — 10 минут</span>
           </p>
           <p className="contact-home-link">
-            До обращения можно посмотреть <AppLink href="/" navigate={navigate}>автомобили из Китая с расчётом до Минска</AppLink>.
+            До обращения можно посмотреть <AppLink href="/" navigate={navigate}>автомобили {siteFromPhrase()} с расчётом до Минска</AppLink>.
           </p>
           <div className="info-actions">
             <ExternalLink className="primary contact-telegram-cta" href={COMPANY.telegramUrl}>
@@ -10557,6 +10614,7 @@ function ToolPage({ tool, navigate }) {
           <div className="model-page-body page-width">
             <article className="model-page-article">
               {tool.kind === "cost" && <ToolPageTable table={deliveryStages()} />}
+              {tool.kind === "cost" && <ToolPageTable table={deliveryStagesKorea()} />}
             </article>
           </div>
         )}
@@ -10828,7 +10886,9 @@ function DeliveryCalculator() {
   // неподвижным и выбор модели не выглядит как два последовательных пересчёта.
   const bodyClassText = `${bodyClass || "Кузов не определён"}.`;
   const deliveryHint = precisionPrompt
-    || `Ориентир от ${money(estimate.low)} до ${money(estimate.high)}. Плечо по Китаю: ${estimate.transitLabel}.`;
+    // Страны в калькуляторе пока нет (расчёт по зонам Китая), поэтому плечо названо
+    // без страны; с корейским профилем логистики здесь появится выбор.
+    || `Ориентир от ${money(estimate.low)} до ${money(estimate.high)}. Плечо по стране отправления: ${estimate.transitLabel}.`;
   const copyShareLink = async () => {
     const url = `${window.location.origin}${appHref("/delivery-cost")}${search ? `?${search}` : ""}`;
     if (!await copyToClipboard(url)) return;
@@ -12186,6 +12246,74 @@ const BLOG_SHARE_TARGETS = [
   { id: "threads", name: "Threads", Icon: ThreadsLogo, href: (url, title) => `https://www.threads.net/intent/post?text=${encodeURIComponent(`${title} ${url}`)}` },
 ];
 
+/**
+ * Выбор страны прямо в заголовке каталога (решение Сергея 29.09.2026): в «Каталог авто
+ * из Китая и Кореи» слова стран выделены и открывают обычный список сайта — «Китай и
+ * Корея», «Китай», «Корея». Выбор ставит фильтр `country`, а дальше каталог сам уводит
+ * на страницу страны (`/catalog/korea`), как делает с маркой. Текст заголовка для
+ * поисковика не меняется: те же слова и пробелы, кнопка — часть фразы.
+ */
+const HEADING_FROM = /из(\s|\u00a0)(Китая|Кореи)((\s|\u00a0)и(\s|\u00a0)(Китая|Кореи))?/;
+function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => {
+      if (event.key === "Escape" || (event.type === "pointerdown" && !boxRef.current?.contains(event.target))) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  const match = HEADING_FROM.exec(String(tail || ""));
+  if (!match) return <span>{tail}</span>;
+  const prefix = tail.slice(0, match.index);
+  const suffix = tail.slice(match.index + match[0].length);
+  const selected = countryKey(value);
+  // Слова в кнопке — по выбранной стране, а без выбора — обе, как в заголовке страницы.
+  const words = selected ? originOf(selected).genitive : siteCountriesGenitive();
+  // Список — галочки по странам, по умолчанию отмечены все (Сергей, 29.09.2026). Одна
+  // отмеченная — фильтр по ней; снять последнюю нельзя: пустой каталог никому не нужен,
+  // поэтому нажатие на единственную отмеченную снова включает все.
+  const checked = (key) => !selected || selected === key;
+  const toggle = (key) => {
+    const next = ACTIVE_ORIGINS.filter((item) => (item === key ? !checked(item) : checked(item)));
+    const label = next.length === 1 ? countryName(next[0]) : ANY_COUNTRY;
+    if (label !== (value || ANY_COUNTRY)) onChange?.(label);
+  };
+  return (
+    <span>
+      {prefix}из{match[1]}
+      <span className={`heading-country${open ? " open" : ""}`} ref={boxRef}>
+        <button type="button" className="heading-country-trigger" aria-haspopup="menu" aria-expanded={open} aria-label="Выбрать страну" onClick={() => setOpen((current) => !current)}>
+          {words}
+          {/* Своя стрелка: толще и короче, чем у значков сайта, с круглыми концами. */}
+          <svg className="heading-country-caret" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <div className="select-menu heading-country-menu" role="menu" aria-hidden={!open} inert={open ? undefined : true}>
+          <div className="select-options">
+            {ACTIVE_ORIGINS.map((key) => (
+              <button key={key} type="button" role="menuitemcheckbox" aria-checked={checked(key)} className={checked(key) ? "selected" : ""} onClick={() => toggle(key)}>
+                <span className="select-option-label">
+                  <span className={`select-option-check${checked(key) ? " checked" : ""}`} aria-hidden="true">{checked(key) && <Check size={12} weight="bold" />}</span>
+                  <span>{countryName(key)}</span>
+                </span>
+                {/* Флаг справа — из public/flags, чтобы не зависеть от эмодзи системы. */}
+                <img className="heading-country-flag" src={`/flags/${key}.svg`} alt="" aria-hidden="true" width="24" height="16" loading="lazy" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </span>
+      {suffix}
+    </span>
+  );
+}
+
 function BlogShareMenu({ post, direction = "up" }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -13008,7 +13136,7 @@ function ArticleCatalog({ navigate }) {
           <SiteLogo />
           <span className="visually-hidden">abcars.by</span>
         </span>
-        <span> — это маркетплейс б/у авто из Китая</span>
+        <span> — это маркетплейс б/у авто {siteFromPhrase()}</span>
       </p>
       <div className="article-catalog-action">
         <AppLink className="primary article-catalog-button" href="/catalog" navigate={navigate} onClick={() => trackEvent("article_promo_click")}>
@@ -13067,7 +13195,7 @@ function BlogFigure({ car, index, navigate, onOpen = null, eager = false }) {
   return (
     <figure className="blog-figure">
       <AppLink href={carHref(car)} navigate={navigate} onClick={open} aria-label={`Открыть объявление: ${title}`}>
-        <img src={image} srcSet={imageSourceSet(source, IMAGE_WIDTH_ARTICLE)} alt={`${title} — автомобиль из Китая в наличии`} loading={eager ? "eager" : "lazy"} onError={(event) => retryWithFullImage(event, source)} />
+        <img src={image} srcSet={imageSourceSet(source, IMAGE_WIDTH_ARTICLE)} alt={`${title} — автомобиль ${fromPhrase(carOrigin(car))} в наличии`} loading={eager ? "eager" : "lazy"} onError={(event) => retryWithFullImage(event, source)} />
       </AppLink>
       <figcaption>
         <AppLink href={carHref(car)} navigate={navigate} onClick={open}>{title}</AppLink>
@@ -13479,7 +13607,7 @@ function NewsletterSubscribedModal({ onClose }) {
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
         <img className="newsletter-subscribed-icon" src="/app-download/newsletter-mailbox.png" width="80" height="80" alt="" aria-hidden="true" />
         <h2 id="newsletter-subscribed-title">Вы подписались на рассылку</h2>
-        <p id="newsletter-subscribed-description">Будем присылать полезные обновления и аналитику рынка автомобилей Китая.</p>
+        <p id="newsletter-subscribed-description">Будем присылать полезные обновления и аналитику рынка автомобилей {siteCountriesGenitive()}.</p>
         <div className="order-removal-actions availability-paused-actions">
           <button className="primary" type="button" onClick={onClose} autoFocus>Готово</button>
         </div>
@@ -13572,7 +13700,7 @@ function SiteFooter({ navigate }) {
       <div className="page-width footer-main">
         <div className="footer-brand">
           <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="abcars.by — на главную"><SiteLogo /></AppLink>
-          <p>Помогаем выбрать и купить автомобиль из Китая в Беларусь.</p>
+          <p>Помогаем выбрать и купить автомобиль {siteFromPhrase()} в Беларусь.</p>
         </div>
         <FooterAppDownload onOpen={openAppUnavailable} />
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<a href={"/how-it-works#faq"}>Вопросы и ответы</a></div>
@@ -13599,7 +13727,7 @@ function SiteFooter({ navigate }) {
         <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
           <span className="footer-newsletter-title">
             <img src="/app-download/newsletter-mailbox.png" width="64" height="64" alt="" aria-hidden="true" />
-            <strong>Подпишитесь на обновления и аналитику рынка авто в Китае</strong>
+            <strong>Подпишитесь на обновления и аналитику рынка авто {siteInPhrase()}</strong>
           </span>
           <div className="footer-newsletter-action">
             <div className="footer-newsletter-form">
@@ -14675,7 +14803,7 @@ const catalogMetaQueryForPath = (href) => {
   const landing = findCatalogLanding(path);
   if (!landing) return null;
   const filters = catalogFiltersFromParams(landingFilterParams(landing));
-  return catalogMetaQuery(filters.type, filters.brand, filters.bodyType);
+  return catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country);
 };
 // Сколько переход на страницу каталога ждёт её справочник (см. navigate в useRoute).
 const CATALOG_META_WAIT_MS = 800;
@@ -14684,13 +14812,15 @@ const prefetchCatalogMeta = (href) => {
   if (query === null || metaResolved.has(query)) return;
   requestCatalogMeta(query).catch(() => {});
 };
-const EMPTY_CATALOG_META = { brands: [], models: [], bodyTypes: [], drives: [], availability: {} };
+const EMPTY_CATALOG_META = { brands: [], models: [], bodyTypes: [], drives: [], countries: [], availability: {} };
 // Строка запроса справочника: те же три признака и в каталоге, и в поиске на главной.
-const catalogMetaQuery = (type, brand, bodyType) => {
+const catalogMetaQuery = (type, brand, bodyType, country = ANY_COUNTRY) => {
   const query = new URLSearchParams();
   if (type && type !== "Все") query.set("type", type);
   if (brand && brand !== "Все марки") query.set("brand", brand);
   appendMulti(query, "bodyType", bodyType, ANY_BODY_TYPE);
+  // Страна — чтобы на странице страны марки и модели считались только по ней.
+  if (countryKey(country)) query.set("country", countryKey(country));
   return query.toString();
 };
 let catalogRequest = null;

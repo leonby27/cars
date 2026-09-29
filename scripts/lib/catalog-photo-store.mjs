@@ -5,6 +5,8 @@ import { vehiclePhotoHref, allowedGuaziPhotoQuery } from '../../src/photo-source
 import { guaziImageCacheFile } from '../../server/guazi-image-key.mjs';
 
 const che168PhotoHref = href => /^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) && !href.split('/').includes('..');
+// Кадры Encar: три размера в пути, JPEG (src/photo-source.js).
+const encarPhotoHref = href => /^\/photo\/encar\/w(600|1200|1920)\/[A-Za-z0-9/_.-]+\.jpe?g$/i.test(href) && !href.split('/').includes('..');
 
 // Кадры Guazi идут через /api/image: сайт сам кладёт копию в свой кэш
 // (server/guazi-image-cache.mjs), поэтому второй копии здесь не нужно.
@@ -20,7 +22,7 @@ export function guaziPhotoSource(href) {
   } catch { return null; }
 }
 
-export const storablePhotoHref = href => che168PhotoHref(href) || Boolean(guaziPhotoSource(href));
+export const storablePhotoHref = href => che168PhotoHref(href) || encarPhotoHref(href) || Boolean(guaziPhotoSource(href));
 
 export function catalogPhotoPaths(car, { previewCount = 1 } = {}) {
   return [...new Set((car.images?.length ? car.images : [car.image]).filter(Boolean).slice(0, previewCount === 5 ? 5 : 1)
@@ -49,7 +51,8 @@ async function storeGuaziPhoto(href, source, { directory, site, fetcher, minFree
 export async function storeCatalogPhoto(href, { directory, site = 'https://abcars.by', fetcher = fetch, minFreeBytes = 5 * 1024**3 } = {}) {
   const guazi = guaziPhotoSource(href);
   if (guazi) return storeGuaziPhoto(href, guazi, { directory, site, fetcher, minFreeBytes });
-  if (!che168PhotoHref(href)) throw new Error('Invalid photo path');
+  const encar = encarPhotoHref(href);
+  if (!che168PhotoHref(href) && !encar) throw new Error('Invalid photo path');
   const file = path.join(directory,href);
   try { if ((await fs.stat(file)).size > 0) return { stored: false, bytes: 0 }; } catch (error) { if(error.code !== 'ENOENT') throw error; }
   const disk = await fs.statfs(directory);
@@ -63,7 +66,9 @@ export async function storeCatalogPhoto(href, { directory, site = 'https://abcar
     chunks.push(chunk);
   }
   const body=Buffer.concat(chunks);
-  if(body.toString('ascii',0,4)!=='RIFF' || body.toString('ascii',8,12)!=='WEBP') throw new Error('Invalid WebP photo');
+  // Che168 отдаёт webp, Encar — JPEG: проверяем сигнатуру по источнику.
+  const jpeg = body.length > 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff;
+  if (encar ? !jpeg : (body.toString('ascii',0,4)!=='RIFF' || body.toString('ascii',8,12)!=='WEBP')) throw new Error(encar ? 'Invalid JPEG photo' : 'Invalid WebP photo');
   await fs.mkdir(path.dirname(file),{recursive:true});
   const temporary=file+'.'+randomUUID()+'.tmp';
   try { await fs.writeFile(temporary,body,{mode:0o644,flag:'wx'}); await fs.rename(temporary,file); }

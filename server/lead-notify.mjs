@@ -57,7 +57,9 @@ export function leadMessage(lead) {
     lines.push("");
     lines.push(`Машина: ${lead.car.title}${facts ? ` (${facts})` : ""}`);
     lines.push(`${siteUrl}/cars/${listingNumber(lead.car.id)}`);
-    if (lead.car.sourceUrl) lines.push(`Che168: ${lead.car.sourceUrl}`);
+    // Ссылка на объявление у источника. Имя площадки не пишем: с Кореей источников
+    // несколько, а менеджеру важен сам адрес.
+    if (lead.car.sourceUrl) lines.push(`Объявление: ${lead.car.sourceUrl}`);
   } else if (lead.listingId) {
     // Объявление успели снять с продажи — заявка всё равно должна назвать машину.
     lines.push("");

@@ -7,8 +7,8 @@ import { protectRussianShortWords } from "../src/typography.js";
 
 test("binds short Russian words to the following word", () => {
   assert.equal(
-    protectRussianShortWords("Понятный путь к автомобилю из Китая"),
-    "Понятный путь к автомобилю из Китая",
+    protectRussianShortWords("Понятный путь к автомобилю из Китая и Кореи"),
+    "Понятный путь к автомобилю из Китая и Кореи",
   );
 });
 

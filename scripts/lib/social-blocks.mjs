@@ -57,7 +57,7 @@ export function shapeSocialCar(row) {
   return {
     ...raw,
     externalId: String(row.external_id),
-    id: `che168-${row.external_id}`,
+    id: raw.id || `${String(row.source || "che168").toLowerCase()}-${row.external_id}`,
     brand: row.brand,
     model: row.model,
     year: row.year,
@@ -102,7 +102,7 @@ export const isLiveAvailable = (car) =>
 
 const normalizeLiveCar = (car) => ({
   ...car,
-  externalId:String(car.externalId || String(car.id || "").replace(/^che168-/, "")),
+  externalId:String(car.externalId || String(car.id || "").replace(/^(che168|guazi|encar)-/, "")),
   range:Number(car.range ?? car.electricRange ?? car.combinedRange) || null,
   battery:Number(car.battery) || null,
   mileage:Number(car.mileage) || 0,
@@ -343,7 +343,7 @@ export function blogPost({ slug, network = "telegram", site = "abcars.by" }) {
     : network === "threads" ? `🔗 ${site}/blog/${slug}`
     : "🔗 Полный разбор в журнале — ссылка в шапке профиля";
   const tags = network === "instagram" && social.tags?.length
-    ? `\n\n${["абкарс", "автоизкитая", ...social.tags].map((tag) => `#${tag.replace(/\s+/g, "")}`).join(" ")}`
+    ? `\n\n${["абкарс", "автоизкитая", "автоизкореи", ...social.tags].map((tag) => `#${tag.replace(/\s+/g, "")}`).join(" ")}`
     : "";
   // У материала журнала свой призыв: звать проверять наличие машины неуместно,
   // когда речь о разборе правил или подборке.

@@ -2,6 +2,10 @@ import { repairVerifiedDrive, driveConflicts } from "../src/vehicle-spec-integri
 import crypto from "node:crypto";
 import { canonicalImportName, uniquePhotos } from "../config/import-policy.mjs";
 import { pool, withTransaction } from "./db.mjs";
+// Страна машины по имени источника: карточка говорит «из Кореи» для Encar и «из Китая»
+// для остальных, общие страницы — фразу сайта (см. src/origin.js).
+import { ORIGIN_SOURCES, originForSource, originFromParam } from "../src/origin.js";
+import { koreanListingId } from "../src/listing-id.js";
 import { notifyLead } from "./lead-notify.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { marketPriceStatsFromRows } from "./market-price-stats.mjs";
@@ -12,7 +16,7 @@ import { DRIVE_TYPES, normalizeDrive, orderDrives, UNKNOWN_DRIVE } from "../src/
 import { FUEL_TYPES, GEARBOX_TYPES, enginePower, engineVolume, fuelType, gearboxType } from "../src/engine-spec.js";
 
 const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).slice(0, 2)) : Number(value) || null;
-const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({ price:car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images })).digest("hex");
+const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({ price:car.sourcePrice ?? car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images })).digest("hex");
 export const SOLD_LISTING_RETENTION_MS = 14 * 86400_000;
 
 // Проданная машина ещё две недели открывается из избранного и по старой ссылке.
@@ -42,6 +46,14 @@ export function normalizeCar(car) {
 // пересчёт не разошёлся с импортом — иначе после него часть полей молча пропала бы.
 export const vehicleSpecifications = (item) => ({ bodyType:item.bodyType,bodyStructure:item.bodyStructure,batteryType:item.batteryType,batteryBrand:item.batteryBrand,batteryHealth:item.batteryHealth,engine:item.engine,transmission:item.transmission,engineVolume:engineVolume(item),enginePower:enginePower(item),gearbox:gearboxType(item) || null,fuelType:fuelType(item) || null,bodyColor:item.bodyColor,acceleration:item.acceleration,torqueNm:item.torqueNm,tireSizeFront:item.tireSizeFront,tireRim:item.tireRim,vehicleClass:item.vehicleClass,driverAssistance:item.driverAssistance,infotainmentChip:item.infotainmentChip,assistanceLevel:item.assistanceLevel,radarCount:item.radarCount,cameraCount:item.cameraCount,ultrasonicCount:item.ultrasonicCount,warranty:item.warranty,inspectionGrade:item.inspectionGrade,powertrainInspection:item.powertrainInspection,bodyInspection:item.bodyInspection,interiorInspection:item.interiorInspection,structureInspection:item.structureInspection,engineBayInspection:item.engineBayInspection,batteryProtection:item.batteryProtection });
 
+// Колонка `price_cny` хранит цену в валюте продавца: юани у Китая, воны у Кореи (имя
+// историческое). Импортёр пишет `sourcePrice` + `sourceCurrency` (+ `usdPrice`), старые
+// записи — `chinaPrice`; валюта при чтении берётся из полезной нагрузки, а без неё — по
+// источнику (src/pricing.js sourceCurrencyOf).
+// Порог «цена изменилась» — в валюте продавца: 700 ¥ или 140 000 ₩ (≈ 100 $ и там, и там);
+// запасной пересчёт «прошлой цены» в доллары — по грубому курсу валюты (7,15 ¥, 1 354 ₩),
+// когда в объявлении нет `usdPrice`. Импортёр Encar обязан писать `usdPrice` — тогда и
+// стрелка цены на карточке, и прошлая цена считаются точно.
 export async function upsertCar(car, client = pool) {
   const item = normalizeCar(car);
   const checkedAt = item.checkedAt || item.importedAt || new Date().toISOString();
@@ -52,13 +64,13 @@ export async function upsertCar(car, client = pool) {
     [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify(vehicleSpecifications(item))]);
   await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at, sold_at)
     VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()),NULL)
-    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', sold_at=NULL, content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= 700 THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / 7.15)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= 700 THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash THEN now() ELSE listings.content_changed_at END`,
-    [item.id,item.source,item.externalId,item.sourceUrl,item.title,item.city,item.firstRegistration,item.mileage,item.chinaPrice,item.guidePriceCny,item.owners,item.transfers,item.conditionGrade,item.appearanceScore,item.claims || item.incident,item.description,contentHash(item),JSON.stringify(item),checkedAt,item.importedAt || checkedAt,estimatedTotalUsd]);
+    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', sold_at=NULL, content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / CASE WHEN listings.source='Encar' THEN 1354 ELSE 7.15 END)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash THEN now() ELSE listings.content_changed_at END`,
+    [item.id,item.source,item.externalId,item.sourceUrl,item.title,item.city,item.firstRegistration,item.mileage,item.sourcePrice ?? item.chinaPrice,item.guidePriceCny,item.owners,item.transfers,item.conditionGrade,item.appearanceScore,item.claims || item.incident,item.description,contentHash(item),JSON.stringify(item),checkedAt,item.importedAt || checkedAt,estimatedTotalUsd]);
   await client.query("DELETE FROM listing_media WHERE listing_id=$1", [item.id]);
   const images = (item.images || [item.image]).filter(Boolean);
   if (images.length) await client.query(`INSERT INTO listing_media (listing_id, position, url)
     SELECT $1, ordinal::int - 1, url FROM unnest($2::text[]) WITH ORDINALITY AS media(url, ordinal)`, [item.id,images]);
-  const history = item.priceHistory || [{ at:checkedAt, priceCny:item.chinaPrice }];
+  const history = item.priceHistory || [{ at:checkedAt, priceCny:item.sourcePrice ?? item.chinaPrice }];
   if (history.length) await client.query(`INSERT INTO price_history (listing_id, observed_at, price_cny)
     SELECT $1, point.at, point.price_cny FROM jsonb_to_recordset($2::jsonb) AS point(at timestamptz, price_cny integer)
     ON CONFLICT DO NOTHING`, [item.id,JSON.stringify(history.map((point) => ({ at:point.at, price_cny:point.priceCny })))]);
@@ -110,7 +122,11 @@ export function buildCarFilters(searchParams) {
   const clauses = ["l.status='active'"];
   const values = [];
   const add = (sql, value) => { values.push(value); clauses.push(sql.replace("?", `$${values.length}`)); };
-  if (["Guazi", "Che168"].includes(searchParams.get("source"))) add("l.source=?", searchParams.get("source"));
+  if (["Guazi", "Che168", "Encar"].includes(searchParams.get("source"))) add("l.source=?", searchParams.get("source"));
+  // Страна машины — по источникам (`country=china|korea`, код `KR` тоже понимаем);
+  // неизвестное значение фильтр не сужает, чтобы опечатка в адресе не прятала каталог.
+  const country = originFromParam(searchParams.get("country"));
+  if (country) add("l.source=ANY(?)", [...ORIGIN_SOURCES[country]]);
   if (searchParams.get("type") && searchParams.get("type") !== "Все") add("v.powertrain=?", searchParams.get("type"));
   if (searchParams.get("brand") && searchParams.get("brand") !== "Все марки") add("v.brand=?", searchParams.get("brand"));
   const models = multiParamValues(searchParams.getAll("model"), "Все модели");
@@ -123,7 +139,9 @@ export function buildCarFilters(searchParams) {
   if (colors.length) add("v.specifications->>'bodyColor'=ANY(?)", colors);
   if (DRIVE_TYPES.includes(searchParams.get("drive"))) add("v.drivetrain=?", searchParams.get("drive"));
   if (Number(searchParams.get("ownersMax"))) add("l.owners<=?", Number(searchParams.get("ownersMax")));
-  if (searchParams.get("noClaims") === "1") clauses.push("COALESCE(l.claims, l.source_payload->>'claims', l.source_payload->>'incident') ~ '(0\\s*次理赔|理赔\\s*0\\s*次)'");
+  // «Без страховых случаев»: у Encar число случаев лежит числом (`claimsCount`), у
+  // китайских источников — строкой отчёта «0次理赔»; берём то, что есть у записи.
+  if (searchParams.get("noClaims") === "1") clauses.push("(NULLIF(l.source_payload->>'claimsCount','')::int = 0 OR COALESCE(l.claims, l.source_payload->>'claims', l.source_payload->>'incident') ~ '(0\\s*次理赔|理赔\\s*0\\s*次)')");
   if (["S", "A", "B", "C", "D"].includes(searchParams.get("conditionGrade"))) add("l.condition_grade=?", searchParams.get("conditionGrade"));
   if (Number(searchParams.get("yearMin"))) add("v.model_year>=?", Number(searchParams.get("yearMin")));
   if (Number(searchParams.get("yearMax"))) add("v.model_year<=?", Number(searchParams.get("yearMax")));
@@ -197,6 +215,9 @@ export function buildCarOrder(searchParams) {
   return orders[searchParams.get("sort")] || orders.newest;
 }
 
+// Короткая метка источника в номере машины: Che168 → CH, Guazi → GZ, Encar → KR.
+const SOURCE_CODES = { Che168: "CH", Guazi: "GZ", Encar: "KR" };
+
 export function rowToCar(row) {
   const raw = row.source_payload || {};
   // Проданное объявление тоже доходит сюда: карточку по номеру спрашивают заявки и
@@ -205,7 +226,7 @@ export function rowToCar(row) {
   // Строка без столбца состояния (узкие выборки) считается живой.
   const available = row.status === undefined || row.status === "active";
   const soldAt = available ? null : row.sold_at || row.last_checked_at || row.last_seen_at || null;
-  return normalizeCar({ ...raw, available, soldAt, id:row.id, externalId:row.external_id, source:row.source, sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:available ? "Карточка доступна" : "Продано", statusTone:available ? "green" : "red", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, previousPriceUsd:Number(row.previous_price_usd) || null, priceChangedAt:row.price_changed_at, sourceId:raw.sourceId || `${row.source === "Che168" ? "CH" : "GZ"}-${row.external_id}`, ...row.specifications });
+  return normalizeCar({ ...raw, available, soldAt, id:row.id, externalId:row.external_id, source:row.source, origin:originForSource(row.source), sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:available ? "Карточка доступна" : "Продано", statusTone:available ? "green" : "red", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, previousPriceUsd:Number(row.previous_price_usd) || null, priceChangedAt:row.price_changed_at, sourceId:raw.sourceId || `${SOURCE_CODES[row.source] || "GZ"}-${row.external_id}`, ...row.specifications });
 }
 
 export function withoutDetailPayload(car) {
@@ -533,7 +554,10 @@ export async function carsByIds(ids) {
 }
 
 export async function getCar(id) {
-  const result = await pool.query(`${carSelect}, COALESCE((SELECT json_agg(json_build_object('at',p.observed_at,'priceCny',p.price_cny) ORDER BY p.observed_at) FROM price_history p WHERE p.listing_id=l.id), '[]'::json) AS price_history FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id=$1 OR l.external_id=$1 ORDER BY (l.id=$1) DESC LIMIT 1`, [id]);
+  // Корейский адрес `kr-123` — это id `encar-123`; голый номер — китайские источники,
+  // чтобы совпавшие номера Che168 и Encar не открывали чужую машину.
+  const lookup = koreanListingId(id) || id;
+  const result = await pool.query(`${carSelect}, COALESCE((SELECT json_agg(json_build_object('at',p.observed_at,'priceCny',p.price_cny) ORDER BY p.observed_at) FROM price_history p WHERE p.listing_id=l.id), '[]'::json) AS price_history FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.id=$1 OR (l.external_id=$1 AND l.source<>'Encar') ORDER BY (l.id=$1) DESC LIMIT 1`, [lookup]);
   return result.rows[0] ? { ...rowToCar(result.rows[0]), priceHistory:result.rows[0].price_history } : null;
 }
 
@@ -826,7 +850,10 @@ export async function modelClassStock() {
  * параллельно. Условия те же, что были у отдельных запросов; порядок строк задаёт база,
  * как и раньше, — у неё своё правило сравнения строк.
  */
-export async function getCatalogMeta(type, brand, bodyType) {
+// `country` — ключ страны (src/origin.js): на странице страны марки, модели и счётчики
+// считаются только по её источникам, иначе на /catalog/korea висели бы китайские марки.
+export async function getCatalogMeta(type, brand, bodyType, country = null) {
+  const origin = originFromParam(country);
   const selectedBodyTypes = multiParamValues(bodyType, "Все кузова", { splitCommas:true });
   // У каждого прохода свой набор подстановок, номера $n в каждом идут подряд.
   const filters = () => {
@@ -837,17 +864,21 @@ export async function getCatalogMeta(type, brand, bodyType) {
       type: () => (type && type !== "Все" ? `v.powertrain=${param(type)}` : "true"),
       brand: () => (brand && brand !== "Все марки" ? `v.brand=${param(brand)}` : "true"),
       body: () => (selectedBodyTypes.length ? `v.specifications->>'bodyType'=ANY(${param(selectedBodyTypes)})` : "true"),
+      country: () => (origin ? `l.source=ANY(${param([...ORIGIN_SOURCES[origin]])})` : "true"),
     };
   };
   const w = filters();
+  // Третий набор группировки — источник: из него складывается число машин по странам
+  // для фильтра «Страна» (src/origin.js), с тем же отбором, что и у марок.
   const wide = { values:w.values, text:`SELECT * FROM (
-      SELECT GROUPING(v.brand) AS g_brand, v.brand, v.drivetrain AS drive,
+      SELECT GROUPING(v.brand) AS g_brand, GROUPING(l.source) AS g_source, v.brand, v.drivetrain AS drive, l.source,
         count(*) FILTER (WHERE ${w.type()} AND ${w.body()})::int AS brand_count,
-        count(*) FILTER (WHERE v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан')::int AS drive_count
+        count(*) FILTER (WHERE v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан')::int AS drive_count,
+        count(*) FILTER (WHERE ${w.type()} AND ${w.brand()} AND ${w.body()})::int AS source_count
       FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
-      WHERE l.status='active'
-      GROUP BY GROUPING SETS ((v.brand), (v.drivetrain))
-    ) counted ORDER BY g_brand, brand, drive` };
+      WHERE l.status='active' AND ${w.country()}
+      GROUP BY GROUPING SETS ((v.brand), (v.drivetrain), (l.source))
+    ) counted ORDER BY g_brand, brand, drive, source` };
   const n = filters();
   const narrow = { values:n.values, text:`SELECT * FROM (
       SELECT GROUPING(v.model) AS g_model, GROUPING(v.specifications->>'bodyType') AS g_body, GROUPING(${FUEL_SQL}) AS g_fuel,
@@ -863,12 +894,18 @@ export async function getCatalogMeta(type, brand, bodyType) {
         count(NULLIF(v.specifications->>'acceleration',''))::int AS accel, count(NULLIF(v.specifications->>'tireRim',''))::int AS tire,
         count(${ENGINE_VOLUME_SQL})::int AS engine, count(${ENGINE_POWER_SQL})::int AS power, count(${GEARBOX_SQL})::int AS gearbox
       FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
-      WHERE l.status='active' AND ${n.type()} AND ${n.brand()}
+      WHERE l.status='active' AND ${n.type()} AND ${n.brand()} AND ${n.country()}
       GROUP BY GROUPING SETS ((v.model), (v.specifications->>'bodyType'), (${FUEL_SQL}), ())
     ) counted ORDER BY g_model, model, g_body, CASE WHEN g_body=0 THEN known_body_count END DESC, body_type` };
   const [wideRows, narrowRows] = await Promise.all([pool.query(wide.text, wide.values), pool.query(narrow.text, narrow.values)]);
-  const brands = wideRows.rows.filter((row) => row.g_brand === 0 && row.brand_count > 0).map((row) => ({ brand:row.brand, count:row.brand_count }));
-  const drives = wideRows.rows.filter((row) => row.g_brand === 1 && row.drive_count > 0);
+  const countryCounts = new Map();
+  for (const row of wideRows.rows.filter((row) => row.g_source === 0)) {
+    const origin = originForSource(row.source);
+    countryCounts.set(origin, (countryCounts.get(origin) || 0) + Number(row.source_count));
+  }
+  const countryRowsOut = Object.keys(ORIGIN_SOURCES).map((origin) => ({ origin, count:countryCounts.get(origin) || 0 }));
+  const brands = wideRows.rows.filter((row) => row.g_brand === 0 && row.g_source !== 0 && row.brand_count > 0).map((row) => ({ brand:row.brand, count:row.brand_count }));
+  const drives = wideRows.rows.filter((row) => row.g_brand === 1 && row.g_source !== 0 && row.drive_count > 0);
   const part = (name) => narrowRows.rows.filter((row) => ["g_model", "g_body", "g_fuel"].every((key) => row[key] === (key === name ? 0 : 1)));
   // Строка итога есть всегда (пустая группировка отвечает и на пустой выборке); запас —
   // на случай подменённой базы в тестах.
@@ -886,7 +923,7 @@ export async function getCatalogMeta(type, brand, bodyType) {
     range:sum("range"), accel:sum("accel"), tire:sum("tire"), engine:sum("engine"), power:sum("power"), gearbox:sum("gearbox"),
     fuel:part("g_fuel").filter((row) => row.fuel_count > 0).length,
   };
-  return { total:sum("body_count"), brands, models, bodyTypes, drives:driveRows, availability };
+  return { total:sum("body_count"), brands, models, bodyTypes, drives:driveRows, countries:countryRowsOut, availability };
 }
 
 // Список обзоров на странице «О моделях авто» показывает по каждой модели фото,

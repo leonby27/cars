@@ -54,7 +54,7 @@ const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+
 const host = new URL(siteUrl).hostname;
 const keyLocation = `${siteUrl}/${KEY}.txt`;
 
-const listingNumber = (value) => String(value ?? "").replace(/^(che168|guazi|ch|gz)[-_]/i, "");
+import { listingNumber } from "../src/listing-id.js";
 
 const { pool } = await import("../server/db.mjs");
 

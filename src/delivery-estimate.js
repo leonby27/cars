@@ -1,5 +1,4 @@
-import { chinaTransitFor } from "./china-logistics.js";
-import { PRICING } from "./pricing.js";
+import { LOGISTICS } from "./pricing.js";
 
 const round50 = (value) => Math.round(value / 50) * 50;
 const midpoint = ([low, high]) => (low + high) / 2;
@@ -43,15 +42,23 @@ export function deliveryPrecisionPrompt({ modelSelected = false, locationSelecte
 }
 
 /** Ориентир именно CIP до Минска: перевозка и страхование, без таможни и СВХ. */
-export function estimateDeliveryCip({ model = "", city = "", lengthMm = 0, curbWeight = 0 } = {}) {
-  const transit = chinaTransitFor(city);
+// `origin` — страна отправления: строки и ставки берутся из профиля страны в pricing.js.
+export function estimateDeliveryCip({ model = "", city = "", lengthMm = 0, curbWeight = 0, origin = "china" } = {}) {
+  const logistics = LOGISTICS[origin] || LOGISTICS.china;
+  const transit = logistics.transitFor(city);
   const large = isLargeDeliveryModel(model, { lengthMm, curbWeight });
-  const rows = [
-    { label: "Документы и страхование", range: PRICING.exportDocsUsd },
-    { label: "Автовоз по Китаю до Хоргоса", range: transit.usd },
-    { label: "Хоргос — Минск", range: PRICING.intlDeliveryUsd },
-  ];
-  if (large) rows.push({ label: "Крупный кузов", range: PRICING.bigCarExtraUsd });
+  const rows = origin === "korea"
+    ? [
+      { label: "Документы и портовые сборы", range: logistics.exportDocsUsd },
+      { label: "Перегон до порта Пусан", range: transit.usd },
+      { label: "Пусан — Владивосток — Минск", range: logistics.intlDeliveryUsd },
+    ]
+    : [
+      { label: "Документы и страхование", range: logistics.exportDocsUsd },
+      { label: "Автовоз по Китаю до Хоргоса", range: transit.usd },
+      { label: "Хоргос — Минск", range: logistics.intlDeliveryUsd },
+    ];
+  if (large) rows.push({ label: "Крупный кузов", range: logistics.bigCarExtraUsd });
 
   const low = round50(rows.reduce((sum, row) => sum + row.range[0], 0));
   const high = round50(rows.reduce((sum, row) => sum + row.range[1], 0));

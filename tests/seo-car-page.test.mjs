@@ -51,7 +51,7 @@ const render = (options = {}) =>
 test("разметка карточки: полная цепочка крошек и поля машины по-русски", () => {
   const { html } = render().carPage({ car: { ...car, bodyColor: "Black", seats: "5", doors: "4", horsepower: "517", firstRegistration: "2023.4" } });
   const crumbs = JSON.parse(html.match(/<script type="application\/ld\+json">(\{[^<]*"BreadcrumbList"[^<]*)<\/script>/)[1]);
-  assert.deepEqual(crumbs.itemListElement.map((item) => item.name), ["Главная", "Каталог авто из Китая", "BYD", "BYD Han", "BYD Han 2023"]);
+  assert.deepEqual(crumbs.itemListElement.map((item) => item.name), ["Главная", "Каталог авто из Китая и Кореи", "BYD", "BYD Han", "BYD Han 2023"]);
   assert.equal(crumbs.itemListElement[2].item, "https://abcars.by/catalog/byd");
   assert.equal(crumbs.itemListElement[3].item, "https://abcars.by/catalog/byd/han");
   const vehicle = JSON.parse(html.match(/<script type="application\/ld\+json">(\{[^<]*"@type":"Vehicle"[^<]*)<\/script>/)[1]);
@@ -73,8 +73,9 @@ test("страница машины несёт свой заголовок, оп
   assert.match(html, /<title>BYD Han 2023, пробег 21[^<]*400 км, батарея 85,4 кВт·ч — [^<]+\$ с доставкой в Беларусь \| abcars\.by<\/title>/);
   // Тема — в описании и в хлебных крошках, а не в названии машины: заголовок остаётся
   // тем, что человек ищет («BYD Han 2023»), а слова «из Китая» идут второй строкой.
+  // У машины — её страна (без поля origin это Китай), у крошек — фраза сайта.
   assert.match(html, /<meta name="description" content="BYD Han 2023 из Китая: пробег 21[^"]*400 км, электромобиль, ориентировочная цена до Минска — [^"]+\$\. Проверка перед покупкой\."/);
-  assert.match(html, /"name":"Каталог авто из Китая"/);
+  assert.match(html, /"name":"Каталог авто из Китая и Кореи"/);
   // Приставка источника из адреса убрана, косой черты на конце нет.
   assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/cars\/56135000"/);
   assert.match(html, /<meta property="og:url" content="https:\/\/abcars\.by\/cars\/56135000"/);
@@ -131,11 +132,29 @@ test("из карточки ведут ссылки на разделы ката
   assert.match(html, /<a href="\/catalog\/electric-sedan">Электрические седаны из Китая<\/a>/);
 });
 
+test("машина с Encar говорит «из Кореи», а общие ссылки — фразу сайта", () => {
+  // Поле origin ставит rowToCar по источнику объявления (server/repository.mjs).
+  const korean = { ...car, id: "encar-40123456", source: "Encar", origin: "korea", city: "" };
+  // У похожей машины есть снимок: без него строки с alt в списке не будет.
+  const { html } = render().carPage({ car: korean, related: [{ ...related[0], image: "https://example.com/han-2.jpg" }] });
+  assert.match(html, /<meta name="description" content="BYD Han 2023 из Кореи: пробег 21[^"]*400 км/);
+  assert.match(html, /alt="BYD Han 2023 из Кореи" width="750"/);
+  assert.match(html, /"name":"Каталог авто из Китая и Кореи"/);
+  assert.match(html, /<a href="\/catalog">Весь каталог автомобилей из Китая и Кореи<\/a>/);
+  // Похожие машины в списке — со своей страной: у Che168 и Guazi это Китай.
+  assert.match(html, /alt="BYD Han 2022 из Китая" width="600"/);
+  // Город — тоже по стране машины.
+  const withCity = render().carPage({ car: { ...korean, city: "guangzhou" } }).html;
+  assert.match(withCity, /<dt>Город в Корее<\/dt>/);
+  // Корейский адрес — с приставкой «kr-»: номера Encar и Che168 могут совпасть.
+  assert.match(html, /<link rel="canonical" href="https:\/\/abcars\.by\/cars\/kr-40123456"/);
+});
+
 test("без похожих машин пустого списка не остаётся", () => {
   // Заголовок над пустым списком читается поисковиком как сломанная страница.
   const { html } = render().carPage({ car, related: [] });
   assert.doesNotMatch(html, /<ul><\/ul>/);
-  assert.match(html, /<a href="\/catalog">Все автомобили с пробегом из Китая<\/a>/);
+  assert.match(html, /<a href="\/catalog">Все автомобили с пробегом из Китая и Кореи<\/a>/);
 });
 
 test("на закрытой сборке страница машины не индексируется", () => {
@@ -158,7 +177,7 @@ test("снятое объявление отдаёт страницу без и�
   assert.match(html, /<meta name="robots" content="noindex, nofollow, noarchive"/);
   // Первоисточник у такой страницы указывать нельзя: настоящего адреса за ней нет.
   assert.doesNotMatch(html, /rel="canonical"/);
-  assert.match(html, /<a href="\/catalog">Перейти в каталог автомобилей из Китая<\/a>/);
+  assert.match(html, /<a href="\/catalog">Перейти в каталог автомобилей из Китая и Кореи<\/a>/);
 });
 
 test("чужая разметка в данных объявления не попадает в страницу как разметка", () => {
@@ -196,7 +215,7 @@ test("из карточки ведут ссылки на растаможку и
   // одинаковом у всех страниц, и проверка прошла бы и без единой ссылки по делу.
   const text = html.slice(html.indexOf("<article>"), html.indexOf("</article>"));
   assert.match(text, /<a href="\/customs">калькуляторе растаможки<\/a>/);
-  assert.match(text, /<a href="\/delivery-cost">Стоимость доставки авто из Китая<\/a>/);
+  assert.match(text, /<a href="\/delivery-cost">Стоимость доставки авто из Китая и Кореи<\/a>/);
   // У электромобиля добавляется квота: для него это не общая справка, а причина,
   // по которой в цене может не быть пошлины.
   assert.match(text, /<a href="\/ev-quota">Квота на электромобили<\/a>/);

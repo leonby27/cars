@@ -1,4 +1,5 @@
-// Сравнение цен: та же машина в Беларуси и та же машина, привезённая из Китая.
+// Сравнение цен: та же машина в Беларуси и та же машина, привезённая из-за рубежа.
+import { siteCountriesGenitive, siteFromPhrase } from "./origin.js";
 //
 // Зачем. Человеку не нужна наша цена сама по себе — ему нужна разница. «Такая же тут
 // стоит 34 900, а привезти выходит 26 400» отвечает на вопрос, ради которого он вообще
@@ -287,8 +288,8 @@ export function compareTable(rows, { collectedAt = null, hidden = 0 } = {}) {
     ? new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Minsk" }).format(new Date(collectedAt))
     : null;
   return {
-    title: "Одна и та же машина: в Беларуси и привезённая из Китая",
-    columns: ["Модель и год", "В Беларуси", "Из Китая под ключ", "Разница"],
+    title: `Одна и та же машина: в Беларуси и привезённая ${siteFromPhrase()}`,
+    columns: ["Модель и год", "В Беларуси", `Из ${siteCountriesGenitive()} под ключ`, "Разница"],
     rows: rows.map((row) => [
       `${row.brand} ${row.model}, ${row.year}${row.longVersion ? " (длиннобазная версия)" : ""}`,
       `${money(row.theirMedian)} · ${cars(row.theirCount)}`,

@@ -28,7 +28,10 @@ function filterLinks(page) {
 }
 
 test("ссылки фильтра ведут только на существующие разделы, и до каждого можно дойти", () => {
-  const pages = [{ path: "/catalog" }, ...CATALOG_LANDINGS.filter((landing) => landing.kind !== "price")];
+  // Ценовые полосы и страницы стран фильтр ссылкой не даёт — они стоят в блоке ссылок
+  // под выдачей (CatalogSectionLinks, sectionLinks на сервере).
+  const outsideFilter = (landing) => landing.kind === "price" || landing.kind === "origin";
+  const pages = [{ path: "/catalog" }, ...CATALOG_LANDINGS.filter((landing) => !outsideFilter(landing))];
   const known = new Set(CATALOG_LANDINGS.map((landing) => landing.path));
   const reached = new Set();
   for (const page of pages) {
@@ -37,6 +40,6 @@ test("ссылки фильтра ведут только на существу�
       reached.add(link);
     }
   }
-  const missing = CATALOG_LANDINGS.filter((landing) => landing.kind !== "price" && !reached.has(landing.path)).map((landing) => landing.path);
+  const missing = CATALOG_LANDINGS.filter((landing) => !outsideFilter(landing) && !reached.has(landing.path)).map((landing) => landing.path);
   assert.deepEqual(missing, [], "до этих разделов фильтр не доводит");
 });
