@@ -40,17 +40,29 @@ export async function loadKoreaSpecs(dir) {
 }
 
 const norm = (text) => String(text || "").toLowerCase().replace(/[^a-z0-9а-яё]+/g, "");
-// Имя модели справочника может быть двойным («Grandeur/Azera», «Carnival/Sedona»).
-const modelMatches = (catalogName, ours) => {
+// Имя модели у нас и у справочника расходится не только написанием: у нас «MINI» — это
+// хэтчбек Cooper, у справочника «Hatch»; наши суффиксы двигателя («Sealion 07 EV»)
+// справочник не пишет; двойные имена («Grandeur/Azera», «Carnival/Sedona») делятся.
+const MODEL_ALIASES = new Map([
+  ["mini|mini", ["hatch"]],
+  ["byd|sealion07ev", ["sealion07", "sealion7"]],
+  ["byd|yuanplus", ["atto3"]],
+  ["kia|carnival", ["carnival", "sedona"]],
+  ["hyundai|grandstarex", ["h1", "starex"]],
+]);
+const modelMatches = (catalogName, brand, ours) => {
   const wanted = norm(ours);
   if (!wanted) return false;
-  return String(catalogName).split("/").some((part) => norm(part) === wanted) || norm(catalogName) === wanted;
+  const wantedForms = new Set([wanted, norm(String(ours).replace(/\s+(EV|PHEV|DM-i|Hybrid)$/i, ""))]);
+  for (const alias of MODEL_ALIASES.get(`${norm(brand)}|${wanted}`) || []) wantedForms.add(alias);
+  const names = [norm(catalogName), ...String(catalogName).split("/").map(norm)];
+  return names.some((name) => wantedForms.has(name));
 };
 
-// Коды поколений в имени модели у площадки: «그랜저 (GN7)», «5시리즈 (G30)», «E-클래스 W213».
-// Код бывает и без скобок и без цифр: «더 뉴 그랜저 IG», «싼타페 TM», «E-클래스 W213».
-// Берём все латинские токены из 1–4 знаков с большой буквы и сверяем их с кодами
-// поколений справочника — случайное слово вроде «GT» совпадёт только с настоящим кодом.
+// Коды поколений в имени модели у площадки: «그랜저 (GN7)», «5시리즈 (G30)», «E-클래스 W213»,
+// «더 뉴 그랜저 IG», «싼타페 TM». Берём все латинские токены из 1–4 знаков с большой буквы
+// и сверяем их с кодами поколений справочника — случайное слово совпадёт только с
+// настоящим кодом.
 const seriesCodes = (car) => {
   const text = `${car.rawSeries || ""} ${car.rawModelGroup || ""}`;
   const codes = new Set();
@@ -60,7 +72,7 @@ const seriesCodes = (car) => {
 };
 
 // Слова комплектации, по которым модификации различаются: «520i», «E220d», «Long Range»,
-// «AWD», «Performance», «2.5», «1.6», «N Line».
+// «AWD», «Performance», «2.5», «1.6», «B6», «110 P300».
 const gradeTokens = (car) => {
   const text = `${car.rawModel || ""} ${car.description || ""}`;
   const tokens = new Set();
@@ -68,9 +80,19 @@ const gradeTokens = (car) => {
   // Короткие индексы моторов: Volvo B5/B6/T8, Audi 45 TFSI (число отдельно не берём).
   for (const match of text.matchAll(/\b([A-Z]\d{1,2})\b/g)) tokens.add(norm(match[1]));
   for (const match of text.matchAll(/\b(\d\.\d)\b/g)) tokens.add(norm(match[1]));
-  for (const word of ["long range", "standard range", "performance", "plaid", "awd", "4matic", "xdrive", "quattro", "n line", "gt-line", "amg", "m sport"]) if (text.toLowerCase().includes(word)) tokens.add(norm(word));
+  for (const word of ["long range", "standard range", "performance", "plaid", "awd", "4matic", "xdrive", "quattro", "n line", "gt-line", "amg", "m sport", "allspace", "coupe", "cabriolet", "convertible", "touring", "avant", "allroad", "sportback", "gran coupe"]) if (text.toLowerCase().includes(word)) tokens.add(norm(word));
   tokens.delete("");
   return tokens;
+};
+
+// Слова кузова в имени поколения справочника («Avant», «Touring», «Allspace», «110»…):
+// без подсказки от площадки такое поколение уступает обычному седану или хэтчбеку.
+const BODY_WORDS = /\b(avant|allroad|touring|estate|wagon|coupe|coup[eé]|cabrio|cabriolet|convertible|roadster|spyder|long|allspace|sportback|gran coupe|shooting brake|hard top|van|pickup|130|90 |sedan long|l sedan)\b/i;
+// Корейские подсказки площадки → слова справочника.
+const KOREAN_BODY_HINTS = [[/올스페이스/, "allspace"], [/왜건|투어링|아반트|에스테이트/, "touring|avant|estate|wagon"], [/쿠페/, "coupe"], [/카브리올레|컨버터블|로드스터/, "cabrio|convertible|roadster"], [/롱|\bL\b/, "long"], [/스포트백/, "sportback"]];
+const bodyHints = (car) => {
+  const text = `${car.rawSeries || ""} ${car.rawModelGroup || ""} ${car.rawModel || ""}`;
+  return KOREAN_BODY_HINTS.filter(([pattern]) => pattern.test(text)).map(([, words]) => new RegExp(`\\b(${words})\\b`, "i"));
 };
 
 const overlaps = (item, year) => (item.from === null || item.from <= year + 1) && (item.to === null || item.to >= year - 1);
@@ -92,30 +114,38 @@ const generationCodes = (generation) => {
 /**
  * Модификация справочника для машины. Возвращает { model, generation, modification,
  * candidates, exact } или null. `exact` — кандидат один (или все с одной мощностью).
+ *
+ * Поколения не выбираются заранее одно: у площадки год модельный, а у справочника
+ * поколения и рестайлинги накладываются друг на друга по годам, к тому же кузова
+ * (седан, универсал, удлинённый) — отдельные поколения. Поэтому кандидаты собираются
+ * из всех подходящих поколений, а очки получают за код поколения, год, слова
+ * комплектации, привод, число мест и «обычный» кузов.
  */
 export function matchKoreaSpec(car, catalog) {
   const brand = catalog?.[car?.brand];
   if (!brand || !car?.model) return null;
   // Одна модель может лежать в справочнике дважды (KGM и SsangYong — две марки у
   // справочника, одна у площадки): поколения складываются вместе.
-  const models = brand.models.filter((item) => modelMatches(item.name, car.model));
+  const models = brand.models.filter((item) => modelMatches(item.name, car.brand, car.model));
   if (!models.length) return null;
   const model = { ...models[0], generations: models.flatMap((item) => item.generations || []) };
   const year = Number(car.year) || 0;
   const codes = seriesCodes(car);
-  let generations = model.generations.filter((generation) => [...generationCodes(generation)].some((code) => codes.has(code)));
-  if (!generations.length) generations = model.generations.filter((generation) => overlaps(generation, year));
+  const coded = model.generations.filter((generation) => [...generationCodes(generation)].some((code) => codes.has(code)));
+  const generations = coded.length ? coded : model.generations.filter((generation) => overlaps(generation, year));
   if (!generations.length) return null;
-  // Несколько поколений по году (рестайлинг) — берём самое позднее из начавшихся до года машины.
-  generations.sort((a, b) => (b.from || 0) - (a.from || 0));
-  const generation = generations.find((item) => (item.from || 0) <= year) || generations.at(-1);
+  // Самое позднее поколение из начавшихся не позже года машины — предпочтительное.
+  const preferred = [...generations].sort((a, b) => (b.from || 0) - (a.from || 0)).find((item) => (item.from || 0) <= year) || generations.at(-1);
   const tokens = gradeTokens(car);
+  const hints = bodyHints(car);
   const fuel = car.sourceFuelType || "";
   const wantDiesel = /diesel/i.test(fuel);
   const wantPetrol = /gasoline|petrol/i.test(fuel);
-  const candidates = generation.modifications
-    .filter((modification) => overlaps(modification, year))
-    .filter(({ summary }) => {
+  const pool = generations.flatMap((generation) => (generation.modifications || []).map((modification) => ({ generation, modification })));
+  const seatCounts = new Set(pool.map(({ modification }) => Number(modification.summary?.seats) || 0).filter(Boolean));
+  const candidates = pool
+    .filter(({ modification }) => overlaps(modification, year))
+    .filter(({ modification: { summary } }) => {
       if (!summary) return false;
       if (car.type === "Электромобиль") return summary.powertrain === "Электромобиль";
       if (car.type === "Гибрид") {
@@ -131,17 +161,22 @@ export function matchKoreaSpec(car, catalog) {
       if (Number(car.engineCc) && Number(summary.engineCc) && Math.abs(Number(car.engineCc) - Number(summary.engineCc)) > 60) return false;
       return true;
     })
-    .filter(({ summary }) => !(car.drive && car.drive !== "Не указан" && summary.drive && summary.drive !== car.drive))
+    .filter(({ modification: { summary } }) => !(car.drive && car.drive !== "Не указан" && summary.drive && summary.drive !== car.drive))
     // Число мест решает только у больших машин (Carnival на 7 и на 9 мест — разные
-    // модификации); у легковых справочник и площадка часто считают места по-разному.
-    .filter(({ summary }) => !(Number(car.seats) >= 7 && Number(summary.seats) && Number(car.seats) !== Number(summary.seats)))
-    .map((modification) => {
+    // модификации) и только там, где справочник различает модификации по местам;
+    // «6-7 мест» у справочника читается как 6, поэтому разница в одно место — не разница.
+    .filter(({ modification: { summary } }) => !(Number(car.seats) >= 7 && seatCounts.size > 1 && Number(summary.seats) && Math.abs(Number(car.seats) - Number(summary.seats)) > 1))
+    .map(({ generation, modification }) => {
       const name = norm(modification.name);
+      const generationName = String(generation.name || "");
       let score = 0;
-      for (const token of tokens) if (token.length >= 2 && name.includes(token)) score += 2;
+      for (const token of tokens) if (token.length >= 2 && (name.includes(token) || norm(generationName).includes(token))) score += 2;
       if (car.drive && car.drive !== "Не указан" && modification.summary.drive === car.drive) score += 1;
-      if (Number(car.seats) && Number(modification.summary.seats) === Number(car.seats)) score += 1;
-      return { modification, score };
+      if (Number(car.seats) && Math.abs(Number(modification.summary.seats) - Number(car.seats)) <= 1 && Number(modification.summary.seats)) score += 1;
+      if (generation === preferred) score += 1;
+      if (BODY_WORDS.test(generationName) && !hints.some((hint) => hint.test(generationName))) score -= 2;
+      if (hints.some((hint) => hint.test(generationName))) score += 2;
+      return { generation, modification, score };
     })
     .sort((a, b) => b.score - a.score);
   if (!candidates.length) return null;
@@ -153,7 +188,7 @@ export function matchKoreaSpec(car, catalog) {
     if (strict.length) top = strict;
   }
   const powers = new Set(top.map((item) => item.modification.summary.horsepower));
-  return { model, generation, modification: top[0].modification, candidates: top.map((item) => item.modification), exact: top.length === 1 || powers.size === 1 };
+  return { model, generation: top[0].generation, modification: top[0].modification, candidates: top.map((item) => item.modification), exact: top.length === 1 || powers.size === 1 };
 }
 
 // Значение, одинаковое у всех кандидатов, иначе null.
