@@ -34,7 +34,8 @@ const KOREAN_MODEL_NAMES = new Map([
   ["kia|쏘렌토", "Sorento"], ["kia|sorento", "Sorento"],
   ["kia|스포티지", "Sportage"], ["kia|sportage", "Sportage"],
   ["kia|셀토스", "Seltos"], ["kia|seltos", "Seltos"],
-  ["kia|카니발", "Carnival"], ["kia|carnival", "Carnival"],
+  // Площадка пишет английское имя Carnival с опечаткой — «Canival».
+  ["kia|카니발", "Carnival"], ["kia|carnival", "Carnival"], ["kia|canival", "Carnival"],
   ["kia|니로", "Niro"], ["kia|niro", "Niro"],
   ["kia|모닝", "Picanto"], ["kia|morning", "Picanto"], ["kia|picanto", "Picanto"],
   ["kia|레이", "Ray"], ["kia|ray", "Ray"],

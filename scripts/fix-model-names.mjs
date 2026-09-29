@@ -19,13 +19,14 @@ const write = (sql, params) => DRY_RUN ? Promise.resolve({ rowCount: 0 }) : pool
 // Тип двигателя нужен трём моделям BYD: под одним китайским именем у них едут
 // и гибриды, и электромобили, и разъезжаются они по разным именам.
 // Машины Guazi идут отдельным проходом ниже: у них свой словарь написаний.
-const { rows: models } = await pool.query(`SELECT v.brand, v.model, v.powertrain, count(*)::int AS n
+// Источник нужен словарю: корейские имена (Encar) приводятся своим словарём.
+const { rows: models } = await pool.query(`SELECT v.brand, v.model, v.powertrain, l.source, count(*)::int AS n
   FROM vehicles v JOIN listings l ON l.vehicle_id = v.id
-  WHERE l.source IS DISTINCT FROM 'Guazi' GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`);
+  WHERE l.source IS DISTINCT FROM 'Guazi' GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3`);
 
 let renamedVehicles = 0;
-for (const { brand, model, powertrain, n } of models) {
-  const canonical = canonicalImportName(brand, model, powertrain);
+for (const { brand, model, powertrain, source, n } of models) {
+  const canonical = canonicalImportName(brand, model, powertrain, { source });
   if (canonical.brand === brand && canonical.model === model) continue;
   await write(
     `UPDATE vehicles v SET brand=$4, model=$5, updated_at=now() FROM listings l
