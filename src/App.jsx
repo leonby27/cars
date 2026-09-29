@@ -14529,7 +14529,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         <img src={imageSource(order.car.image, IMAGE_WIDTH_TILE)} alt={order.car.title} onError={(event) => retryWithFullImage(event, order.car.image)} />
         <div className="customer-order-car-copy">
           <div className="customer-order-car-heading"><h2><a href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer" onClick={openCarPreview}>{order.car.title}</a></h2><p>{shortOrderNumber(order.orderNumber)}</p></div>
-          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b><ApproxSign /> {bynify(money(order.car.estimatedTotalUsd, currency)}</b></div> : null}
+          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b><ApproxSign /> {bynify(money(order.car.estimatedTotalUsd, currency))}</b></div> : null}
         </div>
         <div className="customer-order-card-controls">
           <details className="order-car-menu">
