@@ -165,6 +165,23 @@ How it works:
   EV battery data (`ev-battery`, fetched when the card says it exists: SOH → `batteryHealth`,
   capacity → `battery`, range → `electricRange`). Korean cars imported before this
   existed are completed with `import:encar -- --repair --limit=N`.
+- Specifications reference (2026-09-29): Encar has no power, torque, acceleration,
+  dimensions, weight or battery data (checked: API, page, JATO id — nothing). They come
+  from a model/trim reference crawled from auto-data.net into `config/korea-specs/<brand>.json`
+  (`npm run specs:korea -- --brands=Hyundai,Kia`, parser `scripts/lib/autodata-parser.mjs`,
+  one page per second, resumable; generations and trims produced from 2019). The Korean
+  Danawa catalogue does not answer from abroad. Matching (`scripts/lib/korea-specs.mjs`):
+  brand → model (double names like «Grandeur/Azera») → generation by the code in the
+  Encar series name («그랜저 (GN7)», «5시리즈 (G30)») or by year → trim by powertrain,
+  fuel, displacement (±60 cc), drive and grade words («520i», «E220d», «Long Range»).
+  Several trims that differ only in power → dimensions and weight are taken when they
+  agree, power is left empty (`specSource.exact = false`). Matched values fill empty
+  fields only: `horsepower` (also written into `engine` as `"2.5L 198HP"` so the power
+  filter works), `torqueNm`, `acceleration`, `dimensions`, `curbWeight`, `doors`, tires,
+  EV battery and range; the trim's full sheet is added to `technicalSpecs` as
+  «Характеристики: …» groups with a first row naming the source. The client applies the
+  reference on every read (`EncarClient({ specs })`); `npm run db:korea-specs` applies it
+  to cars already in the database (`--all` recomputes, `--dry-run` only counts).
 - Age: EAEU rules count a car's age from its production date; Encar publishes none, so
   `manufactureDate` is the first-registration month (later than production by weeks).
   The card shows the Korean model year (`formYear`).

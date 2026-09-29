@@ -13,6 +13,8 @@ import {
   encarInspectionUrl, encarListQuery, encarListUrl, encarModelGroups, encarRecordUrl, ENCAR_API,
 } from "./encar-parser.mjs";
 
+import { applyKoreaSpecs } from "./korea-specs.mjs";
+
 const encarBatteryUrl = (vehicleId) => `${ENCAR_API}/v1/readside/vehicle/ev-battery/${vehicleId}`;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -25,8 +27,11 @@ export class EncarGeoBlockedError extends Error {
 }
 
 export class EncarClient {
-  constructor({ fetcher = fetch, pace = 250, timeoutMs = 30_000, attempts = 4, log = () => {} } = {}) {
+  constructor({ fetcher = fetch, pace = 250, timeoutMs = 30_000, attempts = 4, log = () => {}, specs = null } = {}) {
     this.fetcher = fetcher;
+    // Справочник характеристик (scripts/lib/korea-specs.mjs): дописывает мощность,
+    // размеры и батарею в каждую прочитанную карточку.
+    this.specs = specs;
     this.pace = pace;
     this.timeoutMs = timeoutMs;
     this.attempts = attempts;
@@ -99,7 +104,8 @@ export class EncarClient {
   async car(id, { usdPerKrw, importedAt, history = true } = {}) {
     const fetched = await this.vehicle(id, { history });
     if (fetched.status !== 200) return { ...fetched, car: null };
-    const car = buildEncarCar(fetched.detail, { id: String(id), record: fetched.record, inspection: fetched.inspection, battery: fetched.battery, importedAt, usdPerKrw });
+    const built = buildEncarCar(fetched.detail, { id: String(id), record: fetched.record, inspection: fetched.inspection, battery: fetched.battery, importedAt, usdPerKrw });
+    const car = built && this.specs ? applyKoreaSpecs(built, this.specs) : built;
     return { ...fetched, car };
   }
 

@@ -18,6 +18,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { EncarClient, EncarGeoBlockedError } from "./lib/encar-client.mjs";
+import { loadKoreaSpecs } from "./lib/korea-specs.mjs";
 import { ENCAR_MANUFACTURERS } from "./lib/encar-parser.mjs";
 import { canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
 import { sourceUsdRate } from "../src/pricing.js";
@@ -47,7 +48,11 @@ const usdPerKrw = sourceUsdRate("KRW");
 const brands = Object.keys(ENCAR_MANUFACTURERS).filter((brand) => !brandFilter || brandFilter.includes(brand));
 const startedAt = new Date().toISOString();
 const log = (line) => console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
-const client = new EncarClient({ pace, log });
+// Справочник характеристик по модели и комплектации (config/korea-specs, см.
+// scripts/build-korea-specs.mjs): без него карточки заводятся без мощности и размеров.
+const koreaSpecs = await loadKoreaSpecs(path.join(ROOT, "config", "korea-specs"));
+log(`[specs] справочник характеристик: марок ${Object.keys(koreaSpecs).length}`);
+const client = new EncarClient({ pace, log, specs: koreaSpecs });
 
 const summary = { startedAt, brands, active: 0, seenSamePrice: 0, priceChanged: 0, rewritten: 0, unseen: 0, sold: 0, stillAlive: 0, unknown: 0, discoveries: 0, requests: 0, errors: [] };
 

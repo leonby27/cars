@@ -54,6 +54,8 @@
     "refresh:guazi": "node scripts/refresh-guazi.mjs",
     "import:encar": "node scripts/import-encar.mjs",
     "refresh:encar": "node scripts/refresh-encar.mjs",
+    "specs:korea": "node scripts/build-korea-specs.mjs",
+    "db:korea-specs": "node scripts/backfill-korea-specs.mjs",
     "night-watch": "node scripts/night-watch.mjs",
     "indexnow": "node scripts/indexnow.mjs",
     "feed": "node scripts/yandex-feed.mjs --db",

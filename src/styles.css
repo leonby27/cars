@@ -1779,6 +1779,14 @@ html[data-theme="dark"] .heading-country.open .heading-country-trigger {
   object-fit: cover;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
+/* «Все страны»: глобус на месте флага, без рамки флага. */
+.heading-country-globe {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  color: var(--muted-contrast, currentColor);
+}
 .heading-country.open .select-menu {
   opacity: 1;
   visibility: visible;

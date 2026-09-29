@@ -14,7 +14,7 @@ import { SearchField } from "./search-field.jsx";
 import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, GlobeHemisphereEast, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -12277,15 +12277,13 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
   const selected = countryKey(value);
   // Слова в кнопке — по выбранной стране, а без выбора — обе, как в заголовке страницы.
   const words = selected ? originOf(selected).genitive : siteCountriesGenitive();
-  // Список — галочки по странам, по умолчанию отмечены все (Сергей, 29.09.2026). Одна
-  // отмеченная — фильтр по ней. Нажатие на другую страну переключает на неё, а не
-  // добавляет к выбранной: раньше выбранная Корея плюс нажатый Китай давали «все
-  // страны», и человеку казалось, что фильтр сбросился (Сергей, 29.09.2026 вечером).
-  // Остальные фильтры при переключении не трогаются. Нажатие на единственную
-  // отмеченную снова включает все: пустой каталог никому не нужен.
-  const checked = (key) => !selected || selected === key;
-  const toggle = (key) => {
-    const label = selected === key ? ANY_COUNTRY : countryName(key);
+  // Список — выбор одного пункта: «Все страны», Китай, Корея (Сергей, 29.09.2026
+  // вечером; до этого были галочки, и нажатый Китай при выбранной Корее давал «все
+  // страны» — выглядело как сброс фильтра). Остальные фильтры при выборе не трогаются.
+  const options = [{ key: null, label: ANY_COUNTRY }, ...ACTIVE_ORIGINS.map((key) => ({ key, label: countryName(key) }))];
+  const checked = (key) => (selected || null) === key;
+  const choose = (key) => {
+    const label = key ? countryName(key) : ANY_COUNTRY;
     if (label !== (value || ANY_COUNTRY)) onChange?.(label);
   };
   return (
@@ -12299,14 +12297,16 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
         </button>
         <div className="select-menu heading-country-menu" role="menu" aria-hidden={!open} inert={open ? undefined : true}>
           <div className="select-options">
-            {ACTIVE_ORIGINS.map((key) => (
-              <button key={key} type="button" role="menuitemcheckbox" aria-checked={checked(key)} className={checked(key) ? "selected" : ""} onClick={() => toggle(key)}>
+            {options.map(({ key, label }) => (
+              <button key={key || "all"} type="button" role="menuitemradio" aria-checked={checked(key)} className={checked(key) ? "selected" : ""} onClick={() => choose(key)}>
                 <span className="select-option-label">
                   <span className={`select-option-check${checked(key) ? " checked" : ""}`} aria-hidden="true">{checked(key) && <Check size={12} weight="bold" />}</span>
-                  <span>{countryName(key)}</span>
+                  <span>{label}</span>
                 </span>
-                {/* Флаг справа — из public/flags, чтобы не зависеть от эмодзи системы. */}
-                <img className="heading-country-flag" src={`/flags/${key}.svg`} alt="" aria-hidden="true" width="24" height="16" loading="lazy" />
+                {/* Флаг справа — из public/flags, чтобы не зависеть от эмодзи системы; у «Всех стран» — глобус. */}
+                {key
+                  ? <img className="heading-country-flag" src={`/flags/${key}.svg`} alt="" aria-hidden="true" width="24" height="16" loading="lazy" />
+                  : <span className="heading-country-flag heading-country-globe" aria-hidden="true"><GlobeHemisphereEast size={18} /></span>}
               </button>
             ))}
           </div>
