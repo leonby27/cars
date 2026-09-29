@@ -109,11 +109,29 @@ export class EncarClient {
     return { ...fetched, car };
   }
 
+  /**
+   * Список с терпением: сеть сервера временами рвётся на минуты (29.09.2026 полный
+   * круг за десять минут «прошёл» 30 срезов из сотен — почти каждый первый запрос
+   * среза отвечал ошибкой сети). Ошибка сети или 5xx — ждём и повторяем тот же
+   * запрос, а не бросаем срез.
+   */
+  async patientList(query, offset, count, options = {}) {
+    let last = null;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      last = await this.list(query, offset, count, options);
+      if (last.status === 200 && last.json) return last;
+      const wait = Math.min(120_000, 15_000 * (attempt + 1));
+      this.log(`[list] ответ ${last.status} (смещение ${offset}) — жду ${Math.round(wait / 1000)} с и повторяю`);
+      await sleep(wait);
+    }
+    return last;
+  }
+
   /** Модельные группы марки у площадки (в пределах фильтра года и цены). */
   async modelGroups(brand, filters = {}) {
     const manufacturer = ENCAR_MANUFACTURERS[brand];
     if (!manufacturer) return [];
-    const { json } = await this.list(encarListQuery({ manufacturer, ...filters }), 0, 1, { facets: true });
+    const { json } = await this.patientList(encarListQuery({ manufacturer, ...filters }), 0, 1, { facets: true });
     return encarModelGroups(json);
   }
 
@@ -131,10 +149,11 @@ export class EncarClient {
       let total = null;
       let sliceItems = 0;
       while (!stop()) {
-        const { status, json } = await this.list(query, offset, ENCAR_PAGE_SIZE);
+        const { status, json } = await this.patientList(query, offset, ENCAR_PAGE_SIZE);
         stats.pages += 1;
         if (status !== 200 || !json) {
           this.log(`[list] ${label}: ответ ${status} на смещении ${offset} — срез оборван`);
+          stats.broken = (stats.broken || 0) + 1;
           break;
         }
         if (total === null) {
