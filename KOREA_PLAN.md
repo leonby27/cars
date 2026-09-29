@@ -407,7 +407,13 @@ IndexNow на изменённые адреса — только после вы
 
 ---
 
-## Этап 5. Сборщик Encar — сделан 29.09.2026, не выложен
+## Этап 5. Сборщик Encar — сделан и выложен 29.09.2026
+
+Выложено коммитом 618f99b (вместе с этапами 1–4), блок nginx для `/photo/encar/`
+поставлен на сервер (копия прежнего — `abcars-photo-location.conf.before-encar-20260929`),
+источник Encar включён в кабинете, первый сбор запущен на сервере: по 300 машин на
+марку, журнал `/srv/abcars/runtime/encar-first-run.log`. Дальше — вручную:
+`npm run refresh:encar` и `npm run import:encar -- --discoveries`.
 
 Написано (тесты 1 129/1 129, сборка проходит): `scripts/import-encar.mjs` (пополнение),
 `scripts/refresh-encar.mjs` (цены, проданные, находки), `scripts/lib/encar-parser.mjs`
