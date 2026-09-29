@@ -180,7 +180,9 @@ const BynSign = () => <span className="byn-sign" role="img" aria-label="BYN">Б<
 // Текст с суммой, где «BYN» заменён знаком; строки без «BYN» возвращаются как есть.
 const bynify = (value) => {
   if (typeof value !== "string" || !value.includes("BYN")) return value;
-  const parts = value.split("BYN");
+  // Пробел перед знаком — неразрывный: в строках-флексах (смета, цена карточки) обычный
+  // пробел на конце текста пропадает, и цифры прилипают к знаку.
+  const parts = value.split("BYN").map((part, index, all) => (index < all.length - 1 ? part.replace(/ $/, "\u00A0") : part));
   return parts.flatMap((part, index) => (index < parts.length - 1 ? [part, <BynSign key={index} />] : [part]));
 };
 // Знак «≈» перед суммой приглушён (.approx-sign): первой читается сама сумма.
