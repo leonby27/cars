@@ -14,7 +14,7 @@ import { SearchField } from "./search-field.jsx";
 import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, GlobeHemisphereEast, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -12303,10 +12303,8 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
                   <span className={`select-option-check${checked(key) ? " checked" : ""}`} aria-hidden="true">{checked(key) && <Check size={12} weight="bold" />}</span>
                   <span>{label}</span>
                 </span>
-                {/* Флаг справа — из public/flags, чтобы не зависеть от эмодзи системы; у «Всех стран» — глобус. */}
-                {key
-                  ? <img className="heading-country-flag" src={`/flags/${key}.svg`} alt="" aria-hidden="true" width="24" height="16" loading="lazy" />
-                  : <span className="heading-country-flag heading-country-globe" aria-hidden="true"><GlobeHemisphereEast size={18} /></span>}
+                {/* Флаг справа — из public/flags, чтобы не зависеть от эмодзи системы; у «Всех стран» — свой «флаг» с глобусом. */}
+                <img className="heading-country-flag" src={`/flags/${key || "all"}.svg`} alt="" aria-hidden="true" width="24" height="16" loading="lazy" />
               </button>
             ))}
           </div>

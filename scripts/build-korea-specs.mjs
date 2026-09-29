@@ -17,7 +17,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AUTODATA_BASE, AUTODATA_BRANDS, parseBrandModels, parseGenerationModifications, parseModelGenerations, parseModificationPage, summarizeModification } from "./lib/autodata-parser.mjs";
-import { koreaSpecsFile, koreaSpecsSlug } from "./lib/korea-specs.mjs";
+import { koreaSpecsFile, koreaSpecsSlug, readKoreaSpecs, writeKoreaSpecs } from "./lib/korea-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Map(process.argv.slice(2).map((arg) => {
@@ -61,7 +61,9 @@ for (const brand of brands) {
   if (maxPages && pages >= maxPages) break;
   const file = koreaSpecsFile(outDir, brand);
   let existing = null;
-  try { existing = JSON.parse(await fs.readFile(file, "utf8")); } catch {}
+  try { existing = await readKoreaSpecs(file); } catch {}
+  // Старый несжатый файл того же справочника тоже годится как источник разобранного.
+  if (!existing) { try { existing = await readKoreaSpecs(file.replace(/\.gz$/, "")); } catch {} }
   const known = new Map();
   for (const model of existing?.models || []) for (const generation of model.generations || []) for (const modification of generation.modifications || []) if (modification.sections?.length) known.set(modification.path, modification);
   log(`[${brand}] уже разобрано модификаций: ${known.size}`);
@@ -102,7 +104,7 @@ for (const brand of brands) {
     if (entry.generations.length) result.models.push(entry);
     log(`[${brand}] ${model.name}: поколений ${entry.generations.length}, модификаций ${entry.generations.reduce((total, generation) => total + generation.modifications.length, 0)}`);
     // Записываем после каждой модели: прерванный обход не теряет сделанного.
-    await fs.writeFile(file, `${JSON.stringify(result)}\n`);
+    await writeKoreaSpecs(file, result);
   }
   log(`[${brand}] готово: моделей ${result.models.length}, новых страниц ${fetched}, файл ${path.relative(ROOT, file)} (${koreaSpecsSlug(brand)})`);
 }

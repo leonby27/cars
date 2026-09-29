@@ -98,6 +98,12 @@ test("склейка: код поколения, объём, топливо и �
   // Старое поколение по году: 2021 год без кода → IG facelift.
   const older = { ...grandeur, year: 2021, rawSeries: "그랜저", rawModelGroup: "그랜저" };
   assert.equal(matchKoreaSpec(older, catalog).generation.codes[0], "IG");
+  // Код без скобок и без цифр («더 뉴 그랜저 IG») важнее года: машина 2023 года, но поколение IG.
+  const coded = { ...grandeur, year: 2023, rawSeries: "더 뉴 그랜저 IG", rawModelGroup: "그랜저" };
+  assert.equal(matchKoreaSpec(coded, catalog).generation.codes[0], "IG");
+  // Гибрид 2.4 прежнего поколения не должен получить 1.6 нового: объём решает и у гибридов.
+  const hybrid24 = { ...grandeur, year: 2022, type: "Гибрид", sourceFuelType: "Hybrid", engineCc: 2359, engine: "2.4L", rawSeries: "더 뉴 그랜저 IG 하이브리드" };
+  assert.equal(matchKoreaSpec(hybrid24, catalog), null, "в мини-справочнике у IG нет гибрида 2.4 — совпадения быть не должно");
   // Электромобиль: слова комплектации («Long Range») выбирают модификацию, батарея и запас хода дописываются.
   const ioniq = encarCar("ioniq5");
   const evMatch = matchKoreaSpec({ ...ioniq, year: 2024 }, catalog);

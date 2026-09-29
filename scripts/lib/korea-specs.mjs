@@ -10,10 +10,19 @@
 // кандидатов обычно одинаковы, их берём, когда совпадают.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { autodataSpecGroups } from "./autodata-parser.mjs";
 
+// Файлы справочника сжаты: строки характеристик повторяются от модификации к
+// модификации, и в сжатом виде марка весит сотни килобайт вместо мегабайт — так
+// справочник спокойно живёт в репозитории.
 export const koreaSpecsSlug = (brand) => String(brand).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-export const koreaSpecsFile = (dir, brand) => path.join(dir, `${koreaSpecsSlug(brand)}.json`);
+export const koreaSpecsFile = (dir, brand) => path.join(dir, `${koreaSpecsSlug(brand)}.json.gz`);
+export const writeKoreaSpecs = (file, data) => fs.writeFile(file, gzipSync(Buffer.from(JSON.stringify(data)), { level: 9 }));
+export async function readKoreaSpecs(file) {
+  const raw = await fs.readFile(file);
+  return JSON.parse(file.endsWith(".gz") ? gunzipSync(raw).toString("utf8") : raw.toString("utf8"));
+}
 
 /** Справочник целиком: { [марка]: { models: [...] } }. Папки нет — пустой справочник. */
 export async function loadKoreaSpecs(dir) {
@@ -21,9 +30,9 @@ export async function loadKoreaSpecs(dir) {
   let files = [];
   try { files = await fs.readdir(dir); } catch { return catalog; }
   for (const file of files) {
-    if (!file.endsWith(".json")) continue;
+    if (!/\.json(\.gz)?$/.test(file)) continue;
     try {
-      const data = JSON.parse(await fs.readFile(path.join(dir, file), "utf8"));
+      const data = await readKoreaSpecs(path.join(dir, file));
       if (data?.brand && Array.isArray(data.models)) catalog[data.brand] = data;
     } catch {}
   }
@@ -39,11 +48,14 @@ const modelMatches = (catalogName, ours) => {
 };
 
 // Коды поколений в имени модели у площадки: «그랜저 (GN7)», «5시리즈 (G30)», «E-클래스 W213».
+// Код бывает и без скобок и без цифр: «더 뉴 그랜저 IG», «싼타페 TM», «E-클래스 W213».
+// Берём все латинские токены из 1–4 знаков с большой буквы и сверяем их с кодами
+// поколений справочника — случайное слово вроде «GT» совпадёт только с настоящим кодом.
 const seriesCodes = (car) => {
   const text = `${car.rawSeries || ""} ${car.rawModelGroup || ""}`;
   const codes = new Set();
-  for (const match of text.matchAll(/\(([A-Za-z]{1,3}\d{1,3}[A-Za-z]?)\)/g)) codes.add(match[1].toUpperCase());
-  for (const match of text.matchAll(/\b([A-Z]{1,2}\d{2,3}[A-Za-z]?)\b/g)) codes.add(match[1].toUpperCase());
+  for (const match of text.matchAll(/\(([A-Za-z]{1,3}\d{0,3}[A-Za-z]?)\)/g)) codes.add(match[1].toUpperCase());
+  for (const match of text.matchAll(/(?:^|[\s(])([A-Z]{1,3}\d{0,3}[A-Z]?)(?=$|[\s)])/g)) codes.add(match[1].toUpperCase());
   return codes;
 };
 
@@ -87,12 +99,16 @@ export function matchKoreaSpec(car, catalog) {
     .filter(({ summary }) => {
       if (!summary) return false;
       if (car.type === "Электромобиль") return summary.powertrain === "Электромобиль";
-      if (car.type === "Гибрид") return summary.powertrain === "Гибрид" && !summary.mild;
-      // Бензин с мягким 48-вольтовым гибридом у площадки идёт как бензин.
-      if (!(summary.powertrain === "ДВС" || (summary.powertrain === "Гибрид" && summary.mild))) return false;
+      if (car.type === "Гибрид") {
+        if (summary.powertrain !== "Гибрид" || summary.mild) return false;
+      } else if (!(summary.powertrain === "ДВС" || (summary.powertrain === "Гибрид" && summary.mild))) {
+        // Бензин с мягким 48-вольтовым гибридом у площадки идёт как бензин.
+        return false;
+      }
       if (summary.fuel === "Газ") return false;
       if (wantDiesel && summary.fuel !== "Дизель") return false;
       if (wantPetrol && summary.fuel === "Дизель") return false;
+      // Объём — главный признак и у гибридов: 2.4 и 1.6 Grandeur Hybrid — разные поколения.
       if (Number(car.engineCc) && Number(summary.engineCc) && Math.abs(Number(car.engineCc) - Number(summary.engineCc)) > 60) return false;
       return true;
     })
