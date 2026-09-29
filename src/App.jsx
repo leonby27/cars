@@ -172,10 +172,21 @@ const CURRENCIES = [["USD", "$"], ["BYN", "BYN"], ["RUB", "₽"]];
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? usdToByn(usd) : currency === "RUB" ? usdToRub(usd) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : currency === "RUB" ? `${number(toDisplayCurrency(usd, currency))} ₽` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
+// Знак белорусского рубля (постановление Нацбанка № 25 от 27.01.2026, в силе с 04.02.2026):
+// буква «Б» с горизонтальной чертой. В Юникоде знака пока нет, поэтому он рисуется
+// стилем (.byn-sign в styles.css), а в строках — для адресов, заголовков и поисковика —
+// остаётся «BYN». Проба Сергея 29.09.2026: как смотрится вместо букв.
+const BynSign = () => <span className="byn-sign" role="img" aria-label="BYN" />;
+// Текст с суммой, где «BYN» заменён знаком; строки без «BYN» возвращаются как есть.
+const bynify = (value) => {
+  if (typeof value !== "string" || !value.includes("BYN")) return value;
+  const parts = value.split("BYN");
+  return parts.flatMap((part, index) => (index < parts.length - 1 ? [part, <BynSign key={index} />] : [part]));
+};
 // Знак «≈» перед суммой приглушён (.approx-sign): первой читается сама сумма.
 // withApprox выделяет знак в строке вида «≈ $1 200», прочие значения отдаёт как есть.
 const ApproxSign = () => <span className="approx-sign">≈</span>;
-const withApprox = (value) => (typeof value === "string" && value.startsWith("≈ ") ? <><ApproxSign />{value.slice(1)}</> : value);
+const withApprox = (value) => (typeof value === "string" && value.startsWith("≈ ") ? <><ApproxSign />{bynify(value.slice(1))}</> : bynify(value));
 // Суммы в блоке «Цена среди похожих» — крупным шагом (сотня рублей, полсотни
 // долларов): это оценка, а не смета, и точность до рубля обещала бы больше, чем
 // расчёт может дать.
@@ -1032,7 +1043,7 @@ function TotalPrice({ car, price, currency, className = "", approximate = true, 
           Класс на ней — чтобы правила вида «любой span внутри цены — серый и мелкий»
           (а такие есть и в строке каталога, и в карточке на главной) не покрасили
           саму цену: см. .price-line в стилях. */}
-      <span ref={lineRef} className="price-line">{approximate && compactApproximation ? <><span className="price-approximation">≈</span>{" "}{money(price.totalUsd, currency)}</> : withApprox(text)}<PriceChangeMark car={car} /></span>
+      <span ref={lineRef} className="price-line">{approximate && compactApproximation ? <><span className="price-approximation">≈</span>{" "}{bynify(money(price.totalUsd, currency))}</> : withApprox(text)}<PriceChangeMark car={car} /></span>
     </strong>
   );
 }
@@ -1214,7 +1225,7 @@ function CurrencySwitch({ currency, setCurrency, className = "" }) {
     <div className={`currency-switch${className ? ` ${className}` : ""}`} role="group" aria-label="Валюта цен">
       {CURRENCIES.map(([code, label]) => (
         <button key={code} type="button" className={currency === code ? "active" : ""} aria-pressed={currency === code} onClick={() => setCurrency(code)}>
-          {label}
+          {code === "BYN" ? <BynSign /> : label}
         </button>
       ))}
     </div>
@@ -6085,7 +6096,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
                           aria-label={`Открыть ${car.title}`}
                         >
                           <HoverImagePreview car={car} className="saved-search-preview-image" />
-                          <span className="saved-search-preview-price"><ApproxSign /> {money(estimateLandedCost(car).totalUsd, currency)}</span>
+                          <span className="saved-search-preview-price"><ApproxSign /> {bynify(money(estimateLandedCost(car).totalUsd, currency))}</span>
                         </article>
                       ))}
                       <button type="button" className="saved-search-more" onClick={() => openSearch(item)} aria-label={`Показать все ${number(preview.total)} авто по поиску «${item.title}»`}>
@@ -9416,7 +9427,7 @@ function OrderDraft({ car, navigate }) {
           <span>
             {price.isFob ? `Цена FOB · ${car.origin === "korea" ? "Пусан" : "Хоргос"}` : `Цена ${inPhrase(carOrigin(car))}`} <DataTag type="source" />
           </span>
-          <b>{price.isFob ? money(price.chinaUsd, currency) : `${number(sourcePriceOf(car))} ${sourceCurrencySymbol(car)}`}</b>
+          <b>{price.isFob ? bynify(money(price.chinaUsd, currency)) : `${number(sourcePriceOf(car))} ${sourceCurrencySymbol(car)}`}</b>
           <small>{withApprox(price.isFob ? price.basePriceNote : `≈ ${money(price.chinaUsd, currency)} по расчётному курсу`)}</small>
         </div>
       </section>
@@ -9433,7 +9444,7 @@ function OrderDraft({ car, navigate }) {
             <div className="order-cost-list">
               <div>
                 <PriceLabel label={price.basePriceLabel} description={price.basePriceNote || `${number(sourcePriceOf(car))} ${sourceCurrencySymbol(car)} · данные источника`} />
-                <b>{money(price.chinaUsd, currency)}</b>
+                <b>{bynify(money(price.chinaUsd, currency))}</b>
               </div>
               <div>
                 <PriceLabel label={price.buyoutLabel} description="Платёжный агент и комиссии банка" />
@@ -9463,13 +9474,13 @@ function OrderDraft({ car, navigate }) {
               {price.serviceUsd > 0 && (
               <div>
                 <PriceLabel label="Подбор и сопровождение" description="Ориентировочно. Точную сумму назовут после расчёта конкретной машины — она может быть немного больше или меньше" />
-                <b><ApproxSign /> {money(price.serviceUsd, currency)}</b>
+                <b><ApproxSign /> {bynify(money(price.serviceUsd, currency))}</b>
               </div>
               )}
             </div>
             <div className="order-grand-total">
               <PriceLabel label="Ориентировочно до Минска" description="Без постановки на учёт и страховки" />
-              <b><ApproxSign /> {money(price.totalUsd, currency)}</b>
+              <b><ApproxSign /> {bynify(money(price.totalUsd, currency))}</b>
             </div>
             <div className="order-disclaimer">
               <Info size={18} />
@@ -12786,7 +12797,7 @@ function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpe
           {/* «Под ключ в Минске» ушло в подсказку у значка: в карточке эта строчка
               повторялась десять раз и занимала место, а объяснение нужно один раз. */}
           <span className="blog-top-price">
-            <ApproxSign /> {money(estimateLandedCost(car).totalUsd, currency)}
+            <ApproxSign /> {bynify(money(estimateLandedCost(car).totalUsd, currency))}
             <span className="price-info" tabIndex={0} aria-label="Из чего складывается цена">
               <Info size={16} />
               <ActionTooltip text="Итог в Минске: выкуп машины, доставка, таможня и оформление. Предварительный расчёт по открытым тарифам." />
@@ -13201,7 +13212,7 @@ function BlogFigure({ car, index, navigate, onOpen = null, eager = false }) {
       <figcaption>
         <AppLink href={carHref(car)} navigate={navigate} onClick={open}>{title}</AppLink>
         <span>
-          {car.mileage ? `${number(car.mileage)} км · ` : ""}<ApproxSign /> {money(estimateLandedCost(car).totalUsd, currency)} под ключ в Минске
+          {car.mileage ? `${number(car.mileage)} км · ` : ""}<ApproxSign /> {bynify(money(estimateLandedCost(car).totalUsd, currency))} под ключ в Минске
         </span>
       </figcaption>
     </figure>
@@ -14518,7 +14529,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         <img src={imageSource(order.car.image, IMAGE_WIDTH_TILE)} alt={order.car.title} onError={(event) => retryWithFullImage(event, order.car.image)} />
         <div className="customer-order-car-copy">
           <div className="customer-order-car-heading"><h2><a href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer" onClick={openCarPreview}>{order.car.title}</a></h2><p>{shortOrderNumber(order.orderNumber)}</p></div>
-          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b><ApproxSign /> {money(order.car.estimatedTotalUsd, currency)}</b></div> : null}
+          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b><ApproxSign /> {bynify(money(order.car.estimatedTotalUsd, currency)}</b></div> : null}
         </div>
         <div className="customer-order-card-controls">
           <details className="order-car-menu">
