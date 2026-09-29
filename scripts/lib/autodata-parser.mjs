@@ -81,7 +81,8 @@ export function parseModelGenerations(html) {
     // Годы: у выпускаемого поколения класс «cur», у снятого — «end».
     const years = parseYears(textOf(block.match(/<strong class="(?:cur|end)">([\s\S]*?)<\/strong>/)?.[1]));
     const body = textOf(block.match(/<strong class="chas">([\s\S]*?)<\/strong>/)?.[1]) || null;
-    const codes = [...name.matchAll(/\(([^)]+)\)/g)].flatMap((item) => item[1].split(/,\s*/)).map((code) => code.trim()).filter((code) => /^[A-Za-z]{1,3}\d{1,3}[A-Za-z]?$|^[A-Z]{2,4}$/.test(code));
+    // Коды из скобок: «(G30 LCI, facelift 2020)» → G30; «(IG, facelift 2019)» → IG.
+    const codes = [...new Set([...name.matchAll(/\(([^)]+)\)/g)].flatMap((item) => [...item[1].matchAll(/\b([A-Z]{1,3}\d{1,3}[A-Z]?|[A-Z]{2,4})\b/g)].map((token) => token[1])).filter((code) => !/^(LCI|MK|GEN)$/.test(code)))];
     generations.push({ path, name, ...years, body, codes });
   }
   return generations;

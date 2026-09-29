@@ -65,6 +65,8 @@ const gradeTokens = (car) => {
   const text = `${car.rawModel || ""} ${car.description || ""}`;
   const tokens = new Set();
   for (const match of text.matchAll(/\b([A-Za-z]{0,3}\s?\d{3}\s?[a-z]{0,2})\b/g)) tokens.add(norm(match[1]));
+  // Короткие индексы моторов: Volvo B5/B6/T8, Audi 45 TFSI (число отдельно не берём).
+  for (const match of text.matchAll(/\b([A-Z]\d{1,2})\b/g)) tokens.add(norm(match[1]));
   for (const match of text.matchAll(/\b(\d\.\d)\b/g)) tokens.add(norm(match[1]));
   for (const word of ["long range", "standard range", "performance", "plaid", "awd", "4matic", "xdrive", "quattro", "n line", "gt-line", "amg", "m sport"]) if (text.toLowerCase().includes(word)) tokens.add(norm(word));
   tokens.delete("");
@@ -72,6 +74,20 @@ const gradeTokens = (car) => {
 };
 
 const overlaps = (item, year) => (item.from === null || item.from <= year + 1) && (item.to === null || item.to >= year - 1);
+const contains = (item, year) => (item.from === null || item.from <= year) && (item.to === null || item.to >= year);
+
+// Коды поколения из имени справочника: «5 Series Sedan (G30 LCI, facelift 2020)» → G30,
+// «Grandeur/Azera VI (IG, facelift 2019)» → IG. Считаются здесь, а не при обходе: так
+// уже скачанный справочник не надо перекачивать ради нового правила.
+const generationCodes = (generation) => {
+  const codes = new Set((generation.codes || []).map((code) => String(code).toUpperCase()));
+  for (const group of String(generation.name || "").matchAll(/\(([^)]+)\)/g)) {
+    for (const token of group[1].matchAll(/\b([A-Z]{1,3}\d{1,3}[A-Z]?|[A-Z]{2,4})\b/g)) {
+      if (!/^(LCI|MK|GEN)$/.test(token[1])) codes.add(token[1]);
+    }
+  }
+  return codes;
+};
 
 /**
  * Модификация справочника для машины. Возвращает { model, generation, modification,
@@ -80,11 +96,14 @@ const overlaps = (item, year) => (item.from === null || item.from <= year + 1) &
 export function matchKoreaSpec(car, catalog) {
   const brand = catalog?.[car?.brand];
   if (!brand || !car?.model) return null;
-  const model = brand.models.find((item) => modelMatches(item.name, car.model));
-  if (!model) return null;
+  // Одна модель может лежать в справочнике дважды (KGM и SsangYong — две марки у
+  // справочника, одна у площадки): поколения складываются вместе.
+  const models = brand.models.filter((item) => modelMatches(item.name, car.model));
+  if (!models.length) return null;
+  const model = { ...models[0], generations: models.flatMap((item) => item.generations || []) };
   const year = Number(car.year) || 0;
   const codes = seriesCodes(car);
-  let generations = model.generations.filter((generation) => generation.codes?.some((code) => codes.has(String(code).toUpperCase())));
+  let generations = model.generations.filter((generation) => [...generationCodes(generation)].some((code) => codes.has(code)));
   if (!generations.length) generations = model.generations.filter((generation) => overlaps(generation, year));
   if (!generations.length) return null;
   // Несколько поколений по году (рестайлинг) — берём самое позднее из начавшихся до года машины.
@@ -113,16 +132,26 @@ export function matchKoreaSpec(car, catalog) {
       return true;
     })
     .filter(({ summary }) => !(car.drive && car.drive !== "Не указан" && summary.drive && summary.drive !== car.drive))
+    // Число мест решает только у больших машин (Carnival на 7 и на 9 мест — разные
+    // модификации); у легковых справочник и площадка часто считают места по-разному.
+    .filter(({ summary }) => !(Number(car.seats) >= 7 && Number(summary.seats) && Number(car.seats) !== Number(summary.seats)))
     .map((modification) => {
       const name = norm(modification.name);
       let score = 0;
-      for (const token of tokens) if (token.length >= 3 && name.includes(token)) score += 2;
+      for (const token of tokens) if (token.length >= 2 && name.includes(token)) score += 2;
       if (car.drive && car.drive !== "Не указан" && modification.summary.drive === car.drive) score += 1;
+      if (Number(car.seats) && Number(modification.summary.seats) === Number(car.seats)) score += 1;
       return { modification, score };
     })
     .sort((a, b) => b.score - a.score);
   if (!candidates.length) return null;
-  const top = candidates.filter((item) => item.score === candidates[0].score);
+  let top = candidates.filter((item) => item.score === candidates[0].score);
+  // Несколько равных — оставляем те, чьи годы выпуска накрывают год машины строго
+  // (E 220d 194 л.с. 2020–2021 против E 220d 200 л.с. 2022–2023 для машины 2022 года).
+  if (top.length > 1) {
+    const strict = top.filter((item) => contains(item.modification, year));
+    if (strict.length) top = strict;
+  }
   const powers = new Set(top.map((item) => item.modification.summary.horsepower));
   return { model, generation, modification: top[0].modification, candidates: top.map((item) => item.modification), exact: top.length === 1 || powers.size === 1 };
 }
