@@ -12278,12 +12278,14 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
   // Слова в кнопке — по выбранной стране, а без выбора — обе, как в заголовке страницы.
   const words = selected ? originOf(selected).genitive : siteCountriesGenitive();
   // Список — галочки по странам, по умолчанию отмечены все (Сергей, 29.09.2026). Одна
-  // отмеченная — фильтр по ней; снять последнюю нельзя: пустой каталог никому не нужен,
-  // поэтому нажатие на единственную отмеченную снова включает все.
+  // отмеченная — фильтр по ней. Нажатие на другую страну переключает на неё, а не
+  // добавляет к выбранной: раньше выбранная Корея плюс нажатый Китай давали «все
+  // страны», и человеку казалось, что фильтр сбросился (Сергей, 29.09.2026 вечером).
+  // Остальные фильтры при переключении не трогаются. Нажатие на единственную
+  // отмеченную снова включает все: пустой каталог никому не нужен.
   const checked = (key) => !selected || selected === key;
   const toggle = (key) => {
-    const next = ACTIVE_ORIGINS.filter((item) => (item === key ? !checked(item) : checked(item)));
-    const label = next.length === 1 ? countryName(next[0]) : ANY_COUNTRY;
+    const label = selected === key ? ANY_COUNTRY : countryName(key);
     if (label !== (value || ANY_COUNTRY)) onChange?.(label);
   };
   return (
