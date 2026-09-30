@@ -26,7 +26,7 @@ test('migration and duplicate changes run only the affected maintenance',()=>{
 });
 
 test('PageSpeed browser infrastructure rebuilds without rewriting vehicle prices',()=>{
- const p=deploymentPlan(['src/analytics.js','src/boot-api.js','src/counter-loader.js',
+ const p=deploymentPlan(['src/analytics.js','src/boot-api.js','src/counter-loader.js','src/price-fit.js','src/spec-fit.js',
   'src/model-text-load.js','src/model-text-imports.js','src/blog-text-load.js',
   'src/blog-text-imports.js','server/handler.mjs']);
  assert.equal(p.mode,'full');

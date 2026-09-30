@@ -5,12 +5,14 @@ import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuth
 import { Phone, SortAscending, Star } from "@phosphor-icons/react";
 import { observeHoverPhotos, prepareHoverPhoto } from "./hover-photo-queue.js";
 import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
-import { Fragment, Suspense, createContext, lazy, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, Suspense, createContext, lazy, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
 import { Illustration } from "./illustration.jsx";
 import { StripPhoto } from "./strip-photo.jsx";
+import { schedulePriceFit } from "./price-fit.js";
+import { scheduleSpecFit } from "./spec-fit.js";
 import { SearchField } from "./search-field.jsx";
 import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
@@ -775,7 +777,7 @@ function useRoute(user) {
   // страница остаётся на экране эти доли секунды. Два быстрых перехода подряд —
   // выполняется последний.
   const navigationTurn = useRef(0);
-  const navigate = (next, options = {}) => {
+  const navigate = useCallback((next, options = {}) => {
     const turn = ++navigationTurn.current;
     const query = typeof next === "string" ? catalogMetaQueryForPath(next) : null;
     if (query === null || resolvedCatalogMeta(query)) {
@@ -786,7 +788,7 @@ function useRoute(user) {
       if (navigationTurn.current === turn) navigateNow(next, options);
     };
     Promise.race([requestCatalogMeta(query), new Promise((resolve) => setTimeout(resolve, CATALOG_META_WAIT_MS))]).then(go, go);
-  };
+  }, [user]);
   const navigateNow = (next, { replace = false, preserveScroll = false, catalogState = null } = {}) => {
     if (next === -1) {
       window.history.back();
@@ -998,7 +1000,6 @@ function PriceChangeMark({ car }) {
 // разъехалась на две — или, там где переносы запрещены, вылезла за край, — уменьшаем
 // кегль ступенью и смотрим снова. Множитель кладём в переменную: на сколько это точек,
 // решают стили того места, где цена нарисована.
-const PRICE_FIT_STEPS = [0.92, 0.84, 0.76, 0.68];
 
 function TotalPrice({ car, price, currency, className = "", approximate = true, compactApproximation = false }) {
   const boxRef = useRef(null);
@@ -1008,28 +1009,12 @@ function TotalPrice({ car, price, currency, className = "", approximate = true, 
     const box = boxRef.current;
     const line = lineRef.current;
     if (!box || !line) return undefined;
-    // Строка занимает больше одного прямоугольника — значит перенеслась.
-    // Единица запаса по ширине: дробные ширины дают лишние доли пикселя.
-    // Нулевая ширина — цена сейчас не показана (мобильная и обычная разметка
-    // живут в одном месте, лишняя спрятана): мерить нечего, кегль не трогаем.
-    const fits = () => {
-      if (!box.clientWidth) return true;
-      const rects = line.getClientRects();
-      return rects.length === 1 && rects[0].width <= box.clientWidth + 1;
-    };
-    // Цены, которые и так помещаются (а это почти все), обходятся одним замером:
-    // кегль им не трогаем вовсе. Замер идёт для каждой цены в выдаче, поэтому
-    // лишняя работа здесь заметна.
-    const fit = () => {
-      box.style.removeProperty("--price-fit");
-      if (fits()) return;
-      for (const step of PRICE_FIT_STEPS) {
-        box.style.setProperty("--price-fit", String(step));
-        if (fits()) return;
-      }
-    };
+    // Все цены измеряются вместе перед следующим кадром: записи размеров
+    // одной карточки больше не заставляют пересчитывать остальные по очереди.
+    let cancelFit;
+    const fit = () => { cancelFit?.(); cancelFit = schedulePriceFit(box, line); };
     fit();
-    if (typeof ResizeObserver === "undefined") return undefined;
+    if (typeof ResizeObserver === "undefined") return () => cancelFit?.();
     // Место под цену меняется при повороте телефона и при перетаскивании окна.
     // Ширину запоминаем: без этого пересчёт, меняющий кегль, мог бы вызвать сам себя.
     let known = box.parentElement?.clientWidth ?? 0;
@@ -1040,7 +1025,7 @@ function TotalPrice({ car, price, currency, className = "", approximate = true, 
       fit();
     });
     if (box.parentElement) observer.observe(box.parentElement);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); cancelFit?.(); };
   }, [text]);
   return (
     <strong ref={boxRef} className={className || undefined}>
@@ -4611,7 +4596,7 @@ const initialBrandCounts = () => {
 /* Полосы цен до Минска под плиткой марок. Главная — самая сильная страница сайта,
    а на ценовые разделы («до 20 000 $») с неё не вело ни одной ссылки: человек, который
    выбирает по бюджету, а не по марке, попадал туда только через общий каталог. */
-function HomePriceBands({ navigate }) {
+const HomePriceBands = memo(function HomePriceBands({ navigate }) {
   // Карточка «до 40 000 $» с главной убрана 25.09.2026, сам раздел каталога остался.
   const bands = CATALOG_LANDINGS.filter((landing) => landing.kind === "price" && !landing.powertrain && landing.landedMax <= 30000);
   // Подпись карточки — самая популярная модель, у которой самая доступная машина стоит
@@ -4637,7 +4622,7 @@ function HomePriceBands({ navigate }) {
       })}
     </nav>
   );
-}
+});
 
 /* Популярные модели на главной — оглавление каталога, как у IM4CAR: вкладка «Все» —
    48 моделей с наибольшим числом машин, дальше вкладка на каждую крупную марку со всеми
@@ -4655,7 +4640,7 @@ function HomeModelCard({ item, navigate }) {
   return (
     <AppLink href={item.path} navigate={navigate} className="featured-card home-model-card">
       <div className="featured-image">
-        {item.image && <img src={imageSource(item.image, IMAGE_WIDTH_CARD)} alt="" loading="lazy" draggable="false" />}
+        {item.image && <StripPhoto src={imageSource(item.image, IMAGE_WIDTH_CARD)} alt="" draggable="false" />}
       </div>
       <div className="featured-body">
         <h3>{item.name}</h3>
@@ -4797,7 +4782,7 @@ const homeModelNames = (item) => {
   return [brand, model, item.name];
 };
 
-function HomePopularModels({ navigate }) {
+const HomePopularModels = memo(function HomePopularModels({ navigate }) {
   const { models, brands } = useHomeModels();
   const [active, setActive] = useState("all");
   const [query, setQuery] = useState("");
@@ -4919,7 +4904,7 @@ function HomePopularModels({ navigate }) {
       )}
     </section>
   );
-}
+});
 
 function PopularBrands({ navigate, cars, apiMode }) {
   const [expanded, setExpanded] = useState(false);
@@ -5104,7 +5089,7 @@ function UsefulServices({ navigate }) {
   );
 }
 
-function HomeConversionSections({ navigate }) {
+const HomeConversionSections = memo(function HomeConversionSections({ navigate }) {
   const stepIcons = [MagnifyingGlass, ShieldCheck, ClipboardText, CarProfile];
 
   return (
@@ -5145,7 +5130,7 @@ function HomeConversionSections({ navigate }) {
       </section>
     </div>
   );
-}
+});
 
 function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorites, toggleFavorite, loading }) {
   // Сумма без валюты в строке поиска читается в валюте переключателя сайта.
@@ -5831,49 +5816,25 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
     const row = miniSpecsRef.current;
     if (!row) return undefined;
     let active = true;
-    const fit = () => {
-      const available = row.clientWidth;
-      if (!available) return;
-      const chips = [...row.children];
-      const previousStyles = chips.map((chip) => chip.style.cssText);
-      chips.forEach((chip) => chip.style.removeProperty("display"));
-      // Сначала узнаём, какие плашки скрыты самой мобильной раскладкой.
-      const eligible = chips.map((chip) => getComputedStyle(chip).display !== "none");
-      chips.forEach((chip, index) => {
-        if (!eligible[index]) return;
-        chip.style.display = "flex";
-        chip.style.flex = "none";
-        chip.style.width = "max-content";
-        chip.style.maxWidth = "none";
-      });
-      const widths = chips.map((chip, index) => eligible[index] ? chip.getBoundingClientRect().width : 0);
-      const gap = Number.parseFloat(getComputedStyle(row).columnGap) || 0;
-      let occupied = 0;
-      chips.forEach((chip, index) => {
-        chip.style.cssText = previousStyles[index];
-        if (!eligible[index]) return;
-        const next = occupied + (occupied ? gap : 0) + widths[index];
-        let fits = next <= available + 0.5;
-        chip.style.display = fits ? "" : "none";
-        // У кузова внутренний текст умеет сокращаться до многоточия. Такая
-        // плашка тоже не считается поместившейся: скрываем её целиком.
-        const label = fits && chip.classList.contains("body-type-spec") ? chip.querySelector("span") : null;
-        if (label && label.scrollWidth > label.clientWidth + 1) {
-          chip.style.display = "none";
-          fits = false;
-        }
-        if (fits) occupied = next;
-      });
-    };
+    let cancelFit;
+    const fit = () => { cancelFit?.(); cancelFit = scheduleSpecFit(row); };
     fit();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    let knownWidth = row.clientWidth;
+    const resized = () => {
+      const width = row.clientWidth;
+      if (width === knownWidth) return;
+      knownWidth = width;
+      fit();
+    };
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resized);
     if (observer) observer.observe(row);
-    else window.addEventListener("resize", fit);
+    else window.addEventListener("resize", resized);
     document.fonts?.ready.then(() => { if (active) fit(); });
     return () => {
       active = false;
       observer?.disconnect();
-      if (!observer) window.removeEventListener("resize", fit);
+      if (!observer) window.removeEventListener("resize", resized);
+      cancelFit?.();
     };
   }, [car.battery, engineBadge, aspiration, car.bodyType]);
   // Роли кнопки у строки каталога нет по той же причине, что и у карточки витрины:

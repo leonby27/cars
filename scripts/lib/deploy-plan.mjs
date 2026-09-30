@@ -12,7 +12,7 @@ const pricingFiles = new Set([
 // Audited browser infrastructure does not change stored vehicle prices. Unknown
 // JS remains conservative, but loading counters/text chunks must not rewrite DB rows.
 const browserInfrastructure = new Set([
-  'src/analytics.js', 'src/boot-api.js', 'src/counter-loader.js',
+  'src/analytics.js', 'src/boot-api.js', 'src/counter-loader.js', 'src/price-fit.js', 'src/spec-fit.js',
   'src/model-text-load.js', 'src/model-text-imports.js',
   'src/blog-text-load.js', 'src/blog-text-imports.js',
 ]);

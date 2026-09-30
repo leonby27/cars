@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-// Native lazy loading can fetch an entire horizontal gallery. Only give hidden
-// frames a URL when they enter the clipped strip, so swiping loads the next frame.
+// Native lazy loading can fetch an entire horizontal gallery or model carousel.
+// Only give hidden frames a URL near the viewport and inside the clipped track.
 export function StripPhoto({ src, first = false, ...props }) {
   const ref = useRef(null);
   const [revealed, setRevealed] = useState(false);
