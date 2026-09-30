@@ -39,7 +39,8 @@ await pool(posts, async post => {
         if (!images.get(href).pages.includes(post.slug)) images.get(href).pages.push(post.slug);
       }
     }
-    if (!page.images.length) throw new Error("No journal images found in HTML");
+    // The draft price-report sample contains charts and no vehicle photos.
+    if (!page.images.length && post.kind !== "report") throw new Error("No journal images found in HTML");
   } catch (error) { page.error = error.message; }
 });
 console.log(`Pages: ${pages.length}; unique image URLs: ${images.size}`);
