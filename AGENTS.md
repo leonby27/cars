@@ -1,5 +1,11 @@
 # Prototype Instructions
 
+Vehicle delivery duration copy (owner decision, 2026-09-30): in the delivery disclosure shared by the full vehicle page and quick view, show the lower bound as «от N дней» in both the heading and all expanded stages instead of a range (for example, «от 32 дней»). Keep country/city-specific duration calculations and the variability note; use the genitive «от 1 дня» / «от 21 дня» where appropriate.
+
+Quick-view pricing controls (owner decision, 2026-09-30): replace the visible «Быстрый просмотр» toolbar label with quota and Decree No. 140 controls on the left. Show quota only when the viewed vehicle is a pure electric car, never for hybrids or combustion cars; keep Decree No. 140 for all powertrains. Place the shared currency selector on the right before copy-link and favorites. Match all toolbar controls to those action buttons: 36px height, pill shape, surface colors and typography in both themes. Reuse global pricing preferences and preserve the accessible dialog name.
+
+Quick-view dark-theme controls (owner correction, 2026-09-30): use the same `--panel` background as the sidebar vehicle facts for every top toolbar button and the currency rail, including close. Keep the currency rail color consistent despite global currency styles. The active currency segment uses exactly `#454d57` with light text, never an inverted white background with dark text. Keep currency segments fully pill-shaped with `corner-shape: round` so the global squircle rule cannot square their corners. Use a visible gray off/red on decree switch track with a white thumb. Preserve the light-theme colors.
+
 Homepage search filters button (owner decision, 2026-09-30): show «Фильтры» beside the sliders icon in the search field's catalog button; size the button to its content while preserving its height and theme colors. Use 16px text at weight 500 with a 20px line height and no underline.
 
 Footer newsletter heading (owner decision, 2026-09-30): use «Подпишитесь на аналитику рынка авто в Китае и Корее», with the country phrase supplied by `siteInPhrase()`. Omit «обновления и».

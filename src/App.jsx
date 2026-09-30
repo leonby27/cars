@@ -554,7 +554,7 @@ const pluralRu = (count, one, few, many) => {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
   return many;
 };
-const daysRange = ([low, high]) => `${low}–${high} ${pluralRu(high, "день", "дня", "дней")}`;
+const daysFrom = ([low]) => `от ${low} ${pluralRu(low, "дня", "дней", "дней")}`;
 
 // Начало суток по Минску — одинаково у сервера (UTC) и браузера (любой пояс), см. minskClock.
 const startOfDayMs = (value) => {
@@ -1476,7 +1476,7 @@ function DecreePricingPanel() {
   );
 }
 
-function DecreePricingButton({ compact, path }) {
+function DecreePricingButton({ compact, path, className = "" }) {
   const pricing = useQuotaPricing();
   const on = Boolean(pricing?.refund50);
   const [open, setOpen] = useState(false);
@@ -1488,6 +1488,7 @@ function DecreePricingButton({ compact, path }) {
     if (!open) return undefined;
     const close = (event) => {
       if (event.key === "Escape") {
+        event.stopPropagation();
         setOpen(false);
         triggerRef.current?.focus();
       } else if (event.type === "pointerdown" && !shellRef.current?.contains(event.target)) {
@@ -1506,7 +1507,7 @@ function DecreePricingButton({ compact, path }) {
       <button
         ref={triggerRef}
         type="button"
-        className="icon-label decree-pricing-button"
+        className={`icon-label decree-pricing-button${className ? ` ${className}` : ""}`}
         role={compact ? undefined : "switch"}
         aria-checked={compact ? undefined : on}
         aria-expanded={compact ? open : undefined}
@@ -1565,18 +1566,24 @@ function useHeaderDecreeMode(headerRef) {
   return mode;
 }
 
-function EvQuotaButton({ quotas, navigate }) {
+function EvQuotaButton({ quotas, navigate, className = "" }) {
   // В шапке — общий остаток по стране: физлица плюс юрлица. Разбивка по каждой
   // половине лежит во вкладках карточки.
   const remaining = quotas.personal.remaining + quotas.business.remaining;
   const total = quotas.personal.total + quotas.business.total;
   const [open, setOpen] = useState(false);
   const shellRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelId = useId();
 
   useEffect(() => {
     if (!open) return undefined;
     const close = (event) => {
       if (event.key === "Escape" || (event.type === "pointerdown" && !shellRef.current?.contains(event.target))) {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          triggerRef.current?.focus();
+        }
         setOpen(false);
       }
     };
@@ -1591,10 +1598,11 @@ function EvQuotaButton({ quotas, navigate }) {
   return (
     <div className="quota-shell" ref={shellRef}>
       <button
+        ref={triggerRef}
         type="button"
-        className={`icon-label quota-link${open ? " selected" : ""}`}
+        className={`icon-label quota-link${open ? " selected" : ""}${className ? ` ${className}` : ""}`}
         aria-expanded={open}
-        aria-controls="ev-quota-panel"
+        aria-controls={panelId}
         aria-label={`Квоты ${number(remaining)}: осталось из ${number(total)} на беспошлинный ввоз электромобилей`}
         onClick={() => setOpen((value) => !value)}
       >
@@ -1609,7 +1617,7 @@ function EvQuotaButton({ quotas, navigate }) {
       </button>
       <div
         className={`quota-pop${open ? " open" : ""}`}
-        id="ev-quota-panel"
+        id={panelId}
         aria-hidden={!open}
         inert={open ? undefined : true}
       >
@@ -8765,7 +8773,7 @@ function CopyLinkButton({ car, labelled = false, className }) {
   };
   if (labelled) {
     return (
-      <button type="button" className={className} onClick={copy} aria-live="polite">
+      <button type="button" className={className} onClick={copy} aria-label={hint} aria-live="polite">
         {state === "copied" ? <Check size={19} weight="bold" /> : <LinkSimple size={19} weight="bold" />}
         <span>{hint}</span>
       </button>
@@ -9282,7 +9290,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               </div>
               <div>
                 <span>Срок доставки до Минска</span>
-                <h2>{daysRange(timing.totalDays)}</h2>
+                <h2>{daysFrom(timing.totalDays)}</h2>
               </div>
               <CaretDown className="disclosure-caret" size={20} weight="bold" />
             </button>
@@ -9292,19 +9300,19 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                 <div className="delivery-stages">
                   <div className="facts-row">
                     <b>Выкуп и экспорт</b>
-                    <strong>{daysRange(timing.buyoutDays)}</strong>
+                    <strong>{daysFrom(timing.buyoutDays)}</strong>
                   </div>
                   <div className="facts-row">
                     <b>Логистика {inPhrase(carOrigin(car))}</b>
-                    <strong>{daysRange(timing.chinaDays)}</strong>
+                    <strong>{daysFrom(timing.chinaDays)}</strong>
                   </div>
                   <div className="facts-row">
                     <b>Маршрут до Минска</b>
-                    <strong>{daysRange(timing.intlDays)}</strong>
+                    <strong>{daysFrom(timing.intlDays)}</strong>
                   </div>
                   <div className="facts-row">
                     <b>СВХ и оформление</b>
-                    <strong>{daysRange(timing.svhDays)}</strong>
+                    <strong>{daysFrom(timing.svhDays)}</strong>
                   </div>
                 </div>
                 <div className="price-assumption delivery-note">
@@ -9392,6 +9400,12 @@ function useQuickViewCar(listed, apiMode) {
 
 function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpenFull, onClose, onOpenOrder = null, priceRatingPending = false }) {
   const closeRef = useRef(null);
+  const currency = useCurrency();
+  const setCurrency = useSetCurrency();
+  const quotas = useMemo(() => ({
+    personal: evQuotaState({ audience: "personal" }),
+    business: evQuotaState({ audience: "business" }),
+  }), []);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -9413,10 +9427,14 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
     <div className="quick-view-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="quick-view-modal" role="dialog" aria-modal="true" aria-label={`Быстрый просмотр: ${car.title}`}>
         <header className="quick-view-bar">
-          <span>Быстрый просмотр</span>
+          <div className="quick-view-pricing">
+            {car.type === "Электромобиль" && <EvQuotaButton quotas={quotas} navigate={navigate} className="quick-view-action" />}
+            <DecreePricingButton className="quick-view-action" />
+          </div>
           <div className="quick-view-actions">
+            {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="quick-view-action quick-view-currency" />}
             <CopyLinkButton car={car} labelled className="quick-view-action" />
-            <button type="button" disabled={localGuaziPreview} aria-pressed={favorite} className={`quick-view-action${favorite ? " selected" : ""}`} onClick={() => toggleFavorite(car.id)}>
+            <button type="button" disabled={localGuaziPreview} aria-pressed={favorite} aria-label={favorite ? "В избранном" : "В избранное"} className={`quick-view-action${favorite ? " selected" : ""}`} onClick={() => toggleFavorite(car.id)}>
               <Heart size={19} weight={favorite ? "fill" : "bold"} />
               <span>{favorite ? "В избранном" : "В избранное"}</span>
             </button>

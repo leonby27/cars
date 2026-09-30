@@ -14130,6 +14130,8 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.32);
 }
 .quick-view-bar {
+  position: relative;
+  z-index: 2;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -14138,16 +14140,17 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
   padding: 12px 14px 12px 24px;
   border-bottom: 1px solid var(--line);
 }
-.quick-view-bar > span {
-  color: var(--muted);
-  font-size: 16px;
-}
 /* «Ссылка» и «избранное» переехали сюда из строки над названием машины: так
    содержимое окна начинается сразу с названия. У кнопок подпись — в полосе
    места хватает, и подсказка при наведении не нужна. */
+.quick-view-pricing,
 .quick-view-actions {
   display: flex;
+  align-items: center;
+  flex-shrink: 0;
   gap: 8px;
+}
+.quick-view-actions {
   margin-left: auto;
 }
 .quick-view-action {
@@ -14174,11 +14177,57 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
   opacity: 0.5;
   cursor: default;
 }
+.currency-switch.quick-view-currency {
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  gap: 0;
+  padding: 3px;
+}
+.quick-view-currency button {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+.quick-view-currency button:hover {
+  color: var(--ink);
+}
+.quick-view-currency button.active {
+  background: var(--panel);
+  color: var(--accent-dark);
+  box-shadow: 0 1px 4px rgba(23, 25, 28, 0.14);
+}
+.quick-view-pricing .quota-pop {
+  max-height: calc(100dvh - 150px);
+}
+.quick-view-pricing .quota-link > strong {
+  font-weight: inherit;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1100px) {
+  .quick-view-actions > .quick-view-action:not(.quick-view-currency) {
+    width: 36px;
+    justify-content: center;
+    padding: 0;
+  }
+  .quick-view-actions > .quick-view-action > span {
+    display: none;
+  }
+}
 .quick-view-close {
   display: grid;
   place-items: center;
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -14209,14 +14258,33 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
 :root[data-theme="dark"] .quick-view-bar {
   border-bottom-color: color-mix(in srgb, var(--line) 45%, transparent);
 }
-/* В тёмной теме обычный тон панели почти сливается с фоном окна — кнопкам полосы
-   и кружкам у названия (стрелка на полную страницу и знак китайского имени,
-   они читаются парой) подмешиваем цвет текста. В светлой контраста хватает и так. */
-:root[data-theme="dark"] :is(.quick-view-close, .quick-view-action),
+/* Верхние кнопки повторяют фон карточки характеристик. Селектор с #root
+   перекрывает общее оформление валюты, чтобы вся полоса была одного тона. */
+html[data-theme="dark"] #root .quick-view-bar :is(.quick-view-close, .quick-view-action) {
+  background: var(--panel);
+}
+html[data-theme="dark"] #root .quick-view-bar :is(.quick-view-close, button.quick-view-action):hover {
+  background: color-mix(in srgb, var(--ink) 8%, var(--panel));
+}
+html[data-theme="dark"] #root .quick-view-currency button:hover {
+  background: color-mix(in srgb, var(--ink) 8%, var(--panel));
+  color: var(--ink);
+}
+html[data-theme="dark"] #root .quick-view-currency button.active {
+  background: #454d57;
+  color: var(--ink);
+  box-shadow: none;
+}
+html[data-theme="dark"] #root .quick-view-bar .decree-switch-track {
+  background: #697380;
+}
+html[data-theme="dark"] #root .quick-view-bar .decree-pricing-button[aria-checked="true"] .decree-switch-track {
+  background: var(--accent);
+}
+/* Кружки у названия сохраняют более светлый фон. */
 :root[data-theme="dark"] .quick-view-modal :is(.detail-back, .chinese-name-mark) {
   background: color-mix(in srgb, var(--ink) 10%, var(--surface));
 }
-:root[data-theme="dark"] :is(.quick-view-close, .quick-view-action):hover,
 :root[data-theme="dark"] .quick-view-modal .detail-back:hover {
   background: color-mix(in srgb, var(--ink) 17%, var(--surface));
 }
