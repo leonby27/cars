@@ -136,7 +136,16 @@ const blogSlug = (() => {
   return unbased.startsWith("/blog/") ? findBlogPost(unbased.replace(/\/+$/, ""))?.slug || null : null;
 })();
 
-if (modelSlug) loadModelText(modelSlug).catch(() => null).then(start);
-else if (blogSlug) loadBlogText(blogSlug).catch(() => null).then(start);
-else if (isToolPath) loadToolPageTexts().catch(() => null).then(start);
-else start();
+// Server-rendered content is already usable. Give the browser a paint opportunity
+// before hydration's synchronous work, even when the bundle arrives unusually
+// quickly. Client-only routes still start immediately.
+function startAfterPaint() {
+  if (root.dataset.prerender && !document.documentElement.classList.contains("foreign-boot") && document.visibilityState !== "hidden") {
+    requestAnimationFrame(() => setTimeout(start, 0));
+  } else start();
+}
+
+if (modelSlug) loadModelText(modelSlug).catch(() => null).then(startAfterPaint);
+else if (blogSlug) loadBlogText(blogSlug).catch(() => null).then(startAfterPaint);
+else if (isToolPath) loadToolPageTexts().catch(() => null).then(startAfterPaint);
+else startAfterPaint();
