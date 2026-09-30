@@ -559,12 +559,13 @@ export async function handleApiRequest(request, response) {
     // сборки, когда курс уже другой.
     if (request.method === "GET" && url.pathname === "/api/market/compare") {
       const quotaMode = url.searchParams.get("quota");
+      const refund50 = url.searchParams.get("refund50") === "1";
       const stats = quotaMode === "on"
-        ? () => modelPriceStatsForQuota(true)
+        ? () => modelPriceStatsForQuota(true, refund50)
         : quotaMode === "off"
-        ? () => modelPriceStatsForQuota(false)
-        : modelPriceStats;
-      return json(response, 200, await marketComparison(stats, brandStock, quotaMode || "full"), metaCache);
+        ? () => modelPriceStatsForQuota(false, refund50)
+        : () => modelPriceStats({ refund50 });
+      return json(response, 200, await marketComparison(stats, brandStock, `${quotaMode || "full"}${refund50 ? "-refund50" : ""}`), metaCache);
     }
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType"), url.searchParams.get("country")), catalogMetaCache);
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.

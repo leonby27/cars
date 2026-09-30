@@ -17,6 +17,21 @@ const row = (id, { type = "Электромобиль", mileage = 40_000 } = {})
   image:id === 1 ? "fresh.jpg" : null,
 });
 
+test("сравнение рынка применяет указ № 140 к каждому автомобилю перед агрегацией", () => {
+  for (const type of ["Электромобиль", "Бензин"]) {
+    const rows = [1, 2, 3, 4, 5].map((id) => row(id, { type }));
+    const full = marketPriceStatsFromRows(rows);
+    const half = marketPriceStatsFromRows(rows, { refund50:true });
+    assert.equal(full.length, half.length);
+    for (let index = 0; index < full.length; index++) {
+      assert.equal(half[index].count, full[index].count);
+      assert.ok(half[index].quotaOff.median < full[index].quotaOff.median);
+      if (type === "Электромобиль") assert.equal(half[index].quotaOn.median, full[index].quotaOn.median);
+      else assert.ok(half[index].quotaOn.median < full[index].quotaOn.median);
+    }
+  }
+});
+
 test("свод цен хранит режим с квотой и без неё", () => {
   const rows = [1, 2, 3, 4, 5].map((id) => row(id));
   const stats = marketPriceStatsFromRows(rows);

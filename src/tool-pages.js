@@ -428,9 +428,8 @@ export function calcShareSearch(state) {
   // сбивало бы с толку того, кто ссылку читает.
   if (CALC_KINDS.find((item) => item.id === state.kind)?.volume) put("engineCc", Math.round(Number(state.engineCc) || 0) || null);
   put("year", state.year);
-  // У электромобиля на этом месте формы стоит переключатель квоты. Скрытое
-  // возмещение из ранее выбранного типа двигателя в ссылку не переносим.
-  if (state.kind !== "ev" && state.refund50) put("refund50", 1);
+  // Указ № 140 применим и к электромобилям независимо от переключателя квоты.
+  if (state.refund50) put("refund50", 1);
   return params.toString();
 }
 

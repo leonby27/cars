@@ -671,7 +671,7 @@ export async function modelPriceMedians() {
  * чтобы переключатель менял медиану, среднюю и границы без нового запроса к базе.
  * Фото берём у свежего активного объявления той же модели.
  */
-export async function modelPriceStats() {
+export async function modelPriceStats({ refund50 = false } = {}) {
   const { rows } = await pool.query(`SELECT l.id, v.brand, v.model, v.model_year AS year,
       l.mileage_km, l.price_cny, l.source, l.city, v.powertrain AS type,
       l.source_payload->>'usdPrice' AS usd_price,
@@ -691,7 +691,7 @@ export async function modelPriceStats() {
       AND l.price_cny > 0
       AND v.model_year IS NOT NULL
     ORDER BY l.listed_at DESC NULLS LAST, l.id`);
-  return marketPriceStatsFromRows(rows);
+  return marketPriceStatsFromRows(rows, { refund50 });
 }
 
 const MARKET_STATS_TTL_MS = 10 * 60 * 1000;
@@ -774,7 +774,11 @@ export async function modelPriceStatsStored() {
  * ответе. Для обычной цены достаточно готового столбца базы. При включённой квоте
  * заново считаем только электромобили: у ДВС и гибридов переключатель цену не меняет.
  */
-export async function modelPriceStatsForQuota(quotaPricingOn = false) {
+export async function modelPriceStatsForQuota(quotaPricingOn = false, refund50 = false) {
+  if (refund50) {
+    const rows = await modelPriceStats({ refund50:true });
+    return rows.map((row) => ({ ...row, ...(quotaPricingOn ? row.quotaOn : row.quotaOff) }));
+  }
   const stored = await modelPriceStatsStored();
   if (!quotaPricingOn) return stored;
   const { rows } = await pool.query(`SELECT v.brand, v.model, v.model_year AS year,

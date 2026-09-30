@@ -207,8 +207,8 @@ export const DUTY_RATE_TABLES = Object.freeze({
  *
  * `refund50` — возмещение половины пошлины и налогов по указу № 140 от 10.04.2019
  * (инвалиды I и II группы, многодетные родители, родители и опекуны детей-инвалидов,
- * одна легковая машина в год). Это именно возмещение после оформления, а не скидка
- * при уплате, поэтому в расчёте оно стоит отдельной строкой со знаком минус.
+ * одна легковая машина в год). По п. 2.3 документы можно представить при
+ * декларировании и сразу уплатить на 50% меньше либо заявить возврат после выпуска.
  */
 export function customsPayment({
   customsValueUsd,
@@ -236,10 +236,11 @@ export function customsPayment({
   // Нужно только для объяснения под расчётом, на сами цифры не влияет.
   let detail = {};
   if (kind === "ev") {
-    // Пока в квоте есть места, пошлины нет вовсе. Нулевой НДС дают только машинам
-    // не старше пяти лет с даты выпуска — этот порог от квоты не зависит.
+    // Личный ввоз по квоте: освобождение и от пошлины, и от налогов без порога
+    // возраста (п. 9 приложения 3 к решению ЕЭК № 107, редакция решения № 111).
+    // Без квоты нулевой НДС по п. 1.4 указа № 92 остаётся только до пяти лет.
     dutyUsd = quotaIsOver ? value * PRICING.evDutyPercent : 0;
-    vatUsd = overFiveYears ? (value + dutyUsd) * PRICING.vatPercent : 0;
+    vatUsd = quotaIsOver && overFiveYears ? (value + dutyUsd) * PRICING.vatPercent : 0;
     basis = quotaIsOver ? "ev-duty" : "ev-quota";
   } else if (kind === "erev") {
     // Машину оформляют по коду электромобиля, но льготы у неё нет с 2026 года:
@@ -297,6 +298,11 @@ export function customsPayment({
 // значение держим в переменной, а не в константе, — переключатель «Цены с квотами»
 // меняет его на ходу, и следующая же перерисовка пересчитывает все карточки.
 let quotaOverNow = isEvQuotaOver();
+let refund50Now = false;
+
+export const setPricingRefund50 = (value) => {
+  refund50Now = Boolean(value);
+};
 
 /** Переключение режима цен из интерфейса. */
 export const setPricingQuotaOver = (value) => {
@@ -340,7 +346,7 @@ export const isSeriesHybrid = (car) => {
 // иначе шанхайская цена тихо поехала бы по тарифу Хоргоса.
 const FOB_PORTS = Object.freeze({ china: "Horgos", korea: "Busan" });
 
-export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
+export function estimateLandedCost(car, { quotaOver = quotaOverNow, refund50 = refund50Now } = {}) {
   const logistics = logisticsFor(car);
   const currency = sourceCurrencyOf(car);
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
@@ -387,14 +393,13 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   const customsBasisNote = isFob
     ? "Сумма предварительная: точную посчитаем по документам на машину."
     : null;
-  // Нулевой НДС дают только машинам не старше пяти лет с даты выпуска (указ № 92
-  // с правками указа № 428). Машина старше — НДС 20% от стоимости вместе с пошлиной,
-  // даже когда льготная квота ещё действует.
+  // Без квоты льгота по НДС ограничена пятью годами (указ № 92).
+  // Квота для личного ввоза освобождает от НДС независимо от возраста.
   const overFiveYears = age > 5;
   // Сам платёж считает общая функция: ею же считает калькулятор на странице
   // растаможки, поэтому карточка и калькулятор не могут разойтись в цифрах.
   // Здесь остаются только подписи под строкой — они про конкретную карточку.
-  const evPayment = customsPayment({ customsValueUsd, kind: "ev", ageYears: age, quotaOver });
+  const evPayment = customsPayment({ customsValueUsd, kind: "ev", ageYears: age, quotaOver, refund50 });
   // Храним выбранный расчёт целиком. Из него берутся и итог таможни, и состав
   // строки в детальной смете: так утильсбор или таможенный сбор невозможно
   // случайно посчитать отдельно второй раз.
@@ -402,25 +407,23 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
   let customsUsd = payment.totalUsd;
   let customsNote = quotaOver
     ? (overFiveYears ? "Пошлина 15% и НДС 20% · старше 5 лет" : "Пошлина 15% · оформление и сборы")
-    : (overFiveYears ? "НДС 20% · машина старше 5 лет" : "Льгота 0% · оформление и сборы");
+    : "Льгота 0% · оформление и сборы";
   let customsAlert = quotaOver
     ? "Без квоты на льготный ввоз"
-    : overFiveYears ? "Старше 5 лет — НДС 20% сверху" : null;
+    : null;
   // Тон подписи под строкой: красная — про квоту на электромобили, оранжевая — всё
   // остальное. Разный цвет нужен, чтобы эти случаи не читались как один.
-  let customsAlertTone = quotaOver || overFiveYears ? "warn" : null;
+  let customsAlertTone = quotaOver ? "warn" : null;
   // Подробное объяснение для подсказки. Пусто — в подсказке остаётся короткая строка.
-  let customsHint = overFiveYears
-    ? (quotaOver
+  let customsHint = quotaOver
+    ? (overFiveYears
       ? "Нулевой НДС дают только машинам не старше пяти лет с даты выпуска, а этой уже больше. Поэтому пошлина 15% от цены машины и НДС 20% сверху, плюс сборы за оформление."
-      : "Пошлины на эту машину нет — льготная квота ещё действует. Но нулевой НДС дают только машинам не старше пяти лет с даты выпуска, а этой больше, поэтому добавляется НДС 20% и сборы за оформление.")
-    : quotaOver
-      ? "Льготная квота на ввоз электромобилей закончилась, поэтому пошлина — 15% от цены машины."
-      : "Машина ввозится по льготе: пошлины и НДС нет, платятся только сборы за оформление.";
+      : "Расчёт без квоты: пошлина — 15% от цены машины. Для электромобиля не старше пяти лет НДС нулевой.")
+    : "При личном ввозе по квоте пошлины и НДС нет независимо от возраста машины, платятся только сборы за оформление.";
   let engineAssumed = false;
   const seriesHybrid = isSeriesHybrid(car);
   if (seriesHybrid) {
-    payment = customsPayment({ customsValueUsd, kind: "erev", ageYears: age });
+    payment = customsPayment({ customsValueUsd, kind: "erev", ageYears: age, refund50 });
     customsUsd = payment.totalUsd;
     customsNote = "Гибрид с генератором · пошлина 15% и НДС 20%";
     customsHint = "Бензиновый мотор здесь только крутит генератор, колёс он не касается, поэтому таможня оформляет машину как электромобиль. Но льготу на такие гибриды отменили с 1 января 2026 года: пошлина 15% и НДС 20% сверху — около 38% от цены машины, плюс сборы за оформление.";
@@ -438,7 +441,7 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     const exactCc = Number(car.engineCc);
     const engineCc = exactCc >= 500 && exactCc <= 8000 ? Math.round(exactCc) : parsedEngine ? Math.round(parsedEngine * 1000) : ASSUMED_ENGINE_CC;
     engineAssumed = !parsedEngine && !(exactCc >= 500 && exactCc <= 8000);
-    payment = customsPayment({ customsValueUsd, kind: "ice", engineCc, ageYears: age });
+    payment = customsPayment({ customsValueUsd, kind: "ice", engineCc, ageYears: age, refund50 });
     customsUsd = payment.totalUsd;
     customsNote = `Пошлина по объёму · ${(engineCc / 1000).toLocaleString("ru-RU")} л${engineAssumed ? " (оценка)" : ""}`;
     // Подсказку про квоту и НДС здесь оставлять нельзя: она написана про
@@ -453,11 +456,15 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     customsAlert = engineAssumed ? "Объём двигателя не указан — платёж посчитан по 1,5 л" : null;
     customsAlertTone = engineAssumed ? "warn" : null;
   }
+  if (payment.refundUsd > 0) {
+    customsNote += " · с учётом указа № 140";
+    customsHint += " Учтено возмещение 50% пошлин и налогов по указу № 140 при наличии права на льготу. Утилизационный и таможенный сборы оплачиваются полностью.";
+  }
   // У гибрида с генератором пошлина считается от известной цены машины, а не от
   // предполагаемого объёма двигателя, — разброс здесь такой же узкий, как у
   // электромобиля с пошлиной, а не как у расчёта по объёму.
   const customsSpread = seriesHybrid || car.type === "Электромобиль"
-    ? (seriesHybrid || quotaOver || overFiveYears ? Math.max(200, round50(customsUsd * .05)) : 150)
+    ? (seriesHybrid || quotaOver ? Math.max(200, round50(customsUsd * .05)) : 150)
     : Math.max(300, round50(customsUsd * .08));
   const customsLow = Math.max(0, customsUsd - customsSpread);
   const customsHigh = customsUsd + customsSpread;
@@ -488,8 +495,8 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow } = {}) {
     intlLow, intlHigh, intlNote,
     svhLow:PRICING.svhUsd[0], svhHigh:PRICING.svhUsd[1],
     customsUsd, customsLow, customsHigh, customsNote, customsHint, customsAlert, customsAlertTone, customsIncludedText, seriesHybrid, ageYears:age,
-    customsValueUsd, customsFeesUsd:payment.feesUsd,
-    dutyUsd:payment.dutyUsd, vatUsd:payment.vatUsd, utilUsd:payment.utilUsd, clearanceUsd:payment.clearanceUsd,
+    customsValueUsd, customsFeesUsd:payment.feesUsd, quotaOver,
+    dutyUsd:payment.dutyUsd, vatUsd:payment.vatUsd, utilUsd:payment.utilUsd, clearanceUsd:payment.clearanceUsd, refundUsd:payment.refundUsd,
     serviceUsd:PRICING.serviceUsd,
     totalLow, totalHigh, totalUsd:round50((totalLow + totalHigh) / 2),
   };

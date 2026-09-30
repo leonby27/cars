@@ -35,13 +35,13 @@ const carFromRow = (row) => ({
  * Собирает обе версии наших цен для сравнения рынка. Строки приходят от новых к
  * старым, поэтому первая фотография в группе остаётся самой свежей.
  */
-export function marketPriceStatsFromRows(rows = []) {
+export function marketPriceStatsFromRows(rows = [], { refund50 = false } = {}) {
   const groups = new Map();
   for (const row of rows) {
     const car = carFromRow(row);
     const type = row.type === "Бензин" ? "ДВС" : row.type || null;
-    const quotaOn = Number(estimateLandedCost(car, { quotaOver:false }).totalUsd);
-    const quotaOff = Number(estimateLandedCost(car, { quotaOver:true }).totalUsd);
+    const quotaOn = Number(estimateLandedCost(car, { quotaOver:false, refund50 }).totalUsd);
+    const quotaOff = Number(estimateLandedCost(car, { quotaOver:true, refund50 }).totalUsd);
     if (!(quotaOn > 0) || !(quotaOff > 0)) continue;
     const mileage = Number(row.mileage_km);
     for (const limit of MARKET_MILEAGE_LIMITS) {

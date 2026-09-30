@@ -1,6 +1,38 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildVehicleQuickInfo } from "../src/vehicle-quick-info.js";
+import { buildVehicleQuickInfo, buildVehicleQuickFacts } from "../src/vehicle-quick-info.js";
+
+test("расход энергии заменяет места и сохраняет приоритет разгона и топлива", () => {
+  const car = {
+    year:2024, mileage:49400, type:"Электромобиль", electricRange:688,
+    drive:"Полный", battery:78.4, horsepower:450, seats:5,
+    technicalSpecs:{ groups:[{ items:[{ name:"Power Consumption (kWh/100km)", value:"13" }] }] },
+  };
+  const facts = buildVehicleQuickFacts(car);
+  assert.equal(facts.length, 8);
+  assert.deepEqual(facts.at(-1), { label:"Расход энергии", value:"13 кВт·ч" });
+  assert.deepEqual(buildVehicleQuickFacts({ ...car, acceleration:4.5 }).at(-1), { label:"Разгон до 100 км/ч", value:"4,5 с" });
+  car.technicalSpecs.groups[0].items.push({ name:"Расход смешанный", value:"11.1-11.2 л/100 км" });
+  assert.deepEqual(buildVehicleQuickFacts(car).at(-1), { label:"Расход топлива", value:"11,1 л" });
+});
+
+test("расход энергии различает единицы, диапазоны и отсутствующие данные", () => {
+  for (const name of ["Расход энергии (WLTP)", "Combined electricity consumption (kWh/100km)", "Расход энергии смешанный"]) {
+    const car = { type:"Электромобиль", seats:5, technicalSpecs:{ groups:[{ items:[{ name, value:"15,2–13,1 кВт·ч/100 км" }] }] } };
+    assert.deepEqual(buildVehicleQuickFacts(car).at(-1), { label:"Расход энергии", value:"13,1 кВт·ч" });
+    for (const value of [null, "— кВт·ч/100 км", "0 кВт·ч/100 км"]) {
+      car.technicalSpecs.groups[0].items[0].value = value;
+      assert.deepEqual(buildVehicleQuickFacts(car).at(-1), { label:"Мест", value:"5" });
+    }
+  }
+  const car = { seats:5, technicalSpecs:{ groups:[{ items:[
+    { name:"Comprehensive fuel and electricity consumption (L/100km)", value:"2.1" },
+    { name:"Battery capacity (kWh)", value:"78.4" },
+    { name:"Power Consumption (kWh/100km)", value:"—" },
+    { name:"Measured average electricity consumption (kWh/100km)", value:"14.2" },
+  ] }] } };
+  assert.deepEqual(buildVehicleQuickFacts(car).at(-1), { label:"Расход энергии", value:"14,2 кВт·ч" });
+});
 
 test("builds a compact comma-separated vehicle summary from available facts", () => {
   assert.equal(

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { carFaq, carFaqTitle } from "../src/car-faq.js";
 import { estimateLandedCost } from "../src/pricing.js";
-import { isEvQuotaExhausted } from "../src/ev-quota.js";
 import { createSeoRenderer } from "../server/seo-render.mjs";
 
 const shell = '<!doctype html><html><head></head><body><div id="root"></div></body></html>';
@@ -30,15 +29,20 @@ test("вопросы карточки считаются по самой маш�
 test("ответ про таможню зависит от типа двигателя и возраста", () => {
   const ev = faqOf(EV).find((item) => /таможне/.test(item.q));
   const ice = faqOf(ICE).find((item) => /таможне/.test(item.q));
-  assert.match(
-    ev.a,
-    isEvQuotaExhausted() ? /выбрана, поэтому начисляется пошлина 15%/ : /Пока действует квота[^.]*пошлины у электромобиля нет/,
-  );
+  assert.match(ev.a, /без квоты: начисляется пошлина 15%/);
   // Машине младше пяти лет НДС не начисляют — и это должно быть сказано прямо.
-  assert.match(ev.a, /меньше пяти лет[^.]*НДС при ввозе нулевой/);
+  assert.match(ev.a, /не больше пяти лет[^.]*НДС при ввозе нулевой/);
   // У бензиновой пошлина считается по объёму двигателя, а не процентом от цены.
   assert.match(ice.a, /по объёму двигателя и возрасту/);
   assert.doesNotMatch(ice.a, /квот/i);
+});
+
+test("FAQ личного ввоза по квоте не начисляет НДС старому электромобилю", () => {
+  const car = { ...EV, manufactureDate:"2019-01-01" };
+  const landed = estimateLandedCost(car, { quotaOver:false, refund50:true });
+  const answer = carFaq(car, landed).find((item) => /таможне/.test(item.q)).a;
+  assert.match(answer, /освобождён от пошлины и НДС независимо от возраста/);
+  assert.doesNotMatch(answer, /20%|50%/);
 });
 
 test("на странице машины есть блок вопросов и разметка FAQPage, у проданной — нет", () => {

@@ -30,7 +30,8 @@ import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, usdToByn, usdToRub, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
+import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, setPricingRefund50, usdToByn, usdToRub, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
+import { readDecreePricing, rememberDecreePricing } from "./decree-pricing.js";
 import { evQuotaPricingAvailable, evQuotaState, holdQuotaChoice, isEvQuotaOver, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
@@ -1468,6 +1469,115 @@ const QUOTA_TOOLTIP = (
   </>
 );
 
+const DECREE_DESCRIPTION = "Для многодетных родителей, людей с инвалидностью I–II группы и родителей/опекунов детей с инвалидностью до 18 лет. Постоянное проживание в Беларуси, 1 авто в год. Сборы без скидки.";
+
+function DecreePricingPanel() {
+  const pricing = useQuotaPricing();
+  const hintId = useId();
+  return (
+    <div className="quota-panel decree-panel">
+      <div className="quota-panel-pricing">
+        <label className="quick-view-toggle">
+          <input type="checkbox" role="switch" checked={Boolean(pricing?.refund50)}
+            aria-describedby={hintId} onChange={(event) => pricing?.setRefund50(event.target.checked)} />
+          <span className="quick-view-toggle-track" aria-hidden="true"><i /></span>
+          <span className="quick-view-toggle-label">Указ № 140</span>
+        </label>
+        <small id={hintId}>Возмещение 50% пошлин и налогов. {DECREE_DESCRIPTION}</small>
+      </div>
+    </div>
+  );
+}
+
+function DecreePricingButton({ compact, path }) {
+  const pricing = useQuotaPricing();
+  const on = Boolean(pricing?.refund50);
+  const [open, setOpen] = useState(false);
+  const shellRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelId = useId();
+  useEffect(() => setOpen(false), [compact, path]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      } else if (event.type === "pointerdown" && !shellRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  return (
+    <div className="quota-shell decree-shell" ref={shellRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="icon-label decree-pricing-button"
+        role={compact ? undefined : "switch"}
+        aria-checked={compact ? undefined : on}
+        aria-expanded={compact ? open : undefined}
+        aria-controls={compact ? panelId : undefined}
+        aria-label={compact ? `Указ № 140: ${on ? "включён" : "выключен"}` : "Учитывать возмещение по указу № 140"}
+        data-active={on}
+        onClick={() => compact ? setOpen((value) => !value) : pricing?.setRefund50(!on)}
+      >
+        <span className="decree-label">Указ № 140</span>
+        {!compact && <span className="decree-switch-track" aria-hidden="true"><i /></span>}
+        {!open && <ActionTooltip className="quota-link-tooltip" text={<>
+          <b>Возмещение 50% пошлин и налогов</b>
+          <span>{DECREE_DESCRIPTION}</span>
+        </>} />}
+      </button>
+      {compact && <div className={`quota-pop${open ? " open" : ""}`} id={panelId}
+        aria-hidden={!open} inert={open ? undefined : true}>
+        <DecreePricingPanel />
+      </div>}
+    </div>
+  );
+}
+
+// The hidden full-size button remains measurable in every mode, so moving the
+// control into the menu cannot cause resize feedback or lose its natural width.
+function useHeaderDecreeMode(headerRef) {
+  const [mode, setMode] = useState("menu");
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const logo = header.querySelector(".wordmark");
+    const menu = header.querySelector(".header-menu-shell");
+    const left = header.querySelector(".header-left-controls");
+    const quota = left.querySelector(".quota-shell");
+    const right = header.querySelector(".header-right-controls");
+    const probe = header.querySelector(".decree-measure");
+    const track = probe.querySelector(".decree-switch-track");
+    const width = (node) => node.getBoundingClientRect().width;
+    const px = (value) => Number.parseFloat(value) || 0;
+    const update = () => {
+      const available = width(header) - width(logo) - width(menu) - width(quota) - width(right)
+        - px(getComputedStyle(menu).marginLeft) - px(getComputedStyle(header).columnGap) * 3
+        - px(getComputedStyle(left).columnGap);
+      const full = width(probe);
+      const compact = full - width(track) - px(getComputedStyle(probe).columnGap);
+      setMode(available >= full ? "full" : available >= compact ? "compact" : "menu");
+    };
+    update();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    [header, logo, menu, quota, right, probe].forEach((node) => observer?.observe(node));
+    window.addEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [headerRef]);
+  return mode;
+}
+
 function EvQuotaButton({ quotas, navigate }) {
   // В шапке — общий остаток по стране: физлица плюс юрлица. Разбивка по каждой
   // половине лежит во вкладках карточки.
@@ -1527,6 +1637,8 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   const setCurrency = useSetCurrency();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  const headerRef = useRef(null);
+  const decreeMode = useHeaderDecreeMode(headerRef);
   // Остаток квоты считается по вшитым в сборку сводкам — за сессию он не меняется.
   const quotas = useMemo(() => ({
     personal: evQuotaState({ audience: "personal" }),
@@ -1562,7 +1674,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
 
   return (
     <header className="site-header">
-      <div className="header-inner">
+      <div className="header-inner" ref={headerRef}>
         <AppLink className="wordmark" href="/" navigate={navigate} onClick={playRefreshPulse} aria-label="abcars.by — на главную">
           <SiteLogo />
         </AppLink>
@@ -1587,6 +1699,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               <div className="header-menu-settings">
                 {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
               </div>
+              {decreeMode === "menu" && <DecreePricingPanel />}
               <nav aria-label="Основная навигация">
                 {/* Каталог и журнал — первыми (25.09.2026): главный раздел сайта в главном
                     меню, как у всех сайтов в выдаче; до этого на каталог вели только
@@ -1608,8 +1721,13 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
         </div>
         <div className="header-actions header-left-controls">
           <EvQuotaButton quotas={quotas} navigate={navigate} />
+          {decreeMode !== "menu" && <DecreePricingButton compact={decreeMode === "compact"} path={path} />}
+          <button type="button" className="icon-label decree-pricing-button decree-measure" aria-hidden="true" inert tabIndex={-1}>
+            <span className="decree-label">Указ № 140</span>
+            <span className="decree-switch-track"><i /></span>
+          </button>
         </div>
-        <div className="header-actions">
+        <div className="header-actions header-right-controls">
           {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-currency-switch" />}
           <button
             className={`icon-label searches-link${path === "/searches" ? " selected" : ""}`}
@@ -3628,7 +3746,7 @@ function useSameModelCars(car, active) {
 // машины той же модели стояли отдельным блоком над похожими; двух почти одинаковых
 // сеток подряд слишком много, поэтому теперь это два состояния одного блока.
 function SimilarCars({ car, cars, onOpenCar }) {
-  const similarPricingOn = useQuotaPricing()?.on;
+  const similarPricingOn = useQuotaPricing();
   const similarCars = useMemo(() => selectSimilarCars(car, cars), [car, cars, similarPricingOn]);
   // Карточку, открытую по прямой ссылке, сервер рисует с соседями той же модели
   // (server/car-page.mjs), а подбор «Все» их исключает — до загрузки каталога сетка
@@ -5702,6 +5820,58 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
   const currency = useCurrency();
   const open = () => (onOpen ? onOpen(car) : navigate(carHref(car)));
   const price = estimateLandedCost(car);
+  const engineBadge = engineVolumeBadge(car);
+  const aspiration = engineAspiration(car);
+  const miniSpecsRef = useRef(null);
+  useLayoutEffect(() => {
+    const row = miniSpecsRef.current;
+    if (!row) return undefined;
+    let active = true;
+    const fit = () => {
+      const available = row.clientWidth;
+      if (!available) return;
+      const chips = [...row.children];
+      const previousStyles = chips.map((chip) => chip.style.cssText);
+      chips.forEach((chip) => chip.style.removeProperty("display"));
+      // Сначала узнаём, какие плашки скрыты самой мобильной раскладкой.
+      const eligible = chips.map((chip) => getComputedStyle(chip).display !== "none");
+      chips.forEach((chip, index) => {
+        if (!eligible[index]) return;
+        chip.style.display = "flex";
+        chip.style.flex = "none";
+        chip.style.width = "max-content";
+        chip.style.maxWidth = "none";
+      });
+      const widths = chips.map((chip, index) => eligible[index] ? chip.getBoundingClientRect().width : 0);
+      const gap = Number.parseFloat(getComputedStyle(row).columnGap) || 0;
+      let occupied = 0;
+      chips.forEach((chip, index) => {
+        chip.style.cssText = previousStyles[index];
+        if (!eligible[index]) return;
+        const next = occupied + (occupied ? gap : 0) + widths[index];
+        let fits = next <= available + 0.5;
+        chip.style.display = fits ? "" : "none";
+        // У кузова внутренний текст умеет сокращаться до многоточия. Такая
+        // плашка тоже не считается поместившейся: скрываем её целиком.
+        const label = fits && chip.classList.contains("body-type-spec") ? chip.querySelector("span") : null;
+        if (label && label.scrollWidth > label.clientWidth + 1) {
+          chip.style.display = "none";
+          fits = false;
+        }
+        if (fits) occupied = next;
+      });
+    };
+    fit();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    if (observer) observer.observe(row);
+    else window.addEventListener("resize", fit);
+    document.fonts?.ready.then(() => { if (active) fit(); });
+    return () => {
+      active = false;
+      observer?.disconnect();
+      if (!observer) window.removeEventListener("resize", fit);
+    };
+  }, [car.battery, engineBadge, aspiration, car.bodyType]);
   // Роли кнопки у строки каталога нет по той же причине, что и у карточки витрины:
   // внутри свои ссылки и кнопки, а с клавиатуры открывает ссылка-заголовок.
   return (
@@ -5751,7 +5921,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
         <p className="summary">
           {number(car.mileage)} км · {powertrainName(car.type)} · {car.drive} привод
         </p>
-        <div className="mini-specs">
+        <div className="mini-specs" ref={miniSpecsRef}>
           {car.battery && (
             <span>
               <BatteryHigh size={17} />
@@ -5761,16 +5931,16 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
           {/* Машине с двигателем плашки батареи не достаются, и строка оставалась
               пустой: у бензиновой и дизельной там объём и наддув. Гибриду с бензиновым
               мотором они тоже пишутся — рядом с батареей и запасом хода. */}
-          {engineVolumeBadge(car) && (
+          {engineBadge && (
             <span>
               <Engine size={17} />
-              Объём {engineVolumeBadge(car)}
+              Объём {engineBadge}
             </span>
           )}
-          {engineAspiration(car) && (
+          {aspiration && (
             <span>
               <Timer size={17} />
-              {engineAspiration(car)}
+              {aspiration}
             </span>
           )}
           <span className="body-type-spec" title={car.bodyType}>
@@ -6514,7 +6684,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   const availability = useApi ? remoteMeta.availability : localAvailability(typedCars);
   // Цена в статическом режиме считается здесь же, поэтому смена режима цен
   // (переключатель «Цены с квотами») должна пересчитать выдачу.
-  const quotaPricingOn = useQuotaPricing()?.on;
+  const quotaPricingOn = useQuotaPricing();
   const filtered = useMemo(
     () =>
       sortCars(
@@ -8793,6 +8963,7 @@ const VEHICLE_QUICK_FACT_ICONS = {
   "Коробка": Gear,
   "Мест": UsersThree,
   "Расход топлива": GasPump,
+  "Расход энергии": Lightning,
 };
 
 function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumbs = null, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false, actions = true }) {
@@ -8874,7 +9045,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   const price = estimateLandedCost(car);
   const quotaPricing = useQuotaPricing();
   const quotaPricingOn = quotaPricing?.on !== false;
-  const priceVerdict = priceRatingVerdictFor({ rating:car.priceRating, priceUsd:price.totalUsd, mileage:car.mileage, quotaPricingOn });
+  const ratingPriceUsd = estimateLandedCost(car, { refund50:false }).totalUsd;
+  const priceVerdict = priceRatingVerdictFor({ rating:car.priceRating, priceUsd:ratingPriceUsd, mileage:car.mileage, quotaPricingOn });
   const timing = estimateDeliveryDays(car.city, carOrigin(car));
   // Кнопка не уводит со страницы: сначала окно объясняет, что именно мы проверим.
   // Дальше вошедшему запрос уходит из самого окна, гостя ведём заводить аккаунт.
@@ -9022,12 +9194,13 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                 >
                   <PriceRatingScale
                     rating={car.priceRating}
-                    priceUsd={price.totalUsd}
+                    priceUsd={ratingPriceUsd}
                     mileage={car.mileage}
                     battery={car.battery}
                     quotaPricingOn={quotaPricingOn}
                     formatMoney={(usd) => roughMoney(usd, currency)}
                   />
+                  {quotaPricing?.refund50 && <p className="price-rating-note">Сравнение цен — без персонального возмещения по указу № 140.</p>}
                 </aside>
               )}
             </div>
@@ -11092,8 +11265,12 @@ function CustomsCalculator() {
   const [currency, setCurrency] = useState(() => shared.currency || CALC_CURRENCIES[0].id);
   const [engineCc, setEngineCc] = useState(() => String(shared.engineCc ?? 1500));
   const [year, setYear] = useState(() => shared.year || String(new Date().getFullYear() - 3));
-  const [refund50, setRefund50] = useState(() => Boolean(shared.refund50));
   const quotaPricing = useQuotaPricing();
+  const refund50 = Boolean(quotaPricing?.refund50);
+  const setRefund50 = (on) => quotaPricing?.setRefund50(on);
+  useEffect(() => {
+    if (shared.refund50) setRefund50(true);
+  }, [shared]);
   // Валюта, в которой показан платёж. Пусто — значит «как у цены машины»: человек
   // вписал цену в долларах и, скорее всего, хочет видеть в них же ответ. Как только
   // он выберет валюту у самой суммы, она перестаёт следовать за ценой.
@@ -11119,9 +11296,8 @@ function CustomsCalculator() {
       kind: kindItem.id === "phev" ? "ice" : kindItem.id,
       engineCc: cc,
       ageYears,
-      // У электромобиля этот переключатель управляет квотой, поэтому скрытое
-      // состояние возмещения от ранее выбранного ДВС не должно менять сумму.
-      refund50: isElectric ? false : refund50,
+      // Указ № 140 применяется независимо от выбранного режима квоты.
+      refund50,
     })
     : null;
 
@@ -11518,8 +11694,9 @@ function ChinaBrandsDirectory({ navigate }) {
 /* Подробное сравнение цен с рынком Беларуси. Сервер заранее сопоставляет одинаковые
    модели и годы, а браузер только переключает предел пробега и рисует карточки. */
 function MarketCompare({ navigate }) {
-  const quotaPricingOn = useQuotaPricing()?.on === true;
-  const quotaMode = quotaPricingOn ? "on" : "off";
+  const pricing = useQuotaPricing();
+  const quotaPricingOn = pricing?.on === true;
+  const quotaMode = `${quotaPricingOn ? "on" : "off"}${pricing?.refund50 ? "&refund50=1" : ""}`;
   // Сравнение из готовой страницы (src/boot-api.js) — для первого кадра.
   const [dataByQuota, setDataByQuota] = useState(() => {
     const embedded = embeddedApiValue(`${import.meta.env.BASE_URL}api/market/compare?quota=${quotaMode}`);
@@ -15052,6 +15229,12 @@ export function App() {
   // Режим цен: включённый переключатель показывает льготную цену, выключенный —
   // цену с пошлиной 15%. Выбор запоминается в браузере и применяется ко всем карточкам.
   const [quotaPricingOn, setQuotaPricingOn] = useState(isEvQuotaPricingOn);
+  const [refund50On, setRefund50On] = useState(false);
+  useEffect(() => {
+    const on = readDecreePricing();
+    setPricingRefund50(on);
+    setRefund50On(on);
+  }, []);
   // После оживления готовой страницы — выбор посетителя: до этого он придержан
   // (holdQuotaChoice в main.jsx), иначе суммы первого кадра разошлись бы с сервером.
   useEffect(() => {
@@ -15065,13 +15248,19 @@ export function App() {
   }, []);
   const quotaPricing = useMemo(() => ({
     on: quotaPricingOn,
+    refund50: refund50On,
+    setRefund50: (on) => {
+      rememberDecreePricing(on);
+      setPricingRefund50(on);
+      setRefund50On(on);
+    },
     available: evQuotaPricingAvailable(),
     set: (on) => {
       rememberEvQuotaPricing(on);
       setPricingQuotaOver(!on);
       setQuotaPricingOn(on);
     },
-  }), [quotaPricingOn]);
+  }), [quotaPricingOn, refund50On]);
   // Сохранённую тему и системное оформление читаем не в первом рисовании, а слоем
   // ниже (useLayoutEffect — до первого кадра): главную собирает и сервер, где ни
   // хранилища, ни системной темы нет. Внешний вид страницы от этого не мигает —

@@ -33,16 +33,16 @@ test("выключенный переключатель ссылку не зас
   assert.equal(new URLSearchParams(search).has("refund"), false);
 });
 
-test("у электромобиля скрытое возмещение не попадает в ссылку", () => {
+test("ссылка на расчёт электромобиля сохраняет включённый указ № 140", () => {
   const search = calcShareSearch({ ...full, kind: "ev", refund50: true });
-  assert.equal(new URLSearchParams(search).has("refund"), false);
+  assert.equal(calcStateFromSearch(search).refund50, true);
 });
 
 test("электромобиль меняет переключатель возмещения на квоту", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   assert.match(app, /isElectric \? "Учитывать квоту на беспошлинный ввоз" : "Возмещение 50% по указу № 140"/);
   assert.match(app, /checked=\{isElectric \? Boolean\(quotaPricing\?\.on\) : refund50\}/);
-  assert.match(app, /refund50: isElectric \? false : refund50/);
+  assert.doesNotMatch(app, /refund50: isElectric \? false : refund50/);
 });
 
 test("испорченная ссылка не ломает форму", () => {

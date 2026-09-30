@@ -2709,20 +2709,14 @@ html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
   color: var(--muted);
   font-size: 16px;
 }
-/* Плашки стоят одной строкой и не переносятся. Машине с двигателем их достаётся
-   больше (объём и наддув сверх батареи и запаса хода), и на узкой колонке строка
-   раньше вылезала на цену справа: теперь она прокручивается внутри себя, полосу
-   прокрутки не показывая. */
+/* Плашки стоят в один ряд. Не помещающиеся целиком скрывает замер в CarRow;
+   контейнер обрезает только промежуточное состояние до первого замера. */
 .mini-specs {
   display: flex;
   min-width: 0;
   flex-wrap: nowrap;
   gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.mini-specs::-webkit-scrollbar {
-  display: none;
+  overflow: hidden;
 }
 .mini-specs > span {
   flex: 0 0 auto;
@@ -2740,7 +2734,7 @@ html[data-theme="dark"] .brand-guide .brand-guide-alternatives a:focus-visible {
   min-width: 0;
   width: fit-content;
   max-width: 100%;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
 }
 .body-type-spec > span {
   min-width: 0;
@@ -9271,7 +9265,7 @@ html[data-theme="dark"] #root .spec-search,
   position: absolute;
   z-index: 1;
   inset: 90px 0 0;
-  background: linear-gradient(to bottom, transparent, var(--page) 68%);
+  background: linear-gradient(to bottom, transparent, var(--quick-view-background, var(--page)) 68%);
   content: "";
   pointer-events: none;
 }
@@ -14116,6 +14110,7 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
 }
 .quick-view-modal {
   position: relative;
+  --quick-view-background: var(--page);
   display: flex;
   flex-direction: column;
   /* Немного шире страницы автомобиля: галерея и расчёт в двух колонках не поджимаются. */
@@ -14123,7 +14118,7 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
   max-height: calc(100vh - 48px);
   overflow: hidden;
   border-radius: calc(20px * var(--corner-scale));
-  background: var(--page);
+  background: var(--quick-view-background);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.32);
 }
 .quick-view-bar {
@@ -14220,7 +14215,7 @@ html[data-theme="dark"] body #root .availability-comment-field textarea:focus {
 /* В тёмной теме модалка чуть светлее страницы под ней, но темнее панелей внутри,
    иначе карточки расчёта и галерея перестают читаться как отдельные блоки. */
 :root[data-theme="dark"] .quick-view-modal {
-  background: #191c20;
+  --quick-view-background: #191c20;
 }
 /* Фон окна предпросмотра почти совпадает с мягким тоном поиска по данным —
    внутри него поиску нужен тон посветлее, иначе поле сливается. */
@@ -17860,6 +17855,85 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
   position: relative;
   display: flex;
 }
+.header-actions .decree-pricing-button {
+  height: 48px;
+  padding: 0 15px;
+  gap: 10px;
+  flex-shrink: 0;
+  border-radius: calc(14px * var(--corner-scale));
+  background: var(--header-control-bg);
+  white-space: nowrap;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.decree-pricing-button:hover,
+.decree-pricing-button[data-active="true"] {
+  color: var(--accent-dark);
+}
+.decree-pricing-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.decree-switch-track {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.decree-switch-track i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.decree-pricing-button[aria-checked="true"] .decree-switch-track {
+  background: var(--accent);
+}
+.decree-pricing-button[aria-checked="true"] .decree-switch-track i {
+  transform: translateX(13px);
+}
+.header-inner > .wordmark,
+.header-inner > .header-menu-shell,
+.header-inner > .header-actions,
+.header-left-controls > .quota-shell {
+  flex-shrink: 0;
+}
+.header-actions .decree-pricing-button {
+  width: max-content;
+}
+.header-actions .decree-pricing-button > .decree-label {
+  display: inline;
+}
+.header-actions .decree-pricing-button > .decree-switch-track {
+  display: inline-block;
+}
+.header-actions .decree-measure {
+  position: fixed;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.header-menu > .decree-panel {
+  margin-bottom: 8px;
+}
+@media (max-width: 700px) {
+  .header-actions .decree-pricing-button {
+    height: 40px;
+    padding: 0 10px;
+    border-radius: calc(12px * var(--corner-scale));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .decree-pricing-button, .decree-switch-track, .decree-switch-track i { transition: none; }
+}
 .header-actions .quota-link {
   height: 48px;
   padding: 0 15px;
@@ -18466,6 +18540,8 @@ html[data-theme="dark"] .tool-page-links-list > a:hover {
     .quick-view-action,
     .quick-view-toggle .quick-view-toggle-track,
     .quick-view-toggle .quick-view-toggle-track i,
+    .decree-switch-track,
+    .decree-switch-track i,
     .model-page-back,
     .quota-panel-bar,
     .quota-panel-bar > b,

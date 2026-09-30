@@ -24,8 +24,9 @@ const RESOLVERS = [
   // Сравнение с белорусским рынком — так же, как в handler.mjs.
   ["/api/market/compare", (params) => {
     const quotaMode = params.get("quota");
-    const stats = quotaMode === "on" ? () => modelPriceStatsForQuota(true) : quotaMode === "off" ? () => modelPriceStatsForQuota(false) : modelPriceStats;
-    return marketComparison(stats, brandStock, quotaMode || "full");
+    const refund50 = params.get("refund50") === "1";
+    const stats = quotaMode === "on" ? () => modelPriceStatsForQuota(true, refund50) : quotaMode === "off" ? () => modelPriceStatsForQuota(false, refund50) : () => modelPriceStats({ refund50 });
+    return marketComparison(stats, brandStock, `${quotaMode || "full"}${refund50 ? "-refund50" : ""}`);
   }],
 ];
 

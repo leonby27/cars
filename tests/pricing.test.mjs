@@ -1,7 +1,38 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { customsPayment, estimateLandedCost, LOGISTICS, PRICING, CLEARANCE_MONTHS, usdToByn } from "../src/pricing.js";
+import { customsPayment, estimateLandedCost, setPricingRefund50, LOGISTICS, PRICING, CLEARANCE_MONTHS, usdToByn } from "../src/pricing.js";
 import { engineVolume } from "../src/engine-spec.js";
+
+test("указ № 140 пересчитывает цену под ключ, сохраняя сборы и расходы на доставку", () => {
+  for (const car of [
+    { type:"ДВС", engine:"2.0L", year:2020 },
+    { type:"ДВС", engine:"2.0L", year:2025 },
+    { type:"Гибрид", engine:"1.5T", transmission:"7-speed dual-clutch", year:2024 },
+    { type:"Гибрид", sourceFuelType:"Range Extender", year:2024 },
+    { type:"Электромобиль", year:2024 },
+    { type:"Электромобиль", year:2019 },
+  ]) {
+    for (const quotaOver of [true, false]) {
+      const input = { source:"Che168", usdPrice:20000, ...car };
+      const full = estimateLandedCost(input, { quotaOver, refund50:false });
+      const half = estimateLandedCost(input, { quotaOver, refund50:true });
+      assert.equal(half.refundUsd, (full.dutyUsd + full.vatUsd) / 2);
+      for (const key of ["utilUsd", "clearanceUsd", "chinaUsd", "buyoutLow", "intlLow", "serviceUsd"]) assert.equal(half[key], full[key]);
+      const expectedCustoms = (full.dutyUsd + full.vatUsd) / 2 + full.utilUsd + full.clearanceUsd;
+      assert.equal(half.customsUsd, Math.round(expectedCustoms / 50) * 50);
+      if (half.refundUsd > 0) {
+        assert.ok(half.totalUsd < full.totalUsd);
+        assert.match(half.customsHint, /указу № 140/u);
+      } else assert.equal(half.totalUsd, full.totalUsd);
+      try {
+        setPricingRefund50(true);
+        assert.equal(estimateLandedCost(input, { quotaOver }).totalUsd, half.totalUsd);
+        assert.equal(estimateLandedCost(input, { quotaOver, refund50:false }).totalUsd, full.totalUsd);
+      } finally { setPricingRefund50(false); }
+      assert.equal(estimateLandedCost(input, { quotaOver }).totalUsd, full.totalUsd);
+    }
+  }
+});
 
 test("rounds converted Belarusian-ruble prices to the nearest hundred", () => {
   assert.equal(usdToByn(123449 / PRICING.usdByn), 123400);
@@ -120,25 +151,25 @@ test("leaves the plug-in hybrid on the engine-size rate", () => {
   assert.match(phev.customsNote, /1,5 л/);
 });
 
-test("adds import VAT to an electric car older than five years", () => {
-  const fresh = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2024-03-01" }, { quotaOver:false });
-  const old = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2019-03-01" }, { quotaOver:false });
+test("adds import VAT to an electric car older than five years without quota", () => {
+  const fresh = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2024-03-01" }, { quotaOver:true });
+  const old = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2019-03-01" }, { quotaOver:true });
   // Сборы считаются в рублях по курсу, поэтому в долларах это не круглое число:
   // в строке карточки оно, как и любая другая сумма, округлено до полусотни.
-  assert.equal(fresh.customsUsd, Math.round(PRICING.customsFeesUsd.upTo3Years / 50) * 50);
+  assert.equal(fresh.vatUsd, 0);
   // Сборы у машины старше трёх лет выше: утилизационный сбор вдвое больше.
   assert.ok(Math.abs(old.customsFeesUsd - PRICING.customsFeesUsd.over3Years) < 1e-9);
-  assert.equal(old.customsUsd, Math.round((old.customsValueUsd * 0.2 + old.customsFeesUsd) / 50) * 50);
+  assert.equal(old.customsUsd, Math.round((old.customsValueUsd * 0.38 + old.customsFeesUsd) / 50) * 50);
   assert.equal(old.customsAlertTone, "warn");
   assert.match(old.customsNote, /старше 5 лет/);
   assert.match(old.customsHint, /пяти лет/);
 });
 
 test("counts the age from the manufacturing date, not the model year", () => {
-  const byModelYear = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль" }, { quotaOver:false });
-  const byPlate = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2020-01-01" }, { quotaOver:false });
-  assert.equal(byModelYear.customsAlert, null);
-  assert.match(byPlate.customsAlert, /Старше 5 лет/);
+  const byModelYear = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль" }, { quotaOver:true });
+  const byPlate = estimateLandedCost({ chinaPrice:100000, year:2024, type:"Электромобиль", manufactureDate:"2020-01-01" }, { quotaOver:true });
+  assert.equal(byModelYear.vatUsd, 0);
+  assert.match(byPlate.customsNote, /старше 5 лет/);
   assert.ok(byPlate.ageYears > 6 && byPlate.ageYears < 7);
 });
 
@@ -264,10 +295,20 @@ test("электромобилю по квоте пошлины нет, без �
   assert.equal(withQuota.vatUsd, 0, "машине моложе пяти лет НДС не начисляется");
 });
 
-test("электромобилю старше пяти лет добавляет НДС 20% даже по квоте", () => {
+test("личный ввоз электромобиля по квоте освобождает от НДС и после пяти лет", () => {
   const payment = customsPayment({ customsValueUsd: 20000, kind: "ev", ageYears: 6, quotaOver: false });
   assert.equal(payment.dutyUsd, 0);
-  assert.equal(Math.round(payment.vatUsd), 4000);
+  assert.equal(payment.vatUsd, 0);
+});
+
+test("электромобиль: квота и указ № 140 во всех возрастных сценариях", () => {
+  for (const [ageYears, quotaOver, expected] of [[3,false,0], [5,false,0], [6,false,0], [3,true,3000], [5,true,3000], [6,true,7600]]) {
+    for (const refund50 of [false, true]) {
+      const payment = customsPayment({ customsValueUsd:20000, kind:"ev", ageYears, quotaOver, refund50 });
+      assert.equal(payment.dutyUsd + payment.vatUsd - payment.refundUsd, expected * (refund50 ? 0.5 : 1));
+      assert.equal(payment.totalExactUsd, expected * (refund50 ? 0.5 : 1) + payment.feesUsd);
+    }
+  }
 });
 
 test("гибриду с генератором считает 15% пошлины и НДС 20% сверху", () => {

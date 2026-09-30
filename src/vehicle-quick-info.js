@@ -32,22 +32,32 @@ const driveLabel = (value) => {
   return normalized.includes("привод") ? normalized : `${normalized} привод`;
 };
 
-const mixedFuelConsumption = (car) => {
+const isEnergyConsumption = (item) => {
+  const name = String(item?.name ?? "");
+  const text = `${name} ${item?.value ?? ""}`;
+  return /(?:consum|расход|энергопотреб)/iu.test(name)
+    && /(?:kwh|кВт[·⋅\s]*ч|расход.*энерги|энергопотреб|(?:power|energy|electricity).*consumption)/iu.test(text)
+    && !/(?:топлив|fuel|\bL\s*\/|л\s*\/)/iu.test(text);
+};
+
+const specConsumption = (car, matches, unit) => {
   const groups = car?.technicalSpecs?.groups;
   if (!Array.isArray(groups)) return null;
-  const item = groups
-    .flatMap((group) => Array.isArray(group?.items) ? group.items : [])
-    .find((candidate) => /(?:расход.*смешан|смешан.*расход|combined.*consum|consum.*combined)/iu.test(String(candidate?.name ?? "")));
-  if (!item) return null;
-  const raw = String(item.value ?? "");
-  const numbers = [...raw.matchAll(/\d+(?:[.,]\d+)?/gu)]
-    .map(([match]) => Number(match.replace(",", ".")))
-    .filter((number) => Number.isFinite(number) && number > 0);
-  if (!numbers.length) return null;
-  const rangeMatch = raw.match(/[\d.,]+\s*[-–—~～]\s*[\d.,]+/u);
-  const consumption = rangeMatch ? Math.min(numbers[0], numbers[1]) : numbers[0];
-  return `${formatNumber(consumption)} л`;
+  const items = groups.flatMap((group) => Array.isArray(group?.items) ? group.items : []);
+  for (const item of items.filter(matches)) {
+    // Read only the leading value/range, never the 100 from the unit.
+    const match = String(item.value ?? "").match(/^\s*(\d+(?:[.,]\d+)?)(?:\s*[-–—~～]\s*(\d+(?:[.,]\d+)?))?/u);
+    if (!match) continue;
+    const numbers = match.slice(1).filter(Boolean).map((value) => Number(value.replace(",", ".")));
+    if (numbers.some((value) => value <= 0)) continue;
+    return `${formatNumber(Math.min(...numbers))} ${unit}`;
+  }
+  return null;
 };
+
+const mixedFuelConsumption = (car) => specConsumption(car, (item) => !isEnergyConsumption(item)
+  && /(?:расход.*смешан|смешан.*расход|combined.*consum|consum.*combined)/iu.test(String(item?.name ?? "")), "л");
+const energyConsumption = (car) => specConsumption(car, isEnergyConsumption, "кВт·ч");
 
 export function buildVehicleQuickInfo(car = {}) {
   const mileage = positiveNumber(car.mileage);
@@ -80,6 +90,7 @@ export function buildVehicleQuickFacts(car = {}) {
   const horsepower = positiveNumber(car.horsepower ?? car.powerHp ?? car.enginePowerHp ?? car.hp);
   const acceleration = positiveNumber(car.acceleration);
   const fuelConsumption = mixedFuelConsumption(car);
+  const electricityConsumption = energyConsumption(car);
   const powertrain = powertrainLabel(car);
   const drive = driveLabel(car.drive);
   const range = electricRange
@@ -104,6 +115,7 @@ export function buildVehicleQuickFacts(car = {}) {
   const last = acceleration
     ? ["Разгон до 100 км/ч", `${acceleration.toLocaleString("ru-RU")} с`]
     : fuelConsumption ? ["Расход топлива", fuelConsumption]
+    : electricityConsumption ? ["Расход энергии", electricityConsumption]
     : seats ? ["Мест", String(seats)] : null;
   const availableExtras = extra.slice(0, Math.max(0, 8 - primary.length - Number(Boolean(last))));
   return [...primary, ...availableExtras, ...(last ? [last] : [])]
