@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { productId } from './guazi-pilot-data.mjs';
+import { isGuaziSoldCard } from './guazi-availability.mjs';
 
 export function mergeRefreshedGuazi(previous, fresh) {
   if (fresh.source !== 'Guazi' || fresh.id !== `guazi-${fresh.externalId}` || productId(fresh.sourceUrl) !== fresh.externalId
@@ -46,8 +47,12 @@ export function createGuaziRefreshStore({ pool, withTransaction, upsertCar, data
       });
     },
     async markUnavailable(row, evidence) {
-      if (!row || row.id !== `guazi-${row.externalId}` || evidence.observations?.length !== 2
-        || evidence.observations.some(o => !o.unavailable || ![404, 410].includes(o.httpStatus) || productId(o.url) !== row.externalId)) throw Error('Unconfirmed Guazi unavailability');
+      if (!row || row.id !== `guazi-${row.externalId}`) throw Error('Unconfirmed Guazi unavailability');
+      const observations = evidence.observations || [];
+      const sourceSold = observations.length === 1 && isGuaziSoldCard(observations[0], row.externalId);
+      const missingTwice = observations.length === 2
+        && observations.every(o => o.unavailable && [404, 410].includes(o.httpStatus) && productId(o.url) === row.externalId);
+      if (!sourceSold && !missingTwice) throw Error('Unconfirmed Guazi unavailability');
       await withTransaction(async client => {
         await client.query(`UPDATE listings SET status='unavailable', sold_at=COALESCE(sold_at,now()), last_checked_at=now(),
           source_payload=source_payload || jsonb_build_object('guaziUnavailabilityEvidence',$2::jsonb)

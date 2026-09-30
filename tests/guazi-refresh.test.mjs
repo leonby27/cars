@@ -8,6 +8,7 @@ import { makeSegments } from '../scripts/lib/guazi-core.mjs';
 import { readJson } from '../scripts/lib/guazi-pilot-io.mjs';
 import { readSessionCard } from '../scripts/lib/guazi-pilot-browser.mjs';
 import { mergeRefreshedGuazi, createGuaziRefreshStore } from '../scripts/lib/guazi-refresh-store.mjs';
+import { isGuaziSoldCard } from '../scripts/lib/guazi-availability.mjs';
 
 const config = { ...JSON.parse(await fs.readFile(new URL('../config/guazi-core.json', import.meta.url))), priceBasis: 'FOB' };
 const { filters } = JSON.parse(await fs.readFile(new URL('../config/refresh-order.json', import.meta.url)));
@@ -23,6 +24,7 @@ const capture = (id, price = '$28,748') => ({ url: url(id), observedAt: new Date
   images: [{ imgUrl: 'https://global-image-pub.guazistatic-global.com/car.jpg' }], prices: [{ price, enName: 'Horgos, China' }],
 } });
 const missing = id => ({ unavailable: true, httpStatus: 404, url: url(id), observedAt: new Date().toISOString() });
+const sold = id => { const value = capture(id); value.rawData.displayStatus = 1; return value; };
 const blocked = () => Object.assign(Error('Source access check'), { code: 'SOURCE_BLOCKED' });
 
 async function fixture(t, { active = [a], listed = [a, b] } = {}) {
@@ -98,6 +100,54 @@ test('catalog absence and a live detail only refresh price, keep active, and fla
   const state = await f.run();
   assert.equal(state.counts.review, 1); assert.equal(f.removals.length, 0); assert.equal(f.rows.get(a).status, 'active');
   assert.equal(f.writes[0].availabilityStatus, 'unverified');
+});
+
+test('explicit sold status removes existing cars in one read, even with a stale listing and FOB price', async t => {
+  for (const listed of [[], [a]]) {
+    const f = await fixture(t, { listed }); f.detail = async id => sold(id);
+    const state = await f.run();
+    assert.equal(state.counts.unavailable, 1); assert.equal(state.counts.review, 0);
+    assert.equal(f.rows.get(a).status, 'unavailable'); assert.equal(f.writes.length, 0);
+    assert.deepEqual(f.reads, [a]);
+    assert.deepEqual(f.removals[0].evidence.observations[0].rawData, { productId: a, displayStatus: 1 });
+  }
+});
+
+test('sold new discoveries are rejected without inserting or removing a database row', async t => {
+  const f = await fixture(t, { active: [], listed: [b] }); f.detail = async id => sold(id);
+  const state = await f.run();
+  assert.equal(state.counts.rejected, 1); assert.equal(state.counts.unavailable, 0);
+  assert.equal(f.writes.length, 0); assert.equal(f.removals.length, 0); assert.deepEqual(f.reads, [b]);
+});
+
+test('under offer, unknown status and hidden price alone never mean sold', async t => {
+  for (const displayStatus of [undefined, null, 0, 2, 3, 99, '1', true]) {
+    const f = await fixture(t, { listed: [] });
+    f.detail = async id => { const value = capture(id); Object.assign(value.rawData, { displayStatus, showPrice: 0 }); return value; };
+    assert.equal((await f.run()).counts.review, 1);
+    assert.equal(f.removals.length, 0); assert.equal(f.rows.get(a).status, 'active');
+  }
+});
+
+test('sold status from a second missing-page read is recognized; failed removal remains resumable', async t => {
+  const f = await fixture(t, { listed: [] }); let calls = 0;
+  f.detail = async id => ++calls === 1 ? missing(id) : sold(id);
+  const remove = f.store.markUnavailable;
+  f.store.markUnavailable = async () => { throw Error('database failed'); };
+  await assert.rejects(f.run(), /database failed/);
+  assert.equal((await f.state()).counts.checked, 0); assert.equal(f.rows.get(a).status, 'active');
+  f.store.markUnavailable = remove;
+  assert.equal((await f.run(false)).counts.unavailable, 1);
+  assert.equal(f.writes.length, 0); assert.equal(f.removals.length, 1);
+});
+
+test('sold recognition uses the exact product identity, never another car or a numeric coercion', () => {
+  assert.equal(isGuaziSoldCard(sold(a), a), true);
+  assert.equal(isGuaziSoldCard(sold(a), b), false);
+  assert.equal(isGuaziSoldCard({ ...sold(a), url: url(b) }), false);
+  assert.equal(isGuaziSoldCard({ ...sold(a), url: 'https://example.com/products/car-y2ud7mtru4.html' }), false);
+  assert.equal(isGuaziSoldCard({ ...sold(a), rawData: { productId: a, displayStatus: '1' } }), false);
+  assert.equal(isGuaziSoldCard(missing(a)), false);
 });
 
 test('missing page for a listed car never removes it; incomplete discovery performs no writes', async t => {
@@ -189,4 +239,16 @@ test('database removal is source-scoped and rejects mismatched or single evidenc
   await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [missing(a), missing(b)] }), /Unconfirmed/);
   await store.markUnavailable(snapshotRow(a), { run: 'test', observations: [missing(a), missing(a)] });
   assert.match(queries[0].sql, /source='Guazi' AND status='active'/); assert.equal(queries[0].params[0], `guazi-${a}`);
+});
+
+test('database accepts one explicit sold card, rejects unknown status and mismatched identities', async () => {
+  const queries = [];
+  const store = createGuaziRefreshStore({ databaseUrl: 'postgres://test:secret@localhost/test', withTransaction: fn => fn({ query: async (sql, params) => { queries.push({ sql, params }); return { rows: [] }; } }) });
+  await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [capture(a)] }), /Unconfirmed/);
+  await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [sold(b)] }), /Unconfirmed/);
+  await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [{ ...sold(a), rawData: { productId: b, displayStatus: 1 } }] }), /Unconfirmed/);
+  await store.markUnavailable(snapshotRow(a), { run: 'test', observations: [sold(a)] });
+  assert.equal(queries.length, 1); assert.equal(queries[0].params[0], `guazi-${a}`);
+  assert.match(queries[0].sql, /source='Guazi' AND status='active'/);
+  assert.equal(JSON.parse(queries[0].params[1]).observations[0].rawData.displayStatus, 1);
 });

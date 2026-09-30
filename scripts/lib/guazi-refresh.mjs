@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { openGuaziBrowser } from './guazi-pilot-browser.mjs';
 import { makeSegments, searchBody, listCandidate, normalizeCoreCard, evaluateCoreCard } from './guazi-core.mjs';
 import { productId } from './guazi-pilot-data.mjs';
+import { isGuaziSoldCard } from './guazi-availability.mjs';
 import { discoverPartition, DISCOVERY_VERSION } from './guazi-discovery.mjs';
 import { readJson, writeJson, mapLimit } from './guazi-pilot-io.mjs';
 import { withGuaziRetries } from './guazi-retry.mjs';
@@ -176,6 +177,18 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
                 await record({ id, brand: brand.brand, outcome: 'unavailable' }); return;
               }
               capture = second;
+            }
+            // Same detail request, no extra lookup: Guazi explicitly marks sold
+            // cards even while their old prices and catalog links still exist.
+            if (isGuaziSoldCard(capture, id)) {
+              if (active.has(id)) {
+                await store.markUnavailable(active.get(id), { run: state.run, observations: [{
+                  url: capture.url, observedAt: capture.observedAt,
+                  rawData: { productId: id, displayStatus: capture.rawData.displayStatus },
+                }] });
+              }
+              await record({ id, brand: brand.brand, outcome: active.has(id) ? 'unavailable' : 'rejected', reason: 'Guazi marks the detail card as sold (displayStatus=1)' });
+              return;
             }
             const card = normalizeCoreCard(capture, config);
             const segment = job.segment || segments.find(s => s.brand === card.catalogIdentity.sourceBrand && s.sourceFuelNames.includes(card.fuel));
