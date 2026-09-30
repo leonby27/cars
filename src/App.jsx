@@ -14011,7 +14011,7 @@ function SiteFooter({ navigate }) {
         <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
           <span className="footer-newsletter-title">
             <Illustration src="/app-download/newsletter-mailbox.png" width="64" height="64" alt="" aria-hidden="true" loading="lazy" decoding="async" />
-            <strong>Подпишитесь на обновления и аналитику рынка авто {siteInPhrase()}</strong>
+            <strong>Подпишитесь на аналитику рынка авто {siteInPhrase()}</strong>
           </span>
           <div className="footer-newsletter-action">
             <div className="footer-newsletter-form">

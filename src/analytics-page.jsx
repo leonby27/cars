@@ -1328,15 +1328,24 @@ function Dashboard({ data, period, setPeriod, device, setDevice, reload, logout,
   const [updates, setUpdates] = useState({});
   const [contactFresh, setContactFresh] = useState({});
   const viewedSections = useRef(new Set());
+  const updatesRequest = useRef(0);
+  const updatesReadPending = useRef(false);
   useEffect(() => watchAnalyticsExit(() => viewedSections.current), []);
   const loadUpdates = useCallback(async (viewing = "") => {
+    if (!viewing && updatesReadPending.current) return;
+    if (!viewing) updatesReadPending.current = true;
+    const request = ++updatesRequest.current;
     try {
-      const response = await fetch(analyticsUpdatesUrl(viewing), { credentials:"same-origin" });
+      const response = await fetch(analyticsUpdatesUrl(viewing), { credentials:"same-origin", cache:"no-store" });
       if (response.ok) {
-        setUpdates(await response.json());
+        const payload = await response.json();
+        // Обновление среза и отметка «просмотрено» могут идти одновременно.
+        // Поздний ответ старого запроса не должен возвращать уже погашенный «+1».
+        if (request === updatesRequest.current) setUpdates(payload);
         for (const item of [viewing].flat()) viewedSections.current.add(item || "overview");
       }
     } catch { /* счётчики — не повод ломать раздел */ }
+    finally { if (!viewing) updatesReadPending.current = false; }
   }, []);
   // Автоматически открытый «Обзор» ещё не означает, что пользователь успел
   // заметить новое. Сохраняем его при закрытии страницы или явном нажатии.
@@ -1361,7 +1370,9 @@ function Dashboard({ data, period, setPeriod, device, setDevice, reload, logout,
   };
   // При входе и обновлении только получаем цифры, не отмечая открытый по умолчанию
   // «Обзор» прочитанным.
-  useEffect(() => { loadUpdates(); }, [data, leads, loadUpdates]);
+  // Заявки загружаются отдельно и не меняют ответ /updates. Не запрашиваем те же
+  // счётчики повторно сразу после входа, когда приходит список заявок.
+  useEffect(() => { loadUpdates(); }, [data.generatedAt, loadUpdates]);
   const active = [...sections, socialSection].find((item) => item.id === section) || sections[0];
   return (
     <main className="analytics-page">
