@@ -1,6 +1,6 @@
 # Prototype Instructions
 
-Homepage search filters button (owner decision, 2026-09-30): show «Фильтры» beside the sliders icon in the search field's catalog button; size the button to its content while preserving its height and theme colors.
+Homepage search filters button (owner decision, 2026-09-30): show «Фильтры» beside the sliders icon in the search field's catalog button; size the button to its content while preserving its height and theme colors. Use 16px text at weight 500 with a 20px line height and no underline.
 
 Footer newsletter heading (owner decision, 2026-09-30): use «Подпишитесь на аналитику рынка авто в Китае и Корее», with the country phrase supplied by `siteInPhrase()`. Omit «обновления и».
 
