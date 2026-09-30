@@ -306,7 +306,9 @@ test("электромобиль: квота и указ № 140 во всех �
     for (const refund50 of [false, true]) {
       const payment = customsPayment({ customsValueUsd:20000, kind:"ev", ageYears, quotaOver, refund50 });
       assert.equal(payment.dutyUsd + payment.vatUsd - payment.refundUsd, expected * (refund50 ? 0.5 : 1));
-      assert.equal(payment.totalExactUsd, expected * (refund50 ? 0.5 : 1) + payment.feesUsd);
+      const expectedTotal = expected * (refund50 ? 0.5 : 1) + payment.feesUsd;
+      // Grouping the fee additions can differ by floating-point rounding only.
+      assert.ok(Math.abs(payment.totalExactUsd - expectedTotal) < 1e-9);
     }
   }
 });

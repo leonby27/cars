@@ -24,6 +24,7 @@ test("nginx: Encar sizes stay separate in either request order and bypass old st
   for (const [href, body] of [
     ["photo/encar/w1920/carpicture/old.jpg", "incorrect old 600px copy"],
     ["photo/encar/v2/w1920/carpicture/saved.jpg", "correct saved large copy"],
+    ["photo/encar/v2/w1920/carpicture/uppercase-saved.JPG", "saved uppercase JPEG"],
   ]) {
     const file = path.join(directory, "media", href);
     await mkdir(path.dirname(file), { recursive: true });
@@ -74,7 +75,20 @@ test("nginx: Encar sizes stay separate in either request order and bypass old st
     status: 200, cache: "MISS", body: `/carpicture/old.jpg?${encarResizeQuery(1920)}`,
   });
   assert.equal((await request("/photo/encar/v2/w1920/carpicture/old.jpg")).cache, "HIT");
+  // Real Encar listings use uppercase extensions; preserve case upstream too.
+  for (const extension of ["JPG", "JPEG", "JpEg"]) {
+    for (const width of [600, 1200, 1920]) {
+      const href = `/photo/encar/v2/w${width}/carpicture/car.${extension}`;
+      assert.deepEqual(await request(href), {
+        status: 200, cache: "MISS", body: `/carpicture/car.${extension}?${encarResizeQuery(width)}`,
+      });
+      assert.equal((await request(href.replace("/v2/", "/"))).cache, "HIT");
+    }
+  }
   for (const prefix of ["/photo/encar", "/photo/encar/v2"]) {
+    assert.deepEqual(await request(`${prefix}/w1920/carpicture/uppercase-saved.JPG`), {
+      status: 200, cache: "STORED", body: "saved uppercase JPEG",
+    });
     assert.deepEqual(await request(`${prefix}/w1920/carpicture/saved.jpg`), {
       status: 200, cache: "STORED", body: "correct saved large copy",
     });
