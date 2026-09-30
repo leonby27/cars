@@ -27,7 +27,7 @@ import { reuseFeed } from "./lib/reuse-feed.mjs";
 //   node scripts/yandex-feed.mjs --db --fresh-days=60   # старая локальная база
 // Без `--db` и без SEO_CARS_FROM_DB=1 скрипт в базу не ходит и ничего не пишет —
 // так он безопасно стоит в цепочке сборки на рабочей машине.
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
@@ -52,6 +52,7 @@ const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+
 const buildDir = process.env.ABCARS_BUILD_DIR || "dist";
 const outPath = path.resolve(args.get("out") || path.join(root, buildDir, "client", "feeds", "yandex-cars.xml"));
 if (process.env.ABCARS_REUSE_FEED === "1" && buildDir === "dist.next"
+    && (process.env.ABCARS_REUSE_CATALOG !== "1" || existsSync(path.join(root,buildDir,"catalog-reused.json")))
     && reuseFeed(path.join(root, "dist/client/feeds/yandex-cars.xml"), outPath)) {
   console.log("[feed] сохранён свежий фид предыдущей сборки; плановое обновление — по таймеру");
   process.exit(0);

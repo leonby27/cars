@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { catalogRateKey, catalogBuildKey, readCatalogBuildCache, writeCatalogBuildCache } from "./lib/catalog-build-cache.mjs";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { normalizeDrive } from "../src/drive-types.js";
@@ -1265,6 +1266,25 @@ async function readLiveCatalog() {
     console.warn("Витрина главной, счётчики моделей и карта сайта с машинами не собраны: дампа каталога нет, а чтение из базы не разрешено (SEO_CARS_FROM_DB=1).");
     return nothing;
   }
+  const buildDir = path.dirname(clientDir);
+  const cachePath = path.join(buildDir, "catalog-build-data.bin");
+  const key = catalogBuildKey(root, {
+    siteUrl, carsSitemap, fullSitemap, carsPerModelInSitemap, listPagesInSitemap,
+    showcaseSize, blogCarsOnPage, blogEnabled:BLOG_ENABLED,
+    publishedPosts:blogPosts().map(post=>post.slug),
+  });
+  if (process.env.ABCARS_REUSE_CATALOG === "1") {
+    const {saved,reason} = readCatalogBuildCache(process.env.ABCARS_CATALOG_CACHE_FILE || path.join(root,"dist","catalog-build-data.bin"),key);
+    if (saved) {
+      // Preserve original age: consecutive UI releases cannot renew stale data.
+      writeCatalogBuildCache(cachePath,saved);
+      writeFileSync(path.join(buildDir,"catalog-reused.json"),JSON.stringify({createdAt:saved.createdAt}));
+      writeFileSync(path.join(buildDir,"market-price-stats.json"),JSON.stringify(saved.marketPrices));
+      console.log("[catalog] быстрый режим: готовые данные, без запросов к базе");
+      return saved.live;
+    }
+    console.log(`[catalog] полная подготовка: ${reason}`);
+  } else console.log("[catalog] полная подготовка: изменились данные/правила или запрошена обычная сборка");
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
@@ -1392,7 +1412,7 @@ async function readLiveCatalog() {
     }
     const priceSnapshot = await marketPriceSnapshot();
     writeFileSync(path.join(path.dirname(clientDir), "market-price-stats.json"), JSON.stringify(priceSnapshot));
-    return {
+    const prepared = {
       showcase,
       collections,
       models: new Map(facts.models.map((row) => [`${row.brand}|${row.model}`, row.count])),
@@ -1416,6 +1436,8 @@ async function readLiveCatalog() {
       // странице сравнения, чтобы её серверная разметка совпадала с приложением.
       priceStats: priceSnapshot.normal,
     };
+    writeCatalogBuildCache(cachePath,{key,rateKey:catalogRateKey(root),live:prepared,marketPrices:priceSnapshot});
+    return prepared;
   } catch (error) {
     console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);
     return nothing;

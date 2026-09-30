@@ -48,53 +48,27 @@ fi
 
 set -a; source ./.env.local; set +a
 
-# Новые правки в базе применяем до перезапуска сайта: свежий код может ожидать
-# столбца, которого в базе ещё нет. Уже применённые правки пропускаются сами.
-npm run db:migrate
+# Classify the actual changes before launching expensive tasks.
+plan_flags=$(node scripts/deploy-plan.mjs "$before_rev" "$after_rev" "$pricing_refreshed")
+read -r reuse_catalog reuse_feed pricing_changed duplicates_changed migrations_changed <<< "$plan_flags"
 
-# Карточки двух источников могут описывать одну физическую машину. Строгая
-# взаимно-однозначная сверка оставляет в публичном каталоге Che168, а Guazi
-# сохраняет в базе и автоматически возвращает, если основная карточка продана.
-if [ -z "$before_rev" ] || [ -z "$after_rev" ] || ! git diff --quiet "$before_rev" "$after_rev" -- \
-  scripts/deduplicate-cross-source.mjs scripts/lib/cross-source-dedupe.mjs db/migrations \
-  config/import-policy.mjs config/model-names-by.mjs; then
+if [ "$migrations_changed" -eq 1 ]; then
+  npm run db:migrate
+else
+  echo "схема базы не менялась: миграции пропущены"
+fi
+if [ "$duplicates_changed" -eq 1 ]; then
   npm run dedupe:catalog -- --apply
 else
   echo "правила дублей не менялись: проверку выполнит штатный таймер"
 fi
-
-# Сохранённые цены нужны для сортировки и фильтра. Полный проход по десяткам тысяч
-# объявлений нужен только после изменения формулы, её справочников или свежих
-# курсов/квоты. Для обычной правки страницы этот проход ничего не меняет.
-pricing_changed=0
-if [ -z "$before_rev" ] || [ -z "$after_rev" ]; then
-  pricing_changed=1
-elif [ "$before_rev" != "$after_rev" ] && ! git diff --quiet "$before_rev" "$after_rev" -- \
-  src/pricing.js src/china-logistics.js src/korea-logistics.js src/engine-spec.js src/ev-quota.js src/origin.js \
-  config/import-policy.mjs config/model-names-by.mjs scripts/lib/che168-parser.mjs \
-  scripts/backfill-estimates.mjs; then
-  pricing_changed=1
-fi
-
-if [ "$pricing_refreshed" -eq 1 ] || [ "$pricing_changed" -eq 1 ]; then
-  npm run db:estimates \
-    || echo "пересчёт цен не прошёл: сортировка по цене может отставать от карточек"
+if [ "$pricing_changed" -eq 1 ]; then
+  npm run db:estimates
 else
-  echo "формула цены не менялась: полный пересчёт каталога пропущен"
+  echo "расчёт цены не менялся: пересчёт каталога пропущен"
 fi
 
-# The daily feed service owns routine data refreshes. Reuse its current result
-# for UI-only deployments; formula/rates or feed-code changes force regeneration.
-reuse_feed=0
-if [ "$pricing_changed" -eq 0 ] && [ "$pricing_refreshed" -eq 0 ] \
-  && git diff --quiet "$before_rev" "$after_rev" -- \
-    scripts/yandex-feed.mjs scripts/lib/reuse-feed.mjs scripts/lib/social-blocks.mjs \
-    src/catalog-landings.js src/model-pages.js src/car-title.js src/company-data.js src/photo-source.js \
-    src/listing-id.js db/migrations; then
-  reuse_feed=1
-fi
-
-if ABCARS_REUSE_FEED="$reuse_feed" ABCARS_BUILD_DIR=dist.next npm run build >/tmp/abcars-deploy-build.log 2>&1; then
+if ABCARS_REUSE_CATALOG="$reuse_catalog" ABCARS_REUSE_FEED="$reuse_feed" ABCARS_BUILD_DIR=dist.next npm run build >/tmp/abcars-deploy-build.log 2>&1; then
   echo "сборка готова"
 else
   echo "сборка не удалась — предыдущая версия продолжает работать"
@@ -104,7 +78,7 @@ fi
 
 # A missing snapshot would bring the full cold calculation back into HTTP requests.
 # Keep the previous release running if database-backed preparation did not finish.
-if [ ! -s dist.next/market-price-stats.json ]; then
+if [ ! -s dist.next/market-price-stats.json ] || [ ! -s dist.next/catalog-build-data.bin ]; then
   echo "сводка цен не подготовлена — предыдущая версия продолжает работать"
   exit 1
 fi
