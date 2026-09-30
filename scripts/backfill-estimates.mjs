@@ -15,20 +15,19 @@ const STEP = 1; // разницу меньше доллара считаем ш�
 
 const { rows } = await pool.query(`SELECT l.id, l.estimated_total_usd, l.price_cny,
     l.source, l.status,
-    (l.source_payload->>'usdPrice')::numeric AS usd_price,
-    l.source_payload->>'priceBasis' AS price_basis,
-    (l.source_payload->>'fobPriceUsd')::numeric AS fob_price_usd,
-    l.source_payload->>'fobPort' AS fob_port,
-    v.model_year AS year,
-    v.powertrain AS type,
-    l.source_payload->>'sourceFuelType' AS fuel_type,
-    COALESCE(l.source_payload->>'transmission', v.specifications->>'transmission') AS transmission,
-    COALESCE(l.source_payload->>'engine', v.specifications->>'engine') AS engine,
-    l.city,
-    l.source_payload->>'manufactureDate' AS manufacture_date,
-    l.source_payload->>'dimensions' AS dimensions,
-    (l.source_payload->>'curbWeight')::numeric AS curb_weight
-  FROM listings l JOIN vehicles v ON v.id = l.vehicle_id`);
+    p."usdPrice" AS usd_price, p."priceBasis" AS price_basis,
+    p."fobPriceUsd" AS fob_price_usd, p."fobPort" AS fob_port,
+    v.model_year AS year, v.powertrain AS type,
+    p."sourceFuelType" AS fuel_type,
+    COALESCE(p.transmission, s.transmission) AS transmission,
+    COALESCE(p.engine, s.engine) AS engine, l.city,
+    p."manufactureDate" AS manufacture_date, p.dimensions, p."curbWeight" AS curb_weight
+  FROM listings l JOIN vehicles v ON v.id = l.vehicle_id
+  CROSS JOIN LATERAL jsonb_to_record(l.source_payload) AS p(
+    "usdPrice" text, "priceBasis" text, "fobPriceUsd" text, "fobPort" text,
+    "sourceFuelType" text, transmission text, engine text, "manufactureDate" text,
+    dimensions text, "curbWeight" text)
+  CROSS JOIN LATERAL jsonb_to_record(v.specifications) AS s(transmission text, engine text)`);
 console.log(`[db] ${rows.length} объявлений`);
 
 const updates = [];
@@ -56,7 +55,7 @@ for (const row of rows) {
     manufactureDate: row.manufacture_date,
     dimensions: row.dimensions,
     curbWeight: row.curb_weight,
-  }).totalUsd;
+  }, { quotaOver:true, refund50:false }).totalUsd;
   if (!Number.isFinite(est) || est <= 0) { skipped++; continue; }
   if (Math.abs(est - Number(row.estimated_total_usd || 0)) < STEP) { unchanged++; continue; }
   updates.push({ id: row.id, est, was: Number(row.estimated_total_usd) || 0, active: row.status === "active" });

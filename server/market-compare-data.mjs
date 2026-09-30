@@ -1,3 +1,4 @@
+import { createAsyncCache } from "./async-cache.mjs";
 // Сравнение цен с белорусским рынком для приложения.
 //
 // Половинки сравнения живут в разных местах, и это не случайность:
@@ -42,19 +43,13 @@ async function readMarket() {
  *   машину, и её отсутствие в списке он прочитает как «не возят».
  */
 export async function marketComparison(stats, _stock, cacheKey = "full") {
-  const now = Date.now();
-  const known = cache.get(cacheKey);
-  if (known?.value && now - known.at < TTL_MS) return known.value;
-  const market = await readMarket();
-  if (!market) {
-    const value = { cards: [], collectedAt: null, mileageLimits: [] };
-    cache.set(cacheKey, { at:now, value });
-    return value;
-  }
-  const cards = groupDetailedRows(compareDetailedRows({ ours: await stats(), market }));
-  const value = { cards, collectedAt: market.collectedAt || null, mileageLimits:market.mileageLimits || [] };
-  cache.set(cacheKey, { at:now, value });
-  return value;
+  if (!cache.has(cacheKey)) cache.set(cacheKey, createAsyncCache(async () => {
+    const market = await readMarket();
+    if (!market) return { cards: [], collectedAt: null, mileageLimits: [] };
+    const cards = groupDetailedRows(compareDetailedRows({ ours: await stats(), market }));
+    return { cards, collectedAt: market.collectedAt || null, mileageLimits:market.mileageLimits || [] };
+  }, { ttl:TTL_MS }));
+  return cache.get(cacheKey)();
 }
 
 export const clearMarketComparisonCache = () => cache.clear();

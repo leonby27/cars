@@ -1,3 +1,4 @@
+import { setImmediate as yieldToRequests } from "node:timers/promises";
 import { estimateLandedCost } from "../src/pricing.js";
 
 export const MARKET_MILEAGE_LIMITS = Object.freeze([20_000, 50_000, 100_000, 150_000, 200_000, null]);
@@ -35,13 +36,15 @@ const carFromRow = (row) => ({
  * Собирает обе версии наших цен для сравнения рынка. Строки приходят от новых к
  * старым, поэтому первая фотография в группе остаётся самой свежей.
  */
-export function marketPriceStatsFromRows(rows = [], { refund50 = false } = {}) {
+function* collectMarketPriceStats(rows = [], { refund50 = false } = {}) {
+  let processed = 0;
   const groups = new Map();
   for (const row of rows) {
     const car = carFromRow(row);
     const type = row.type === "Бензин" ? "ДВС" : row.type || null;
-    const quotaOn = Number(estimateLandedCost(car, { quotaOver:false, refund50 }).totalUsd);
     const quotaOff = Number(estimateLandedCost(car, { quotaOver:true, refund50 }).totalUsd);
+    const quotaOn = car.type === "Электромобиль"
+      ? Number(estimateLandedCost(car, { quotaOver:false, refund50 }).totalUsd) : quotaOff;
     if (!(quotaOn > 0) || !(quotaOff > 0)) continue;
     const mileage = Number(row.mileage_km);
     for (const limit of MARKET_MILEAGE_LIMITS) {
@@ -62,6 +65,7 @@ export function marketPriceStatsFromRows(rows = [], { refund50 = false } = {}) {
       group.quotaOn.push(quotaOn);
       group.quotaOff.push(quotaOff);
     }
+    if (++processed % 1000 === 0) yield;
   }
   return [...groups.values()].map((group) => {
     const quotaOn = summarize(group.quotaOn);
@@ -79,4 +83,21 @@ export function marketPriceStatsFromRows(rows = [], { refund50 = false } = {}) {
       quotaOff,
     };
   });
+}
+
+export function marketPriceStatsFromRows(rows, options) {
+  const work = collectMarketPriceStats(rows, options);
+  let step;
+  do { step = work.next(); } while (!step.done);
+  return step.value;
+}
+
+// Refresh in small batches so a catalog-wide calculation cannot hold up other
+// HTTP requests. The synchronous test/build API uses the exact same calculation.
+export async function marketPriceStatsFromRowsAsync(rows, options) {
+  const work = collectMarketPriceStats(rows, options);
+  for (let step = work.next(); ; step = work.next()) {
+    if (step.done) return step.value;
+    await yieldToRequests();
+  }
 }

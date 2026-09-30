@@ -1268,7 +1268,7 @@ async function readLiveCatalog() {
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
-    const { getModelFacts, listCars, modelPriceStats, modelSummary, sectionStats } = await import("../server/repository.mjs");
+    const { getModelFacts, listCars, marketPriceSnapshot, modelSummary, sectionStats } = await import("../server/repository.mjs");
     // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
     // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
     // модель займёт весь блок.
@@ -1390,6 +1390,8 @@ async function readLiveCatalog() {
         highlight: blogHighlight(post, notable),
       });
     }
+    const priceSnapshot = await marketPriceSnapshot();
+    writeFileSync(path.join(path.dirname(clientDir), "market-price-stats.json"), JSON.stringify(priceSnapshot));
     return {
       showcase,
       collections,
@@ -1412,7 +1414,7 @@ async function readLiveCatalog() {
       changed,
       // Полная статистика по модели, году, типу двигателя и пробегу нужна той же
       // странице сравнения, чтобы её серверная разметка совпадала с приложением.
-      priceStats: await modelPriceStats(),
+      priceStats: priceSnapshot.normal,
     };
   } catch (error) {
     console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);

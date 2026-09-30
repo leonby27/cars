@@ -14,7 +14,7 @@ import { SearchField } from "./search-field.jsx";
 import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Ruler, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -30,9 +30,9 @@ import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { carAgeYears, customsPayment, estimateLandedCost, PRICING, setPricingQuotaOver, setPricingRefund50, usdToByn, usdToRub, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
-import { readDecreePricing, rememberDecreePricing } from "./decree-pricing.js";
-import { evQuotaPricingAvailable, evQuotaState, holdQuotaChoice, isEvQuotaOver, isEvQuotaPricingOn, rememberEvQuotaPricing } from "./ev-quota.js";
+import { carAgeYears, customsPayment, estimateLandedCost, PRICING, usdToByn, usdToRub, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
+import { chooseDecreePricing, chooseQuotaPricing, getPricingState, getServerPricingState, restorePricingChoice, subscribePricing } from "./pricing-state.js";
+import { evQuotaPricingAvailable, evQuotaState } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
@@ -8961,7 +8961,7 @@ const VEHICLE_QUICK_FACT_ICONS = {
   "Кузов": CarProfile,
   "Цвет": Palette,
   "Коробка": Gear,
-  "Мест": UsersThree,
+  "Длина": Ruler,
   "Расход топлива": GasPump,
   "Расход энергии": Lightning,
 };
@@ -15226,41 +15226,18 @@ export function App() {
   // в рублях сумма понятнее без пересчёта в уме. Доллары остаются в переключателе,
   // и выбранная валюта запоминается в браузере.
   const [currency, setCurrency] = useState("BYN");
-  // Режим цен: включённый переключатель показывает льготную цену, выключенный —
-  // цену с пошлиной 15%. Выбор запоминается в браузере и применяется ко всем карточкам.
-  const [quotaPricingOn, setQuotaPricingOn] = useState(isEvQuotaPricingOn);
-  const [refund50On, setRefund50On] = useState(false);
-  useEffect(() => {
-    const on = readDecreePricing();
-    setPricingRefund50(on);
-    setRefund50On(on);
-  }, []);
-  // После оживления готовой страницы — выбор посетителя: до этого он придержан
-  // (holdQuotaChoice в main.jsx), иначе суммы первого кадра разошлись бы с сервером.
-  useEffect(() => {
-    // Страница оживлена — дальше пришедшие ответы справочника можно подставлять сразу.
+  const pricingState = useSyncExternalStore(subscribePricing, getPricingState, getServerPricingState);
+  useLayoutEffect(() => {
     metaResolvedUsable = true;
-    holdQuotaChoice(false);
-    if (!isEvQuotaPricingOn()) return;
-    // Расчёт цены помнит режим в своей переменной (pricing.js) — возвращаем его тоже.
-    setPricingQuotaOver(isEvQuotaOver());
-    setQuotaPricingOn(true);
+    restorePricingChoice();
   }, []);
   const quotaPricing = useMemo(() => ({
-    on: quotaPricingOn,
-    refund50: refund50On,
-    setRefund50: (on) => {
-      rememberDecreePricing(on);
-      setPricingRefund50(on);
-      setRefund50On(on);
-    },
+    on: !pricingState.quotaOver,
+    refund50: pricingState.refund50,
+    setRefund50: chooseDecreePricing,
     available: evQuotaPricingAvailable(),
-    set: (on) => {
-      rememberEvQuotaPricing(on);
-      setPricingQuotaOver(!on);
-      setQuotaPricingOn(on);
-    },
-  }), [quotaPricingOn, refund50On]);
+    set: chooseQuotaPricing,
+  }), [pricingState]);
   // Сохранённую тему и системное оформление читаем не в первом рисовании, а слоем
   // ниже (useLayoutEffect — до первого кадра): главную собирает и сервер, где ни
   // хранилища, ни системной темы нет. Внешний вид страницы от этого не мигает —
@@ -15514,6 +15491,17 @@ export function App() {
   }, [authBackend, authLoading, user]);
   useEffect(() => {
     let cancelled = false;
+    const setCatalogCars = (items) => setCars((current) => {
+      const detailed = current.filter((car) => !car._summary);
+      return items.map((item) => {
+        const normalized = normalizeImportedCar(item);
+        // Общий список не должен заменять уже открытую полную карточку своей
+        // короткой версией: иначе сведения пропадают до ответа /api/cars/:id.
+        return normalized._summary
+          ? detailed.find((car) => sameListing(car.id, normalized.id)) || normalized
+          : normalized;
+      });
+    });
     const load = async () => {
       try {
         const payload = await requestBootCatalog();
@@ -15530,7 +15518,7 @@ export function App() {
           if (!initialCars.some((car) => sameListing(car.id, embedded.id))) initialCars = [...initialCars, embedded];
         }
         if (!cancelled) {
-          setCars(initialCars.map(normalizeImportedCar));
+          setCatalogCars(initialCars);
           setCatalogTotal(Number(payload.total) || initialCars.length);
           if (payload.refreshedAt) setCatalogUpdatedAt(payload.refreshedAt);
           setApiMode(true);
@@ -15547,7 +15535,7 @@ export function App() {
             } catch {}
           }
           if (!cancelled) {
-            setCars(initialCars.map(normalizeImportedCar));
+            setCatalogCars(initialCars);
             setCatalogTotal(Number(payload.count) || payload.cars.length);
             if (payload.generatedAt) setCatalogUpdatedAt(payload.generatedAt);
             setApiMode(false);

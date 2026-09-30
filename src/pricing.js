@@ -1,7 +1,8 @@
 import { chinaTransitFor } from "./china-logistics.js";
 import { koreaTransitFor } from "./korea-logistics.js";
 import { engineVolume } from "./engine-spec.js";
-import { isEvQuotaOver } from "./ev-quota.js";
+import { getPricingState } from "./pricing-state.js";
+export { setPricingQuotaOver, setPricingRefund50 } from "./pricing-state.js";
 import { originForSource, originOf } from "./origin.js";
 
 // Этапы до СВХ по странам, доллары [низ, верх]. Растаможка от страны не зависит
@@ -219,7 +220,7 @@ export function customsPayment({
   refund50 = false,
 } = {}) {
   const value = Math.max(0, Number(customsValueUsd) || 0);
-  const quotaIsOver = quotaOver === undefined ? quotaOverNow : Boolean(quotaOver);
+  const quotaIsOver = quotaOver === undefined ? getPricingState().quotaOver : Boolean(quotaOver);
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
   const age = Number(ageYears) || 0;
   const overFiveYears = age > 5;
@@ -294,21 +295,6 @@ export function customsPayment({
   };
 }
 
-// Режим цен: с льготной квотой или с пошлиной 15%. Считанное при загрузке
-// значение держим в переменной, а не в константе, — переключатель «Цены с квотами»
-// меняет его на ходу, и следующая же перерисовка пересчитывает все карточки.
-let quotaOverNow = isEvQuotaOver();
-let refund50Now = false;
-
-export const setPricingRefund50 = (value) => {
-  refund50Now = Boolean(value);
-};
-
-/** Переключение режима цен из интерфейса. */
-export const setPricingQuotaOver = (value) => {
-  quotaOverNow = Boolean(value);
-};
-
 // Цену в юанях со страницы модели переводим в доллары по тому же курсу, что и
 // расчёт стоимости машины: юани человеку ни о чём не говорят. Округляем до сотни —
 // это ориентир, не смета. «от»/«до» перед суммой сохраняем.
@@ -346,7 +332,9 @@ export const isSeriesHybrid = (car) => {
 // иначе шанхайская цена тихо поехала бы по тарифу Хоргоса.
 const FOB_PORTS = Object.freeze({ china: "Horgos", korea: "Busan" });
 
-export function estimateLandedCost(car, { quotaOver = quotaOverNow, refund50 = refund50Now } = {}) {
+const feeFormatter = new Intl.NumberFormat("ru-RU", { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+export function estimateLandedCost(car, { quotaOver = getPricingState().quotaOver, refund50 = getPricingState().refund50 } = {}) {
   const logistics = logisticsFor(car);
   const currency = sourceCurrencyOf(car);
   const eurUsd = PRICING.eurByn / PRICING.usdByn;
@@ -470,7 +458,7 @@ export function estimateLandedCost(car, { quotaOver = quotaOverNow, refund50 = r
   const customsHigh = customsUsd + customsSpread;
 
   const utilFeeByn = age <= 3 ? PRICING.utilFeeByn.upTo3Years : PRICING.utilFeeByn.over3Years;
-  const utilFeeLabel = utilFeeByn.toLocaleString("ru-RU", { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const utilFeeLabel = feeFormatter.format(utilFeeByn);
   const includedPayments = [
     payment.dutyUsd > 0 ? "ввозная пошлина" : null,
     payment.vatUsd > 0 ? "НДС" : null,

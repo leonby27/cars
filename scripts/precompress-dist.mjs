@@ -1,16 +1,5 @@
-// Заранее сжимает готовую сборку в brotli максимального уровня.
-//
-// Зачем: nginx на сервере сжимает ответы на лету уровнем 6 — сильнее нельзя, иначе
-// на каждый запрос уходило бы слишком много процессорного времени. Но в его настройках
-// включён `brotli_static on`: если рядом с файлом лежит такой же с суффиксом `.br`,
-// nginx отдаёт готовый и ничего не считает. Значит сжать один раз при сборке можно
-// самым сильным уровнем 11 — посетитель получит те же файлы, но меньше на десятую
-// часть. Замер 28.08.2026: главный скрипт 271 → 243 КБ, файл стилей 38 → 33 КБ,
-// вся сборка 1,4 → 1,3 МБ. На медленной мобильной сети это около 160 мс.
-//
-// Запуск: node scripts/precompress-dist.mjs [--dir=dist/client]
-// Стоит последним шагом в `npm run build`: сжимать нужно то, что уже сложили все
-// предыдущие шаги, включая заранее собранные страницы разделов и обзоров.
+// Prepare static Brotli at level 6. Reuse matching files, including the feed's
+// own compressed output, instead of compressing it a second time.
 import { constants, brotliCompress, brotliDecompressSync } from "node:zlib";
 import { promisify } from "node:util";
 import { existsSync, readdirSync, readFileSync, writeFileSync, statSync, unlinkSync } from "node:fs";
@@ -28,7 +17,7 @@ const root = arg("dir", `${buildDir}/client`);
 // Прошлая сборка: выкладка на сервере сохраняет её в dist.prev до пересборки. Если
 // файл не изменился с прошлого раза, его сжатую копию берём оттуда готовой — между
 // выкладками без смены данных не меняется почти ничего, а распаковать для сравнения
-// в разы дешевле, чем сжать уровнем 11 заново. Локально dist.prev нет — жмём всё.
+// в разы дешевле, чем сжать заново. Локально dist.prev нет — жмём всё.
 const previousRoot = arg("previous", buildDir === "dist.next" ? "dist/client" : "dist.prev/client");
 // Только то, что сжимается с толком. Фотографии, шрифты woff2 и картинки png/jpg/webp
 // уже сжаты внутри себя — второй проход дал бы проценты при заметном размере на диске.
@@ -69,8 +58,7 @@ const collect = (dir) => {
   }
 };
 
-const previousPacked = (path, raw) => {
-  const candidate = join(previousRoot, `${relative(root, path)}.br`);
+const previousPacked = (candidate, raw) => {
   if (!existsSync(candidate)) return null;
   try {
     const packed = readFileSync(candidate);
@@ -83,12 +71,13 @@ const previousPacked = (path, raw) => {
 const handle = async (path) => {
   const raw = readFileSync(path);
   if (raw.length < minBytes) return;
-  const ready = previousPacked(path, raw);
+  const ready = previousPacked(`${path}.br`, raw)
+    || previousPacked(join(previousRoot, `${relative(root, path)}.br`), raw);
   const packed =
     ready ||
     (await compress(raw, {
       params: {
-        [constants.BROTLI_PARAM_QUALITY]: 11,
+        [constants.BROTLI_PARAM_QUALITY]: 6,
         [constants.BROTLI_PARAM_SIZE_HINT]: raw.length,
       },
     }));

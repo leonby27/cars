@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildVehicleQuickInfo, buildVehicleQuickFacts } from "../src/vehicle-quick-info.js";
 
-test("расход энергии заменяет места и сохраняет приоритет разгона и топлива", () => {
+test("расход энергии сохраняет приоритет разгона и топлива", () => {
   const car = {
     year:2024, mileage:49400, type:"Электромобиль", electricRange:688,
     drive:"Полный", battery:78.4, horsepower:450, seats:5,
@@ -22,7 +22,7 @@ test("расход энергии различает единицы, диапа�
     assert.deepEqual(buildVehicleQuickFacts(car).at(-1), { label:"Расход энергии", value:"13,1 кВт·ч" });
     for (const value of [null, "— кВт·ч/100 км", "0 кВт·ч/100 км"]) {
       car.technicalSpecs.groups[0].items[0].value = value;
-      assert.deepEqual(buildVehicleQuickFacts(car).at(-1), { label:"Мест", value:"5" });
+      assert.equal(buildVehicleQuickFacts(car).some(({ label }) => label === "Мест"), false);
     }
   }
   const car = { seats:5, technicalSpecs:{ groups:[{ items:[
@@ -105,6 +105,7 @@ test("дополняет короткий список известными ха
     buildVehicleQuickFacts({
       year:2024, mileage:110010, type:"ДВС", engine:"3.5L", drive:"Передний",
       bodyType:"Минивэн", bodyColor:"Black", transmission:"Automatic", owners:1, seats:9,
+      dimensions:"5218×1998×1800",
     }),
     [
       { label:"Год выпуска", value:"2024" },
@@ -114,7 +115,7 @@ test("дополняет короткий список известными ха
       { label:"Кузов", value:"Минивэн" },
       { label:"Цвет", value:"Чёрный" },
       { label:"Коробка", value:"Автомат" },
-      { label:"Мест", value:"9" },
+      { label:"Длина", value:"5 218 мм" },
     ],
   );
   const full = buildVehicleQuickFacts({
@@ -129,4 +130,23 @@ test("дополняет короткий список известными ха
     bodyType:"Минивэн", bodyColor:"Black", transmission:"Automatic",
     seats:9, acceleration:8.4,
   }).at(-1).label, "Разгон до 100 км/ч");
+});
+
+test("короткая карточка не подменяет последний факт при загрузке полных характеристик", () => {
+  const car = {
+    year:2021, mileage:18300, type:"ДВС", drive:"Передний", horsepower:149.6,
+    bodyType:"SUV / кроссовер", bodyColor:"White", transmission:"Automatic",
+    dimensions:"4560×1860×1720", seats:5,
+  };
+  const summary = buildVehicleQuickFacts({ ...car, _summary:true });
+  assert.equal(summary.length, 7);
+  assert.equal(summary.some(({ label }) => label === "Длина" || label === "Мест"), false);
+  assert.deepEqual(buildVehicleQuickFacts(car).at(-1), { label:"Длина", value:"4 560 мм" });
+  const detailed = buildVehicleQuickFacts({ ...car, technicalSpecs:{ groups:[{ items:[
+    { name:"Расход смешанный", value:"7,4 л/100 км" },
+  ] }] } });
+  assert.deepEqual(detailed.slice(0, 7), summary);
+  assert.deepEqual(detailed.at(-1), { label:"Расход топлива", value:"7,4 л" });
+  assert.deepEqual(buildVehicleQuickFacts({ ...car, _summary:true, acceleration:9.3 }).at(-1), { label:"Разгон до 100 км/ч", value:"9,3 с" });
+  assert.equal(buildVehicleQuickFacts({ ...car, dimensions:"нет данных" }).some(({ label }) => label === "Длина"), false);
 });

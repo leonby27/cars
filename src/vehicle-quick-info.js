@@ -9,6 +9,10 @@ const positiveNumber = (value) => {
   return Number.isFinite(number) && number > 0 ? number : null;
 };
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value);
+const bodyLength = (car) => {
+  const millimeters = Number(clean(car?.dimensions).match(/^(\d{4,5})(?=\D|$)/u)?.[1]);
+  return millimeters >= 2500 && millimeters <= 7000 ? `${formatNumber(millimeters)} мм` : null;
+};
 
 // Объём мотора идёт в той же фразе, что топливо: «бензин 2.0 л», «гибрид 1.5 л».
 // Только там, где мотор есть и объём указан: у электромобиля объёма нет вообще,
@@ -91,6 +95,7 @@ export function buildVehicleQuickFacts(car = {}) {
   const acceleration = positiveNumber(car.acceleration);
   const fuelConsumption = mixedFuelConsumption(car);
   const electricityConsumption = energyConsumption(car);
+  const length = bodyLength(car);
   const powertrain = powertrainLabel(car);
   const drive = driveLabel(car.drive);
   const range = electricRange
@@ -111,13 +116,15 @@ export function buildVehicleQuickFacts(car = {}) {
     ["Цвет", translateColor(car.bodyColor)],
     ["Коробка", gearboxType(car) || null],
   ].filter(([, value]) => value);
-  const seats = positiveNumber(car.seats);
+  // Короткая карточка каталога не содержит technicalSpecs. Пока полная карточка
+  // загружается, не подставляем длину в слот, который может занять расход.
   const last = acceleration
     ? ["Разгон до 100 км/ч", `${acceleration.toLocaleString("ru-RU")} с`]
+    : car._summary ? null
     : fuelConsumption ? ["Расход топлива", fuelConsumption]
     : electricityConsumption ? ["Расход энергии", electricityConsumption]
-    : seats ? ["Мест", String(seats)] : null;
-  const availableExtras = extra.slice(0, Math.max(0, 8 - primary.length - Number(Boolean(last))));
+    : length ? ["Длина", length] : null;
+  const availableExtras = extra.slice(0, Math.max(0, 8 - primary.length - (car._summary ? 1 : Number(Boolean(last)))));
   return [...primary, ...availableExtras, ...(last ? [last] : [])]
     .slice(0, 8)
     .map(([label, value]) => ({ label, value }));

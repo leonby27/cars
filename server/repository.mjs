@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { createAsyncCache } from "./async-cache.mjs";
 import { repairVerifiedDrive, driveConflicts } from "../src/vehicle-spec-integrity.js";
 import crypto from "node:crypto";
 import { canonicalImportName, uniquePhotos } from "../config/import-policy.mjs";
@@ -8,7 +10,7 @@ import { ORIGIN_SOURCES, originForSource, originFromParam } from "../src/origin.
 import { koreanListingId } from "../src/listing-id.js";
 import { notifyLead } from "./lead-notify.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
-import { marketPriceStatsFromRows } from "./market-price-stats.mjs";
+import { marketPriceStatsFromRowsAsync } from "./market-price-stats.mjs";
 import { searchTextWords, searchWordStem } from "../src/car-search-text.js";
 import { normalizeBodyType } from "../src/body-types.js";
 import { carTitle } from "../src/car-title.js";
@@ -671,144 +673,49 @@ export async function modelPriceMedians() {
  * чтобы переключатель менял медиану, среднюю и границы без нового запроса к базе.
  * Фото берём у свежего активного объявления той же модели.
  */
-export async function modelPriceStats({ refund50 = false } = {}) {
+// A build supplies both refund scenarios; HTTP requests never need to prepare
+// the full catalog before serving the first visitor. Refreshes share one query.
+const marketStatsFile = new URL(`../${process.env.ABCARS_BUILD_DIR || "dist"}/market-price-stats.json`, import.meta.url);
+let marketSeed;
+try {
+  const saved = JSON.parse(readFileSync(marketStatsFile, "utf8"));
+  if (saved.version === 1 && Array.isArray(saved.normal) && Array.isArray(saved.refund50)) marketSeed = saved;
+} catch { /* First build has no previous snapshot. */ }
+
+const marketStats = createAsyncCache(async () => {
   const { rows } = await pool.query(`SELECT l.id, v.brand, v.model, v.model_year AS year,
       l.mileage_km, l.price_cny, l.source, l.city, v.powertrain AS type,
-      l.source_payload->>'usdPrice' AS usd_price,
-    l.source_payload->>'priceBasis' AS price_basis,
-    l.source_payload->>'fobPriceUsd' AS fob_price_usd,
-    l.source_payload->>'fobPort' AS fob_port,
-      l.source_payload->>'sourceFuelType' AS fuel_type,
-      COALESCE(l.source_payload->>'transmission', v.specifications->>'transmission') AS transmission,
-      COALESCE(l.source_payload->>'engine', v.specifications->>'engine') AS engine,
-      l.source_payload->>'manufactureDate' AS manufacture_date,
-      l.source_payload->>'dimensions' AS dimensions,
-      l.source_payload->>'curbWeight' AS curb_weight,
+      p."usdPrice" AS usd_price, p."priceBasis" AS price_basis,
+      p."fobPriceUsd" AS fob_price_usd, p."fobPort" AS fob_port,
+      p."sourceFuelType" AS fuel_type,
+      COALESCE(p.transmission, s.transmission) AS transmission,
+      COALESCE(p.engine, s.engine) AS engine,
+      p."manufactureDate" AS manufacture_date, p.dimensions, p."curbWeight" AS curb_weight,
       (SELECT m.url FROM listing_media m WHERE m.listing_id=l.id ORDER BY m.position LIMIT 1) AS image
-    FROM catalog_listings l
-    JOIN vehicles v ON v.id=l.vehicle_id
-    WHERE l.status='active'
-      AND l.price_cny > 0
-      AND v.model_year IS NOT NULL
+    FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
+    CROSS JOIN LATERAL jsonb_to_record(l.source_payload) AS p(
+      "usdPrice" text, "priceBasis" text, "fobPriceUsd" text, "fobPort" text,
+      "sourceFuelType" text, transmission text, engine text, "manufactureDate" text,
+      dimensions text, "curbWeight" text)
+    CROSS JOIN LATERAL jsonb_to_record(v.specifications) AS s(transmission text, engine text)
+    WHERE l.status='active' AND l.price_cny > 0 AND v.model_year IS NOT NULL
     ORDER BY l.listed_at DESC NULLS LAST, l.id`);
-  return marketPriceStatsFromRows(rows, { refund50 });
+  return {
+    version:1, createdAt:Date.now(),
+    normal:await marketPriceStatsFromRowsAsync(rows),
+    refund50:await marketPriceStatsFromRowsAsync(rows, { refund50:true }),
+  };
+}, { initial:marketSeed, initialAt:marketSeed?.createdAt || 0 });
+
+export const marketPriceSnapshot = () => marketStats();
+export async function modelPriceStats({ refund50 = false } = {}) {
+  const snapshot = await marketStats();
+  return refund50 ? snapshot.refund50 : snapshot.normal;
 }
 
-const MARKET_STATS_TTL_MS = 10 * 60 * 1000;
-let storedMarketStatsCache = { at:0, value:null };
-
-/**
- * Быстрая статистика для обычного режима цен без квоты.
- *
- * Итоговая цена уже хранится в `estimated_total_usd` и пересчитывается при каждой
- * выкладке с новой формулой или курсом. Раньше сравнение всё равно выгружало из базы
- * десятки тысяч объявлений и заново считало каждое в Node — первый локальный запрос
- * занимал около восьми секунд. PostgreSQL собирает те же группы за доли секунды и
- * возвращает только готовые 12 тысяч строк статистики.
- */
-export async function modelPriceStatsStored() {
-  const now = Date.now();
-  if (storedMarketStatsCache.value && now - storedMarketStatsCache.at < MARKET_STATS_TTL_MS) return storedMarketStatsCache.value;
-  const [stats, images] = await Promise.all([
-    pool.query(`WITH mileage_limits(mileage_max) AS (
-        VALUES (20000::int), (50000::int), (100000::int), (150000::int), (200000::int), (NULL::int)
-      )
-      SELECT v.brand, v.model, v.model_year AS year,
-        CASE WHEN v.powertrain='Бензин' THEN 'ДВС' ELSE v.powertrain END AS type,
-        limits.mileage_max,
-        count(*)::int AS count,
-        min(l.estimated_total_usd)::int AS min,
-        round(avg(l.estimated_total_usd))::int AS mean,
-        percentile_cont(0.5) WITHIN GROUP (ORDER BY l.estimated_total_usd)::int AS median,
-        max(l.estimated_total_usd)::int AS max
-      FROM catalog_listings l
-      JOIN vehicles v ON v.id=l.vehicle_id
-      CROSS JOIN mileage_limits limits
-      WHERE l.status='active'
-        AND l.estimated_total_usd > 0
-        AND v.model_year IS NOT NULL
-        AND (limits.mileage_max IS NULL OR (l.mileage_km IS NOT NULL AND l.mileage_km <= limits.mileage_max))
-      GROUP BY v.brand, v.model, v.model_year,
-        CASE WHEN v.powertrain='Бензин' THEN 'ДВС' ELSE v.powertrain END,
-        limits.mileage_max`),
-    pool.query(`WITH latest AS (
-        SELECT DISTINCT ON (
-          v.brand, v.model, v.model_year,
-          CASE WHEN v.powertrain='Бензин' THEN 'ДВС' ELSE v.powertrain END
-        ) l.id, v.brand, v.model, v.model_year AS year,
-          CASE WHEN v.powertrain='Бензин' THEN 'ДВС' ELSE v.powertrain END AS type
-        FROM catalog_listings l
-        JOIN vehicles v ON v.id=l.vehicle_id
-        WHERE l.status='active' AND l.estimated_total_usd > 0 AND v.model_year IS NOT NULL
-        ORDER BY v.brand, v.model, v.model_year,
-          CASE WHEN v.powertrain='Бензин' THEN 'ДВС' ELSE v.powertrain END,
-          l.listed_at DESC NULLS LAST, l.id
-      )
-      SELECT latest.*,
-        (SELECT m.url FROM listing_media m WHERE m.listing_id=latest.id ORDER BY m.position LIMIT 1) AS image
-      FROM latest`),
-  ]);
-  const imageByGroup = new Map(images.rows.map((row) => [
-    `${row.brand}\u0000${row.model}\u0000${row.year}\u0000${row.type || "unknown"}`,
-    row.image || null,
-  ]));
-  const value = stats.rows.map((row) => ({
-    brand:row.brand,
-    model:row.model,
-    year:Number(row.year),
-    type:row.type || null,
-    mileageMax:row.mileage_max == null ? null : Number(row.mileage_max),
-    image:imageByGroup.get(`${row.brand}\u0000${row.model}\u0000${row.year}\u0000${row.type || "unknown"}`) || null,
-    count:Number(row.count),
-    min:Number(row.min),
-    mean:Number(row.mean),
-    median:Number(row.median),
-    max:Number(row.max),
-  }));
-  storedMarketStatsCache = { at:now, value };
-  return value;
-}
-
-/**
- * Выбранный посетителем режим цены без отправки обеих версий в одном огромном
- * ответе. Для обычной цены достаточно готового столбца базы. При включённой квоте
- * заново считаем только электромобили: у ДВС и гибридов переключатель цену не меняет.
- */
 export async function modelPriceStatsForQuota(quotaPricingOn = false, refund50 = false) {
-  if (refund50) {
-    const rows = await modelPriceStats({ refund50:true });
-    return rows.map((row) => ({ ...row, ...(quotaPricingOn ? row.quotaOn : row.quotaOff) }));
-  }
-  const stored = await modelPriceStatsStored();
-  if (!quotaPricingOn) return stored;
-  const { rows } = await pool.query(`SELECT v.brand, v.model, v.model_year AS year,
-      l.mileage_km, l.price_cny, l.source, l.city, v.powertrain AS type,
-      l.source_payload->>'usdPrice' AS usd_price,
-    l.source_payload->>'priceBasis' AS price_basis,
-    l.source_payload->>'fobPriceUsd' AS fob_price_usd,
-    l.source_payload->>'fobPort' AS fob_port,
-      l.source_payload->>'sourceFuelType' AS fuel_type,
-      COALESCE(l.source_payload->>'transmission', v.specifications->>'transmission') AS transmission,
-      COALESCE(l.source_payload->>'engine', v.specifications->>'engine') AS engine,
-      l.source_payload->>'manufactureDate' AS manufacture_date,
-      l.source_payload->>'dimensions' AS dimensions,
-      l.source_payload->>'curbWeight' AS curb_weight
-    FROM catalog_listings l
-    JOIN vehicles v ON v.id=l.vehicle_id
-    WHERE l.status='active'
-      AND l.price_cny > 0
-      AND v.model_year IS NOT NULL
-      AND v.powertrain='Электромобиль'`);
-  const quotaRows = marketPriceStatsFromRows(rows);
-  const quotaByGroup = new Map(quotaRows.map((row) => [
-    `${row.brand}\u0000${row.model}\u0000${row.year}\u0000${row.type || "unknown"}\u0000${row.mileageMax ?? "all"}`,
-    row.quotaOn,
-  ]));
-  return stored.map((row) => {
-    if (row.type !== "Электромобиль") return row;
-    const quota = quotaByGroup.get(`${row.brand}\u0000${row.model}\u0000${row.year}\u0000${row.type || "unknown"}\u0000${row.mileageMax ?? "all"}`);
-    return quota ? { ...row, ...quota } : row;
-  });
+  const rows = await modelPriceStats({ refund50 });
+  return rows.map((row) => ({ ...row, ...(quotaPricingOn ? row.quotaOn : row.quotaOff) }));
 }
 
 // Кузов и тип двигателя каждой модели с числом машин — одним запросом на весь каталог

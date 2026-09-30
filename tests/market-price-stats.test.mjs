@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { marketPriceStatsFromRows } from "../server/market-price-stats.mjs";
+import { marketPriceStatsFromRows, marketPriceStatsFromRowsAsync } from "../server/market-price-stats.mjs";
 
 const row = (id, { type = "Электромобиль", mileage = 40_000 } = {}) => ({
   id:String(id),
@@ -59,4 +59,15 @@ test("одинаковые модели разных типов не смеши�
   ]).filter((item) => item.mileageMax === 50_000);
   assert.deepEqual(stats.map((item) => item.type).sort(), ["Гибрид", "Электромобиль"]);
   assert.ok(stats.every((item) => item.count === 1));
+});
+
+test("background aggregation yields to other requests and preserves all results", async () => {
+  const rows = Array.from({length:2100}, (_,i)=>row(i%20+1,{type:i%2 ? "Электромобиль" : "Бензин"}));
+  let yielded = false;
+  setImmediate(()=>{yielded=true;});
+  for (const refund50 of [false,true]) {
+    const actual = await marketPriceStatsFromRowsAsync(rows,{refund50});
+    assert.equal(yielded,true);
+    assert.deepEqual(actual,marketPriceStatsFromRows(rows,{refund50}));
+  }
 });
