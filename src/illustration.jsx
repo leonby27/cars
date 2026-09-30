@@ -6,12 +6,15 @@
 // браузер выберет несуществующий источник и покажет пустое место.
 import { appHref } from "./app-href.js";
 
-export function Illustration({ src, alt, ...props }) {
+export function Illustration({ src, alt, previewWidth, sizes, ...props }) {
   const base = src.replace(/\.(png|jpe?g|webp)$/, "");
+  const sources = (format) => previewWidth
+    ? `${appHref(`${base}-${previewWidth}.${format}`)} ${previewWidth}w, ${appHref(`${base}.${format}`)} ${props.width}w`
+    : appHref(`${base}.${format}`);
   return (
     <picture className="illustration">
-      <source type="image/avif" srcSet={appHref(`${base}.avif`)} />
-      <source type="image/webp" srcSet={appHref(`${base}.webp`)} />
+      <source type="image/avif" srcSet={sources("avif")} sizes={sizes} />
+      <source type="image/webp" srcSet={sources("webp")} sizes={sizes} />
       <img src={appHref(src)} alt={alt} {...props} />
     </picture>
   );

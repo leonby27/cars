@@ -65,7 +65,7 @@ export default {
         if (!upstream.ok || !contentType.startsWith("image/") || !upstream.body) return Response.json({ error:"image_unavailable" }, { status:502 });
         // Фотография объявления столько не весит: предел отсекает поток через наш прокси.
         if ((Number(upstream.headers.get("content-length")) || 0) > 12 * 1024 * 1024) return Response.json({ error:"image_too_large" }, { status:502 });
-        return new Response(upstream.body, { status:200, headers:{ "content-type":contentType, "cache-control":"public, max-age=21600, stale-while-revalidate=86400", "x-content-type-options":"nosniff" } });
+        return new Response(upstream.body, { status:200, headers:{ "content-type":contentType, "cache-control":"public, max-age=604800, stale-while-revalidate=86400", "x-content-type-options":"nosniff" } });
       }
       return Response.json({ error:"image_unavailable" }, { status:502 });
     }

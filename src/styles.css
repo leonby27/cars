@@ -5170,7 +5170,7 @@ html[data-theme="dark"] #root .load-more {
 }
 .footer-bottom a {
   font-weight: 500;
-  opacity: 0.9;
+  opacity: 1;
 }
 .footer-bottom a:hover {
   opacity: 1;

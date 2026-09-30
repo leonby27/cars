@@ -22,7 +22,7 @@ const requestApi = async (path) => {
       state.headers = Object.fromEntries(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]));
       return this;
     },
-    end() { return this; },
+    end(body) { state.body = body ? JSON.parse(String(body)) : null; return this; },
   };
   try {
     await handleApiRequest({ method:"GET", url:path, headers:{ host:"example.test" } }, response);
@@ -56,5 +56,15 @@ test("личные ответы и состояние базы не кэширу
   for (const path of ["/api/auth/me", "/api/account/favorites", "/api/account/searches", "/api/health", "/api/cars/does-not-exist"]) {
     const { cacheControl } = await requestApi(path);
     assert.equal(cacheControl, "no-store", path);
+  }
+});
+
+test("anonymous session discovery succeeds without unlocking protected account routes", async () => {
+  const session = await requestApi("/api/auth/me");
+  assert.equal(session.status, 200);
+  assert.deepEqual(session.body, { user: null });
+  assert.equal(session.cacheControl, "no-store");
+  for (const path of ["/api/account/favorites", "/api/account/searches"]) {
+    assert.equal((await requestApi(path)).status, 401);
   }
 });

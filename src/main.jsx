@@ -13,9 +13,9 @@ import { loadBlogText } from "./blog-text-load.js";
 import { findBlogPost } from "./blog-posts.js";
 import { holdQuotaChoice, isEvQuotaOver } from "./ev-quota.js";
 import { setPricingQuotaOver } from "./pricing.js";
+import { countersAfterAppReady } from "./counter-loader.js";
 import "./styles.css";
 import "./order-contact.css";
-import "./analytics.css";
 
 const root = document.getElementById("root");
 captureCatalogFallback(document, window.location);
@@ -40,7 +40,11 @@ const modelSlug = (() => {
 // hydrateRoot тоже нельзя — оживление у React неспешное и к возврату вызова ещё
 // не закончено (на этом и споткнулась первая версия).
 function AfterHydration({ onReady, children }) {
-  React.useEffect(() => onReady(), [onReady]);
+  React.useEffect(() => {
+    const cleanup = onReady?.();
+    countersAfterAppReady();
+    return cleanup;
+  }, [onReady]);
   return children;
 }
 
@@ -54,9 +58,11 @@ const dropSeoBody = () => {
 function start() {
   const app = (
     <React.StrictMode>
-      <CrashGuard>
-        <App />
-      </CrashGuard>
+      <AfterHydration>
+        <CrashGuard>
+          <App />
+        </CrashGuard>
+      </AfterHydration>
     </React.StrictMode>
   );
   // Главную страницу сборка кладёт в #root уже нарисованной (scripts/prerender-home.mjs):

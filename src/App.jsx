@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
 import { Illustration } from "./illustration.jsx";
+import { StripPhoto } from "./strip-photo.jsx";
 import { SearchField } from "./search-field.jsx";
 import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
@@ -69,7 +70,7 @@ import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
-import { embeddedApiValue } from "./boot-api.js";
+import { embeddedApiValue, initialApiValue } from "./boot-api.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "./purchase-info.js";
 import { TRACKING_FAQ } from "./tracking-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
@@ -77,9 +78,10 @@ import { missingFavoriteIsExpired } from "./favorite-cars.js";
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
 // таблиц) не кладём в общий файл приложения, а подгружаем отдельным файлом при
 // первом открытии /analytics: каждому посетителю сайта он не нужен.
-const AnalyticsPage = lazy(() => import("./analytics-page.jsx").then((m) => ({ default: m.AnalyticsPage })));
+const AnalyticsPage = lazy(() => import("./analytics-entry.jsx").then((m) => ({ default: m.AnalyticsPage })));
 
-const number = (value) => new Intl.NumberFormat("ru-RU").format(value);
+const numberFormatter = new Intl.NumberFormat("ru-RU");
+const number = (value) => numberFormatter.format(value);
 function ModelQuickLabel({ model }) {
   const labelRef = useRef(null);
   const [truncated, setTruncated] = useState(false);
@@ -1524,7 +1526,7 @@ function DecreePricingButton({ compact, path }) {
         aria-checked={compact ? undefined : on}
         aria-expanded={compact ? open : undefined}
         aria-controls={compact ? panelId : undefined}
-        aria-label={compact ? `Указ № 140: ${on ? "включён" : "выключен"}` : "Учитывать возмещение по указу № 140"}
+        aria-label={compact ? `Указ № 140: ${on ? "включён" : "выключен"}` : "Указ № 140: учитывать возмещение"}
         data-active={on}
         onClick={() => compact ? setOpen((value) => !value) : pricing?.setRefund50(!on)}
       >
@@ -1608,12 +1610,12 @@ function EvQuotaButton({ quotas, navigate }) {
         className={`icon-label quota-link${open ? " selected" : ""}`}
         aria-expanded={open}
         aria-controls="ev-quota-panel"
-        aria-label={`Осталось квот ${number(remaining)} из ${number(total)} на беспошлинный ввоз электромобилей`}
+        aria-label={`Квоты ${number(remaining)}: осталось из ${number(total)} на беспошлинный ввоз электромобилей`}
         onClick={() => setOpen((value) => !value)}
       >
         <Lightning size={20} weight="bold" />
         <span>Квоты</span>
-        <strong>{number(remaining)}</strong>
+        {" "}<strong>{number(remaining)}</strong>
         {/* Слово «квота» само себя не объясняет, поэтому по наведению — короткий
             рассказ о том, что это и зачем на него смотреть. Пока карточка открыта,
             подсказки нет: цифры и прогноз уже перед глазами. Своя подсказка вместо
@@ -2245,7 +2247,7 @@ function HomeFaqItem({ item, open, onToggle, navigate = null }) {
         <span>{item.question}</span>
         <CaretDown size={20} weight="bold" aria-hidden="true" />
       </button>
-      <div className="animated-disclosure" aria-hidden={!open}>
+      <div className="animated-disclosure" aria-hidden={!open} inert={!open}>
         <div><p>{navigate ? renderInlineText(item.answer, navigate) : item.answer}</p></div>
       </div>
     </article>
@@ -2272,7 +2274,7 @@ function ToolDisclosures({ title, titleId, items, faq = null }) {
             {/* Три слоя, а не два: поля содержимого обязаны лежать на внутреннем
                 блоке. На том, который схлопывается, они остаются видимыми даже при
                 нулевой высоте — под каждым закрытым пунктом висела лишняя полоска. */}
-            <div className="animated-disclosure" aria-hidden={openIndex !== index}>
+            <div className="animated-disclosure" aria-hidden={openIndex !== index} inert={openIndex !== index}>
               <div>
                 <div className="tool-disclosure-body">{item.content}</div>
               </div>
@@ -3543,9 +3545,10 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
     const inCatalog = Boolean(frame.closest("main.catalog"));
     const ahead = inCatalog ? Math.min(1600, Math.max(600, window.innerHeight * 1.5)) : 300;
     // В каталоге готовим и обложку следующей машины, ещё до её lazy-загрузки.
-    const urls = JSON.parse(previewKey).slice(inCatalog ? 0 : 1);
+    const frames = JSON.parse(previewKey);
+    const urls = (car.source === "Guazi" ? frames.slice(0, 2) : frames).slice(inCatalog ? 0 : 1);
     return observeHoverPhotos(frame, urls, { ahead });
-  }, [previewKey]);
+  }, [previewKey, car.source]);
   // Карточку целиком перекрывает ссылка-подложка, поэтому до самого превью события
   // мыши не доходят: слушаем их на карточке, а кадр считаем по границам картинки.
   useEffect(() => {
@@ -3618,7 +3621,8 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
         >
           {images.map((image, index) => {
             const frame = (
-              <img
+              <StripPhoto
+                first={index === 0}
                 src={imageSource(image, IMAGE_WIDTH_STRIP)}
                 alt={index === 0 ? car.title : ""}
                 draggable="false"
@@ -4704,7 +4708,7 @@ function HomeModelSlider({ items, navigate, label, more = null }) {
       <div className="home-model-viewport">
         <div className="home-model-track" style={start ? { "--home-model-shift": -start } : undefined}>
           {items.map((item) => (
-            <HomeModelCard key={item.path} item={item} navigate={navigate} />
+            <HomeModelCard key={`${item.path}:${item.name}`} item={item} navigate={navigate} />
           ))}
           {more && (
             <AppLink href={more.path} navigate={navigate} className="home-model-more">
@@ -4737,7 +4741,7 @@ function HomeModelLinks({ items, navigate, more = null }) {
   return (
     <ul className="home-model-links">
       {items.map((item) => (
-        <li key={item.path}><AppLink href={item.path} navigate={navigate}>{item.name}</AppLink></li>
+        <li key={`${item.path}:${item.name}`}><AppLink href={item.path} navigate={navigate}>{item.name}</AppLink></li>
       ))}
       {more && <li><AppLink href={more.path} navigate={navigate}>{more.label} — {more.note}</AppLink></li>}
     </ul>
@@ -5021,10 +5025,10 @@ function PopularBrands({ navigate, cars, apiMode }) {
           // доступности требует, чтобы видимый текст входил в подпись с начала.
           // Прежнее «Перейти к предложениям: Audi 8 525» это правило нарушало.
           return (
-            <AppLink className={`brand-link ${layoutClass(brand)}`.trim()} key={brand} href={href} navigate={navigate} aria-label={countsKnown ? `${brand} ${number(count)} объявлений` : brand}>
+            <AppLink className={`brand-link ${layoutClass(brand)}`.trim()} key={brand} href={href} navigate={navigate}>
               <BrandMark brand={brand} />
               <span className="brand-name" title={brand}>{brand}</span>
-              <span className="brand-count" aria-hidden="true">{countsKnown ? number(count) : ""}</span>
+              {" "}<span className="brand-count">{countsKnown ? number(count) : ""}</span>
             </AppLink>
           );
         })}
@@ -5656,7 +5660,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
       <section className="trust-strip page-width">
         <div>
           <span>
-            <Illustration src="/services/delivery-control.png" width="512" height="341" alt="" aria-hidden="true" />
+            <Illustration src="/services/delivery-control.png" previewWidth={192} sizes="96px" width="512" height="341" alt="" aria-hidden="true" loading="lazy" decoding="async" />
           </span>
           <p>
             <b>Под ключ до выдачи</b>
@@ -5674,7 +5678,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         </div>
         <div>
           <span>
-            <Illustration src="/trust-strip/two-prices.png" width="512" height="512" alt="" aria-hidden="true" />
+            <Illustration src="/trust-strip/two-prices.png" previewWidth={192} sizes="96px" width="512" height="512" alt="" aria-hidden="true" loading="lazy" decoding="async" />
           </span>
           <p>
             <b>Показываем обе цены</b>
@@ -8338,7 +8342,7 @@ function VehicleConditionSummary({ car }) {
             Подробнее <CaretDown size={15} aria-hidden="true" />
           </button>
           )}
-          <div className="animated-disclosure vehicle-condition-details" aria-hidden={!detailsOpen}>
+          <div className="animated-disclosure vehicle-condition-details" aria-hidden={!detailsOpen} inert={!detailsOpen}>
             <div id={detailsId}>
               {facts.length > 0 && <dl>{facts.map(([label, value]) => <div key={label} className="facts-row"><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
               {gradeToggles && sourceNote}
@@ -9322,7 +9326,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               </div>
               <CaretDown className="disclosure-caret" size={20} weight="bold" />
             </button>
-            <div className="animated-disclosure" aria-hidden={!deliveryOpen}>
+            <div className="animated-disclosure" aria-hidden={!deliveryOpen} inert={!deliveryOpen}>
               <div className="disclosure-content delivery-disclosure-content">
                 <p className="delivery-intro">От договора до выдачи авто в Минске.</p>
                 <div className="delivery-stages">
@@ -13924,7 +13928,7 @@ function NewsletterSubscribedModal({ onClose }) {
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="lead-modal order-removal-modal confirm-modal availability-paused-modal social-unavailable-modal newsletter-subscribed-modal" role="dialog" aria-modal="true" aria-labelledby="newsletter-subscribed-title" aria-describedby="newsletter-subscribed-description newsletter-subscribed-unsubscribe">
         <button className="modal-close" type="button" onClick={onClose} aria-label="Закрыть"><X size={22} /></button>
-        <img className="newsletter-subscribed-icon" src="/app-download/newsletter-mailbox.png" width="80" height="80" alt="" aria-hidden="true" />
+        <Illustration className="newsletter-subscribed-icon" src="/app-download/newsletter-mailbox.png" width="80" height="80" alt="" aria-hidden="true" />
         <h2 id="newsletter-subscribed-title">Вы подписались на рассылку</h2>
         <p id="newsletter-subscribed-description">Будем присылать полезные обновления и аналитику рынка автомобилей {siteCountriesGenitive()}.</p>
         <div className="order-removal-actions availability-paused-actions">
@@ -14045,7 +14049,7 @@ function SiteFooter({ navigate }) {
         </div>
         <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
           <span className="footer-newsletter-title">
-            <img src="/app-download/newsletter-mailbox.png" width="64" height="64" alt="" aria-hidden="true" />
+            <Illustration src="/app-download/newsletter-mailbox.png" width="64" height="64" alt="" aria-hidden="true" loading="lazy" decoding="async" />
             <strong>Подпишитесь на обновления и аналитику рынка авто {siteInPhrase()}</strong>
           </span>
           <div className="footer-newsletter-action">
@@ -15124,9 +15128,8 @@ const bootCatalogMeta = (query = "") => {
   // После первого кадра встроенный в HTML ответ уже может быть старым: при
   // внутренних переходах используем только недавно полученные данные API.
   if (metaResolvedUsable) return resolvedCatalogMeta(query);
-  if (window.__boot?.metaValue && String(window.__boot.metaQuery || "") === String(query)) return window.__boot.metaValue;
-  // Справочник, встроенный в заранее собранную страницу (src/boot-api.js).
-  return embeddedApiValue(`/api/catalog/meta${query ? `?${query}` : ""}`) || null;
+  const preloaded = String(window.__boot?.metaQuery || "") === String(query) ? window.__boot?.metaValue : undefined;
+  return initialApiValue(`/api/catalog/meta${query ? `?${query}` : ""}`, preloaded) || null;
 };
 
 /**

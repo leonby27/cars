@@ -7,7 +7,6 @@
 import { rewriteEvDutyCopyDeep } from "./ev-duty-copy.js";
 import { stripUnreleasedBlogLinks } from "./blog-posts.js";
 
-const files = import.meta.glob("./blog-texts/*.js");
 const loaded = new Map();
 
 const pause = (delay) => new Promise((resolve) => setTimeout(resolve, delay));
@@ -42,12 +41,13 @@ export const loadedBlogText = (slug) => loaded.get(slug) || null;
 export async function loadBlogText(slug) {
   if (!slug) return null;
   if (loaded.has(slug)) return loaded.get(slug);
-  const file = files[`./blog-texts/${slug}.js`];
-  if (!file) return null;
   // Ссылки на материалы, которые ещё не вышли, остаются текстом: страница у них есть,
   // но в журнале её пока нет, и вести туда читателя незачем.
   let text;
   try {
+    const { files } = await import("./blog-text-imports.js");
+    const file = files[`./blog-texts/${slug}.js`];
+    if (!file) return null;
     text = stripUnreleasedBlogLinks(rewriteEvDutyCopyDeep((await file()).default));
   } catch {
     text = await loadStableText(slug);

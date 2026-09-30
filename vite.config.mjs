@@ -12,6 +12,7 @@ export default defineConfig({
   base: "/",
   build: {
     outDir: join(process.env.ABCARS_BUILD_DIR || "dist", "client"),
+    sourcemap: true,
   },
   optimizeDeps: {
     include: ["react", "react-dom/client"],

@@ -145,7 +145,7 @@ test("proxies allowlisted catalog images with cache headers", async () => {
     const response = await worker.fetch(new Request(`https://example.test/api/image?src=${encodeURIComponent(source)}`), { ASSETS:{ fetch:async () => new Response("missing", { status:404 }) } });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/jpeg");
-    assert.match(response.headers.get("cache-control"), /max-age=21600/);
+    assert.match(response.headers.get("cache-control"), /max-age=604800/);
     assert.equal(forwardedUrl, source);
   } finally {
     globalThis.fetch = originalFetch;

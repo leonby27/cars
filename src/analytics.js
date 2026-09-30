@@ -162,9 +162,10 @@ const CONFIRM_RETRIES = 4;
 export const postHumanConfirm = async (payload, attempt = 0) => {
   const response = await post("/api/analytics/human", payload);
   if (!response) return;
-  let confirmed = null;
-  try { confirmed = (await response.json())?.confirmed; } catch { return; }
-  if (confirmed === 0 && attempt < CONFIRM_RETRIES) {
+  let result;
+  try { result = await response.json(); } catch { return; }
+  if (result?.retry === false) return;
+  if (result?.confirmed === 0 && attempt < CONFIRM_RETRIES) {
     window.setTimeout(() => { postHumanConfirm(payload, attempt + 1); }, CONFIRM_RETRY_MS);
   }
 };

@@ -10,7 +10,6 @@
 // читаются из `src/model-texts.js`.
 import { rewriteEvDutyCopyDeep } from "./ev-duty-copy.js";
 
-const files = import.meta.glob("./model-texts/*.js");
 const loaded = new Map();
 
 /** Уже загруженный текст обзора или `null` — для отрисовки без ожидания. */
@@ -33,6 +32,7 @@ export const primeModelText = (slug, text) => {
 export async function loadModelText(slug) {
   if (!slug) return null;
   if (loaded.has(slug)) return loaded.get(slug);
+  const { files } = await import("./model-text-imports.js");
   const file = files[`./model-texts/${slug}.js`];
   if (!file) return null;
   // Пока действует льгота, текст отдаётся слово в слово; когда квота кончится,

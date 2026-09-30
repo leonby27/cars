@@ -56,6 +56,7 @@ test("правила безопасности пускают Метрику", ()
   // Картинка-счётчик и кадр синхронизации Яндекса.
   assert.ok(rule("img-src").includes("https:"), "картинка счётчика заблокирована");
   assert.ok(rule("frame-src").includes("https://*.yandex.ru"), "кадр синхронизации заблокирован");
+  assert.ok(rule("frame-src").split(" ").includes("https://mc.yandex.com"), "кадр Метрики на .com заблокирован");
 });
 
 test("правила безопасности пускают Google Analytics", () => {

@@ -20,3 +20,12 @@ export function embeddedApiValue(url) {
   if (typeof scope?.__bootRecord === "function") scope.__bootRecord(url);
   return undefined;
 }
+
+// Hydration must use exactly the snapshot that produced the HTML, even when a
+// preload has already returned newer counts. Refreshes run after the first render.
+export function initialApiValue(url, preloaded) {
+  const embedded = embeddedApiValue(url);
+  if (embedded !== undefined) return embedded;
+  if (globalThis.document?.getElementById?.("root")?.dataset?.prerender) return undefined;
+  return preloaded;
+}

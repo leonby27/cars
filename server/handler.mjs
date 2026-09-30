@@ -191,10 +191,11 @@ export async function handleApiRequest(request, response) {
       const limit = await checkRateLimit("analyticsEvents", [clientAddress(request)]);
       if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
       const body = await readJson(request);
-      if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0 });
-      if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0 });
+      if (!fromOwnPage(request.headers) || fromAnalyticsPage(request.headers) || isBotAgent(request.headers["user-agent"])) return json(response, 202, { ok:true, confirmed:0, retry:false });
+      if (await isDatacenterAddress(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0, retry:false });
+      // The first catalog request may still be in flight; this exclusion can change.
       if (!hasRecentSiteRequest(clientAddress(request))) return json(response, 202, { ok:true, confirmed:0 });
-      if (await isStaffVisit(request)) return json(response, 202, { ok:true, confirmed:0 });
+      if (await isStaffVisit(request)) return json(response, 202, { ok:true, confirmed:0, retry:false });
       const result = await confirmHumanVisit(body);
       return result.error ? json(response, 400, result) : json(response, 202, result);
     }
@@ -260,7 +261,7 @@ export async function handleApiRequest(request, response) {
       if (!allowedImageSource(source)) return json(response, 403, { error:"image_host_not_allowed" });
       if (!allowedGuaziPhotoQuery(source)) return json(response, 403, { error:"image_variant_not_allowed" });
       const cached = await cachedGuaziImage(source.href);
-      response.writeHead(200, {"content-type":cached.contentType,"content-length":String(cached.bytes.length),"cache-control":"public, max-age=21600, stale-while-revalidate=86400","x-content-type-options":"nosniff"});
+      response.writeHead(200, {"content-type":cached.contentType,"content-length":String(cached.bytes.length),"cache-control":"public, max-age=604800, stale-while-revalidate=86400","x-content-type-options":"nosniff"});
       return response.end(cached.bytes);
     }
     if (request.method === "GET" && url.pathname === "/api/health") {
@@ -321,7 +322,8 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "GET" && url.pathname === "/api/auth/me") {
       const user = await getSessionUser(request);
-      return user ? json(response, 200, { user }) : json(response, 401, { error:"unauthorized" });
+      // Session discovery is public; protected account routes still require auth.
+      return json(response, 200, { user: user || null });
     }
     if (request.method === "POST" && url.pathname === "/api/auth/logout") {
       await deleteSession(request);

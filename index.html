@@ -159,8 +159,8 @@
         // Очередь вызовов ставим сразу, а сам скрипт счётчика подключаем позже. Причина:
         // на телефоне tag.js занимает основной поток 2,2 секунды — вшестеро дольше всего
         // нашего кода, — и всё это время страница не может дорисоваться. Заходы при этом
-        // не теряются: очередь ждёт скрипт, а он подключается, как только страница
-        // загрузилась (или сразу, если посетитель тронул экран раньше).
+        // не теряются: очередь ждёт скрипт, а сами счётчики подключаются после оживления страницы, по одному
+        // и в свободное от отрисовки время (src/counter-loader.js).
         window.ym = window.ym || function(){(window.ym.a = window.ym.a || []).push(arguments)};
         window.ym.l = 1 * new Date();
         ym(111868764, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
@@ -168,21 +168,18 @@
         const src = 'https://mc.yandex.ru/metrika/tag.js?id=111868764';
         let started = false;
         const startCounter = () => {
-          if (started) return;
+          if (started || window.__ym !== 111868764) return;
           started = true;
           const tag = document.createElement('script');
           tag.async = 1;
           tag.src = src;
-          document.head.appendChild(tag);
+          return new Promise((resolve) => {
+            const timeout = setTimeout(resolve, 10000);
+            tag.onload = tag.onerror = () => { clearTimeout(timeout); resolve(); };
+            document.head.appendChild(tag);
+          });
         };
-        const soon = () => (window.requestIdleCallback ? requestIdleCallback(startCounter, { timeout: 1500 }) : setTimeout(startCounter, 300));
-        if (document.readyState === 'complete') soon();
-        else addEventListener('load', soon, { once: true });
-        // Любое действие посетителя — повод не ждать полной загрузки: щелчок или
-        // прокрутка должны попасть в статистику.
-        for (const event of ['pointerdown', 'keydown', 'touchstart', 'scroll']) {
-          addEventListener(event, startCounter, { once: true, passive: true });
-        }
+        (window.__counterQueue ||= []).push(startCounter);
       })();
     </script>
     <script id="google-analytics">
@@ -224,14 +221,13 @@
           tag.id = 'google-analytics-library';
           tag.async = 1;
           tag.src = `https://www.googletagmanager.com/gtag/js?id=${id}`;
-          document.head.appendChild(tag);
+          return new Promise((resolve) => {
+            const timeout = setTimeout(resolve, 10000);
+            tag.onload = tag.onerror = () => { clearTimeout(timeout); resolve(); };
+            document.head.appendChild(tag);
+          });
         };
-        const soon = () => (window.requestIdleCallback ? requestIdleCallback(startCounter, { timeout:1500 }) : setTimeout(startCounter, 300));
-        if (document.readyState === 'complete') soon();
-        else addEventListener('load', soon, { once:true });
-        for (const event of ['pointerdown', 'keydown', 'touchstart', 'scroll']) {
-          addEventListener(event, startCounter, { once:true, passive:true });
-        }
+        (window.__counterQueue ||= []).push(startCounter);
       })();
     </script>
   </head>
