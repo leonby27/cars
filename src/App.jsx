@@ -49,6 +49,7 @@ import { chineseModelName } from "../config/model-names-by.mjs";
 import { splitInlineLinks, plainInlineText } from "./inline-links.js";
 import { loadModelText, loadedModelText } from "./model-text-load.js";
 import { buildVehicleQuickFacts } from "./vehicle-quick-info.js";
+import { createVehicleMarketLoader, vehicleMarketComparisonUrl, vehicleMarketSavings, vehicleMarketChoice } from "./vehicle-market-savings.js";
 import { PriceRatingScale, priceRatingVerdictFor } from "./price-rating-scale.jsx";
 import { brandNotice } from "./brand-notice.js";
 import { translateSpecGroup, translateTechnicalSpecs } from "./spec-translations.js";
@@ -8938,6 +8939,46 @@ const VEHICLE_QUICK_FACT_ICONS = {
   "Расход энергии": Lightning,
 };
 
+const loadVehicleMarketComparison = createVehicleMarketLoader();
+
+function VehicleMarketSavings({ car }) {
+  const pricing = useQuotaPricing();
+  const quotaOn = pricing?.on === true;
+  const url = vehicleMarketComparisonUrl(car, { quotaOn, refund50: pricing?.refund50 === true, base: import.meta.env.BASE_URL });
+  const [loaded, setLoaded] = useState(null);
+  // При переключении машины или льгот старый ответ не показываем даже на один кадр.
+  const data = loaded?.url === url ? loaded.data : embeddedApiValue(url);
+  useEffect(() => {
+    if (!url) return undefined;
+    let alive = true;
+    loadVehicleMarketComparison(url).then((data) => {
+      if (alive) setLoaded({ url, data });
+    }).catch(() => {
+      if (alive) setLoaded({ url, data: null });
+    });
+    return () => { alive = false; };
+  }, [url]);
+  const savings = vehicleMarketSavings(car, data, { quotaOn });
+  const choice = vehicleMarketChoice(car, data, { quotaOn });
+  if (!savings && !choice) return null;
+  const selected = savings?.best;
+  const percent = selected ? new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(selected.percent) : null;
+  const savingsDescription = selected ? `${{ mean: "Средняя", median: "Медианная", min: "Минимальная" }[selected.key]} цена этой модели ниже, чем на белорусских площадках.` : "";
+  const choiceDescription = "Больше объявлений этой модели, чем на белорусских площадках.";
+  return (
+    <div className="vehicle-market-advantages">
+      {savings && <section className="vehicle-market-savings" tabIndex={0} aria-label="Сравнение с ценами в Беларуси" aria-description={savingsDescription}>
+        <h3 aria-live="polite"><strong className="vehicle-market-value">{percent}%</strong> <span>экономии</span></h3>
+        <ActionTooltip text={<span>{savingsDescription}</span>} className="quota-link-tooltip vehicle-market-tooltip" tapToOpen />
+      </section>}
+      {choice && <section className="vehicle-market-savings vehicle-market-choice" tabIndex={0} aria-label="Сравнение выбора автомобилей" aria-description={choiceDescription}>
+        <h3><strong className="vehicle-market-value">{choice.multiplier}</strong> <span>больше выбор</span></h3>
+        <ActionTooltip text={<span>{choiceDescription}</span>} className="quota-link-tooltip vehicle-market-tooltip" tapToOpen />
+      </section>}
+    </div>
+  );
+}
+
 function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumbs = null, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false, actions = true }) {
   const currency = useCurrency();
   // У цены в шапке выпадает «Цена среди похожих»; детализация стоит открытой в
@@ -9237,6 +9278,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
           </div>
         </div>
         <div className="detail-sidebar">
+          {!sold && <VehicleMarketSavings key={car.id} car={car} />}
           {/* Состояние по данным источника — последней строкой «Основной информации»,
               а не отдельной плашкой. Нет основной информации — состояние стоит само. */}
           {quickInfo.length > 0 && (

@@ -7,6 +7,7 @@
 // второй проход рисует страницу уже с ними, а браузер получает их в window.__boot.api.
 import { brandCatalogGuide, brandStock, getCatalogMeta, getModelFacts, listCars, modelPriceStats, modelPriceStatsForQuota, modelSummary } from "./repository.mjs";
 import { marketComparison } from "./market-compare-data.mjs";
+import { selectMarketComparison } from "../src/market-compare.js";
 
 // Адрес → ответ. Только чтение и только то, что нужно заранее собранным страницам.
 // Машины списка — облегчённо: карточка показывает не больше пяти кадров
@@ -22,11 +23,12 @@ const RESOLVERS = [
   ["/api/model-facts", () => getModelFacts()],
   ["/api/brand-guide", (params) => brandCatalogGuide(params.get("brand"))],
   // Сравнение с белорусским рынком — так же, как в handler.mjs.
-  ["/api/market/compare", (params) => {
+  ["/api/market/compare", async (params) => {
     const quotaMode = params.get("quota");
     const refund50 = params.get("refund50") === "1";
     const stats = quotaMode === "on" ? () => modelPriceStatsForQuota(true, refund50) : quotaMode === "off" ? () => modelPriceStatsForQuota(false, refund50) : () => modelPriceStats({ refund50 });
-    return marketComparison(stats, brandStock, `${quotaMode || "full"}${refund50 ? "-refund50" : ""}`);
+    const comparison = await marketComparison(stats, brandStock, `${quotaMode || "full"}${refund50 ? "-refund50" : ""}`);
+    return selectMarketComparison(comparison, Object.fromEntries(params));
   }],
 ];
 

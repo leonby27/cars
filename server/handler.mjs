@@ -13,6 +13,7 @@ import { isDatabaseUnavailable, pool } from "./db.mjs";
 import { authenticateAccount, clearSessionCookie, createAccount, createSession, deleteAccount, deleteSession, getSessionAccount, getSessionUser, listAccountFavorites, normalizePhone, normalizeProfile, sessionCookie, setAccountFavorite, updateAccountProfile } from "./auth.mjs";
 import { brandCatalogGuide, brandStock, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelPriceStats, modelPriceStatsForQuota, modelSummary, soldListingVisible } from "./repository.mjs";
 import { marketComparison } from "./market-compare-data.mjs";
+import { selectMarketComparison } from "../src/market-compare.js";
 import { priceRating } from "./price-rating.mjs";
 import { publicCarWithoutReport, reportGroupsForCar } from "./report-access.mjs";
 import { claimGuestAvailabilityLeads, createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
@@ -567,7 +568,8 @@ export async function handleApiRequest(request, response) {
         : quotaMode === "off"
         ? () => modelPriceStatsForQuota(false, refund50)
         : () => modelPriceStats({ refund50 });
-      return json(response, 200, await marketComparison(stats, brandStock, `${quotaMode || "full"}${refund50 ? "-refund50" : ""}`), metaCache);
+      const comparison = await marketComparison(stats, brandStock, `${quotaMode || "full"}${refund50 ? "-refund50" : ""}`);
+      return json(response, 200, selectMarketComparison(comparison, Object.fromEntries(url.searchParams)), metaCache);
     }
     if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType"), url.searchParams.get("country")), catalogMetaCache);
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.

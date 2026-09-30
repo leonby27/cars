@@ -256,8 +256,9 @@ export function buildEncarCar(detail, { id = null, record = null, inspection = n
   const mileage = numeric(spec.mileage);
   const images = encarPhotos(detail);
   // Номера объявления в карточке нет — его знает тот, кто карточку запросил. У
-  // перевыставленной машины номер объявления лежит в manage.dummyVehicleId, у обычной
-  // совпадает с vehicleId; это запасной путь, когда номер не передали.
+  // дополнительного dummy-объявления номер лежит в manage.dummyVehicleId, у обычного
+  // совпадает с vehicleId. Это не другая машина: импорт проверяет sourceVehicleId.
+  // Здесь запасной путь, когда номер объявления не передали.
   const externalId = String(id || (detail.manage?.dummy ? detail.manage?.dummyVehicleId : detail.vehicleId) || "").trim();
   if (!brand || !model || !year || !priceMan || mileage === null || images.length < 2 || !externalId) return null;
 

@@ -56,14 +56,26 @@ test("подсказка о восстановлении зависит от м�
   assert.equal(hasRebuiltHint({ brand:"BMW", model:"X3", year:2022, diff:5 }), false);
 });
 
-test("для сравнения нужно не меньше пяти машин с каждой стороны", () => {
-  assert.equal(hasEnoughMarketSample({ count:5 }), true);
-  assert.equal(hasEnoughMarketSample({ count:4 }), false);
+test("для сравнения нужно не меньше двух машин с каждой стороны", () => {
+  for (const count of [2, 3, 4, 5]) assert.equal(hasEnoughMarketSample({ count }), true);
+  for (const count of [0, 1]) assert.equal(hasEnoughMarketSample({ count }), false);
   assert.equal(hasEnoughMarketSample(null), false);
-  assert.equal(hasEnoughComparisonSample({ ours:{ count:5 }, belarus:{ count:5 } }), true);
-  assert.equal(hasEnoughComparisonSample({ ours:{ count:4 }, belarus:{ count:40 } }), false);
-  assert.equal(hasEnoughComparisonSample({ ours:{ count:40 }, belarus:{ count:4 } }), false);
-  assert.equal(hasEnoughComparisonSample({ ours:{ count:5 }, belarus:null }), false);
+  assert.equal(hasEnoughComparisonSample({ ours:{ count:2 }, belarus:{ count:2 } }), true);
+  assert.equal(hasEnoughComparisonSample({ ours:{ count:151 }, belarus:{ count:2 } }), true);
+  assert.equal(hasEnoughComparisonSample({ ours:{ count:1 }, belarus:{ count:40 } }), false);
+  assert.equal(hasEnoughComparisonSample({ ours:{ count:40 }, belarus:{ count:1 } }), false);
+  assert.equal(hasEnoughComparisonSample({ ours:{ count:2 }, belarus:null }), false);
+});
+
+test("два объявления дают сравнение по каждой ценовой базе и участвуют в выборе года", () => {
+  const year = { year:2024, prices:{ 100000:{
+    ours:{ count:151, min:28_000, mean:30_000, median:30_450 },
+    belarus:{ count:2, min:35_000, mean:40_000, median:40_000 },
+  } } };
+  for (const [basis, difference] of [["min", 20], ["mean", 25], ["median", 23.875]]) {
+    assert.equal(comparisonYearDifference(year, "100000", basis, true), difference);
+    assert.equal(bestComparisonYear({ years:[year] }, "100000", basis, true).year, year);
+  }
 });
 
 test("цена нашего каталога следует за переключателем квот", () => {
@@ -80,14 +92,14 @@ test("цена нашего каталога следует за переклю�
 
 test("по умолчанию выбирается самый выгодный год с достаточной выборкой", () => {
   const card = { years:[
-    { year:2026, prices:{ 100000:{ ours:{ count:4, median:40_000 }, belarus:{ count:12, median:80_000 } } } },
+    { year:2026, prices:{ 100000:{ ours:{ count:1, median:40_000 }, belarus:{ count:12, median:80_000 } } } },
     { year:2025, prices:{ 100000:{ ours:{ count:8, median:72_000 }, belarus:{ count:9, median:80_000 } } } },
     { year:2024, prices:{ 100000:{ ours:{ count:7, median:56_000 }, belarus:{ count:6, median:80_000 } } } },
   ] };
   const best = bestComparisonYear(card, "100000", "median", true);
   assert.equal(best.year.year, 2024);
   assert.equal(best.difference, 30);
-  assert.equal(comparisonYearDifference(card.years[0], "100000", "median", true), null, "четырёх машин недостаточно");
+  assert.equal(comparisonYearDifference(card.years[0], "100000", "median", true), null, "одной машины недостаточно");
 });
 
 test("самый выгодный год учитывает переключатель квот", () => {
@@ -103,7 +115,7 @@ test("самый выгодный год учитывает переключат
 test("без надёжного сравнения берётся самый свежий год с нашей ценой", () => {
   const card = { years:[
     { year:2025, prices:{ all:{ ours:{ count:7, median:42_000 }, belarus:null } } },
-    { year:2024, prices:{ all:{ ours:{ count:9, median:38_000 }, belarus:{ count:3, median:50_000 } } } },
+    { year:2024, prices:{ all:{ ours:{ count:9, median:38_000 }, belarus:{ count:1, median:50_000 } } } },
   ] };
   const best = bestComparisonYear(card, "all", "median", true);
   assert.equal(best.year.year, 2025);
@@ -112,16 +124,16 @@ test("без надёжного сравнения берётся самый с�
 
 test("если отдельные годы малы, достаточная сумма выбирается как Все года", () => {
   const card = { years:[
-    { year:2025, prices:{ 100000:{ ours:{ count:3, min:40_000, mean:42_000, median:42_000 }, belarus:{ count:3, min:50_000, mean:52_000, median:52_000 } } } },
-    { year:2024, prices:{ 100000:{ ours:{ count:3, min:30_000, mean:32_000, median:32_000 }, belarus:{ count:3, min:40_000, mean:45_000, median:45_000 } } } },
+    { year:2025, prices:{ 100000:{ ours:{ count:1, min:40_000, mean:42_000, median:42_000 }, belarus:{ count:1, min:50_000, mean:52_000, median:52_000 } } } },
+    { year:2024, prices:{ 100000:{ ours:{ count:1, min:30_000, mean:32_000, median:32_000 }, belarus:{ count:1, min:40_000, mean:45_000, median:45_000 } } } },
   ] };
   const best = bestComparisonYear(card, "100000", "median", true);
   assert.equal(best.year, null);
   assert.equal(best.aggregate, true);
   assert.ok(best.difference > 0);
   assert.deepEqual(best.prices, aggregateComparisonPrices(card.years, "100000", true));
-  assert.equal(best.prices.ours.count, 6);
-  assert.equal(best.prices.belarus.count, 6);
+  assert.equal(best.prices.ours.count, 2);
+  assert.equal(best.prices.belarus.count, 2);
 });
 
 test("сравниваются только одинаковые годы", () => {

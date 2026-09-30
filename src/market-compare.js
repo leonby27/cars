@@ -19,7 +19,7 @@ import { siteCountriesGenitive, siteFromPhrase } from "./origin.js";
 //    значит: у нас машины 2021–2023, а на площадке могут стоять только свежие.
 // 2. Сравниваем середины, а не «от». Самая дешёвая машина модели — почти всегда битая
 //    или с огромным пробегом; сравнение «от» и «от» всегда выходило бы в нашу пользу.
-// 3. Набор меньше пяти предложений не берём вовсе: малая выборка слишком случайна.
+// 3. Для показа цены и сравнения нужно хотя бы два предложения с каждой стороны.
 //
 // Год выбираем тот, где на белорусском рынке больше всего предложений: это и самый
 // представительный срез, и самый полезный человеку.
@@ -296,7 +296,7 @@ export function compareTable(rows, { collectedAt = null, hidden = 0 } = {}) {
       `${money(row.ourMedian)} · ${cars(row.ourCount)}`,
       row.diff > 0 ? `дешевле на ${money(row.diff)} (${row.diffPercent}%)` : `дороже на ${money(-row.diff)} (${-row.diffPercent}%)`,
     ]),
-    note: `Цены белорусского рынка — середина по открытым объявлениям белорусских площадок${date ? ` на ${date}` : ""}; наш расчёт — середина итоговой суммы до Минска по машинам того же года в нашем каталоге. Сравниваются только наборы, где с обеих сторон не меньше пяти предложений. Пометка «длиннобазная версия» означает, что в Китае машина длиннее европейской, хотя в Беларуси её продают под тем же именем. Эта сумма — ориентир до договора, а не окончательная цена.${hidden ? ` В этой таблице показаны первые ${new Intl.NumberFormat("ru-RU").format(rows.length)} строк, ещё ${new Intl.NumberFormat("ru-RU").format(hidden)} доступны на самой странице через поиск и фильтр по маркам.` : ""}`,
+    note: `Цены белорусского рынка — середина по открытым объявлениям белорусских площадок${date ? ` на ${date}` : ""}; наш расчёт — середина итоговой суммы до Минска по машинам того же года в нашем каталоге. Сравниваются только наборы, где с обеих сторон не меньше двух предложений. Пометка «длиннобазная версия» означает, что в Китае машина длиннее европейской, хотя в Беларуси её продают под тем же именем. Эта сумма — ориентир до договора, а не окончательная цена.${hidden ? ` В этой таблице показаны первые ${new Intl.NumberFormat("ru-RU").format(rows.length)} строк, ещё ${new Intl.NumberFormat("ru-RU").format(hidden)} доступны на самой странице через поиск и фильтр по маркам.` : ""}`,
   };
 }
 
@@ -339,7 +339,7 @@ export function coverageNote(item) {
   if (item.matched) return null;
   if (!item.offers) return "в белорусских объявлениях таких машин не нашлось";
   if (item.offers < 10) return `в Беларуси всего ${item.offers} ${item.offers === 1 ? "предложение" : item.offers < 5 ? "предложения" : "предложений"} — сравнивать не с чем`;
-  return "предложения есть, но ни по одной модели и году не набралось пяти машин с обеих сторон";
+  return "предложения есть, но ни по одной модели и году не набралось двух машин с обеих сторон";
 }
 
 /**
@@ -468,7 +468,7 @@ export const hasRebuiltHint = (row) => {
 // цены выглядел бы обещанием, которого мы не даём.
 export const REBUILT_HINT = "На белорусском рынке у этой модели встречаются машины из США после восстановления. Поэтому низкая цена может быть связана с историей конкретного автомобиля — проверьте VIN и фотографии до ремонта.";
 
-export const MIN_MARKET_COMPARISON_CARS = 5;
+export const MIN_MARKET_COMPARISON_CARS = 2;
 
 /** Цену стороны показываем только по выборке, достаточной для сравнения. */
 export const hasEnoughMarketSample = (stats) => (
@@ -485,6 +485,15 @@ export const hasEnoughComparisonSample = (prices) => (
 export const comparisonOwnPrices = (stats, quotaPricingOn) => (
   (quotaPricingOn ? stats?.quotaOn : stats?.quotaOff) || stats || null
 );
+
+// Карточке машины нужна только её модель. Общий свод и его кэш остаются едиными.
+export function selectMarketComparison(data, { brand, model, type } = {}) {
+  if (!brand && !model && !type) return data;
+  return { ...data, cards: (data?.cards || []).filter((card) =>
+    (!brand || card.brand === brand)
+    && (!model || normalizeModel(card.model) === normalizeModel(model))
+    && (!type || card.type === type)) };
+}
 
 /** Объединяет статистику нескольких лет для состояния «Все года». */
 export function aggregateComparisonStats(years, mileageKey, source, quotaPricingOn) {

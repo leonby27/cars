@@ -30,6 +30,7 @@ import { fileURLToPath } from "node:url";
 import { EncarClient, EncarGeoBlockedError } from "./lib/encar-client.mjs";
 import { loadKoreaSpecs } from "./lib/korea-specs.mjs";
 import { ENCAR_MANUFACTURERS } from "./lib/encar-parser.mjs";
+import { createEncarImportIdentity } from "./lib/encar-import-identity.mjs";
 import { MAX_LANDED_USD, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { estimateLandedCost, sourceUsdRate } from "../src/pricing.js";
 
@@ -71,17 +72,18 @@ const brands = Object.keys(ENCAR_MANUFACTURERS).filter((brand) => !brandFilter |
 const startedAt = new Date().toISOString();
 const log = (line) => console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
 
-// Известные номера — из базы, чтобы не качать карточки второй раз. Снятые тоже
-// известны: перевыставленная машина получает у площадки новый номер.
-const knownIds = new Set();
+// Объявления пропускаем до скачивания; повтор машины под другим номером —
+// после чтения карточки, по её sourceVehicleId. Снятая машина не блокирует
+// новое объявление, а активная не должна появляться в каталоге дважды.
+let identity = createEncarImportIdentity();
 let pool = null;
 if (writeDatabase) {
   ({ pool } = await import("../server/db.mjs"));
-  const { rows } = await pool.query("SELECT external_id FROM listings WHERE source='Encar'");
-  for (const row of rows) knownIds.add(String(row.external_id));
-  log(`[skip] в базе уже ${knownIds.size} корейских объявлений`);
-
+  const { rows } = await pool.query("SELECT external_id, status, source_payload->>'sourceVehicleId' AS source_vehicle_id FROM listings WHERE source='Encar'");
+  identity = createEncarImportIdentity(rows);
+  log(`[skip] в базе уже ${identity.knownIds.size} корейских объявлений`);
 }
+const { knownIds } = identity;
 
 const accepted = [];
 const rejected = new Map();
@@ -172,11 +174,12 @@ async function discover() {
     for (const car of file.cars || []) {
       if (accepted.length >= limit) break;
       if (!car?.externalId || car.source !== "Encar") continue;
-      if (knownIds.has(car.externalId)) { known += 1; continue; }
+      if (knownIds.has(String(car.externalId))) { known += 1; continue; }
       if (brandFilter && !brandFilter.includes(car.brand)) continue;
       const violation = importPolicyViolation(car);
       if (violation) { reject(`Import policy: ${violation}`, car.externalId); continue; }
-      knownIds.add(car.externalId);
+      const duplicate = identity.claim(car);
+      if (duplicate) { reject(duplicate, car.externalId); continue; }
       accepted.push(car);
       if (accepted.length - checkpointed >= batchSize) await checkpoint(false);
     }
@@ -235,8 +238,8 @@ async function worker() {
       if (violation) { reject(`Import policy: ${violation}`, candidate.externalId); continue; }
       const landedUsd = estimateLandedCost(car).totalUsd;
       if (isAbovePriceCeiling(landedUsd)) { reject(`landed price ${Math.round(landedUsd)} $ is above the ${MAX_LANDED_USD} $ ceiling`, candidate.externalId); continue; }
-      if (knownIds.has(car.externalId)) { reject("already in catalog", candidate.externalId); continue; }
-      knownIds.add(car.externalId);
+      const duplicate = identity.claim(car, { repair });
+      if (duplicate) { reject(duplicate, candidate.externalId); continue; }
       accepted.push(car);
       if (accepted.length - checkpointed >= batchSize) await checkpoint(false);
     } catch (error) {
