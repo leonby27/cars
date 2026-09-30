@@ -49,7 +49,7 @@ test("без объёма остаётся одно слово, у электр�
   );
 });
 
-test("пары «название — значение» для списка в две колонки", async () => {
+test("пары «название — значение» для карточки автомобиля", async () => {
   const { buildVehicleQuickFacts } = await import("../src/vehicle-quick-info.js");
   assert.deepEqual(
     buildVehicleQuickFacts({ year:2024, mileage:20000, type:"ДВС", engine:"2.0T 184HP L4", drive:"Передний", acceleration:8.7 }),
@@ -65,4 +65,36 @@ test("пары «название — значение» для списка в 
     buildVehicleQuickFacts({ type:"Электромобиль", electricRange:650, combinedRange:1000, drive:"AWD", battery:94.5, horsepower:568 }).map(({ value }) => value),
     ["Электро", "650 км / 1\u00a0000 км", "Полный", "94,5 кВт·ч", "568 л. с."],
   );
+});
+
+test("дополняет короткий список известными характеристиками, но не превышает восемь", async () => {
+  const { buildVehicleQuickFacts } = await import("../src/vehicle-quick-info.js");
+  assert.deepEqual(
+    buildVehicleQuickFacts({
+      year:2024, mileage:110010, type:"ДВС", engine:"3.5L", drive:"Передний",
+      bodyType:"Минивэн", bodyColor:"Black", transmission:"Automatic", owners:1, seats:9,
+    }),
+    [
+      { label:"Год выпуска", value:"2024" },
+      { label:"Пробег", value:"110\u00a0010 км" },
+      { label:"Двигатель", value:"Бензин 3.5 л" },
+      { label:"Привод", value:"Передний" },
+      { label:"Кузов", value:"Минивэн" },
+      { label:"Цвет", value:"Чёрный" },
+      { label:"Коробка", value:"Автомат" },
+      { label:"Мест", value:"9" },
+    ],
+  );
+  const full = buildVehicleQuickFacts({
+    year:2025, mileage:4300, type:"Электромобиль", electricRange:705,
+    drive:"Полный", battery:100, horsepower:789, acceleration:3.3,
+    bodyType:"Лифтбек", bodyColor:"White",
+  });
+  assert.equal(full.length, 8);
+  assert.equal(full.at(-1).label, "Разгон до 100 км/ч");
+  assert.equal(buildVehicleQuickFacts({
+    year:2024, mileage:110010, type:"ДВС", drive:"Передний",
+    bodyType:"Минивэн", bodyColor:"Black", transmission:"Automatic",
+    seats:9, acceleration:8.4,
+  }).at(-1).label, "Разгон до 100 км/ч");
 });

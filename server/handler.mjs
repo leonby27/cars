@@ -14,6 +14,7 @@ import { authenticateAccount, clearSessionCookie, createAccount, createSession, 
 import { brandCatalogGuide, brandStock, createOrderDraft, getCar, getCatalogMeta, getModelFacts, listCars, modelPriceStats, modelPriceStatsForQuota, modelSummary, soldListingVisible } from "./repository.mjs";
 import { marketComparison } from "./market-compare-data.mjs";
 import { priceRating } from "./price-rating.mjs";
+import { publicCarWithoutReport, reportGroupsForCar } from "./report-access.mjs";
 import { claimGuestAvailabilityLeads, createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
 import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, deviceKindFromHeaders, devicePlatformFromHeaders, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword, visitorCountry } from "./analytics.mjs";
@@ -569,6 +570,14 @@ export async function handleApiRequest(request, response) {
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.
     // Стоит до разбора адреса машины — иначе «summary» приняли бы за номер объявления.
     if (request.method === "GET" && url.pathname === "/api/cars/summary") return json(response, 200, await modelSummary(url.searchParams), catalogCache);
+    const reportMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)\/report$/);
+    if (reportMatch) {
+      const user = await getSessionUser(request);
+      if (!user) return json(response, 401, { error:"unauthorized" }, { "cache-control":"private, no-store" });
+      const car = await getCar(decodeURIComponent(reportMatch[1]));
+      if (!car || !soldListingVisible(car)) return json(response, 404, { error:"car_not_found" }, { "cache-control":"private, no-store" });
+      return json(response, 200, { groups:reportGroupsForCar(car) }, { "cache-control":"private, no-store" });
+    }
     const carMatch = request.method === "GET" && url.pathname.match(/^\/api\/cars\/([^/]+)$/);
     if (carMatch) {
       const car = await getCar(decodeURIComponent(carMatch[1]));
@@ -580,7 +589,7 @@ export async function handleApiRequest(request, response) {
       // Положение цены среди таких же машин считаем здесь же: карточке нужен готовый
       // ответ, а не ещё один запрос с её стороны.
       return car
-        ? json(response, 200, { ...car, priceRating:await priceRating(car) }, car.available === false ? soldListingCache : catalogCache)
+        ? json(response, 200, publicCarWithoutReport({ ...car, priceRating:await priceRating(car) }), car.available === false ? soldListingCache : catalogCache)
         : json(response, 404, { error:"car_not_found" });
     }
     if (request.method === "POST" && url.pathname === "/api/order-drafts") {

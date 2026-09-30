@@ -30,12 +30,13 @@ const blocked = () => Object.assign(Error('Source access check'), { code: 'SOURC
 async function fixture(t, { active = [a], listed = [a, b] } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'guazi-refresh-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const rows = new Map(active.map(id => [id, { ...snapshotRow(id), status: 'active' }]));
+  const rows = new Map(active.map(id => [id, { ...snapshotRow(id), status: 'active', fobPriceUsd: 28748 }]));
   const f = { root, rows, listed, reads: [], searches: [], writes: [], removals: [], messages: [], finalized: 0, releases: 0, closed: 0, snapshots: 0 };
   f.store = {
     target: 'test-only', acquire: async () => async () => { f.releases++; },
     snapshot: async () => { f.snapshots++; return [...rows.values()].filter(x => x.status === 'active').map(({ status, ...row }) => row); },
-    upsert: async car => { const exists = rows.has(car.externalId); f.writes.push(car); rows.set(car.externalId, { ...snapshotRow(car.externalId), status: 'active' }); return exists ? 'updated' : 'added'; },
+    upsert: async car => { const previous = rows.get(car.externalId); f.writes.push(car); rows.set(car.externalId, { ...snapshotRow(car.externalId), status: 'active', fobPriceUsd: car.fobPriceUsd }); return { action: previous ? 'updated' : 'added', priceChanged: !!previous && previous.fobPriceUsd !== car.fobPriceUsd }; },
+    countActive: async brands => [...rows.values()].filter(row => row.status === 'active' && (!brands || brands.includes(row.brand))).length,
     markUnavailable: async (row, evidence) => { f.removals.push({ row, evidence }); rows.get(row.externalId).status = 'unavailable'; },
     finalize: async () => { f.finalized++; },
   };
@@ -68,6 +69,9 @@ test('new round refreshes existing FOB, adds discoveries, and removes only after
   assert.equal(f.removals[0].evidence.observations.length, 2);
   assert.ok(f.writes.every(car => car.source === 'Guazi' && car.fobPort === 'Horgos' && car.fobPriceUsd === 28748));
   assert.equal(f.finalized, 1); assert.equal(f.releases, 1); assert.equal(f.closed, 1);
+  assert.match(f.messages[0], /^✅ Tesla\nМашин в выдаче источника: 2\nЦены изменились у: 0\nНовых заведено: 1\nСнято с продажи: 1\nОсталось в каталоге: 2\nСтраниц прочитано: 2/);
+  assert.match(f.messages[1], /^🏁 Каталог Guazi обновлён целиком/);
+  assert.match(f.messages[1], /В каталоге Guazi сейчас: 2/);
   await assert.rejects(fs.stat(refreshPaths(f.root).lock), { code: 'ENOENT' });
 });
 
@@ -79,6 +83,8 @@ test('next round actually rereads lists and cards; completed round cannot be res
   const second = await f.run();
   assert.notEqual(second.run, first.run); assert.equal(f.reads.length, 2); assert.equal(f.searches.length, n * 2);
   assert.equal(f.writes.at(-1).fobPriceUsd, 29900); assert.equal(f.snapshots, 2);
+  assert.match(f.messages.at(-2), /Цены изменились у: 1/);
+  assert.match(f.messages.at(-1), /изменилось цен: 1/);
 });
 
 test('blocked card saves committed checks; resume keeps initial snapshot and skips only those successes', async t => {
@@ -92,6 +98,7 @@ test('blocked card saves committed checks; resume keeps initial snapshot and ski
   const resumed = await f.run(false);
   assert.equal(resumed.status, 'complete'); assert.equal(resumed.run, state.run); assert.equal(f.snapshots, 1);
   assert.equal(f.reads.filter(id => id === a).length, 1); assert.equal(f.reads.filter(id => id === b).length, 2);
+  assert.match(f.messages.at(-2), /^✅ Tesla\nМашин в выдаче источника: 2\nЦены изменились у: 0\nНовых заведено: 1/);
 });
 
 test('catalog absence and a live detail only refresh price, keep active, and flag unverified availability', async t => {
@@ -230,6 +237,22 @@ test('store preserves enrichment and original import date but writes fresh FOB a
   assert.equal(merged.appearanceScore, 85); assert.equal(merged.conditionSummary, 'old report'); assert.equal(merged.importedAt, '2026-09-26');
   assert.equal(merged.fobPriceUsd, 29000); assert.deepEqual(merged.priceHistory, [{ at: '2026-09-28', priceCny: 200000 }]);
   assert.throws(() => mergeRefreshedGuazi(old, { ...fresh, fobPort: 'Shanghai' }), /Invalid/);
+});
+
+test('database store reports a price change only when an existing Horgos FOB quote differs', async () => {
+  const fresh = { ...snapshotRow(a), source: 'Guazi', priceBasis: 'FOB', fobPort: 'Horgos', fobPriceUsd: 28748,
+    chinaPrice: 200000, checkedAt: '2026-09-30', images: ['https://global-image-pub.guazistatic-global.com/car.jpg'] };
+  let previous = { source: 'Guazi', source_payload: { fobPriceUsd: 28000 } };
+  const saved = [];
+  const store = createGuaziRefreshStore({ databaseUrl: 'postgres://test:secret@localhost/test',
+    withTransaction: fn => fn({ query: async () => ({ rows: previous ? [previous] : [] }) }),
+    upsertCar: async car => saved.push(car) });
+  assert.deepEqual(await store.upsert(fresh), { action: 'updated', priceChanged: true });
+  previous.source_payload.fobPriceUsd = 28748;
+  assert.deepEqual(await store.upsert(fresh), { action: 'updated', priceChanged: false });
+  previous = null;
+  assert.deepEqual(await store.upsert(fresh), { action: 'added', priceChanged: false });
+  assert.equal(saved.length, 3);
 });
 
 test('database removal is source-scoped and rejects mismatched or single evidence', async () => {

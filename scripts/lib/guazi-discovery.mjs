@@ -21,6 +21,7 @@ export function validateDiscoveryItem(item,filters){
 export async function discoverPartition({search,body,state,save,event=async()=>{},leafLimit=400,currentYear=new Date().getUTCFullYear()}){
  if(state.version!==DISCOVERY_VERSION)throw Error('Unexpected discovery version');
  state.candidates||={};state.root||={filters:{}};
+ state.pagesRead??=0;
  async function walk(node,depth=0){
   if(depth>50)throw Error('Guazi discovery subdivision limit');
   if(node.done)return;
@@ -29,7 +30,7 @@ export async function discoverPartition({search,body,state,save,event=async()=>{
    let recommendId,expected=0;const seen=new Set();let incomplete=false;
    for(let page=1;page<=25;page++){
     const request={...body,...node.filters,sort:'created_at desc',pageNum:page,...(recommendId?{recommendId}:{})};
-    const data=(await search(request)).data;expected=Math.max(expected,data.totalCount);node.total=data.totalCount;
+    const data=(await search(request)).data;state.pagesRead++;expected=Math.max(expected,data.totalCount);node.total=data.totalCount;
     if(data.totalCount>leafLimit){incomplete=true;break;}
     if(data.recommendId)recommendId=data.recommendId;
     const oldSize=seen.size;

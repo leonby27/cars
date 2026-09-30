@@ -19,6 +19,42 @@ export const refreshPaths = root => ({
 });
 const emptyCounts = () => ({ checked: 0, updated: 0, added: 0, unavailable: 0, review: 0, rejected: 0 });
 const stopError = () => Object.assign(new Error('Guazi refresh paused'), { code: 'GUAZI_PAUSED' });
+const minutes = ms => Math.round(ms / 6000) / 10;
+const discoveryPages = node => node.children?.length
+  ? node.children.reduce((total, child) => total + discoveryPages(child), 0)
+  : node.done ? node.lastPage || 0 : 0;
+const discoverySections = node => node.children?.length
+  ? node.children.reduce((total, child) => total + discoverySections(child), 0)
+  : Number(node.done || false);
+
+export function formatGuaziBrandReport({ brand, sourceCount, priceChanged, added, unavailable, remaining, pages, sections, elapsedMs, review, rejected }) {
+  return [
+    `✅ ${brand}`,
+    `Машин в выдаче источника: ${sourceCount}`,
+    `Цены изменились у: ${priceChanged}`,
+    `Новых заведено: ${added}`,
+    `Снято с продажи: ${unavailable}`,
+    `Осталось в каталоге: ${remaining}`,
+    `Страниц прочитано: ${pages}${sections > 1 ? ` в ${sections} разделах выдачи` : ''} · ${minutes(elapsedMs)} мин`,
+    ...(review ? [`Нужно проверить: ${review}`] : []),
+    ...(rejected ? [`Отклонено новых: ${rejected}`] : []),
+  ].join('\n');
+}
+
+export function formatGuaziRoundReport({ brands, checked, priceChanged, added, unavailable, remaining, elapsedMs, review, rejected }) {
+  return [
+    '🏁 Каталог Guazi обновлён целиком',
+    `Круг 2 закрыт: обойдено марок ${brands}`,
+    '',
+    `За этот круг проверено наших объявлений: ${checked} · изменилось цен: ${priceChanged}`,
+    `За этот круг новых заведено: ${added}`,
+    `За этот круг снято с продажи: ${unavailable}`,
+    `В каталоге Guazi сейчас: ${remaining}`,
+    `Заняло: ${Math.round(elapsedMs / 360000) / 10} ч`,
+    ...(review ? [`Нужно проверить: ${review}`] : []),
+    ...(rejected ? [`Отклонено новых: ${rejected}`] : []),
+  ].join('\n');
+}
 
 export async function loadRefreshPolicy(root) {
   const config = { ...await readJson(path.join(root, 'config/guazi-core.json')), priceBasis: 'FOB' };
@@ -53,7 +89,13 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
   await lock.writeFile(String(process.pid));
   let state, browser, releaseStore, ownsState = false;
   const checkStop = () => { if (signal?.aborted) throw stopError(); };
-  const save = async () => { state.updatedAt = new Date().toISOString(); await writeJson(paths.state, state); };
+  let brandTick = null, runTick = null;
+  const save = async () => {
+    const now = Date.now();
+    if (runTick !== null) { state.activeElapsedMs = (state.activeElapsedMs || 0) + now - runTick; runTick = now; }
+    if (brandTick !== null) { state.brandElapsedMs = (state.brandElapsedMs || 0) + now - brandTick; brandTick = now; }
+    state.updatedAt = new Date().toISOString(); await writeJson(paths.state, state);
+  };
   const message = async text => { try { await notify(text); } catch (error) { log(`[telegram] ${error.message}`); } };
   try {
     checkStop();
@@ -87,6 +129,7 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     for (const result of results.values()) { state.counts.checked++; state.counts[result.outcome]++; }
     state.status = 'running'; state.pid = process.pid; delete state.error;
     ownsState = true;
+    runTick = Date.now();
     await save();
     let recording = Promise.resolve();
     const record = result => {
@@ -132,8 +175,11 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     for (const brand of brands) {
       checkStop();
       if (state.brandsDone.includes(brand.brand)) continue;
+      if (state.brand !== brand.brand) state.brandElapsedMs = 0;
+      brandTick = Date.now();
       state.brand = brand.brand; state.phase = 'discovery'; await save();
       const queue = new Map();
+      let pages = 0, sections = 0;
       for (const segment of brand.segments) for (const partition of config.exportEligibilityPartitions) {
         checkStop();
         const file = path.join(out, 'discovery', `${segment.id}-${partition}.json`);
@@ -143,6 +189,8 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
           search: body => retry(() => browser.publicSearch(body)), body: searchBody(segment, config, 1, partition),
           state: discovery, save: () => writeJson(file, discovery), event,
         });
+        pages += Math.max(discovery.pagesRead || 0, discoveryPages(discovery.root));
+        sections += discoverySections(discovery.root);
         for (const item of found) {
           const candidate = listCandidate(item, segment);
           if (!queue.has(candidate.id) || queue.get(candidate.id).candidate.violations.length) queue.set(candidate.id, { candidate, segment, partition, listed: true });
@@ -199,8 +247,8 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
             const car = { ...evaluation.car, checkedAt: card.observedAt, available: true, refreshRun: state.run,
               availabilityStatus: listed ? 'observed_in_catalog' : 'unverified',
               ...(job.partition === undefined ? {} : { sourceExportPolicyEligible: job.partition }) };
-            const action = await store.upsert(car);
-            await record({ id, brand: brand.brand, outcome: !listed ? 'review' : action === 'added' ? 'added' : 'updated',
+            const { action, priceChanged } = await store.upsert(car);
+            await record({ id, brand: brand.brand, outcome: !listed ? 'review' : action === 'added' ? 'added' : 'updated', priceChanged,
               ...(!listed ? { reason: 'Detail and price refreshed, but absent from catalog; availability remains unverified' } : {}) });
           } catch (error) { failure ||= error; }
         });
@@ -208,16 +256,28 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
         if (failure) throw failure;
       }
       checkStop();
+      const brandResults = [...results.values()].filter(result => result.brand === brand.brand);
+      const byOutcome = outcome => brandResults.filter(result => result.outcome === outcome).length;
+      const countBrands = [...new Set([...brand.segments.flatMap(segment => segment.covers), ...brand.existing.map(row => row.brand)])];
+      const remaining = await store.countActive(countBrands);
       state.brandsDone.push(brand.brand); await save();
-      await message(`Круг 2 · Guazi · ${brand.brand}: проверка завершена (${state.brandsDone.length}/${brands.length} марок).\nВсего: обновлено ${state.counts.updated}, добавлено ${state.counts.added}, снято ${state.counts.unavailable}, на проверку ${state.counts.review}.`);
+      await message(formatGuaziBrandReport({ brand: brand.brand, sourceCount: [...queue.values()].filter(job => job.listed).length,
+        priceChanged: brandResults.filter(result => result.priceChanged).length,
+        added: byOutcome('added'), unavailable: byOutcome('unavailable'), remaining, pages, sections,
+        elapsedMs: state.brandElapsedMs, review: byOutcome('review'), rejected: byOutcome('rejected') }));
+      brandTick = null;
     }
     const unchecked = snapshot.filter(row => !results.has(row.externalId));
     if (unchecked.length) throw Error(`Incomplete Guazi refresh: ${unchecked.length} starting listings unchecked`);
     checkStop();
     state.phase = 'dedupe'; await save();
     await store.finalize();
+    const remainingActive = await store.countActive();
     state.status = 'complete'; state.phase = 'complete'; state.finishedAt = new Date().toISOString(); await save();
-    await message(`Круг 2 · Guazi завершён.\nОбновлено: ${state.counts.updated}\nДобавлено: ${state.counts.added}\nСнято: ${state.counts.unavailable}\nНужно проверить: ${state.counts.review}\nОтклонено новых: ${state.counts.rejected}`);
+    await message(formatGuaziRoundReport({ brands: brands.length, checked: snapshot.length,
+      priceChanged: [...results.values()].filter(result => result.priceChanged).length,
+      added: state.counts.added, unavailable: state.counts.unavailable, remaining: remainingActive,
+      elapsedMs: state.activeElapsedMs, review: state.counts.review, rejected: state.counts.rejected }));
     return state;
   } catch (error) {
     if (ownsState) {

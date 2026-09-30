@@ -388,7 +388,9 @@ const nameVocabulary = vocabulary({ ...guaziNames, ...NAMES });
 const valueVocabulary = vocabulary({ ...guaziValues, ...VALUES });
 
 export function translateSpecGroup(name) {
-  return groupVocabulary.get(vocabularyKey(name)) || name;
+  const translated = groupVocabulary.get(vocabularyKey(name)) || name;
+  const prefixed = translated.match(/^(?:Характеристики|Осмотр):\s*(.+)$/u);
+  return prefixed ? prefixed[1][0].toUpperCase() + prefixed[1].slice(1) : translated;
 }
 
 export function translateSpecName(name) {
@@ -463,6 +465,7 @@ export function translateTechnicalSpecs(technicalSpecs) {
   return groups
     .map((group) => ({
       name: translateSpecGroup(group.name),
+      isReport: /^Осмотр:\s*/u.test(group.name) || group.name === "Страховая история",
       items: (group.items || []).map((item) => ({
         name: translateSpecName(item.name),
         value: translateSpecValue(item.value, item.name),

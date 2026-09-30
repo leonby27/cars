@@ -36,7 +36,7 @@ import { estimateDeliveryDays } from "./china-logistics.js";
 import { BODY_TYPES, normalizeBodyType } from "./body-types.js";
 import { ANY_DRIVE, DRIVE_TYPES, normalizeDrive, orderDrives } from "./drive-types.js";
 import { carAnchorSelector, clearCatalogReturn, feedAnchorSelector, readCatalogReturn, readHomeSearchReturn, readQuickViewReturn, saveCatalogReturn, saveCatalogReturnScroll, saveHomeSearchReturn, saveQuickViewReturn } from "./catalog-return.js";
-import { formatListingAge, getListingAddedAt, getSourceListedAt, isNewListing } from "./listing-age.js";
+import { getListingAddedAt, isNewListing } from "./listing-age.js";
 import { formatChangeDate, formatChangePercent, getPriceChange, minskClock } from "./price-change.js";
 import { selectSimilarCars } from "./similar-cars.js";
 import { MODEL_PAGES, MODELS_INDEX, findModelPage, modelPageForCar, modelPageRedirect } from "./model-pages.js";
@@ -47,7 +47,7 @@ import { loadModelText, loadedModelText } from "./model-text-load.js";
 import { buildVehicleQuickFacts } from "./vehicle-quick-info.js";
 import { PriceRatingScale, priceRatingVerdictFor } from "./price-rating-scale.jsx";
 import { brandNotice } from "./brand-notice.js";
-import { translateTechnicalSpecs } from "./spec-translations.js";
+import { translateSpecGroup, translateTechnicalSpecs } from "./spec-translations.js";
 import { conditionGradeMeta, worstConditionGrade } from "./condition-grade.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
@@ -162,6 +162,7 @@ const SetOrderedListingsContext = createContext(null);
 // кабинет на сервере или в браузере, карточке это знать незачем.
 const EMPTY_AVAILABILITY = { signedIn:false, request:null };
 const AvailabilityContext = createContext(EMPTY_AVAILABILITY);
+const AuthContext = createContext({ user:null, backend:null });
 // Заказ хранит полный идентификатор объявления, карточка — тоже, но в адресах живёт
 // короткий номер. Сравниваем по номеру, как и избранное.
 const orderedListingsFrom = (orders) => new Set((orders || []).map((order) => listingNumber(order?.listingId)).filter(Boolean));
@@ -3545,7 +3546,6 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
 function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey, hideNewBadge = false }) {
   const currency = useCurrency();
   const price = estimateLandedCost(car);
-  const listingAge = formatListingAge(getSourceListedAt(car));
   // Карточка целиком нажимается мышью, но кнопкой не притворяется: роль кнопки на блоке
   // со ссылками и своими кнопками внутри сбивает чтение с экрана, а её имя («Открыть …»)
   // не совпадало с написанным на карточке. С клавиатуры машину открывает ссылка-заголовок.
@@ -3574,12 +3574,6 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey, hideN
           {number(car.mileage)} км
           <span className="featured-card-specs-more"> · {powertrainName(car.type)} · {car.drive}</span>
         </p>
-        {listingAge && (
-          <div className="featured-listing-age">
-            <Clock size={15} />
-            {listingAge}
-          </div>
-        )}
         <div className="featured-price">
           <TotalPrice car={car} price={price} currency={currency} />
         </div>
@@ -4393,6 +4387,8 @@ const brandLogos = {
   Jeep: "jeep.svg",
   Jetour: "jetour.svg",
   Kia: "kia.svg",
+  Genesis: "genesis.svg",
+  KGM: "kgm.svg",
 };
 
 // Brands the importer keeps supplying, but the home page showcase leaves out.
@@ -5706,7 +5702,6 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
   const currency = useCurrency();
   const open = () => (onOpen ? onOpen(car) : navigate(carHref(car)));
   const price = estimateLandedCost(car);
-  const listingAge = formatListingAge(getSourceListedAt(car));
   // Роли кнопки у строки каталога нет по той же причине, что и у карточки витрины:
   // внутри свои ссылки и кнопки, а с клавиатуры открывает ссылка-заголовок.
   return (
@@ -5786,13 +5781,6 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
         <div className="source-line">
           <MapPin size={15} />
           {translateCity(car.city)}
-          {listingAge && (
-            <>
-              <span>•</span>
-              <Clock size={15} />
-              {listingAge}
-            </>
-          )}
         </div>
       </div>
       <div className="car-row-price">
@@ -7894,6 +7882,12 @@ function FactList({ items, tiles = false }) {
 // spec-translations.js; незнакомые значения показываются как есть.
 const SPEC_GROUP_ICONS = {
   "Общие данные": ClipboardText,
+  "Общие сведения": ClipboardText,
+  "Динамика и расход": Gauge,
+  "Электромотор и батарея": BatteryHigh,
+  "Объёмы и масса": Scales,
+  "Размеры": ArrowsLeftRight,
+  "Привод, тормоза, подвеска": Gear,
   "Кузов": CarProfile,
   "Электромотор": Lightning,
   "Батарея и зарядка": BatteryHigh,
@@ -7909,18 +7903,64 @@ const SPEC_GROUP_ICONS = {
   "Мультимедиа": Desktop,
   "Освещение": Lightbulb,
   "Стёкла и зеркала": Eye,
+  "Опции": SlidersHorizontal,
+  "Итог": ShieldCheck,
+  "Самодиагностика": Gauge,
+  "Коробка передач": Gear,
+  "Рулевое управление": SteeringWheel,
+  "Тормоза": Tire,
+  "Электрика": Lightning,
+  "Топливная система": GasPump,
+  "Высоковольтная система": Lightning,
+  "Кузовные панели": CarProfile,
+  "Страховая история": ShieldCheck,
+  "Батарея": BatteryHigh,
 };
 
-function TechnicalSpecs({ car }) {
+function TechnicalSpecs({ car, navigate }) {
+  const { user, backend } = useContext(AuthContext);
+  const [reportPayload, setReportPayload] = useState(null);
+  const [reportError, setReportError] = useState(false);
+  const [reportRetry, setReportRetry] = useState(0);
+  useEffect(() => {
+    if (!user || backend !== "server") {
+      setReportPayload(null);
+      setReportError(false);
+      return undefined;
+    }
+    if (!car.reportPreview?.length) return undefined;
+    const controller = new AbortController();
+    setReportError(false);
+    fetch(`/api/cars/${encodeURIComponent(car.id)}/report`, { signal:controller.signal, credentials:"same-origin" })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("report unavailable")))
+      .then((payload) => setReportPayload({ carId:car.id, accountId:user.id, groups:payload.groups || [] }))
+      .catch(() => { if (!controller.signal.aborted) { setReportPayload(null); setReportError(true); } });
+    return () => controller.abort();
+  }, [user?.id, backend, car.id, car.reportPreview, reportRetry]);
   // Цвета в техкарте источника нет — она описывает модель, а не конкретную машину.
   // Подмешиваем его из объявления первой строкой «Общих данных», чтобы цвет
   // находился и глазами, и встроенным поиском по полным данным.
   const groups = useMemo(() => {
     const translated = translateTechnicalSpecs(car.technicalSpecs);
     const color = translateColor(car.bodyColor);
-    if (color && translated.length) translated[0] = { ...translated[0], items: [{ name: "Цвет кузова", value: color }, ...translated[0].items] };
+    if (color && translated.length) {
+      const firstSpec = translated.findIndex((group) => !group.isReport);
+      const colorRow = { name: "Цвет кузова", value: color };
+      if (firstSpec >= 0) translated[firstSpec] = { ...translated[firstSpec], items: [colorRow, ...translated[firstSpec].items] };
+      else translated.unshift({ name: "Общие сведения", isReport: false, items: [colorRow] });
+    }
     return translated;
   }, [car.technicalSpecs, car.bodyColor]);
+  const specGroups = groups.filter((group) => !group.isReport);
+  const reportUnlocked = Boolean(user && backend === "server" && reportPayload?.carId === car.id && reportPayload.accountId === user.id);
+  const reportGroups = reportUnlocked
+    ? translateTechnicalSpecs({ groups:reportPayload.groups }).filter((group) => group.isReport)
+    : [];
+  const reportPreview = car.reportPreview?.length
+    ? car.reportPreview.map((group) => translateSpecGroup(group.name))
+    : groups.filter((group) => group.isReport).map((group) => group.name);
+  const searchableGroups = [...specGroups, ...reportGroups];
+  const reportHeadingId = useId();
   const [query, setQuery] = useState("");
   const searchBoxRef = useRef(null);
   // Тот же умный поиск: часть слова, кириллица и набранное не в той раскладке.
@@ -7929,7 +7969,7 @@ function TechnicalSpecs({ car }) {
   // поэтому страница не дёргается при наборе (ищем и по названию, и по значению).
   const found = useMemo(() => {
     if (!needles.length) return [];
-    return groups
+    return searchableGroups
       .map((group) => ({
         ...group,
         items: group.items.filter((item) => {
@@ -7938,7 +7978,7 @@ function TechnicalSpecs({ car }) {
         }),
       }))
       .filter((group) => group.items.length);
-  }, [groups, needles.join("|")]);
+  }, [searchableGroups, needles.join("|")]);
   const searching = needles.length > 0;
   // Клик мимо панели или Escape закрывают выдачу вместе с запросом. Escape
   // перехватываем на capture-фазе, чтобы в быстром просмотре он сперва закрыл
@@ -7960,8 +8000,30 @@ function TechnicalSpecs({ car }) {
       window.removeEventListener("keydown", onKeyDown, true);
     };
   }, [searching]);
-  if (!groups.length) return null;
+  if (!groups.length && !reportPreview.length) return null;
+  const renderGroup = (group) => {
+    const GroupIcon = SPEC_GROUP_ICONS[group.name] || ListChecks;
+    return (
+      <details className="spec-group" key={group.name}>
+        <summary>
+          <GroupIcon size={21} weight="duotone" aria-hidden="true" />
+          <span>{group.name}</span>
+          <small>{group.items.length}</small>
+          <CaretDown className="spec-caret" size={18} aria-hidden="true" />
+        </summary>
+        <div className="spec-rows">
+          {group.items.map((item, index) => (
+            <div className="spec-row" key={`${item.name}-${index}`}>
+              <span>{item.name}</span>
+              <b>{item.value}</b>
+            </div>
+          ))}
+        </div>
+      </details>
+    );
+  };
   return (
+    <>
     <section className="detail-facts-section technical-specs" aria-label="Характеристики автомобиля">
       <div className="spec-search-box" ref={searchBoxRef}>
         <SearchField
@@ -7975,8 +8037,8 @@ function TechnicalSpecs({ car }) {
           <div className="spec-search-results" role="region" aria-label="Результаты поиска по полным данным">
             {found.length
               ? found.map((group) => (
-                  <div className="spec-search-group" key={group.name}>
-                    <p>{group.name}</p>
+                  <div className="spec-search-group" key={`${group.isReport ? "report" : "spec"}-${group.name}`}>
+                    <p>{group.isReport ? `Отчет об авто · ${group.name}` : group.name}</p>
                     {group.items.map((item, index) => (
                       <div className="spec-row" key={`${item.name}-${index}`}>
                         <span>{item.name}</span>
@@ -7989,28 +8051,42 @@ function TechnicalSpecs({ car }) {
           </div>
         )}
       </div>
-      {groups.map((group) => {
-        const GroupIcon = SPEC_GROUP_ICONS[group.name] || ListChecks;
-        return (
-        <details className="spec-group" key={group.name}>
-          <summary>
-            <GroupIcon size={21} weight="duotone" aria-hidden="true" />
-            <span>{group.name}</span>
-            <small>{group.items.length}</small>
-            <CaretDown className="spec-caret" size={18} aria-hidden="true" />
-          </summary>
-          <div className="spec-rows">
-            {group.items.map((item, index) => (
-              <div className="spec-row" key={`${item.name}-${index}`}>
-                <span>{item.name}</span>
-                <b>{item.value}</b>
-              </div>
-            ))}
-          </div>
-        </details>
-        );
-      })}
+      {specGroups.map(renderGroup)}
     </section>
+    {(reportGroups.length > 0 || reportPreview.length > 0) && (
+      <section className="detail-facts-section technical-specs vehicle-report" aria-labelledby={reportHeadingId}>
+        <h2 id={reportHeadingId}>Отчет об авто</h2>
+        {reportUnlocked ? reportGroups.map(renderGroup) : user ? (
+          <div className="vehicle-report-status" role="status">
+            {backend !== "server" ? "Отчет временно недоступен." : reportError ? (
+              <>Не удалось загрузить отчет. <button type="button" onClick={() => setReportRetry((value) => value + 1)}>Повторить</button></>
+            ) : "Загружаем отчет…"}
+          </div>
+        ) : (
+          <div className="vehicle-report-gate">
+            <div className="vehicle-report-preview" aria-hidden="true">
+              {reportPreview.slice(0, 6).map((name, index) => {
+                const GroupIcon = SPEC_GROUP_ICONS[name] || ListChecks;
+                return <div className="vehicle-report-preview-row" key={`${name}-${index}`}>
+                  <GroupIcon size={21} weight="duotone" />
+                  <span>{name}</span>
+                  <i />
+                  <CaretDown size={18} />
+                </div>;
+              })}
+            </div>
+            <div className="vehicle-report-gate-content">
+              <LockKey size={47} weight="duotone" aria-hidden="true" />
+              <h3>Полный отчет — после регистрации</h3>
+              <p>Осмотр и страховая история доступны в личном кабинете</p>
+              <button className="primary vehicle-report-gate-button" type="button" onClick={() => navigate("/register", { preserveScroll:true })}>Открыть отчет</button>
+              <p className="vehicle-report-gate-login">Есть аккаунт? <button type="button" onClick={() => navigate("/login", { preserveScroll:true })}>Войти</button></p>
+            </div>
+          </div>
+        )}
+      </section>
+    )}
+    </>
   );
 }
 
@@ -8703,6 +8779,22 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   );
 }
 
+const VEHICLE_QUICK_FACT_ICONS = {
+  "Год выпуска": CalendarBlank,
+  "Пробег": Gauge,
+  "Двигатель": Engine,
+  "Запас хода": RoadHorizon,
+  "Привод": Gear,
+  "Батарея": BatteryHigh,
+  "Мощность": Lightning,
+  "Разгон до 100 км/ч": Timer,
+  "Кузов": CarProfile,
+  "Цвет": Palette,
+  "Коробка": Gear,
+  "Мест": UsersThree,
+  "Расход топлива": GasPump,
+};
+
 function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumbs = null, goBack = null, openFull = null, floatingCta = true, onOpenOrder = null, priceRatingPending = false, actions = true }) {
   const currency = useCurrency();
   // У цены в шапке выпадает «Цена среди похожих»; детализация стоит открытой в
@@ -8817,6 +8909,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   };
   const favoriteHint = favorite ? "Удалить из избранного" : "Добавить в избранное";
   const quickInfo = buildVehicleQuickFacts(car);
+  const quickInfoColumns = [quickInfo.slice(0, 4), quickInfo.slice(4, 8)].filter((column) => column.length);
   // Обзор модели (если написан) — для материалов журнала про неё. Отдельного блока
   // «О модели» в карточке нет с 25.09.2026: он вёл на ту же страницу модели, что и
   // первая ссылка «Все … в наличии» ниже.
@@ -8848,7 +8941,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   // там та же строка стоит отдельно, между фотографиями и характеристиками.
   const datesLine = carDatesLine(car);
   const conditionFacts = [
-    [CarProfile, `Владельцы ${inPhrase(carOrigin(car))}`, car.owners],
     [BatteryHigh, "Тип батареи", car.technicalSpecs?.count ? null : translateBattery(car.batteryType)],
   ].filter(([, , value]) => value);
   return (
@@ -8964,7 +9056,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               <FactList items={conditionFacts} />
             </section>
           )}
-          <TechnicalSpecs car={car} />
+          <TechnicalSpecs car={car} navigate={navigate} />
           <VehicleFaq car={car} navigate={navigate} />
           {/* Куда идти за объяснением сметы — в самом низу карточки, строками с
               иконками. Раньше эти ссылки стояли внутри разбора цены и терялись в
@@ -9004,11 +9096,24 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               а не отдельной плашкой. Нет основной информации — состояние стоит само. */}
           {quickInfo.length > 0 && (
             <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
-              <dl className="vehicle-quick-facts">
-                {/* Подсказка с полным текстом — на случай, если значение не влезло и
-                    обрезано многоточием. */}
-                {quickInfo.map(({ label, value }) => <div key={label} className="facts-row"><dt>{label}</dt><dd title={value}>{value}</dd></div>)}
-              </dl>
+              <div className={`vehicle-quick-facts${quickInfoColumns.length > 1 ? " two-columns" : ""}`}>
+                {quickInfoColumns.map((column, index) => (
+                  <dl className="vehicle-quick-facts-column" key={index}>
+                    {column.map(({ label, value }) => {
+                      const Icon = VEHICLE_QUICK_FACT_ICONS[label] || Info;
+                      return (
+                        <div key={label} className="vehicle-quick-fact">
+                          <Icon size={20} weight="duotone" aria-hidden="true" />
+                          <div className="vehicle-quick-fact-copy">
+                            <dt title={label}>{label}</dt>
+                            <dd title={value}>{value}</dd>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                ))}
+              </div>
               {car.source === "Guazi" && <VehicleConditionSummary car={car} />}
             </section>
           )}
@@ -15789,6 +15894,7 @@ export function App() {
      <OrderedListingsContext.Provider value={orderedListings}>
      <SetOrderedListingsContext.Provider value={publishOrderedListings}>
      <AvailabilityContext.Provider value={availability}>
+     <AuthContext.Provider value={{ user, backend:authBackend }}>
       <ClientSeo path={path} car={findCarByListing(cars, detailId)} carPending={Boolean(detailId) && (loading || routeLoading || awaitingTarget)} landing={findCatalogLanding(path) || modelLanding.landing || modelLanding.provisional} />
       <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
@@ -15821,6 +15927,7 @@ export function App() {
           redirectTo={resolvePostAuthPath(path, authBackgroundPath, pendingFavorite, pendingSavedSearch)}
         />
       )}
+     </AuthContext.Provider>
      </AvailabilityContext.Provider>
      </SetOrderedListingsContext.Provider>
      </OrderedListingsContext.Provider>

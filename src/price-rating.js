@@ -94,9 +94,9 @@ export const priceRatingVerdict = (priceUsd, medianUsd) => {
  * человек видит на шкале. Набор для сравнения всегда не меньше пяти машин
  * (PRICE_RATING_MIN_CARS на сервере), случайная дешёвая пара объявлений его не вызовет.
  */
-// Предупреждение снимали с карточки 18.09.2026 и вернули по просьбе владельца
-// 29.09.2026; выключается одним значением ниже.
-export const PRICE_RATING_DAMAGE_WARNING_SHOWN = true;
+// Предупреждение снова скрыто по просьбе владельца 30.09.2026; расчёт и текст
+// сохранены, чтобы при необходимости его можно было вернуть одним значением.
+export const PRICE_RATING_DAMAGE_WARNING_SHOWN = false;
 export const PRICE_RATING_DAMAGE_WARNING = "Возможно, машина восстановлена после удара, так как цена сильно ниже рынка";
 export const priceRatingDamageWarning = (assessment) => {
   const position = Number(assessment?.position);

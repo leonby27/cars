@@ -415,10 +415,10 @@ test("год сравнения виден в тексте цены, включ�
 });
 
 
-// Предупреждение снимали 18.09.2026 и вернули 29.09.2026.
-test("предупреждение о ремонте рисуется на карточке", async () => {
+// Предупреждение скрыто по просьбе владельца 30.09.2026.
+test("предупреждение о ремонте скрыто на карточке", async () => {
   const source = await readFile(new URL("../src/price-rating-scale.jsx", import.meta.url), "utf8");
-  assert.equal(PRICE_RATING_DAMAGE_WARNING_SHOWN, true);
+  assert.equal(PRICE_RATING_DAMAGE_WARNING_SHOWN, false);
   assert.match(source, /PRICE_RATING_DAMAGE_WARNING_SHOWN \? priceRatingDamageWarning\(assessment\) : null/);
 });
 

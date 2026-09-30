@@ -11,6 +11,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { getCar, listCars, soldListingVisible } from "./repository.mjs";
 import { priceRating } from "./price-rating.mjs";
+import { publicCarWithoutReport } from "./report-access.mjs";
 import { appShell } from "./dist-files.mjs";
 import { createSeoRenderer, carRoute, listingNumber } from "./seo-render.mjs";
 // Обзоры моделей весят больше мегабайта, поэтому этот модуль сам подключается только
@@ -97,6 +98,7 @@ export async function renderCarPage(id) {
   // уходит и в готовую разметку, и в данные для оживления, — сверка их не разойдётся.
   const rating = await priceRating(car);
   if (rating) car.priceRating = rating;
+  const publicCar = publicCarWithoutReport(car);
   // Разметка приложения собирается из сырых записей — тех же, что отдаёт /api/cars:
   // приложение нормализует их само, и браузер при оживлении повторит это с теми же
   // данными (renderHtml встраивает их в страницу). Адрес в метке — тот, по которому
@@ -104,10 +106,10 @@ export async function renderCarPage(id) {
   // идентификатору): браузер оживляет разметку, только когда метка совпадает с
   // адресной строкой.
   const route = `/cars/${encodeURIComponent(String(id).trim())}`;
-  const appRoot = await renderCarAppMarkup(route, car, related);
+  const appRoot = await renderCarAppMarkup(route, publicCar, related);
   const modelPage = modelPageForCar(car);
   const page = renderer.carPage({
-    car: { ...car, drive: normalizeDrive(car.drive) },
+    car: { ...publicCar, drive: normalizeDrive(car.drive) },
     related,
     modelPage,
     // Разделы машины: марка, тип, кузов и их сочетания — плюс ценовая полоса по её
@@ -116,7 +118,7 @@ export async function renderCarPage(id) {
     journal: BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [],
     appRoot,
     appRootPath: route,
-    bootData: appRoot ? { carId: car.id, carValue: car, relatedValue: related } : null,
+    bootData: appRoot ? { carId: car.id, carValue: publicCar, relatedValue: related } : null,
     indexable: sold ? false : undefined,
   });
   return { status: 200, html: page.html, sold };

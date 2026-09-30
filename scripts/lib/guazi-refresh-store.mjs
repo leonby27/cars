@@ -42,9 +42,16 @@ export function createGuaziRefreshStore({ pool, withTransaction, upsertCar, data
       return withTransaction(async client => {
         const { rows } = await client.query('SELECT source, source_payload FROM listings WHERE id=$1 FOR UPDATE', [fresh.id]);
         if (rows.length && rows[0].source !== 'Guazi') throw Error('Guazi refresh cannot modify another source');
+        const previousPrice = Number(rows[0]?.source_payload?.fobPriceUsd);
         await upsertCar(mergeRefreshedGuazi(rows[0]?.source_payload, fresh), client);
-        return rows.length ? 'updated' : 'added';
+        return { action: rows.length ? 'updated' : 'added', priceChanged: rows.length > 0 && Number.isFinite(previousPrice) && previousPrice > 0 && previousPrice !== fresh.fobPriceUsd };
       });
+    },
+    async countActive(brands = null) {
+      const { rows } = await pool.query(`SELECT count(*)::int AS total FROM listings l
+        JOIN vehicles v ON v.id=l.vehicle_id
+        WHERE l.source='Guazi' AND l.status='active' AND ($1::text[] IS NULL OR v.brand = ANY($1::text[]))`, [brands]);
+      return rows[0].total;
     },
     async markUnavailable(row, evidence) {
       if (!row || row.id !== `guazi-${row.externalId}`) throw Error('Unconfirmed Guazi unavailability');

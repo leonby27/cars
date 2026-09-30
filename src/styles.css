@@ -6452,7 +6452,7 @@ html[data-theme="dark"] #root .load-more {
 }
 .vehicle-quick-info {
   margin: 0 0 12px;
-  padding: 18px 20px;
+  padding: 14px 24px;
   border: 1px solid var(--line);
   border-radius: calc(16px * var(--corner-scale));
   background: var(--panel);
@@ -6521,22 +6521,70 @@ html[data-theme="dark"] #root .load-more {
 .vehicle-quick-info p + p {
   margin-top: 10px;
 }
-/* «Основная информация» и детализация цены — один вид строки (.facts-row):
-   название серое слева, лёгкий пунктир, значение обычным цветом у правого края,
+/* Основные сведения об автомобиле: иконка и два уровня текста, как в референсе. */
+.vehicle-quick-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+}
+.vehicle-quick-facts.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+.vehicle-quick-facts-column {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-width: 0;
+  margin: 0;
+}
+.vehicle-quick-fact {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+.vehicle-quick-fact > svg {
+  color: var(--ink);
+}
+.vehicle-quick-fact-copy {
+  min-width: 0;
+}
+.vehicle-quick-fact :is(dt, dd) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vehicle-quick-fact dt {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.vehicle-quick-fact dd {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+@media (max-width: 700px) {
+  .vehicle-quick-facts.two-columns {
+    column-gap: 12px;
+  }
+}
+/* Детализация цены и списки в отчёте используют строки с пунктиром:
+   название серое слева, значение обычным цветом у правого края,
    а в расчёте ещё значок «i» справа от суммы. Пунктир тянется на всё свободное
    место, но не короче 12px; что не помещается — и название, и значение, —
    обрезается многоточием, а не переносится. Шаг строк общий: строка 24px
    (столько занимает кружок значка «i») и 8px между строками. Порядок в строке
    задан через order: пунктир — это ::after самой строки, он встаёт между
    названием и значением. */
-.vehicle-quick-facts {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-}
 /* Селектор с родителем — сильнее общего .price-breakdown > div (там flex-start,
    зазор 14px и разнос по краям): при нём пунктир уезжал со строки текста. */
-:is(.vehicle-quick-facts, .price-breakdown, .delivery-stages, .vehicle-condition-details dl) > .facts-row {
+:is(.price-breakdown, .delivery-stages, .vehicle-condition-details dl) > .facts-row {
   display: flex;
   align-items: baseline;
   justify-content: flex-start;
@@ -8968,16 +9016,6 @@ footer {
   display: block;
   white-space: nowrap;
 }
-.featured-body > .featured-listing-age {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 5px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.3;
-}
 .featured-load-more {
   margin-top: 28px;
 }
@@ -9190,7 +9228,119 @@ html[data-theme="dark"] #root .spec-search,
 .spec-group {
   border-top: 1px solid var(--line);
 }
-.technical-specs > .spec-group:first-of-type {
+.vehicle-report-gate {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+.vehicle-report-preview {
+  position: absolute;
+  inset: 0 0 auto;
+  pointer-events: none;
+  opacity: 0.58;
+  filter: blur(1.5px);
+}
+.vehicle-report-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 17px;
+  font-style: normal;
+}
+.vehicle-report-preview-row svg:first-child {
+  flex: none;
+  color: var(--accent-dark);
+}
+.vehicle-report-preview-row i {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--muted);
+  filter: blur(5px);
+  opacity: 0.45;
+}
+.vehicle-report-gate::before {
+  position: absolute;
+  z-index: 1;
+  inset: 90px 0 0;
+  background: linear-gradient(to bottom, transparent, var(--page) 68%);
+  content: "";
+  pointer-events: none;
+}
+.vehicle-report-gate-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 65px 20px 42px;
+}
+.vehicle-report-gate-content > svg {
+  margin-bottom: 18px;
+  color: var(--accent-dark);
+}
+.vehicle-report-gate-content h3 {
+  margin: 0;
+  font-size: clamp(20px, 2.3vw, 26px);
+  line-height: 1.3;
+}
+.vehicle-report-gate-content > p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.vehicle-report-gate-button {
+  width: min(100%, 240px);
+  min-height: 44px;
+  margin-top: 24px;
+  cursor: pointer;
+}
+.vehicle-report-gate-content .vehicle-report-gate-login {
+  margin-top: 17px;
+}
+.vehicle-report-gate-login button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.vehicle-report-gate-login button:hover,
+.vehicle-report-gate-login button:focus-visible {
+  text-decoration: underline;
+}
+.vehicle-report-status {
+  padding: 24px 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.vehicle-report-status button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .vehicle-report-gate-content { padding: 56px 14px 42px; }
+  .vehicle-report-preview-row { height: 46px; font-size: 15px; }
+  .vehicle-report-gate-content h3 { font-size: 19px; }
+  .vehicle-report-gate-content > p { font-size: 14px; }
+}
+.technical-specs:not(.vehicle-report) > .spec-group:first-of-type {
   border-top: 0;
 }
 .spec-group:last-of-type {
@@ -13878,10 +14028,9 @@ html[data-theme="dark"] .brand-logo img[src$="/xiaomi.svg"] {
   .mobile-cards-grid .featured-body strong {
     font-size: calc(18px * var(--price-fit, 1));
   }
-  /* Тип с приводом и «размещено N дней назад» в узкой плитке не показываем:
-     они бы обрезались троеточием и съели место у цены. */
-  .mobile-cards-grid .featured-card-specs-more,
-  .mobile-cards-grid .featured-body > .featured-listing-age {
+  /* Тип с приводом в узкой плитке не показываем: он бы обрезался
+     троеточием и съел место у цены. */
+  .mobile-cards-grid .featured-card-specs-more {
     display: none;
   }
   .mobile-cards-grid .featured-favorite {

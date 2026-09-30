@@ -1,4 +1,6 @@
-import { engineVolume } from "./engine-spec.js";
+import { engineVolume, gearboxType } from "./engine-spec.js";
+import { normalizeBodyType } from "./body-types.js";
+import { translateColor } from "./colors.js";
 
 const clean = (value) => String(value ?? "").trim();
 const lower = (value) => clean(value).toLocaleLowerCase("ru-RU");
@@ -30,6 +32,23 @@ const driveLabel = (value) => {
   return normalized.includes("привод") ? normalized : `${normalized} привод`;
 };
 
+const mixedFuelConsumption = (car) => {
+  const groups = car?.technicalSpecs?.groups;
+  if (!Array.isArray(groups)) return null;
+  const item = groups
+    .flatMap((group) => Array.isArray(group?.items) ? group.items : [])
+    .find((candidate) => /(?:расход.*смешан|смешан.*расход|combined.*consum|consum.*combined)/iu.test(String(candidate?.name ?? "")));
+  if (!item) return null;
+  const raw = String(item.value ?? "");
+  const numbers = [...raw.matchAll(/\d+(?:[.,]\d+)?/gu)]
+    .map(([match]) => Number(match.replace(",", ".")))
+    .filter((number) => Number.isFinite(number) && number > 0);
+  if (!numbers.length) return null;
+  const rangeMatch = raw.match(/[\d.,]+\s*[-–—~～]\s*[\d.,]+/u);
+  const consumption = rangeMatch ? Math.min(numbers[0], numbers[1]) : numbers[0];
+  return `${formatNumber(consumption)} л`;
+};
+
 export function buildVehicleQuickInfo(car = {}) {
   const mileage = positiveNumber(car.mileage);
   const electricRange = positiveNumber(car.electricRange ?? car.range);
@@ -52,10 +71,7 @@ export function buildVehicleQuickInfo(car = {}) {
 
 const capitalize = (value) => value.replace(/^./u, (letter) => letter.toLocaleUpperCase("ru-RU"));
 
-/**
- * Те же факты парами «название — значение» для списка в две колонки. Набор и
- * порядок совпадают с короткой строкой выше; пустые пары не показываем.
- */
+/** Не больше восьми известных фактов для двух колонок карточки автомобиля. */
 export function buildVehicleQuickFacts(car = {}) {
   const mileage = positiveNumber(car.mileage);
   const electricRange = positiveNumber(car.electricRange ?? car.range);
@@ -63,12 +79,13 @@ export function buildVehicleQuickFacts(car = {}) {
   const battery = positiveNumber(car.battery);
   const horsepower = positiveNumber(car.horsepower ?? car.powerHp ?? car.enginePowerHp ?? car.hp);
   const acceleration = positiveNumber(car.acceleration);
+  const fuelConsumption = mixedFuelConsumption(car);
   const powertrain = powertrainLabel(car);
   const drive = driveLabel(car.drive);
   const range = electricRange
     ? [`${formatNumber(electricRange)} км`, combinedRange && combinedRange !== electricRange ? `${formatNumber(combinedRange)} км` : null].filter(Boolean).join(" / ")
     : null;
-  return [
+  const primary = [
     ["Год выпуска", positiveNumber(car.year) ? String(Number(car.year)) : null],
     ["Пробег", mileage ? `${formatNumber(mileage)} км` : null],
     ["Двигатель", powertrain ? capitalize(powertrain) : null],
@@ -76,6 +93,20 @@ export function buildVehicleQuickFacts(car = {}) {
     ["Привод", drive ? capitalize(drive.replace(/\s*привод$/u, "")) : null],
     ["Батарея", battery ? `${formatNumber(battery)} кВт·ч` : null],
     ["Мощность", horsepower ? `${formatNumber(horsepower)} л. с.` : null],
-    ["Разгон до 100 км/ч", acceleration ? `${acceleration.toLocaleString("ru-RU")} с` : null],
-  ].filter(([, value]) => value).map(([label, value]) => ({ label, value }));
+  ].filter(([, value]) => value);
+  const body = normalizeBodyType(car);
+  const extra = [
+    ["Кузов", body !== "Не определён" ? body : null],
+    ["Цвет", translateColor(car.bodyColor)],
+    ["Коробка", gearboxType(car) || null],
+  ].filter(([, value]) => value);
+  const seats = positiveNumber(car.seats);
+  const last = acceleration
+    ? ["Разгон до 100 км/ч", `${acceleration.toLocaleString("ru-RU")} с`]
+    : fuelConsumption ? ["Расход топлива", fuelConsumption]
+    : seats ? ["Мест", String(seats)] : null;
+  const availableExtras = extra.slice(0, Math.max(0, 8 - primary.length - Number(Boolean(last))));
+  return [...primary, ...availableExtras, ...(last ? [last] : [])]
+    .slice(0, 8)
+    .map(([label, value]) => ({ label, value }));
 }
