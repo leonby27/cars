@@ -1,0 +1,140 @@
+import "./storage-guard.js";
+import React from "react";
+import { captureCatalogFallback } from "./catalog-fallback.js";
+import { createRoot, hydrateRoot } from "react-dom/client";
+import { App } from "./App.jsx";
+import { CrashGuard } from "./crash-guard.jsx";
+import { installRussianTypography } from "./typography.js";
+import { loadModelText } from "./model-text-load.js";
+import { findModelPage } from "./model-pages.js";
+import { loadToolPageTexts } from "./tool-page-text-load.js";
+import { findToolPage } from "./tool-pages.js";
+import { loadBlogText } from "./blog-text-load.js";
+import { findBlogPost } from "./blog-posts.js";
+import { holdQuotaChoice, isEvQuotaOver } from "./ev-quota.js";
+import { setPricingQuotaOver } from "./pricing.js";
+import { countersAfterAppReady } from "./counter-loader.js";
+
+const root = document.getElementById("root");
+captureCatalogFallback(document, window.location);
+
+// Обзор модели, открытый по прямой ссылке: его текст лежит отдельным файлом, и
+// приложение ждёт этот файл, прежде чем занять собой страницу. Иначе посетитель
+// на мгновение увидел бы обзор без текста — заголовок, фотографии и пустоту.
+// Ошибку глотаем: без текста страница всё равно откроется, а он подгрузится сам.
+const modelSlug = (() => {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const pathname = window.location.pathname;
+  const unbased = base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
+  // Каталожная страница модели `/catalog/<марка>/<модель>`: если у модели есть обзор,
+  // его текст нужен до первого кадра — сервер отрисовал страницу уже с ним, и при
+  // оживлении разметка обязана совпасть.
+  return findModelPage(unbased.replace(/\/+$/, ""))?.slug || null;
+})();
+// Обёртка, сообщающая, что оживление готовой разметки завершилось. Эффект React
+// выполняет после сверки и первого кадра — раньше включать типографику нельзя:
+// она меняет пробелы в тексте, React счёл бы разметку чужой и перерисовал страницу
+// целиком, потеряв весь выигрыш готовой разметки. Просто вызвать типографику после
+// hydrateRoot тоже нельзя — оживление у React неспешное и к возврату вызова ещё
+// не закончено (на этом и споткнулась первая версия).
+function AfterHydration({ onReady, children }) {
+  React.useEffect(() => {
+    const cleanup = onReady?.();
+    countersAfterAppReady();
+    return cleanup;
+  }, [onReady]);
+  return children;
+}
+
+// На старых собранных страницах ещё может лежать прежний SEO-блок. Новая главная его
+// больше не создаёт, но удаление оставляем для безопасного перехода и остальных
+// статических страниц, которыми приложение завладевает после загрузки.
+const dropSeoBody = () => {
+  for (const node of document.querySelectorAll(".seo-body")) if (!root.contains(node)) node.remove();
+};
+
+function start() {
+  const app = (
+    <React.StrictMode>
+      <AfterHydration>
+        <CrashGuard>
+          <App />
+        </CrashGuard>
+      </AfterHydration>
+    </React.StrictMode>
+  );
+  // Главную страницу сборка кладёт в #root уже нарисованной (scripts/prerender-home.mjs):
+  // её не перерисовываем, а оживляем — React сверяет готовую разметку со своей и просто
+  // добавляет поведение. Так заголовок и первый экран видны сразу, до загрузки скрипта.
+  // В метке лежит адрес, для которого разметка собрана ("/" или "/cars/<номер>").
+  // Сверяем с настоящим адресом: файл главной веб-сервер подкладывает и под чужие
+  // адреса (/favorites и т.п.), а карточку могли открыть по неканонической ссылке —
+  // в обоих случаях оживлять чужую разметку бессмысленно, приложение рисует с нуля.
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const currentPath = (window.location.pathname.replace(/\/+$/, "") || "/").replace(base, "") || "/";
+  const prerenderedFor = (root.dataset.prerender || "").replace(/\/+$/, "") || (root.dataset.prerender ? "/" : "");
+  // Снимок каталога в записи истории (фильтры, порядок, догруженные страницы) —
+  // это уже не стартовое состояние, с которого собрана готовая разметка: после
+  // перезагрузки такой вкладки рисуем с нуля.
+  // То же с поиском на главной: возврат из карточки поднимает прошлую выдачу поиска
+  // из памяти вкладки (heroReturn), а сервер нарисовал обычную главную.
+  const restoredCatalog = Boolean(window.history.state?.catalog || window.history.state?.heroReturn);
+  if (prerenderedFor && prerenderedFor === currentPath && !restoredCatalog) {
+    document.documentElement.classList.remove("booting");
+    dropSeoBody();
+    // Цены в готовой разметке посчитаны без льготы — так же и первый кадр (ev-quota.js).
+    holdQuotaChoice(true);
+    // Расчёт цены запомнил режим ещё при загрузке модуля — сбрасываем на серверный.
+    setPricingQuotaOver(isEvQuotaOver());
+    const ready = () => installRussianTypography(root);
+    hydrateRoot(
+      root,
+      <React.StrictMode>
+        <AfterHydration onReady={ready}>
+          <CrashGuard>
+            <App />
+          </CrashGuard>
+        </AfterHydration>
+      </React.StrictMode>,
+    );
+    return;
+  }
+  // Build-time SEO pages contain meaningful HTML for crawlers and no-JS clients.
+  // The interactive application takes over once its bundle is ready.
+  if (root.hasChildNodes()) root.replaceChildren();
+  dropSeoBody();
+  // Статическую разметку `index.html` прячем до запуска приложения, чтобы она не
+  // мелькала перед нужной страницей. Она уже убрана — можно показывать приложение.
+  document.documentElement.classList.remove("booting");
+  // Пометку «чужой адрес с разметкой главной» ставит сама страница (prerender-home):
+  // до этого места была видна только шапка, дальше рисуем настоящую страницу.
+  document.documentElement.classList.remove("foreign-boot");
+  installRussianTypography(root);
+
+  createRoot(root).render(app);
+}
+
+// Страницы-инструменты (растаможка, доставка, квота, калькулятор) устроены так же:
+// их тексты лежат отдельным файлом, и по прямой ссылке приложение ждёт его, чтобы
+// страница появилась сразу с текстом. Ошибку глотаем по той же причине.
+const isToolPath = (() => {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const pathname = window.location.pathname;
+  const unbased = base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
+  return Boolean(findToolPage(unbased));
+})();
+
+// Материал журнала по прямой ссылке: сервер нарисовал его уже с текстом
+// (server/static-page.mjs), поэтому текст нужен до первого кадра — иначе оживление
+// увидело бы страницу без текста и перерисовало её целиком.
+const blogSlug = (() => {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const pathname = window.location.pathname;
+  const unbased = base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
+  return unbased.startsWith("/blog/") ? findBlogPost(unbased.replace(/\/+$/, ""))?.slug || null : null;
+})();
+
+if (modelSlug) loadModelText(modelSlug).catch(() => null).then(start);
+else if (blogSlug) loadBlogText(blogSlug).catch(() => null).then(start);
+else if (isToolPath) loadToolPageTexts().catch(() => null).then(start);
+else start();

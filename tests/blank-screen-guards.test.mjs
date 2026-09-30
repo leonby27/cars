@@ -10,6 +10,7 @@ import test from "node:test";
 
 const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+const entry = fs.readFileSync(new URL("../src/app-entry.jsx", import.meta.url), "utf8");
 
 test("компоненты с проверкой «машины нет» не читают машину до неё", () => {
   const guard = /^  if \(!car\) return /m;
@@ -37,7 +38,8 @@ test("история пишется только через обёртки с tr
 
 test("приложение обёрнуто защитой от пустого экрана, хранилище проверяется первым", () => {
   assert.match(main, /^import "\.\/storage-guard\.js";/);
-  assert.equal(main.match(/<CrashGuard>\s*<App \/>\s*<\/CrashGuard>/g).length, 2);
+  assert.match(entry, /^import "\.\/storage-guard\.js";/);
+  assert.equal(entry.match(/<CrashGuard>\s*<App \/>\s*<\/CrashGuard>/g).length, 2);
 });
 
 test("при запрете хранилища приложение получает хранилище в памяти", async () => {
