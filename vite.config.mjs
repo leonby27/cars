@@ -27,14 +27,13 @@ export default defineConfig({
       // (snippets/abcars-photo-location.conf). Локально nginx нет, и без этой
       // переадресации каталог остаётся без снимков. Берём ту же серверную копию,
       // что и посетители сайта: прямой запрос в Китай обходил уже готовый кэш.
-      // Кадры Encar (Корея): пока блок nginx для /photo/encar/ не выложен на сервер,
-      // локально берём кадр прямо у хранилища площадки — размер из пути переводится
+      // Кадры Encar (Корея) локально берём прямо у хранилища — размер из пути переводится
       // в его параметры, как это делает nginx (deploy/nginx-abcars-photo-location.conf).
       "/photo/encar": {
         target: "https://ci.encar.com",
         changeOrigin: true,
         rewrite: (url) => {
-          const match = url.match(/^\/photo\/encar\/w(\d+)(\/[^?]*)/);
+          const match = url.match(/^\/photo\/encar\/(?:v2\/)?w(600|1200|1920)(\/[^?]*)/);
           return match ? `${match[2]}?${encarResizeQuery(Number(match[1]))}` : url;
         },
         configure(proxy) {

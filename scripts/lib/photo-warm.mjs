@@ -1,4 +1,4 @@
-import { isEncarPhotoHost } from "../../src/photo-source.js";
+import { isEncarPhotoHost, vehiclePhotoHref } from "../../src/photo-source.js";
 // План запросов совпадает с размерами App.jsx. Сначала обложки, потом галерея.
 export function photoWarmUrls(car, { site, widths = ["original", 600], previewCount = 1, galleryCount = 1 }) {
   const sources = [...new Set([car.image, ...(car.images || [])].filter(Boolean))];
@@ -11,7 +11,7 @@ export function photoWarmUrls(car, { site, widths = ["original", 600], previewCo
       // Кадры Encar греем через тот же сервер: бакеты по ширине стоят в пути.
       if (isEncarPhotoHost(url.hostname)) {
         const buckets = index === 0 ? [600, 1920] : [600];
-        for (const width of buckets) urls.add(`${site}/photo/encar/w${width}${url.pathname}`);
+        for (const width of buckets) urls.add(vehiclePhotoHref(source, width, { mirrorOrigin: site, cacheVersion: "" }));
         continue;
       }
       if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) continue;

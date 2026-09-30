@@ -234,11 +234,33 @@ Korean cars lose their stored frames a week later like everyone else (`photo-cle
   lacks «gasoline» so hybrids stay out of the petrol fuel filter.
 - Claims: `claimsCount` (number) — the «без страховых случаев» filter accepts it next to
   the Chinese `0次理赔` strings.
-- Photos: `ci.encar.com` frames go through our cache as `/photo/encar/w600|w1200|w1920/<path>`
+- Photos: `ci.encar.com` frames go through our cache as `/photo/encar/v2/w600|w1200|w1920/<path>`
   (`src/photo-source.js`, store, warm-up) and the nginx block in
   `deploy/nginx-abcars-photo-location.conf`.
 - Import policy: `importPolicyViolation` is per country; Korea additionally allows
   Genesis and KGM; Chevrolet/Renault stay excluded for both countries.
+
+### Photo cache correction (2026-09-30, prepared locally)
+
+Production requests for photos 42664100_019.jpg and 42124074_044.jpg reproduced a cache collision:
+after requesting w600, w1200 and w1920 returned the same 600×338 JPEG bytes. Direct
+Encar requests returned 1200×675 and 1919×1080. The origin rewrite removed the width
+from `$uri`, which also served as the nginx cache key. The corrected block preserves
+the sized `$uri` and uses a separate `$encar_path` only for the upstream request.
+
+The `v2` path bypasses previously cached browser responses and permanent files that
+may contain a small image under a large filename. Legacy URLs are mapped to v2 by
+nginx; photo cleanup recognizes both generations. No existing files need deletion.
+
+On the next **explicitly authorized deployment**, install the updated nginx photo
+snippet before publishing the frontend (validate with `nginx -t` and reload). Also
+sync `src/photo-source.js`, `scripts/lib/catalog-photo-store.mjs`, and
+`scripts/lib/photo-cleanup.mjs` to their matching paths under `/opt/abcars-photo-store`
+and restart any already-running photo-store/gallery-store services. Preserve their
+queues and timer settings. New photos are fetched on demand; do not bulk-download or
+purge old files. Run `ABCARS_TEST_NGINX=1 node --test tests/nginx-encar-cache.test.mjs`
+with the local `nginx:stable` Docker image to verify both request orders, versioned
+browser URLs, legacy URLs and persistent copies without accessing production.
 
 ## Local database and API
 

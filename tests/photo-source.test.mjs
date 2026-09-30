@@ -130,12 +130,14 @@ test("сломанное превью Guazi переключается на ор
 
 test("Encar: три размера в пути через наш сервер, соцсетям — JPEG с параметрами хранилища", () => {
   const encar = "https://ci.encar.com/carpicture/carpicture01/pic4012/40123456_001.jpg";
-  assert.equal(vehiclePhotoHref(encar, 600, { cacheVersion: "" }), "/photo/encar/w600/carpicture/carpicture01/pic4012/40123456_001.jpg");
-  assert.equal(vehiclePhotoHref(encar, 1200, { cacheVersion: "" }), "/photo/encar/w1200/carpicture/carpicture01/pic4012/40123456_001.jpg");
-  assert.equal(vehiclePhotoHref(encar, "original", { cacheVersion: "" }), "/photo/encar/w1920/carpicture/carpicture01/pic4012/40123456_001.jpg");
-  assert.equal(vehiclePhotoHref(encar, 0, { cacheVersion: "" }), "/photo/encar/w600/carpicture/carpicture01/pic4012/40123456_001.jpg");
+  assert.equal(vehiclePhotoHref(encar, 600, { cacheVersion: "" }), "/photo/encar/v2/w600/carpicture/carpicture01/pic4012/40123456_001.jpg");
+  assert.equal(vehiclePhotoHref(encar, 1200, { cacheVersion: "" }), "/photo/encar/v2/w1200/carpicture/carpicture01/pic4012/40123456_001.jpg");
+  assert.equal(vehiclePhotoHref(encar, "original", { cacheVersion: "" }), "/photo/encar/v2/w1920/carpicture/carpicture01/pic4012/40123456_001.jpg");
+  assert.equal(vehiclePhotoHref(encar, 0, { cacheVersion: "" }), "/photo/encar/v2/w600/carpicture/carpicture01/pic4012/40123456_001.jpg");
   assert.equal(socialPhotoHref(encar), `${encar}?impolicy=heightRate&rh=608&cw=1080&ch=608&cg=Center`);
-  assert.equal(socialPhotoHref("/photo/encar/w600/carpicture/carpicture01/pic4012/40123456_001.jpg", { origin: "https://abcars.by" }), "https://abcars.by/photo/encar/w1200/carpicture/carpicture01/pic4012/40123456_001.jpg");
+  assert.equal(socialPhotoHref("/photo/encar/v2/w600/carpicture/carpicture01/pic4012/40123456_001.jpg", { origin: "https://abcars.by" }), "https://abcars.by/photo/encar/v2/w1200/carpicture/carpicture01/pic4012/40123456_001.jpg");
+  assert.equal(vehiclePhotoHref(encar, 1920, { cacheVersion: "" }), vehiclePhotoHref(encar, "original", { cacheVersion: "" }));
+  assert.equal(socialPhotoHref("/photo/encar/w600/carpicture/carpicture01/pic4012/40123456_001.jpg", { origin: "https://abcars.by" }), socialPhotoHref(encar, { origin: "https://abcars.by" }));
   // Чужой хост по-прежнему уходит как есть.
   assert.equal(vehiclePhotoHref("https://example.com/a.jpg", 600), "https://example.com/a.jpg");
 });

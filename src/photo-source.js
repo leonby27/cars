@@ -30,11 +30,14 @@ export function allowedGuaziPhotoQuery(url) {
 
 // Хранилище Encar (Корея): кадр по умолчанию 640×360, размер задаётся параметрами
 // (`?impolicy=heightRate&rh=<высота>&cw=<ширина>&ch=<высота>&cg=Center`). Через наш
-// сервер идёт три размера, и размер стоит в самом пути (`/photo/encar/w600/…`), а не в
+// сервер идёт три размера, и размер стоит в самом пути (`/photo/encar/v2/w600/…`), а не в
 // параметрах: nginx хранит копии по адресу, и `?w=` слепил бы два размера в один файл.
 const encarHosts = new Set(["ci.encar.com"]);
 export const ENCAR_PHOTO_WIDTHS = Object.freeze([600, 1200, 1920]);
-const encarBucket = (width) => (width === "original" ? 1920 : Number(width) > 600 ? 1200 : 600);
+// Новая версия пути обходит и браузерный кэш, и постоянные копии, которые старый
+// nginx мог сохранить в 600px под именем большого кадра. Другие источники не трогаем.
+export const ENCAR_PHOTO_PREFIX = "/photo/encar/v2";
+const encarBucket = (width) => (width === "original" || Number(width) > 1200 ? 1920 : Number(width) > 600 ? 1200 : 600);
 /** Параметры хранилища Encar для ширины бакета — их же подставляет nginx (deploy/nginx-abcars-photo-location.conf). */
 export const encarResizeQuery = (width) => `impolicy=heightRate&rh=${Math.round(width * 9 / 16)}&cw=${width}&ch=${Math.round(width * 9 / 16)}&cg=Center`;
 export const isEncarPhotoHost = (hostname) => encarHosts.has(String(hostname || "").toLowerCase());
@@ -61,7 +64,7 @@ export function vehiclePhotoHref(source, width = 0, { mirrorOrigin = "", cacheVe
       return versionedPhotoHref(`${mirrorOrigin}/api/image?src=${encodeURIComponent(guaziSizedHref(url, width))}`, cacheVersion);
     }
     if (isEncarPhotoHost(url.hostname)) {
-      return versionedPhotoHref(`${mirrorOrigin}/photo/encar/w${encarBucket(width)}${url.pathname}`, cacheVersion);
+      return versionedPhotoHref(`${mirrorOrigin}${ENCAR_PHOTO_PREFIX}/w${encarBucket(width)}${url.pathname}`, cacheVersion);
     }
     if (!/(^|\.)autoimg\.cn$/.test(url.hostname)) return source;
     const path = width === "original"
@@ -81,11 +84,11 @@ export function socialPhotoHref(source, { origin = "", width = 1080 } = {}) {
   const sourceOrigin = "https://erscglobal2.autoimg.cn";
   try {
     // Кадр Encar: уже JPEG, размер — параметрами хранилища; со своего домена — бакет 1200.
-    const encarStored = String(source).match(/^\/photo\/encar\/w\d+(\/.+)$/);
+    const encarStored = String(source).match(/^\/photo\/encar\/(?:v2\/)?w\d+(\/.+)$/);
     const encarUrl = encarStored ? new URL(`https://ci.encar.com${encarStored[1]}`) : new URL(source.startsWith("//") ? `https:${source}` : source, "https://abcars.by");
     if (isEncarPhotoHost(encarUrl.hostname)) {
       if (!/\.jpe?g$/i.test(encarUrl.pathname)) return "";
-      return origin ? `${origin}/photo/encar/w1200${encarUrl.pathname}` : `https://${encarUrl.hostname}${encarUrl.pathname}?${encarResizeQuery(width)}`;
+      return origin ? `${origin}${ENCAR_PHOTO_PREFIX}/w1200${encarUrl.pathname}` : `https://${encarUrl.hostname}${encarUrl.pathname}?${encarResizeQuery(width)}`;
     }
     const url = new URL(
       source.startsWith("/photo/") ? `${sourceOrigin}${source.slice("/photo".length)}`

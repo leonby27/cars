@@ -6,7 +6,7 @@ import { guaziImageCacheFile } from '../../server/guazi-image-key.mjs';
 
 const che168PhotoHref = href => /^\/photo\/escimg\/[A-Za-z0-9/_.-]+\.webp$/.test(href) && !href.split('/').includes('..');
 // Кадры Encar: три размера в пути, JPEG (src/photo-source.js).
-const encarPhotoHref = href => /^\/photo\/encar\/w(600|1200|1920)\/[A-Za-z0-9/_.-]+\.jpe?g$/i.test(href) && !href.split('/').includes('..');
+const encarPhotoHref = href => /^\/photo\/encar\/v2\/w(600|1200|1920)\/[A-Za-z0-9/_.-]+\.jpe?g$/i.test(href) && !href.split('/').includes('..');
 
 // Кадры Guazi идут через /api/image: сайт сам кладёт копию в свой кэш
 // (server/guazi-image-cache.mjs), поэтому второй копии здесь не нужно.

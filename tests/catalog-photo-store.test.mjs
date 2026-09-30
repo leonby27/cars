@@ -8,6 +8,27 @@ import {galleryPhotoPaths} from '../scripts/lib/gallery-photo-store.mjs';
 import {guaziImageCacheFile} from '../server/guazi-image-key.mjs';
 const images=Array.from({length:8},(_,i)=>`https://erscglobal2.autoimg.cn/escimg/auto/1400x0_c42_${i}.webp`);
 const webp=Buffer.from('RIFF0000WEBPtest');
+test('Encar: старые ошибочные копии не мешают сохранить новые размеры',async()=>{
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'encar-store-'));
+ try{
+  const image='https://ci.encar.com/carpicture06/pic4266/42664100_001.jpg';
+  const paths=galleryPhotoPaths({images:[image]});
+  assert.deepEqual(paths,[600,1920].map(width=>`/photo/encar/v2/w${width}/carpicture06/pic4266/42664100_001.jpg`));
+  assert.deepEqual(catalogPhotoPaths({image}),[paths[0]]);
+  const old=path.join(directory,paths[1].replace('/v2/','/'));
+  await fs.mkdir(path.dirname(old),{recursive:true});await fs.writeFile(old,'old small image');
+  const jpeg=Buffer.from([255,216,255,217]);let calls=0;
+  const options={directory,minFreeBytes:0,fetcher:async url=>{
+   calls++;assert.equal(url.pathname,paths[1]);
+   return new Response(jpeg,{headers:{'content-type':'image/jpeg'}});
+  }};
+  assert.equal((await storeCatalogPhoto(paths[1],options)).stored,true);
+  assert.equal((await storeCatalogPhoto(paths[1],options)).stored,false);
+  assert.equal(calls,1);
+  assert.deepEqual(await fs.readFile(path.join(directory,paths[1])),jpeg);
+  assert.equal(await fs.readFile(old,'utf8'),'old small image');
+ }finally{await fs.rm(directory,{recursive:true,force:true});}
+});
 test('сохраняются первые пять кадров в единственном размере каталога 600px без оригиналов',()=>{
  const urls=catalogPhotoPaths({images},{previewCount:5});assert.equal(urls.length,5);assert.ok(urls.every(u=>/\/600x0_c42_/.test(u)));assert.ok(!urls.some(u=>u.includes('_5.webp')));
  assert.deepEqual(catalogPhotoPaths({images:['https://example.com/a.webp']}),[]);

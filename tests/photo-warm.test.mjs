@@ -9,6 +9,11 @@ import { photoHref } from "../server/seo-render.mjs";
 const site = "https://abcars.by";
 const images = Array.from({ length: 8 }, (_, i) => `https://erscglobal2.autoimg.cn/escimg/auto/g34/M02/1400x0_c42_car${i}.jpg.webp`);
 
+test("Encar: прогрев и галерея используют одну новую версию, большой кадр — 1920px", () => {
+  const image = "https://ci.encar.com/carpicture06/pic4266/42664100_001.jpg";
+  assert.deepEqual(photoWarmUrls({ image }, { site }), [600, "original"].map(width => site + photoHref(image, width, { cacheVersion: "" })));
+});
+
 test("ночной проход сохраняет два размера только обложки", () => {
   assert.deepEqual(photoWarmUrls({ image: images[0], images }, { site }),
     ["original", 600].map(width => site + photoHref(images[0], width, { cacheVersion:"" })));

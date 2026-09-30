@@ -91,6 +91,7 @@ test('Encar: три размера одного кадра — один влад
   const encar='https://ci.encar.com/carpicture02/pic4212/42124074_001.jpg';
   assert.equal(photoIdentity(encar),'encar:/carpicture02/pic4212/42124074_001.jpg');
   assert.equal(photoIdentity('/photo/encar/w600/carpicture02/pic4212/42124074_001.jpg'),photoIdentity('/photo/encar/w1920/carpicture02/pic4212/42124074_001.jpg'));
+  assert.equal(photoIdentity('/photo/encar/v2/w1920/carpicture02/pic4212/42124074_001.jpg'),photoIdentity(encar));
   assert.equal(photoIdentity(vehiclePhotoHref(encar,600,{cacheVersion:''})),photoIdentity(encar));
   assert.equal(photoIdentity('/photo/encar/w600/../x.jpg'),null);
   assert.equal(photoIdentity('/photo/encar/w300/carpicture02/a.jpg'),null);
