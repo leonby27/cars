@@ -183,3 +183,42 @@ test("переходит к общему пробегу при нехватке 
   assert.equal(vehicleMarketSavings(car, data), null);
   assert.equal(vehicleMarketChoice(car, data), null);
 });
+
+test("при 0–1 местном объявлении и минимум 10 наших показывает ×10 без плашки экономии", () => {
+  for (const belarus of [null, stats(50000, 0), stats(50000, 1)]) {
+    for (const count of [9, 10, 100]) {
+      const data = fixture();
+      data.cards[0].years[0].prices = { all: { ours: stats(10000, count), belarus } };
+      const choice = vehicleMarketChoice(car, data);
+      assert.equal(choice?.multiplier ?? null, count >= 10 ? "×10" : null);
+      if (choice) assert.equal(choice.mileageMax, null);
+      assert.equal(vehicleMarketSavings(car, data), null);
+    }
+  }
+});
+
+test("не принимает неизвестную или повреждённую выборку за отсутствие местных объявлений", () => {
+  for (const belarus of [undefined, {}, { count: null }, { count: -1 }, { count: 0.5 }, { count: Infinity }]) {
+    const data = fixture();
+    data.cards[0].years[0].prices = { all: { ours: stats(10000, 100), belarus } };
+    assert.equal(vehicleMarketChoice(car, data), null);
+  }
+  for (const count of [undefined, NaN, Infinity, 10.5]) {
+    const data = fixture();
+    data.cards[0].years[0].prices = { all: { ours: { count }, belarus: null } };
+    assert.equal(vehicleMarketChoice(car, data), null);
+  }
+});
+
+test("редкая местная выборка не заменяет достаточный срез и не смешивает машины", () => {
+  const data = fixture();
+  data.cards[0].years[0].prices.all = { ours: stats(10000, 100), belarus: null };
+  assert.equal(vehicleMarketChoice(car, data), null); // В ближайшем достаточном срезе выбор одинаковый.
+  delete data.cards[0].years[0].prices["100000"];
+  assert.equal(vehicleMarketChoice(car, data).multiplier, "×10");
+  for (const patch of [{ year: 2021 }, { type: "ДВС" }, { model: "X4" }, { available: false }]) {
+    assert.equal(vehicleMarketChoice({ ...car, ...patch }, data), null);
+  }
+  data.cards[0].longVersion = true;
+  assert.equal(vehicleMarketChoice(car, data), null);
+});

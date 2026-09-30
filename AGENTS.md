@@ -1,5 +1,11 @@
 # Prototype Instructions
 
+Vehicle choice sparse Belarus sample (owner correction, 2026-09-30): when no sufficient shared price sample exists after widening mileage, allow the choice badge at the all-mileage slice if our exact model/year/powertrain has at least 10 listings and the Belarus count is 0 or 1. Show «×10» without a prefix. An explicit null Belarus bucket means zero matches; missing/malformed data or a failed request never counts as zero. Preserve the two-listing minimum for price savings and stop at the first sufficient shared slice when one exists.
+
+Vehicle availability CTA copy (owner correction, 2026-09-30): omit the secondary «Консультация бесплатно» line from both the regular and floating vehicle availability buttons; retain «Узнать точную цену и наличие» and the existing ordered state.
+
+Vehicle market badge mobile hints (owner decision, 2026-09-30): below 701px, show a small regular-weight outline Info icon after the copy in both savings and choice badges. Tapping anywhere in either badge opens its shared tooltip on the first tap; tapping the other badge switches the hint, and tapping outside dismisses it. Keep desktop appearance unchanged.
+
 Belarus price comparison sample (owner decision, 2026-09-30): show a market price from two listings and compare when both catalog and Belarus samples contain at least two cars. Apply the same threshold to default year selection and combined years. This supersedes the five-car minimum below for the Belarus market comparison.
 
 Vehicle delivery duration copy (owner decision, 2026-09-30): in the delivery disclosure shared by the full vehicle page and quick view, show the lower bound as «от N дней» in both the heading and all expanded stages instead of a range (for example, «от 32 дней»). Keep country/city-specific duration calculations and the variability note; use the genitive «от 1 дня» / «от 21 дня» where appropriate.
@@ -10,7 +16,7 @@ Quick-view dark-theme controls (owner correction, 2026-09-30): use the same `--p
 
 Encar import identity (owner request, 2026-09-30): ordinary and dummy advertisements may share one `sourceVehicleId`. Before accepting live discoveries or file imports, check this physical vehicle ID against active stored listings and the current batch; never infer duplicates from price, mileage or photos. Preserve listing IDs and source URLs, allow explicit repair of existing records, and do not let unavailable listings block a new advertisement. Owner separately authorized duplicate cleanup: 29,392 production duplicates were hidden through `catalog_duplicate_matches` with strategy `encar-source-vehicle-v1`, leaving 53,809 visible vehicles while preserving all 83,201 source records; local data has 9 hidden duplicates and 58 visible vehicles. Prefer the active advertisement whose external ID equals the vehicle ID, otherwise the oldest active listing. Preserve these matches during Che168/Guazi deduplication. The production rollback data is `/srv/abcars-backups/encar-dedupe-2026-09-30T12-54-55-415Z/matches-before.json`. Future cleanup still requires explicit authorization.
 
-Homepage search filters button (owner decision, 2026-09-30): show «Фильтры» beside the sliders icon in the search field's catalog button; size the button to its content while preserving its height and theme colors. Use 16px text at weight 500 with a 20px line height and no underline.
+Homepage search filters button (owner decision, 2026-09-30): on desktop, show «Фильтры» beside the sliders icon in the search field's catalog button; size the button to its content while preserving its height and theme colors. Use 16px text at weight 500 with a 20px line height and no underline. On mobile (up to 700px), hide the label and restore the original 38px square icon-only button; preserve the accessible name.
 
 Footer newsletter heading (owner decision, 2026-09-30): use «Подпишитесь на аналитику рынка авто в Китае и Корее», with the country phrase supplied by `siteInPhrase()`. Omit «обновления и».
 

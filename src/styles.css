@@ -468,6 +468,16 @@ button {
 .hero-search-filters[aria-expanded="true"] {
   opacity: 0.82;
 }
+@media (max-width: 700px) {
+  .hero-search-filters {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+  .hero-search-filters > span {
+    display: none;
+  }
+}
 .hero-search-clear {
   background: var(--panel);
   color: var(--muted);
@@ -7009,12 +7019,6 @@ html[data-theme="dark"] #root .load-more {
   font-size: 17px;
   font-weight: 800;
   line-height: 1.25;
-}
-.availability-primary-note {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.3;
-  opacity: 0.75;
 }
 .order-card.price-disclosure {
   margin: 0 0 12px;
@@ -24720,6 +24724,20 @@ html[data-theme="dark"] .vehicle-market-advantages {
   max-width: min(240px, calc(100vw - 20px));
   padding: 8px 10px;
   font-size: 14px;
+}
+.vehicle-market-info {
+  display: none;
+}
+@media (max-width: 700px) {
+  .vehicle-market-savings {
+    cursor: pointer;
+  }
+  .vehicle-market-info {
+    display: block;
+    flex: 0 0 16px;
+    margin-left: 3px;
+    color: var(--muted);
+  }
 }
 @media (max-width: 980px) {
   .detail-layout .detail-main .detail-sidebar > .vehicle-market-advantages {

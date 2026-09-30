@@ -8603,7 +8603,11 @@ function ActionTooltip({ text, className = "", tapToOpen = false, showOnMount = 
   useEffect(() => {
     const button = anchorRef.current?.parentElement;
     if (!button) return undefined;
-    const show = () => {
+    const show = (event) => {
+      // Касание может сначала вызвать mouseenter/focus: не открываем подсказку
+      // до click, иначе тот же первый тап сразу закроет её.
+      if (tapToOpen && event.type === "mouseenter" && window.matchMedia("(hover: none)").matches) return;
+      if (tapToOpen && event.type === "focus" && !button.matches(":focus-visible")) return;
       place();
       setVisible(true);
     };
@@ -8618,7 +8622,7 @@ function ActionTooltip({ text, className = "", tapToOpen = false, showOnMount = 
       button.removeEventListener("focus", show);
       button.removeEventListener("blur", hide);
     };
-  }, [place]);
+  }, [place, tapToOpen]);
   // Некоторые подсказки появляются после уже совершённого клика: их якорь
   // монтируется внутри сфокусированной кнопки, поэтому нового события focus не
   // будет. В этом случае показываем подсказку сразу после её появления в DOM.
@@ -8655,8 +8659,8 @@ function ActionTooltip({ text, className = "", tapToOpen = false, showOnMount = 
       if (button && button.contains(event.target)) return;
       setVisible(false);
     };
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
+    document.addEventListener("click", close, true);
+    return () => document.removeEventListener("click", close, true);
   }, [tapToOpen, visible]);
   // Текст меняется на «Ссылка скопирована» — вместе с ним меняется и ширина.
   useEffect(() => {
@@ -8968,11 +8972,11 @@ function VehicleMarketSavings({ car }) {
   return (
     <div className="vehicle-market-advantages">
       {savings && <section className="vehicle-market-savings" tabIndex={0} aria-label="Сравнение с ценами в Беларуси" aria-description={savingsDescription}>
-        <h3 aria-live="polite"><strong className="vehicle-market-value">{percent}%</strong> <span>экономии</span></h3>
+        <h3 aria-live="polite"><strong className="vehicle-market-value">{percent}%</strong> <span>экономии</span><Info className="vehicle-market-info" size={16} weight="regular" aria-hidden="true" /></h3>
         <ActionTooltip text={<span>{savingsDescription}</span>} className="quota-link-tooltip vehicle-market-tooltip" tapToOpen />
       </section>}
       {choice && <section className="vehicle-market-savings vehicle-market-choice" tabIndex={0} aria-label="Сравнение выбора автомобилей" aria-description={choiceDescription}>
-        <h3><strong className="vehicle-market-value">{choice.multiplier}</strong> <span>больше выбор</span></h3>
+        <h3><strong className="vehicle-market-value">{choice.multiplier}</strong> <span>больше выбор</span><Info className="vehicle-market-info" size={16} weight="regular" aria-hidden="true" /></h3>
         <ActionTooltip text={<span>{choiceDescription}</span>} className="quota-link-tooltip vehicle-market-tooltip" tapToOpen />
       </section>}
     </div>
@@ -9370,7 +9374,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               <span className="availability-primary-title">
                 {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Узнать точную цену и наличие"}
               </span>
-              {!inOrder && <span className="availability-primary-note">Консультация бесплатно</span>}
             </button>
           )}
           <BrandNotice car={car} />
@@ -9380,7 +9383,6 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                 <span className="availability-primary-title">
                   {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Узнать точную цену и наличие"}
                 </span>
-                {!inOrder && <span className="availability-primary-note">Консультация бесплатно</span>}
               </button>
             </div>
           )}

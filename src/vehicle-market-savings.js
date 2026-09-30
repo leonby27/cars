@@ -15,7 +15,7 @@ export function vehicleMarketComparisonUrl(car, { quotaOn = false, refund50 = fa
 }
 
 /** Один срез для цены и выбора; расширяем пробег только при нехватке объявлений. */
-function vehicleMarketSample(car, data, { quotaOn = false } = {}) {
+function vehicleMarketSample(car, data, { quotaOn = false } = {}, allowSparseChoice = false) {
   if (!car || car.available === false || !car.year || !car.type) return null;
   const card = data?.cards?.find((item) => item.brand === car.brand
     && normalizeModel(item.model) === normalizeModel(car.model) && item.type === car.type);
@@ -29,6 +29,14 @@ function vehicleMarketSample(car, data, { quotaOn = false } = {}) {
     const raw = year?.prices?.[mileageMax == null ? "all" : String(mileageMax)];
     const prices = { ours: comparisonOwnPrices(raw?.ours, quotaOn), belarus: raw?.belarus };
     if (hasEnoughComparisonSample(prices)) return { year: Number(year.year), mileageMax, prices };
+    // После расширения до всех пробегов малое число местных объявлений
+    // мешает сравнению цен, но не скрывает большой выбор в нашем каталоге.
+    const oursCount = prices.ours?.count;
+    const belarusCount = prices.belarus === null ? 0 : prices.belarus?.count;
+    if (allowSparseChoice && mileageMax === null && Number.isSafeInteger(oursCount) && oursCount >= 10
+      && Number.isSafeInteger(belarusCount) && belarusCount >= 0 && belarusCount < 2) {
+      return { year: Number(year.year), mileageMax, prices };
+    }
   }
   return null;
 }
@@ -53,10 +61,11 @@ export function vehicleMarketSavings(car, data, options = {}) {
 
 /** Больший выбор не зависит от того, дешевле ли у нас машины. */
 export function vehicleMarketChoice(car, data, options = {}) {
-  const sample = vehicleMarketSample(car, data, options);
+  const sample = vehicleMarketSample(car, data, options, true);
   if (!sample) return null;
-  const ours = Number(sample.prices.ours.count), belarus = Number(sample.prices.belarus.count);
-  if (!Number.isSafeInteger(ours) || !Number.isSafeInteger(belarus) || belarus <= 0 || ours < belarus * 2) return null;
+  const ours = Number(sample.prices.ours.count), belarus = sample.prices.belarus === null ? 0 : Number(sample.prices.belarus.count);
+  if (!Number.isSafeInteger(ours) || !Number.isSafeInteger(belarus) || belarus < 0 || ours < belarus * 2) return null;
+  if (belarus < 2) return { year: sample.year, mileageMax: sample.mileageMax, ours, belarus, multiplier: "×10" };
   const ratio = ours / belarus;
   // Не завышаем: 2,99 → 2,9. Отображаемый множитель ограничен ×10.
   const shown = Math.floor(ratio * 10) / 10;
