@@ -1,4 +1,4 @@
-import { comparisonOwnPrices, hasEnoughComparisonSample, normalizeModel } from "./market-compare.js";
+import { aggregateComparisonPrices, comparisonOwnPrices, hasEnoughComparisonSample, normalizeModel } from "./market-compare.js";
 
 export const VEHICLE_MARKET_PRICE_OPTIONS = Object.freeze([
   { key: "mean", label: "По средней цене" },
@@ -14,7 +14,7 @@ export function vehicleMarketComparisonUrl(car, { quotaOn = false, refund50 = fa
   return `${base}api/market/compare?${params}`;
 }
 
-/** Один срез для цены и выбора; расширяем пробег только при нехватке объявлений. */
+/** Сначала год машины, затем вся модель; расширяем выборку только при нехватке данных. */
 function vehicleMarketSample(car, data, { quotaOn = false } = {}, allowSparseChoice = false) {
   if (!car || car.available === false || !car.year || !car.type) return null;
   const card = data?.cards?.find((item) => item.brand === car.brand
@@ -25,17 +25,35 @@ function vehicleMarketSample(car, data, { quotaOn = false } = {}, allowSparseCho
   const mileage = car.mileage == null || car.mileage === "" ? NaN : Number(car.mileage);
   const limits = Number.isFinite(mileage) && mileage >= 0
     ? [...MILEAGE_LIMITS.filter((limit) => limit >= mileage), null] : [null];
-  for (const mileageMax of limits) {
-    const raw = year?.prices?.[mileageMax == null ? "all" : String(mileageMax)];
-    const prices = { ours: comparisonOwnPrices(raw?.ours, quotaOn), belarus: raw?.belarus };
-    if (hasEnoughComparisonSample(prices)) return { year: Number(year.year), mileageMax, prices };
+  const scopes = [
+    ...(year ? [{ year: Number(year.year), years: [year] }] : []),
+    ...(card.years?.some(item => item !== year) ? [{ year: null, years: card.years }] : []),
+  ];
+  for (const scope of scopes) for (const mileageMax of limits) {
+    const key = mileageMax == null ? "all" : String(mileageMax);
+    const raw = scope.years[0]?.prices?.[key];
+    let prices;
+    if (scope.year === null) {
+      const buckets = scope.years.map(item => item.prices?.[key]).filter(Boolean);
+      // Не превращаем неизвестное число объявлений в ноль при объединении лет.
+      if (!buckets.length || buckets.some(bucket => {
+        const ownCount = comparisonOwnPrices(bucket.ours, quotaOn)?.count;
+        const localCount = bucket.belarus === null ? 0 : bucket.belarus?.count;
+        return !Number.isSafeInteger(ownCount) || ownCount < 0
+          || !Number.isSafeInteger(localCount) || localCount < 0;
+      })) continue;
+      prices = aggregateComparisonPrices(scope.years, key, quotaOn);
+    } else {
+      prices = { ours: comparisonOwnPrices(raw?.ours, quotaOn), belarus: raw?.belarus };
+    }
+    if (hasEnoughComparisonSample(prices)) return { year: scope.year, mileageMax, prices };
     // После расширения до всех пробегов малое число местных объявлений
     // мешает сравнению цен, но не скрывает большой выбор в нашем каталоге.
     const oursCount = prices.ours?.count;
     const belarusCount = prices.belarus === null ? 0 : prices.belarus?.count;
     if (allowSparseChoice && mileageMax === null && Number.isSafeInteger(oursCount) && oursCount >= 10
       && Number.isSafeInteger(belarusCount) && belarusCount >= 0 && belarusCount < 2) {
-      return { year: Number(year.year), mileageMax, prices };
+      return { year: scope.year, mileageMax, prices };
     }
   }
   return null;

@@ -15,7 +15,7 @@ test("сравнивает модель того же года и двигате
   assert.equal(result.year, 2022);
   assert.equal(result.mileageMax, 100000);
   assert.deepEqual(result.options.map(({ key, percent }) => [key, percent]), [["mean", 38], ["median", 38], ["min", 38]]);
-  for (const patch of [{ year: 2021 }, { type: "ДВС" }, { model: "X4" }, { brand: "Audi" }, { available: false }]) {
+  for (const patch of [{ type: "ДВС" }, { model: "X4" }, { brand: "Audi" }, { available: false }]) {
     assert.equal(vehicleMarketSavings({ ...car, ...patch }, fixture()), null);
   }
   const longer = fixture(); longer.cards[0].longVersion = true;
@@ -121,7 +121,7 @@ test("больший выбор показывается независимо о
   assert.equal(vehicleMarketSavings(car, data), null);
   assert.equal(vehicleMarketChoice(car, data).multiplier, "×10");
   assert.equal(vehicleMarketChoice(car, data).mileageMax, 100000);
-  for (const patch of [{year:2021}, {type:"ДВС"}, {model:"X4"}, {available:false}]) {
+  for (const patch of [{type:"ДВС"}, {model:"X4"}, {available:false}]) {
     assert.equal(vehicleMarketChoice({...car,...patch}, data), null);
   }
   assert.equal(vehicleMarketChoice(car, null), null);
@@ -216,9 +216,65 @@ test("редкая местная выборка не заменяет дост�
   assert.equal(vehicleMarketChoice(car, data), null); // В ближайшем достаточном срезе выбор одинаковый.
   delete data.cards[0].years[0].prices["100000"];
   assert.equal(vehicleMarketChoice(car, data).multiplier, "×10");
-  for (const patch of [{ year: 2021 }, { type: "ДВС" }, { model: "X4" }, { available: false }]) {
+  for (const patch of [{ type: "ДВС" }, { model: "X4" }, { available: false }]) {
     assert.equal(vehicleMarketChoice({ ...car, ...patch }, data), null);
   }
   data.cards[0].longVersion = true;
   assert.equal(vehicleMarketChoice(car, data), null);
+});
+
+test("если года машины нет, сравнивает все годы той же модели и двигателя", () => {
+  const data = fixture();
+  data.cards[0].years[0].prices["100000"].ours.count = 20;
+  const missingYear = { ...car, year: 2026 };
+  const savings = vehicleMarketSavings(missingYear, data);
+  const choice = vehicleMarketChoice(missingYear, data);
+  assert.equal(savings.year, null);
+  assert.equal(savings.best.percent, 38);
+  assert.equal(choice.year, null);
+  assert.equal(choice.multiplier, "×10");
+  assert.equal(choice.mileageMax, 100000);
+});
+
+test("9 машин одного года при редкой местной выборке дополняются остальными годами модели", () => {
+  const data = fixture();
+  data.cards[0].years = [
+    { year: 2022, prices: { all: { ours: stats(31000, 9), belarus: null } } },
+    { year: 2021, prices: { all: { ours: stats(30000, 8), belarus: stats(50000, 1) } } },
+  ];
+  const choice = vehicleMarketChoice(car, data);
+  assert.equal(choice.year, null);
+  assert.equal(choice.ours, 17);
+  assert.equal(choice.belarus, 1);
+  assert.equal(choice.multiplier, "×10");
+  assert.equal(vehicleMarketSavings(car, data), null);
+});
+
+test("достаточный год без выгоды не заменяется выгодной моделью, а редкий — объединяется с весами", () => {
+  const data = fixture();
+  data.cards[0].years = [
+    { year: 2022, prices: { all: { ours: stats(50000, 2), belarus: stats(50000, 2) } } },
+    { year: 2021, prices: { all: { ours: stats(20000, 8), belarus: stats(50000, 2) } } },
+  ];
+  assert.equal(vehicleMarketChoice(car, data), null);
+  assert.equal(vehicleMarketSavings(car, data), null);
+  data.cards[0].years[0].prices.all.belarus.count = 1;
+  const savings = vehicleMarketSavings(car, data);
+  assert.equal(savings.year, null);
+  assert.equal(savings.options.find(item => item.key === "mean").percent, 48);
+  assert.equal(vehicleMarketChoice(car, data).multiplier, "×3,3");
+});
+
+test("объединение лет сохраняет выбор квоты и не считает неизвестные данные нулём", () => {
+  const data = fixture();
+  const own = data.cards[0].years[0].prices["100000"].ours;
+  own.quotaOn = stats(25000, 20);
+  own.quotaOff = stats(60000, 20);
+  const missingYear = { ...car, year: 2026 };
+  assert.equal(vehicleMarketSavings(missingYear, data), null);
+  assert.equal(vehicleMarketSavings(missingYear, data, { quotaOn: true }).best.percent, 50);
+  for (const belarus of [undefined, {}, { count: null }, { count: -1 }]) {
+    data.cards[0].years[0].prices = { all: { ours: stats(20000, 20), belarus } };
+    assert.equal(vehicleMarketChoice(missingYear, data), null);
+  }
 });

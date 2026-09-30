@@ -21,6 +21,20 @@ const market = {
   },
 };
 
+test("полный свод сохраняет модель и год после первых 10 000 строк", () => {
+  const base = { brand: "Toyota", model: "Crown", year: 2024, type: "Гибрид", count: 10, min: 40000, mean: 45000, median: 45000, max: 50000, mileageMax: null };
+  const ours = [
+    ...Array.from({ length: 10000 }, (_, index) => ({ ...base, model: `Model ${index}` })),
+    { ...base, year: 2026, count: 9 },
+  ];
+  const rows = compareDetailedRows({ ours, market: { version: 2, brands: {} } });
+  assert.equal(rows.length, 10001);
+  const crown = groupDetailedRows(rows).find(card => card.model === "Crown");
+  assert.equal(crown.years[0].year, 2026);
+  assert.equal(crown.years[0].prices.all.ours.count, 9);
+  assert.equal(compareDetailedRows({ ours, limit: 5 }).length, 5);
+});
+
 const ours = [
   { brand: "BYD", model: "Han", year: 2022, count: 120, median: 22000 },
   { brand: "BYD", model: "Han", year: 2023, count: 60, median: 24000 },

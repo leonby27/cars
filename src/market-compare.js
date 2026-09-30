@@ -176,7 +176,7 @@ function detailedMarketIndex(market) {
  * сохраняем и без белорусской строки: отсутствие местных данных — тоже полезный
  * ответ, а модель из нашего каталога не должна исчезать из поиска.
  */
-export function compareDetailedRows({ ours = [], market = null, limit = 10_000 } = {}) {
+export function compareDetailedRows({ ours = [], market = null, limit = Infinity } = {}) {
   const index = detailedMarketIndex(market);
   const rows = [];
   for (const row of ours) {

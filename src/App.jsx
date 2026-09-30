@@ -8967,8 +8967,8 @@ function VehicleMarketSavings({ car }) {
   if (!savings && !choice) return null;
   const selected = savings?.best;
   const percent = selected ? new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(selected.percent) : null;
-  const savingsDescription = selected ? `${{ mean: "Средняя", median: "Медианная", min: "Минимальная" }[selected.key]} цена этой модели ниже, чем на белорусских площадках.` : "";
-  const choiceDescription = "Больше объявлений этой модели, чем на белорусских площадках.";
+  const savingsDescription = selected ? `${{ mean: "Средняя", median: "Медианная", min: "Минимальная" }[selected.key]} цена этой модели${savings.year === null ? " по всем годам" : ""} ниже, чем на белорусских площадках.` : "";
+  const choiceDescription = `Больше объявлений этой модели${choice?.year === null ? " по всем годам" : ""}, чем на белорусских площадках.`;
   return (
     <div className="vehicle-market-advantages">
       {savings && <section className="vehicle-market-savings" tabIndex={0} aria-label="Сравнение с ценами в Беларуси" aria-description={savingsDescription}>

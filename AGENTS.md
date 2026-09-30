@@ -1,5 +1,9 @@
 # Prototype Instructions
 
+Vehicle market whole-model fallback (owner correction, 2026-09-30): if the exact vehicle year is missing or remains undersampled after widening mileage, retry across all available years of the same brand/model/powertrain, starting with the vehicle's mileage ceiling and widening as before. Preserve a sufficient exact-year result even if it has no qualifying advantage. Keep the sparse 0–1 Belarus / at least 10 own choice rule at either scope. Mark whole-model results with year:null and say «по всем годам» in the relevant tooltip. Never mix powertrains or long/standard model versions; missing or malformed counts are not zero.
+
+Market comparison completeness (2026-09-30): build the detailed comparison from all model/year/powertrain/mileage rows by default. Never truncate the aggregate at 10,000 rows before grouping/filtering: newer Encar model years can appear later. Apply display pagination only after complete model grouping; preserve explicit caller limits where requested.
+
 Vehicle choice sparse Belarus sample (owner correction, 2026-09-30): when no sufficient shared price sample exists after widening mileage, allow the choice badge at the all-mileage slice if our exact model/year/powertrain has at least 10 listings and the Belarus count is 0 or 1. Show «×10» without a prefix. An explicit null Belarus bucket means zero matches; missing/malformed data or a failed request never counts as zero. Preserve the two-listing minimum for price savings and stop at the first sufficient shared slice when one exists.
 
 Vehicle availability CTA copy (owner correction, 2026-09-30): omit the secondary «Консультация бесплатно» line from both the regular and floating vehicle availability buttons; retain «Узнать точную цену и наличие» and the existing ordered state.
