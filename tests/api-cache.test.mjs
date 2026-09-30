@@ -33,7 +33,7 @@ const requestApi = async (path) => {
 };
 
 test("каталог отдаётся с общим кэшем, но браузер своей копии не держит", async () => {
-  for (const path of ["/api/cars?limit=24", "/api/cars?limit=60&sort=variety", "/api/catalog/meta", "/api/model-facts", "/api/brand-guide?brand=Zeekr"]) {
+  for (const path of ["/api/cars?limit=24", "/api/cars?limit=60&sort=variety", "/api/model-facts", "/api/brand-guide?brand=Zeekr"]) {
     const { status, cacheControl } = await requestApi(path);
     assert.equal(status, 200, path);
     assert.match(cacheControl, /\bpublic\b/, path);
@@ -42,6 +42,14 @@ test("каталог отдаётся с общим кэшем, но брауз�
     // max-age=0 оставляет свежесть за посетителем: хранит только сеть доставки.
     assert.match(cacheControl, /\bmax-age=0\b/, path);
   }
+});
+
+test("справочник марок и моделей быстро обновляется во время пополнения каталога", async () => {
+  const { status, cacheControl } = await requestApi("/api/catalog/meta?country=korea&brand=BMW");
+  assert.equal(status, 200);
+  assert.match(cacheControl, /\bpublic\b/);
+  assert.match(cacheControl, /\bs-maxage=30\b/);
+  assert.doesNotMatch(cacheControl, /stale-while-revalidate/);
 });
 
 test("личные ответы и состояние базы не кэшируются", async () => {

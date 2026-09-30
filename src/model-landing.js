@@ -53,6 +53,7 @@ export const priceSpan = (priceFrom, priceTo) => {
 // по тем же правилам, что заголовки разделов (src/catalog-landings.js).
 const FROM_ORIGINS = Object.values(ORIGINS).map((origin) => origin.genitive).join("|");
 const cleanModelHeading = (h1) => siteWording(String(h1 || "")
+  .replace(/:.*$/u, "")
   .replace(/\s+(б\/у|с пробегом)(?=\s)/gi, "")
   .replace(new RegExp(`(доставк[а-яё]*|из (?:${FROM_ORIGINS})(?: и (?:${FROM_ORIGINS}))?) в Минск(?![а-яё])`, "gi"), "$1 в Беларусь")
   .replace(/цены до Минска/gi, "цены в Беларуси")

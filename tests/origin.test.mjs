@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ACTIVE_ORIGINS, fromPhrase, inPhrase, originForSource, originFromParam, siteAdjective, siteAdjectiveCapital, siteCountriesGenitive, siteFromPhrase, siteInPhrase, siteMarketplacesPhrase, siteWording } from "../src/origin.js";
-import { CATALOG_INDEX_SEO, HOME_SEO } from "../src/catalog-landings.js";
+import { CATALOG_INDEX_SEO, HOME_H1_PARTS, HOME_SEO } from "../src/catalog-landings.js";
 import { modelCatalogSeo, modelPageIndexable } from "../src/model-landing.js";
+import { bootScreen } from "../server/boot-screen.mjs";
 
 // Страна происхождения — одна настройка (src/origin.js). С 29.09.2026 возим из Китая и
 // Кореи, и общие страницы говорят «из Китая и Кореи» (решение Сергея по образцу IM4CAR);
@@ -37,6 +38,17 @@ test("общие страницы говорят «из Китая и Кореи
   assert.doesNotMatch(HOME_SEO.description, /в Китае/);
 });
 
+test("ссылки на страны в заголовке главной сохраняют исходный текст и первый кадр", () => {
+  assert.equal(HOME_H1_PARTS.map((part) => part.text).join(""), HOME_SEO.h1);
+  assert.deepEqual(HOME_H1_PARTS.filter((part) => part.href).map(({ text, href }) => [text, href]), [
+    ["Китая", "/catalog/china"],
+    ["Кореи", "/catalog/korea"],
+  ]);
+  const boot = bootScreen({ kind: "home", hrefRoute: (path) => `/preview${path}` });
+  assert.match(boot, /href="\/preview\/catalog\/china"[^>]*>Китая<\/a>/);
+  assert.match(boot, /href="\/preview\/catalog\/korea"[^>]*>Кореи<\/a>/);
+});
+
 test("старые тексты переводятся на фразу сайта и не портятся при повторе", () => {
   const cases = [
     ["Автомобили BYD с пробегом из Китая — доставка в Беларусь", "Автомобили BYD с пробегом из Китая и Кореи — доставка в Беларусь"],
@@ -58,6 +70,14 @@ test("заголовок страницы модели: «в Беларусь»,
   assert.equal(seo.h1, "Купить BYD Seal из Китая и Кореи с доставкой в Беларусь");
   assert.match(seo.description, /б\/у/);
   assert.match(seo.description, /Минска/);
+});
+
+test("заголовок страницы модели не показывает пояснение после двоеточия", () => {
+  const seo = modelCatalogSeo({
+    name: "Toyota RAV4",
+    review: { h1: "Toyota RAV4 с пробегом из Китая и Кореи: сколько стоит доставка в Минск" },
+  });
+  assert.equal(seo.h1, "Toyota RAV4 из Китая и Кореи");
 });
 
 test("модель без обзора и меньше чем с тремя машинами не индексируется", () => {

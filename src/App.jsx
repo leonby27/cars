@@ -23,7 +23,7 @@ import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVar
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { CITY_NAMES, cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS, canonicalImportModel } from "../config/import-policy.mjs";
-import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, HOME_SEO, brandLandingPath, modelFromSlug, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, modelLandingPath, modelLandingRedirect, parseModelLandingPath, priceBandsForCar, priceBandsForLanding, relatedLandings } from "./catalog-landings.js";
+import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, HOME_H1_PARTS, HOME_SEO, brandLandingPath, modelFromSlug, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, modelLandingPath, modelLandingRedirect, parseModelLandingPath, priceBandsForCar, priceBandsForLanding, relatedLandings } from "./catalog-landings.js";
 import { modelAutoText, modelFaq, modelFaqTitle, modelLandingObject } from "./model-landing.js";
 import { modelSlug } from "./model-slug.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
@@ -774,7 +774,7 @@ function useRoute(user) {
   const navigate = (next, options = {}) => {
     const turn = ++navigationTurn.current;
     const query = typeof next === "string" ? catalogMetaQueryForPath(next) : null;
-    if (query === null || metaResolved.has(query)) {
+    if (query === null || resolvedCatalogMeta(query)) {
       navigateNow(next, options);
       return;
     }
@@ -5428,7 +5428,9 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             после оживления: заголовок — главный элемент страницы для PageSpeed, и
             любая замена его текста после первого кадра считается новой отрисовкой
             и сдвигом строк — метрика готовности уезжала с 0,2 с обратно на 3+ с. */}
-        <h1>{HOME_SEO.h1}</h1>
+        <h1>{HOME_H1_PARTS.map((part, index) => part.href
+          ? <AppLink key={index} className="hero-country-link" href={part.href} navigate={navigate}>{part.text}</AppLink>
+          : <Fragment key={index}>{part.text}</Fragment>)}</h1>
         <ul className="hero-benefits" aria-label="Преимущества заказа">
           <li><CheckCircle size={21} weight="fill" />Без скрытых платежей</li>
           <li><CheckCircle size={21} weight="fill" />Всё по договору</li>
@@ -6588,21 +6590,9 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   };
   useEffect(() => {
     if (!useApi) return;
-    // Первая страница уже встроена сервером — первый запрос пропускаем. Встроенный
-    // список одноразовый: при следующем заходе на этот адрес внутри сайта он был бы
-    // уже устаревшим.
-    if (bootListUsed.current) {
-      bootListUsed.current = false;
-      if (window.__boot) window.__boot.catalogValue = null;
-      return;
-    }
     const controller = new AbortController();
-    setRemoteLoading(true);
-    setRemoteError(false);
-    const query = requestParams();
-    // Справочник и список машин идут врозь: какие поля показывать, известно из
-    // справочника, а он отвечает быстрее выдачи. Раньше их ждали вместе, и панель
-    // фильтров достраивалась только после того, как загрузится каталог.
+    // Даже если список уже встроен в HTML, его справочник мог быть собран раньше:
+    // проверяем марки и модели заново после оживления страницы.
     requestCatalogMeta(catalogMetaQuery(filters.type, filters.brand, filters.bodyType, filters.country))
       .then((meta) => {
         if (!controller.signal.aborted) setRemoteMeta(meta);
@@ -6610,6 +6600,20 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
       .catch(() => {
         if (!controller.signal.aborted) setRemoteError(true);
       });
+    // Первая страница уже встроена сервером — первый запрос пропускаем. Встроенный
+    // список одноразовый: при следующем заходе на этот адрес внутри сайта он был бы
+    // уже устаревшим.
+    if (bootListUsed.current) {
+      bootListUsed.current = false;
+      if (window.__boot) window.__boot.catalogValue = null;
+      return () => controller.abort();
+    }
+    setRemoteLoading(true);
+    setRemoteError(false);
+    const query = requestParams();
+    // Справочник и список машин идут врозь: какие поля показывать, известно из
+    // справочника, а он отвечает быстрее выдачи. Раньше их ждали вместе, и панель
+    // фильтров достраивалась только после того, как загрузится каталог.
     fetch(`/api/cars?${query}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("catalog unavailable"))))
       .then((catalog) => {
@@ -14796,12 +14800,29 @@ const metaRequests = new Map();
 // переходят внутри сайта, рисует кнопки моделей марки в первом же кадре, а не через
 // мгновение после него (тогда ряд кнопок в семь колонок сдвигал вниз всю выдачу).
 const metaResolved = new Map();
+// Во время пополнения каталога число машин быстро растёт. Ответы можно повторно
+// использовать при переходе между страницами, но нельзя держать до закрытия вкладки.
+const CATALOG_META_CLIENT_TTL_MS = 30_000;
+const resolvedCatalogMeta = (key) => {
+  const entry = metaResolved.get(String(key));
+  if (!entry) return null;
+  if (Date.now() - entry.at < CATALOG_META_CLIENT_TTL_MS) return entry.value;
+  metaResolved.delete(String(key));
+  return null;
+};
 // До конца оживления готовой страницы пришедшие ответы не подставляем: сервер рисовал
 // её по своим встроенным данным, и первый кадр обязан совпасть с ними (App снимает флаг).
 let metaResolvedUsable = false;
 const rememberMetaRequest = (key, request) => {
-  // Неудачу не запоминаем, иначе следующий выбор фильтра больше не попробует.
-  request.then((value) => metaResolved.set(key, value), () => metaRequests.delete(key));
+  // Запоминаем только незавершённый запрос. И успешный, и неудачный ответ должны
+  // уступить место новому после короткого срока хранения.
+  request.then(
+    (value) => {
+      metaResolved.set(key, { value, at: Date.now() });
+      if (metaRequests.get(key) === request) metaRequests.delete(key);
+    },
+    () => { if (metaRequests.get(key) === request) metaRequests.delete(key); },
+  );
   metaRequests.set(key, request);
   return request;
 };
@@ -14810,16 +14831,21 @@ const rememberMetaRequest = (key, request) => {
 if (window.__boot?.meta) rememberMetaRequest(String(window.__boot.metaQuery || ""), window.__boot.meta);
 const requestCatalogMeta = (query = "") => {
   const key = String(query);
+  const cached = resolvedCatalogMeta(key);
+  if (cached) return Promise.resolve(cached);
   if (!metaRequests.has(key)) rememberMetaRequest(key, fetchCarsJson(`/api/catalog/meta${key ? `?${key}` : ""}`));
   return metaRequests.get(key);
 };
 // Тот же справочник, но уже готовым ответом: если загрузочный запрос успел ответить до
 // первой отрисовки, панель фильтров показывает все поля сразу, а не достраивается.
-const bootCatalogMeta = (query = "") =>
-  window.__boot?.metaValue && String(window.__boot.metaQuery || "") === String(query)
-    ? window.__boot.metaValue
-    // Справочник, встроенный в заранее собранную страницу (src/boot-api.js).
-    : embeddedApiValue(`/api/catalog/meta${query ? `?${query}` : ""}`) || (metaResolvedUsable ? metaResolved.get(String(query)) : null) || null;
+const bootCatalogMeta = (query = "") => {
+  // После первого кадра встроенный в HTML ответ уже может быть старым: при
+  // внутренних переходах используем только недавно полученные данные API.
+  if (metaResolvedUsable) return resolvedCatalogMeta(query);
+  if (window.__boot?.metaValue && String(window.__boot.metaQuery || "") === String(query)) return window.__boot.metaValue;
+  // Справочник, встроенный в заранее собранную страницу (src/boot-api.js).
+  return embeddedApiValue(`/api/catalog/meta${query ? `?${query}` : ""}`) || null;
+};
 
 /**
  * Заранее запросить справочник для раздела каталога, на который ведёт ссылка: зовётся,
@@ -14842,7 +14868,7 @@ const catalogMetaQueryForPath = (href) => {
 const CATALOG_META_WAIT_MS = 800;
 const prefetchCatalogMeta = (href) => {
   const query = catalogMetaQueryForPath(href);
-  if (query === null || metaResolved.has(query)) return;
+  if (query === null || resolvedCatalogMeta(query)) return;
   requestCatalogMeta(query).catch(() => {});
 };
 const EMPTY_CATALOG_META = { brands: [], models: [], bodyTypes: [], drives: [], countries: [], availability: {} };

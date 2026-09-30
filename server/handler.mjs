@@ -76,12 +76,15 @@ const catalogCache = { "cache-control":"public, max-age=0, s-maxage=900, stale-w
 // держать её вчерашней ещё сутки после этой границы; пять минут сглаживают повторные
 // открытия и оставляют удаление практически точным.
 const soldListingCache = { "cache-control":"public, max-age=0, s-maxage=300" };
-// Справочники фильтров — списки марок и моделей со счётчиками — считаются по всему
-// каталогу, и холодный ответ занимает около 1,8 секунды (23 КБ). Меняются они только
-// после ночного пополнения, поэтому держим их час, а сутки после этого отдаём прежний
-// ответ, пока в фоне готовится новый: в холодный ответ тогда почти никто не попадает.
-// PageSpeed 28.08.2026 поймал именно такой холодный ответ — 5,1 с на медленной сети.
+// Остальные справочные ответы меняются редко и выдерживают часовой кэш.
 const metaCache = { "cache-control":"public, max-age=0, s-maxage=3600, stale-while-revalidate=86400" };
+// Справочник фильтров считают по всему каталогу, но во время импорта он меняется
+// постоянно: часовой кэш оставлял старые марки и модели при свежей выдаче.
+const catalogMetaCache = { "cache-control":"public, max-age=0, s-maxage=30" };
+// Каталожная HTML-страница содержит встроенные счётчики и список моделей. Если
+// оставить ей суточный stale-кэш SEO-страниц, первый экран снова покажет снимок
+// начала импорта, даже когда /api/catalog/meta уже обновился.
+const catalogPageCache = { "cache-control":"public, max-age=0, s-maxage=30" };
 // Страницу машины собирает робот десятками тысяч раз. Без общего кэша каждый его заход —
 // это запрос к базе; с ним сеть Vercel десять минут отдаёт готовый ответ, а сутки после
 // этого показывает прежний, пока в фоне готовится новый.
@@ -508,7 +511,7 @@ export async function handleApiRequest(request, response) {
             response.writeHead(301, { location: index.location, ...seoPageCache });
             return response.end();
           }
-          return html(response, index.status, index.html, index.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+          return html(response, index.status, index.html, index.status === 200 ? catalogPageCache : { "cache-control":"no-store" });
         }
         // Параметры адреса нужны разделу так же, как каталогу: по ним выбирается
         // страница списка («?page=2»), а «?page=1» уводит на адрес без параметра.
@@ -524,14 +527,14 @@ export async function handleApiRequest(request, response) {
             response.writeHead(301, { location: modelPage.location, ...seoPageCache });
             return response.end();
           }
-          return html(response, modelPage.status, modelPage.html, modelPage.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+          return html(response, modelPage.status, modelPage.html, modelPage.status === 200 ? catalogPageCache : { "cache-control":"no-store" });
         }
         const page = await renderCatalogPage(slug, sectionParams);
         if (page.location) {
           response.writeHead(301, { location: page.location, ...seoPageCache });
           return response.end();
         }
-        return html(response, page.status, page.html, page.status === 200 ? seoPageCache : { "cache-control":"no-store" });
+        return html(response, page.status, page.html, page.status === 200 ? catalogPageCache : { "cache-control":"no-store" });
       } catch (error) {
         console.error(error);
         // Раздел каталога без данных показывать нечем: отдаём обычную страницу каталога,
@@ -562,7 +565,7 @@ export async function handleApiRequest(request, response) {
         : modelPriceStats;
       return json(response, 200, await marketComparison(stats, brandStock, quotaMode || "full"), metaCache);
     }
-    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType"), url.searchParams.get("country")), metaCache);
+    if (request.method === "GET" && url.pathname === "/api/catalog/meta") return json(response, 200, await getCatalogMeta(url.searchParams.get("type"), url.searchParams.get("brand"), url.searchParams.getAll("bodyType"), url.searchParams.get("country")), catalogMetaCache);
     // Сводка по набору машин: сколько их, годы, лучший запас хода, батарея, мощность.
     // Стоит до разбора адреса машины — иначе «summary» приняли бы за номер объявления.
     if (request.method === "GET" && url.pathname === "/api/cars/summary") return json(response, 200, await modelSummary(url.searchParams), catalogCache);

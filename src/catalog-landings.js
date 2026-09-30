@@ -1819,6 +1819,17 @@ export const HOME_SEO = Object.freeze({
   h1: `Авто ${siteFromPhrase({ nbsp: true })} с\u00a0доставкой в\u00a0Беларусь`,
 });
 
+// Части видимого H1: названия стран остаются ссылками, а собранный текст должен
+// побуквенно совпадать с HOME_SEO.h1 на первом кадре и после запуска приложения.
+const [homeH1BeforeCountries, homeH1AfterCountries] = HOME_SEO.h1.split(siteFromPhrase({ nbsp: true }));
+export const HOME_H1_PARTS = Object.freeze([
+  { text: `${homeH1BeforeCountries}из\u00a0` },
+  { text: ORIGINS.china.genitive, href: "/catalog/china" },
+  { text: " и\u00a0" },
+  { text: ORIGINS.korea.genitive, href: "/catalog/korea" },
+  { text: homeH1AfterCountries },
+]);
+
 // Каталог не спорит с главной за «авто из Китая в Беларусь» и «китайские автомобили»:
 // эти запросы частотнее, и отвечать на них должна главная. У каталога свои слова —
 // «купить», «каталог», «цены» (Вордстат 20.09.2026: «купить авто из Китая» 248 в

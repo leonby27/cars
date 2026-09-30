@@ -18,7 +18,7 @@
 // занимает невидимая плашка того же размера.
 import { evQuotaState } from "../src/ev-quota.js";
 // Главный заголовок — тот же, что рисует приложение (h1 главной берётся из этой же записи).
-import { HOME_SEO } from "../src/catalog-landings.js";
+import { HOME_H1_PARTS } from "../src/catalog-landings.js";
 
 const svg = (size, path) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" fill="currentColor" viewBox="0 0 256 256"><path d="${path}"></path></svg>`;
@@ -62,15 +62,17 @@ function header(hrefRoute) {
 // Заголовок первого экрана рисуется не тегом h1, а обычным блоком с тем же
 // оформлением. Первый экран — это картинка-заглушка до запуска приложения, и она
 // Этот же текст рисует приложение: первый кадр и готовая страница не должны менять
-// главный заголовок после загрузки. Строка берётся из HOME_SEO.h1, а не пишется
-// здесь второй раз: до 29.09.2026 две копии уже разошлись. Неразрывные пробелы в ней
-// стоят символами — в разметке они становятся сущностями, как и раньше.
-const HERO_TITLE = HOME_SEO.h1.replace(/\u00a0/g, "&nbsp;");
+// главный заголовок после загрузки. Ссылки на страны и текст берутся из тех же
+// частей, что использует приложение; неразрывные пробелы сохраняются в разметке.
+const heroTitle = (hrefRoute) => HOME_H1_PARTS.map((part) => {
+  const text = part.text.replace(/\u00a0/g, "&nbsp;");
+  return part.href ? `<a class="hero-country-link" href="${hrefRoute ? hrefRoute(part.href) : part.href}">${text}</a>` : text;
+}).join("");
 const HERO_BENEFITS = ["Без скрытых платежей", "Всё по договору", "Проверка авто до оплаты"];
 
-function homeHero() {
+function homeHero(hrefRoute) {
   const benefits = HERO_BENEFITS.map((text) => `<li>${svg(21, ICON.check)}${text}</li>`).join("");
-  return `<main><section class="hero"><div class="hero-updated boot-invisible">&nbsp;</div><div class="hero-title">${HERO_TITLE}</div><ul class="hero-benefits" aria-label="Преимущества заказа">${benefits}</ul><div class="hero-search"><div class="hero-search-field">${svg(20, ICON.search)}<input placeholder="Очень умный поиск" aria-label="Поиск по каталогу" type="search" tabindex="-1" readonly /><button type="button" class="hero-search-filters" aria-label="Показать фильтры" aria-expanded="false">${svg(21, ICON.faders)}</button></div></div></section></main>`;
+  return `<main><section class="hero"><div class="hero-updated boot-invisible">&nbsp;</div><div class="hero-title">${heroTitle(hrefRoute)}</div><ul class="hero-benefits" aria-label="Преимущества заказа">${benefits}</ul><div class="hero-search"><div class="hero-search-field">${svg(20, ICON.search)}<input placeholder="Очень умный поиск" aria-label="Поиск по каталогу" type="search" tabindex="-1" readonly /><button type="button" class="hero-search-filters" aria-label="Показать фильтры" aria-expanded="false">${svg(21, ICON.faders)}</button></div></div></section></main>`;
 }
 
 /**
@@ -83,5 +85,5 @@ function homeHero() {
  * и лучше короткая пауза, чем кнопка, которая молча не работает.
  */
 export function bootScreen({ kind = "header", hrefRoute } = {}) {
-  return `<div class="boot-screen" aria-hidden="true" inert>${header(hrefRoute)}${kind === "home" ? homeHero() : ""}</div>`;
+  return `<div class="boot-screen" aria-hidden="true" inert>${header(hrefRoute)}${kind === "home" ? homeHero(hrefRoute) : ""}</div>`;
 }

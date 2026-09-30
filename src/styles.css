@@ -337,6 +337,29 @@ button {
   line-height: 1.08;
   letter-spacing: -2.4px;
 }
+.hero .hero-country-link,
+.hero .hero-country-link:visited {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, var(--ink) 39%, transparent);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 0.15em;
+  text-decoration-skip-ink: auto;
+  transition: color var(--motion-medium) var(--motion-ease), text-decoration-color var(--motion-medium) var(--motion-ease), text-underline-offset var(--motion-medium) var(--motion-ease);
+}
+.hero .hero-country-link:hover,
+.hero .hero-country-link:focus-visible {
+  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
+  text-decoration-color: color-mix(in srgb, var(--ink) 65%, transparent);
+  text-underline-offset: 0.22em;
+}
+.hero .hero-country-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero .hero-country-link { transition: none; }
+}
 .hero > p {
   margin: 19px auto 32px;
   max-width: 680px;
