@@ -429,9 +429,7 @@ button {
   font-size: 1.06em;
   font-weight: 500;
 }
-/* Кнопка фильтров и крестик очистки живут в одном «гнезде» справа: пока строка
-   пустая — фильтры, появился текст — крестик. Геометрия у них общая, различаются
-   только иконка и цвет, чтобы подмена не дёргала строку. */
+/* Справа в пустой строке — фильтры, при вводе текста — крестик очистки. */
 .hero-search-clear,
 .hero-search-filters {
   flex: 0 0 auto;
@@ -450,6 +448,14 @@ button {
 /* Фильтры инверсией к теме: в тёмной — белая кнопка с тёмной иконкой, в светлой
    наоборот. Крестик очистки — спокойный, на подложке панели. */
 .hero-search-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
   background: var(--ink);
   color: var(--page);
   transition: opacity var(--motion-fast) ease;

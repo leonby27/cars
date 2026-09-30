@@ -3438,9 +3438,7 @@ function HeroSearch({ value, onChange, navigate }) {
           onFocus={handleFocus}
           onChange={(event) => onChange(event.target.value)}
         />
-        {/* Одно «гнездо» на двоих: пока строка пустая — кнопка фильтров, появился
-            текст — на её месте крестик очистки. Геометрия общая, меняются только
-            иконка и цвет, поэтому строка не дёргается. */}
+        {/* Пока строка пустая — кнопка фильтров, появился текст — крестик очистки. */}
         {value ? (
           <button type="button" className="hero-search-clear" aria-label="Очистить поиск" onClick={() => onChange("")}>
             <X size={18} weight="bold" />
@@ -3448,6 +3446,7 @@ function HeroSearch({ value, onChange, navigate }) {
         ) : (
           <AppLink href="/catalog" navigate={navigate} className="hero-search-filters" aria-label="Открыть фильтры в каталоге">
             <SlidersHorizontal size={21} weight="bold" />
+            <span>Фильтры</span>
           </AppLink>
         )}
       </div>
