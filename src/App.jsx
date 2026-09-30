@@ -11765,9 +11765,8 @@ const MARKET_POWERTRAIN_OPTIONS = Object.freeze([
 const MARKET_PRICE_RANGE_VALUES = Object.freeze([
   10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000, 60000, 70000, 80000, 90000, 100000, 125000, 150000,
 ]);
-const marketPriceRangeLabel = (value) => `${number(value)} $`;
 const marketPriceRangeValue = (label) => {
-  const value = Number(String(label).replace(/\D/g, ""));
+  const value = Number(label);
   return Number.isFinite(value) && value > 0 ? value : null;
 };
 
@@ -11814,6 +11813,7 @@ function itemsMatchingQuery(items, query, haystackOf, namesOf) {
 }
 
 function MarketStatRow({ label, stats, priceOption }) {
+  const currency = useCurrency();
   const value = hasEnoughMarketSample(stats) ? stats?.[priceOption.key] : null;
   const count = Number(stats?.count);
   return (
@@ -11824,7 +11824,7 @@ function MarketStatRow({ label, stats, priceOption }) {
           <span className="market-card-count" aria-label={`${number(count)} объявлений`}>· {number(count)}</span>
         ) : null}
       </b>
-      <span data-label={priceOption.column}>{Number.isFinite(value) ? `${number(Math.round(value))} $` : "—"}</span>
+      <span data-label={priceOption.column}>{Number.isFinite(value) ? bynify(money(Math.round(value), currency)) : "—"}</span>
     </div>
   );
 }
@@ -11917,6 +11917,7 @@ function MarketModelCard({ card, navigate, mileageOption, priceOption, quotaPric
 }
 
 function MarketCompareCards({ cards, navigate, loading = false, quotaPricingOn = false }) {
+  const currency = useCurrency();
   const narrow = useNarrowViewport();
   const [query, setQuery] = useState("");
   const searchRef = useRef(null);
@@ -11934,14 +11935,17 @@ function MarketCompareCards({ cards, navigate, loading = false, quotaPricingOn =
   const powertrainOption = MARKET_POWERTRAIN_OPTIONS.find((option) => option.label === powertrain) || MARKET_POWERTRAIN_OPTIONS[0];
   const priceOption = MARKET_PRICE_OPTIONS.find((option) => option.label === priceBasis) || MARKET_PRICE_OPTIONS[2];
   const brands = useMemo(() => ["Все марки", ...new Set(cards.map((card) => card.brand))].sort((left, right) => left === "Все марки" ? -1 : right === "Все марки" ? 1 : left.localeCompare(right, "ru")), [cards]);
-  const priceFromOptions = useMemo(() => ["От", ...MARKET_PRICE_RANGE_VALUES.filter((value) => priceTo == null || value <= priceTo).map(marketPriceRangeLabel)], [priceTo]);
-  const priceToOptions = useMemo(() => ["До", ...MARKET_PRICE_RANGE_VALUES.filter((value) => priceFrom == null || value >= priceFrom).map(marketPriceRangeLabel)], [priceFrom]);
+  const priceFromOptions = useMemo(() => ["От", ...MARKET_PRICE_RANGE_VALUES.filter((value) => priceTo == null || value <= priceTo).map(String)], [priceTo]);
+  const priceToOptions = useMemo(() => ["До", ...MARKET_PRICE_RANGE_VALUES.filter((value) => priceFrom == null || value >= priceFrom).map(String)], [priceFrom]);
+  // В состоянии остаются исходные USD: смена валюты меняет только подписи,
+  // не выбранные границы и не состав сравниваемых машин.
+  const formatPriceBound = (value) => value === "От" || value === "До" ? value : money(Number(value), currency);
   const priceRangeLabel = priceFrom != null && priceTo != null
-    ? `${number(priceFrom)}–${number(priceTo)} $`
+    ? `${money(priceFrom, currency)}–${money(priceTo, currency)}`
     : priceFrom != null
-    ? `От ${number(priceFrom)} $`
+    ? `От ${money(priceFrom, currency)}`
     : priceTo != null
-    ? `До ${number(priceTo)} $`
+    ? `До ${money(priceTo, currency)}`
     : "Любая цена";
   useEffect(() => {
     if (!priceRangeOpen) return undefined;
@@ -12009,22 +12013,24 @@ function MarketCompareCards({ cards, navigate, loading = false, quotaPricingOn =
             onClick={() => setPriceRangeOpen((current) => !current)}
           >
             <CurrencyDollar size={20} weight="duotone" aria-hidden="true" />
-            <span>{priceRangeLabel}</span>
+            <span>{bynify(priceRangeLabel)}</span>
           </button>
           {priceRangeOpen && !narrow && (
             <div className="market-compare-price-range-fields" id="market-price-range-fields">
               <SelectField
                 className="market-compare-price-bound"
                 label="Цена от"
-                value={priceFrom == null ? "От" : marketPriceRangeLabel(priceFrom)}
+                value={priceFrom == null ? "От" : String(priceFrom)}
                 options={priceFromOptions}
+                formatOption={formatPriceBound}
                 onChange={(value) => setPriceFrom(marketPriceRangeValue(value))}
               />
               <SelectField
                 className="market-compare-price-bound"
                 label="Цена до"
-                value={priceTo == null ? "До" : marketPriceRangeLabel(priceTo)}
+                value={priceTo == null ? "До" : String(priceTo)}
                 options={priceToOptions}
+                formatOption={formatPriceBound}
                 onChange={(value) => setPriceTo(marketPriceRangeValue(value))}
               />
             </div>
@@ -12043,15 +12049,17 @@ function MarketCompareCards({ cards, navigate, loading = false, quotaPricingOn =
             <SelectField
               className="market-compare-price-bound"
               label="Цена от"
-              value={priceFrom == null ? "От" : marketPriceRangeLabel(priceFrom)}
+              value={priceFrom == null ? "От" : String(priceFrom)}
               options={priceFromOptions}
+              formatOption={formatPriceBound}
               onChange={(value) => setPriceFrom(marketPriceRangeValue(value))}
             />
             <SelectField
               className="market-compare-price-bound"
               label="Цена до"
-              value={priceTo == null ? "До" : marketPriceRangeLabel(priceTo)}
+              value={priceTo == null ? "До" : String(priceTo)}
               options={priceToOptions}
+              formatOption={formatPriceBound}
               onChange={(value) => setPriceTo(marketPriceRangeValue(value))}
             />
           </div>

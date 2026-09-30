@@ -700,6 +700,8 @@ Belarus price-page model-link year carryover (owner decision, 2026-09-21): when 
 
 Belarus price-page immediate controls (owner decision, 2026-09-21): render the search, sorting and filter controls on `/price-belarus` immediately, without waiting for comparison data. While the response is loading, show skeletons only where the model cards will appear; keep the already visible controls interactive and preserve choices made before the data arrives.
 
+Belarus price-page currency (owner correction, 2026-09-30): both comparison price rows and all price-range labels/options on `/price-belarus` follow the shared USD/BYN/RUB selector immediately. Keep range values in USD internally so switching display currency preserves the selected budget, filtering, year selection and percentage differences.
+
 Belarus price-page quota pricing (owner decision, 2026-09-21): the «В нашем каталоге» prices on `/price-belarus` must follow the global «Цены с квотами» switch exactly like catalog cards. Store both quota-on and quota-off aggregate prices in the comparison response so changing the switch immediately updates displayed prices, percentage differences, price-range filtering and sorting without another API request. Non-electric prices remain identical in both modes.
 
 Belarus price-page search clear control (owner decision, 2026-09-21): while the `/price-belarus` search contains text, show its clear control permanently as a compact iOS-style filled circle with a cross; do not rely on the browser's hover-only search cancel control.
