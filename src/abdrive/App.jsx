@@ -78,11 +78,13 @@ function Questions(){
  return <section className="ab-questions"><h2>Вопросы о покупке</h2>{purchaseQuestions.map(item=><details key={item.id} id={item.id}><summary>{item.question}</summary><p>{item.answer}</p></details>)}</section>;
 }
 function CarPage({car,leadEnabled}){
- const facts=[['Год выпуска',car.year],['Пробег',mileageText(car.mileage)],['Двигатель',car.type],['Привод',car.drive],['Батарея',car.battery?car.battery+' кВт·ч':null],['Запас хода',car.range?car.range+' км':null]].filter(([,value])=>value);
+ const facts=car.facts?.length?car.facts:[{label:'Год выпуска',value:car.year},{label:'Пробег',value:mileageText(car.mileage)},{label:'Двигатель',value:car.type}].filter(item=>item.value);
+ const checkedDate=car.checkedAt?new Date(car.checkedAt):null;
+ const checkedText=checkedDate&&!Number.isNaN(checkedDate.getTime())?checkedDate.toLocaleString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):null;
  return <><nav className="ab-breadcrumb"><a href="/catalog">Каталог</a> / <a href={'/catalog?'+new URLSearchParams({brand:car.brand})}>{car.brand}</a> / <a href={'/catalog?'+new URLSearchParams({brand:car.brand,model:car.model})}>{car.model}</a></nav><h1>{car.title}</h1>
   <div className="ab-car-layout"><div><Gallery images={car.images} title={car.title}/>
-   <section className="ab-panel"><h2>Об автомобиле</h2><dl>{facts.map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></section></div>
-   <aside><section className="ab-panel"><p className="ab-eyebrow">Автомобиль {fromPhrase(car.origin)}</p><Price offer={car.offer}/><p>Цена до Москвы рассчитывается для конкретной машины. В расчёте нужно учесть покупку, доставку, оформление и услуги исполнителя.</p><p className="ab-muted">Объявление не является подтверждением наличия. Его проверят у продавца перед заказом.</p>{leadEnabled?<a href="#request" className="ab-button">Уточнить цену и наличие</a>:null}</section><LeadForm car={car} enabled={leadEnabled}/></aside>
+   <section className="ab-panel"><h2>Об автомобиле</h2><dl>{facts.map(({label,value})=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><p className="ab-facts-note">Характеристики указаны по данным объявления. Комплектацию и состояние конкретного автомобиля нужно подтвердить перед покупкой.</p></section></div>
+   <aside><section className="ab-panel"><p className="ab-eyebrow">Автомобиль {fromPhrase(car.origin)}</p><Price offer={car.offer}/><p>Цена до Москвы рассчитывается для конкретной машины. В расчёте нужно учесть покупку, доставку, оформление и услуги исполнителя.</p><p className="ab-muted">{checkedText?<>Данные обновлены <time dateTime={checkedDate.toISOString()}>{checkedText} МСК</time>. </>:null}Объявление не является подтверждением наличия. Его проверят у продавца перед заказом.</p>{leadEnabled?<a href="#request" className="ab-button">Уточнить цену и наличие</a>:null}</section><LeadForm car={car} enabled={leadEnabled}/></aside>
   </div><Process/></>;
 }
 export function AbdriveApp({boot}){

@@ -18,5 +18,6 @@ export function Gallery({images=[],title}){
    {urls.map((url,i)=><StripPhoto key={url} src={vehiclePhotoHref(url,600,{mirrorOrigin:'https://abcars.by'})} first={i===0} alt={`${title}, фото ${i+1}`}/>)}
   </div>
   {urls.length>1?<div className="ab-gallery-controls"><button type="button" onClick={()=>go(active-1)} disabled={active===0} aria-label="Предыдущее фото">←</button><span aria-live="polite">Фото {active+1} из {urls.length}</span><button type="button" onClick={()=>go(active+1)} disabled={active===urls.length-1} aria-label="Следующее фото">→</button></div>:null}
+  <a className="ab-full-photo" href={vehiclePhotoHref(urls[active],'original',{mirrorOrigin:'https://abcars.by'})} target="_blank" rel="noopener noreferrer">Открыть фото полностью ↗</a>
  </section>;
 }

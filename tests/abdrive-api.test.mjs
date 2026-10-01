@@ -19,6 +19,8 @@ test('RU catalog never presents the legacy Belarus price as RUB',()=>{
  const selection=catalogSelection(new URLSearchParams({brand:"O'Reilly",q:"a%_",country:'korea'}));
  assert.doesNotMatch(selection.where,/O'Reilly/);assert.equal(selection.args[0],"O'Reilly");assert.equal(selection.args[1],'%a\\%\\_%');
  assert.throws(()=>catalogSelection(new URLSearchParams({sort:'price'})),/price_filter_unavailable/);
+ for(const params of [{landedMax:'20000'},{priceCnyMax:'20000'}])assert.throws(()=>catalogSelection(new URLSearchParams(params)),/price_filter_unavailable/);
+ for(const params of [{currency:'BYN'},{refund50:'1'}])assert.throws(()=>catalogSelection(new URLSearchParams(params)),/invalid_filter/);
  assert.throws(()=>catalogSelection(new URLSearchParams({page:'1000000'})),/invalid_page/);
 });
 

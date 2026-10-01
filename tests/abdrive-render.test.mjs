@@ -11,7 +11,7 @@ const site=getSiteProfile('abdrive');
 const directory=resolve('dist-abdrive');
 
 test('built RU pages serve their own HTML/assets; missing tools, quotes and private data do not fall back to BY', {skip:!existsSync(resolve(directory,'ssr/entry-server.js'))},async()=>{
- const car={id:'che168-1',number:'1',title:'Test $& </script><script>alert(1)</script>',brand:'BYD',model:'Seal',year:2024,type:'Электромобиль',mileage:123,origin:'china',images:[],offer:{status:'unavailable',totalAmount:null,currency:'RUB'}};
+ const car={id:'che168-1',number:'1',title:'Test $& </script><script>alert(1)</script>',brand:'BYD',model:'Seal',year:2024,type:'Электромобиль',mileage:123,origin:'china',checkedAt:'2026-10-01T09:00:00Z',facts:[{label:'Цвет кузова',value:'Чёрный'}],images:[],offer:{status:'unavailable',totalAmount:null,currency:'RUB'}};
  const catalog={list:async params=>{if(params.get('yearMin')==='invalid')throw new Error('invalid_filter');return {cars:[car],total:1,page:1,hasMore:false};},get:async id=>id==='1'?{car}:null,meta:async()=>({brands:[{brand:'BYD',count:1}],models:[{model:'Seal',count:1}],total:1})};
  const frontend=await createFrontend({buildDirectory:directory,catalog,site});
  const server=http.createServer(createAbdriveHandler({catalog,site,siteDatabase:{},frontend,log:()=>{}}));
@@ -28,7 +28,7 @@ test('built RU pages serve their own HTML/assets; missing tools, quotes and priv
   const faq=await fetch(base+'/faq').then(r=>r.text());assert.match(faq,/<details/);assert.match(faq,/не адрес офиса/);assert.doesNotMatch(faq,/BYN|Беларус|Минск/);
   const invalid=await fetch(base+'/catalog?yearMin=invalid');assert.equal(invalid.status,400);assert.match(await invalid.text(),/Проверьте параметры поиска/);
   const response=await fetch(base+'/cars/1');const html=await response.text();
-  assert.equal(response.status,200);assert.match(html,/Стоимость по запросу/);assert.match(html,/Фотографии уточняются/);assert.match(html,/noindex,follow/);
+  assert.equal(response.status,200);assert.match(html,/Стоимость по запросу/);assert.match(html,/Фотографии уточняются/);assert.match(html,/Цвет кузова/);assert.match(html,/Чёрный/);assert.match(html,/Данные обновлены/);assert.match(html,/12:00/);assert.match(html,/noindex,follow/);
   assert.ok(html.includes('Test $&amp;'));
   assert.doesNotMatch(html,/<script>alert\(1\)<\/script>/);
   const raw=html.match(/<script id="abdrive-data" type="application\/json">([\s\S]*?)<\/script>/)[1];

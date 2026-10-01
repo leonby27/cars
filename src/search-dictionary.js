@@ -3,7 +3,7 @@
 // тем же значениям, что стоят в выпадающих фильтрах каталога. Модуль без React и
 // сети — весь разбор названий проверяется тестами.
 import { colorLabelForWord } from "./colors.js";
-import { latinVariants } from "./search-query.js";
+import { latinVariants } from "./search-transliteration.js";
 
 // Быстрый поиск на главной: строка вида «Zeekr 001 2025» разбирается на марку,
 // модель и годы по тому же справочнику, которым живут выпадающие фильтры, а

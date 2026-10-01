@@ -1,12 +1,15 @@
 import {createAsyncCache} from "../async-cache.mjs";
 import {originForSource,ORIGIN_SOURCES} from '../../src/origin.js';
 import {listingNumber,koreanListingId} from '../../src/listing-id.js';
+import {vehiclePublicFacts} from '../../src/vehicle-public-facts.js';
+import {listSearchVariants,findBrandInText,HERO_BRAND_RU} from '../../src/search-dictionary.js';
 import {sourceVersion} from '../catalog/offer-repository.mjs';
 
 const columns=`l.id,l.source,l.external_id,l.source_url,l.title,l.city,l.mileage_km,l.price_cny,
  l.source_payload,l.last_checked_at,l.last_seen_at,l.status,
- v.brand,v.model,v.model_year,v.powertrain,v.drivetrain,v.battery_kwh,v.electric_range_km,v.specifications,
+ v.brand,v.model,v.model_year,v.powertrain,v.drivetrain,v.battery_kwh,v.electric_range_km,v.combined_range_km,v.specifications,
  ARRAY(SELECT m.url FROM listing_media m WHERE m.listing_id=l.id ORDER BY m.position) AS images`;
+const brandNames=[...new Set(HERO_BRAND_RU.map(([,name])=>name))];
 const from='FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id';
 
 export function catalogSelection(params) {
@@ -16,7 +19,22 @@ export function catalogSelection(params) {
   const value=params.get(param);if(value){if(value.length>100)throw new Error('invalid_filter');add(`${column}=?`,value);}
  }
  const text=(params.get('q')||'').trim();
- if(text){if(text.length>100)throw new Error('invalid_filter');add("(v.brand||' '||v.model||' '||v.model_year::text) ILIKE ?",'%'+text.replace(/[\\%_]/g,'\\$&')+'%');}
+ if(text){
+  if(text.length>100)throw new Error('invalid_filter');
+  // Match names in either word order. Currency/price parsing is deliberately separate.
+  const candidates=/[%_]/.test(text)?[text]:listSearchVariants(text);
+  const recognized=candidates.filter(value=>findBrandInText(value,brandNames));
+  const variants=(recognized.length?recognized:candidates).slice(0,12);
+  if(!variants.length)throw new Error('invalid_filter');
+  const alternatives=variants.map(variant=>{
+   const words=variant.split(/\s+/).filter(Boolean).slice(0,8);
+   return '('+words.map(word=>{
+    args.push('%'+word.replace(/[\\%_]/g,'\\$&')+'%');
+    return `(v.brand||' '||v.model||' '||v.model_year::text) ILIKE $${args.length}`;
+   }).join(' AND ')+')';
+  });
+  clauses.push('('+alternatives.join(' OR ')+')');
+ }
  const country=params.get('country');
  if(country==='china'||country==='korea')add('l.source=ANY(?::text[])',ORIGIN_SOURCES[country]);
  else if(country)throw new Error('invalid_country');
@@ -24,7 +42,8 @@ export function catalogSelection(params) {
   const raw=params.get(key);if(raw){const n=Number(raw);if(!Number.isInteger(n)||n<min||n>max)throw new Error('invalid_filter');add(`${column}${op}?`,n);}
  }
  if(params.get('yearMin')&&params.get('yearMax')&&Number(params.get('yearMin'))>Number(params.get('yearMax')))throw new Error('invalid_filter');
- if(params.has('priceMin')||params.has('priceMax')||['price','price_asc','price_desc'].includes(params.get('sort')))throw new Error('price_filter_unavailable');
+ if(['priceMin','priceMax','landedMin','landedMax','priceCnyMax'].some(key=>params.has(key))||['price','price_asc','price_desc'].includes(params.get('sort')))throw new Error('price_filter_unavailable');
+ if(['quota','refund50','quotaOver'].some(key=>params.has(key))||(params.has('currency')&&params.get('currency')!=='RUB'))throw new Error('invalid_filter');
  const sort={newest:'l.first_seen_at DESC',year_desc:'v.model_year DESC',mileage_asc:'l.mileage_km ASC'}[params.get('sort')||'newest'];
  if(!sort)throw new Error('invalid_sort');
  const page=Number(params.get('page')||1);
@@ -32,13 +51,14 @@ export function catalogSelection(params) {
  return {where:clauses.join(' AND '),args,order:sort+',l.id',page,limit:24,offset:(page-1)*24};
 }
 
-export function publicCar(row) {
+export function publicCar(row,{detail=false}={}) {
  return {
   id:row.id,number:listingNumber(row.id),brand:row.brand,model:row.model,year:row.model_year,
   title:[row.brand,row.model,row.model_year].filter(Boolean).join(' '),
   origin:originForSource(row.source),type:row.powertrain,drive:row.drivetrain,
   mileage:row.mileage_km==null?null:Number(row.mileage_km),battery:Number(row.battery_kwh)||null,range:Number(row.electric_range_km)||null,
   images:(row.images||[]).filter(url=>/^https?:\/\//.test(url)),
+  ...(detail?{facts:vehiclePublicFacts(row)}:{}),
   checkedAt:row.last_checked_at||row.last_seen_at,
   offer:{status:'unavailable',currency:'RUB',destinationId:'moscow',destinationName:'Москва',totalAmount:null,reason:'tariffs_pending'},
  };
@@ -74,7 +94,7 @@ export function createRussianCatalog(db) {
    const result=await db.query(`SELECT ${columns} ${from} WHERE l.status='active' AND l.id=ANY($1::text[])
      ORDER BY CASE WHEN l.id=$2 THEN 0 ELSE 1 END,l.id LIMIT 1`,[ids,number]);
    const row=result.rows[0];
-   return row?{car:publicCar(row),sourceVersion:sourceVersion(row),sourceUrl:row.source_url}:null;
+   return row?{car:publicCar(row,{detail:true}),sourceVersion:sourceVersion(row),sourceUrl:row.source_url}:null;
   },
   async meta(brand='') {
    if(typeof brand!=='string'||brand.length>100)throw new Error('invalid_filter');
