@@ -1,4 +1,4 @@
-.market-wordmark { font-size: 33px; font-weight: 750; letter-spacing: -1.6px; line-height: 1; color: var(--text); }
+.market-wordmark { font-size: 33px; font-weight: 750; letter-spacing: -1.6px; line-height: 1; color: var(--ink); }
 .market-wordmark > span { color: var(--muted); }
 .market-destination { white-space: nowrap; font-size: 13px; color: var(--muted); }
 .market-filter-note { align-self: center; font-size: 13px; color: var(--muted); }

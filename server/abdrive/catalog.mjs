@@ -121,7 +121,7 @@ export function createRussianCatalog(db) {
 // Explicit public contract for the shared UI; never spread source_payload.
 function sharedVehicleFields(row) {
  const spec=row.specifications||{}, raw=row.source_payload||{};
- const allowed=['bodyType','bodyColor','engine','engineVolume','enginePower','transmission','gearbox','fuelType','acceleration','tireRim','batteryType','batteryBrand','vehicleClass'];
+ const allowed=['bodyType','bodyColor','engine','engineVolume','enginePower','transmission','gearbox','fuelType','sourceFuelType','acceleration','tireRim','batteryType','batteryBrand','vehicleClass'];
  const fields={};
  for(const key of allowed) {const value=raw[key]??spec[key];if(typeof value==='string'||typeof value==='number')fields[key]=typeof value==='string'?value.slice(0,160):value;}
  return {...fields,source:row.source,city:row.city,image:row.images?.[0]||null,electricRange:row.electric_range_km,combinedRange:row.combined_range_km,firstSeenAt:row.first_seen_at,available:true,detailLoaded:true};

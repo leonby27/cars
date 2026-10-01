@@ -33,7 +33,7 @@ test('RU uses shared pages, own metadata and safe data; BY tools and documents s
   const raw=html.match(/<script id="abdrive-data" type="application\/json">([\s\S]*?)<\/script>/)[1];assert.equal(JSON.parse(raw).car.title,car.title);
   assert.equal((await fetch(base+'/api/cars/1').then(r=>r.json())).id,car.id);
   assert.equal((await fetch(base+'/',{method:'HEAD'})).status,200);
-  for(const path of ['/ev-quota','/price-belarus','/privacy','/cars/missing','/documents/privacy-policy.pdf','/assets/nope.js'])assert.equal((await fetch(base+path)).status,404,path);
+  for(const path of ['/ev-quota','/price-belarus','/privacy','/cars/missing','/documents/privacy-policy.pdf','/orders/draft/1','/assets/nope.js'])assert.equal((await fetch(base+path)).status,404,path);
   const script=html.match(/src="(\/assets\/[^\"]+\.js)"/)[1];
   const asset=await fetch(base+script);assert.equal(asset.status,200);assert.match(asset.headers.get('content-type'),/javascript/);
   const xml=await fetch(base+'/sitemap.xml').then(r=>r.text());assert.doesNotMatch(xml,/abcars|ev-quota|price-belarus/);

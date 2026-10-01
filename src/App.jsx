@@ -15958,7 +15958,7 @@ export function App() {
     unavailable.forEach((id) => next.delete(id));
     setFavorites(next);
     if (!user) {
-      storeFavorites(guestFavoritesKey, next);
+      storeFavorites(IS_RU ? "abdrive-favorites" : guestFavoritesKey, next);
       return;
     }
     const localKey = accountFavoritesKey(user.id);
@@ -16176,7 +16176,7 @@ export function App() {
   const staticPage =
     IS_RU && ["/how-it-works", "/faq"].includes(contentPath) ? <RussianServicePage><HomeConversionSections navigate={navigate}/></RussianServicePage> :
     IS_RU && contentPath === "/privacy" ? <RussianPrivacyPage/> :
-    IS_RU && ["/tracking", "/contacts", "/terms", "/models", "/account", "/login", "/register", "/analytics"].includes(contentPath) ? <NotFound navigate={navigate}/> :
+    IS_RU && (contentPath.startsWith("/orders/") || ["/tracking", "/contacts", "/terms", "/models", "/account", "/login", "/register", "/analytics"].includes(contentPath)) ? <NotFound navigate={navigate}/> :
     contentPath === "/how-it-works" ? (
       <HowItWorksPage
         navigate={navigate}
