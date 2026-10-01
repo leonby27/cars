@@ -11,7 +11,7 @@ test('presentation and test-only changes reuse inputs without DB maintenance',()
 });
 test('pricing/rates changes and unknown data code cannot take the fast path',()=>{
  for(const file of ['src/pricing.js','src/korea-logistics.js','src/new-price-helper.js','server/repository.mjs','scripts/generate-seo-pages.mjs','package-lock.json']){
-  const p=deploymentPlan(['src/styles.css',file]);assert.equal(p.reuseCatalog,false);assert.equal(p.reuseFeed,false);
+  const p=deploymentPlan(['src/styles.css',file]);assert.equal(p.reuseCatalog,false);assert.equal(p.reuseFeed,file === 'scripts/generate-seo-pages.mjs');
  }
  assert.equal(deploymentPlan(['src/pricing.js']).recalculatePrices,true);
  assert.equal(deploymentPlan(['server/repository.mjs']).recalculatePrices,false);
@@ -63,7 +63,25 @@ test('real Git diff permits already-built server rates but catches a newer local
   writeFileSync(join(dir,'src/pricing.js'),'server rates');
   writeFileSync(join(dir,'dist/catalog-build-data.bin.meta.json'),JSON.stringify({rateKey:catalogRateKey(dir)}));
   const flags=()=>execFileSync(process.execPath,[cli,before,after,'0'],{cwd:dir,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
-  assert.equal(flags(),'1 1 0 0 0');
-  writeFileSync(join(dir,'src/pricing.js'),'newer rates');assert.equal(flags(),'0 0 1 0 0');
+  assert.equal(flags(),'1 1 0 0 0 0');
+  writeFileSync(join(dir,'src/pricing.js'),'newer rates');assert.equal(flags(),'0 0 1 0 0 0');
  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+// Regressions from the last five production releases.
+test('contacts and comparison rendering reuse inputs, journal selection refreshes only catalog',()=>{
+ for(const file of ['src/info-pages-seo.js','src/market-compare.js','src/vehicle-market-savings.js',
+  'src/service-video-loading.js','config/critical-classes.json','src/blog-texts/example.js']) {
+  const p=deploymentPlan([file]);
+  assert.equal(p.reuseCatalog,true,file); assert.equal(p.reuseFeed,true,file);
+  assert.equal(p.recalculatePrices,false,file); assert.equal(p.restartBot,false,file);
+ }
+ const p=deploymentPlan(['src/blog-posts.js','scripts/generate-seo-pages.mjs','scripts/lib/blog-cover.mjs']);
+ assert.equal(p.reuseCatalog,false); assert.equal(p.reuseFeed,true); assert.equal(p.recalculatePrices,false);
+ assert.equal(p.restartBot,false);
+ const nginx=deploymentPlan(['deploy/nginx-abcars-photo-location.conf','scripts/audit-blog-images.mjs']);
+ assert.equal(nginx.reuseCatalog,true);assert.equal(nginx.reuseFeed,true);assert.equal(nginx.restartBot,false);
+ assert.equal(deploymentPlan(['scripts/telegram-commands.mjs']).restartBot,true);
+ assert.equal(deploymentPlan(['scripts/lib/telegram-guazi.mjs']).restartBot,true);
+ assert.equal(deploymentPlan(['src/pricing.js']).restartBot,true);
 });

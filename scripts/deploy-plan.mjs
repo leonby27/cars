@@ -27,4 +27,4 @@ const plan = deploymentPlan(files,{knownBase,pricingRefreshed:ratesChanged});
 console.error(`[выкладка] ${plan.mode === 'presentation' ? 'быстрая: используем совместимые готовые данные' : 'полная: обновляем данные'}`);
 console.error(`[выкладка] причина: ${plan.reasons.join(', ')}`);
 // Fixed numeric fields only; the shell does not evaluate file names as code.
-console.log([plan.reuseCatalog,plan.reuseFeed,plan.recalculatePrices,plan.checkDuplicates,plan.migrate].map(Number).join(' '));
+console.log([plan.reuseCatalog,plan.reuseFeed,plan.recalculatePrices,plan.checkDuplicates,plan.migrate,plan.restartBot].map(Number).join(' '));

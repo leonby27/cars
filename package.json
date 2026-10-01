@@ -42,7 +42,7 @@
     "social:week:finalize": "node scripts/social-week-finalize.mjs",
     "social:week:publish": "node scripts/social-week-publish.mjs",
     "social:week:cleanup-test": "node scripts/social-week-cleanup-test.mjs",
-    "build": "node scripts/clean-dist.mjs && vite build && vite build --ssr src/entry-server.jsx --outDir ${ABCARS_BUILD_DIR:-dist}/ssr && node scripts/split-css.mjs && node scripts/generate-seo-pages.mjs && node scripts/prerender-home.mjs && node scripts/yandex-feed.mjs && node scripts/precompress-dist.mjs",
+    "build": "node scripts/build.mjs",
     "preview": "vite preview",
     "import:guazi": "node scripts/import-guazi.mjs",
     "import:guazi-global": "node scripts/import-guazi-global.mjs",
@@ -63,7 +63,8 @@
     "test": "node --test tests/*.test.mjs",
     "test:worker": "node --test tests/worker.test.mjs",
     "db:respec": "node scripts/backfill-specs.mjs",
-    "core:guazi": "node scripts/guazi-core.mjs"
+    "core:guazi": "node scripts/guazi-core.mjs",
+    "deploy": "node scripts/deploy.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

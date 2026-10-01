@@ -51,3 +51,21 @@ test('SEO rebuild uses compatible cached data with unavailable DB and new page a
   assert.deepEqual(JSON.parse(readFileSync(join(output,'../market-price-stats.json'),'utf8')),marketPrices);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('planner and fingerprint agree on audited render-only changes',async()=>{
+ const {deploymentPlan}=await import('../scripts/lib/deploy-plan.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'abcars-shared-key-'));
+ try {
+  for(const d of ['src','server','config','db','scripts/lib'])mkdirSync(join(dir,d),{recursive:true});
+  for(const f of ['package.json','package-lock.json'])writeFileSync(join(dir,f),'{}');
+  const first=catalogBuildKey(dir,{});
+  for(const f of ['src/info-pages-seo.js','src/market-compare.js','src/vehicle-market-savings.js','config/critical-classes.json','scripts/deploy.mjs']){
+   writeFileSync(join(dir,f),'changed rendering');
+   assert.equal(deploymentPlan([f]).reuseCatalog,true,f);
+   assert.equal(catalogBuildKey(dir,{}),first,f);
+  }
+  writeFileSync(join(dir,'src/blog-posts.js'),'changed selection');
+  assert.equal(deploymentPlan(['src/blog-posts.js']).reuseCatalog,false);
+  assert.notEqual(catalogBuildKey(dir,{}),first);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

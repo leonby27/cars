@@ -1,3 +1,4 @@
+import { catalogInput, feedInput } from './deploy-impact.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -14,21 +15,24 @@ export function catalogRateKey(root) {
   return hash.digest('hex');
 }
 
-export function catalogBuildKey(root, settings) {
+export function inputKey(root, settings, relevant = catalogInput) {
   const files = [];
   const walk = (directory) => {
     for (const entry of readdirSync(join(root,directory),{withFileTypes:true})) {
       const file = join(directory,entry.name);
       if (entry.isDirectory()) walk(file);
-      else if (entry.isFile() && /\.(js|mjs|json|sql)$/.test(file)) files.push(file);
+      else if (entry.isFile() && /\.(js|mjs|json|sql)$/.test(file) && relevant(file)) files.push(file);
     }
   };
-  for (const dir of ['src','server','config','db','scripts/lib']) walk(dir);
-  files.push('scripts/generate-seo-pages.mjs','package.json','package-lock.json');
+  for (const dir of ['src','server','config','db','scripts']) walk(dir);
+  files.push('package.json','package-lock.json');
   const hash = createHash('sha256').update(JSON.stringify({version:VERSION,v8:process.versions.v8,settings}));
   for (const file of files.sort()) hash.update(relative(root,join(root,file))).update('\0').update(readFileSync(join(root,file))).update('\0');
   return hash.digest('hex');
 }
+
+export const catalogBuildKey = (root, settings) => inputKey(root, settings, catalogInput);
+export const feedBuildKey = (root, settings) => inputKey(root, settings, feedInput);
 
 export function readCatalogBuildCache(file, key, { now = Date.now(), maxAge = CATALOG_CACHE_MAX_AGE } = {}) {
   try {

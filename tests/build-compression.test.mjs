@@ -30,3 +30,18 @@ test('UI deploy reuses only a recent feed and matching compressed siblings', () 
   assert.equal(reuseFeed(join(dir,'missing'),target),false);
  } finally {rmSync(dir,{recursive:true,force:true});}
 });
+
+test('successive feed copies preserve age and reject incompatible or missing fingerprints',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'abcars-feed-age-'));
+ try{
+  const source=join(dir,'source.xml'),next=join(dir,'next.xml'),last=join(dir,'last.xml');
+  writeFileSync(source,'<feed>current</feed>');utimesSync(source,new Date(1000),new Date(1000));
+  assert.equal(reuseFeed(source,next,{now:2000,key:'new'}),false);
+  writeFileSync(source+'.meta.json',JSON.stringify({key:'one'}));
+  assert.equal(reuseFeed(source,next,{now:2000,key:'two'}),false);
+  assert.equal(reuseFeed(source,next,{now:2000,key:'one'}),true);
+  assert.equal(reuseFeed(next,last,{now:3000,key:'one'}),true);
+  assert.equal(reuseFeed(last,next,{now:86401000,key:'one'}),false);
+  assert.equal(reuseFeed(source,next,{now:500,key:'one'}),false);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

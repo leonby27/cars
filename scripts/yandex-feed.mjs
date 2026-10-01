@@ -1,3 +1,4 @@
+import { feedBuildKey } from "./lib/catalog-build-cache.mjs";
 import { reuseFeed } from "./lib/reuse-feed.mjs";
 // Фид каталога для Яндекса: `/feeds/yandex-cars.xml`.
 //
@@ -51,15 +52,15 @@ const args = new Map(process.argv.slice(2).map((arg) => {
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const buildDir = process.env.ABCARS_BUILD_DIR || "dist";
 const outPath = path.resolve(args.get("out") || path.join(root, buildDir, "client", "feeds", "yandex-cars.xml"));
-if (process.env.ABCARS_REUSE_FEED === "1" && buildDir === "dist.next"
-    && (process.env.ABCARS_REUSE_CATALOG !== "1" || existsSync(path.join(root,buildDir,"catalog-reused.json")))
-    && reuseFeed(path.join(root, "dist/client/feeds/yandex-cars.xml"), outPath)) {
-  console.log("[feed] сохранён свежий фид предыдущей сборки; плановое обновление — по таймеру");
-  process.exit(0);
-}
 const freshDays = Math.max(1, Number(args.get("fresh-days")) || 7);
 // Лимит Яндекса на файл — 30 000 предложений; держим небольшой запас.
 const offerLimit = Math.min(30_000, Math.max(100, Number(args.get("limit")) || 29_500));
+const feedKey = feedBuildKey(root, {siteUrl, freshDays, offerLimit});
+if (process.env.ABCARS_REUSE_FEED === "1" && buildDir === "dist.next"
+    && reuseFeed(path.join(root, "dist/client/feeds/yandex-cars.xml"), outPath, { key:feedKey })) {
+  console.log("[feed] сохранён свежий фид предыдущей сборки; плановое обновление — по таймеру");
+  process.exit(0);
+}
 // Одно фото на машину и 600 точек: Яндексу для предложения хватает одного кадра, а
 // каждую картинку он скачивает через наш сервер (JPEG нет в постоянном хранилище
 // фото, он берётся у источника и ложится во временный кэш на 8 ГБ). Пять кадров по
@@ -297,6 +298,8 @@ const writeAtomic = (file, data) => {
 writeAtomic(outPath, xml);
 writeAtomic(`${outPath}.gz`, gzipSync(xml, { level: 9 }));
 writeAtomic(`${outPath}.br`, brotliCompressSync(xml, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 6 } }));
+
+writeAtomic(`${outPath}.meta.json`, JSON.stringify({key:feedKey}));
 
 const totalCars = [...byModel.values()].reduce((sum, list) => sum + list.length, 0);
 console.log(`[feed] ${path.relative(root, outPath) || outPath}: ${collections.length} подборок (марки и модели), ${cars.length} машин из ${totalCars} свежих с фото (модели для соцсетей — ${coreCars}), ${sets.length} наборов; ${(Buffer.byteLength(xml) / 1_048_576).toFixed(1)} МБ, ${((Date.now() - started) / 1000).toFixed(1)} с`);
