@@ -33,7 +33,7 @@ export const INFO_PAGES_SEO = Object.freeze({
   contacts: Object.freeze({
     title: `Контакты abcars.by — автомобили ${siteFromPhrase()} в Минске`,
     description: `Контакты сервиса abcars.by в Минске. Консультация по выбору, проверке, расчёту и покупке автомобиля ${siteFromPhrase()}.`,
-    h1: "Контакты abcars.by",
+    h1: "Контакты",
     lead: `Обсудим бюджет, подбор, проверку и расчёт цены автомобиля ${siteFromPhrase()} с доставкой в Беларусь.`,
   }),
   terms: Object.freeze({

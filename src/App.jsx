@@ -1212,15 +1212,28 @@ function ClientSeo({ path, car, landing, carPending = false }) {
 /* Both theme variants ship in the markup and CSS reveals the matching one: the
    theme attribute is set before first paint, so swapping `src` from React state
    would only add a flash of the wrong logo on hydration. */
-function CurrencySwitch({ currency, setCurrency, className = "" }) {
+function SegmentedControl({ options, value, onChange, label, className = "", renderOption }) {
   return (
-    <div className={`currency-switch${className ? ` ${className}` : ""}`} role="group" aria-label="Валюта цен">
-      {CURRENCIES.map(([code, label]) => (
-        <button key={code} type="button" className={currency === code ? "active" : ""} aria-pressed={currency === code} onClick={() => setCurrency(code)}>
-          {code === "BYN" ? <BynSign /> : label}
+    <div className={`segmented-control${className ? ` ${className}` : ""}`} role="group" aria-label={label}>
+      {options.map((option) => (
+        <button key={option.value} type="button" className={value === option.value ? "active" : ""} aria-pressed={value === option.value} onClick={() => onChange(option.value)}>
+          {renderOption ? renderOption(option) : option.label}
         </button>
       ))}
     </div>
+  );
+}
+
+function CurrencySwitch({ currency, setCurrency, className = "" }) {
+  return (
+    <SegmentedControl
+      options={CURRENCIES.map(([value, label]) => ({ value, label }))}
+      value={currency}
+      onChange={setCurrency}
+      label="Валюта цен"
+      className={`currency-switch${className ? ` ${className}` : ""}`}
+      renderOption={({ value, label }) => value === "BYN" ? <BynSign /> : label}
+    />
   );
 }
 
@@ -10235,7 +10248,7 @@ function ServiceCatalogShowcase({ navigate, cars, apiMode, total, favorites, tog
   );
 }
 
-function ServiceContactCta() {
+function ServiceContactCta({ includeOptions = true, questionEvent = "service_contact_question_click" }) {
   // Номер не выставляем сразу: первое нажатие показывает его, второе — звонит. Так же
   // устроена кнопка в шапке, и роботам, которые собирают телефоны со страниц, номер
   // не достаётся просто так.
@@ -10243,7 +10256,7 @@ function ServiceContactCta() {
   const revealPhone = (event) => {
     if (phoneRevealed) return;
     event.preventDefault();
-    trackEvent("service_contact_question_click");
+    trackEvent(questionEvent);
     trackEvent("contact_phone_reveal");
     setPhoneRevealed(true);
   };
@@ -10268,7 +10281,7 @@ function ServiceContactCta() {
           decoding="async"
         />
       </section>
-      <section className="service-contact-options page-width" aria-label="Способы связи">
+      {includeOptions && <section className="service-contact-options page-width" aria-label="Способы связи">
         <a className="service-contact-option" href={COMPANY.viberUrl} rel={EXTERNAL_LINK_REL} onClick={() => trackEvent("service_contact_sales_click")}>
           <span aria-hidden="true"><ViberLogo size={27} /></span>
           <strong>Viber</strong>
@@ -10284,7 +10297,7 @@ function ServiceContactCta() {
           <strong>Электронная почта</strong>
           <p>{COMPANY.email} — для документов, расчётов и деловых вопросов.</p>
         </a>
-      </section>
+      </section>}
     </>
   );
 }
@@ -10657,55 +10670,101 @@ function ReviewsSection({ navigate }) {
   );
 }
 
+const CONTACT_OFFICE_MAPS = Object.freeze({
+  china: Object.freeze({ longitude: "27.597341", latitude: "53.940579", title: "Офис партнёров: Минск, улица Мележа, 5к1" }),
+  korea: Object.freeze({ longitude: "27.512217", latitude: "53.922078", title: "Офис партнёров для авто из Кореи" }),
+});
+
 function ContactsPage({ navigate, theme }) {
-  const mapSrc = `https://yandex.ru/map-widget/v1/?ll=27.512217%2C53.922078&pt=27.512217%2C53.922078%2Cpmrdm&z=16${theme === "dark" ? "&theme=dark" : ""}`;
+  const [officeOrigin, setOfficeOrigin] = useState("china");
+  const officeMap = CONTACT_OFFICE_MAPS[officeOrigin];
+  const mapPoint = `${officeMap.longitude}%2C${officeMap.latitude}`;
+  const mapSrc = `https://yandex.ru/map-widget/v1/?ll=${mapPoint}&pt=${mapPoint}%2Cpmrdm&z=16${theme === "dark" ? "&theme=dark" : ""}`;
+  const contactDepartments = [
+    { name: "Приём заявок с сайта", hours: "Круглосуточно" },
+    { name: "По вопросам покупки авто", hours: COMPANY.hours },
+    { name: "Служба поддержки", hours: "Круглосуточно" },
+    { name: "По вопросам партнёрства", hours: COMPANY.hours },
+  ];
   return (
     <main className="contact-page">
-      <section className="contact-hero page-width">
-        <div className="contact-hero-copy">
-          <button className="back-mobile" onClick={() => navigate("/")}>
-            <ArrowLeft size={18} />
-            На главную
-          </button>
-          <span className="info-eyebrow">Контакты</span>
-          <h1>Расскажем о процессе и ответим на ваши вопросы</h1>
-          <p className="contact-office-summary">
-            <span>Среднее время ответа — 10 минут</span>
-          </p>
-          <p className="contact-home-link">
-            До обращения можно посмотреть <AppLink href="/" navigate={navigate}>автомобили {siteFromPhrase()} с расчётом до Минска</AppLink>.
-          </p>
-          <div className="info-actions">
-            <ExternalLink className="primary contact-telegram-cta" href={COMPANY.telegramUrl}>
-              Написать нам в Telegram <ArrowRight size={18} />
-            </ExternalLink>
-          </div>
+      <section className="contact-hero page-width" aria-labelledby="contact-title">
+        <div className="contact-breadcrumbs">
+          <AppLink href="/" navigate={navigate}>Главная</AppLink>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">Контакты</span>
         </div>
-        <div className="info-hero-visual">
-          <Illustration src="/illustrations/contact-hero.png" alt="Чай, архитектура Китая и деловые принадлежности" />
-        </div>
+        <h1 id="contact-title">Контакты</h1>
       </section>
 
-      <section className="contact-options page-width" aria-label="Способы связи">
-        <ExternalLink href={COMPANY.telegramUrl}>
-          <TelegramLogo size={24} weight="duotone" />
-          <span><small>Написать в Telegram</small><b>{COMPANY.telegram}</b><em>Обычно отвечаем за 10 минут</em></span>
-        </ExternalLink>
-        <a href={`mailto:${COMPANY.email}`}>
-          <EnvelopeSimple size={24} weight="duotone" />
-          <span><small>Электронная почта</small><b>{COMPANY.email}</b><em>Документы и деловые вопросы</em></span>
+      <section className="contact-method-grid page-width" aria-label="Способы связи">
+        <a className="contact-method-card contact-method-card-brand" href={`tel:${COMPANY.phoneHref}`}>
+          <img className="contact-method-brand-image" src="/social/contact-phone.png" alt="" width="92" height="92" decoding="async" />
+          <strong>{COMPANY.phone}</strong>
+          <span className="contact-method-description">Позвоните — обсудим ваши вопросы<br />и подберём автомобиль под ваши задачи.</span>
+          <span className="contact-method-action">Позвонить <ArrowRight size={26} aria-hidden="true" /></span>
         </a>
+        <a className="contact-method-card contact-method-card-brand" href={COMPANY.viberUrl} rel={EXTERNAL_LINK_REL}>
+          <img className="contact-method-brand-image contact-method-brand-image-viber" src="/social/contact-viber.png" alt="" width="102" height="102" decoding="async" />
+          <strong>Viber</strong>
+          <span className="contact-method-description">Напишите или позвоните в Viber —<br />обсудим запрос и поможем выбрать авто.</span>
+          <span className="contact-method-action">Связаться <ArrowRight size={26} aria-hidden="true" /></span>
+        </a>
+        <a className="contact-method-card contact-method-card-brand" href={`mailto:${COMPANY.email}`}>
+          <img className="contact-method-brand-image" src="/social/contact-mail.png" alt="" width="92" height="92" decoding="async" />
+          <strong>Электронная почта</strong>
+          <span className="contact-method-description">Напишите на {COMPANY.email} —<br />обсудим документы и расчёт стоимости.</span>
+          <span className="contact-method-action">Написать письмо <ArrowRight size={26} aria-hidden="true" /></span>
+        </a>
+        <ExternalLink className="contact-method-card contact-method-card-brand" href={COMPANY.telegramUrl}>
+          <img className="contact-method-brand-image" src="/social/contact-telegram.png" alt="" width="92" height="92" decoding="async" />
+          <strong>Telegram</strong>
+          <span className="contact-method-description">Задайте вопрос в Telegram-чате —<br />ответим и поможем выбрать автомобиль.</span>
+          <span className="contact-method-action">Задать вопрос <ArrowRight size={26} aria-hidden="true" /></span>
+        </ExternalLink>
       </section>
 
-      <section className="contact-map page-width" aria-label="Офис abcars.by на карте">
-        <iframe
-          key={theme}
-          src={mapSrc}
-          title="Офис abcars.by на Яндекс Картах"
-          loading="lazy"
-          allowFullScreen
-        />
+      <section className="contact-socials page-width" aria-labelledby="contact-socials-title">
+        <h2 id="contact-socials-title">Мы в социальных сетях</h2>
+        <div className="contact-socials-links">
+          <ExternalLink className="header-social-link contact-social-link" aria-label="Telegram" href={COMPANY.telegramUrl} onClick={() => trackEvent("contact_telegram_click")}><TelegramOfficialLogo size={36} weight="fill" /></ExternalLink>
+          <ExternalLink className="header-social-link contact-social-link" aria-label="Instagram" href={COMPANY.instagramUrl} onClick={() => trackEvent("contact_instagram_click")}><InstagramLogo size={44} weight="bold" /></ExternalLink>
+          <ExternalLink className="header-social-link contact-social-link" aria-label="Threads" href={COMPANY.threadsUrl} onClick={() => trackEvent("contact_threads_click")}><ThreadsLogo size={44} /></ExternalLink>
+        </div>
       </section>
+
+      <section className="contact-departments page-width" aria-label="Часы работы отделов">
+        <ul>
+          {contactDepartments.map(({ name, hours }) => (
+            <li key={name}>
+              <strong>{name}</strong>
+              <span>{hours}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="contact-offices page-width" aria-labelledby="contact-offices-title">
+        <h2 id="contact-offices-title">Офисы партнёров</h2>
+        <SegmentedControl
+          options={[{ value: "china", label: `Авто ${fromPhrase("china")}` }, { value: "korea", label: `Авто ${fromPhrase("korea")}` }]}
+          value={officeOrigin}
+          onChange={setOfficeOrigin}
+          label="Направление автомобилей"
+          className="contact-office-switch"
+        />
+        <div className="contact-map">
+          <iframe
+            key={`${officeOrigin}-${theme}`}
+            src={mapSrc}
+            title={`${officeMap.title} на Яндекс Картах`}
+            loading="eager"
+            allowFullScreen
+          />
+        </div>
+      </section>
+
+      <ServiceContactCta includeOptions={false} questionEvent="contact_page_question_click" />
 
     </main>
   );
@@ -12599,9 +12658,8 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
   const selected = match ? countryKey(value) : null;
   // Слова в кнопке — по выбранной стране, а без выбора — обе, как в заголовке страницы.
   const words = selected ? originOf(selected).genitive : siteCountriesGenitive();
-  // Пока список открыт, он стоит на месте (Сергей, 29.09.2026): выбор страны меняет
-  // слова в кнопке, заголовок по центру переезжает, а с ним уезжал и список. Запоминаем,
-  // где кнопка была при открытии, и сдвигаем список обратно на ту же разницу.
+  // Заголовок центрируется и меняет ширину вместе с выбранной страной. Держим
+  // открытый список у исходной точки, но не выпускаем его за края экрана.
   useLayoutEffect(() => {
     const box = boxRef.current;
     const menu = menuRef.current;
@@ -12609,12 +12667,25 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
       anchorRef.current = null;
       return;
     }
-    const rect = box.getBoundingClientRect();
-    const x = rect.left + window.scrollX;
-    const y = rect.top + window.scrollY;
-    if (!anchorRef.current) anchorRef.current = { x, y };
-    menu.style.setProperty("--heading-menu-dx", `${Math.round(anchorRef.current.x - x)}px`);
-    menu.style.setProperty("--heading-menu-dy", `${Math.round(anchorRef.current.y - y)}px`);
+    const positionMenu = () => {
+      const rect = box.getBoundingClientRect();
+      const x = rect.left + window.scrollX;
+      const y = rect.top + window.scrollY;
+      if (!anchorRef.current) anchorRef.current = { x, y };
+      const inset = 12;
+      const minX = window.scrollX + inset;
+      const maxX = window.scrollX + document.documentElement.clientWidth - menu.offsetWidth - inset;
+      const targetX = Math.max(minX, Math.min(anchorRef.current.x, maxX));
+      menu.style.setProperty("--heading-menu-dx", `${Math.round(targetX - x)}px`);
+      menu.style.setProperty("--heading-menu-dy", `${Math.round(anchorRef.current.y - y)}px`);
+    };
+    positionMenu();
+    const onResize = () => {
+      anchorRef.current = null;
+      positionMenu();
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [open, words]);
   useEffect(() => {
     if (!open) return undefined;
@@ -12638,6 +12709,7 @@ function HeadingCountryMenu({ tail, value = ANY_COUNTRY, onChange }) {
   const checked = (key) => (selected || null) === key;
   const choose = (key) => {
     const label = key ? countryName(key) : ANY_COUNTRY;
+    setOpen(false);
     if (label !== (value || ANY_COUNTRY)) onChange?.(label);
   };
   return (
