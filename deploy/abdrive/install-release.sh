@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Independent ABDrive release. Does not run any BY deployment/import/migration.
 set -euo pipefail
+exec 9>/run/lock/abdrive-release.lock
+flock -n 9 || { echo "Another ABDrive release or HTTPS operation is running"; exit 75; }
 archive=${1:?release archive required}
 release=${2:?release name required}
 [[ $release =~ ^[a-zA-Z0-9-]+$ ]] || exit 2
@@ -52,7 +54,7 @@ if [[ ! -e /etc/nginx/sites-available/abdrive ]]; then
   fi
   systemctl reload nginx
 fi
-curl --fail --silent --retry 5 --retry-all-errors --retry-delay 1 --max-time 15 --resolve abdrive.ru:80:127.0.0.1 http://abdrive.ru/catalog -o /dev/null
+curl --fail --silent --retry 5 --retry-all-errors --retry-delay 1 --max-time 15 --location --max-redirs 3 --resolve abdrive.ru:443:127.0.0.1 --resolve abdrive.ru:80:127.0.0.1 http://abdrive.ru/catalog -o /dev/null
 [[ $(systemctl show abcars --property=MainPID --value) == "$by_pid" ]]
 systemctl enable abdrive
 trap - ERR

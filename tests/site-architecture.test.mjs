@@ -118,7 +118,7 @@ test('RU owner notification names its site, destination and RUB quote without BY
   assert.match(message, /ABDrive/);
   assert.match(message, /Доставка: Москва/);
   assert.match(message, /вручную владельцем/);
-  assert.match(message, /https:\/\/abdrive\.ru\/cars\/12345/);
+  assert.match(message, /https:\/\/abdrive\.ru\/cars\/che168-12345/);
   assert.match(message, /₽/);
   assert.doesNotMatch(message, /abcars\.by|Минск|\$/);
   const untyped = formatLeadMessage({ ...lead, car:{ ...lead.car, priceCurrency:undefined } }, { site:ru });

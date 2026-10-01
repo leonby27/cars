@@ -47,7 +47,7 @@ export function formatLeadMessage(lead, { site = getSiteProfile("abcars"), siteU
     ].filter(Boolean).join(" · ");
     lines.push("");
     lines.push(`Машина: ${lead.car.title}${facts ? ` (${facts})` : ""}`);
-    lines.push(`${siteUrl}/cars/${listingNumber(lead.car.id)}`);
+    lines.push(`${siteUrl}/cars/${site.id === "abdrive" ? encodeURIComponent(lead.car.id) : listingNumber(lead.car.id)}`);
     // Ссылка на объявление у источника. Имя площадки не пишем: с Кореей источников
     // несколько, а менеджеру важен сам адрес.
     if (lead.car.sourceUrl) lines.push(`Объявление: ${lead.car.sourceUrl}`);

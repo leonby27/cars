@@ -44,8 +44,10 @@ export function catalogSelection(params) {
  if(params.get('yearMin')&&params.get('yearMax')&&Number(params.get('yearMin'))>Number(params.get('yearMax')))throw new Error('invalid_filter');
  if(['priceMin','priceMax','landedMin','landedMax','priceCnyMax'].some(key=>params.has(key))||['price','price_asc','price_desc'].includes(params.get('sort')))throw new Error('price_filter_unavailable');
  if(['quota','refund50','quotaOver'].some(key=>params.has(key))||(params.has('currency')&&params.get('currency')!=='RUB'))throw new Error('invalid_filter');
- const sort={newest:'l.first_seen_at DESC',year_desc:'v.model_year DESC',mileage_asc:'l.mileage_km ASC'}[params.get('sort')||'newest'];
- if(!sort)throw new Error('invalid_sort');
+ const orders={newest:'l.first_seen_at DESC',year_desc:'v.model_year DESC',mileage_asc:'l.mileage_km ASC'};
+ const sortKey=params.get('sort')||'newest';
+ if(!Object.hasOwn(orders,sortKey))throw new Error('invalid_sort');
+ const sort=orders[sortKey];
  const page=Number(params.get('page')||1);
  if(!Number.isInteger(page)||page<1||page>100)throw new Error('invalid_page');
  return {where:clauses.join(' AND '),args,order:sort+',l.id',page,limit:24,offset:(page-1)*24};

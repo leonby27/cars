@@ -5,13 +5,13 @@ import {siteFromPhrase,fromPhrase} from '../../src/origin.js';
 
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const mime={'.js':'text/javascript','.css':'text/css','.woff2':'font/woff2'};
-export async function createFrontend({buildDirectory,catalog,site,privacyText=null}){
+export async function createFrontend({buildDirectory,catalog,site,privacyText=null,leadEnabled:configuredIntake=false}){
  const directory=resolve(buildDirectory);
  const [template,entry]=await Promise.all([
   readFile(resolve(directory,'client/index.html'),'utf8'),
   import(pathToFileURL(resolve(directory,'ssr/entry-server.js')).href),
  ]);
- const leadEnabled=Boolean(privacyText);
+ const leadEnabled=Boolean(privacyText?.trim()&&configuredIntake);
  return async(request,response,url)=>{
   if(url.pathname.startsWith('/assets/')){
    const name=url.pathname.slice(8);

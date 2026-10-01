@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Run after public DNS points both names to this server. No BY certificate edits.
 set -euo pipefail
+exec 9>/run/lock/abdrive-release.lock
+flock -n 9 || { echo "Another ABDrive release or HTTPS operation is running"; exit 75; }
 expected=5.23.48.128
 for domain in abdrive.ru www.abdrive.ru; do
   resolved=$(getent ahostsv4 "$domain" | awk '{print $1}' | sort -u || true)
   [[ $resolved == "$expected" ]] || { echo "DNS is not ready for $domain"; exit 3; }
 done
 mkdir -p /var/www/abdrive-acme
-certbot certonly --webroot -w /var/www/abdrive-acme --cert-name abdrive.ru -d abdrive.ru -d www.abdrive.ru --non-interactive
+certbot certonly --webroot -w /var/www/abdrive-acme --cert-name abdrive.ru -d abdrive.ru -d www.abdrive.ru --non-interactive --deploy-hook 'nginx -t && systemctl reload nginx'
 config=/etc/nginx/sites-available/abdrive
 cp "$config" "$config.before-https"
 install -m 644 "$(dirname "$0")/nginx-https.conf" "$config"

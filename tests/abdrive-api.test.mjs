@@ -22,6 +22,7 @@ test('RU catalog never presents the legacy Belarus price as RUB',()=>{
  for(const params of [{landedMax:'20000'},{priceCnyMax:'20000'}])assert.throws(()=>catalogSelection(new URLSearchParams(params)),/price_filter_unavailable/);
  for(const params of [{currency:'BYN'},{refund50:'1'}])assert.throws(()=>catalogSelection(new URLSearchParams(params)),/invalid_filter/);
  assert.throws(()=>catalogSelection(new URLSearchParams({page:'1000000'})),/invalid_page/);
+ for(const sort of ['constructor','__proto__','toString'])assert.throws(()=>catalogSelection(new URLSearchParams({sort})),/invalid_sort/);
 });
 
 test('RU HTTP: only own routes, origin, consent and server snapshots; no account or BY tools exposed',async()=>{

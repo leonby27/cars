@@ -1,6 +1,6 @@
 # Independent ABDrive deployment
 
-These scripts target the existing Timeweb host. Never use the BY deployment runner to release ABDrive.
+These scripts target the existing Timeweb host. Release and HTTPS operations share `/run/lock/abdrive-release.lock`. Never use the BY deployment runner to release ABDrive.
 
 - `provision.py`: one-time additive creation of new database, roles, service user and private environment. Refuses existing ABDrive resources. No existing business rows are touched.
 - `install-release.sh ARCHIVE RELEASE`: extracts an immutable release, installs dependencies, applies only the guarded RU schema, switches only ABDrive, checks catalog/HTTP and preserves BY process. On failure restores a real prior release or stops the new service.
