@@ -1,3 +1,4 @@
+import "./site-profile.js";
 import { chinaTransitFor } from "./china-logistics.js";
 import { koreaTransitFor } from "./korea-logistics.js";
 import { engineVolume } from "./engine-spec.js";

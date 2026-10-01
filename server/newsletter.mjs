@@ -1,4 +1,4 @@
-import { pool } from "./db.mjs";
+import { pool } from "./site-data/db.mjs";
 
 export const NEWSLETTER_CONSENT_VERSION = "footer-2026-09-10";
 

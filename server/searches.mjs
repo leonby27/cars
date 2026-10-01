@@ -1,4 +1,4 @@
-import { pool } from "./db.mjs";
+import { pool } from "./site-data/db.mjs";
 import { getSessionAccount } from "./auth.mjs";
 
 // Больше живой человек не сохранит, а без предела один аккаунт мог бы наполнять таблицу без конца.

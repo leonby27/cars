@@ -1,3 +1,6 @@
+import { SITE } from "./site-profile.js";
+import { contentForSite } from "../config/sites/index.mjs";
+
 // Журнал: подборки автомобилей и статьи. Разбор одной подборки — это три слоя:
 //
 //   1. Постоянный текст — кому подходит, на что смотреть, чем такая покупка
@@ -75,7 +78,7 @@ export const BLOG_POWERTRAINS = Object.freeze([
  * Материалы журнала, новые сверху. `filters` — правило отбора машин; ключи те же,
  * что понимает каталог (см. `blogApiParams` и `blogCatalogHref` ниже).
  */
-export const BLOG_POSTS = Object.freeze([
+const BY_BLOG_POSTS = Object.freeze([
   // Сравнение двух моделей — второй вид материала (`kind: "duel"`). У него нет одного
   // правила отбора: вместо `filters` стоят `sides` — по стороне на модель, и каждая
   // сторона живёт своим срезом каталога. Всё остальное общее с подборкой: заголовки,
@@ -1593,6 +1596,9 @@ export const BLOG_POSTS = Object.freeze([
   },
 
 ]);
+
+// A missing regional edition is empty, never a copy of Belarusian publications.
+export const BLOG_POSTS = contentForSite(SITE, { by: BY_BLOG_POSTS }) || Object.freeze([]);
 
 const RUBRIC_BY_SLUG = new Map(BLOG_RUBRICS.map((rubric) => [rubric.slug, rubric]));
 

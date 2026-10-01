@@ -1,0 +1,25 @@
+[Unit]
+Description=ABDrive Russian catalog
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=abdrive
+Group=abdrive
+WorkingDirectory=/srv/abdrive/current
+EnvironmentFile=/etc/abdrive/environment
+ExecStart=/usr/bin/node server/abdrive/index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+MemoryMax=384M
+CPUQuota=50%
+Nice=10
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

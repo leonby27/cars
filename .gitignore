@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 dist/
 dist.next/
 runtime/
@@ -14,3 +14,6 @@ pnpm-debug.log*
 
 # Импортёры пересоздают каталог локально; 441 МБ в git не помещаются.
 public/data/cars.json
+
+dist-abdrive/
+dist-abdrive.next/

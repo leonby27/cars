@@ -1,3 +1,6 @@
+import { SITE } from "./site-profile.js";
+import { hasSiteService } from "../config/sites/index.mjs";
+
 // Страницы-инструменты: остаток квоты, калькулятор растаможки и из чего складывается
 // цена доставки. Отдельные адреса им нужны потому, что это самостоятельные запросы —
 // «сколько осталось квоты на электромобили», «калькулятор растаможки авто из Китая»,
@@ -112,7 +115,7 @@ export const TOOL_PAGES = Object.freeze([
     seoDescription: `Одна и та же машина: сколько стоит в Беларуси и сколько выходит привезти ${siteFromPhrase()} под ключ. Сравнение по моделям и годам выпуска с разницей в деньгах.`,
     lead: "Честно сравниваем цены на одинаковые машины.",
   },
-]);
+].filter((tool) => hasSiteService(SITE, ({ quota: "quota", customs: "customs", cost: "delivery", brands: "brands", range: "range", market: "marketComparison" })[tool.kind])));
 
 const BY_PATH = new Map(TOOL_PAGES.map((page) => [page.path, page]));
 

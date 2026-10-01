@@ -1,0 +1,15 @@
+# Independent ABDrive deployment
+
+These scripts target the existing Timeweb host. Never use the BY deployment runner to release ABDrive.
+
+- `provision.py`: one-time additive creation of new database, roles, service user and private environment. Refuses existing ABDrive resources. No existing business rows are touched.
+- `install-release.sh ARCHIVE RELEASE`: extracts an immutable release, installs dependencies, applies only the guarded RU schema, switches only ABDrive, checks catalog/HTTP and preserves BY process. On failure restores a real prior release or stops the new service.
+- `enable-https.sh`: requires both public names to resolve to 5.23.48.128; obtains a separate certificate and installs the HTTPS config. Does not edit BY certificates.
+
+Build locally with `SITE_ID=abdrive VITE_SITE_ID=abdrive SITE_URL=https://abdrive.ru npm run build`. Archive config, src, server, scripts/lib, scripts/abdrive-migrate.mjs, db/sites/abdrive, db/market, dist-abdrive, package.json, package-lock.json and deploy/abdrive. Do not include env files, node_modules, local data or BY dist. Upload archive to /tmp and run the installer as root. Keep the previous release for rollback.
+
+Private settings live in `/etc/abdrive/environment`. The lead form stays unavailable until actual operator documents and a consent version are configured. Set explicit RU Telegram credentials before enabling intake. No automatic BY credential inheritance. Do not add test leads to production; integration tests target only loopback PostgreSQL.
+
+Manual application rollback: resolve the previous directory in `/srv/abdrive/releases`, point `/srv/abdrive/current` to it atomically, restart only `abdrive`, then check its local health and catalog. Do not drop the private database when rolling back application code.
+
+Current installed release and unfinished items: `docs/architecture/two-sites.md`.

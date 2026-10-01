@@ -64,7 +64,9 @@
     "test:worker": "node --test tests/worker.test.mjs",
     "db:respec": "node scripts/backfill-specs.mjs",
     "core:guazi": "node scripts/guazi-core.mjs",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "api:abdrive": "node server/abdrive/index.mjs",
+    "db:migrate:abdrive": "node scripts/abdrive-migrate.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

@@ -1,4 +1,6 @@
+import "../config/load-env.mjs";
 import http from "node:http";
+import { SITE } from "../src/site-profile.js";
 import { pool } from "./db.mjs";
 import { handleApiRequest } from "./handler.mjs";
 import { flushSiteRequests, loadSiteRequests } from "./analytics.mjs";
@@ -52,7 +54,7 @@ await loadSiteRequests();
 const siteRequestsTimer = setInterval(() => { flushSiteRequests(); }, SITE_REQUESTS_FLUSH_MS);
 siteRequestsTimer.unref();
 
-server.listen(port, "0.0.0.0", () => console.log(`abcars.by API: http://127.0.0.1:${port}`));
+server.listen(port, "0.0.0.0", () => console.log(`${SITE.company.brand} API: http://127.0.0.1:${port}`));
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
