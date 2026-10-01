@@ -1,5 +1,17 @@
-.market-wordmark { font-size: 33px; font-weight: 750; letter-spacing: -1.6px; line-height: 1; color: var(--ink); }
-.market-wordmark > span { color: var(--muted); }
-.market-destination { white-space: nowrap; font-size: 13px; color: var(--muted); }
+.market-destination { position: relative; display: inline-flex; align-items: center; white-space: nowrap; color: var(--ink); }
+.market-destination select { appearance: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: var(--header-control-bg); border: 0; border-radius: calc(14px * var(--corner-scale)); height: 48px; padding: 0 32px 0 14px; cursor: pointer; }
+.market-destination select:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.market-destination select option { color: var(--ink); background: var(--panel); }
+.market-destination > svg { position: absolute; right: 11px; pointer-events: none; }
 .market-filter-note { align-self: center; font-size: 13px; color: var(--muted); }
-@media (max-width: 700px) { .market-wordmark { font-size: 27px; } .market-destination { display: none; } }
+.market-cost-rows { margin: 16px 0; }
+.market-cost-rows > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.market-cost-rows dt { font-size: 14px; color: var(--muted); }
+.market-cost-rows dd { margin: 0; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.market-price-note { color: var(--muted); font-size: 13px; }
+.market-price-assumptions summary { cursor: pointer; font-weight: 600; }
+.market-price-assumptions p { font-size: 14px; color: var(--muted); }
+@media (max-width: 700px) {
+  .market-destination select { height: 40px; font-size: 13px; padding-left: 10px; padding-right: 26px; }
+  .market-destination > svg { right: 8px; }
+}

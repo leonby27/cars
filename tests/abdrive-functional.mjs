@@ -13,7 +13,13 @@ try {
   page.on('console',message=>{if(message.type()==='error'&&!message.text().startsWith('Failed to load resource'))errors.push(message.text());});
   page.on('response',response=>{if(response.url().startsWith(base)&&response.status()>=400)failed.push(response.status()+' '+response.url());});
   await page.goto(base+'/catalog?brand=BMW',{waitUntil:'networkidle'});
+  await page.waitForFunction(()=>Object.keys(document.querySelector('.favorites-link')||{}).some(key=>key.startsWith('__reactProps$')));
   assert.ok(await page.locator('.car-row').count()>0);
+  assert.equal(await page.getByRole('group',{name:'Валюта цен',exact:true}).count(),0);
+  const destination=page.getByRole('combobox',{name:'Город доставки',exact:true});
+  assert.equal(await destination.inputValue(),'moscow');
+  assert.deepEqual(await destination.locator('option').allTextContents(),['Москва']);
+  await destination.selectOption('moscow');
   const firstId=await page.locator('.car-row').first().getAttribute('data-car-id');
   await page.locator('.car-row').first().getByRole('button',{name:'Добавить в избранное',exact:true}).first().dispatchEvent('click');
   await page.getByRole('button',{name:'Избранное',exact:true}).click();

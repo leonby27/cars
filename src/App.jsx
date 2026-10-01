@@ -1017,7 +1017,7 @@ function PriceChangeMark({ car }) {
 function TotalPrice({ car, price, currency, className = "", approximate = true, compactApproximation = false }) {
   const boxRef = useRef(null);
   const lineRef = useRef(null);
-  const text = IS_RU ? (car.offer?.status === "estimated" ? `≈ ${number(car.offer.totalAmount)} ₽` : "Цена по запросу") : `${approximate ? "≈ " : ""}${money(price.totalUsd, currency)}`;
+  const text = IS_RU ? (car.offer?.status === "estimated" ? `≈ ${number(car.offer.totalAmount)} ₽` : "Расчёт уточняется") : `${approximate ? "≈ " : ""}${money(price.totalUsd, currency)}`;
   useLayoutEffect(() => {
     const box = boxRef.current;
     const line = lineRef.current;
@@ -1238,6 +1238,7 @@ function SegmentedControl({ options, value, onChange, label, className = "", ren
 }
 
 function CurrencySwitch({ currency, setCurrency, className = "" }) {
+  if (IS_RU) return null;
   return (
     <SegmentedControl
       options={CURRENCIES.map(([value, label]) => ({ value, label }))}
@@ -1296,11 +1297,13 @@ function ViberLogo({ size = 27 }) {
 }
 
 function SiteLogo() {
-  if (IS_RU) return <span className="market-wordmark">abdrive<span>.ru</span></span>;
+  const logoPath = IS_RU ? "/abdrive/logo" : "/logo";
+  const logoWidth = IS_RU ? 504 : 480;
+  const logoVersion = IS_RU ? 3 : 2;
   return (
     <>
-      <img className="wordmark-image wordmark-image-light" src="/logo-light.svg?v=2" width="480" height="100" alt="" aria-hidden="true" />
-      <img className="wordmark-image wordmark-image-dark" src="/logo-dark.svg?v=2" width="480" height="100" alt="" aria-hidden="true" />
+      <img className="wordmark-image wordmark-image-light" src={`${logoPath}-light.svg?v=${logoVersion}`} width={logoWidth} height="100" alt="" aria-hidden="true" />
+      <img className="wordmark-image wordmark-image-dark" src={`${logoPath}-dark.svg?v=${logoVersion}`} width={logoWidth} height="100" alt="" aria-hidden="true" />
     </>
   );
 }
@@ -1723,9 +1726,9 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             aria-hidden={!menuOpen}
             inert={menuOpen ? undefined : true}
           >
-              <div className="header-menu-settings">
+              {!IS_RU && <div className="header-menu-settings">
                 {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
-              </div>
+              </div>}
               {!IS_RU && decreeMode === "menu" && <DecreePricingPanel />}
               <nav aria-label="Основная навигация">
                 {/* Каталог и журнал — первыми (25.09.2026): главный раздел сайта в главном
@@ -1746,7 +1749,12 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
           </div>
         </div>
-        <div className="header-actions header-left-controls">{IS_RU ? <span className="market-destination">До Москвы · ₽</span> : <>
+        <div className="header-actions header-left-controls">{IS_RU ? <label className="market-destination">
+          <select aria-label="Город доставки" defaultValue={SITE.destination.id}>
+            <option value={SITE.destination.id}>{SITE.destination.name}</option>
+          </select>
+          <CaretDown size={14} weight="bold" aria-hidden="true" />
+        </label> : <>
           <EvQuotaButton quotas={quotas} navigate={navigate} />
           {decreeMode !== "menu" && <DecreePricingButton compact={decreeMode === "compact"} path={path} />}
           <button type="button" className="icon-label decree-pricing-button decree-measure" aria-hidden="true" inert tabIndex={-1}>

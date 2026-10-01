@@ -5,6 +5,7 @@ import {listingNumber,koreanListingId} from '../../src/listing-id.js';
 import {vehiclePublicFacts} from '../../src/vehicle-public-facts.js';
 import {listSearchVariants,findBrandInText,HERO_BRAND_RU} from '../../src/search-dictionary.js';
 import {sourceVersion} from '../catalog/offer-repository.mjs';
+import {createRussianRates,estimateRussianOffer} from './pricing.mjs';
 
 const columns=`l.id,l.source,l.external_id,l.source_url,l.title,l.city,l.mileage_km,l.price_cny,
  l.source_payload,l.last_checked_at,l.last_seen_at,l.first_seen_at,l.status,
@@ -54,7 +55,7 @@ export function catalogSelection(params) {
  return {where:clauses.join(' AND '),args,order:sort+',l.id',page,limit,offset};
 }
 
-export function publicCar(row,{detail=false}={}) {
+export function publicCar(row,{detail=false,rates,now}={}) {
  return {
   ...sharedVehicleFields(row),
   id:row.id,number:listingNumber(row.id),brand:row.brand,model:row.model,year:row.model_year,
@@ -64,11 +65,11 @@ export function publicCar(row,{detail=false}={}) {
   images:(row.images||[]).filter(url=>/^https?:\/\//.test(url)),
   ...(detail?{facts:vehiclePublicFacts(row)}:{}),
   checkedAt:row.last_checked_at||row.last_seen_at,
-  offer:{status:'unavailable',currency:'RUB',destinationId:'moscow',destinationName:'Москва',totalAmount:null,reason:'tariffs_pending'},
+  offer:estimateRussianOffer(row,{rates,now}),
  };
 }
 
-export function createRussianCatalog(db) {
+export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>new Date()}={}) {
  const pages=new Map();
  const sharedMeta=new Map();
  const metadata=createAsyncCache(async()=>{
@@ -90,7 +91,8 @@ export function createRussianCatalog(db) {
    const count=await db.query(`SELECT count(*)::int AS total ${from} WHERE ${q.where}`,q.args);
    const cars=await db.query(`SELECT ${columns} ${from} WHERE ${q.where} ORDER BY ${q.order} LIMIT $${q.args.length+1} OFFSET $${q.args.length+2}`,[...q.args,q.limit,q.offset]);
    const total=count.rows[0].total;
-   const items=cars.rows.map(publicCar);return {cars:items,items,total,page:q.page,limit:q.limit,offset:q.offset,hasMore:q.offset+cars.rowCount<Math.min(total,5000),refreshedAt:items.reduce((date,car)=>String(car.checkedAt||'')>date?String(car.checkedAt):date,'')};
+   const rates=await getRates();
+   const items=cars.rows.map(row=>publicCar(row,{rates,now:now()}));return {cars:items,items,total,page:q.page,limit:q.limit,offset:q.offset,hasMore:q.offset+cars.rowCount<Math.min(total,5000),refreshedAt:items.reduce((date,car)=>String(car.checkedAt||'')>date?String(car.checkedAt):date,'')};
     },{ttl:30000,onError:()=>{}}));
    }
    return pages.get(key)();
@@ -102,7 +104,7 @@ export function createRussianCatalog(db) {
    const result=await db.query(`SELECT ${columns} ${from} WHERE l.status='active' AND l.id=ANY($1::text[])
      ORDER BY CASE WHEN l.id=$2 THEN 0 ELSE 1 END,l.id LIMIT 1`,[ids,number]);
    const row=result.rows[0];
-   return row?{car:publicCar(row,{detail:true}),sourceVersion:sourceVersion(row),sourceUrl:row.source_url}:null;
+   return row?{car:publicCar(row,{detail:true,rates:await getRates(),now:now()}),sourceVersion:sourceVersion(row),sourceUrl:row.source_url}:null;
   },
   async modelFacts() {return {models:(await metadata()).models};},
   async sharedMeta(params) {

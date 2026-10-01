@@ -15,6 +15,10 @@ for(const args of [
  if(result.status!==0)throw new Error('ABDrive build failed');
 }
 
-for(const folder of ['brands','services','trust-strip','fonts','illustrations','flags']) {
+for(const folder of ['abdrive','brands','services','trust-strip','fonts','illustrations','flags']) {
  if(existsSync(resolve('public',folder)))cpSync(resolve('public',folder),resolve(output,'client',folder),{recursive:true});
+}
+
+for(const file of ['favicon.svg','favicon-96.png','favicon.ico','apple-touch-icon.png']) {
+ cpSync(resolve('public',file),resolve(output,'client',file));
 }

@@ -8,7 +8,8 @@ import {pathToFileURL} from 'node:url';
 import {listingNumber} from '../../src/listing-id.js';
 
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const mime={'.js':'text/javascript','.css':'text/css','.woff2':'font/woff2','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.jpg':'image/jpeg','.avif':'image/avif'};
+const brandFiles=new Set(['/favicon.svg','/favicon-96.png','/favicon.ico','/apple-touch-icon.png']);
+const mime={'.ico':'image/x-icon','.js':'text/javascript','.css':'text/css','.woff2':'font/woff2','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.jpg':'image/jpeg','.avif':'image/avif'};
 export async function createFrontend({buildDirectory,catalog,site,privacyText=null,leadEnabled:configuredIntake=false}){
  const directory=resolve(buildDirectory);
  const [template,entry]=await Promise.all([
@@ -17,7 +18,7 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
  ]);
  const leadEnabled=Boolean(privacyText?.trim()&&configuredIntake);
  return async(request,response,url)=>{
-  if(/^\/(assets|brands|services|trust-strip|fonts|illustrations|flags)\//.test(url.pathname)){
+  if(brandFiles.has(url.pathname)||/^\/(assets|abdrive|brands|services|trust-strip|fonts|illustrations|flags)\//.test(url.pathname)){
    const name=url.pathname.slice(1);
    if(!/^[a-zA-Z0-9_./-]+$/.test(name)||name.split('/').includes('..')||!mime[extname(name)]){response.writeHead(404);return response.end();}
    try{
