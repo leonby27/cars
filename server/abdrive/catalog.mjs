@@ -80,9 +80,9 @@ export function publicCar(row,{detail=false,rates,now}={}) {
  };
 }
 
-export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>new Date()}={}) {
+export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>new Date(),priceIndexFile}={}) {
  const pages=new Map();
- const priceIndex=createRussianPriceIndex(db,{getRates,now});
+ const priceIndex=createRussianPriceIndex(db,{getRates,now,cacheFile:priceIndexFile});
  const sharedMeta=new Map();
  const metadata=createAsyncCache(async()=>{
    const result=await db.query(`SELECT v.brand,v.model,count(*)::int AS count,min(l.id) AS sample_id,min(v.model_year) AS "yearMin",max(v.model_year) AS "yearMax",array_agg(l.id) AS ids,array_agg(DISTINCT v.powertrain) AS powertrains,array_agg(DISTINCT v.specifications->>'bodyType') AS "bodyTypes",max(COALESCE(v.electric_range_km,v.combined_range_km)) AS range,min(CASE WHEN v.specifications->>'acceleration' ~ '^[0-9]+([.][0-9]+)?$' THEN (v.specifications->>'acceleration')::numeric END) AS accel ${from} WHERE l.status='active' GROUP BY v.brand,v.model ORDER BY v.brand,v.model`);

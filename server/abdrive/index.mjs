@@ -13,7 +13,7 @@ import {deliverNextLead} from './notifications.mjs';
 if(SITE.id!=='abdrive')throw new Error('ABDrive server requires SITE_ID=abdrive');
 const identity=await sitePool.query('SELECT site_id FROM site_identity WHERE singleton');
 if(identity.rows[0]?.site_id!=='abdrive')throw new Error('Wrong private site database');
-const catalog=createRussianCatalog(catalogPool);
+const catalog=createRussianCatalog(catalogPool,{priceIndexFile:process.env.ABDRIVE_PRICE_INDEX_FILE});
 catalog.warmPrices().catch(error=>console.error('[abdrive] price index warmup failed',error.code||error.message));
 let privacyText=null;
 if(process.env.ABDRIVE_PRIVACY_FILE){

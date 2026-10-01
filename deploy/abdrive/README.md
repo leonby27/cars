@@ -10,6 +10,8 @@ Build locally with `SITE_ID=abdrive VITE_SITE_ID=abdrive SITE_URL=https://abdriv
 
 Private settings live in `/etc/abdrive/environment`. The lead form stays unavailable until actual operator documents and a consent version are configured. Set explicit RU Telegram credentials before enabling intake. No automatic BY credential inheritance. Do not add test leads to production; integration tests target only loopback PostgreSQL.
 
+Include `scripts/abdrive-warm-prices.mjs` in release archives. Before switching the application, the installer prepares the Russian price index in `/var/cache/abdrive/price-index.json`; the running service loads it at startup and refreshes it in the background. This prevents cold full-catalog calculations from blocking page requests. The installer checks the home page, brand directory, journal and budget pages as well as the catalog before accepting a release.
+
 Manual application rollback: resolve the previous directory in `/srv/abdrive/releases`, point `/srv/abdrive/current` to it atomically, restart only `abdrive`, then check its local health and catalog. Do not drop the private database when rolling back application code.
 
 Current installed release and unfinished items: `docs/architecture/two-sites.md`.

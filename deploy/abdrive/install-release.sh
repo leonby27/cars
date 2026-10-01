@@ -18,6 +18,10 @@ set -a
 source /etc/abdrive/environment
 set +a
 runuser -u abdrive --preserve-environment -- node scripts/abdrive-migrate.mjs
+install -d -m 700 -o abdrive -g abdrive /var/cache/abdrive
+export ABDRIVE_PRICE_INDEX_FILE=/var/cache/abdrive/price-index.json
+# Prepare the full RU price index while the previous application keeps serving.
+runuser -u abdrive --preserve-environment -- nice -n 10 node --max-old-space-size=512 scripts/abdrive-warm-prices.mjs
 old=""
 if [[ -L $base/current ]]; then old=$(readlink -e "$base/current" || true); fi
 by_pid=$(systemctl show abcars --property=MainPID --value)
@@ -44,6 +48,9 @@ done
 [[ $healthy == 1 ]]
 curl --fail --silent --max-time 15 http://127.0.0.1:8788/api/catalog/meta | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{let d=JSON.parse(s);console.log("Catalog vehicles:",d.total);process.exit(d.total>0?0:1)})'
 curl --fail --silent --max-time 15 http://127.0.0.1:8788/catalog -o /tmp/abdrive-release-check.html
+for path in / /china-brands /blog /catalog/byd /catalog/do-2000000-rub; do
+  curl --fail --silent --max-time 15 "http://127.0.0.1:8788$path" -o /dev/null
+done
 # Initial HTTP host only; never overwrite later HTTPS configuration.
 if [[ ! -e /etc/nginx/sites-available/abdrive ]]; then
   install -m 644 deploy/abdrive/nginx-http.conf /etc/nginx/sites-available/abdrive
