@@ -1,3 +1,7 @@
+import { normalizeRussianPhone } from "./markets/contact.js";
+import { SITE } from "./site-profile.js";
+import { IS_RU, marketEstimate, RU_ORDER_STEPS, RU_FAQ, RU_FAQ_LEAD, ruPageSeo } from "./markets/interface.js";
+import { RussianPriceDetails, RussianServicePage, RussianPrivacyPage } from "./markets/ru-sections.jsx";
 import { prepareServiceVideo } from "./service-video-loading.js";
 import { readCatalogFallback } from "./catalog-fallback.js";
 import { withoutTrackingParams } from "./tracking-params.js";
@@ -26,14 +30,14 @@ import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVar
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels, translateColor } from "./colors.js";
 import { CITY_NAMES, cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS, canonicalImportModel } from "../config/import-policy.mjs";
-import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, HOME_H1_PARTS, HOME_SEO, brandLandingPath, modelFromSlug, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, modelLandingPath, modelLandingRedirect, parseModelLandingPath, priceBandsForCar, priceBandsForLanding, relatedLandings } from "./catalog-landings.js";
+import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, CATALOG_MAX_PAGES, CATALOG_PAGE_SIZE, HOME_H1_PARTS as BY_HOME_H1_PARTS, HOME_SEO, brandLandingPath, modelFromSlug, catalogLandingForFilters, findCatalogLanding, landingFilterParams, landingHeading, landingsForCar, modelLandingPath, modelLandingRedirect, parseModelLandingPath, priceBandsForCar, priceBandsForLanding, relatedLandings } from "./catalog-landings.js";
 import { modelAutoText, modelFaq, modelFaqTitle, modelLandingObject } from "./model-landing.js";
 import { modelSlug } from "./model-slug.js";
 import { landingFaq, landingFaqTitle } from "./landing-faq.js";
 import { carFaq, carFaqTitle } from "./car-faq.js";
 import { brandGuideConfig, guideBudgetTitle, guideDate, guideNumber, guidePlural, guidePowertrains, guidePrice, guideYears, isBrandGuide, isBrandGuideLanding, ZEEKR_BUDGETS } from "./brand-guide.js";
 import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
-import { carAgeYears, customsPayment, estimateLandedCost, PRICING, usdToByn, usdToRub, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
+import { carAgeYears, customsPayment, estimateLandedCost as estimateBelarusCost, PRICING, usdToByn, usdToRub, yuanToUsdAbout, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
 import { chooseDecreePricing, chooseQuotaPricing, getPricingState, getServerPricingState, restorePricingChoice, subscribePricing } from "./pricing-state.js";
 import { evQuotaPricingAvailable, evQuotaState } from "./ev-quota.js";
 import { estimateDeliveryDays } from "./china-logistics.js";
@@ -74,7 +78,7 @@ import { blogFigureHtml } from "./blog-figures.js";
 import { BLOG_INDEX, blogApiParams, blogArticlePhotoParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { embeddedApiValue, initialApiValue } from "./boot-api.js";
-import { FAQ_GROUPS, HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "./purchase-info.js";
+import { FAQ_GROUPS, HOME_FAQ as BY_HOME_FAQ, HOME_FAQ_LEAD as BY_HOME_FAQ_LEAD, HOME_ORDER_STEPS as BY_HOME_ORDER_STEPS } from "./purchase-info.js";
 import { TRACKING_FAQ } from "./tracking-info.js";
 import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 import { missingFavoriteIsExpired } from "./favorite-cars.js";
@@ -82,6 +86,14 @@ import { missingFavoriteIsExpired } from "./favorite-cars.js";
 // таблиц) не кладём в общий файл приложения, а подгружаем отдельным файлом при
 // первом открытии /analytics: каждому посетителю сайта он не нужен.
 const AnalyticsPage = lazy(() => import("./analytics-entry.jsx").then((m) => ({ default: m.AnalyticsPage })));
+
+const estimateLandedCost = IS_RU ? marketEstimate : estimateBelarusCost;
+const HOME_H1_PARTS = IS_RU ? BY_HOME_H1_PARTS.map((part,index) => index === BY_HOME_H1_PARTS.length-1 ? {...part,text:" с\u00a0доставкой в\u00a0Россию"} : part) : BY_HOME_H1_PARTS;
+const HOME_FAQ = IS_RU ? RU_FAQ : BY_HOME_FAQ;
+const HOME_FAQ_LEAD = IS_RU ? RU_FAQ_LEAD : BY_HOME_FAQ_LEAD;
+const HOME_ORDER_STEPS = IS_RU ? RU_ORDER_STEPS : BY_HOME_ORDER_STEPS;
+const accountEnabled = !IS_RU;
+const leadEnabled = () => !IS_RU || Boolean(window.__boot?.leadEnabled);
 
 const numberFormatter = new Intl.NumberFormat("ru-RU");
 const number = (value) => numberFormatter.format(value);
@@ -120,7 +132,7 @@ const carHref = (car) => `/cars/${encodeURIComponent(listingNumber(car?.id))}`;
 // Заголовок страницы машины. Он же уходит в Метрику, когда карточку открывают
 // быстрым просмотром: в отчётах такой просмотр должен выглядеть ровно так же,
 // как открытая страница этой машины, а не как что-то отдельное.
-const carPageTitle = (car) => `${car?.title || carTitle(car?.brand, car?.model, car?.year)}, ${carTitleDetails(car, estimateLandedCost(car).totalUsd)} | abcars.by`;
+const carPageTitle = (car) => IS_RU ? `${car?.title || "Автомобиль"} — ABDrive` : `${car?.title || carTitle(car?.brand, car?.model, car?.year)}, ${carTitleDetails(car, estimateLandedCost(car).totalUsd)} | abcars.by`;
 // Адрес несёт короткий номер, а карточки и избранное — полный идентификатор,
 // поэтому сравниваем их по номеру.
 const sameListing = (left, right) => Boolean(left) && Boolean(right) && listingNumber(left) === listingNumber(right);
@@ -175,7 +187,7 @@ const orderedListingsFrom = (orders) => new Set((orders || []).map((order) => li
 const useOrderedListings = () => useContext(OrderedListingsContext) || EMPTY_ORDERED_LISTINGS;
 const useAvailability = () => useContext(AvailabilityContext) || EMPTY_AVAILABILITY;
 // Три валюты показа: доллары, белорусские и российские рубли (₽ добавлен 29.09.2026).
-const CURRENCIES = [["USD", "$"], ["BYN", "BYN"], ["RUB", "₽"]];
+const CURRENCIES = IS_RU ? [["RUB", "₽"]] : [["USD", "$"], ["BYN", "BYN"], ["RUB", "₽"]];
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? usdToByn(usd) : currency === "RUB" ? usdToRub(usd) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : currency === "RUB" ? `${number(toDisplayCurrency(usd, currency))} ₽` : `$${number(usd)}`);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
@@ -472,7 +484,7 @@ const ownerOptions = [ANY_OWNERS, "1 владелец", "До 2 владельц
 // адреса повторяются — ответ отдаётся из кэша, а не собирается в базе заново.
 const CATALOG_SHUFFLE_SEEDS = 12;
 const randomShuffleSeed = () => `s${Math.floor(Math.random() * CATALOG_SHUFFLE_SEEDS)}`;
-const photoOptions = import.meta.env.BASE_URL === "/" ? undefined : { mirrorOrigin: "https://abcars.by" };
+const photoOptions = !IS_RU && import.meta.env.BASE_URL === "/" ? undefined : { mirrorOrigin: "https://abcars.by" };
 const imageSource = (source, width) => vehiclePhotoHref(source, width, photoOptions);
 // Ширины под места, где показываем фото: с запасом для экранов с двойной плотностью.
 // Большое фото в карточке машины и в галерее просит настоящий оригинал — см.
@@ -808,7 +820,7 @@ function useRoute(user) {
     }
     const currentPath = appPath(window.location.pathname);
     const targetPath = appPath(target.pathname);
-    const keepScrollPosition = preserveScroll || preservesAuthScroll(targetPath, user);
+    const keepScrollPosition = preserveScroll || (!IS_RU && preservesAuthScroll(targetPath, user));
     const targetUrl = `${basePath}${target.pathname}${target.search}${target.hash}`;
     dropScrollSave();
     if (replace) {
@@ -1005,7 +1017,7 @@ function PriceChangeMark({ car }) {
 function TotalPrice({ car, price, currency, className = "", approximate = true, compactApproximation = false }) {
   const boxRef = useRef(null);
   const lineRef = useRef(null);
-  const text = `${approximate ? "≈ " : ""}${money(price.totalUsd, currency)}`;
+  const text = IS_RU ? (car.offer?.status === "estimated" ? `≈ ${number(car.offer.totalAmount)} ₽` : "Цена по запросу") : `${approximate ? "≈ " : ""}${money(price.totalUsd, currency)}`;
   useLayoutEffect(() => {
     const box = boxRef.current;
     const line = lineRef.current;
@@ -1035,7 +1047,7 @@ function TotalPrice({ car, price, currency, className = "", approximate = true, 
           Класс на ней — чтобы правила вида «любой span внутри цены — серый и мелкий»
           (а такие есть и в строке каталога, и в карточке на главной) не покрасили
           саму цену: см. .price-line в стилях. */}
-      <span ref={lineRef} className="price-line">{approximate && compactApproximation ? <><span className="price-approximation">≈</span>{" "}{bynify(money(price.totalUsd, currency))}</> : withApprox(text)}<PriceChangeMark car={car} /></span>
+      <span ref={lineRef} className="price-line">{IS_RU ? text : approximate && compactApproximation ? <><span className="price-approximation">≈</span>{" "}{bynify(money(price.totalUsd, currency))}</> : withApprox(text)}{!IS_RU && <PriceChangeMark car={car} />}</span>
     </strong>
   );
 }
@@ -1166,6 +1178,7 @@ function ClientSeo({ path, car, landing, carPending = false }) {
   const listPageRaw = isCatalogPath(path) ? String(new URLSearchParams(window.location.search).get("page") || "") : "";
   const listPage = /^[1-9]\d{0,4}$/.test(listPageRaw) && listPageRaw !== "1" ? Number(listPageRaw) : 0;
   useEffect(() => {
+    if (IS_RU) { applyPageHead(ruPageSeo(path, { car, landing, search: window.location.search })); return; }
     // Сервер уже поставил заголовок, описание и адрес-первоисточник для этого адреса —
     // с живыми цифрами, которых у приложения нет. Не переписываем их, пока человек на
     // этом адресе; ушёл внутри сайта — метку снимаем, дальше заголовки ставит приложение.
@@ -1283,6 +1296,7 @@ function ViberLogo({ size = 27 }) {
 }
 
 function SiteLogo() {
+  if (IS_RU) return <span className="market-wordmark">abdrive<span>.ru</span></span>;
   return (
     <>
       <img className="wordmark-image wordmark-image-light" src="/logo-light.svg?v=2" width="480" height="100" alt="" aria-hidden="true" />
@@ -1553,6 +1567,7 @@ function DecreePricingButton({ compact, path, className = "" }) {
 function useHeaderDecreeMode(headerRef) {
   const [mode, setMode] = useState("menu");
   useLayoutEffect(() => {
+    if (IS_RU) return;
     const header = headerRef.current;
     const logo = header.querySelector(".wordmark");
     const menu = header.querySelector(".header-menu-shell");
@@ -1687,7 +1702,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   return (
     <header className="site-header">
       <div className="header-inner" ref={headerRef}>
-        <AppLink className="wordmark" href="/" navigate={navigate} onClick={playRefreshPulse} aria-label="abcars.by — на главную">
+        <AppLink className="wordmark" href="/" navigate={navigate} onClick={playRefreshPulse} aria-label={`${SITE.company.brand} — на главную`}>
           <SiteLogo />
         </AppLink>
         <div className="header-menu-shell" ref={menuRef}>
@@ -1711,7 +1726,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               <div className="header-menu-settings">
                 {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
               </div>
-              {decreeMode === "menu" && <DecreePricingPanel />}
+              {!IS_RU && decreeMode === "menu" && <DecreePricingPanel />}
               <nav aria-label="Основная навигация">
                 {/* Каталог и журнал — первыми (25.09.2026): главный раздел сайта в главном
                     меню, как у всех сайтов в выдаче; до этого на каталог вели только
@@ -1719,8 +1734,8 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
                 <AppLink href="/catalog" navigate={navigate} className={path === "/catalog" || path.startsWith("/catalog/") ? "active" : ""} aria-current={path === "/catalog" ? "page" : undefined}>Автомобили</AppLink>
                 {BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate} className={path === BLOG_INDEX.path || path.startsWith(`${BLOG_INDEX.path}/`) ? "active" : ""} aria-current={path === BLOG_INDEX.path ? "page" : undefined}>{BLOG_INDEX.name}</AppLink>}
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
-                <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>
-                <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
+                {!IS_RU && <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>}
+                {COMPANY.phone && <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>}
                 {/* На узких экранах кнопке «Мои поиски» в шапке не хватает места,
                     поэтому там она живёт в этом меню; на широких — прячется, чтобы
                     не дублировать кнопку рядом с избранным. */}
@@ -1731,21 +1746,21 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
           </div>
         </div>
-        <div className="header-actions header-left-controls">
+        <div className="header-actions header-left-controls">{IS_RU ? <span className="market-destination">До Москвы · ₽</span> : <>
           <EvQuotaButton quotas={quotas} navigate={navigate} />
           {decreeMode !== "menu" && <DecreePricingButton compact={decreeMode === "compact"} path={path} />}
           <button type="button" className="icon-label decree-pricing-button decree-measure" aria-hidden="true" inert tabIndex={-1}>
             <span className="decree-label">Указ № 140</span>
             <span className="decree-switch-track"><i /></span>
           </button>
-        </div>
+        </>}</div>
         <div className="header-actions header-right-controls">
           {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-currency-switch" />}
           <button
             className={`icon-label searches-link${path === "/searches" ? " selected" : ""}`}
             aria-label="Мои поиски"
             aria-current={path === "/searches" ? "page" : undefined}
-            onClick={() => (user ? navigate("/searches") : navigate("/register", { replace:true, preserveScroll:true }))}
+            onClick={() => ((user || IS_RU) ? navigate("/searches") : navigate("/register", { replace:true, preserveScroll:true }))}
           >
             <BookmarkSimple size={21} weight={savedSearchesCount ? "fill" : "bold"} />
             {savedSearchesCount > 0 && <b>{savedSearchesCount}</b>}
@@ -1757,13 +1772,13 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             className={`icon-label favorites-link${path === "/favorites" ? " selected" : ""}`}
             aria-label="Избранное"
             aria-current={path === "/favorites" ? "page" : undefined}
-            onClick={() => (user ? navigate("/favorites") : navigate("/register", { replace:true, preserveScroll:true }))}
+            onClick={() => ((user || IS_RU) ? navigate("/favorites") : navigate("/register", { replace:true, preserveScroll:true }))}
           >
             <Heart size={21} weight={favoritesCount ? "fill" : "bold"} />
             {favoritesCount > 0 && <b>{favoritesCount}</b>}
             <ActionTooltip text="Избранное" />
           </button>
-          <button
+          {accountEnabled && <button
             className={`icon-label account-link${path === "/account" || path === "/login" || path === "/register" ? " selected" : ""}`}
             aria-label={user ? `Личный кабинет — ${String(user.name || "").split(" ")[0] || "Кабинет"}` : "Войти"}
             aria-current={path === "/account" ? "page" : undefined}
@@ -1771,7 +1786,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
           >
             <UserCircle size={22} weight={user ? "fill" : "bold"} />
             <span>{user ? String(user.name || "").split(" ")[0] || "Кабинет" : "Войти"}</span>
-          </button>
+          </button>}
         </div>
       </div>
     </header>
@@ -2474,7 +2489,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
     </div>
   );
 
-  const priceRange = (className = "") => (
+  const priceRange = (className = "") => IS_RU ? <span className="market-filter-note">Стоимость до Москвы уточняется для выбранного авто</span> : (
     <div className={`filter-range-pair${className ? ` ${className}` : ""}`}>
       <SelectField label="Цена от" value={values.priceMin} onChange={actions.priceMin} options={priceMinOptions} formatOption={(value) => priceMinLabel(value, currency)} />
       <SelectField label="Цена до" value={values.priceMax} onChange={actions.priceMax} options={priceMaxChoices(values.priceMin)} formatOption={(value) => priceMaxLabel(value, currency)} />
@@ -2629,7 +2644,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
                 </button>
               </span>
             ))}
-            {!hasPriceRange(values.priceMin, values.priceMax) && (
+            {!IS_RU && !hasPriceRange(values.priceMin, values.priceMax) && (
               <button type="button" className="filter-chip" onClick={() => setSheet("field:price")}>Цена</button>
             )}
             {!hasYearRange(values.yearMin, values.yearMax) && (
@@ -3409,7 +3424,7 @@ const HERO_SORT_OPTIONS = [
   { value: "range_desc", label: "С наибольшим запасом хода" },
   { value: "year_desc", label: "Новые по году" },
   { value: "year_asc", label: "Старые по году" },
-];
+ ].filter(option => !IS_RU || !option.value.startsWith("price"));
 
 function HeroSearch({ value, onChange, navigate }) {
   const fieldRef = useRef(null);
@@ -3737,7 +3752,7 @@ function useSameModelCars(car, active) {
   useEffect(() => {
     if (!active || !car.brand || !car.model) return undefined;
     const controller = new AbortController();
-    const query = new URLSearchParams({ brand: car.brand, model: car.model, sort: "price_asc", limit: String(requested + 1), offset: "0" });
+    const query = new URLSearchParams({ brand: car.brand, model: car.model, sort: IS_RU ? "newest" : "price_asc", limit: String(requested + 1), offset: "0" });
     fetch(`/api/cars?${query}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("same model catalog unavailable"))))
       .then((catalog) => {
@@ -4327,6 +4342,7 @@ function useModelText(slug) {
 /* Под выдачей на странице модели: сводка по живым цифрам, обзор (если написан),
    вопросы и ссылки. Только на первой странице списка — дальше только ссылки. */
 function ModelLandingNotes({ landing, page, navigate }) {
+  if (IS_RU) return null;
   const { facts, review, links, name } = landing;
   const text = useModelText(review?.slug || null);
   // Цифры ещё едут (переход на другую модель): блок появится вместе с ними.
@@ -5143,7 +5159,7 @@ const HomeConversionSections = memo(function HomeConversionSections({ navigate }
         </ol>
       </section>
 
-      <section className="home-faq" aria-labelledby="home-faq-title">
+      <section className="home-faq" id={IS_RU ? "faq" : undefined} aria-labelledby="home-faq-title">
         <div className="home-faq-intro">
           <span className="home-section-kicker">Коротко о главном</span>
           <h2 id="home-faq-title">Частые вопросы о покупке и доставке б/у авто {siteFromPhrase()}</h2>
@@ -5663,7 +5679,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           )
         )}
       </section>
-      {!searching && <HomePriceBands navigate={navigate} />}
+      {!IS_RU && !searching && <HomePriceBands navigate={navigate} />}
       {!searching && <HomePopularModels navigate={navigate} />}
       {!searching && (
       <section className="trust-strip page-width">
@@ -5690,8 +5706,8 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             <Illustration src="/trust-strip/two-prices.png" previewWidth={192} sizes="96px" width="512" height="512" alt="" aria-hidden="true" loading="lazy" decoding="async" />
           </span>
           <p>
-            <b>Показываем обе цены</b>
-            <small>Цена {siteInPhrase()} — и до Минска</small>
+            <b>{IS_RU ? "Согласование стоимости" : "Показываем обе цены"}</b>
+            <small>{IS_RU ? "Расчёт доставки до Москвы" : <>Цена {siteInPhrase()} — и до Минска</>}</small>
           </p>
         </div>
         <div>
@@ -5944,9 +5960,8 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       </div>
       <div className="car-row-price">
         <TotalPrice car={car} price={price} currency={currency} />
-        <span>Под ключ</span>
-        <b>{number(sourcePriceOf(car))} {sourceCurrencySymbol(car)}</b>
-        <small>цена {inPhrase(carOrigin(car))}</small>
+        <span>{IS_RU ? "С доставкой до Москвы" : "Под ключ"}</span>
+        {!IS_RU && <><b>{number(sourcePriceOf(car))} {sourceCurrencySymbol(car)}</b><small>цена {inPhrase(carOrigin(car))}</small></>}
       </div>
     </article>
   );
@@ -6022,7 +6037,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
     { value: "range_desc", label: "С наибольшим запасом хода" },
     { value: "year_desc", label: "Новые по году" },
     { value: "year_asc", label: "Старые по году" },
-  ];
+  ].filter(option => !IS_RU || !option.value.startsWith("price"));
   const [sort, setSort] = useState("default");
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
   // «По добавлению» — родной порядок избранного: свежесохранённая машина сверху.
@@ -6053,7 +6068,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
       </div>
       <div className="catalog-heading">
         <div className="section-heading-title">
-          <h1>Избранное · {hasUnresolved ? favorites.size : favoriteCars.length}</h1>
+          <h1>Избранное · {hasUnresolved ? favorites.size : favoriteCars.length}</h1>{IS_RU && <p>Сохраняется в этом браузере.</p>}
           {quickViewToggle}
         </div>
         {favoriteCars.length > 0 && (
@@ -6197,7 +6212,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
       </div>
       <div className="catalog-heading">
         <div className="section-heading-title">
-          <h1>Мои поиски · {searches.length}</h1>
+          <h1>Мои поиски · {searches.length}</h1>{IS_RU && <p>Сохраняются в этом браузере.</p>}
           {quickViewToggle}
         </div>
       </div>
@@ -6404,7 +6419,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     { value: "range_desc", label: "С наибольшим запасом хода" },
     { value: "year_desc", label: "Новые по году" },
     { value: "year_asc", label: "Старые по году" },
-  ];
+  ].filter(option => !IS_RU || !option.value.startsWith("price"));
   // Страница марки или типа задаёт свой фильтр самим адресом. Параметры в адресе имеют
   // приоритет: с них работают ссылки из умного поиска и сохранённые поиски.
   const params = new URLSearchParams(window.location.search);
@@ -6481,7 +6496,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   // показать человеку на этой странице совсем не те машины, за которыми он пришёл.
   // На странице модели порядок по умолчанию — по цене: так же режет список сервер,
   // и готовая разметка совпадает с первым кадром.
-  const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : params.get("page") || landing?.kind === "model" ? "price_asc" : "default";
+  const urlSort = sortOptions.some((option) => option.value === params.get("sort")) ? params.get("sort") : params.get("page") || landing?.kind === "model" ? (IS_RU ? "newest" : "price_asc") : "default";
   const [sort, setSort] = useState(() => (sortOptions.some((option) => option.value === restoredCatalog?.sort) ? restoredCatalog.sort : urlSort));
   const fallbackFilters = useRef(savedSearchKey({ ...initialFilters, sort: urlSort }));
   // "По умолчанию" mixes the catalog the way the home feed does. The seed keeps that
@@ -7055,7 +7070,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             aria-hidden="true"
           />
           <h3>Как устроена покупка</h3>
-          <p>Весь путь автомобиля {siteFromPhrase()} до выдачи в Минске — без скрытых этапов.</p>
+          <p>Весь путь автомобиля {siteFromPhrase()} до выдачи {IS_RU ? "в Москве" : "в Минске"} — без скрытых этапов.</p>
           <ul>
             <li>
               <Check size={15} />
@@ -7067,7 +7082,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
             </li>
             <li>
               <Check size={15} />
-              Передача в Минске
+              Передача {IS_RU ? "в Москве" : "в Минске"}
             </li>
           </ul>
           <button className="secondary" onClick={() => navigate("/how-it-works")}>
@@ -7095,6 +7110,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
    Они собраны из всего каталога, и до 25.09.2026 на них вели ссылки только с общего
    каталога и указателя моделей — с разделов марок, кузовов и типов не было ни одной. */
 function PriceBandLinks({ landing, navigate, heading = "По цене до Минска" }) {
+  if (IS_RU) return null;
   const bands = priceBandsForLanding(landing);
   if (!bands.length) return null;
   return (
@@ -7113,6 +7129,7 @@ function PriceBandLinks({ landing, navigate, heading = "По цене до Ми�
    было только с главной, где плитку марок рисует скрипт, — то есть для поисковика
    разделы были островом. Здесь те же ссылки видит и человек, и робот. */
 function CatalogSectionLinks({ navigate }) {
+  if (IS_RU) return null;
   // Марки, типы двигателя и кузова отсюда убраны 25.09.2026: они ссылками стоят в самом
   // фильтре над выдачей (optionHrefs в FilterPanel). Здесь остаётся то, чего фильтр
   // ссылкой не даёт: ценовые полосы (в фильтре это поле «от–до») и сочетания двух
@@ -7155,6 +7172,7 @@ function CatalogSectionLinks({ navigate }) {
    машины, а не чтение. Здесь же ссылки на обзоры моделей этой марки и на соседние
    страницы каталога — по ним поисковик обходит раздел, а человек переходит к похожему. */
 function CatalogLandingNotes({ landing, navigate, total = null }) {
+  if (IS_RU) return null;
   // Сводку по марке сервер встраивает в готовую страницу раздела (window.__boot.
   // brandGuideValue): без неё первый кадр — «Загружаем сводку…», а у готовой
   // разметки — цифры, и они бы разошлись.
@@ -7411,6 +7429,7 @@ function CatalogLandingFaq({ landing, total, guide = null, navigate }) {
    каталог: человек к этому месту уже прочитал карточку, и дальше у него остаются
    ровно эти вопросы. У проданной машины блока нет, его отсекает сам carFaq. */
 function VehicleFaq({ car, navigate }) {
+  if (IS_RU) return <HomeFaqList items={RU_FAQ} navigate={navigate} />;
   const faq = carFaq(car, estimateLandedCost(car));
   if (!faq.length) return null;
   const schema = {
@@ -8401,6 +8420,7 @@ function ConsentField({ checked, onChange, error }) {
 }
 
 function CustomSearchCta({ variant, navigate }) {
+  if (IS_RU && variant !== "empty") return null;
   const isEmpty = variant === "empty";
   return (
     <section className={`custom-search-cta ${isEmpty ? "is-empty" : "is-end"}`} aria-labelledby={`custom-search-${variant}-title`}>
@@ -8871,11 +8891,12 @@ function AvailabilityRequestModal({ onClose, preview = false }) {
 // Форма повторяет окно входа, но без вкладок: человек пришёл не заводить аккаунт, а
 // спросить про машину.
 function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
-  const [values, setValues] = useState({ name:"", phone:"+375", account:false, password:"", confirm:"", consent:true });
+  const [values, setValues] = useState({ name:"", phone:IS_RU ? "+7" : "+375", account:false, password:"", confirm:"", consent:!IS_RU });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
-  const withAccount = values.account;
+  const withAccount = !IS_RU && values.account;
+  const submission = useRef(null);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
   const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
   const blockPhoneWhitespace = (event) => {
@@ -8896,9 +8917,10 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   const submit = async (event) => {
     event.preventDefault();
     setError("");
-    const phone = normalizeLocalPhone(values.phone);
+    const phone = IS_RU ? normalizeRussianPhone(values.phone) : normalizeLocalPhone(values.phone);
     if (values.name.trim().length < 2) return setError(authMessages.invalid_name);
-    if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (!phone || phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (IS_RU && !values.consent) return setError("Подтвердите согласие на обработку данных.");
     if (withAccount) {
       if (values.password.length < 8) return setError(authMessages.invalid_password);
       if (values.password !== values.confirm) return setError("Пароли не совпадают.");
@@ -8906,7 +8928,9 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
     }
     setPending(true);
     try {
-      await submitLead(car, { name:values.name.trim(), phone, createAccount:withAccount, password:values.password, confirm:values.confirm });
+      const payload = { name:values.name.trim(), phone, consent:values.consent, createAccount:withAccount, password:values.password, confirm:values.confirm };
+      if (IS_RU) { const fingerprint = JSON.stringify({name:payload.name,phone,listingId:car.id}); if (submission.current?.fingerprint !== fingerprint) submission.current = {fingerprint,key:crypto.randomUUID()}; payload.requestKey=submission.current.key; }
+      await submitLead(car, payload);
       onDone();
     } catch (submitError) {
       setError(authMessages[submitError.message] || "Не удалось отправить заявку. Попробуйте ещё раз.");
@@ -8921,10 +8945,10 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
         <div className="auth-modal-heading">
           <h1 id="availability-lead-title">Узнать точную цену и наличие авто</h1>
         </div>
-        <p className="availability-lead-note">Заявку получит компания-импортёр и уточнит все детали.</p>
+        <p className="availability-lead-note">{IS_RU ? "Менеджер уточнит задачу и передаст её партнёру для расчёта до Москвы." : "Заявку получит компания-импортёр и уточнит все детали."}</p>
         <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
-        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
-        <label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
+        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : IS_RU ? "+79991234567" : "+375291234567"} maxLength={16} required /></label>
+        {!IS_RU && <><label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
         <div className={`auth-registration-reveal${withAccount ? " open" : ""}`} aria-hidden={!withAccount} inert={withAccount ? undefined : true}>
           <div className="auth-registration-reveal-inner">
             <PasswordField label="Пароль" autoComplete="new-password" value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : "Минимум 8 символов"} required={withAccount} disabled={!withAccount} />
@@ -8932,9 +8956,11 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
             <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!withAccount} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
           </div>
         </div>
+        </>}
+        {IS_RU && <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} required/><span>Согласен на обработку данных для ответа на заявку и передачи партнёру на условиях <a href="/privacy" target="_blank" rel="noopener noreferrer">политики конфиденциальности</a>.</span></label>}
         {error && <div className="auth-error" role="alert">{error}</div>}
         <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Получить точную цену"}<ArrowRight size={18} /></button>
-        {!withAccount && (
+        {!IS_RU && !withAccount && (
           <p className="availability-lead-legal">Нажимая кнопку, вы соглашаетесь с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой конфиденциальности</a>.</p>
         )}
       </form>
@@ -9133,7 +9159,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
     ...(modelPath ? [{ path: modelPath, name: `Все ${car.brand} ${car.model} в наличии` }] : []),
     ...landingsForCar(car),
     ...priceBandsForCar({ type: car.type, landedUsd: price.totalUsd }),
-  ].filter((landing) => landing.path !== currentAppPath());
+  ].filter((landing) => landing.path !== currentAppPath() && (!IS_RU || landing.kind !== "price"));
   // Материалы журнала про модель этой машины: сравнения с соседями по классу.
   const journal = BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [];
   // Блок отчёта продавца заполнен только у Guazi; у Che168 все поля пусты, а тип
@@ -9195,7 +9221,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
           {datesLine && <p>{datesLine}</p>}
         </div>
 
-          <div ref={priceDropdownRef} className="detail-header-price" aria-label="Ориентировочная стоимость до Минска">
+          <div ref={priceDropdownRef} className="detail-header-price" aria-label={IS_RU ? "Стоимость до Москвы" : "Ориентировочная стоимость до Минска"}>
             <div className="price-total">
               <TotalPrice car={car} price={price} currency={currency} compactApproximation />
               {priceVerdict && (
@@ -9239,7 +9265,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             </div>
             {/* Что это за число: цена не за машину в Китае, а итог с доставкой и
                 растаможкой. Мелкой строкой под ценой — крупное число остаётся главным. */}
-            <span className="detail-sidebar-price-note">Цена под ключ до Минска.</span>
+            <span className="detail-sidebar-price-note">{IS_RU ? "С доставкой до Москвы." : "Цена под ключ до Минска."}</span>
           </div>
       </div>
       <div className="detail-main">
@@ -9289,16 +9315,16 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             </nav>
           )}
           <div className="detail-tools-footer">
-            <nav className="detail-tool-links" aria-label="Страницы расчётов">
+            {!IS_RU && <nav className="detail-tool-links" aria-label="Страницы расчётов">
               <AppLink href="/customs" navigate={navigate}><Calculator size={21} /><span>Калькулятор растаможки</span><CaretRight size={17} weight="bold" /></AppLink>
               <AppLink href="/delivery-cost" navigate={navigate}><RoadHorizon size={21} /><span>Из чего складывается цена</span><CaretRight size={17} weight="bold" /></AppLink>
               {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
-            </nav>
+            </nav>}
             <p className="detail-source-note">{!localGuaziPreview && "Это сведения продавца и площадки, не наша независимая проверка. "}Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно. <ListingIdRow car={car} /></p>
           </div>
         </div>
         <div className="detail-sidebar">
-          {!sold && <VehicleMarketSavings key={car.id} car={car} />}
+          {!IS_RU && !sold && <VehicleMarketSavings key={car.id} car={car} />}
           {/* Состояние по данным источника — последней строкой «Основной информации»,
               а не отдельной плашкой. Нет основной информации — состояние стоит само. */}
           {quickInfo.length > 0 && (
@@ -9327,6 +9353,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
           {car.source === "Guazi" && quickInfo.length === 0 && <VehicleConditionSummary car={car} />}
           {/* Детализация цены — перед сроком доставки, и всегда открыта: ссылку
               на неё искать не нужно. */}
+          {IS_RU ? <RussianPriceDetails car={car} /> : <>
           <aside className="price-breakdown-card" aria-label="Детализация цены">
                 <div className="price-disclosure-content">
                 <div className="price-breakdown">
@@ -9383,7 +9410,8 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               </div>
             </div>
           </section>
-          {sold ? (
+          </>}
+          {leadEnabled() && (sold ? (
             <div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>
           ) : (
             <button ref={availabilityCtaRef} className={`primary report-order-cta availability-primary-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
@@ -9391,9 +9419,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                 {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Узнать точную цену и наличие"}
               </span>
             </button>
-          )}
-          <BrandNotice car={car} />
-          {floatingCta && !sold && (
+          ))}
+          {!IS_RU && <BrandNotice car={car} />}
+          {leadEnabled() && floatingCta && !sold && (
             <div className={`detail-floating-availability${floatingCtaHidden ? " is-hidden" : ""}`} aria-hidden={floatingCtaHidden}>
               <button className={`primary availability-primary-cta${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={floatingCtaHidden ? -1 : 0}>
                 <span className="availability-primary-title">
@@ -9488,8 +9516,8 @@ function VehicleQuickViewModal({ car, navigate, favorite, toggleFavorite, onOpen
       <section className="quick-view-modal" role="dialog" aria-modal="true" aria-label={`Быстрый просмотр: ${car.title}`}>
         <header className="quick-view-bar">
           <div className="quick-view-pricing">
-            {car.type === "Электромобиль" && <EvQuotaButton quotas={quotas} navigate={navigate} className="quick-view-action" />}
-            <DecreePricingButton className="quick-view-action" />
+            {!IS_RU && car.type === "Электромобиль" && <EvQuotaButton quotas={quotas} navigate={navigate} className="quick-view-action" />}
+            {!IS_RU && <DecreePricingButton className="quick-view-action" />}
           </div>
           <div className="quick-view-actions">
             {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="quick-view-action quick-view-currency" />}
@@ -14173,13 +14201,13 @@ function SiteFooter({ navigate }) {
     <footer className="site-footer">
       <div className="page-width footer-main">
         <div className="footer-brand">
-          <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label="abcars.by — на главную"><SiteLogo /></AppLink>
-          <p>Помогаем выбрать и купить автомобиль {siteFromPhrase()} в Беларусь.</p>
+          <AppLink className="wordmark footer-wordmark" href="/" navigate={navigate} aria-label={`${SITE.company.brand} — на главную`}><SiteLogo /></AppLink>
+          <p>Помогаем выбрать и купить автомобиль {siteFromPhrase()} {IS_RU ? "в Россию" : "в Беларусь"}.</p>
         </div>
-        <FooterAppDownload onOpen={openAppUnavailable} />
+        {!IS_RU && <FooterAppDownload onOpen={openAppUnavailable} />}
         <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<a href={"/how-it-works#faq"}>Вопросы и ответы</a></div>
-        <div className="footer-column footer-tools"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
-        <div className="footer-column footer-contacts">
+        {TOOL_PAGES.length > 0 && <div className="footer-column footer-tools"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>}
+        {COMPANY.phone && <div className="footer-column footer-contacts">
           <b>Связаться</b>
           <AppLink href="/contacts" navigate={navigate}>Контакты</AppLink>
           <div className="footer-socials">
@@ -14198,7 +14226,8 @@ function SiteFooter({ navigate }) {
             {phoneRevealed ? COMPANY.phone : "+375 показать номер"}
           </button>
         </div>
-        <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
+        }
+        {!IS_RU && <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
           <span className="footer-newsletter-title">
             <Illustration src="/app-download/newsletter-mailbox.png" width="64" height="64" alt="" aria-hidden="true" loading="lazy" decoding="async" />
             <strong>Подпишитесь на аналитику рынка авто {siteInPhrase()}</strong>
@@ -14219,11 +14248,11 @@ function SiteFooter({ navigate }) {
               </div>
             </div>
           </div>
-        </form>
+        </form>}
       </div>
       <div className="page-width footer-bottom">
         <span>© 2026</span>
-        <div><a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a><a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">Условия использования</a></div>
+        <div>{(!IS_RU || leadEnabled()) && <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>}{!IS_RU && <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">Условия использования</a>}</div>
       </div>
     </footer>
     {appUnavailableOpen && <AppUnavailableModal onClose={() => setAppUnavailableOpen(false)} />}
@@ -14615,9 +14644,10 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
   const submit = async (event) => {
     event.preventDefault();
     setError("");
-    const phone = normalizeLocalPhone(values.phone);
+    const phone = IS_RU ? normalizeRussianPhone(values.phone) : normalizeLocalPhone(values.phone);
     if (registering && values.name.trim().length < 2) return setError(authMessages.invalid_name);
-    if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (!phone || phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (IS_RU && !values.consent) return setError("Подтвердите согласие на обработку данных.");
     if (values.password.length < 8) return setError(authMessages.invalid_password);
     if (registering && values.password !== values.confirm) return setError("Пароли не совпадают.");
     if (registering && !values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
@@ -14656,7 +14686,7 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
             <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required={registering} disabled={!registering} /></label>
           </div>
         </div>
-        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
+        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : IS_RU ? "+79991234567" : "+375291234567"} maxLength={16} required /></label>
         <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : registering ? "Минимум 8 символов" : ""} required />
         <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
           <div className="auth-registration-reveal-inner">
@@ -15358,7 +15388,7 @@ export function App() {
   const [user, setUser] = useState(null);
   const { path, navigate, backToCatalog } = useRoute(user);
   const [authLoading, setAuthLoading] = useState(true);
-  const { authRoute, authBackgroundPath, authModalOpen, contentPath } = resolveAuthRoute(path, window.history.state?.fromPath, user, authLoading);
+  const { authRoute, authBackgroundPath, authModalOpen, contentPath } = IS_RU ? {authRoute:false,authBackgroundPath:"/",authModalOpen:false,contentPath:path} : resolveAuthRoute(path, window.history.state?.fromPath, user, authLoading);
   // Фон модального окна и загрузка его автомобиля используют один адрес.
   const dataPath = contentPath;
   const detailId = dataPath.startsWith("/cars/") ? dataPath.split("/")[2] : null;
@@ -15379,7 +15409,7 @@ export function App() {
   // По умолчанию цены в белорусских рублях: сайт для покупателей в Беларуси, и
   // в рублях сумма понятнее без пересчёта в уме. Доллары остаются в переключателе,
   // и выбранная валюта запоминается в браузере.
-  const [currency, setCurrency] = useState("BYN");
+  const [currency, setCurrency] = useState(IS_RU ? "RUB" : "BYN");
   const pricingState = useSyncExternalStore(subscribePricing, getPricingState, getServerPricingState);
   useLayoutEffect(() => {
     metaResolvedUsable = true;
@@ -15438,7 +15468,7 @@ export function App() {
   // разметка разошлись бы, и React перерисовал бы всю страницу заново.
   useEffect(() => {
     const storedCurrency = window.localStorage.getItem("navostok-currency");
-    if (storedCurrency === "USD" || storedCurrency === "RUB") setCurrency(storedCurrency);
+    if (!IS_RU && (storedCurrency === "USD" || storedCurrency === "RUB")) setCurrency(storedCurrency);
     const storedTotal = Number(window.localStorage.getItem(catalogTotalKey)) || 0;
     if (storedTotal) setCatalogTotal((current) => current || storedTotal);
     const storedUpdatedAt = window.localStorage.getItem(catalogUpdatedKey) || "";
@@ -15534,6 +15564,7 @@ export function App() {
     return () => media.removeEventListener("change", syncSystemTheme);
   }, []);
   useEffect(() => {
+    if (IS_RU) { setAuthLoading(false); return; }
     fetchWithRetry("/api/auth/me", { cache:"no-store", credentials:"same-origin" })
       .then(async (response) => {
         if (response.ok) return response.json();
@@ -15548,8 +15579,8 @@ export function App() {
     if (authLoading) return undefined;
     let cancelled = false;
     if (!user) {
-      setFavorites(new Set());
-      setFavoritesReady(false);
+      setFavorites(IS_RU ? readFavorites("abdrive-favorites") : new Set());
+      setFavoritesReady(IS_RU);
       return undefined;
     }
     const localKey = accountFavoritesKey(user.id);
@@ -15615,8 +15646,8 @@ export function App() {
     if (authLoading) return undefined;
     let cancelled = false;
     if (!user) {
-      setSavedSearches([]);
-      setSavedSearchesReady(false);
+      setSavedSearches(IS_RU ? readLocalSearches("abdrive-guest") : []);
+      setSavedSearchesReady(IS_RU);
       return undefined;
     }
     const applySearches = (values) => {
@@ -15759,6 +15790,7 @@ export function App() {
   }, [apiMode, targetId, cars, loading]);
   const awaitingTarget = Boolean(targetId) && !findCarByListing(cars, targetId) && missingTargetId !== targetId;
   const toggleFavorite = (id) => {
+    if (IS_RU) { const next = new Set(favorites); next.has(id) ? next.delete(id) : next.add(id); setFavorites(next); storeFavorites("abdrive-favorites", next); return; }
     // Saving without an account would strand the list in this browser, so the
     // heart offers registration instead of storing anything — and the car is held
     // aside so signing in finishes the click the visitor already made.
@@ -15804,6 +15836,7 @@ export function App() {
   }, [favorites, favoritesReady, path, pendingFavorite, user]);
   const saveSearch = (filters) => {
     const normalized = normalizeSavedFilters(filters);
+    if (IS_RU) { if (savedSearches.some(item => savedSearchKey(item.filters) === savedSearchKey(normalized))) return; const next = [{id: crypto.randomUUID(), title:savedSearchTitle(normalized), filters:normalized, createdAt:new Date().toISOString()}, ...savedSearches]; setSavedSearches(next); storeLocalSearches("abdrive-guest", next); return; }
     // Гостю сохранять некуда: как и сердце в карточке, кнопка предлагает
     // регистрацию, а сам набор фильтров ждёт аккаунт и сохраняется после входа.
     if (!user) {
@@ -15840,6 +15873,7 @@ export function App() {
   // Обновление сохранённого поиска: запись меняется на месте, без второй копии.
   // На сервере это удаление старой строки и создание новой — отдельной ручки нет.
   const updateSavedSearch = (id, filters) => {
+    if (IS_RU) { const normalized = normalizeSavedFilters(filters); const next = savedSearches.map(item => item.id === id ? {...item, filters:normalized, title:savedSearchTitle(normalized)} : item); setSavedSearches(next); storeLocalSearches("abdrive-guest", next); return; }
     if (!user) return;
     const existing = savedSearches.find((item) => item.id === id);
     if (!existing) {
@@ -15887,6 +15921,7 @@ export function App() {
     })();
   };
   const deleteSavedSearch = (id) => {
+    if (IS_RU) { const next = savedSearches.filter(item => item.id !== id); setSavedSearches(next); storeLocalSearches("abdrive-guest", next); return; }
     if (!user) return;
     const previous = savedSearches;
     const next = savedSearches.filter((item) => item.id !== id);
@@ -15986,6 +16021,11 @@ export function App() {
   // Заявка от незарегистрированного: либо обычная заявка с именем и телефоном, либо
   // сразу аккаунт — тогда машина попадает в кабинет заказом, как у всех остальных.
   const submitAvailabilityLead = async (car, form) => {
+    if (IS_RU) {
+      const response=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:form.name,phone:form.phone,consent:form.consent,listingId:car.id,destinationId:'moscow',requestKey:form.requestKey}),signal:AbortSignal.timeout(15000)});
+      if(!response.ok)throw new Error((await response.json()).error||'lead_failed');
+      return true;
+    }
     if (form.createAccount) {
       const session = await authenticate("register", { name:form.name, phone:form.phone, password:form.password, confirm:form.confirm, consent:true });
       const done = await requestCarAvailability(car, session?.user, session?.backend);
@@ -16134,6 +16174,9 @@ export function App() {
   // Pages built entirely from static content must never wait on the catalog request, and the
   // home page renders its own feed skeletons instead of blocking the whole route on it.
   const staticPage =
+    IS_RU && ["/how-it-works", "/faq"].includes(contentPath) ? <RussianServicePage><HomeConversionSections navigate={navigate}/></RussianServicePage> :
+    IS_RU && contentPath === "/privacy" ? <RussianPrivacyPage/> :
+    IS_RU && ["/tracking", "/contacts", "/terms", "/models", "/account", "/login", "/register", "/analytics"].includes(contentPath) ? <NotFound navigate={navigate}/> :
     contentPath === "/how-it-works" ? (
       <HowItWorksPage
         navigate={navigate}
@@ -16166,7 +16209,8 @@ export function App() {
       <ToolPage tool={findToolPage(contentPath)} navigate={navigate} />
     ) : null;
   const page =
-    contentPath === "/analytics" ? (
+    IS_RU && window.__boot?.filterError && window.__boot.path === contentPath && window.__boot.search === window.location.search ? <main className="simple-page page-width"><EmptyState title="Проверьте параметры поиска" description="Проверьте годы, пробег и другие фильтры. Поиск по итоговой цене пока недоступен."><AppLink href="/catalog" navigate={navigate}>Сбросить фильтры</AppLink></EmptyState></main> :
+    !IS_RU && contentPath === "/analytics" ? (
       // Пока отдельный файл страницы едет по сети, показываем пустоту: страница
       // служебная, её открывают единицы, а ожидание — доли секунды.
       <Suspense fallback={null}>
@@ -16227,7 +16271,7 @@ export function App() {
      <AvailabilityContext.Provider value={availability}>
      <AuthContext.Provider value={{ user, backend:authBackend }}>
       <ClientSeo path={path} car={findCarByListing(cars, detailId)} carPending={Boolean(detailId) && (loading || routeLoading || awaitingTarget)} landing={findCatalogLanding(path) || modelLanding.landing || modelLanding.provisional} />
-      <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
+      <div className={`app-content${!IS_RU && contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}
           favoritesCount={favorites.size}

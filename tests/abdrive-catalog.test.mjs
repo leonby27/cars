@@ -15,6 +15,8 @@ test('RU catalog SQL: models belong to selected brand; year/mileage filters keep
    CREATE TABLE listing_media(listing_id text,url text,position int);
    INSERT INTO vehicles(id,brand,model,model_year,powertrain) VALUES('1','BYD','Seal',2024,'Электромобиль'),('2','BYD','Han',2022,'Гибрид'),('3','Zeekr','001',2025,'Электромобиль'),('4','BMW','X3',2024,'ДВС'),('5','Buick','GL8',2024,'ДВС');
    INSERT INTO catalog_listings(id,vehicle_id,source,mileage_km,status,first_seen_at) VALUES('guazi-1','1','Guazi Global',0,'active',now()),('che168-2','2','Che168',NULL,'active',now()),('encar-3','3','Encar',20000,'active',now()),('encar-4','4','Encar',10000,'active',now()),('che168-5','5','Che168',10000,'active',now());`);
+  await db.query(`ALTER TABLE catalog_listings ADD COLUMN owners int, ADD COLUMN condition_grade text;
+   UPDATE vehicles SET drivetrain='Задний', specifications='{"bodyType":"Внедорожник","bodyColor":"Black","engineVolume":2,"enginePower":250,"fuelType":"Бензин","gearbox":"Автомат"}' WHERE brand='BMW';`);
   const catalog=createRussianCatalog(db);
   assert.deepEqual((await catalog.meta('BYD')).models.map(row=>row.model),['Han','Seal']);
   assert.deepEqual((await catalog.meta('Zeekr')).models.map(row=>row.model),['001']);
@@ -24,6 +26,15 @@ test('RU catalog SQL: models belong to selected brand; year/mileage filters keep
   assert.equal(selected.total,1);assert.equal(selected.cars[0].id,'guazi-1');assert.equal(selected.cars[0].mileage,0);
   assert.equal((await catalog.list(new URLSearchParams({brand:'BYD',model:'001'}))).total,0);
   assert.equal((await catalog.get('che168-2')).car.mileage,null);
+  const multi=new URLSearchParams({brand:'BYD',limit:'1',offset:'1'});multi.append('model','Seal');multi.append('model','Han');
+  const page=await catalog.list(multi);assert.equal(page.total,2);assert.equal(page.items.length,1);assert.equal(page.offset,1);assert.equal(page.hasMore,false);
+  const advanced=new URLSearchParams({bodyType:'Внедорожник',color:'Black',engineMin:'1.5',powerMin:'200',fuel:'Бензин'});
+  assert.deepEqual((await catalog.list(advanced)).items.map(car=>car.id),['encar-4']);
+  advanced.append('brandNot','BMW');assert.equal((await catalog.list(advanced)).total,0);
+  const sharedMeta=await catalog.sharedMeta(new URLSearchParams({brand:'BMW'}));
+  assert.equal(sharedMeta.total,1);assert.deepEqual(sharedMeta.models.map(row=>row.model),['X3']);assert.equal(sharedMeta.availability.engine,1);
+  assert.equal((await catalog.get('encar-4')).car.enginePower,250);
+
   for(const q of ['зикр 001','001 зикр','pbrh 001']){
    const found=await catalog.list(new URLSearchParams({q}));assert.equal(found.total,1,q);assert.equal(found.cars[0].brand,'Zeekr');
   }

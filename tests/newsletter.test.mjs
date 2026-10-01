@@ -101,7 +101,7 @@ test("подписка и блок приложения стоят строко�
   ]);
   // Блок с приложением — самостоятельный элемент сетки, а не часть колонки с логотипом:
   // иначе он снова начнёт зависеть от её высоты.
-  assert.match(app, /<\/div>\s*<FooterAppDownload onOpen=\{openAppUnavailable\} \/>/);
+  assert.match(app, /<\/div>\s*\{!IS_RU && <FooterAppDownload onOpen=\{openAppUnavailable\} \/>\}/);
   assert.match(styles, /\.footer-newsletter\s*\{[^}]*grid-row:\s*2/s);
   assert.match(styles, /\.footer-app-download\s*\{[^}]*grid-row:\s*2/s);
   // Ручные сдвиги наезжали на колонки, когда в них добавлялись пункты.

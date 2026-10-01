@@ -1,3 +1,4 @@
+import { SITE } from "./site-profile.js";
 const visitorKey = "abcars-analytics-visitor";
 const sessionKey = "abcars-analytics-session";
 
@@ -201,6 +202,7 @@ const watchForHuman = () => {
 };
 
 export function trackEvent(eventName, details = {}) {
+  if (SITE.market === "RU") return;
   if (skipThisVisit()) return;
   // У события про машину примета — сама машина: «быстрый просмотр» из каталога и
   // открытая следом карточка — это один и тот же взгляд, а не два.
@@ -236,6 +238,7 @@ let lastMetrikaView = typeof window === "undefined" ? null : window.location.hre
 let lastGoogleAnalyticsView = typeof window === "undefined" ? null : window.location.href;
 
 export function trackMetrikaView(url, options = {}) {
+  if (SITE.market === "RU") return;
   const absolute = new URL(url, window.location.href).href;
   if (isAnalyticsPath(absolute) || isAnalyticsPath(window.location.pathname)) return;
   const metrikaCounter = window.__ym;
@@ -257,6 +260,7 @@ export function trackMetrikaView(url, options = {}) {
 // Отдельная отметка «машину посмотрели в модалке»: в отчётах такой просмотр ничем не
 // отличается от обычного, а по этой цели видно, каким способом смотрят машины.
 export function trackMetrikaGoal(goal, params = undefined) {
+  if (SITE.market === "RU") return;
   if (isAnalyticsPath(window.location.pathname)) return;
   const metrikaCounter = window.__ym;
   if (metrikaCounter && typeof window.ym === "function") window.ym(metrikaCounter, "reachGoal", goal, params);

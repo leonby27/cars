@@ -1,3 +1,4 @@
+import { SITE } from "./site-profile.js";
 // Заглушка браузера для сборки готовой разметки главной страницы вне браузера.
 //
 // Приложение писалось для браузера и кое-где спрашивает его прямо во время
@@ -32,11 +33,11 @@ if (typeof window === "undefined") {
   const location = {
     // Меняется через setServerLocation ниже, если когда-нибудь начнём собирать
     // не только главную.
-    href: "https://abcars.by/",
-    origin: "https://abcars.by",
+    href: SITE.origin+"/",
+    origin: SITE.origin,
     protocol: "https:",
-    host: "abcars.by",
-    hostname: "abcars.by",
+    host: new URL(SITE.origin).host,
+    hostname: new URL(SITE.origin).hostname,
     pathname: "/",
     search: "",
     hash: "",
@@ -80,6 +81,6 @@ export const setServerLocation = (pathname = "/", search = "") => {
     globalThis.window.location.pathname = pathname;
     // Страница списка («?page=2») читает номер из строки запроса — она нужна и здесь.
     globalThis.window.location.search = query;
-    globalThis.window.location.href = `https://abcars.by${pathname}${query}`;
+    globalThis.window.location.href = `${SITE.origin}${pathname}${query}`;
   }
 };

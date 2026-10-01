@@ -1,7 +1,5 @@
-import React from 'react';
-import {hydrateRoot} from 'react-dom/client';
-import {AbdriveApp} from './App.jsx';
-import './styles.css';
-const root=document.getElementById('root');
-const boot=JSON.parse(document.getElementById('abdrive-data').textContent);
-hydrateRoot(root,<AbdriveApp boot={boot}/>);
+import '../styles.css';
+import '../order-contact.css';
+import '../markets/interface.css';
+window.__boot=JSON.parse(document.getElementById('abdrive-data').textContent);
+import('../app-entry.jsx');

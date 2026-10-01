@@ -1,3 +1,4 @@
+import {russianModel} from "./shared-page.mjs";
 import {normalizeLead,saveLead} from './leads.mjs';
 
 const reply=(response,status,data)=>{
@@ -25,12 +26,17 @@ export function createAbdriveHandler({catalog,siteDatabase,site,consentVersion=n
  return async(request,response)=>{
   try{
    const url=new URL(request.url,site.origin);
+   if(request.method==='GET'&&url.pathname==='/api/model-facts')return reply(response,200,await catalog.modelFacts());
+   if(request.method==='GET'&&url.pathname==='/api/model-catalog') {
+    const model=await russianModel(catalog,`/catalog/${encodeURIComponent(url.searchParams.get('brand')||'')}/${encodeURIComponent(url.searchParams.get('model')||'')}`);
+    return reply(response,model?200:404,model||{error:'not_found'});
+   }
    if(request.method==='GET'&&url.pathname==='/api/health')return reply(response,200,{ok:true,site:site.id});
-   if(request.method==='GET'&&url.pathname==='/api/catalog')return reply(response,200,await catalog.list(url.searchParams));
-   if(request.method==='GET'&&url.pathname==='/api/catalog/meta')return reply(response,200,await catalog.meta(url.searchParams.get('brand')||''));
+   if(request.method==='GET'&&['/api/catalog','/api/cars'].includes(url.pathname))return reply(response,200,await catalog.list(url.searchParams));
+   if(request.method==='GET'&&url.pathname==='/api/catalog/meta')return reply(response,200,catalog.sharedMeta?await catalog.sharedMeta(url.searchParams):await catalog.meta(url.searchParams.get('brand')||''));
    if(request.method==='GET'&&url.pathname.startsWith('/api/cars/')){
     const found=await catalog.get(decodeURIComponent(url.pathname.slice(10)));
-    return reply(response,found?200:404,found?{car:found.car}:{error:'not_found'});
+    return reply(response,found?200:404,found?found.car:{error:'not_found'});
    }
    if(request.method==='POST'&&url.pathname==='/api/leads'){
     if(request.headers.origin!==site.origin)return reply(response,403,{error:'origin_not_allowed'});

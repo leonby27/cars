@@ -56,7 +56,7 @@ test("sold vehicle replaces every gallery with one inert gray block without a ph
   assert.doesNotMatch(styles, /\.sold-vehicle-photo > img/);
   const soldComponent = app.slice(app.indexOf("function SoldVehiclePhoto"), app.indexOf("function HoverImagePreview"));
   assert.doesNotMatch(soldComponent, /onClick|onPointer|zoom|GalleryModal|<img|imageSource/);
-  assert.match(app, /\{floatingCta && !sold && \(/);
+  assert.match(app, /\{leadEnabled\(\) && floatingCta && !sold && \(/);
   assert.ok(app.includes('<div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>'));
 });
 
@@ -75,7 +75,7 @@ test("availability action is green below the information and has a floating repe
 });
 
 test("price breakdown stands open before the delivery block", () => {
-  assert.ok(app.includes('<span className="detail-sidebar-price-note">Цена под ключ до Минска.</span>'));
+  assert.ok(app.includes('<span className="detail-sidebar-price-note">{IS_RU ? "С доставкой до Москвы." : "Цена под ключ до Минска."}</span>'));
   assert.ok(!app.includes('>Детализация</button>'));
   assert.ok(app.includes('<aside className="price-breakdown-card" aria-label="Детализация цены">'));
   assert.ok(app.indexOf('className="price-breakdown-card"') < app.indexOf('className={`delivery-disclosure delivery-card'));

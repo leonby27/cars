@@ -7,6 +7,7 @@ const output=process.env.ABDRIVE_BUILD_DIR||'dist-abdrive';
 if(!['dist-abdrive','dist-abdrive.next'].includes(output))throw new Error('Invalid ABDrive output directory');
 export default defineConfig({
  root:resolve(root,'abdrive'),publicDir:false,base:'/',plugins:[react()],
+ resolve:{alias:['model-text-load.js','blog-text-load.js','tool-page-text-load.js'].map(name=>({find:new RegExp('^.*[/]'+name.replaceAll('.', '\\.')+'$'),replacement:resolve(root,'src/markets/empty-text-load.js')}))},
  define:{__SITE_ID__:JSON.stringify('abdrive')},
  build:{outDir:resolve(root,output,'client'),emptyOutDir:true,sourcemap:true},
 });
