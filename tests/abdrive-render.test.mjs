@@ -12,18 +12,23 @@ const directory=resolve('dist-abdrive');
 
 test('built RU pages serve their own HTML/assets; missing tools, quotes and private data do not fall back to BY', {skip:!existsSync(resolve(directory,'ssr/entry-server.js'))},async()=>{
  const car={id:'che168-1',number:'1',title:'Test $& </script><script>alert(1)</script>',brand:'BYD',model:'Seal',year:2024,type:'Электромобиль',mileage:123,origin:'china',images:[],offer:{status:'unavailable',totalAmount:null,currency:'RUB'}};
- const catalog={list:async()=>({cars:[car],total:1,page:1,hasMore:false}),get:async id=>id==='1'?{car}:null,meta:async()=>({brands:[{brand:'BYD',count:1}],total:1})};
+ const catalog={list:async params=>{if(params.get('yearMin')==='invalid')throw new Error('invalid_filter');return {cars:[car],total:1,page:1,hasMore:false};},get:async id=>id==='1'?{car}:null,meta:async()=>({brands:[{brand:'BYD',count:1}],models:[{model:'Seal',count:1}],total:1})};
  const frontend=await createFrontend({buildDirectory:directory,catalog,site});
  const server=http.createServer(createAbdriveHandler({catalog,site,siteDatabase:{},frontend,log:()=>{}}));
  server.listen(0,'127.0.0.1');await once(server,'listening');const base=`http://127.0.0.1:${server.address().port}`;
  try{
-  for(const path of ['/','/catalog','/how-it-works']){
+  for(const path of ['/','/catalog','/how-it-works','/faq']){
    const response=await fetch(base+path);assert.equal(response.status,200);const html=await response.text();
    assert.match(html,/<h1>/);assert.match(html,/ABDrive/);assert.match(html,/https:\/\/abdrive.ru/);
    assert.doesNotMatch(html,/доставк[^<]*Минск|BYN|Указ № 140|<!--abdrive-app-->/);
   }
+  const filtered=await fetch(base+'/catalog?brand=BYD&model=Seal&yearMax=2025&mileageMax=20000').then(r=>r.text());
+  assert.match(filtered,/name="model"/);assert.match(filtered,/<option value="Seal" selected="">Seal/);
+  assert.match(filtered,/name="yearMax"[^>]*value="2025"/);
+  const faq=await fetch(base+'/faq').then(r=>r.text());assert.match(faq,/<details/);assert.match(faq,/не адрес офиса/);assert.doesNotMatch(faq,/BYN|Беларус|Минск/);
+  const invalid=await fetch(base+'/catalog?yearMin=invalid');assert.equal(invalid.status,400);assert.match(await invalid.text(),/Проверьте параметры поиска/);
   const response=await fetch(base+'/cars/1');const html=await response.text();
-  assert.equal(response.status,200);assert.match(html,/Стоимость по запросу/);assert.match(html,/noindex,follow/);
+  assert.equal(response.status,200);assert.match(html,/Стоимость по запросу/);assert.match(html,/Фотографии уточняются/);assert.match(html,/noindex,follow/);
   assert.ok(html.includes('Test $&amp;'));
   assert.doesNotMatch(html,/<script>alert\(1\)<\/script>/);
   const raw=html.match(/<script id="abdrive-data" type="application\/json">([\s\S]*?)<\/script>/)[1];

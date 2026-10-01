@@ -27,7 +27,7 @@ export function createAbdriveHandler({catalog,siteDatabase,site,consentVersion=n
    const url=new URL(request.url,site.origin);
    if(request.method==='GET'&&url.pathname==='/api/health')return reply(response,200,{ok:true,site:site.id});
    if(request.method==='GET'&&url.pathname==='/api/catalog')return reply(response,200,await catalog.list(url.searchParams));
-   if(request.method==='GET'&&url.pathname==='/api/catalog/meta')return reply(response,200,await catalog.meta());
+   if(request.method==='GET'&&url.pathname==='/api/catalog/meta')return reply(response,200,await catalog.meta(url.searchParams.get('brand')||''));
    if(request.method==='GET'&&url.pathname.startsWith('/api/cars/')){
     const found=await catalog.get(decodeURIComponent(url.pathname.slice(10)));
     return reply(response,found?200:404,found?{car:found.car}:{error:'not_found'});

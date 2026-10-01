@@ -3,9 +3,12 @@ import {StripPhoto} from '../strip-photo.jsx';
 import {EmptyState} from '../empty-state.jsx';
 import {vehiclePhotoHref} from '../photo-source.js';
 import {fromPhrase,siteFromPhrase,countryName} from '../origin.js';
+import {Gallery} from './Gallery.jsx';
+import {purchaseQuestions} from './faq.js';
 import {normalizeRussianPhone} from '../markets/contact.js';
 
 const number=value=>new Intl.NumberFormat('ru-RU').format(value);
+const mileageText=value=>value==null?'Пробег не указан':number(value)+' км';
 const route=car=>'/cars/'+encodeURIComponent(car.id);
 const photo=url=>vehiclePhotoHref(url,600,{mirrorOrigin:'https://abcars.by'});
 
@@ -16,7 +19,7 @@ function CarCard({car}){
  return <article className="ab-card"><a href={route(car)} className="ab-car-link">
   {car.images?.[0]?<StripPhoto src={photo(car.images[0])} first alt={car.title}/>:<div className="ab-no-photo">Фото уточняется</div>}
   <div className="ab-card-body"><p className="ab-eyebrow">Автомобиль {fromPhrase(car.origin)}</p><h2>{car.title}</h2>
-   <p className="ab-facts">{number(car.mileage)} км · {car.type}{car.drive?' · '+car.drive:''}</p><Price offer={car.offer}/>
+   <p className="ab-facts">{mileageText(car.mileage)} · {car.type}{car.drive?' · '+car.drive:''}</p><Price offer={car.offer}/>
   </div></a></article>;
 }
 function LeadForm({car,enabled}){
@@ -50,13 +53,16 @@ function LeadForm({car,enabled}){
    </form>}
  </section>;
 }
-function Filters({params,brands}){
+function Filters({params,brands,models}){
  return <form action="/catalog" method="get" className="ab-filters">
   <label className="ab-search">Поиск<input name="q" defaultValue={params.q||''} placeholder="Марка или модель"/></label>
-  <label>Марка<select name="brand" defaultValue={params.brand||''}><option value="">Все марки</option>{brands.map(item=><option key={item.brand} value={item.brand}>{item.brand}</option>)}</select></label>
+  <label>Марка<select name="brand" defaultValue={params.brand||''} onChange={event=>{const form=event.currentTarget.form;form.elements.model.value='';form.requestSubmit();}}><option value="">Все марки</option>{brands.map(item=><option key={item.brand} value={item.brand}>{item.brand}</option>)}</select></label>
+  <label>Модель<select name="model" defaultValue={params.model||''} disabled={!params.brand}><option value="">{params.brand?'Все модели':'Сначала выберите марку'}</option>{models.map(item=><option key={item.model} value={item.model}>{item.model}</option>)}</select></label>
   <label>Страна<select name="country" defaultValue={params.country||''}><option value="">Все страны</option><option value="china">{countryName("china")}</option><option value="korea">{countryName("korea")}</option></select></label>
   <label>Тип двигателя<select name="type" defaultValue={params.type||''}><option value="">Все типы</option>{['ДВС','Гибрид','Электромобиль'].map(type=><option key={type}>{type}</option>)}</select></label>
   <label>Год от<input name="yearMin" type="number" min="1990" max="2100" defaultValue={params.yearMin||''}/></label>
+  <label>Год до<input name="yearMax" type="number" min="1990" max="2100" defaultValue={params.yearMax||''}/></label>
+  <label>Пробег до, км<input name="mileageMax" type="number" min="0" max="1000000" step="1000" defaultValue={params.mileageMax||''}/></label>
   <label>Порядок<select name="sort" defaultValue={params.sort||'newest'}><option value="newest">Новые объявления</option><option value="year_desc">Свежее год выпуска</option><option value="mileage_asc">Меньше пробег</option></select></label>
   <button type="submit">Показать</button><a href="/catalog" className="ab-reset">Сбросить</a>
  </form>;
@@ -68,29 +74,33 @@ function Process(){
   <article><span>03</span><h3>Обсудите заказ с партнёром</h3><p>Договор, оплату и доставку согласовывают с исполнителем. Условия фиксируются до покупки.</p></article>
  </div></section>;
 }
+function Questions(){
+ return <section className="ab-questions"><h2>Вопросы о покупке</h2>{purchaseQuestions.map(item=><details key={item.id} id={item.id}><summary>{item.question}</summary><p>{item.answer}</p></details>)}</section>;
+}
 function CarPage({car,leadEnabled}){
- const facts=[['Год выпуска',car.year],['Пробег',number(car.mileage)+' км'],['Двигатель',car.type],['Привод',car.drive],['Батарея',car.battery?car.battery+' кВт·ч':null],['Запас хода',car.range?car.range+' км':null]].filter(([,value])=>value);
- return <><nav className="ab-breadcrumb"><a href="/catalog">Каталог</a> / {car.brand}</nav><h1>{car.title}</h1>
-  <div className="ab-car-layout"><div><div className="ab-gallery">{car.images.map((url,i)=><StripPhoto key={url} src={photo(url)} first={i===0} alt={`${car.title}, фото ${i+1}`}/>)}</div>
+ const facts=[['Год выпуска',car.year],['Пробег',mileageText(car.mileage)],['Двигатель',car.type],['Привод',car.drive],['Батарея',car.battery?car.battery+' кВт·ч':null],['Запас хода',car.range?car.range+' км':null]].filter(([,value])=>value);
+ return <><nav className="ab-breadcrumb"><a href="/catalog">Каталог</a> / <a href={'/catalog?'+new URLSearchParams({brand:car.brand})}>{car.brand}</a> / <a href={'/catalog?'+new URLSearchParams({brand:car.brand,model:car.model})}>{car.model}</a></nav><h1>{car.title}</h1>
+  <div className="ab-car-layout"><div><Gallery images={car.images} title={car.title}/>
    <section className="ab-panel"><h2>Об автомобиле</h2><dl>{facts.map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></section></div>
    <aside><section className="ab-panel"><p className="ab-eyebrow">Автомобиль {fromPhrase(car.origin)}</p><Price offer={car.offer}/><p>Цена до Москвы рассчитывается для конкретной машины. В расчёте нужно учесть покупку, доставку, оформление и услуги исполнителя.</p><p className="ab-muted">Объявление не является подтверждением наличия. Его проверят у продавца перед заказом.</p>{leadEnabled?<a href="#request" className="ab-button">Уточнить цену и наличие</a>:null}</section><LeadForm car={car} enabled={leadEnabled}/></aside>
   </div><Process/></>;
 }
 export function AbdriveApp({boot}){
- const {kind='catalog',data,params={},brands=[],car,leadEnabled=false}=boot;
+ const {kind='catalog',data,params={},brands=[],models=[],car,leadEnabled=false}=boot;
  const nextParams=new URLSearchParams(params);nextParams.set('page',String((data?.page||1)+1));
  const prevParams=new URLSearchParams(params);prevParams.set('page',String(Math.max(1,(data?.page||1)-1)));
  return <><header className="ab-header"><a href="/" className="ab-logo" aria-label="ABDrive — главная">AB<span>Drive</span></a><nav><a href="/catalog">Каталог</a><a href="/how-it-works">Как купить</a>{leadEnabled?<a href="/#request">Подбор</a>:null}</nav><span className="ab-destination">Доставка до Москвы · ₽</span></header>
   <main className="ab-main">{kind==='notFound'?<EmptyState title="Страница не найдена" description="Возможно, объявление больше недоступно."><a href="/catalog">Перейти в каталог</a></EmptyState>:
    kind==='car'?<CarPage car={car} leadEnabled={leadEnabled}/>:
    kind==='privacy'?<section className="ab-panel ab-document"><h1>Обработка персональных данных</h1><p>{boot.privacyText}</p></section>:
-   kind==='process'?<><h1>Как заказать автомобиль через ABDrive</h1><p className="ab-intro">ABDrive помогает найти автомобиль и передать запрос партнёру, который уточнит условия покупки и доставки в Россию.</p><Process/><LeadForm enabled={leadEnabled}/></>:
+   kind==='faq'?<><h1>Покупка автомобиля в Россию: вопросы и ответы</h1><Questions/><a className="ab-button" href="/catalog">Выбрать автомобиль</a></>:
+   kind==='process'?<><h1>Как заказать автомобиль через ABDrive</h1><p className="ab-intro">ABDrive помогает найти автомобиль и передать запрос партнёру, который уточнит условия покупки и доставки в Россию.</p><Process/><Questions/><LeadForm enabled={leadEnabled}/></>:
    <><section className={kind==='home'?'ab-hero':'ab-catalog-heading'}><p className="ab-eyebrow">Каталог для покупателей в России</p><h1>Автомобили {siteFromPhrase()}</h1><p>Выберите машину. Уточните стоимость и условия доставки до Москвы.</p></section>
-    <Filters params={params} brands={brands}/>
+    <Filters params={params} brands={brands} models={models}/>
     {data?<><p className="ab-results">{number(data.total)} объявлений{data.page>1?' · Страница '+data.page:''}</p>{data.cars.length?<div className="ab-grid">{data.cars.map(item=><CarCard key={item.id} car={item}/>)}</div>:<EmptyState title="По этим условиям машин нет" description="Попробуйте убрать часть фильтров."><a href="/catalog">Сбросить фильтры</a></EmptyState>}
       <nav className="ab-pagination" aria-label="Страницы каталога">{data.page>1?<a href={'/catalog?'+prevParams}>← Назад</a>:null}{data.hasMore?<a href={'/catalog?'+nextParams}>Следующая страница →</a>:null}</nav></>:
-     <EmptyState title="Каталог временно недоступен" description="Не удалось загрузить объявления. Попробуйте обновить страницу."><a href="/catalog">Повторить</a></EmptyState>}
-    {kind==='home'?<><Process/><LeadForm enabled={leadEnabled}/></>:null}</>}
-  </main><footer className="ab-footer"><a href="/" className="ab-logo">AB<span>Drive</span></a><p>Автомобили {siteFromPhrase()} для покупателей в России.</p><p>Москва — базовый город расчёта доставки.</p>{leadEnabled?<a href="/privacy">Обработка персональных данных</a>:null}</footer>
+     <EmptyState title={boot.filterError?'Проверьте параметры поиска':'Каталог временно недоступен'} description={boot.filterError?'Проверьте годы и пробег или сбросьте фильтры. Поиск по цене пока недоступен.':'Не удалось загрузить объявления. Попробуйте обновить страницу.'}><a href="/catalog">{boot.filterError?'Сбросить фильтры':'Повторить'}</a></EmptyState>}
+    {kind==='home'?<><Process/><Questions/><LeadForm enabled={leadEnabled}/></>:null}</>}
+  </main><footer className="ab-footer"><a href="/" className="ab-logo">AB<span>Drive</span></a><p>Автомобили {siteFromPhrase()} для покупателей в России.</p><p>Москва — базовый город расчёта доставки.</p><a className="ab-faq-link" href="/faq">Вопросы о покупке</a>{leadEnabled?<a href="/privacy">Обработка персональных данных</a>:null}</footer>
  </>;
 }

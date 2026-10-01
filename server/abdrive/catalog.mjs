@@ -23,6 +23,7 @@ export function catalogSelection(params) {
  for(const [key,column,op,min,max] of [['yearMin','v.model_year','>=',1990,2100],['yearMax','v.model_year','<=',1990,2100],['mileageMax','l.mileage_km','<=',0,1000000]]){
   const raw=params.get(key);if(raw){const n=Number(raw);if(!Number.isInteger(n)||n<min||n>max)throw new Error('invalid_filter');add(`${column}${op}?`,n);}
  }
+ if(params.get('yearMin')&&params.get('yearMax')&&Number(params.get('yearMin'))>Number(params.get('yearMax')))throw new Error('invalid_filter');
  if(params.has('priceMin')||params.has('priceMax')||['price','price_asc','price_desc'].includes(params.get('sort')))throw new Error('price_filter_unavailable');
  const sort={newest:'l.first_seen_at DESC',year_desc:'v.model_year DESC',mileage_asc:'l.mileage_km ASC'}[params.get('sort')||'newest'];
  if(!sort)throw new Error('invalid_sort');
@@ -36,7 +37,7 @@ export function publicCar(row) {
   id:row.id,number:listingNumber(row.id),brand:row.brand,model:row.model,year:row.model_year,
   title:[row.brand,row.model,row.model_year].filter(Boolean).join(' '),
   origin:originForSource(row.source),type:row.powertrain,drive:row.drivetrain,
-  mileage:Number(row.mileage_km),battery:Number(row.battery_kwh)||null,range:Number(row.electric_range_km)||null,
+  mileage:row.mileage_km==null?null:Number(row.mileage_km),battery:Number(row.battery_kwh)||null,range:Number(row.electric_range_km)||null,
   images:(row.images||[]).filter(url=>/^https?:\/\//.test(url)),
   checkedAt:row.last_checked_at||row.last_seen_at,
   offer:{status:'unavailable',currency:'RUB',destinationId:'moscow',destinationName:'Москва',totalAmount:null,reason:'tariffs_pending'},
@@ -46,8 +47,10 @@ export function publicCar(row) {
 export function createRussianCatalog(db) {
  const pages=new Map();
  const metadata=createAsyncCache(async()=>{
-   const result=await db.query(`SELECT v.brand,count(*)::int AS count ${from} WHERE l.status='active' GROUP BY v.brand ORDER BY v.brand`);
-   return {brands:result.rows,total:result.rows.reduce((sum,r)=>sum+r.count,0)};
+   const result=await db.query(`SELECT v.brand,v.model,count(*)::int AS count ${from} WHERE l.status='active' GROUP BY v.brand,v.model ORDER BY v.brand,v.model`);
+   const counts=new Map();
+   for(const row of result.rows)counts.set(row.brand,(counts.get(row.brand)||0)+row.count);
+   return {brands:[...counts].map(([brand,count])=>({brand,count})),models:result.rows,total:result.rows.reduce((sum,r)=>sum+r.count,0)};
  },{ttl:60000,onError:()=>{}});
  return {
   async list(params) {
@@ -73,6 +76,10 @@ export function createRussianCatalog(db) {
    const row=result.rows[0];
    return row?{car:publicCar(row),sourceVersion:sourceVersion(row),sourceUrl:row.source_url}:null;
   },
-  meta:metadata,
+  async meta(brand='') {
+   if(typeof brand!=='string'||brand.length>100)throw new Error('invalid_filter');
+   const all=await metadata();
+   return {...all,models:brand?all.models.filter(row=>row.brand===brand&&row.model):[]};
+  },
  };
 }

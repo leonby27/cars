@@ -10,6 +10,9 @@ const site=getSiteProfile('abdrive');
 
 test('RU catalog never presents the legacy Belarus price as RUB',()=>{
  const car=publicCar({id:'che168-1',source:'Che168',brand:'BYD',model:'Seal',model_year:2024,mileage_km:1000,estimated_total_usd:12345,source_url:'private',source_payload:{contact:'private'},images:['https://example.com/a.jpg','javascript:alert(1)']});
+ assert.equal(publicCar({images:[],mileage_km:null}).mileage,null);
+ assert.equal(publicCar({images:[],mileage_km:0}).mileage,0);
+ assert.throws(()=>catalogSelection(new URLSearchParams({yearMin:'2025',yearMax:'2020'})),/invalid_filter/);
  assert.equal(car.offer.currency,'RUB');assert.equal(car.offer.totalAmount,null);
  assert.equal(car.source_url,undefined);assert.equal(car.source_payload,undefined);assert.equal(car.estimated_total_usd,undefined);
  assert.equal(car.images.length,1);

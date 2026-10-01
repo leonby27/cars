@@ -27,25 +27,24 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
   }
   if(url.pathname==='/sitemap.xml'){
    response.writeHead(200,{'content-type':'application/xml; charset=utf-8'});
-   return response.end('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+['/','/catalog','/how-it-works'].map(path=>`<url><loc>${site.origin}${path}</loc></url>`).join('')+'</urlset>');
+   return response.end('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+['/','/catalog','/how-it-works','/faq'].map(path=>`<url><loc>${site.origin}${path}</loc></url>`).join('')+'</urlset>');
   }
   let boot={kind:'notFound',leadEnabled};let status=200;
   const path=url.pathname.replace(/\/+$/,'')||'/';
   if(path==='/'||path==='/catalog'){
-   const [data,meta]=await Promise.allSettled([catalog.list(url.searchParams),catalog.meta()]);
-   if(data.status==='rejected'&&/^invalid_|price_filter_unavailable/.test(data.reason?.message||'')){
-    response.writeHead(400,{'content-type':'text/plain; charset=utf-8'});return response.end('Проверьте параметры поиска.');
-   }
-   boot={...boot,kind:path==='/'?'home':'catalog',data:data.status==='fulfilled'?data.value:null,brands:meta.status==='fulfilled'?meta.value.brands:[],params:Object.fromEntries(url.searchParams)};
-   if(data.status==='rejected')status=503;
+   const [data,meta]=await Promise.allSettled([catalog.list(url.searchParams),catalog.meta(url.searchParams.get('brand')||'')]);
+   const filterError=data.status==='rejected'&&/^(invalid_|price_filter_unavailable)/.test(data.reason?.message||'');
+   boot={...boot,filterError:Boolean(filterError),kind:path==='/'?'home':'catalog',data:data.status==='fulfilled'?data.value:null,brands:meta.status==='fulfilled'?meta.value.brands:[],models:meta.status==='fulfilled'?meta.value.models||[]:[],params:Object.fromEntries(url.searchParams)};
+   if(data.status==='rejected')status=filterError?400:503;
   }else if(path.startsWith('/cars/')){
    const listing=await catalog.get(decodeURIComponent(path.slice(6)));
    if(listing)boot={...boot,kind:'car',car:listing.car};else status=404;
   }else if(path==='/how-it-works')boot={...boot,kind:'process'};
+  else if(path==='/faq')boot={...boot,kind:'faq'};
   else if(path==='/privacy'&&privacyText)boot={...boot,kind:'privacy',privacyText};
   else status=404;
   const title=boot.kind==='car'?`${boot.car.title} ${fromPhrase(boot.car.origin)} — ABDrive`:
-   boot.kind==='process'?'Как заказать автомобиль — ABDrive':boot.kind==='privacy'?'Обработка персональных данных — ABDrive':
+   boot.kind==='faq'?'Вопросы о покупке и доставке в Россию — ABDrive':boot.kind==='process'?'Как заказать автомобиль — ABDrive':boot.kind==='privacy'?'Обработка персональных данных — ABDrive':
    status===404?'Страница не найдена — ABDrive':`Автомобили ${siteFromPhrase()} в Россию — ABDrive`;
   const canonical=site.origin+(boot.kind==='car'?'/cars/'+encodeURIComponent(boot.car.id):path);
   // Unpriced individual advertisements are useful to visitors, but not submitted as priced offers.
