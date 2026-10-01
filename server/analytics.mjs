@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { pool } from "./db.mjs";
 import { readCookie } from "./auth.mjs";
+import { countLeadPeople } from "./analytics-lead-people.mjs";
 
 export const ANALYTICS_EVENTS = new Set([
   "page_view",
@@ -627,6 +628,23 @@ export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now
   };
 }
 
+// Полная выборка без лимита карточек CRM: один человек может оставить заявки
+// на несколько машин и подбор. Для заказа используем постоянный телефон аккаунта.
+export async function getAnalyticsLeadPeople(from, to, { db = pool } = {}) {
+  const result = await db.query(`SELECT 'draft-' || d.id AS id, NULL AS customer_id,
+      d.contact AS phone,
+      CASE WHEN d.calculation->>'requestType' = 'catalog_search' THEN 'custom_search' ELSE 'car' END AS kind
+    FROM order_drafts d
+    WHERE d.created_at >= $1 AND d.created_at < $2 AND ${notStaffContact("d.contact")}
+    UNION ALL
+    SELECT 'order-' || o.id AS id, o.customer_id,
+      coalesce(nullif(a.phone,''), o.contact_phone) AS phone, 'car' AS kind
+    FROM customer_orders o JOIN customer_accounts a ON a.id=o.customer_id
+    WHERE coalesce(o.availability_requested_at, o.created_at) >= $1
+      AND coalesce(o.availability_requested_at, o.created_at) < $2 AND ${notStaffAccount("o.customer_id")}`, [from, to]);
+  return countLeadPeople(result.rows);
+}
+
 export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
   const range = normalizeAnalyticsRange(rangeValue);
   // Устройство режет только то, что считается по событиям сайта. Заявки, избранное
@@ -641,17 +659,17 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
   // вкладка, закрытая страница) и его может подделать кто угодно, а строка в таблице
   // появляется только от настоящего действия. Из событий берём лишь то, чего в базе нет:
   // посетителей, заходы и просмотры карточек.
-  const [summaryResult,visitsResult,benchmark,actionsResult,dailyResult,catalogPagesResult,vehiclesResult,favoritesResult,registrationsResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult] = await Promise.all([
+  const [summaryResult,visitsResult,benchmark,actionsResult,dailyResult,catalogPagesResult,vehiclesResult,favoritesResult,registrationsResult,accountsResult,searchesResult,actionsDailyResult,visitDetailsResult,leadPeople] = await Promise.all([
     pool.query(`SELECT
       count(DISTINCT visitor_id) FILTER (WHERE ${LIVE_VISITOR})::int AS visitors,
       count(*) FILTER (WHERE event_name='page_view' AND ${LIVE_VISITOR})::int AS page_views,
       count(*) FILTER (WHERE event_name='vehicle_view' AND ${LIVE_VISITOR})::int AS vehicle_views,
       count(*) FILTER (WHERE event_name='availability_request_click' AND ${LIVE_VISITOR})::int AS availability_requests,
       count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_request_click' AND ${LIVE_VISITOR})::int AS availability_request_people,
-      -- Окно по кнопке «Узнать точную цену и наличие» в карточке: сколько раз его открыли.
+      -- Один посетитель за выбранный период, даже если открывал окно на разных машинах.
       -- Событие уходит в момент нажатия, до формы и до записи в базу, — это верх
       -- воронки, а заявки ниже (availability_clicks) — её низ.
-      count(*) FILTER (WHERE event_name='availability_click' AND ${LIVE_VISITOR})::int AS availability_modal_opens,
+      count(DISTINCT visitor_id) FILTER (WHERE event_name='availability_click' AND ${LIVE_VISITOR})::int AS availability_modal_opens,
       count(*) FILTER (WHERE event_name='article_promo_shown' AND ${LIVE_VISITOR})::int AS promo_shown,
       count(*) FILTER (WHERE event_name='article_promo_click' AND ${LIVE_VISITOR})::int AS promo_clicks,
       count(DISTINCT visitor_id) FILTER (WHERE event_name='article_promo_click' AND ${LIVE_VISITOR})::int AS promo_click_people,
@@ -840,6 +858,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
       FROM numbered
       GROUP BY visitor_id, visit_number
       ORDER BY min(created_at) DESC`, [from, to]),
+    getAnalyticsLeadPeople(from, to),
   ]);
   const actionsByDay = new Map(actionsDailyResult.rows.map((row) => [row.day, row]));
   const registrationsByDay = new Map(accountsResult.rows.map((row) => [row.day, row.registrations]));
@@ -875,7 +894,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "" } = {}) {
     from,
     to,
     generatedAt:new Date().toISOString(),
-    summary:{ ...summaryResult.rows[0], ...visitsResult.rows[0], ...benchmark, ...actionsResult.rows[0], registrations },
+    summary:{ ...summaryResult.rows[0], ...visitsResult.rows[0], ...benchmark, ...actionsResult.rows[0], ...leadPeople, registrations },
     daily,
     catalogPages:catalogPagesResult.rows.map((row) => ({ path:row.path, views:row.views, viewers:row.viewers, lastViewedAt:row.last_viewed })),
     vehicles:vehiclesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.listing_title, views:row.views, viewers:row.viewers, availabilityClicks:row.availability_clicks, availabilityRequests:row.availability_requests, favorites:row.favorites, lastViewedAt:row.last_viewed })),

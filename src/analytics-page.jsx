@@ -2,7 +2,7 @@ import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
 import { Fragment, isValidElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, InstagramLogo, MagnifyingGlass, SignOut, SquaresFour, Trash, Tray, UsersThree } from "./icons.jsx";
+import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, Info, InstagramLogo, MagnifyingGlass, SignOut, SquaresFour, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
@@ -188,7 +188,7 @@ function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
   );
 }
 
-function LeadsSection({ leads, loading, error, unavailable, reload, removeLead, period }) {
+function LeadsSection({ leads, summary = {}, loading, error, unavailable, reload, removeLead, period }) {
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
   const [deletingId, setDeletingId] = useState("");
@@ -219,9 +219,9 @@ function LeadsSection({ leads, loading, error, unavailable, reload, removeLead, 
   return (
     <>
       <section className="analytics-kpis" aria-label="Заявки в цифрах">
-        <article><span>Заявок за период</span><strong>{formatNumber(counts.all)}</strong><p>{leadPeriodNote(period)}</p></article>
-        <article><span>На конкретный автомобиль</span><strong>{formatNumber(counts.car)}</strong><p>Клиент выбрал машину в каталоге</p></article>
-        <article><span>Индивидуальный подбор</span><strong>{formatNumber(counts.custom_search)}</strong><p>Описали, что ищут, своими словами</p></article>
+        <article><span className="analytics-lead-heading">Заявок за период <LeadCountingInfo /></span><strong>{formatNumber(summary.lead_people)}</strong><p>{leadPeriodNote(period)}</p></article>
+        <article><span className="analytics-lead-heading">На конкретный автомобиль <LeadCountingInfo /></span><strong>{formatNumber(summary.car_lead_people)}</strong><p>Клиент выбрал машину в каталоге</p></article>
+        <article><span className="analytics-lead-heading">Индивидуальный подбор <LeadCountingInfo /></span><strong>{formatNumber(summary.custom_search_people)}</strong><p>Описали, что ищут, своими словами</p></article>
         <article><span>Последняя заявка</span><strong className="analytics-kpi-small">{lastLead ? formatLeadDate(lastLead.createdAt) : "—"}</strong><p>{lastLead?.customer.name || (leads.length ? "За этот период заявок нет" : "Заявок пока нет")}</p></article>
       </section>
       <section className="analytics-panel">
@@ -300,15 +300,17 @@ const pluralRu = (value, one, few, many) => {
   return last === 1 ? one : many;
 };
 
-// Карточка «Заявки» в обзоре — воронка в два числа: слева сколько раз открыли окно
-// по зелёной кнопке «Узнать точную цену и наличие», справа сколько заявок в итоге
-// пришло. Открытия считаются по событию из браузера, заявки — по таблицам сайта,
-// и «+N» новых относится только к заявкам.
-function LeadsFunnelCount({ opens = 0, total = 0, fresh = 0 }) {
+// Оба итога — люди за период. Красный +N — отдельные непрочитанные заявки:
+// он может быть больше числа людей и не вычитается из него.
+export function LeadsFunnelCount({ opens = 0, total = 0, fresh = 0 }) {
+  const newAmount = Math.max(0, Number(fresh) || 0);
   return <span className="analytics-kpi-funnel">
     <span>{formatNumber(opens)}</span>
     <i aria-hidden="true">/</i>
-    {Number(fresh) ? <AnalyticsSplitCount total={total} fresh={fresh} className="analytics-kpi-split-count is-leads" /> : <span>{formatNumber(total)}</span>}
+    <span className="analytics-split-count analytics-kpi-split-count is-leads">
+      <span>{formatNumber(total)}</span>
+      {newAmount > 0 && <><i aria-hidden="true">+</i><b title={`Новых заявок: ${formatNumber(newAmount)}`} aria-label={`Новых заявок: ${formatNumber(newAmount)}`}>{formatNumber(newAmount)}</b></>}
+    </span>
   </span>;
 }
 
@@ -395,7 +397,7 @@ function OverviewSection({ data, period, device = "all", updates = {} }) {
   }, [trendPeriod, device, data.generatedAt]);
   // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
   // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
-  const leadsTotal = (Number(summary.availability_clicks) || 0) + (Number(summary.custom_searches) || 0);
+  const leadsTotal = Number(summary.lead_people) || 0;
   // Открытия окна по кнопке «Узнать точную цену и наличие» — событие из браузера, как
   // просмотры, поэтому срез по устройству к ним применяется; к заявкам — нет.
   const leadModalOpens = Number(summary.availability_modal_opens) || 0;
@@ -411,16 +413,14 @@ function OverviewSection({ data, period, device = "all", updates = {} }) {
     // устройству их не показываем — иначе «было» вышло бы меньше настоящего.
     ["Заходы", summary.visits, visitsNote(summary, period, data.days), device === "all" ? updates.overview : 0],
     ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, device === "all" ? updates.vehicle_cars : 0],
-    // Заявки — воронка «открытий окна / заявок» (решение владельца 29.09.2026): первое
-    // число — сколько раз нажали «Узнать точную цену и наличие» и увидели окно, второе —
-    // тем же счётом, что раздел «Заявки»: на машину и на подбор вместе.
+    // Заявки — уникальные люди: на машину и на подбор вместе, без сложения групп.
     // У заявок устройство не записывается, поэтому они всегда по всем устройствам.
     // «+N» у них красный, как у пункта «Заявки» в меню: их нельзя пропустить.
     ["Заявки", <LeadsFunnelCount opens={leadModalOpens} total={leadsTotal} fresh={updates.leads} />, `${formatNumber(leadModalOpens)} ${pluralRu(leadModalOpens, "открытие окна", "открытия окна", "открытий окна")} / ${formatNumber(leadsTotal)} ${pluralRu(leadsTotal, "заявка", "заявки", "заявок")}`, updates.leads, "is-leads"],
   ];
   return (
     <>
-      <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh,freshTone]) => <article key={label}><span>{label}</span><strong>{isValidElement(value) ? value : Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className={`analytics-kpi-split-count${freshTone ? ` ${freshTone}` : ""}`} /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
+      <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh,freshTone]) => <article key={label}><span className={freshTone === "is-leads" ? "analytics-lead-heading" : undefined}>{label}{freshTone === "is-leads" && <LeadCountingInfo />}</span><strong>{isValidElement(value) ? value : Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className={`analytics-kpi-split-count${freshTone ? ` ${freshTone}` : ""}`} /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
       <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
           <h2>График</h2>
@@ -575,6 +575,15 @@ function useHoverTooltip(label) {
   const node = open && createPortal(<span ref={tooltip} role="tooltip" className="detail-action-tooltip is-visible"
     style={{ left:position?.left ?? 0, top:position?.top ?? 0, visibility:position ? "visible" : "hidden" }}>{label}</span>, document.body);
   return { anchor, handlers, node };
+}
+
+function LeadCountingInfo() {
+  const label = "За выбранный период один человек считается один раз: открытия окна — по посетителю в браузере, заявки — по телефону. Повторные открытия и заявки на разные машины не увеличивают итог. Красный +N показывает каждую новую заявку; все заявки сохранены в списке.";
+  const { anchor, handlers, node } = useHoverTooltip(label);
+  return <>
+    <button ref={anchor} type="button" className="analytics-lead-info" aria-label={label} {...handlers}><Info size={17} aria-hidden="true" /></button>
+    {node}
+  </>;
 }
 
 function VisitDevice({ device, platform }) {
@@ -1401,7 +1410,7 @@ function Dashboard({ data, period, setPeriod, device, setDevice, reload, logout,
 
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} device={device} updates={updates} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={reloadLeads} removeLead={removeLead} period={period} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} summary={data.summary} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={() => { reloadLeads(); reload(period, { silent:true }); }} removeLead={removeLead} period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} updates={updates} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
