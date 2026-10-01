@@ -14,7 +14,7 @@ export function createRussianPriceIndex(db,{getRates,now,cacheFile,forceRefresh=
   const rates=await getRates(),date=now();
   const result=new Map();let after='',scanned=0;
   for(;;){
-   const rows=await db.query(`SELECT l.id,l.source,l.city,l.price_cny,v.brand,v.model,v.model_year,v.powertrain,l.source_payload,v.specifications FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND l.id>$1 ORDER BY l.id LIMIT 1000`,[after]);
+   const rows=await db.query(`SELECT l.id,l.source,l.city,l.price_cny,v.brand,v.model,v.model_year,v.powertrain,v.drivetrain,v.battery_kwh,l.source_payload,v.specifications FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND l.id>$1 ORDER BY l.id LIMIT 1000`,[after]);
    for(const row of rows.rows){const offer=estimateRussianOffer(row,{rates,now:date});if(offer.status==='estimated')result.set(row.id,offer.totalAmount);}
    scanned+=rows.rows.length;onProgress(scanned);
    if(rows.rows.length<1000)break;after=rows.rows.at(-1).id;

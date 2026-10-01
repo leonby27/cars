@@ -21,7 +21,7 @@ export function russianPriceRows(car) {
   const min=rows.reduce((sum,row)=>sum+(row.minAmount??row.amount),0),max=rows.reduce((sum,row)=>sum+row.amount,0);
   const detail=rows.map(row=>`${row.label}: ${russianMoneyRange(row.minAmount??row.amount,row.amount)}.`).join(' ');
   return [{id:group.ids[0],label:group.label,value:`${group.ids[0]==='purchase'?'':'≈ '}${russianMoneyRange(min,max,{compact:true})}`,
-   description:[group.note||detail,...(group.customs?['Для личного ввоза. Возраст, объём двигателя и мощность подтверждаются по документам.',...(offer.range?['Диапазон зависит от 30-минутной мощности электромоторов; пиковая мощность объявления используется только как верхняя граница.']:[])]:[])].join(' ')}];
+   description:[group.note||detail,...(group.customs?['Для личного ввоза. Возраст, объём двигателя и мощность подтверждаются по документам.',...(offer.inputs?.motorPower?.method==='reference'?['Мощность электромоторов — по справочнику модификаций.']:(offer.range?['Диапазон зависит от 30-минутной мощности электромоторов.']:[]))]:[])].join(' ')}];
  });
 }
 export function russianPriceNote(offer) {

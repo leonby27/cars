@@ -41,9 +41,9 @@ export function estimateRussianOffer(row,{rates=RU_PRICING.rates,tariffs=RU_PRIC
   // Year-only listings can cross the 3/5-year bands. Use the more expensive
   // plausible band, explicitly disclosed, instead of silently underquoting.
   const ages=[Math.max(0,(+date-Date.UTC(year,0,1))/(365.2425*86400000)),Math.max(0,(+date-Date.UTC(year,11,31))/(365.2425*86400000))];
-  // Exact continuous power narrows the estimate; otherwise calculate bounds, not a guessed coefficient.
-  const powerLow=electric?power.continuousKw||0:power.iceKw+(hybrid?power.continuousKw||0:0);
-  const powerHigh=electric?power.continuousKw||power.electricPeakKw:power.iceKw+(hybrid?power.continuousKw||power.electricPeakKw||Infinity:0);
+  const motorLow=power.motorPower.minKw,motorHigh=power.motorPower.maxKw??Infinity;
+  const powerLow=electric?motorLow:power.iceKw+(hybrid?motorLow:0);
+  const powerHigh=electric?motorHigh:power.iceKw+(hybrid?motorHigh:0);
   const duties=ages.map(age=>electric?purchase*.15:personalIceDuty({age,cc,valueRub:purchase,eurRub:rates.EUR}));
   const duty=Math.round(Math.max(...duties));
   const utility=kw=>Math.max(...ages.map(age=>electric?personalElectricUtil({age,kw}):personalIceUtil({age,cc,hp:kw/.7355})));
@@ -69,11 +69,12 @@ export function estimateRussianOffer(row,{rates=RU_PRICING.rates,tariffs=RU_PRIC
   const lowSum=rows.reduce((sum,row)=>sum+(row.minAmount??row.amount),0);
   const range=lowSum!==sum?{min:Math.floor(lowSum/10000)*10000,max:Math.ceil(sum/10000)*10000}:null;
   return {...base,status:'estimated',totalAmount:Math.ceil(sum/10000)*10000,subtotal:sum,rows,range,estimateKind:range?'range':'point',
-    inputs:{powertrain:power.kind,engineCc:cc,icePowerKw:power.iceKw,electricPeakKw:power.electricPeakKw,continuousPowerKw:power.continuousKw},
+    inputs:{powertrain:power.kind,engineCc:cc,icePowerKw:power.iceKw,electricPeakKw:power.electricPeakKw,continuousPowerKw:power.continuousKw,motorPower:power.motorPower},
     ratesDate:rates.date,version:tariffs.version,calculatedAt:date.toISOString(),
     assumptions:['Предварительный расчёт для личного ввоза физическим лицом. Тарифы доставки и сопровождения — ориентиры, условия партнёра ещё не подтверждены.',
       'Возраст оценён по году модели, объём — по подробной спецификации или данным объявления. Дата выпуска, объём и мощность проверяются по документам.',
-      ...(range?['Диапазон отражает неизвестную 30-минутную мощность электромоторов: нижняя граница — минимальные платежи при известных характеристиках, верхняя — при пиковой мощности из объявления (либо максимальная строка утильсбора, если её нет). Это границы расчёта, а не обещание минимальной цены.']:[]),
+      ...(power.motorPower.method==='reference'?['Мощность электромоторов для расчёта оценена по справочнику модификаций; документальное значение имеет приоритет.']:[]),
+      ...(power.motorPower.method==='unknown'?['Электрическая мощность неизвестна; показаны минимальный и максимальный платежи.']:[]),
       ...(hybrid?['У параллельного гибрида для утильсбора учитываются ДВС и электромоторы вместе. Пиковая мощность не подменяет документальную 30-минутную.']:[]),
       ...(electric?['Расчёт для электрической схемы: пошлина 15%, акциз, НДС 22% и утильсбор. У последовательного гибрида тип установки подтверждается при оформлении.']:[]),
       ...(Math.abs(duties[0]-duties[1])>1||ages.some(age=>age<=3)&&ages.some(age=>age>3)?['Год автомобиля попадает на границу возрастных ставок: заложен больший платёж. После проверки даты выпуска сумма может уменьшиться.']:[]),

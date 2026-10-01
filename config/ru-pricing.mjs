@@ -1,6 +1,7 @@
+import {RU_POWER_REFERENCE_VERSION} from './ru-power-reference.mjs';
 // Preliminary planning allowances, not a partner quote. See docs/architecture/ru-pricing.md.
 export const RU_PRICING = {
-  version: 'ru-moscow-market-logistics-2026-10-01',
+  version: 'ru-moscow-market-logistics-2026-10-01-power-'+RU_POWER_REFERENCE_VERSION,
   destinationId: 'moscow', destinationName: 'Москва',
   rates: {date:'2026-10-01', RUB:1, USD:83.5588, EUR:94.8810, CNY:12.4732, KRW:0.0615127},
   paymentPercent: 0.02,

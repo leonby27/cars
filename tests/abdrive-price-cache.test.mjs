@@ -30,3 +30,17 @@ test('missing, corrupted, expired and incompatible snapshots are rebuilt before 
   assert.equal(queries,3);
  }finally{await rm(directory,{recursive:true,force:true});}
 });
+
+test('Russian index and detail quote share reference inputs, and old reference versions rebuild',async()=>{
+ const {estimateRussianOffer}=await import('../server/abdrive/pricing.mjs');
+ const car={...row,brand:'Kia',model:'Niro',model_year:2021,powertrain:'Электромобиль',drivetrain:'Передний',battery_kwh:64,specifications:{},source_payload:{motorPowerKw:150}};
+ const directory=await mkdtemp(join(tmpdir(),'abdrive-reference-'));
+ try{
+  const cacheFile=join(directory,'prices.json');
+  await writeFile(cacheFile,JSON.stringify({format:1,version:'ru-moscow-market-logistics-2026-10-01',date,prices:[[car.id,1]]}));
+  let queries=0;
+  const index=await createRussianPriceIndex({query:async sql=>{queries++;assert.match(sql,/v\.drivetrain/);assert.match(sql,/v\.battery_kwh/);return {rows:[car]};}},{getRates:async()=>RU_PRICING.rates,now:()=>date,cacheFile})();
+  assert.equal(queries,1);assert.equal(index.prices.get(car.id),estimateRussianOffer(car,{now:date}).totalAmount);
+  assert.equal(estimateRussianOffer(car,{now:date}).inputs.motorPower.method,'reference');
+ }finally{await rm(directory,{recursive:true,force:true});}
+});

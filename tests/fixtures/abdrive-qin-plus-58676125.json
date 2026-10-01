@@ -1,0 +1,336 @@
+{
+  "id": "che168-58676125",
+  "brand": "BYD",
+  "model": "Qin PLUS",
+  "model_year": 2026,
+  "powertrain": "Гибрид",
+  "source": "Che168",
+  "city": "chaoyang",
+  "price_cny": 79400,
+  "drivetrain": "Передний",
+  "battery_kwh": 15.8,
+  "source_payload": {
+    "sourceFuelType": "Plug-in Hybrid",
+    "transmission": "E-CVT Continuously Variable Transmission",
+    "technicalSpecs": {
+      "groups": [
+        {
+          "name": "Basic Specifications",
+          "items": [
+            {
+              "name": "Model Name",
+              "value": "Qin PLUS 2025 DM-i Smart Driving Edition 128KM Pro"
+            },
+            {
+              "name": "Manufacturer Suggested Retail Price (¥)",
+              "value": "￥79,800"
+            },
+            {
+              "name": "Manufacturer",
+              "value": "BYD"
+            },
+            {
+              "name": "Class",
+              "value": "Compact Car"
+            },
+            {
+              "name": "Energy Type",
+              "value": "Plug-in Hybrid"
+            },
+            {
+              "name": "Emission Standard",
+              "value": "China VI"
+            },
+            {
+              "name": "Launch Date",
+              "value": "2025.09"
+            },
+            {
+              "name": "WLTC Pure Electric Range (km)",
+              "value": "100"
+            },
+            {
+              "name": "CLTC Pure Electric Range (km)",
+              "value": "128"
+            },
+            {
+              "name": "Fast Charging Time (hours)",
+              "value": "0.5"
+            },
+            {
+              "name": "Slow Charging Time (hours)",
+              "value": "4.8"
+            },
+            {
+              "name": "Maximum power (kW)",
+              "value": "-"
+            },
+            {
+              "name": "Max Torque (N·m)",
+              "value": "-"
+            },
+            {
+              "name": "Abbreviation",
+              "value": "E-CVT Continuously Variable Transmission"
+            },
+            {
+              "name": "Engine",
+              "value": "1.5L 101HP L4"
+            },
+            {
+              "name": "Electric Motor (Ps)",
+              "value": "163"
+            },
+            {
+              "name": "Length*Width*Height (mm)",
+              "value": "4780*1837*1515"
+            },
+            {
+              "name": "Official 0-100km/h acceleration (s)",
+              "value": "7.6"
+            },
+            {
+              "name": "Top speed (km/h)",
+              "value": "180"
+            },
+            {
+              "name": "WLTC Combined Fuel Consumption (L/100km)",
+              "value": "1.11"
+            },
+            {
+              "name": "WLTC Fuel Consumption at Minimum Charge State (L/100km)",
+              "value": "3.98"
+            },
+            {
+              "name": "Fuel consumption at minimum charge state (L/100km) NEDC",
+              "value": "3.08"
+            },
+            {
+              "name": "Comprehensive fuel and electricity consumption (L/100km)",
+              "value": "2.64"
+            },
+            {
+              "name": "Vehicle warranty",
+              "value": "Six years or 150,000 kilometers"
+            },
+            {
+              "name": "Curb weight (kg)",
+              "value": "1580"
+            },
+            {
+              "name": "Maximum Gross Weight (kg)",
+              "value": "1955"
+            }
+          ]
+        },
+        {
+          "name": "Body",
+          "items": [
+            {
+              "name": "Length (mm)",
+              "value": "4780"
+            },
+            {
+              "name": "Width (mm)",
+              "value": "1837"
+            },
+            {
+              "name": "Height (mm)",
+              "value": "1515"
+            },
+            {
+              "name": "Wheelbase (mm)",
+              "value": "2718"
+            },
+            {
+              "name": "Front track (mm)",
+              "value": "1580"
+            },
+            {
+              "name": "Rear track (mm)",
+              "value": "1590"
+            },
+            {
+              "name": "Approach angle (°)",
+              "value": "13"
+            },
+            {
+              "name": "Departure angle (°)",
+              "value": "16"
+            },
+            {
+              "name": "Minimum turning radius (m)",
+              "value": "5.5"
+            },
+            {
+              "name": "Body structure",
+              "value": "Sedan"
+            },
+            {
+              "name": "Door Opening Method",
+              "value": "Conventional Door"
+            },
+            {
+              "name": "Number of doors",
+              "value": "4"
+            },
+            {
+              "name": "Seating capacity",
+              "value": "5"
+            },
+            {
+              "name": "Fuel tank capacity (L)",
+              "value": "65"
+            },
+            {
+              "name": "Trunk capacity (L)",
+              "value": "450"
+            },
+            {
+              "name": "Drag Coefficient (Cd)",
+              "value": "-"
+            }
+          ]
+        },
+        {
+          "name": "Engine",
+          "items": [
+            {
+              "name": "Engine model",
+              "value": "BYD472QC"
+            },
+            {
+              "name": "Displacement (mL)",
+              "value": "1498"
+            },
+            {
+              "name": "Displacement (L)",
+              "value": "1.5"
+            },
+            {
+              "name": "Intake form",
+              "value": "Naturally Aspirated"
+            },
+            {
+              "name": "Engine Layout",
+              "value": "Transverse"
+            },
+            {
+              "name": "Cylinder arrangement",
+              "value": "L"
+            },
+            {
+              "name": "Number of cylinders",
+              "value": "4"
+            },
+            {
+              "name": "Valves per cylinder",
+              "value": "4"
+            },
+            {
+              "name": "Valvetrain",
+              "value": "DOHC"
+            },
+            {
+              "name": "Maximum horsepower (Ps)",
+              "value": "101"
+            },
+            {
+              "name": "Maximum power (kW)",
+              "value": "74"
+            },
+            {
+              "name": "Max Power RPM",
+              "value": "-"
+            },
+            {
+              "name": "Max Torque (N·m)",
+              "value": "126"
+            },
+            {
+              "name": "Max Torque RPM",
+              "value": "-"
+            },
+            {
+              "name": "Maximum Net Power (kW)",
+              "value": "70"
+            },
+            {
+              "name": "Energy Type",
+              "value": "Plug-in Hybrid"
+            },
+            {
+              "name": "Fuel Grade",
+              "value": "92 Octane"
+            },
+            {
+              "name": "Fuel Supply System",
+              "value": "Multi-point Injection"
+            },
+            {
+              "name": "Cylinder Head Material",
+              "value": "Aluminum Alloy"
+            },
+            {
+              "name": "Cylinder Block Material",
+              "value": "Aluminum Alloy"
+            },
+            {
+              "name": "Emission Standard",
+              "value": "China VI"
+            }
+          ]
+        },
+        {
+          "name": "Electric Motor",
+          "items": [
+            {
+              "name": "Front Motor Brand",
+              "value": "BYD"
+            },
+            {
+              "name": "Front Motor Model",
+              "value": "TZ210XYB"
+            },
+            {
+              "name": "Motor Type",
+              "value": "Permanent Magnet/Synchronous"
+            },
+            {
+              "name": "Total Motor Power (kW)",
+              "value": "120"
+            },
+            {
+              "name": "Total Electric Motor Horsepower (Ps)",
+              "value": "163"
+            },
+            {
+              "name": "Total Motor Torque (N·m)",
+              "value": "210"
+            },
+            {
+              "name": "Front Motor Max Power (kW)",
+              "value": "120"
+            },
+            {
+              "name": "Front Motor Max Torque (N·m)",
+              "value": "210"
+            },
+            {
+              "name": "Number of Drive Motors",
+              "value": "Single Motor"
+            },
+            {
+              "name": "Motor Layout",
+              "value": "Front-mounted"
+            },
+            {
+              "name": "Battery/Motor/ECU Warranty Policy for First Owner",
+              "value": "Lifetime Warranty/Non-Operational (Exclusion clauses subject to official terms)"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
