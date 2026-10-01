@@ -1,45 +1,44 @@
-// A scroll film is an optional enhancement. Once the visitor starts reading,
-// keep the static layout for this visit instead of extending the page beneath them.
-export function prepareServiceVideo({ video, poster, source, onReady, win = window, timeoutMs = 5000 }) {
+// Keep the film's scroll space reserved while its bytes load, so it can appear
+// without moving the rest of the page even if the visitor starts scrolling.
+export function prepareServiceVideo({ video, poster, source, onReady, onProgress, onUnavailable, win = window }) {
   const controller = new AbortController();
   let disposed = false;
-  let ready = false;
   let objectUrl;
-  let timeout;
 
   const removePendingListeners = () => {
-    win.clearTimeout(timeout);
-    win.removeEventListener("scroll", onScroll);
     video.removeEventListener("loadeddata", onLoaded);
+    video.removeEventListener("error", fail);
   };
   const cancel = () => {
     if (disposed) return;
     disposed = true;
     controller.abort();
     removePendingListeners();
-    video.removeEventListener("error", cancel);
     video.pause();
     video.removeAttribute("src");
     video.load();
     if (objectUrl) win.URL.revokeObjectURL(objectUrl);
   };
-  const onScroll = () => {
-    if (!ready && win.scrollY > 8) cancel();
+  const fail = () => {
+    if (disposed) return;
+    cancel();
+    onUnavailable?.();
   };
   const onLoaded = () => {
-    if (disposed || win.scrollY > 8) return cancel();
-    ready = true;
+    if (disposed) return;
     removePendingListeners();
+    onProgress?.(1);
     onReady();
   };
 
-  if (win.scrollY > 8 || win.navigator.connection?.saveData ||
-      win.matchMedia("(prefers-reduced-motion: reduce)").matches) return cancel;
+  if (win.navigator.connection?.saveData ||
+      win.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    fail();
+    return cancel;
+  }
 
-  win.addEventListener("scroll", onScroll, { passive: true });
   video.addEventListener("loadeddata", onLoaded);
-  video.addEventListener("error", cancel);
-  timeout = win.setTimeout(cancel, timeoutMs);
+  video.addEventListener("error", fail);
 
   (async () => {
     try {
@@ -48,15 +47,31 @@ export function prepareServiceVideo({ video, poster, source, onReady, win = wind
       if (disposed) return;
       const response = await win.fetch(source, { signal: controller.signal });
       if (!response.ok) throw new Error("Video unavailable");
-      const blob = await response.blob();
+      const length = Number(response.headers?.get("content-length"));
+      const reader = length > 0 ? response.body?.getReader?.() : null;
+      let blob;
+      if (reader) {
+        const chunks = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (disposed) return;
+          chunks.push(value);
+          received += value.byteLength;
+          onProgress?.(Math.min(0.96, (received / length) * 0.96));
+        }
+        blob = new Blob(chunks, { type: response.headers?.get("content-type") || "video/mp4" });
+      } else {
+        blob = await response.blob();
+      }
       if (disposed) return;
-      if (win.scrollY > 8) return cancel();
       // Full buffering prevents scroll seeks from waiting on missing byte ranges.
       objectUrl = win.URL.createObjectURL(blob);
       video.src = objectUrl;
       video.load();
     } catch {
-      cancel();
+      fail();
     }
   })();
 

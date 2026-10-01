@@ -40,7 +40,7 @@ import { ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_FLOW_STEPS, SERVICE_PROOF, S
 import { BLOG_ENABLED } from "../src/feature-flags.js";
 import { SAMPLE_REPORT, groups, indexChartSvg, percent } from "../src/blog-report.js";
 import { blogFigureHtml } from "../src/blog-figures.js";
-import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt, blogPostHidden } from "../src/blog-posts.js";
+import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogArticlePhotoParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt, blogPostHidden } from "../src/blog-posts.js";
 import { BLOG_TEXTS, blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
 // машины в момент запроса. Пока разметка жила только здесь, серверная страница
@@ -1354,7 +1354,7 @@ async function readLiveCatalog() {
       // отбора тоже — срез для кадров задан отдельным полем `photos`.
       if (post.kind === "article") {
         if (!post.photos?.filters) continue;
-        const shots = await listCars(blogListParams({ slug: post.slug, filters: post.photos.filters }, "6"));
+        const shots = await listCars(blogArticlePhotoParams(post, "6"));
         collections.set(post.slug, { cars: shots.items.filter((car) => car.images?.length || car.image), total: shots.total, changedAt: shots.changedAt || null });
         continue;
       }

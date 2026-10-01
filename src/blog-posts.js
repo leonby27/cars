@@ -2041,7 +2041,7 @@ const POWERTRAIN_FILTER_LABEL = { "Электромобиль": "Электро�
  * списка фильтр молча ничего не отберёт, поэтому за список следит тест.
  */
 export const BLOG_FILTER_KEYS = Object.freeze([
-  "brand", "model", "type", "bodyType", "drive", "yearMin", "mileageMax", "landedMin", "landedMax", "rangeMin", "batteryMin", "accelMax",
+  "country", "brand", "model", "type", "bodyType", "drive", "yearMin", "mileageMax", "landedMin", "landedMax", "rangeMin", "batteryMin", "accelMax",
 ]);
 
 // Порядок машин в подборке. Не «в разнобой» и не по дате: и то и другое меняет
@@ -2050,6 +2050,12 @@ export const BLOG_FILTER_KEYS = Object.freeze([
 // зерном: порядок случайный на вид, но один и тот же, пока машины в наличии.
 // Уходит из списка только то, что продали.
 export const blogListParams = (post, limit) => blogApiParams(post, { sort: "default", seed: post.slug, limit });
+
+/** Кадры статей пока берём из Китая; будущая статья о Корее задаст country в photos.filters. */
+export const blogArticlePhotoParams = (post, limit = 6) => {
+  if (!post?.photos?.filters) return null;
+  return blogListParams({ slug: post.slug, filters: { country: "china", ...post.photos.filters } }, limit);
+};
 
 /**
  * Сколько машин запрашиваем, чтобы набрать список из разных марок. Берём с запасом
@@ -2076,6 +2082,7 @@ export const blogOnePerBrand = (cars, limit) => {
 export const blogApiParams = (post, extra = {}) => {
   const filters = post?.filters || {};
   const params = new URLSearchParams();
+  if (filters.country) params.set("country", filters.country);
   if (filters.brand) params.set("brand", filters.brand);
   if (filters.model) params.set("model", filters.model);
   if (filters.type) params.set("type", filters.type);
@@ -2098,6 +2105,7 @@ export const blogApiParams = (post, extra = {}) => {
 export const blogCatalogHref = (post) => {
   const filters = post?.filters || {};
   const params = new URLSearchParams();
+  if (filters.country) params.set("country", filters.country);
   if (filters.brand) params.set("brand", filters.brand);
   if (filters.model) params.set("model", filters.model);
   if (filters.type) params.set("type", POWERTRAIN_FILTER_LABEL[filters.type] || filters.type);

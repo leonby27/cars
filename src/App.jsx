@@ -17,7 +17,7 @@ import { SearchField } from "./search-field.jsx";
 import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, EnvelopeSimple, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Ruler, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
+import { Article, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, ArrowsLeftRight, BatteryHigh, BookmarkSimple, Calculator, CalendarBlank, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Clock, Copy, CurrencyDollar, Desktop, DotsThreeVertical, Engine, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightbulb, Lightning, List, ListChecks, LinkSimple, LockKey, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, Ruler, Scales, ShareNetwork, ShieldCheck, SignOut, SlidersHorizontal, Sparkle, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, Trash, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -71,7 +71,7 @@ import { deliveryBodyClass, deliveryModelSize, deliveryPrecisionPrompt, estimate
 import { BLOG_ENABLED, REVIEWS_ENABLED, GUAZI_PREVIEW_ENABLED } from "./feature-flags.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "./blog-report.js";
 import { blogFigureHtml } from "./blog-figures.js";
-import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
+import { BLOG_INDEX, blogApiParams, blogArticlePhotoParams, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogCarFigure, blogCarReason, blogListParams, blogPostSides, blogTopCars, BLOG_TOP_POOL, blogPostStats, blogPostTags, blogPosts, blogPostsFor, blogPostsForModel, blogRelatedPosts, blogAllPosts, blogFreshnessLabel, blogPostDateSentence, blogSidebarItems, findBlogPost, homeBlogPosts } from "./blog-posts.js";
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { embeddedApiValue, initialApiValue } from "./boot-api.js";
 import { FAQ_GROUPS, HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "./purchase-info.js";
@@ -1474,6 +1474,7 @@ const DECREE_DESCRIPTION = "Для многодетных родителей, л
 
 function DecreePricingPanel() {
   const pricing = useQuotaPricing();
+  const isMobile = useNarrowViewport();
   const hintId = useId();
   return (
     <div className="quota-panel decree-panel">
@@ -1484,7 +1485,9 @@ function DecreePricingPanel() {
           <span className="quick-view-toggle-track" aria-hidden="true"><i /></span>
           <span className="quick-view-toggle-label">Указ № 140</span>
         </label>
-        <small id={hintId}>Возмещение 50% пошлин и налогов. {DECREE_DESCRIPTION}</small>
+        <small id={hintId}>
+          Возмещение 50% пошлин и налогов.{!isMobile && ` ${DECREE_DESCRIPTION}`}
+        </small>
       </div>
     </div>
   );
@@ -5821,7 +5824,7 @@ function FilterPanel({ filters, setFilters, resultCount, brands, models, bodyTyp
       searchSaved={searchSaved}
       searchUpdate={searchUpdate}
       onExpandedChange={onExpandedChange}
-      initiallyExpanded={expanded || filters.type !== "Все" || (filters.country || ANY_COUNTRY) !== ANY_COUNTRY || filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL}
+      initiallyExpanded={expanded || filters.type !== "Все" || filters.mileage !== ANY_MILEAGE || multiValues(filters.bodyType, ANY_BODY_TYPE).length > 0 || multiValues(filters.color, ANY_COLOR).length > 0 || filters.drive !== ANY_DRIVE || filters.owners !== ANY_OWNERS || filters.battery !== ANY_BATTERY || filters.condition !== ANY_CONDITION || filters.accel !== ANY_ACCEL || filters.tire !== ANY_TIRE || (filters.range || ANY_RANGE) !== ANY_RANGE || (filters.engine || ANY_ENGINE) !== ANY_ENGINE || (filters.power || ANY_POWER) !== ANY_POWER || (filters.gearbox || ANY_GEARBOX) !== ANY_GEARBOX || (filters.fuel || ANY_FUEL) !== ANY_FUEL}
     />
   );
 }
@@ -9967,6 +9970,8 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
     const sticky = stickyRef.current;
     const video = videoRef.current;
     if (!scene || !sticky || !video || isMobileVideo !== (window.innerWidth <= 700)) return undefined;
+    scene.classList.add("service-video-loading");
+    const loader = scene.querySelector(".service-video-loader");
     const pageShell = scene.closest(".service-video-shell");
 
     let updateFrame = 0;
@@ -9974,6 +9979,19 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
     let targetTime = 0;
     let seeking = false;
     let prepared = false;
+    let lastProgress = -1;
+    const loaderDelay = window.setTimeout(() => {
+      if (!scene.classList.contains("service-video-ready") &&
+          !scene.classList.contains("service-video-static") &&
+          !scene.classList.contains("service-video-failed")) {
+        scene.classList.add("service-video-loader-visible");
+      }
+    }, 1500);
+    const showVideo = () => {
+      window.clearTimeout(loaderDelay);
+      scene.classList.remove("service-video-loader-visible");
+      scene.classList.add("service-video-ready");
+    };
 
     const commitFrame = () => {
       seekFrame = 0;
@@ -9987,12 +10005,16 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
     };
     const handleSeeked = () => {
       seeking = false;
-      scheduleSeek();
+      if (prepared && Math.abs(video.currentTime - targetTime) <= 1 / 45) {
+        showVideo();
+      } else {
+        scheduleSeek();
+      }
     };
     const update = () => {
       updateFrame = 0;
       const rect = scene.getBoundingClientRect();
-      if (!prepared) {
+      if (scene.classList.contains("service-video-static")) {
         pageShell?.classList.toggle("service-video-header-active", rect.bottom > sticky.offsetHeight * 0.2);
         return;
       }
@@ -10050,17 +10072,42 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
       video,
       poster: scene.querySelector(".service-scroll-poster"),
       source: isMobileVideo ? "/videos/how-it-works-mobile-v2.mp4" : "/videos/how-it-works-desktop-v2.mp4",
+      onProgress: (progress) => {
+        const percent = Math.round(progress * 100);
+        if (percent === lastProgress) return;
+        lastProgress = percent;
+        loader?.style.setProperty("--service-video-progress", `${percent}%`);
+        scene.classList.add("service-video-progress-known");
+      },
       onReady: () => {
         prepared = true;
-        scene.classList.add("service-video-ready");
+        scene.classList.remove("service-video-loading");
+        update();
+        if (Math.abs(video.currentTime - targetTime) <= 1 / 45) {
+          showVideo();
+        }
+      },
+      onUnavailable: () => {
+        window.clearTimeout(loaderDelay);
+        scene.classList.remove("service-video-loader-visible");
+        scene.classList.remove("service-video-loading");
+        if (!reducedMotion && !window.navigator.connection?.saveData && scene.getBoundingClientRect().top < -1) {
+          scene.classList.add("service-video-failed");
+        } else {
+          scene.removeAttribute("style");
+          scene.classList.remove("service-video-copy-swapped");
+          scene.classList.add("service-video-static");
+        }
         update();
       },
     });
     update();
 
     return () => {
+      window.clearTimeout(loaderDelay);
       cancelPreparation();
-      scene.classList.remove("service-video-ready", "service-video-copy-swapped");
+      scene.classList.remove("service-video-loading", "service-video-loader-visible", "service-video-ready", "service-video-static", "service-video-failed", "service-video-progress-known", "service-video-copy-swapped");
+      loader?.style.removeProperty("--service-video-progress");
       scene.removeAttribute("style");
       if (updateFrame) window.cancelAnimationFrame(updateFrame);
       if (seekFrame) window.cancelAnimationFrame(seekFrame);
@@ -10077,7 +10124,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
   // modes; the selected site theme resumes after the capability cards.
 
   return (
-    <section className="service-video-story" ref={sceneRef} aria-label={`Автомобиль прибывает ${siteFromPhrase()}`}>
+    <section className="service-video-story service-video-loading" ref={sceneRef} aria-label={`Автомобиль прибывает ${siteFromPhrase()}`}>
       <div className="service-video-sticky" ref={stickyRef}>
         <div className="service-scroll-media">
           <picture>
@@ -10087,6 +10134,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
           </picture>
           <video ref={videoRef} className="service-scroll-video" preload="none"
             muted playsInline aria-hidden="true" tabIndex={-1} />
+          <span className="service-video-loader" role="status" aria-label="Загружаем видео"><span /></span>
         </div>
         <div className="service-video-copy">
           <div className="service-video-copy-inner">
@@ -10283,17 +10331,17 @@ function ServiceContactCta({ includeOptions = true, questionEvent = "service_con
       </section>
       {includeOptions && <section className="service-contact-options page-width" aria-label="Способы связи">
         <a className="service-contact-option" href={COMPANY.viberUrl} rel={EXTERNAL_LINK_REL} onClick={() => trackEvent("service_contact_sales_click")}>
-          <span aria-hidden="true"><ViberLogo size={27} /></span>
+          <img className="service-contact-option-illustration" src="/social/contact-viber.png" alt="" width="82" height="82" loading="lazy" decoding="async" />
           <strong>Viber</strong>
           <p>Напишите или позвоните — поможем выбрать автомобиль и посчитать цену до Минска.</p>
         </a>
         <ExternalLink className="service-contact-option" href={COMPANY.telegramUrl} onClick={() => trackEvent("service_contact_telegram_click")}>
-          <span aria-hidden="true"><TelegramLogo size={27} weight="duotone" /></span>
+          <img className="service-contact-option-illustration" src="/social/contact-telegram.png" alt="" width="82" height="82" loading="lazy" decoding="async" />
           <strong>Telegram</strong>
           <p>Быстро ответим на вопросы и подскажем по вашему запросу.</p>
         </ExternalLink>
         <a className="service-contact-option" href={`mailto:${COMPANY.email}`} onClick={() => trackEvent("service_contact_email_click")}>
-          <span aria-hidden="true"><EnvelopeSimple size={27} weight="duotone" /></span>
+          <img className="service-contact-option-illustration" src="/social/contact-mail.png" alt="" width="82" height="82" loading="lazy" decoding="async" />
           <strong>Электронная почта</strong>
           <p>{COMPANY.email} — для документов, расчётов и деловых вопросов.</p>
         </a>
@@ -13824,7 +13872,8 @@ function BlogReportPage({ post, navigate }) {
  * менялись бы при каждой перезагрузке, и статья выглядела бы подменённой.
  */
 function useArticlePhotos(post, limit = 6) {
-  const query = post?.photos?.filters ? String(blogListParams({ slug: post.slug, filters: post.photos.filters }, limit)) : null;
+  const params = blogArticlePhotoParams(post, limit);
+  const query = params ? String(params) : null;
   // Кадры из заранее собранной страницы (src/boot-api.js) — для первого кадра.
   const embedded = query ? embeddedApiValue(`/api/cars?${query}`) : undefined;
   const [cars, setCars] = useState(() => (embedded ? embedded.items.map(normalizeImportedCar).filter((car) => car.images?.length || car.image) : []));

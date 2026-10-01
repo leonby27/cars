@@ -37,6 +37,17 @@ test('PageSpeed browser infrastructure rebuilds without rewriting vehicle prices
  assert.equal(deploymentPlan(['src/counter-loader.js'],{pricingRefreshed:true}).recalculatePrices,true);
 });
 
+test('journal photos, film loading and critical CSS do not trigger database maintenance',()=>{
+ const p=deploymentPlan(['config/critical-classes.json','scripts/generate-seo-pages.mjs',
+  'scripts/lib/blog-cover.mjs','src/blog-posts.js','src/service-video-loading.js']);
+ assert.equal(p.mode,'full');
+ assert.equal(p.recalculatePrices,false);
+ assert.equal(p.checkDuplicates,false);
+ assert.equal(p.migrate,false);
+ assert.equal(deploymentPlan(['config/critical-classes.json']).mode,'presentation');
+ assert.equal(deploymentPlan(['config/import-policy.mjs']).checkDuplicates,true);
+});
+
 test('real Git diff permits already-built server rates but catches a newer local rate edit',async()=>{
  const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=await import('node:fs');
  const {tmpdir}=await import('node:os');const {join,resolve}=await import('node:path');

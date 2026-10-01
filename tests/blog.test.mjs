@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { shippedFlag } from "../src/feature-flags.js";
-import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, blogAllPosts, findBlogPost, homeBlogPosts , blogPostHidden} from "../src/blog-posts.js";
+import { BLOG_DUEL_ROW_KEYS, BLOG_DUEL_SPEC_KEYS, BLOG_FILTER_KEYS, BLOG_HIGHLIGHT_FIELDS, BLOG_RUBRICS, BLOG_YEAR_TOKEN, HOME_BLOG_LIMIT, blogApiParams, blogArticlePhotoParams, blogCatalogHref, blogDateLabel, blogDuelRows, blogDuelSpecRows, blogFilterSets, blogHighlight, blogHighlightSort, blogListParams, blogPostDateSentence, blogPostDateLabel, blogPostStats, blogPostTags, blogPosts, blogPostSides, blogPostsFor, blogRelativeDate, blogSidebarItems, blogUpdatedAt, blogAllPosts, findBlogPost, homeBlogPosts , blogPostHidden} from "../src/blog-posts.js";
 import { BLOG_TEXTS, BLOG_TEXTS_RAW } from "../src/blog-texts.js";
 import { SAMPLE_REPORT, indexChartSvg, percent } from "../src/blog-report.js";
 import { BLOG_FIGURES, blogFigureHtml } from "../src/blog-figures.js";
@@ -128,6 +128,17 @@ test("список подборки идёт в постоянном поряд�
     assert.equal(params.get("sort"), "default");
     assert.equal(params.get("seed"), post.slug);
   }
+});
+
+test("фотографии статей о Китае не выбираются из корейского каталога", () => {
+  for (const post of blogAllPosts().filter((item) => item.kind === "article" && item.photos?.filters)) {
+    assert.equal(blogArticlePhotoParams(post, 6).get("country"), "china", post.slug);
+  }
+  const koreanPost = { slug: "future-korea", photos: { filters: { country: "korea", brand: "Hyundai" } } };
+  assert.equal(blogArticlePhotoParams(koreanPost, 6).get("country"), "korea");
+  assert.equal(blogArticlePhotoParams(koreanPost, 6).get("brand"), "Hyundai");
+  assert.equal(blogArticlePhotoParams({ slug: "no-photos" }), null);
+  assert.equal(blogListParams({ slug: "general", filters: { brand: "BMW" } }, 6).has("country"), false);
 });
 
 // Дата в разметке (`dateModified`) и в карте сайта — настоящее изменение набора машин,
@@ -326,6 +337,7 @@ test("правило отбора переводится и в запрос к �
   assert.equal(catalog.get("range"), "От 500 км");
   assert.equal(catalog.get("priceTo"), "30000");
   assert.equal(catalog.get("mileage"), "до 50 000 км");
+  assert.equal(new URLSearchParams(blogCatalogHref({ filters: { country: "china" } }).split("?")[1]).get("country"), "china");
 });
 
 // Черновик — способ посмотреть материал до того, как его есть чем наполнить.

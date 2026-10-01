@@ -20,7 +20,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { BLOG_POSTS, blogListParams } from "../../src/blog-posts.js";
+import { BLOG_POSTS, blogArticlePhotoParams, blogListParams } from "../../src/blog-posts.js";
 import { socialPhotoHref } from "../../src/photo-source.js";
 
 const run = promisify(execFile);
@@ -127,7 +127,8 @@ export async function blogCover(slug, { site = "abcars.by", apiBase = "http://12
   if (!filters) return null;
   // Берём несколько машин подряд: если кадр первой не скачается, обложкой станет
   // следующая, а не пустое место.
-  const cars = await pickCars(apiBase, String(blogListParams({ slug, filters }, 5)), 5);
+  const query = post.kind === "article" ? blogArticlePhotoParams(post, 5) : blogListParams({ slug, filters }, 5);
+  const cars = await pickCars(apiBase, String(query), 5);
   const photos = cars.map(carPhoto).filter(Boolean);
   if (!photos.length) return null;
   const photo = photos[0];

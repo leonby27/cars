@@ -5308,14 +5308,14 @@ html[data-theme="dark"] #root .load-more {
 .contact-method-brand-image {
   position: absolute;
   top: 28px;
-  right: 28px;
-  width: 92px;
-  height: 92px;
+  right: 36px;
+  width: 82px;
+  height: 82px;
   object-fit: contain;
 }
 .contact-method-brand-image-viber {
-  width: 102px;
-  height: 102px;
+  width: 90px;
+  height: 90px;
 }
 @media (max-width: 980px) {
   .contact-method-grid {
@@ -7097,7 +7097,7 @@ html[data-theme="dark"] #root .load-more {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 800;
   line-height: 1.25;
 }
@@ -10903,13 +10903,13 @@ html[data-theme="dark"] #root .spec-search,
   }
   .contact-method-brand-image {
     top: 20px;
-    right: 20px;
-    width: 74px;
-    height: 74px;
+    right: 26px;
+    width: 66px;
+    height: 66px;
   }
   .contact-method-brand-image-viber {
-    width: 82px;
-    height: 82px;
+    width: 74px;
+    height: 74px;
   }
   .contact-socials {
     margin-bottom: 54px;
@@ -21184,15 +21184,12 @@ html[data-theme="dark"] .review-car-cta:hover {
 .service-contact-option:focus-visible {
   background: var(--surface);
 }
-.service-contact-option > span {
-  width: 50px;
-  height: 50px;
-  display: grid;
-  place-items: center;
-  margin-bottom: 35px;
-  border-radius: 50%;
-  background: var(--panel);
-  color: var(--accent-dark);
+.service-contact-option-illustration {
+  width: 72px;
+  height: 72px;
+  margin-left: -9px;
+  margin-bottom: 14px;
+  object-fit: contain;
 }
 .service-contact-option strong {
   font-size: 23px;
@@ -21227,7 +21224,12 @@ html[data-theme="dark"] .review-car-cta:hover {
     min-height: 220px;
     padding: 22px;
   }
-  .service-contact-option > span { margin-bottom: 28px; }
+  .service-contact-option-illustration {
+    width: 68px;
+    height: 68px;
+    margin-left: -8px;
+    margin-bottom: 12px;
+  }
   .service-contact-option strong { font-size: 20px; }
 }
 @media (max-width: 700px) {
@@ -21278,8 +21280,10 @@ html[data-theme="dark"] .review-car-cta:hover {
     padding: 22px;
     border-radius: calc(20px * var(--corner-scale));
   }
-  .service-contact-option > span {
-    margin-bottom: 24px;
+  .service-contact-option-illustration {
+    width: 64px;
+    height: 64px;
+    margin-left: -8px;
   }
 }
 
@@ -23690,15 +23694,69 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   object-fit: cover;
   object-position: center;
 }
-.service-scroll-video { opacity: 0; }
+.service-scroll-video {
+  opacity: 0;
+  transition: opacity 850ms ease;
+}
 .service-video-ready .service-scroll-video { opacity: 1; }
-/* The initial and slow-network layout is an ordinary single-screen hero.
-   Only a fully prepared film may opt into the longer pinned sequence. */
-.service-video-story:not(.service-video-ready) { height: 100svh; }
-.service-video-story:not(.service-video-ready) .service-video-sticky { position: relative; }
-.service-video-story:not(.service-video-ready) .service-video-copy-panel-secondary,
-.service-video-story:not(.service-video-ready) .service-video-scroll-cue { display: none; }
-.service-dark-intro .service-video-story:not(.service-video-ready) + .info-proof-section {
+.service-scroll-media::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: #030405;
+  opacity: .88;
+  pointer-events: none;
+  transition: opacity 850ms ease;
+}
+.service-video-ready .service-scroll-media::after,
+.service-video-static .service-scroll-media::after,
+.service-video-failed .service-scroll-media::after { opacity: 0; }
+.service-video-loader {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: min(180px, 45vw);
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 22%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -50%);
+  transition: opacity 220ms ease, visibility 0s linear 220ms;
+}
+.service-video-loader-visible .service-video-loader {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 220ms ease, visibility 0s;
+}
+.service-video-loader > span {
+  display: block;
+  width: var(--service-video-progress, 38%);
+  height: 100%;
+  border-radius: inherit;
+  background: #ee1c25;
+  animation: service-video-loading 1.35s ease-in-out infinite alternate;
+}
+.service-video-progress-known .service-video-loader > span {
+  animation: none;
+  transition: width 180ms ease;
+}
+.service-video-ready .service-video-loader,
+.service-video-static .service-video-loader,
+.service-video-failed .service-video-loader { opacity: 0; visibility: hidden; }
+@keyframes service-video-loading {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(260%); }
+}
+/* Explicit static preferences or a load error keep the short ordinary hero. */
+.service-video-story.service-video-static { height: 100svh; }
+.service-video-story.service-video-static .service-video-sticky { position: relative; }
+.service-video-story.service-video-static .service-video-copy-panel-secondary,
+.service-video-story.service-video-static .service-video-scroll-cue { display: none; }
+.service-dark-intro .service-video-story.service-video-static + .info-proof-section {
   margin-top: 0;
 }
 .service-video-copy {
@@ -23899,6 +23957,10 @@ html[data-theme="light"] .service-video-shell.service-dark-region-active > .site
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .service-scroll-video,
+  .service-scroll-media::after,
+  .service-video-loader { transition: none; }
+  .service-video-loader > span { animation: none; }
   .service-dark-intro .info-proof-icon-art img {
     transition: none;
   }
