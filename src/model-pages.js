@@ -1,3 +1,5 @@
+import {SITE} from './site-profile.js';
+import {russianEditorialText} from './markets/ru-content.js';
 import { rewriteEvDutyCopyDeep } from "./ev-duty-copy.js";
 import { modelLandingPath } from "./catalog-landings.js";
 import { siteAdjectiveCapital, siteCountriesGenitive, siteFromPhrase } from "./origin.js";
@@ -6361,12 +6363,12 @@ const MODEL_PAGES_SOURCE = [
 // Пока действует льгота, тексты отдаются слово в слово. Когда квота кончится,
 // фразы про нулевую пошлину переписываются под новую ставку — иначе страницы
 // обещали бы то, чего в расчёте цены уже нет.
-export const MODELS_INDEX = rewriteEvDutyCopyDeep(MODELS_INDEX_SOURCE);
+export const MODELS_INDEX = (SITE.market==='RU'?russianEditorialText(MODELS_INDEX_SOURCE):rewriteEvDutyCopyDeep(MODELS_INDEX_SOURCE));
 // С 25.09.2026 обзор живёт на каталожной странице модели `/catalog/<марка>/<модель>`
 // (см. src/catalog-landings.js, modelLandingPath): `path` у каждого обзора — новый
 // адрес, а прежний `/models/<slug>` остаётся в `legacyPath` и уводит на новый
 // перебросом. Остальной код ссылается на `page.path` и переезжает вместе с ним.
-export const MODEL_PAGES = rewriteEvDutyCopyDeep(MODEL_PAGES_SOURCE).map((page) => ({
+export const MODEL_PAGES = (SITE.market==='RU'?russianEditorialText(MODEL_PAGES_SOURCE):rewriteEvDutyCopyDeep(MODEL_PAGES_SOURCE)).map((page) => ({
   ...page,
   legacyPath: page.path,
   path: modelLandingPath(page.brand, page.model) || page.path,

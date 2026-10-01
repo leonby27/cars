@@ -1,3 +1,6 @@
+import {SITE} from './site-profile.js';
+import {russianEditorialText} from './markets/ru-content.js';
+import {russianWording} from './markets/ru-editorial.js';
 import { isEvQuotaExhausted } from "./ev-quota.js";
 import { modelSlug } from "./model-slug.js";
 import { fromPhrase, originFromParam, originForSource, originOf, siteAdjective, siteAdjectiveCapital, siteFromPhrase, siteMarketplacesPhrase, siteWording, ORIGINS } from "./origin.js";
@@ -1802,7 +1805,16 @@ const withSeo = (landing) => {
   return { ...prepared, seoTitle: landingSeoTitle(prepared) };
 };
 
-export const CATALOG_LANDINGS = Object.freeze(CATALOG_LANDINGS_SOURCE.map(withSeo));
+function russianLandingContent(landing) {
+ const localized={...russianWording(landing),notes:russianEditorialText(landing.notes)};
+ if(landing.kind!=='price')return localized;
+ const amount=landing.landedMax*100;
+ const budget=new Intl.NumberFormat('ru-RU').format(amount)+' ₽';
+ const replaceBudget=value=>typeof value==='string'?value.replace(/(?:\d[\d \u00a0]*\s*\$|\$\s*\d[\d \u00a0]*)/g,budget):Array.isArray(value)?value.map(replaceBudget):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,replaceBudget(v)])):value;
+ return {...replaceBudget(localized),seoDescription:`Автомобили с пробегом ${siteFromPhrase()} до ${budget} с доставкой до Москвы и оформлением. Предварительный расчёт по российским правилам ввоза.`,sourceSeoDescription:`Автомобили с доставкой до Москвы в бюджете до ${budget}.`,notes:[`В этой подборке — автомобили, предварительная стоимость которых с доставкой до Москвы и оформлением укладывается в ${budget}.`,...localized.notes.slice(1).filter(note=>!/доллар|тысяч|\$/.test(note))],name:`${landing.powertrain?"Бензиновые автомобили":"Автомобили"} до ${budget}`,h1:`${landing.powertrain?"Бензиновые автомобили":"Автомобили"} из Китая и Кореи до ${budget}`,landedMax:amount,path:`/catalog/${landing.powertrain?'petrol-':''}do-${amount}-rub`,slug:`${landing.powertrain?'petrol-':''}do-${amount}-rub`};
+}
+
+export const CATALOG_LANDINGS = Object.freeze(CATALOG_LANDINGS_SOURCE.map(withSeo).map(landing=>SITE.market==='RU'?russianLandingContent(landing):landing));
 
 // Главная и общий каталог: те же правила, страна — сразу все, откуда возим («из Китая
 // и Кореи», «китайские и корейские автомобили»).

@@ -14,6 +14,7 @@ if(SITE.id!=='abdrive')throw new Error('ABDrive server requires SITE_ID=abdrive'
 const identity=await sitePool.query('SELECT site_id FROM site_identity WHERE singleton');
 if(identity.rows[0]?.site_id!=='abdrive')throw new Error('Wrong private site database');
 const catalog=createRussianCatalog(catalogPool);
+catalog.warmPrices().catch(error=>console.error('[abdrive] price index warmup failed',error.code||error.message));
 let privacyText=null;
 if(process.env.ABDRIVE_PRIVACY_FILE){
  try{privacyText=await readFile(process.env.ABDRIVE_PRIVACY_FILE,'utf8');}
@@ -22,7 +23,7 @@ if(process.env.ABDRIVE_PRIVACY_FILE){
 const intake=intakeConfig(process.env,privacyText);
 const consentVersion=intake.consentVersion;
 const frontend=await createFrontend({buildDirectory:resolve(process.env.ABDRIVE_BUILD_DIR||'dist-abdrive'),catalog,site:SITE,privacyText,leadEnabled:intake.enabled});
-const server=http.createServer(createAbdriveHandler({catalog,siteDatabase:sitePool,site:SITE,consentVersion,frontend}));
+const server=http.createServer(createAbdriveHandler({catalog,siteDatabase:sitePool,site:SITE,consentVersion,registrationConsentVersion:privacyText?.trim()?process.env.ABDRIVE_CONSENT_VERSION:null,frontend}));
 let notifying=false;
 const timer=setInterval(async()=>{
  if(notifying)return;notifying=true;

@@ -41,7 +41,7 @@ test('BY keeps its company, six tools and journal; no RU content fallback or ena
   assert.deepEqual(contentForSite(ru, { by:BLOG_POSTS, ru:[] }), []);
   assert.equal(hasSiteService(ru, 'quota'), false);
   assert.equal(hasSiteService(by, 'quota'), true);
-  assert.equal(ru.flags.BLOG_ENABLED.local, false);
+  assert.equal(ru.flags.BLOG_ENABLED.local, true);
 });
 
 test('RU profile is admitted without waiting for feature completeness', () => {

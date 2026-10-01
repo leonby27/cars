@@ -1,3 +1,4 @@
+import { RU_BLOG_SLUGS, russianPost } from './markets/ru-editorial.js';
 import { SITE } from "./site-profile.js";
 import { contentForSite } from "../config/sites/index.mjs";
 
@@ -40,11 +41,11 @@ const reviewPath = (ref) => {
 export const BLOG_INDEX = Object.freeze({
   path: "/blog",
   name: "Журнал",
-  h1: "Журнал abcars.by",
+  h1: SITE.market === "RU" ? "Журнал ABDrive" : "Журнал abcars.by",
   // Заголовок и описание намеренно шире подборок: в журнале будут ещё статьи, новости,
   // разборы правил ввоза и лайфхаки, и переписывать метаданные под каждый новый раздел
   // не придётся. Слова, по которым сюда приходят, — «авто из Китая» и «Беларусь».
-  seoTitle: `Журнал abcars.by: авто ${siteFromPhrase()} — подборки, статьи, новости`,
+  seoTitle: `Журнал ${SITE.company.brand}: авто ${siteFromPhrase()} — подборки, статьи, новости`,
   seoDescription: `Всё об автомобилях ${siteFromPhrase()} в одном месте: подборки под задачу и бюджет, разборы и статьи, новости рынка, правила ввоза и растаможки в Беларуси. Цифры и списки машин обновляются вместе с каталогом.`,
   lead: "Подборки, статьи, новости и другое актуальное и интересное",
   listTitle: "Все материалы",
@@ -1598,7 +1599,7 @@ const BY_BLOG_POSTS = Object.freeze([
 ]);
 
 // A missing regional edition is empty, never a copy of Belarusian publications.
-export const BLOG_POSTS = contentForSite(SITE, { by: BY_BLOG_POSTS }) || Object.freeze([]);
+export const BLOG_POSTS = contentForSite(SITE, { by: BY_BLOG_POSTS, ru: BY_BLOG_POSTS.filter(post=>RU_BLOG_SLUGS.includes(post.slug)).map(russianPost) }) || Object.freeze([]);
 
 const RUBRIC_BY_SLUG = new Map(BLOG_RUBRICS.map((rubric) => [rubric.slug, rubric]));
 
@@ -2278,6 +2279,6 @@ export const blogHighlight = (post, car) => {
 export const blogPostStats = ({ total = null, priceFromUsd = null, highlight = null } = {}) =>
   [
     total ? { value: groups(total), label: plural(total, "автомобиль в наличии", "автомобиля в наличии", "автомобилей в наличии") } : null,
-    priceFromUsd ? { value: `от ${groups(priceFromUsd)} $`, label: "с доставкой и оформлением в Минске" } : null,
+    priceFromUsd ? { value: `от ${groups(priceFromUsd)} ${SITE.market === "RU" ? "₽" : "$"}`, label: SITE.market === "RU" ? "с доставкой и оформлением в Москве" : "с доставкой и оформлением в Минске" } : null,
     highlight,
   ].filter(Boolean);

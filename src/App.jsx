@@ -1,7 +1,14 @@
+import {estimateRussianDelivery} from './markets/ru-delivery.js';
+import {RU_PRICING} from '../config/ru-pricing.mjs';
+import {russianCarFaq} from './markets/ru-car-faq.js';
+import {russianEditorialText} from './markets/ru-content.js';
+import {russianPriceRows, russianPriceNote} from './markets/ru-price-details.js';
+import { RussianCustomsCalculator } from './markets/ru-calculators.jsx';
 import { normalizeRussianPhone } from "./markets/contact.js";
 import { SITE } from "./site-profile.js";
 import { IS_RU, marketEstimate, RU_ORDER_STEPS, RU_FAQ, RU_FAQ_LEAD, ruPageSeo } from "./markets/interface.js";
-import { RussianPriceDetails, RussianServicePage, RussianPrivacyPage } from "./markets/ru-sections.jsx";
+import { russianOfferPrice } from "./markets/ru-price-format.js";
+import { RussianPrivacyPage } from "./markets/ru-sections.jsx";
 import { prepareServiceVideo } from "./service-video-loading.js";
 import { readCatalogFallback } from "./catalog-fallback.js";
 import { withoutTrackingParams } from "./tracking-params.js";
@@ -61,6 +68,7 @@ import { conditionGradeMeta, worstConditionGrade } from "./condition-grade.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
 import { COMPANY } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
+import { RU_SERVICE_PROOF, RU_PURCHASE_FLOW_STEPS, RU_ABOUT_PRINCIPLES, RU_SERVICE_FAQ_GROUPS } from "./markets/ru-service-copy.js";
 import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EXAMPLE } from "./service-copy.js";
 import { InspectionReport } from "./inspection-report.jsx";
 import { CALC_CURRENCIES, CALC_KINDS, TOOL_PAGES, calcShareSearch, calcStateFromSearch, calcYears, customsExample, deliveryStages, deliveryStagesKorea, dutyRateTables, findToolPage, toolPageStats, toolUpdatedLabel } from "./tool-pages.js";
@@ -88,11 +96,12 @@ import { missingFavoriteIsExpired } from "./favorite-cars.js";
 const AnalyticsPage = lazy(() => import("./analytics-entry.jsx").then((m) => ({ default: m.AnalyticsPage })));
 
 const estimateLandedCost = IS_RU ? marketEstimate : estimateBelarusCost;
+const catalogPrice = car => IS_RU ? car?.offer?.totalAmount ?? null : estimateLandedCost(car).totalUsd;
 const HOME_H1_PARTS = IS_RU ? BY_HOME_H1_PARTS.map((part,index) => index === BY_HOME_H1_PARTS.length-1 ? {...part,text:" с\u00a0доставкой в\u00a0Россию"} : part) : BY_HOME_H1_PARTS;
 const HOME_FAQ = IS_RU ? RU_FAQ : BY_HOME_FAQ;
 const HOME_FAQ_LEAD = IS_RU ? RU_FAQ_LEAD : BY_HOME_FAQ_LEAD;
 const HOME_ORDER_STEPS = IS_RU ? RU_ORDER_STEPS : BY_HOME_ORDER_STEPS;
-const accountEnabled = !IS_RU;
+const accountEnabled = true;
 const leadEnabled = () => !IS_RU || Boolean(window.__boot?.leadEnabled);
 
 const numberFormatter = new Intl.NumberFormat("ru-RU");
@@ -190,6 +199,7 @@ const useAvailability = () => useContext(AvailabilityContext) || EMPTY_AVAILABIL
 const CURRENCIES = IS_RU ? [["RUB", "₽"]] : [["USD", "$"], ["BYN", "BYN"], ["RUB", "₽"]];
 const toDisplayCurrency = (usd, currency) => (currency === "BYN" ? usdToByn(usd) : currency === "RUB" ? usdToRub(usd) : usd);
 const money = (usd, currency) => (currency === "BYN" ? `${number(toDisplayCurrency(usd, currency))} BYN` : currency === "RUB" ? `${number(toDisplayCurrency(usd, currency))} ₽` : `$${number(usd)}`);
+const catalogMoney = (amount, currency) => IS_RU ? `${number(amount)} ₽` : money(amount,currency);
 const approximateMoney = (low, high, currency) => `≈ ${money(Math.round((low + high) / 2), currency)}`;
 // Знак белорусского рубля (постановление Нацбанка № 25 от 27.01.2026, в силе с 04.02.2026):
 // буква «Б» с горизонтальной чертой. В Юникоде знака пока нет, поэтому он рисуется
@@ -301,7 +311,7 @@ const appendYearRange = (query, yearMin, yearMax) => {
 };
 // Цена задаётся диапазоном: одна и та же лестница $5 000 от $15 000 до $100 000
 // работает и нижней, и верхней границей, каждая независимо необязательна.
-const priceSteps = Array.from({ length: 18 }, (_, step) => String(15000 + step * 5000));
+const priceSteps = Array.from({ length: IS_RU ? 19 : 18 }, (_, step) => String(IS_RU ? 1000000 + step * 500000 : 15000 + step * 5000));
 const priceMinOptions = [ANY_PRICE_MIN, ...priceSteps];
 const priceMaxOptions = [ANY_PRICE_MAX, ...priceSteps];
 // Шаг сгущается там, где машин больше всего: три прежние ступени делили каталог
@@ -339,8 +349,8 @@ const engineRangeBounds = (label) => (!label || label === ANY_ENGINE ? null : en
 const powerRangeBounds = (label) => (!label || label === ANY_POWER ? null : powerBounds(label));
 const priceBound = (value, anyLabel) => (!value || value === anyLabel ? null : Number(value));
 // Половинки узкие, а порядок и так читается по паре — префиксы «от»/«до» не печатаем.
-const priceMinLabel = (value, currency) => (priceBound(value, ANY_PRICE_MIN) === null ? ANY_PRICE_MIN : money(Number(value), currency));
-const priceMaxLabel = (value, currency) => (priceBound(value, ANY_PRICE_MAX) === null ? ANY_PRICE_MAX : money(Number(value), currency));
+const priceMinLabel = (value, currency) => (priceBound(value, ANY_PRICE_MIN) === null ? ANY_PRICE_MIN : (IS_RU ? `${number(value)} ₽` : money(Number(value), currency)));
+const priceMaxLabel = (value, currency) => (priceBound(value, ANY_PRICE_MAX) === null ? ANY_PRICE_MAX : (IS_RU ? `${number(value)} ₽` : money(Number(value), currency)));
 // Верхний список не показывает суммы ниже выбранного «от», чтобы диапазон нельзя было вывернуть.
 const priceMaxChoices = (priceMin) => {
   const min = priceBound(priceMin, ANY_PRICE_MIN);
@@ -397,7 +407,7 @@ const translateClaims = (value) => {
 // Из подписи фильтра берём число; дробное тоже («До 3.5 с» — умный поиск умеет).
 const filterNumber = (value) => Number(String(value).replace(/[^\d.]/g, "")) || 0;
 const matchesPriceRange = (car, priceMin, priceMax) => {
-  const total = estimateLandedCost(car).totalUsd;
+  const total = catalogPrice(car);
   const min = priceBound(priceMin, ANY_PRICE_MIN);
   const max = priceBound(priceMax, ANY_PRICE_MAX);
   return (min === null || total >= min) && (max === null || total <= max);
@@ -820,7 +830,7 @@ function useRoute(user) {
     }
     const currentPath = appPath(window.location.pathname);
     const targetPath = appPath(target.pathname);
-    const keepScrollPosition = preserveScroll || (!IS_RU && preservesAuthScroll(targetPath, user));
+    const keepScrollPosition = preserveScroll || preservesAuthScroll(targetPath, user);
     const targetUrl = `${basePath}${target.pathname}${target.search}${target.hash}`;
     dropScrollSave();
     if (replace) {
@@ -1017,7 +1027,7 @@ function PriceChangeMark({ car }) {
 function TotalPrice({ car, price, currency, className = "", approximate = true, compactApproximation = false }) {
   const boxRef = useRef(null);
   const lineRef = useRef(null);
-  const text = IS_RU ? (car.offer?.status === "estimated" ? `≈ ${number(car.offer.totalAmount)} ₽` : "Расчёт уточняется") : `${approximate ? "≈ " : ""}${money(price.totalUsd, currency)}`;
+  const text = IS_RU ? russianOfferPrice(car.offer) : `${approximate ? "≈ " : ""}${money(price.totalUsd, currency)}`;
   useLayoutEffect(() => {
     const box = boxRef.current;
     const line = lineRef.current;
@@ -1737,7 +1747,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
                 <AppLink href="/catalog" navigate={navigate} className={path === "/catalog" || path.startsWith("/catalog/") ? "active" : ""} aria-current={path === "/catalog" ? "page" : undefined}>Автомобили</AppLink>
                 {BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate} className={path === BLOG_INDEX.path || path.startsWith(`${BLOG_INDEX.path}/`) ? "active" : ""} aria-current={path === BLOG_INDEX.path ? "page" : undefined}>{BLOG_INDEX.name}</AppLink>}
                 <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
-                {!IS_RU && <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>}
+                {<AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>}
                 {COMPANY.phone && <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>}
                 {/* На узких экранах кнопке «Мои поиски» в шапке не хватает места,
                     поэтому там она живёт в этом меню; на широких — прячется, чтобы
@@ -1768,7 +1778,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             className={`icon-label searches-link${path === "/searches" ? " selected" : ""}`}
             aria-label="Мои поиски"
             aria-current={path === "/searches" ? "page" : undefined}
-            onClick={() => ((user || IS_RU) ? navigate("/searches") : navigate("/register", { replace:true, preserveScroll:true }))}
+            onClick={() => (user ? navigate("/searches") : navigate("/register", { replace:true, preserveScroll:true }))}
           >
             <BookmarkSimple size={21} weight={savedSearchesCount ? "fill" : "bold"} />
             {savedSearchesCount > 0 && <b>{savedSearchesCount}</b>}
@@ -1780,7 +1790,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             className={`icon-label favorites-link${path === "/favorites" ? " selected" : ""}`}
             aria-label="Избранное"
             aria-current={path === "/favorites" ? "page" : undefined}
-            onClick={() => ((user || IS_RU) ? navigate("/favorites") : navigate("/register", { replace:true, preserveScroll:true }))}
+            onClick={() => (user ? navigate("/favorites") : navigate("/register", { replace:true, preserveScroll:true }))}
           >
             <Heart size={21} weight={favoritesCount ? "fill" : "bold"} />
             {favoritesCount > 0 && <b>{favoritesCount}</b>}
@@ -2497,7 +2507,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
     </div>
   );
 
-  const priceRange = (className = "") => IS_RU ? <span className="market-filter-note">Стоимость до Москвы уточняется для выбранного авто</span> : (
+  const priceRange = (className = "") => (
     <div className={`filter-range-pair${className ? ` ${className}` : ""}`}>
       <SelectField label="Цена от" value={values.priceMin} onChange={actions.priceMin} options={priceMinOptions} formatOption={(value) => priceMinLabel(value, currency)} />
       <SelectField label="Цена до" value={values.priceMax} onChange={actions.priceMax} options={priceMaxChoices(values.priceMin)} formatOption={(value) => priceMaxLabel(value, currency)} />
@@ -2577,7 +2587,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
     ? `${yearBound(values.yearMin, ANY_YEAR_MIN) ? `от ${values.yearMin}` : ""}${yearBound(values.yearMin, ANY_YEAR_MIN) && yearBound(values.yearMax, ANY_YEAR_MAX) ? " " : ""}${yearBound(values.yearMax, ANY_YEAR_MAX) ? `до ${values.yearMax}` : ""}`
     : "Год";
   const priceChip = hasPriceRange(values.priceMin, values.priceMax)
-    ? `${priceBound(values.priceMin, ANY_PRICE_MIN) !== null ? `от ${money(Number(values.priceMin), currency)}` : ""}${priceBound(values.priceMin, ANY_PRICE_MIN) !== null && priceBound(values.priceMax, ANY_PRICE_MAX) !== null ? " " : ""}${priceBound(values.priceMax, ANY_PRICE_MAX) !== null ? `до ${money(Number(values.priceMax), currency)}` : ""}`
+    ? `${priceBound(values.priceMin, ANY_PRICE_MIN) !== null ? `от ${priceMinLabel(values.priceMin, currency)}` : ""}${priceBound(values.priceMin, ANY_PRICE_MIN) !== null && priceBound(values.priceMax, ANY_PRICE_MAX) !== null ? " " : ""}${priceBound(values.priceMax, ANY_PRICE_MAX) !== null ? `до ${priceMaxLabel(values.priceMax, currency)}` : ""}`
     : "Цена";
   const mileageChip = values.mileage !== ANY_MILEAGE ? values.mileage : "Пробег";
   // Всё выбранное одной лентой: цена, год и пробег впереди, за ними остальные поля.
@@ -2652,7 +2662,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
                 </button>
               </span>
             ))}
-            {!IS_RU && !hasPriceRange(values.priceMin, values.priceMax) && (
+            {!hasPriceRange(values.priceMin, values.priceMax) && (
               <button type="button" className="filter-chip" onClick={() => setSheet("field:price")}>Цена</button>
             )}
             {!hasYearRange(values.yearMin, values.yearMax) && (
@@ -3284,9 +3294,9 @@ const savedSearchChips = (filters) => {
   else if (yearTo !== null) chips.push(`до ${yearTo} г.`);
   const priceFrom = priceBound(filters.priceMin, ANY_PRICE_MIN);
   const priceTo = priceBound(filters.priceMax, ANY_PRICE_MAX);
-  if (priceFrom !== null && priceTo !== null) chips.push(`$${number(priceFrom)}–$${number(priceTo)}`);
-  else if (priceFrom !== null) chips.push(`от $${number(priceFrom)}`);
-  else if (priceTo !== null) chips.push(`до $${number(priceTo)}`);
+  if (priceFrom !== null && priceTo !== null) chips.push(IS_RU ? `${number(priceFrom)}–${number(priceTo)} ₽` : `$${number(priceFrom)}–$${number(priceTo)}`);
+  else if (priceFrom !== null) chips.push(IS_RU ? `от ${number(priceFrom)} ₽` : `от $${number(priceFrom)}`);
+  else if (priceTo !== null) chips.push(IS_RU ? `до ${number(priceTo)} ₽` : `до $${number(priceTo)}`);
   if (filters.mileage !== ANY_MILEAGE) chips.push(filters.mileage);
   if (countryKey(filters.country)) chips.push(fromPhrase(countryKey(filters.country)));
   if (filters.drive !== ANY_DRIVE) chips.push(`${filters.drive} привод`);
@@ -3432,7 +3442,7 @@ const HERO_SORT_OPTIONS = [
   { value: "range_desc", label: "С наибольшим запасом хода" },
   { value: "year_desc", label: "Новые по году" },
   { value: "year_asc", label: "Старые по году" },
- ].filter(option => !IS_RU || !option.value.startsWith("price"));
+ ];
 
 function HeroSearch({ value, onChange, navigate }) {
   const fieldRef = useRef(null);
@@ -3795,7 +3805,7 @@ function SimilarCars({ car, cars, onOpenCar }) {
     () =>
       cars
         .filter((candidate) => !sameListing(candidate.id, car.id) && String(candidate.brand) === String(car.brand) && String(candidate.model) === String(car.model))
-        .sort((left, right) => (Number(estimateLandedCost(left).totalUsd) || 0) - (Number(estimateLandedCost(right).totalUsd) || 0) || String(left.id).localeCompare(String(right.id))),
+        .sort((left, right) => (Number(catalogPrice(left)) || 0) - (Number(catalogPrice(right)) || 0) || String(left.id).localeCompare(String(right.id))),
     [car, cars, similarPricingOn],
   );
   const sameModelFromCatalog = useSameModelCars(car, sameModelOnly);
@@ -3805,7 +3815,7 @@ function SimilarCars({ car, cars, onOpenCar }) {
     () =>
       (sameModelFromCatalog.cars || sameModelLoaded)
         .slice()
-        .sort((left, right) => (Number(estimateLandedCost(left).totalUsd) || 0) - (Number(estimateLandedCost(right).totalUsd) || 0) || String(left.id).localeCompare(String(right.id))),
+        .sort((left, right) => (Number(catalogPrice(left)) || 0) - (Number(catalogPrice(right)) || 0) || String(left.id).localeCompare(String(right.id))),
     [sameModelFromCatalog.cars, sameModelLoaded, similarPricingOn],
   );
   // Переключателя нет, когда машина в каталоге одна такая: кнопка «Эта модель»
@@ -4093,7 +4103,7 @@ function ModelPagePromo({ navigate }) {
       </div>
       <div className="model-page-promo-copy">
         <strong>Как заказать авто {siteFromPhrase()}</strong>
-        <p>Сначала подбор, проверка автомобиля и понятная смета, только потом решение, договор и оплата. Дальше машину выкупают, доставляют и выдают в Минске.</p>
+        <p>Сначала подбор, проверка автомобиля и понятная смета, только потом решение, договор и оплата. Дальше машину выкупают, доставляют и выдают {IS_RU ? "в Москве" : "в Минске"}.</p>
         <AppLink className="primary" href="/how-it-works" navigate={navigate}>
           О сервисе <ArrowRight size={18} />
         </AppLink>
@@ -4350,14 +4360,14 @@ function useModelText(slug) {
 /* Под выдачей на странице модели: сводка по живым цифрам, обзор (если написан),
    вопросы и ссылки. Только на первой странице списка — дальше только ссылки. */
 function ModelLandingNotes({ landing, page, navigate }) {
-  if (IS_RU) return null;
   const { facts, review, links, name } = landing;
   const text = useModelText(review?.slug || null);
   // Цифры ещё едут (переход на другую модель): блок появится вместе с ними.
   if (!facts) return null;
   if (page > 1) return <ModelPageWays model={landing} links={links} navigate={navigate} className="model-page-ways" />;
-  const autoText = modelAutoText({ name, facts });
-  const faq = modelFaq({ name, facts, review: text ? { faq: text.faq } : null });
+  const autoText = IS_RU ? russianEditorialText(modelAutoText({ name, facts })) : modelAutoText({ name, facts });
+  const rawFaq = modelFaq({ name, facts, review: text ? { faq: text.faq } : null });
+  const faq = IS_RU ? russianEditorialText(rawFaq) : rawFaq;
   const sections = text?.sections || [];
   return (
     <section className="catalog-landing-notes catalog-landing-article model-landing-notes" aria-labelledby="model-landing-notes-title">
@@ -4402,7 +4412,7 @@ function ModelLandingNotes({ landing, page, navigate }) {
                       return (
                         <div key={column}>
                           <dt>{column}</dt>
-                          <dd>{yuanToUsdAbout(value) || value}</dd>
+                          <dd>{IS_RU ? value : yuanToUsdAbout(value) || value}</dd>
                         </div>
                       );
                     })}
@@ -4646,7 +4656,7 @@ const initialBrandCounts = () => {
    выбирает по бюджету, а не по марке, попадал туда только через общий каталог. */
 const HomePriceBands = memo(function HomePriceBands({ navigate }) {
   // Карточка «до 40 000 $» с главной убрана 25.09.2026, сам раздел каталога остался.
-  const bands = CATALOG_LANDINGS.filter((landing) => landing.kind === "price" && !landing.powertrain && landing.landedMax <= 30000);
+  const bands = CATALOG_LANDINGS.filter((landing) => landing.kind === "price" && !landing.powertrain && landing.landedMax <= (IS_RU ? 3000000 : 30000));
   // Подпись карточки — самая популярная модель, у которой самая доступная машина стоит
   // между прошлой ценой и этой: у каждой карточки своя модель, а не одна Haval H6 на все
   // четыре. Модели — те же, что в «Популярных моделях» (встроены в страницу).
@@ -4655,7 +4665,7 @@ const HomePriceBands = memo(function HomePriceBands({ navigate }) {
   return (
     // С 25.09.2026 — карточки как у полосы доверия, но без картинок; заголовок «По цене
     // до Минска» убран.
-    <nav className="home-price-bands page-width" aria-label="Автомобили по цене до Минска">
+    <nav className="home-price-bands page-width" aria-label={IS_RU ? "Автомобили по цене до Москвы" : "Автомобили по цене до Минска"}>
       {bands.map((band, index) => {
         const floor = index ? bands[index - 1].landedMax : 0;
         const example = models.find((item) => item.priceFrom > floor && item.priceFrom <= band.landedMax);
@@ -4664,7 +4674,7 @@ const HomePriceBands = memo(function HomePriceBands({ navigate }) {
             {/* «Б/у авто» вместо «Автомобили» — той же длины, но со словами, которыми ищут
                 (26.09.2026): название самого раздела каталога не меняется. */}
             <b>{band.name.replace(/^Автомобили/, "Б/у авто")}</b>
-            <small>{example ? `${example.name} и другие` : "С доставкой до Минска"}</small>
+            <small>{example ? `${example.name} и другие` : IS_RU ? "С доставкой до Москвы" : "С доставкой до Минска"}</small>
           </AppLink>
         );
       })}
@@ -5428,7 +5438,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           const modelSet = new Set(parsed.models);
           // Итог «до Минска» есть не у всех статических карточек — для фильтра
           // по цене досчитываем его так же, как это делает каталог.
-          const landedUsd = (car) => Number(car.estimatedTotalUsd) || estimateLandedCost(car).totalUsd;
+          const landedUsd = (car) => IS_RU ? catalogPrice(car) : Number(car.estimatedTotalUsd) || catalogPrice(car);
           // Свободный текст в запасном режиме отбирается здесь же, теми же правилами,
           // что и на сервере: каждое слово должно найтись в карточке.
           const words = searchTextWords(parsed.query);
@@ -5465,7 +5475,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           }
           // Карточки из статического каталога не всегда несут готовый итог «до Минска» —
           // для сортировки по цене досчитываем его так же, как избранное.
-          const sorted = heroSort === "default" ? varietyOrder(matches, seededRandom(heroShuffleSeed)) : sortCars(matches.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd })), heroSort);
+          const sorted = heroSort === "default" ? varietyOrder(matches, seededRandom(heroShuffleSeed)) : sortCars(matches.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: catalogPrice(car) })), heroSort);
           setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null });
         }
       } catch {
@@ -5687,7 +5697,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           )
         )}
       </section>
-      {!IS_RU && !searching && <HomePriceBands navigate={navigate} />}
+      {!searching && <HomePriceBands navigate={navigate} />}
       {!searching && <HomePopularModels navigate={navigate} />}
       {!searching && (
       <section className="trust-strip page-width">
@@ -5714,8 +5724,8 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             <Illustration src="/trust-strip/two-prices.png" previewWidth={192} sizes="96px" width="512" height="512" alt="" aria-hidden="true" loading="lazy" decoding="async" />
           </span>
           <p>
-            <b>{IS_RU ? "Согласование стоимости" : "Показываем обе цены"}</b>
-            <small>{IS_RU ? "Расчёт доставки до Москвы" : <>Цена {siteInPhrase()} — и до Минска</>}</small>
+            <b>Показываем обе цены</b>
+            <small><>Цена {siteInPhrase()} — и до {IS_RU ? "Москвы" : "Минска"}</></small>
           </p>
         </div>
         <div>
@@ -5969,7 +5979,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
       <div className="car-row-price">
         <TotalPrice car={car} price={price} currency={currency} />
         <span>{IS_RU ? "С доставкой до Москвы" : "Под ключ"}</span>
-        {!IS_RU && <><b>{number(sourcePriceOf(car))} {sourceCurrencySymbol(car)}</b><small>цена {inPhrase(carOrigin(car))}</small></>}
+        {(!IS_RU || car.offer?.rows?.find(row=>row.id==="purchase")?.amount) && <><b>{IS_RU ? `${number(car.offer.rows.find(row=>row.id==="purchase").amount)} ₽` : `${number(sourcePriceOf(car))} ${sourceCurrencySymbol(car)}`}</b><small>цена {inPhrase(carOrigin(car))}</small></>}
       </div>
     </article>
   );
@@ -6045,13 +6055,13 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
     { value: "range_desc", label: "С наибольшим запасом хода" },
     { value: "year_desc", label: "Новые по году" },
     { value: "year_asc", label: "Старые по году" },
-  ].filter(option => !IS_RU || !option.value.startsWith("price"));
+  ];
   const [sort, setSort] = useState("default");
   const selectedSort = sortOptions.find((option) => option.value === sort) || sortOptions[0];
   // «По добавлению» — родной порядок избранного: свежесохранённая машина сверху.
   // Карточки из API не несут готовый итог «до Минска» (каталог сортирует по нему
   // на сервере), поэтому для локальной сортировки по цене считаем его здесь.
-  const sortableCars = favoriteCars.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd }));
+  const sortableCars = favoriteCars.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: catalogPrice(car) }));
   const sortedCars = sort === "default" ? favoriteCars : sortCars(sortableCars, sort);
   // Вид выдачи общий с каталогом: переключили здесь — каталог откроется так же.
   // На телефоне плитка идёт двумя карточками в ряд (см. .mobile-cards-grid).
@@ -6076,7 +6086,7 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
       </div>
       <div className="catalog-heading">
         <div className="section-heading-title">
-          <h1>Избранное · {hasUnresolved ? favorites.size : favoriteCars.length}</h1>{IS_RU && <p>Сохраняется в этом браузере.</p>}
+          <h1>Избранное · {hasUnresolved ? favorites.size : favoriteCars.length}</h1>
           {quickViewToggle}
         </div>
         {favoriteCars.length > 0 && (
@@ -6220,7 +6230,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
       </div>
       <div className="catalog-heading">
         <div className="section-heading-title">
-          <h1>Мои поиски · {searches.length}</h1>{IS_RU && <p>Сохраняются в этом браузере.</p>}
+          <h1>Мои поиски · {searches.length}</h1>
           {quickViewToggle}
         </div>
       </div>
@@ -6270,7 +6280,7 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
                           aria-label={`Открыть ${car.title}`}
                         >
                           <HoverImagePreview car={car} className="saved-search-preview-image" />
-                          <span className="saved-search-preview-price"><ApproxSign /> {bynify(money(estimateLandedCost(car).totalUsd, currency))}</span>
+                          <span className="saved-search-preview-price">{IS_RU ? russianOfferPrice(car.offer) : <><ApproxSign /> {bynify(money(estimateLandedCost(car).totalUsd, currency))}</>}</span>
                         </article>
                       ))}
                       <button type="button" className="saved-search-more" onClick={() => openSearch(item)} aria-label={`Показать все ${number(preview.total)} авто по поиску «${item.title}»`}>
@@ -6427,7 +6437,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     { value: "range_desc", label: "С наибольшим запасом хода" },
     { value: "year_desc", label: "Новые по году" },
     { value: "year_asc", label: "Старые по году" },
-  ].filter(option => !IS_RU || !option.value.startsWith("price"));
+  ];
   // Страница марки или типа задаёт свой фильтр самим адресом. Параметры в адресе имеют
   // приоритет: с них работают ссылки из умного поиска и сохранённые поиски.
   const params = new URLSearchParams(window.location.search);
@@ -6704,7 +6714,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           .filter((car) => matchesSearchText(car, searchTextWords(filters.text)) && (filters.type === "Все" || car.type === filters.type) && (filters.brand === "Все марки" || car.brand === filters.brand) && matchesMulti(car.model, filters.model, ANY_MODEL) && matchesMulti(car.bodyType, filters.bodyType, ANY_BODY_TYPE) && matchesColorLabels(car.bodyColor, multiValues(filters.color, ANY_COLOR)) && matchesYears(car, filters.yearMin, filters.yearMax) && matchesMileageRange(car, filters.mileage) && matchesPriceRange(car, filters.priceMin, filters.priceMax) && matchesAdvancedFilters(car, filters) && matchesExclusions(car, filters))
           .map((car) => ({
             ...car,
-            estimatedTotalUsd: estimateLandedCost(car).totalUsd,
+            estimatedTotalUsd: catalogPrice(car),
           })),
         sort,
         shuffleSeed,
@@ -7117,8 +7127,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
 /* Ценовые полосы под страницей раздела: «до 15 000 $», «до 20 000 $» и дальше.
    Они собраны из всего каталога, и до 25.09.2026 на них вели ссылки только с общего
    каталога и указателя моделей — с разделов марок, кузовов и типов не было ни одной. */
-function PriceBandLinks({ landing, navigate, heading = "По цене до Минска" }) {
-  if (IS_RU) return null;
+function PriceBandLinks({ landing, navigate, heading = IS_RU ? "По цене до Москвы" : "По цене до Минска" }) {
   const bands = priceBandsForLanding(landing);
   if (!bands.length) return null;
   return (
@@ -7137,7 +7146,6 @@ function PriceBandLinks({ landing, navigate, heading = "По цене до Ми�
    было только с главной, где плитку марок рисует скрипт, — то есть для поисковика
    разделы были островом. Здесь те же ссылки видит и человек, и робот. */
 function CatalogSectionLinks({ navigate }) {
-  if (IS_RU) return null;
   // Марки, типы двигателя и кузова отсюда убраны 25.09.2026: они ссылками стоят в самом
   // фильтре над выдачей (optionHrefs в FilterPanel). Здесь остаётся то, чего фильтр
   // ссылкой не даёт: ценовые полосы (в фильтре это поле «от–до») и сочетания двух
@@ -7160,7 +7168,7 @@ function CatalogSectionLinks({ navigate }) {
     <section className="catalog-landing-notes" aria-labelledby="catalog-sections-title">
       <h2 id="catalog-sections-title">Автомобили {siteFromPhrase()} по цене и кузову</h2>
       <div className="catalog-landing-links">
-        <b>По цене до Минска</b>
+        <b>{IS_RU ? "По цене до Москвы" : "По цене до Минска"}</b>
         {links(prices)}
       </div>
       <details className="catalog-landing-more">
@@ -7180,7 +7188,6 @@ function CatalogSectionLinks({ navigate }) {
    машины, а не чтение. Здесь же ссылки на обзоры моделей этой марки и на соседние
    страницы каталога — по ним поисковик обходит раздел, а человек переходит к похожему. */
 function CatalogLandingNotes({ landing, navigate, total = null }) {
-  if (IS_RU) return null;
   // Сводку по марке сервер встраивает в готовую страницу раздела (window.__boot.
   // brandGuideValue): без неё первый кадр — «Загружаем сводку…», а у готовой
   // разметки — цифры, и они бы разошлись.
@@ -7237,7 +7244,7 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
   const setCurrency = useSetCurrency();
   const complete = isBrandGuide(landing, guide);
   const brand = landing.brand;
-  const config = brandGuideConfig(brand, landing.notes);
+  const config = IS_RU ? russianEditorialText(brandGuideConfig(brand, landing.notes)) : brandGuideConfig(brand, landing.notes);
   const aboutNotes = config.aboutNotes ?? landing.notes;
   const idPrefix = landing.path.split("/").filter(Boolean).at(-1) || brand.toLowerCase().replaceAll(" ", "-");
   const [selectedModel, setSelectedModel] = useState("");
@@ -7277,9 +7284,9 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
                 formatOption={(model) => model ? `${brand} ${model}` : "Все модели"}
               />
               <span>{guideNumber(selectedCount)} {guidePlural(selectedCount, "автомобиль", "автомобиля", "автомобилей")}{selectedModel ? " этой модели" : " в каталоге"}</span>
-              {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch brand-guide-currency-switch" />}
+              {!IS_RU && setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="price-currency-switch brand-guide-currency-switch" />}
             </div>
-            <div className="brand-guide-price-range" style={{ "--brand-guide-median":`${medianPosition}%` }}>
+            <div className={`brand-guide-price-range${IS_RU ? " is-rub" : ""}`} style={{ "--brand-guide-median":`${medianPosition}%` }}>
               <div className="brand-guide-price-range-inner">
                 <div className="brand-guide-price-track" role="img" aria-label={`Медианная цена ${guidePrice(selectedPriceData?.priceMedian, currency)} в диапазоне от ${guidePrice(selectedPriceData?.priceMin, currency)} до ${guidePrice(selectedPriceData?.priceMax, currency)}`}>
                   <span aria-hidden="true" />
@@ -7345,7 +7352,7 @@ function BrandCatalogGuide({ landing, guide, modelPages, navigate, total }) {
               }) : <p>{activeBudget.text}</p>}
             </div>
           </section>
-          <p className="brand-guide-method">Статистика рассчитана {guideDate(guide.calculatedAt)} по {guideNumber(guide.total)} активным объявлениям abcars.by{changedDate ? <>; последнее изменение состава или содержания этого раздела — {changedDate}</> : null}. Ценовые показатели используют {guideNumber(guide.pricedCount)} объявлений, для которых уже рассчитана итоговая стоимость: автомобиль, доставка и предварительные платежи до Минска. Медиана делит эти предложения пополам и меньше зависит от единичных дорогих версий, чем среднее значение. Перед договором цену продавца, курс и логистику подтверждаем заново.</p>
+          <p className="brand-guide-method">Статистика рассчитана {guideDate(guide.calculatedAt)} по {guideNumber(guide.total)} активным объявлениям {IS_RU ? "ABDrive" : "abcars.by"}{changedDate ? <>; последнее изменение состава или содержания этого раздела — {changedDate}</> : null}. Ценовые показатели используют {guideNumber(guide.pricedCount)} объявлений, для которых уже рассчитана итоговая стоимость: автомобиль, доставка и предварительные платежи до {IS_RU ? "Москвы" : "Минска"}. Медиана делит эти предложения пополам и меньше зависит от единичных дорогих версий, чем среднее значение. Перед договором цену продавца, курс и логистику подтверждаем заново.</p>
         </>
       )}
       {aboutNotes.length > 0 && (
@@ -7404,7 +7411,8 @@ function BrandGuidePowertrain({ values = [] }) {
    выдумывать число нельзя. */
 function CatalogLandingFaq({ landing, total, guide = null, navigate }) {
   const currency = useCurrency();
-  const faq = landingFaq(landing, { total, guide, currency });
+  const rawFaq = landingFaq(landing, { total, guide, currency });
+  const faq = IS_RU ? russianEditorialText(rawFaq) : rawFaq;
   if (!faq.length) return null;
   const schema = {
     "@context": "https://schema.org",
@@ -7437,8 +7445,8 @@ function CatalogLandingFaq({ landing, total, guide = null, navigate }) {
    каталог: человек к этому месту уже прочитал карточку, и дальше у него остаются
    ровно эти вопросы. У проданной машины блока нет, его отсекает сам carFaq. */
 function VehicleFaq({ car, navigate }) {
-  if (IS_RU) return <HomeFaqList items={RU_FAQ} navigate={navigate} />;
-  const faq = carFaq(car, estimateLandedCost(car));
+
+  const faq = IS_RU ? russianCarFaq(car) : carFaq(car, estimateLandedCost(car));
   if (!faq.length) return null;
   const schema = {
     "@context": "https://schema.org",
@@ -8886,7 +8894,7 @@ function AvailabilityRequestModal({ onClose, preview = false }) {
         <h2 id="availability-request-title">{preview ? "Карточка в предпросмотре" : "Заявка принята"}</h2>
         <p id="availability-request-description">{preview
           ? "Кнопка показана для проверки интерфейса. Заявки по локальной тестовой карточке не отправляются."
-          : "Мы передали запрос проверенной компании-импортёру: она уточнит у продавца наличие и цену и свяжется с вами."}</p>
+          : IS_RU ? "Мы получили запрос: уточним наличие и цену автомобиля и свяжемся с вами." : "Мы передали запрос проверенной компании-импортёру: она уточнит у продавца наличие и цену и свяжется с вами."}</p>
         <div className="order-removal-actions availability-paused-actions">
           <button className="invert-button" type="button" onClick={onClose} autoFocus>Закрыть</button>
         </div>
@@ -8903,7 +8911,7 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
-  const withAccount = !IS_RU && values.account;
+  const withAccount = values.account;
   const submission = useRef(null);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
   const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
@@ -8956,18 +8964,19 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
         <p className="availability-lead-note">{IS_RU ? "Менеджер уточнит задачу и передаст её партнёру для расчёта до Москвы." : "Заявку получит компания-импортёр и уточнит все детали."}</p>
         <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
         <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : IS_RU ? "+79991234567" : "+375291234567"} maxLength={16} required /></label>
-        {!IS_RU && <><label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
+        {<><label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
         <div className={`auth-registration-reveal${withAccount ? " open" : ""}`} aria-hidden={!withAccount} inert={withAccount ? undefined : true}>
           <div className="auth-registration-reveal-inner">
             <PasswordField label="Пароль" autoComplete="new-password" value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : "Минимум 8 символов"} required={withAccount} disabled={!withAccount} />
             <PasswordField label="Ещё раз пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Ещё раз пароль" : "Ещё раз"} required={withAccount} disabled={!withAccount} />
-            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!withAccount} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
+            {!IS_RU && <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!withAccount} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>}
           </div>
         </div>
         </>}
         {IS_RU && <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} required/><span>Согласен на обработку данных для ответа на заявку и передачи партнёру на условиях <a href="/privacy" target="_blank" rel="noopener noreferrer">политики конфиденциальности</a>.</span></label>}
+        {IS_RU && !leadEnabled() && <p className="auth-error" role="status">Приём заявок пока не подключён. Вы можете сохранить автомобиль в избранном и вернуться к нему позже.</p>}
         {error && <div className="auth-error" role="alert">{error}</div>}
-        <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Получить точную цену"}<ArrowRight size={18} /></button>
+        <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending || !leadEnabled()}>{pending ? "Отправляем…" : "Получить точную цену"}<ArrowRight size={18} /></button>
         {!IS_RU && !withAccount && (
           <p className="availability-lead-legal">Нажимая кнопку, вы соглашаетесь с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой конфиденциальности</a>.</p>
         )}
@@ -9140,6 +9149,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
     sendAvailability();
   };
   const sendAvailability = async () => {
+    if (IS_RU) { setAvailabilityStatus(""); setAvailabilityStatus(await sendAvailabilityRequest?.(car) ? "sent" : "failed"); return; }
     setAvailabilityStatus("sent");
     // Не дошло — окно закрываем и ничем больше не пугаем: кнопка карточки остаётся
     // жёлтой «Узнать точную цену и наличие», а не зелёной «Перейти в заказ», так что
@@ -9166,7 +9176,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   const sections = [
     ...(modelPath ? [{ path: modelPath, name: `Все ${car.brand} ${car.model} в наличии` }] : []),
     ...landingsForCar(car),
-    ...priceBandsForCar({ type: car.type, landedUsd: price.totalUsd }),
+    ...priceBandsForCar({ type: car.type, landedUsd: IS_RU ? catalogPrice(car) : price.totalUsd }),
   ].filter((landing) => landing.path !== currentAppPath() && (!IS_RU || landing.kind !== "price"));
   // Материалы журнала про модель этой машины: сравнения с соседями по классу.
   const journal = BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [];
@@ -9180,7 +9190,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   // там та же строка стоит отдельно, между фотографиями и характеристиками.
   const datesLine = carDatesLine(car);
   const conditionFacts = [
-    [BatteryHigh, "Тип батареи", car.technicalSpecs?.count ? null : translateBattery(car.batteryType)],
+    [BatteryHigh, "Тип батареи", car.technicalSpecs?.count || !car.batteryType ? null : translateBattery(car.batteryType)],
   ].filter(([, , value]) => value);
   return (
     <>
@@ -9273,7 +9283,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             </div>
             {/* Что это за число: цена не за машину в Китае, а итог с доставкой и
                 растаможкой. Мелкой строкой под ценой — крупное число остаётся главным. */}
-            <span className="detail-sidebar-price-note">{IS_RU ? "С доставкой до Москвы." : "Цена под ключ до Минска."}</span>
+            <span className="detail-sidebar-price-note">{IS_RU ? "Цена под ключ до Москвы." : "Цена под ключ до Минска."}</span>
           </div>
       </div>
       <div className="detail-main">
@@ -9323,10 +9333,10 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             </nav>
           )}
           <div className="detail-tools-footer">
-            {!IS_RU && <nav className="detail-tool-links" aria-label="Страницы расчётов">
+            {<nav className="detail-tool-links" aria-label="Страницы расчётов">
               <AppLink href="/customs" navigate={navigate}><Calculator size={21} /><span>Калькулятор растаможки</span><CaretRight size={17} weight="bold" /></AppLink>
               <AppLink href="/delivery-cost" navigate={navigate}><RoadHorizon size={21} /><span>Из чего складывается цена</span><CaretRight size={17} weight="bold" /></AppLink>
-              {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
+              {!IS_RU && car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}><Lightning size={21} /><span>Остаток квоты</span><CaretRight size={17} weight="bold" /></AppLink>}
             </nav>}
             <p className="detail-source-note">{!localGuaziPreview && "Это сведения продавца и площадки, не наша независимая проверка. "}Актуальность продажи, VIN и возможность экспорта подтверждаются отдельно. <ListingIdRow car={car} /></p>
           </div>
@@ -9361,10 +9371,11 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
           {car.source === "Guazi" && quickInfo.length === 0 && <VehicleConditionSummary car={car} />}
           {/* Детализация цены — перед сроком доставки, и всегда открыта: ссылку
               на неё искать не нужно. */}
-          {IS_RU ? <RussianPriceDetails car={car} /> : <>
+
           <aside className="price-breakdown-card" aria-label="Детализация цены">
                 <div className="price-disclosure-content">
                 <div className="price-breakdown">
+                  {IS_RU ? russianPriceRows(car).map(row => <PriceBreakdownRow key={row.id} {...row} />) : <>
                   <PriceBreakdownRow label={price.basePriceLabel} value={money(price.chinaUsd, currency)} description={price.basePriceNote || `${number(sourcePriceOf(car))} ${sourceCurrencySymbol(car)}${localGuaziPreview ? "" : " · данные источника"}`} />
                   <PriceBreakdownRow label={price.buyoutLabel} value={approximateMoney(price.buyoutLow, price.buyoutHigh, currency)} description="Платёжный агент и комиссии банка" />
                   {!price.isFob && <PriceBreakdownRow label={`Логистика ${inPhrase(carOrigin(car))}`} value={approximateMoney(price.chinaLegLow, price.chinaLegHigh, currency)} description={price.chinaLegNote} />}
@@ -9374,26 +9385,27 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                       фразой подсказки: строкой под растаможкой оно ломало ровный ряд. */}
                   <PriceBreakdownRow label="Растаможка и сборы" value={approximateMoney(price.customsLow, price.customsHigh, currency)} description={<CustomsTooltip price={price} withAlert />} />
                   {price.serviceUsd > 0 && <PriceBreakdownRow label="Подбор и сопровождение" value={`≈ ${money(price.serviceUsd, currency)}`} description="Ориентировочно. Точную сумму назовут после расчёта конкретной машины — она может быть немного больше или меньше" />}
+                  </>}
                 </div>
                 <div className="price-assumption">
-                  <span>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</span>
+                  <span>{IS_RU ? russianPriceNote(car.offer) : <>Это не оферта. Курс НБРБ на {PRICING.rateDate}; цену продавца, маршрут и таможенные параметры нужно подтвердить.</>}</span>
                 </div>
                 </div>
           </aside>
-          <section className={`delivery-disclosure delivery-card${deliveryOpen ? " open" : ""}`} aria-label="Срок доставки до Минска">
+          <section className={`delivery-disclosure delivery-card${deliveryOpen ? " open" : ""}`} aria-label={IS_RU ? "Срок доставки до Москвы" : "Срок доставки до Минска"}>
             <button type="button" className="delivery-card-heading" aria-expanded={deliveryOpen} onClick={() => setDeliveryOpen((open) => !open)}>
               <div className="delivery-card-icon">
                 <Clock size={23} weight="duotone" />
               </div>
               <div>
-                <span>Срок доставки до Минска</span>
+                <span>Срок доставки до {IS_RU ? "Москвы" : "Минска"}</span>
                 <h2>{daysFrom(timing.totalDays)}</h2>
               </div>
               <CaretDown className="disclosure-caret" size={20} weight="bold" />
             </button>
             <div className="animated-disclosure" aria-hidden={!deliveryOpen} inert={!deliveryOpen}>
               <div className="disclosure-content delivery-disclosure-content">
-                <p className="delivery-intro">От договора до выдачи авто в Минске.</p>
+                <p className="delivery-intro">От договора до выдачи авто {IS_RU ? "в Москве" : "в Минске"}.</p>
                 <div className="delivery-stages">
                   <div className="facts-row">
                     <b>Выкуп и экспорт</b>
@@ -9404,7 +9416,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                     <strong>{daysFrom(timing.chinaDays)}</strong>
                   </div>
                   <div className="facts-row">
-                    <b>Маршрут до Минска</b>
+                    <b>Маршрут до {IS_RU ? "Москвы" : "Минска"}</b>
                     <strong>{daysFrom(timing.intlDays)}</strong>
                   </div>
                   <div className="facts-row">
@@ -9418,8 +9430,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               </div>
             </div>
           </section>
-          </>}
-          {leadEnabled() && (sold ? (
+          {sold ? (
             <div ref={availabilityCtaRef} className="sold-order-state" role="status">Этот автомобиль продан</div>
           ) : (
             <button ref={availabilityCtaRef} className={`primary report-order-cta availability-primary-cta${inOrder ? " ordered-cta" : ""}`} onClick={requestAvailability}>
@@ -9427,9 +9438,9 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
                 {inOrder ? (<><CheckCircle size={20} weight="fill" /> Перейти в заказ</>) : "Узнать точную цену и наличие"}
               </span>
             </button>
-          ))}
+          )}
           {!IS_RU && <BrandNotice car={car} />}
-          {leadEnabled() && floatingCta && !sold && (
+          {floatingCta && !sold && (
             <div className={`detail-floating-availability${floatingCtaHidden ? " is-hidden" : ""}`} aria-hidden={floatingCtaHidden}>
               <button className={`primary availability-primary-cta${inOrder ? " ordered-cta" : ""}`} type="button" onClick={requestAvailability} tabIndex={floatingCtaHidden ? -1 : 0}>
                 <span className="availability-primary-title">
@@ -9438,7 +9449,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
               </button>
             </div>
           )}
-          {availabilityStatus === "lead" ? (
+          {availabilityStatus === "failed" ? <p className="auth-error" role="alert">Не удалось отправить заявку. Попробуйте ещё раз.</p> : availabilityStatus === "lead" ? (
             <AvailabilityLeadModal
               car={car}
               submitLead={submitAvailabilityLead}
@@ -9854,7 +9865,7 @@ function OrderDraft({ car, navigate }) {
             <p className="order-tool-links">
               <AppLink href="/customs" navigate={navigate}>Посчитать другую машину</AppLink>
               <AppLink href="/delivery-cost" navigate={navigate}>Из чего складывается цена</AppLink>
-              {car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}>Остаток квоты</AppLink>}
+              {!IS_RU && car.type === "Электромобиль" && <AppLink href="/ev-quota" navigate={navigate}>Остаток квоты</AppLink>}
             </p>
           </section>
           <section className="order-section">
@@ -9894,7 +9905,7 @@ function OrderDraft({ car, navigate }) {
             )}
             <p className="source-warning">
               <Info size={17} />
-              Это заявление площадки и продавца, не независимая проверка abcars.by.
+              Это заявление площадки и продавца, не независимая проверка {IS_RU ? "ABDrive" : "abcars.by"}.
             </p>
           </section>
           <section className="order-section">
@@ -10154,7 +10165,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
     };
   }, [isMobileVideo, reducedMotion]);
 
-  const roundedListings = total >= 100 ? formatRoundedListingCount(total).replace(/\+$/, "") : "64900";
+  const roundedListings = total >= 100 ? formatRoundedListingCount(total).replace(/\+$/, "") : IS_RU ? null : "64900";
   const catalogUpdateLabel = updatedAt ? catalogUpdatedDate(updatedAt) : "";
   // The complete opening region intentionally matches the dark theme in both
   // modes; the selected site theme resumes after the capability cards.
@@ -10175,7 +10186,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
         <div className="service-video-copy">
           <div className="service-video-copy-inner">
             <div className="service-video-copy-panel service-video-copy-panel-primary">
-              <h1>Авто {siteFromPhrase()} под ключ.</h1>
+              <h1>Авто {siteFromPhrase()} {IS_RU ? "в Россию." : "под ключ."}</h1>
               <p>Подберём, посчитаем и найдём, кто привезёт. На связи от выбора машины до получения ключей</p>
               <div className="service-video-copy-actions">
                 <button className="primary service-video-copy-cta" onClick={() => navigate("/catalog")}>
@@ -10185,7 +10196,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
             </div>
             <div className="service-video-copy-panel service-video-copy-panel-secondary">
               <h2>
-                Более {roundedListings} авто с пробегом напрямую из{" "}
+                {roundedListings ? `Более ${roundedListings} авто с пробегом напрямую из` : "Автомобили с пробегом напрямую из"}{" "}
                 <span className="service-video-country-mark">
                   {siteCountriesGenitive()}
                   {/* TODO (Корея): здесь нужна картинка с двумя флагами — Китая и Кореи;
@@ -10197,7 +10208,7 @@ function ServiceScrollVideo({ navigate, total, updatedAt }) {
             </div>
             <aside className="service-video-trust-card">
               <ShieldCheck className="service-video-trust-card-icon" size={28} weight="duotone" />
-              <h3>Всё по договору. Оплата напрямую продавцу.</h3>
+              <h3>{IS_RU ? "Всё по договору. Оплата по согласованной схеме." : "Всё по договору. Оплата напрямую продавцу."}</h3>
             </aside>
             <div className="service-video-checkline">
               <Check size={20} weight="bold" />
@@ -10227,7 +10238,7 @@ const SERVICE_CATALOG_TARGETS = Object.freeze([
   { brand: "Deepal", model: "S05" },
 ]);
 
-const serviceCatalogPrice = (car) => Number(estimateLandedCost(car).totalUsd) || Number.POSITIVE_INFINITY;
+const serviceCatalogPrice = (car) => Number(IS_RU ? car.offer?.totalAmount : estimateLandedCost(car).totalUsd) || Number.POSITIVE_INFINITY;
 const sortServiceCatalogCars = (cars) => [...cars].sort((left, right) => serviceCatalogPrice(left) - serviceCatalogPrice(right));
 const isServiceCatalogTarget = (car) => SERVICE_CATALOG_TARGETS.some(({ brand, model }) => car.brand === brand && car.model === model);
 const mergeServiceCatalogCars = (priorityCars, fillerCars) => {
@@ -10270,11 +10281,11 @@ function ServiceCatalogShowcase({ navigate, cars, apiMode, total, favorites, tog
     setShowcaseLoading(true);
     Promise.all([
       Promise.all(SERVICE_CATALOG_TARGETS.map(async ({ brand, model }) => {
-        const query = new URLSearchParams({ brand, model, sort: "price_asc", limit: "1" });
+        const query = new URLSearchParams({ brand, model, sort: IS_RU ? "newest" : "price_asc", limit: "1" });
         const catalog = await fetchCarsJson(`/api/cars?${query}`, controller.signal);
         return catalog.items?.[0] ? normalizeImportedCar(catalog.items[0]) : null;
       })),
-      fetchCarsJson("/api/cars?sort=price_asc&limit=20", controller.signal),
+      fetchCarsJson(`/api/cars?sort=${IS_RU ? "newest" : "price_asc"}&limit=20`, controller.signal),
     ])
       .then(([priorityItems, catalog]) => {
         if (cancelled) return;
@@ -10292,7 +10303,7 @@ function ServiceCatalogShowcase({ navigate, cars, apiMode, total, favorites, tog
       controller.abort();
     };
   }, [apiMode, cars]);
-  const listingCount = total || cars.length || 64000;
+  const listingCount = total || cars.length || (IS_RU ? 0 : 64000);
   const showSkeletons = (loading || showcaseLoading) && !showcaseCars.length;
   const showcaseSkeletons = ["service-a", "service-b", "service-c", "service-d", "service-e", "service-f"];
 
@@ -10323,7 +10334,7 @@ function ServiceCatalogShowcase({ navigate, cars, apiMode, total, favorites, tog
         </div>
         <div className="service-catalog-cta-wrap">
           <button className="primary service-catalog-cta" type="button" onClick={() => navigate("/catalog")}>
-            Перейти к {number(listingCount)} объявлениям
+            {listingCount ? `Перейти к ${number(listingCount)} объявлениям` : "Перейти к объявлениям"}
           </button>
         </div>
       </div>
@@ -10337,6 +10348,9 @@ function ServiceContactCta({ includeOptions = true, questionEvent = "service_con
   // устроена кнопка в шапке, и роботам, которые собирают телефоны со страниц, номер
   // не достаётся просто так.
   const [phoneRevealed, setPhoneRevealed] = useState(false);
+  const ViberContact = COMPANY.viberUrl ? "a" : "div";
+  const TelegramContact = COMPANY.telegramUrl ? ExternalLink : "div";
+  const EmailContact = COMPANY.email ? "a" : "div";
   const revealPhone = (event) => {
     if (phoneRevealed) return;
     event.preventDefault();
@@ -10347,40 +10361,40 @@ function ServiceContactCta({ includeOptions = true, questionEvent = "service_con
 
   return (
     <>
-      <section className="service-contact-cta page-width" aria-labelledby="service-contact-cta-title">
+      {(!IS_RU || COMPANY.phoneHref) && <section className="service-contact-cta page-width" aria-labelledby="service-contact-cta-title">
         <div className="service-contact-cta-copy">
           <h2 id="service-contact-cta-title">Остались вопросы?</h2>
           <p>Поговорите с нашим экспертом. Ответим на вопросы и поможем выбрать подходящий автомобиль.</p>
-          <a className="primary service-contact-cta-button" href={`tel:${COMPANY.phoneHref}`} onClick={revealPhone}>
+          {COMPANY.phoneHref ? <a className="primary service-contact-cta-button" href={`tel:${COMPANY.phoneHref}`} onClick={revealPhone}>
             <Phone size={20} weight="fill" aria-hidden="true" />
             {phoneRevealed ? COMPANY.phone : "Задать вопрос"}
-          </a>
+          </a> : <button className="primary service-contact-cta-button" type="button" disabled>Контакты скоро появятся</button>}
         </div>
         <Illustration
           src="/services/contact-manager-black.png"
           width="1145"
           height="1374"
-          alt="Консультант abcars.by"
+          alt={`Консультант ${COMPANY.brand}`}
           loading="lazy"
           decoding="async"
         />
-      </section>
-      {includeOptions && <section className="service-contact-options page-width" aria-label="Способы связи">
-        <a className="service-contact-option" href={COMPANY.viberUrl} rel={EXTERNAL_LINK_REL} onClick={() => trackEvent("service_contact_sales_click")}>
+      </section>}
+      {includeOptions && (!IS_RU || COMPANY.phone || COMPANY.telegramUrl || COMPANY.email) && <section className="service-contact-options page-width" aria-label="Способы связи">
+        <ViberContact className="service-contact-option" href={COMPANY.viberUrl} rel={COMPANY.viberUrl ? EXTERNAL_LINK_REL : undefined} aria-disabled={!COMPANY.viberUrl || undefined} onClick={COMPANY.viberUrl ? () => trackEvent("service_contact_sales_click") : undefined}>
           <img className="service-contact-option-illustration" src="/social/contact-viber.png" alt="" width="82" height="82" loading="lazy" decoding="async" />
           <strong>Viber</strong>
-          <p>Напишите или позвоните — поможем выбрать автомобиль и посчитать цену до Минска.</p>
-        </a>
-        <ExternalLink className="service-contact-option" href={COMPANY.telegramUrl} onClick={() => trackEvent("service_contact_telegram_click")}>
+          <p>{IS_RU ? (COMPANY.viberUrl ? "Напишите или позвоните — поможем выбрать автомобиль и посчитать цену до Москвы." : "Поможем выбрать автомобиль и посчитать цену до Москвы.") : "Напишите или позвоните — поможем выбрать автомобиль и посчитать цену до Минска."}</p>
+        </ViberContact>
+        <TelegramContact className="service-contact-option" href={COMPANY.telegramUrl} aria-disabled={!COMPANY.telegramUrl || undefined} onClick={COMPANY.telegramUrl ? () => trackEvent("service_contact_telegram_click") : undefined}>
           <img className="service-contact-option-illustration" src="/social/contact-telegram.png" alt="" width="82" height="82" loading="lazy" decoding="async" />
           <strong>Telegram</strong>
-          <p>Быстро ответим на вопросы и подскажем по вашему запросу.</p>
-        </ExternalLink>
-        <a className="service-contact-option" href={`mailto:${COMPANY.email}`} onClick={() => trackEvent("service_contact_email_click")}>
+          <p>{COMPANY.telegramUrl ? "Быстро ответим на вопросы и подскажем по вашему запросу." : "Ответим на вопросы о выборе и покупке автомобиля."}</p>
+        </TelegramContact>
+        <EmailContact className="service-contact-option" href={COMPANY.email ? `mailto:${COMPANY.email}` : undefined} aria-disabled={!COMPANY.email || undefined} onClick={COMPANY.email ? () => trackEvent("service_contact_email_click") : undefined}>
           <img className="service-contact-option-illustration" src="/social/contact-mail.png" alt="" width="82" height="82" loading="lazy" decoding="async" />
           <strong>Электронная почта</strong>
-          <p>{COMPANY.email} — для документов, расчётов и деловых вопросов.</p>
-        </a>
+          <p>{COMPANY.email ? `${COMPANY.email} — для документов, расчётов и деловых вопросов.` : "Документы, расчёты и деловые вопросы."}</p>
+        </EmailContact>
       </section>}
     </>
   );
@@ -10388,14 +10402,15 @@ function ServiceContactCta({ includeOptions = true, questionEvent = "service_con
 
 function ServicePurchaseFlow() {
   const [activeIndex, setActiveIndex] = useState(0);
-  const activeStep = PURCHASE_FLOW_STEPS[activeIndex];
+  const steps = IS_RU ? RU_PURCHASE_FLOW_STEPS : PURCHASE_FLOW_STEPS;
+  const activeStep = steps[activeIndex];
 
   return (
     <section className="service-purchase-flow page-width" aria-labelledby="service-purchase-flow-title">
       <h2 id="service-purchase-flow-title">Покупка авто: от выбора до ключей</h2>
       <div className="service-purchase-flow-layout">
         <div className="service-purchase-flow-switchers" role="group" aria-label="Этапы покупки">
-          {PURCHASE_FLOW_STEPS.map((step, index) => {
+          {steps.map((step, index) => {
             const selected = index === activeIndex;
             return (
               <button
@@ -10481,7 +10496,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
     };
   }, []);
 
-  const opportunitiesListingCount = total >= 1000 ? `${number(Math.floor(total / 1000) * 1000)} +` : "64 000 +";
+  const opportunitiesListingCount = total >= 1000 ? `${number(Math.floor(total / 1000) * 1000)} +` : IS_RU ? (total > 0 ? number(total) : "Каталог") : "64 000 +";
 
   return (
     <main className="info-page service-video-page">
@@ -10489,7 +10504,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
         <ServiceScrollVideo navigate={navigate} total={total} updatedAt={updatedAt} />
         <section className="info-proof-section page-width" aria-label="Возможности сервиса">
           <div className="info-proof">
-            {SERVICE_PROOF.map(({ title, text }, index) => {
+            {(IS_RU ? RU_SERVICE_PROOF : SERVICE_PROOF).map(({ title, text }, index) => {
               const artwork = SERVICE_PROOF_ARTWORK[index] || SERVICE_PROOF_ARTWORK[0];
               return (
                 <article key={title}>
@@ -10525,7 +10540,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
             </article>
             <article className="service-opportunity-card service-opportunity-card-no-cta">
               <strong>Расчёт</strong>
-              <p>Сразу показываем, из чего состоит цена под ключ</p>
+              <p>{IS_RU ? "Показываем расходы и ориентир цены до Москвы" : "Сразу показываем, из чего состоит цена под ключ"}</p>
             </article>
             <article className="service-opportunity-card service-opportunity-card-wide service-opportunity-card-convenience">
               <strong>Удобно</strong>
@@ -10551,7 +10566,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
       <section className="service-assurance-section page-width" aria-labelledby="service-assurance-title">
         <h2 className="visually-hidden" id="service-assurance-title">Проверка и связь</h2>
         <div className="service-assurance-grid">
-          {ABOUT_PRINCIPLES.map(({ title, text }, index) => {
+          {(IS_RU ? RU_ABOUT_PRINCIPLES : ABOUT_PRINCIPLES).map(({ title, text }, index) => {
             const artwork = assuranceArtwork[index];
             return (
               <article className={`service-opportunity-card service-assurance-card${index === 1 ? " service-assurance-card-tracking" : ""}`} key={title}>
@@ -10659,7 +10674,7 @@ function FaqSection({ navigate }) {
         </div>
       </section>
       <section className="faq-groups">
-        {FAQ_GROUPS.map((group) => (
+        {(IS_RU ? RU_SERVICE_FAQ_GROUPS : FAQ_GROUPS).map((group) => (
           <div className="faq-group" key={group.title}>
             <h3>{group.title}</h3>
             <HomeFaqList items={group.items} navigate={navigate} />
@@ -10910,11 +10925,13 @@ function ToolPage({ tool, navigate }) {
   const isFormPage = isCalculator || tool.kind === "range" || isDeliveryCalculator;
   const isQuotaPage = tool.kind === "quota";
   const calculatorDetails = !isCalculator ? [] : [
+    ...(!IS_RU ? [
     { title: customsExample().title, content: <ToolPageDataTable table={{ ...customsExample(), title: null }} /> },
     {
       title: "Ставки пошлины: полные таблицы",
       content: dutyRateTables().map((table) => <ToolPageDataTable key={table.title} table={table} />),
     },
+    ] : []),
     ...texts.sections.map((section) => ({
       title: section.title,
       content: <ModelPageSection section={{ ...section, title: null }} navigate={navigate} />,
@@ -11059,7 +11076,7 @@ function ToolPage({ tool, navigate }) {
               нечего читать, а две подложки подряд читались как пропущенный кусок. */}
           {isFormPage && (
             <article className="model-page-article">
-              {isCalculator ? <CustomsCalculator /> : isDeliveryCalculator ? <DeliveryCalculator /> : <RangeCalculator />}
+              {isCalculator ? (IS_RU ? <RussianCustomsCalculator SelectField={SelectField} /> : <CustomsCalculator />) : isDeliveryCalculator ? <DeliveryCalculator /> : <RangeCalculator />}
             </article>
           )}
           {/* Сравнение — в одной подложке с заголовком, как форма калькулятора: две
@@ -11298,6 +11315,8 @@ function DeliveryCalculator() {
       currency: CALC_CURRENCIES.some((item) => item.id === params.get("cur")) ? params.get("cur") : "usd",
     };
   }, []);
+  const [deliveryRates,setDeliveryRates]=useState(RU_PRICING.rates);
+  useEffect(()=>{if(!IS_RU)return;const controller=new AbortController();fetch('/api/rates',{signal:controller.signal}).then(r=>r.ok?r.json():null).then(data=>{if(data?.USD>0&&data?.date)setDeliveryRates(data);}).catch(()=>{});return()=>controller.abort();},[]);
   const [model, setModel] = useState(initial.model);
   const [location, setLocation] = useState(initial.location);
   const [outCurrency, setOutCurrency] = useState(initial.currency);
@@ -11305,20 +11324,20 @@ function DeliveryCalculator() {
   const [modelSizes, setModelSizes] = useState({});
   const knownSize = model?.value ? modelSizes[model.value] : null;
   const modelSize = knownSize || model || {};
-  const estimate = useMemo(() => estimateDeliveryCip({
+  const estimate = useMemo(() => (IS_RU ? estimateRussianDelivery : estimateDeliveryCip)({
     model: model?.label,
     city: location?.value,
     lengthMm: modelSize.lengthMm,
     curbWeight: modelSize.curbWeight,
-  }), [model, modelSize.lengthMm, modelSize.curbWeight, location]);
+  }, IS_RU ? {rates:deliveryRates} : undefined), [model, modelSize.lengthMm, modelSize.curbWeight, location, deliveryRates]);
   const fromUsd = { usd: 1, eur: PRICING.usdByn / PRICING.eurByn, byn: PRICING.usdByn, rub: PRICING.usdByn / (PRICING.rubBynPer100 / 100) }[outCurrency] || 1;
-  const sign = { usd: "$", eur: "€", byn: "BYN", rub: "₽" }[outCurrency] || "$";
-  const amount = (value) => number(Math.round(value * fromUsd));
+  const sign = IS_RU ? "₽" : { usd: "$", eur: "€", byn: "BYN", rub: "₽" }[outCurrency] || "$";
+  const amount = (value) => number(Math.round(value * (IS_RU ? 1 : fromUsd)));
   const money = (value) => `${amount(value)} ${sign}`;
   const shareSearch = new URLSearchParams();
   if (model?.value && !model.custom) shareSearch.set("model", model.value);
   if (location?.value && !location.custom) shareSearch.set("city", location.value);
-  if (outCurrency !== "usd") shareSearch.set("cur", outCurrency);
+  if (!IS_RU && outCurrency !== "usd") shareSearch.set("cur", outCurrency);
   const search = shareSearch.toString();
 
   useEffect(() => {
@@ -11355,7 +11374,7 @@ function DeliveryCalculator() {
   const deliveryHint = precisionPrompt
     // Страны в калькуляторе пока нет (расчёт по зонам Китая), поэтому плечо названо
     // без страны; с корейским профилем логистики здесь появится выбор.
-    || `Ориентир от ${money(estimate.low)} до ${money(estimate.high)}. Плечо по стране отправления: ${estimate.transitLabel}.`;
+    || (IS_RU ? `Плечо по стране отправления: ${estimate.transitLabel}.` : `Ориентир от ${money(estimate.low)} до ${money(estimate.high)}. Плечо по стране отправления: ${estimate.transitLabel}.`);
   const copyShareLink = async () => {
     const url = `${window.location.origin}${appHref("/delivery-cost")}${search ? `?${search}` : ""}`;
     if (!await copyToClipboard(url)) return;
@@ -11364,7 +11383,7 @@ function DeliveryCalculator() {
   };
 
   return (
-    <section className="tool-calc tool-calc-delivery" aria-label="Расчёт стоимости доставки CIP до Минска">
+    <section className="tool-calc tool-calc-delivery" aria-label={IS_RU ? "Расчёт стоимости доставки до Москвы" : "Расчёт стоимости доставки CIP до Минска"}>
       <div className="tool-calc-fields">
         <div className="tool-calc-field tool-calc-combo-field">
           <ComboboxField
@@ -11385,22 +11404,22 @@ function DeliveryCalculator() {
           />
         </div>
         <p className="tool-calc-why tool-calc-delivery-note">
-          В CIP входят перевозка и страхование до Минска. Цена машины, растаможка, СВХ, регистрация, подбор и сопровождение считаются отдельно.
+          {IS_RU ? "В доставку" : "В CIP"} входят перевозка и страхование до {IS_RU ? "Москвы" : "Минска"}. Цена машины, растаможка, СВХ, регистрация, подбор и сопровождение считаются отдельно.
         </p>
       </div>
       <div className="tool-calc-result">
         <div className="tool-calc-summary">
           <div className="tool-calc-total">
-            <span>Доставка CIP до Минска</span>
+            <span>{IS_RU ? "Доставка до Москвы" : "Доставка CIP до Минска"}</span>
             <span className="tool-calc-sum">
               <strong><ApproxSign /> {amount(estimate.total)}</strong>
-              <SelectField
+              {IS_RU ? <span>₽</span> : <SelectField
                 className="tool-calc-money-select"
                 label="Валюта расчёта"
                 value={(CALC_CURRENCIES.find((item) => item.id === outCurrency) || CALC_CURRENCIES[0]).name}
                 options={CALC_CURRENCIES.map((item) => item.name)}
                 onChange={(name) => setOutCurrency((CALC_CURRENCIES.find((item) => item.name === name) || CALC_CURRENCIES[0]).id)}
-              />
+              />}
             </span>
             <small aria-live="polite">
               {deliveryHint} <span className={`tool-calc-body-class${bodyClass === "Крупный кузов" ? " large" : ""}`}>{bodyClassText}</span>
@@ -11482,8 +11501,8 @@ function CustomsCalculator() {
   // Знак берём тот же, что написан на кнопке валюты: нажал BYN — и в цифрах стоит
   // BYN, а не «р.». В связном тексте ниже рубли остаются рублями: там это слово,
   // а не обозначение валюты в колонке цифр.
-  const sign = { usd: "$", eur: "€", byn: "BYN", rub: "₽" }[outCurrency] || "$";
-  const amount = (value) => number(Math.round(value * fromUsd));
+  const sign = IS_RU ? "₽" : { usd: "$", eur: "€", byn: "BYN", rub: "₽" }[outCurrency] || "$";
+  const amount = (value) => number(Math.round(value * (IS_RU ? 1 : fromUsd)));
   const money = (value) => `${amount(value)} ${sign}`;
   // Вторая строка — та же сумма в другой валюте. Рублёвую цифру показываем всем,
   // кто считает не в рублях: её и вносят на таможне. Тем, кто уже выбрал рубли,
@@ -12631,7 +12650,7 @@ function useCollectionEdges(post) {
     // Первая машина, у которой главная цифра вообще есть.
     const notable = notableCars.find((car) => blogHighlight(post, car)) || null;
     return {
-      priceFromUsd: cheapest ? estimateLandedCost(cheapest).totalUsd : null,
+      priceFromUsd: cheapest ? (IS_RU ? cheapest.offer?.totalAmount : estimateLandedCost(cheapest).totalUsd) : null,
       highlight: blogHighlight(post, notable),
     };
   };
@@ -13267,7 +13286,7 @@ function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpe
   // В подборке причина считается по самому списку, а в сравнении карточки одной модели
   // стоят рядом, и «самая доступная в подборке» звучало бы странно — там строку
   // передают готовой.
-  const reason = ownReason !== undefined ? ownReason : blogCarReason(car, list, post, (item) => (item ? estimateLandedCost(item).totalUsd : null));
+  const reason = ownReason !== undefined ? ownReason : blogCarReason(car, list, post, (item) => (item ? (IS_RU ? item.offer?.totalAmount : estimateLandedCost(item).totalUsd) : null));
   return (
     <AppLink
       className="blog-top-card"
@@ -13294,10 +13313,10 @@ function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpe
           {/* «Под ключ в Минске» ушло в подсказку у значка: в карточке эта строчка
               повторялась десять раз и занимала место, а объяснение нужно один раз. */}
           <span className="blog-top-price">
-            <ApproxSign /> {bynify(money(estimateLandedCost(car).totalUsd, currency))}
+            {IS_RU ? russianOfferPrice(car.offer) : <><ApproxSign /> {bynify(catalogMoney(estimateLandedCost(car).totalUsd, currency))}</>}
             <span className="price-info" tabIndex={0} aria-label="Из чего складывается цена">
               <Info size={16} />
-              <ActionTooltip text="Итог в Минске: выкуп машины, доставка, таможня и оформление. Предварительный расчёт по открытым тарифам." />
+              <ActionTooltip text={`Итог в ${IS_RU ? "Москве" : "Минске"}: выкуп машины, доставка, таможня и оформление. Предварительный расчёт.`} />
             </span>
           </span>
         </span>
@@ -13354,7 +13373,7 @@ function useDuelSides(post, { deep = true, listLimit = 5 } = {}) {
     // Поэтому пять машин переставляем по той цене, которую человек и увидит,
     // и «цена от» берётся из них же: иначе в таблице стояла бы одна сумма,
     // а первой строкой списка — другая, поменьше.
-    const landed = (car) => estimateLandedCost(car).totalUsd;
+    const landed = (car) => (IS_RU ? car.offer?.totalAmount : estimateLandedCost(car).totalUsd);
     const cars = [...(list?.cars || [])].sort((left, right) => landed(left) - landed(right));
     const prices = [...(cheapest?.cars || []), ...cars].map(landed).filter((value) => Number.isFinite(value) && value > 0);
     return {
@@ -13362,6 +13381,7 @@ function useDuelSides(post, { deep = true, listLimit = 5 } = {}) {
       cars,
       changedAt: summary?.changedAt || list?.changedAt || cheapest?.changedAt || null,
       priceFromUsd: prices.length ? Math.min(...prices) : null,
+      priceOffer: IS_RU ? [...(cheapest?.cars || []),...cars].filter(car=>car.offer?.status==='estimated').sort((a,b)=>landed(a)-landed(b))[0]?.offer : null,
       // Кадр для шапки — первая машина со снимком: у части объявлений
       // фотографий нет вовсе.
       hero: (hero?.cars || []).find((car) => car.images?.length || car.image) || cars[0] || null,
@@ -13428,7 +13448,7 @@ function BlogDuelHero({ data, navigate, onOpen }) {
             </AppLink>
             <figcaption>
               <strong>{entry.side.name}</strong>
-              <span>{entry.priceFromUsd ? `от ${money(entry.priceFromUsd, currency)} под ключ` : "цена считается"}</span>
+              <span>{entry.priceFromUsd ? `${IS_RU ? russianOfferPrice(entry.priceOffer) : `от ${catalogMoney(entry.priceFromUsd, currency)}`} под ключ` : "цена считается"}</span>
             </figcaption>
           </figure>
         );
@@ -13456,10 +13476,10 @@ function BlogDuelTable({ post, data, navigate }) {
   // одной строкой под таблицей.
   const lines = [...rows, ...blogDuelSpecRows(blogPostSides(post))];
   if (!lines.length) return null;
-  const cell = (value) => (value ? (value.money != null ? `≈ ${money(value.money, currency)}` : value.text) : "—");
+  const cell = (value) => (value ? (value.money != null ? `≈ ${IS_RU ? `${number(value.money)} ₽` : catalogMoney(value.money, currency)}` : value.text) : "—");
   const line = (row) => (
     <tr key={row.key}>
-      <th scope="row">{row.label}</th>
+      <th scope="row">{IS_RU && row.key === "price" ? "Цена" : row.label}</th>
       {row.values.map((value, index) => {
         const side = data[index]?.side;
         // Наличие — единственная строка, из которой есть куда пойти: число машин ведёт
@@ -13473,7 +13493,7 @@ function BlogDuelTable({ post, data, navigate }) {
             {target ? (
               <a href={appHref(target)} target="_blank" rel="noreferrer">{withApprox(cell(value))}</a>
             ) : (
-              withApprox(cell(value))
+              IS_RU && row.key === "price" ? russianOfferPrice(data[index]?.priceOffer) : withApprox(cell(value))
             )}
           </td>
         );
@@ -13504,7 +13524,7 @@ function BlogDuelTable({ post, data, navigate }) {
       </div>
       {/* Подписей под названиями строк нет — вместо десятка мелких пояснений одна
           строка под таблицей: откуда цифры и что стоит за ценой. */}
-      <p className="blog-duel-source">Наличие, цена и характеристики версий считаются из каталога в момент открытия страницы: цена — самая доступная машина под ключ в Минске, остальное — лучшее, что есть сейчас. Габариты, багажник и гарантия — паспортные данные производителей.</p>
+      <p className="blog-duel-source">Наличие, цена и характеристики версий считаются из каталога в момент открытия страницы: цена — самая доступная машина под ключ {IS_RU ? "в Москве" : "в Минске"}, остальное — лучшее, что есть сейчас. Габариты, багажник и гарантия — паспортные данные производителей.</p>
     </section>
   );
 }
@@ -13643,7 +13663,7 @@ function ArticleCatalog({ navigate }) {
             текстом: сами картинки логотипа спрятаны от них. */}
         <span className="wordmark article-catalog-logo">
           <SiteLogo />
-          <span className="visually-hidden">abcars.by</span>
+          <span className="visually-hidden">{IS_RU ? "ABDrive" : "abcars.by"}</span>
         </span>
         <span> — это маркетплейс б/у авто {siteFromPhrase()}</span>
       </p>
@@ -13709,7 +13729,7 @@ function BlogFigure({ car, index, navigate, onOpen = null, eager = false }) {
       <figcaption>
         <AppLink href={carHref(car)} navigate={navigate} onClick={open}>{title}</AppLink>
         <span>
-          {car.mileage ? `${number(car.mileage)} км · ` : ""}<ApproxSign /> {bynify(money(estimateLandedCost(car).totalUsd, currency))} под ключ в Минске
+          {car.mileage ? `${number(car.mileage)} км · ` : ""}{IS_RU ? russianOfferPrice(car.offer) : <><ApproxSign /> {bynify(catalogMoney(estimateLandedCost(car).totalUsd, currency))}</>} под ключ {IS_RU ? "в Москве" : "в Минске"}
         </span>
       </figcaption>
     </figure>
@@ -14273,7 +14293,7 @@ function InfoCta({ navigate, title, text }) {
   return (
     <section className="info-cta page-width">
       <div>
-        <span>Каталог abcars.by</span>
+        <span>Каталог {IS_RU ? "ABDrive" : "abcars.by"}</span>
         <h2>{title}</h2>
         <p>{text}</p>
       </div>
@@ -14507,6 +14527,9 @@ try {
   }
 } catch {}
 const authMessages = {
+  account_not_configured:"Регистрация пока не подключена. Попробуйте позже.",
+  lead_intake_not_configured:"Приём заявок пока не подключён. Попробуйте позже.",
+  consent_required:"Подтвердите согласие на обработку данных.",
   invalid_name: "Укажите имя — от 2 до 80 символов.",
   invalid_phone: "Проверьте номер телефона.",
   invalid_password: "Пароль должен содержать минимум 8 символов.",
@@ -14640,7 +14663,7 @@ function PasswordField({ label, value, onChange, autoComplete, placeholder = "",
 
 function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectTo = "/" }) {
   const registering = mode === "register";
-  const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:true });
+  const [values, setValues] = useState({ name:"", phone:IS_RU ? "+7" : "+375", password:"", confirm:"", consent:!IS_RU });
   const [error, setError] = useState("");
   // На телефоне подписи полей скрыты (styles.css), их роль играют плейсхолдеры.
   const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
@@ -14655,7 +14678,7 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
     const phone = IS_RU ? normalizeRussianPhone(values.phone) : normalizeLocalPhone(values.phone);
     if (registering && values.name.trim().length < 2) return setError(authMessages.invalid_name);
     if (!phone || phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
-    if (IS_RU && !values.consent) return setError("Подтвердите согласие на обработку данных.");
+    if (IS_RU && registering && !values.consent) return setError("Подтвердите согласие на обработку данных.");
     if (values.password.length < 8) return setError(authMessages.invalid_password);
     if (registering && values.password !== values.confirm) return setError("Пароли не совпадают.");
     if (registering && !values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
@@ -14699,7 +14722,7 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
         <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
           <div className="auth-registration-reveal-inner">
             <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Повторите пароль" : "Ещё раз"} required={registering} disabled={!registering} />
-            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
+            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>{IS_RU ? <>Согласен на обработку данных по <a href="/privacy" target="_blank" rel="noopener noreferrer">политике конфиденциальности</a></> : <>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></>}</span></label>
           </div>
         </div>
         {error && <div className="auth-error" role="alert">{error}</div>}
@@ -14879,8 +14902,8 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
           }
         }
       } catch {
-        loadLocal();
-        if (!readLocalOrders(user.id).length && !cancelled) setError("Не удалось загрузить заказ. Попробуйте обновить страницу.");
+        if (!IS_RU) loadLocal();
+        if ((IS_RU || !readLocalOrders(user.id).length) && !cancelled) setError("Не удалось загрузить заказ. Попробуйте обновить страницу.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -14988,7 +15011,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
   const requestAvailabilityCheck = () => {
     if (availabilityRequested || saving) return;
     trackAvailabilityRequest(order, availabilityComment);
-    applyAction("request_availability_check", { comment:availabilityComment.trim() });
+    applyAction("request_availability_check", { comment:availabilityComment.trim(), ...(IS_RU ? {consent:true} : {}) });
   };
   const requestOrderRemoval = (event) => {
     event.currentTarget.closest("details")?.removeAttribute("open");
@@ -15029,7 +15052,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         <img src={imageSource(order.car.image, IMAGE_WIDTH_TILE)} alt={order.car.title} onError={(event) => retryWithFullImage(event, order.car.image)} />
         <div className="customer-order-car-copy">
           <div className="customer-order-car-heading"><h2><a href={`/cars/${encodeURIComponent(listingNumber(order.listingId))}`} target="_blank" rel="noopener noreferrer" onClick={openCarPreview}>{order.car.title}</a></h2><p>{shortOrderNumber(order.orderNumber)}</p></div>
-          {order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b><ApproxSign /> {bynify(money(order.car.estimatedTotalUsd, currency))}</b></div> : null}
+          {IS_RU && order.car.offer?.status === "estimated" ? <div className="customer-order-car-price"><b>{russianOfferPrice(order.car.offer)}</b></div> : order.car.estimatedTotalUsd ? <div className="customer-order-car-price"><b><ApproxSign /> {bynify(money(order.car.estimatedTotalUsd, currency))}</b></div> : null}
         </div>
         <div className="customer-order-card-controls">
           <details className="order-car-menu">
@@ -15197,12 +15220,12 @@ function AccountPage({ user, cars, apiMode, favorites, toggleFavorite, authBacke
               <label className="auth-field profile-phone"><span>Телефон для входа</span><input value={formatAccountPhone(user.phone)} disabled /></label>
               <label className="auth-field"><span>Email</span><input type="email" autoComplete="email" value={profile.email} onChange={updateProfileField("email")} placeholder="name@example.com" maxLength={160} /></label>
               <label className="auth-field"><span>Telegram</span><div className="profile-input-prefix"><b>@</b><input value={profile.telegram} onChange={updateProfileField("telegram")} placeholder="username" maxLength={80} /></div></label>
-              <label className="auth-field"><span>Город</span><input autoComplete="address-level2" value={profile.city} onChange={updateProfileField("city")} placeholder="Например, Минск" maxLength={120} /></label>
+              <label className="auth-field"><span>Город</span><input autoComplete="address-level2" value={profile.city} onChange={updateProfileField("city")} placeholder={IS_RU ? "Например, Москва" : "Например, Минск"} maxLength={120} /></label>
               <div className="auth-field"><span>Как удобнее связаться</span><SelectField className="profile-contact-select" label="Как удобнее связаться" value={preferredContactLabel(profile.preferredContact)} options={preferredContactLabels} onChange={(label) => setProfileValue("preferredContact", preferredContactValue(label))} /></div>
             </div>
             {/* В местном режиме профиль сохраняется в браузере посетителя, поэтому
                 паспортных полей там нет: их место — только база под шифрованием. */}
-            {authBackend !== "local" && <details className="profile-extra">
+            {!IS_RU && authBackend !== "local" && <details className="profile-extra">
               <summary>
                 <span>Дополнительные поля</span>
                 <CaretDown className="profile-extra-caret" size={18} />
@@ -15396,7 +15419,7 @@ export function App() {
   const [user, setUser] = useState(null);
   const { path, navigate, backToCatalog } = useRoute(user);
   const [authLoading, setAuthLoading] = useState(true);
-  const { authRoute, authBackgroundPath, authModalOpen, contentPath } = IS_RU ? {authRoute:false,authBackgroundPath:"/",authModalOpen:false,contentPath:path} : resolveAuthRoute(path, window.history.state?.fromPath, user, authLoading);
+  const { authRoute, authBackgroundPath, authModalOpen, contentPath } = resolveAuthRoute(path, window.history.state?.fromPath, user, authLoading);
   // Фон модального окна и загрузка его автомобиля используют один адрес.
   const dataPath = contentPath;
   const detailId = dataPath.startsWith("/cars/") ? dataPath.split("/")[2] : null;
@@ -15527,7 +15550,7 @@ export function App() {
           method:"PATCH",
           credentials:"same-origin",
           headers:{ "content-type":"application/json" },
-          body:JSON.stringify({ action:"request_availability_check", comment:"" }),
+          body:JSON.stringify({ action:"request_availability_check", comment:"", ...(IS_RU ? {consent:true} : {}) }),
         });
         if (!sent.ok) return false;
       }
@@ -15572,7 +15595,6 @@ export function App() {
     return () => media.removeEventListener("change", syncSystemTheme);
   }, []);
   useEffect(() => {
-    if (IS_RU) { setAuthLoading(false); return; }
     fetchWithRetry("/api/auth/me", { cache:"no-store", credentials:"same-origin" })
       .then(async (response) => {
         if (response.ok) return response.json();
@@ -15580,15 +15602,15 @@ export function App() {
         throw new Error("api_unavailable");
       })
       .then((payload) => setUser(payload.user || null))
-      .catch(() => { setAuthBackend("local"); setUser(readLocalSession()); })
+      .catch(() => { if (!IS_RU) { setAuthBackend("local"); setUser(readLocalSession()); } })
       .finally(() => setAuthLoading(false));
   }, []);
   useEffect(() => {
     if (authLoading) return undefined;
     let cancelled = false;
     if (!user) {
-      setFavorites(IS_RU ? readFavorites("abdrive-favorites") : new Set());
-      setFavoritesReady(IS_RU);
+      setFavorites(new Set());
+      setFavoritesReady(false);
       return undefined;
     }
     const localKey = accountFavoritesKey(user.id);
@@ -15624,7 +15646,7 @@ export function App() {
         if (cancelled) return;
         // Переезд на браузерную копию — только когда API нет вовсе; после временного
         // сбоя показываем сохранённую копию, но сервер остаётся основным источником.
-        if (error?.message === "favorites_api_missing") setAuthBackend("local");
+        if (!IS_RU && error?.message === "favorites_api_missing") setAuthBackend("local");
         loadLocalFavorites();
       });
     return () => { cancelled = true; };
@@ -15654,8 +15676,8 @@ export function App() {
     if (authLoading) return undefined;
     let cancelled = false;
     if (!user) {
-      setSavedSearches(IS_RU ? readLocalSearches("abdrive-guest") : []);
-      setSavedSearchesReady(IS_RU);
+      setSavedSearches([]);
+      setSavedSearchesReady(false);
       return undefined;
     }
     const applySearches = (values) => {
@@ -15677,7 +15699,7 @@ export function App() {
       .then((payload) => applySearches(Array.isArray(payload.searches) ? payload.searches : []))
       .catch((error) => {
         if (cancelled) return;
-        if (error?.message === "searches_api_missing") setAuthBackend("local");
+        if (!IS_RU && error?.message === "searches_api_missing") setAuthBackend("local");
         applySearches(readLocalSearches(user.id));
       });
     return () => { cancelled = true; };
@@ -15798,7 +15820,6 @@ export function App() {
   }, [apiMode, targetId, cars, loading]);
   const awaitingTarget = Boolean(targetId) && !findCarByListing(cars, targetId) && missingTargetId !== targetId;
   const toggleFavorite = (id) => {
-    if (IS_RU) { const next = new Set(favorites); next.has(id) ? next.delete(id) : next.add(id); setFavorites(next); storeFavorites("abdrive-favorites", next); return; }
     // Saving without an account would strand the list in this browser, so the
     // heart offers registration instead of storing anything — and the car is held
     // aside so signing in finishes the click the visitor already made.
@@ -15823,7 +15844,7 @@ export function App() {
     }
     fetchWithRetry(`/api/account/favorites/${encodeURIComponent(id)}`, { method:adding ? "PUT" : "DELETE", credentials:"same-origin" })
       .then(async (response) => {
-        if (response.status === 404) {
+        if (!IS_RU && response.status === 404) {
           storeFavorites(localKey, next);
           setAuthBackend("local");
           return;
@@ -15844,7 +15865,6 @@ export function App() {
   }, [favorites, favoritesReady, path, pendingFavorite, user]);
   const saveSearch = (filters) => {
     const normalized = normalizeSavedFilters(filters);
-    if (IS_RU) { if (savedSearches.some(item => savedSearchKey(item.filters) === savedSearchKey(normalized))) return; const next = [{id: crypto.randomUUID(), title:savedSearchTitle(normalized), filters:normalized, createdAt:new Date().toISOString()}, ...savedSearches]; setSavedSearches(next); storeLocalSearches("abdrive-guest", next); return; }
     // Гостю сохранять некуда: как и сердце в карточке, кнопка предлагает
     // регистрацию, а сам набор фильтров ждёт аккаунт и сохраняется после входа.
     if (!user) {
@@ -15866,7 +15886,7 @@ export function App() {
     }
     fetchWithRetry("/api/account/searches", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ title, filters:normalized }) })
       .then(async (response) => {
-        if (response.status === 404) {
+        if (!IS_RU && response.status === 404) {
           storeLocalSearches(user.id, next);
           setAuthBackend("local");
           return;
@@ -15881,7 +15901,6 @@ export function App() {
   // Обновление сохранённого поиска: запись меняется на месте, без второй копии.
   // На сервере это удаление старой строки и создание новой — отдельной ручки нет.
   const updateSavedSearch = (id, filters) => {
-    if (IS_RU) { const normalized = normalizeSavedFilters(filters); const next = savedSearches.map(item => item.id === id ? {...item, filters:normalized, title:savedSearchTitle(normalized)} : item); setSavedSearches(next); storeLocalSearches("abdrive-guest", next); return; }
     if (!user) return;
     const existing = savedSearches.find((item) => item.id === id);
     if (!existing) {
@@ -15905,17 +15924,23 @@ export function App() {
       storeLocalSearches(user.id, next);
       return;
     }
+    if (IS_RU) {
+      fetch(`/api/account/searches/${encodeURIComponent(id)}`, {method:"PATCH", credentials:"same-origin", headers:{"content-type":"application/json"}, body:JSON.stringify({title,filters:normalized})})
+        .then(async response => {const payload=await response.json();if(!response.ok)throw new Error("search_update_failed");setSavedSearches(current=>current.map(item=>item.id===id?payload.search:item));})
+        .catch(()=>setSavedSearches(previous));
+      return;
+    }
     (async () => {
       try {
         const removal = await fetch(`/api/account/searches/${encodeURIComponent(id)}`, { method:"DELETE", credentials:"same-origin" });
-        if ([404, 502, 503].includes(removal.status)) {
+        if (!IS_RU && [404, 502, 503].includes(removal.status)) {
           storeLocalSearches(user.id, next);
           setAuthBackend("local");
           return;
         }
         if (!removal.ok) throw new Error("search_update_failed");
         const creation = await fetch("/api/account/searches", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ title, filters:normalized }) });
-        if ([404, 502, 503].includes(creation.status)) {
+        if (!IS_RU && [404, 502, 503].includes(creation.status)) {
           storeLocalSearches(user.id, next);
           setAuthBackend("local");
           return;
@@ -15929,7 +15954,6 @@ export function App() {
     })();
   };
   const deleteSavedSearch = (id) => {
-    if (IS_RU) { const next = savedSearches.filter(item => item.id !== id); setSavedSearches(next); storeLocalSearches("abdrive-guest", next); return; }
     if (!user) return;
     const previous = savedSearches;
     const next = savedSearches.filter((item) => item.id !== id);
@@ -15940,7 +15964,7 @@ export function App() {
     }
     fetchWithRetry(`/api/account/searches/${encodeURIComponent(id)}`, { method:"DELETE", credentials:"same-origin" })
       .then((response) => {
-        if (response.status === 404) {
+        if (!IS_RU && response.status === 404) {
           storeLocalSearches(user.id, next);
           setAuthBackend("local");
           return;
@@ -15978,7 +16002,7 @@ export function App() {
       method:"DELETE",
       credentials:"same-origin",
     }))).then((responses) => {
-      if (responses.some((response) => response.status === 404)) {
+      if (!IS_RU && responses.some((response) => response.status === 404)) {
         storeFavorites(localKey, next);
         setAuthBackend("local");
         return;
@@ -16007,11 +16031,12 @@ export function App() {
       try {
         response = await fetchWithRetry(`/api/auth/${mode === "register" ? "register" : "login"}`, { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify(values) });
       } catch {
+        if (IS_RU) throw new Error("auth_failed");
         setAuthBackend("local");
         const localUser = await localAuthenticate(mode, values);
         return complete(localUser, "local");
       }
-      if (response.status === 404) {
+      if (!IS_RU && response.status === 404) {
         setAuthBackend("local");
         const localUser = await localAuthenticate(mode, values);
         return complete(localUser, "local");
@@ -16029,15 +16054,15 @@ export function App() {
   // Заявка от незарегистрированного: либо обычная заявка с именем и телефоном, либо
   // сразу аккаунт — тогда машина попадает в кабинет заказом, как у всех остальных.
   const submitAvailabilityLead = async (car, form) => {
-    if (IS_RU) {
-      const response=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:form.name,phone:form.phone,consent:form.consent,listingId:car.id,destinationId:'moscow',requestKey:form.requestKey}),signal:AbortSignal.timeout(15000)});
-      if(!response.ok)throw new Error((await response.json()).error||'lead_failed');
-      return true;
-    }
     if (form.createAccount) {
       const session = await authenticate("register", { name:form.name, phone:form.phone, password:form.password, confirm:form.confirm, consent:true });
       const done = await requestCarAvailability(car, session?.user, session?.backend);
       if (!done) throw new Error("lead_failed");
+      return true;
+    }
+    if (IS_RU) {
+      const response=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:form.name,phone:form.phone,consent:form.consent,listingId:car.id,destinationId:'moscow',requestKey:form.requestKey}),signal:AbortSignal.timeout(15000)});
+      if(!response.ok)throw new Error((await response.json()).error||'lead_failed');
       return true;
     }
     trackAvailabilityRequest({ listingId:car.id, car });
@@ -16093,7 +16118,7 @@ export function App() {
       } catch {
         throw new Error("profile_update_failed");
       }
-      if (response.status === 404) {
+      if (!IS_RU && response.status === 404) {
         setAuthBackend("local");
         setUser(localUpdateProfile(user.id, normalized));
         return;
@@ -16119,7 +16144,7 @@ export function App() {
           // Обрыв сети: аккаунт на сервере остался бы, поэтому не делаем вид, что удалили.
           throw new Error("account_delete_failed");
         }
-        if (response.status === 404) {
+        if (!IS_RU && response.status === 404) {
           setAuthBackend("local");
           await localDeleteAccount(user.id, password);
           response = null;
@@ -16182,9 +16207,10 @@ export function App() {
   // Pages built entirely from static content must never wait on the catalog request, and the
   // home page renders its own feed skeletons instead of blocking the whole route on it.
   const staticPage =
-    IS_RU && ["/how-it-works", "/faq"].includes(contentPath) ? <RussianServicePage><HomeConversionSections navigate={navigate}/></RussianServicePage> :
+
+    IS_RU && contentPath === "/not-found" ? <NotFound navigate={navigate}/> :
     IS_RU && contentPath === "/privacy" ? <RussianPrivacyPage/> :
-    IS_RU && (contentPath.startsWith("/orders/") || ["/tracking", "/contacts", "/terms", "/models", "/account", "/login", "/register", "/analytics"].includes(contentPath)) ? <NotFound navigate={navigate}/> :
+    IS_RU && (contentPath.startsWith("/orders/") || ["/tracking", "/contacts", "/terms", "/analytics"].includes(contentPath)) ? <NotFound navigate={navigate}/> :
     contentPath === "/how-it-works" ? (
       <HowItWorksPage
         navigate={navigate}
@@ -16279,7 +16305,7 @@ export function App() {
      <AvailabilityContext.Provider value={availability}>
      <AuthContext.Provider value={{ user, backend:authBackend }}>
       <ClientSeo path={path} car={findCarByListing(cars, detailId)} carPending={Boolean(detailId) && (loading || routeLoading || awaitingTarget)} landing={findCatalogLanding(path) || modelLanding.landing || modelLanding.provisional} />
-      <div className={`app-content${!IS_RU && contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
+      <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}
           favoritesCount={favorites.size}

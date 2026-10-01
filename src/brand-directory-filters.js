@@ -1,8 +1,9 @@
+import {SITE} from './site-profile.js';
 export const BRAND_PRICE_SEGMENTS = Object.freeze([
   Object.freeze({ label: "Все сегменты", min: null, max: null }),
-  Object.freeze({ label: "До 20 000 $", min: null, max: 20000 }),
-  Object.freeze({ label: "20 000–40 000 $", min: 20000, max: 40000 }),
-  Object.freeze({ label: "От 40 000 $", min: 40000, max: null }),
+  Object.freeze({ label: SITE.market==="RU"?"До 2 000 000 ₽":"До 20 000 $", min: null, max: SITE.market==="RU"?2000000:20000 }),
+  Object.freeze({ label: SITE.market==="RU"?"2 000 000–4 000 000 ₽":"20 000–40 000 $", min: SITE.market==="RU"?2000000:20000, max: SITE.market==="RU"?4000000:40000 }),
+  Object.freeze({ label: SITE.market==="RU"?"От 4 000 000 ₽":"От 40 000 $", min: SITE.market==="RU"?4000000:40000, max: null }),
 ]);
 
 export function brandMatchesPriceSegment(facts, selectedLabel) {

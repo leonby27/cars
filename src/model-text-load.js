@@ -1,3 +1,5 @@
+import {SITE} from './site-profile.js';
+import {russianModelText} from './markets/ru-content.js';
 // Текст обзора для браузера: подгружается отдельным файлом, когда открыли страницу
 // модели или перешли на неё внутри сайта.
 //
@@ -37,7 +39,7 @@ export async function loadModelText(slug) {
   if (!file) return null;
   // Пока действует льгота, текст отдаётся слово в слово; когда квота кончится,
   // фразы про нулевую пошлину переписываются — так же, как на сервере.
-  const text = rewriteEvDutyCopyDeep((await file()).default);
+  const text = (SITE.market==='RU'?russianModelText((await file()).default):rewriteEvDutyCopyDeep((await file()).default));
   loaded.set(slug, text);
   return text;
 }

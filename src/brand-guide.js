@@ -1,3 +1,4 @@
+import {SITE} from './site-profile.js';
 import { usdToByn } from "./pricing.js";
 import { siteFromPhrase, siteInPhrase, siteMarketplacesPhrase } from "./origin.js";
 
@@ -20,7 +21,7 @@ export const guidePlural = (count, one, few, many) => {
 };
 export const guidePrice = (value, currency = "USD") => value == null
   ? "Нет данных"
-  : currency === "BYN" ? `${guideNumber(usdToByn(value))} BYN` : `${guideNumber(value)} $`;
+  : SITE.market === "RU" ? `${guideNumber(value)} ₽` : currency === "BYN" ? `${guideNumber(usdToByn(value))} BYN` : `${guideNumber(value)} $`;
 export const guideYears = ({ yearMin, yearMax }) => yearMin && yearMax
   ? yearMin === yearMax ? String(yearMin) : `${yearMin}–${yearMax}`
   : "Нет данных";
@@ -47,6 +48,12 @@ export const ZEEKR_BUDGETS = [
 ];
 
 export const guideBudgetTitle = (band, currency = "USD") => {
+  if(SITE.market==='RU'){
+    const amount=n=>guideNumber(n*100)+' ₽';
+    if(band.min==null)return `До ${amount(band.max)}`;
+    if(band.max==null)return `От ${amount(band.min)}`;
+    return `${guideNumber(band.min*100)}–${amount(band.max)}`;
+  }
   if (currency !== "BYN") return band.title;
   const value = (usd) => `${guideNumber(usdToByn(usd))} BYN`;
   if (band.min == null) return `До ${value(band.max)}`;

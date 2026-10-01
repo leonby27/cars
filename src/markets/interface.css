@@ -15,3 +15,15 @@
   .market-destination select { height: 40px; font-size: 13px; padding-left: 10px; padding-right: 26px; }
   .market-destination > svg { right: 8px; }
 }
+
+.market-cost-rows > .market-cost-range { flex-wrap: wrap; row-gap: 4px; }
+.market-cost-range dd { margin-left: auto; }
+
+@media (max-width: 700px) {
+  .brand-guide-price-range.is-rub .brand-guide-price-labels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .brand-guide-price-range.is-rub .brand-guide-price-labels > span { position: static; transform: none; padding: 4px 0; align-items: flex-start; text-align: left; }
+  .brand-guide-price-range.is-rub .brand-guide-price-labels > .brand-guide-price-median { align-items: center; text-align: center; }
+  .brand-guide-price-range.is-rub .brand-guide-price-labels > .brand-guide-price-max { align-items: flex-end; text-align: right; }
+  .brand-guide-price-range.is-rub .brand-guide-price-labels strong { font-size: 12px; white-space: nowrap; }
+  .brand-guide-price-range.is-rub .brand-guide-price-labels small { font-size: 10px; }
+}

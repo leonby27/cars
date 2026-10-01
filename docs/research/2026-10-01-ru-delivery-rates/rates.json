@@ -1,0 +1,147 @@
+{
+  "date": "2026-10-01",
+  "question": "Средние открытые тарифы доставки автомобилей до Москвы с учётом города и габаритов. Основа для ABDrive без дополнительных предупреждающих блоков на сайте.",
+  "sources": [
+    {
+      "id": "apk",
+      "url": "https://apktrans.com/",
+      "scope": "Хоргос — Москва",
+      "price": 1200,
+      "currency": "USD"
+    },
+    {
+      "id": "amanat",
+      "url": "https://amanatgro.kz/Amanat-Auto/Amanat-novye-avto-i-avto-s-malenkim-probegom-Khorgos.html",
+      "scope": "Хоргос — Москва",
+      "price": 1600,
+      "currency": "USD"
+    },
+    {
+      "id": "topcar",
+      "url": "https://www.topcar25.ru/dostavka",
+      "scope": "Хоргос — Москва",
+      "price": 1800,
+      "currency": "USD"
+    },
+    {
+      "id": "chinaauto",
+      "url": "https://xn----8sbec4dxa.xn--p1ai/dostavka-i-rastamozhka-avto-iz-kitaya",
+      "scope": "Хоргос — Москва",
+      "price": 2000,
+      "currency": "USD"
+    },
+    {
+      "id": "autoport",
+      "url": "https://autoport-group.com/avtovoz-vladivostok-moskva",
+      "scope": "Владивосток — Москва, седан, от",
+      "price": 169900,
+      "currency": "RUB"
+    },
+    {
+      "id": "trackdv",
+      "url": "https://trackdv.ru/vladivostok-moscow",
+      "scope": "Владивосток — Москва, от",
+      "price": 175000,
+      "currency": "RUB"
+    },
+    {
+      "id": "apk",
+      "url": "https://apktrans.com/",
+      "scope": "Владивосток — Москва",
+      "price": 180000,
+      "currency": "RUB"
+    },
+    {
+      "id": "azway",
+      "url": "https://azway.ru/dostavka-avto-iz-vladivostoka",
+      "scope": "Владивосток — Москва, кроссовер до 4,9 м",
+      "price": 205000,
+      "currency": "RUB"
+    }
+  ],
+  "calculation": {
+    "horgosMoscowUsd": {
+      "sample": [
+        1200,
+        1600,
+        1800,
+        2000
+      ],
+      "mean": 1650,
+      "used": 1650
+    },
+    "vladivostokMoscowRub": {
+      "sample": [
+        169900,
+        175000,
+        180000,
+        205000
+      ],
+      "mean": 182475,
+      "used": 182000
+    }
+  },
+  "supportingSources": [
+    {
+      "url": "https://haojiangexport.com/ru/freight-calculator",
+      "method": "Интерактивный расчёт: land, Moscow, 1 автомобиль, стоимость 30000 USD; тарифы August 2026",
+      "sedan": {
+        "freightUsd": 1552,
+        "chinaExpensesUsd": 1050,
+        "insuranceUsd": 149,
+        "totalUsd": 2750
+      },
+      "largeSUV": {
+        "freightUsd": 2335,
+        "chinaExpensesUsd": 1050,
+        "insuranceUsd": 149,
+        "totalUsd": 3533
+      },
+      "largeDifferenceUsd": 783,
+      "largeUsedUsd": 800
+    },
+    {
+      "url": "https://kimchiauto.ru/",
+      "koreaExpensesUsd": 270,
+      "seaUsd": 800
+    },
+    {
+      "url": "https://nightcar24.ru/rashody-po-koree-i-fraht/",
+      "exporterUsd": 300,
+      "otherKoreaKrw": 1080000,
+      "seaKrw": 1650000,
+      "interpretation": "На странице единицы местами продублированы словом тыс.; использованы целые суммы KRW согласно общей смете страницы."
+    },
+    {
+      "url": "https://senatcars.ru/news/perevozka-i-dostavka-b-u-avtomobilej-iz-korei-stoimost-sroki-nyuansy",
+      "publishedYear": 2024,
+      "seaRub": [
+        80000,
+        85000
+      ],
+      "role": "Более старый контрольный ориентир; не используется для автовоза по РФ."
+    },
+    {
+      "url": "https://www.pacifictrans.ru/pricing/tarify-na-perevozku-avto",
+      "effective": "2026-09-01",
+      "railRub": [
+        225000,
+        240000,
+        255000
+      ],
+      "role": "Железнодорожный тариф исключён из среднего автовоза."
+    }
+  ],
+  "modelAssumptions": [
+    "Публичные цены различаются составом и часто являются ценами от. Это выборка открытых предложений, а не статистика всех заключённых перевозок.",
+    "По каждому городу собственного опубликованного прайса нет. Зоны и границы кузова взяты из эталонного калькулятора ABCars. Внутреннее плечо по Китаю: середины исходных интервалов 225/500/600/700/825 USD.",
+    "Документы и страхование Китая 500 USD: распределение наблюдаемого пакета China expenses + insurance 1199 USD между внутренним плечом восточной зоны 700 и документами/страхованием 499, округлено. Отдельной рыночной котировкой эта строка не является.",
+    "Корея: среднее моря (800 USD + 1650000 KRW по 0.0615127 RUB/KRW и 83.5588 RUB/USD + 82500 RUB по тому же USD) около 1001 USD, округлено до 1000.",
+    "Внутренние расходы Кореи: среднее опубликованных пакетов около 682 USD; использовано 675 для столичного региона (450 документы + 225 перегон). Пусан 100, юг150 USD — середины зон ABCars.",
+    "Надбавка крупного кузова Кореи 40000 RUB — модель: около 20000 на дороге и около 250 USD на море. Публичный Autoport показывает разницу sedan/SUV30000, PacificTrans rail15000–30000; это не отдельная подтверждённая морская котировка.",
+    "Крупный кузов: длина от 4950 мм или масса от 2300 кг, как в эталоне; до получения размеров используется общий список крупных моделей.",
+    "Курс ЦБ обновляется существующим серверным механизмом. Каждая строка валютной логистики округляется до 1000 RUB; итог доставки — сумма строк.",
+    "FOB Horgos/Busan не получает повторные внутренние расходы и документы. Налоги и услуги считаются отдельно."
+  ],
+  "implementation": "abdrive-worktree/config/ru-pricing.mjs; src/markets/ru-delivery.js; server/abdrive/pricing.mjs"
+}

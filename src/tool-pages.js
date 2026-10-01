@@ -45,6 +45,7 @@ import { EV_QUOTA, evQuotaState, isEvQuotaExhausted } from "./ev-quota.js";
 // с годом («растаможка авто из Китая 2026»), и страница без года проигрывает такой же
 // странице с годом. Год берём не из текста, а из часов: сайт пересобирается каждую
 // ночь, поэтому 1 января он сменится сам и никто не забудет его поправить.
+const IS_RU = SITE.market === 'RU';
 const CURRENT_YEAR = new Date().getFullYear();
 
 export const TOOL_PAGES = Object.freeze([
@@ -115,7 +116,12 @@ export const TOOL_PAGES = Object.freeze([
     seoDescription: `Одна и та же машина: сколько стоит в Беларуси и сколько выходит привезти ${siteFromPhrase()} под ключ. Сравнение по моделям и годам выпуска с разницей в деньгах.`,
     lead: "Честно сравниваем цены на одинаковые машины.",
   },
-].filter((tool) => hasSiteService(SITE, ({ quota: "quota", customs: "customs", cost: "delivery", brands: "brands", range: "range", market: "marketComparison" })[tool.kind])));
+].map(tool => !IS_RU ? tool : ({...tool,
+  h1: tool.h1.replace('в Беларуси', 'в России'),
+  seoTitle: tool.seoTitle.replaceAll('abcars.by', 'ABDrive').replaceAll('в Беларусь', 'в Россию').replaceAll('в Беларуси', 'в России'),
+  seoDescription: tool.seoDescription.replaceAll('до Минска', 'до Москвы'),
+  lead: tool.kind === 'cost' ? 'Считаем доставку до Москвы.' : tool.lead,
+})).filter((tool) => hasSiteService(SITE, ({ quota: "quota", customs: "customs", cost: "delivery", brands: "brands", range: "range", market: "marketComparison" })[tool.kind])));
 
 const BY_PATH = new Map(TOOL_PAGES.map((page) => [page.path, page]));
 
@@ -135,6 +141,7 @@ const MONTHS = ["января", "февраля", "марта", "апреля", 
  * пошлин меняются раз в годы, курс — каждую ночь, поэтому по курсу и датируем.
  */
 export function toolUpdatedLabel(tool) {
+  if (IS_RU) return null;
   const day = (value) => {
     const date = value instanceof Date ? value : null;
     if (!date || Number.isNaN(date.getTime())) return null;
@@ -198,6 +205,7 @@ export const deliveryTotalDays = () => {
  * и темп, на растаможке — ставки, на доставке и в калькуляторе — крупные строки сметы.
  */
 export function toolPageStats(kind) {
+  if (IS_RU) return [];
   if (kind === "quota") {
     const state = evQuotaState();
     const stats = [

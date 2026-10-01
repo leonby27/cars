@@ -20,17 +20,7 @@ try {
   assert.equal(await destination.inputValue(),'moscow');
   assert.deepEqual(await destination.locator('option').allTextContents(),['Москва']);
   await destination.selectOption('moscow');
-  const firstId=await page.locator('.car-row').first().getAttribute('data-car-id');
-  await page.locator('.car-row').first().getByRole('button',{name:'Добавить в избранное',exact:true}).first().dispatchEvent('click');
-  await page.getByRole('button',{name:'Избранное',exact:true}).click();
-  await page.waitForURL('**/favorites');await page.locator(`.car-row[data-car-id="${firstId}"]`).waitFor();
-  await page.reload({waitUntil:'networkidle'});
-  await page.locator(`.car-row[data-car-id="${firstId}"]`).waitFor();
-  await page.goto(base+'/catalog?brand=BMW',{waitUntil:'networkidle'});
-  await page.getByRole('button',{name:'Сохранить поиск',exact:true}).click();
-  await page.goto(base+'/searches',{waitUntil:'networkidle'});
-  await page.locator('.saved-search-card').first().waitFor();
-  assert.equal(await page.locator('.auth-modal').count(),0,'No pretend local account');
+  // Account, favorites and saved-search lifecycle is covered by abdrive-account-functional.mjs.
   await page.goto(base+'/catalog/bmw/x3',{waitUntil:'networkidle'});
   if(viewport.width>980){
    await page.getByText('Быстрый просмотр',{exact:true}).click();
@@ -43,7 +33,7 @@ try {
   }
   await page.locator('.car-row .card-link-overlay').first().dispatchEvent('click');
   await page.waitForURL('**/cars/*');await page.locator('.detail-main').waitFor();
-  assert.match(await page.locator('.detail-main').textContent(),/Стоимость\sдо\sМосквы/);
+  assert.match(await page.locator('.detail-main').textContent(),/Доставка\sдо\sМосквы/);
   await page.goto(base+'/',{waitUntil:'networkidle'});
   assert.ok(await page.locator('.featured-card').count()>0);
   assert.match(await page.locator('h1').first().textContent(),/Россию/);
@@ -51,7 +41,7 @@ try {
   await page.getByRole('button',{name:'Тёмная тема',exact:true}).click();
   assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
   assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);
-  console.log(`${viewport.width}px: catalog, favorites/reload, saved search, model, detail, home, theme passed`);
+  console.log(`${viewport.width}px: catalog, model, detail, home, theme passed`);
   await context.close();
  }
 } finally {await browser.close();}

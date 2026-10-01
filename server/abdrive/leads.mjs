@@ -17,10 +17,10 @@ export function normalizeLead(body) {
 }
 
 // Snapshot and consentVersion come from the server, not from browser-supplied prices.
-export async function saveLead(client, lead, {snapshot,consentVersion,destination}) {
+export async function saveLead(client, lead, {snapshot,consentVersion,destination,transaction=true}) {
   if (!consentVersion || !destination?.id || !destination?.name || !snapshot) throw new Error('lead_configuration_missing');
   const id=randomUUID();
-  await client.query('BEGIN');
+  if(transaction)await client.query('BEGIN');
   try {
     const inserted=await client.query(`INSERT INTO leads
       (id,request_key,name,phone,destination_id,destination_name,listing_id,snapshot,comment,consent_version)
@@ -34,9 +34,9 @@ export async function saveLead(client, lead, {snapshot,consentVersion,destinatio
       [lead.requestKey,lead.phone,lead.name,lead.comment,lead.listingId,destination.id]);
       if (!existing.rowCount) throw new Error('request_key_conflict');
     }
-    await client.query('COMMIT');
+    if(transaction)await client.query('COMMIT');
     return {accepted:true};
-  } catch(error) { await client.query('ROLLBACK');throw error; }
+  } catch(error) { if(transaction)await client.query('ROLLBACK');throw error; }
 }
 
 export async function claimNotification(db) {

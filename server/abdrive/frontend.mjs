@@ -1,7 +1,12 @@
+import {isBrandGuideLanding} from '../../src/brand-guide.js';
+import {RU_BLOG_REDIRECTS} from '../../src/markets/ru-editorial.js';
+import {MODEL_PAGES,modelPageRedirect} from '../../src/model-pages.js';
+import {findBlogPost,blogPosts} from '../../src/blog-posts.js';
+import {findToolPage, TOOL_PAGES} from '../../src/tool-pages.js';
 import {homePopularModels} from "../../src/home-popular-models.js";
 import {russianLanding} from "./shared-page.mjs";
 import {ruPageSeo} from "../../src/markets/interface.js";
-import {CATALOG_PAGE_SIZE} from "../../src/catalog-landings.js";
+import {CATALOG_PAGE_SIZE,CATALOG_LANDINGS} from "../../src/catalog-landings.js";
 import {readFile,stat} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -9,7 +14,7 @@ import {listingNumber} from '../../src/listing-id.js';
 
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brandFiles=new Set(['/favicon.svg','/favicon-96.png','/favicon.ico','/apple-touch-icon.png']);
-const mime={'.ico':'image/x-icon','.js':'text/javascript','.css':'text/css','.woff2':'font/woff2','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.jpg':'image/jpeg','.avif':'image/avif'};
+const mime={'.mp4':'video/mp4','.ico':'image/x-icon','.js':'text/javascript','.css':'text/css','.woff2':'font/woff2','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.jpg':'image/jpeg','.avif':'image/avif'};
 export async function createFrontend({buildDirectory,catalog,site,privacyText=null,leadEnabled:configuredIntake=false}){
  const directory=resolve(buildDirectory);
  const [template,entry]=await Promise.all([
@@ -18,7 +23,7 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
  ]);
  const leadEnabled=Boolean(privacyText?.trim()&&configuredIntake);
  return async(request,response,url)=>{
-  if(brandFiles.has(url.pathname)||/^\/(assets|abdrive|brands|services|trust-strip|fonts|illustrations|flags)\//.test(url.pathname)){
+  if(brandFiles.has(url.pathname)||/^\/(assets|abdrive|brands|services|trust-strip|fonts|illustrations|flags|videos|social)\//.test(url.pathname)||(/^\/blog\//.test(url.pathname)&&mime[extname(url.pathname)])){
    const name=url.pathname.slice(1);
    if(!/^[a-zA-Z0-9_./-]+$/.test(name)||name.split('/').includes('..')||!mime[extname(name)]){response.writeHead(404);return response.end();}
    try{
@@ -32,8 +37,12 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
   }
   if(url.pathname==='/sitemap.xml'){
    response.writeHead(200,{'content-type':'application/xml; charset=utf-8'});
-   return response.end('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+['/','/catalog','/how-it-works','/faq'].map(path=>`<url><loc>${site.origin}${path}</loc></url>`).join('')+'</urlset>');
+   return response.end('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+['/','/catalog','/how-it-works','/models','/blog',...blogPosts().map(post=>post.path),...TOOL_PAGES.map(tool=>tool.path),...CATALOG_LANDINGS.map(landing=>landing.path),...MODEL_PAGES.map(page=>page.path)].map(path=>`<url><loc>${site.origin}${path}</loc></url>`).join('')+'</urlset>');
   }
+  if(RU_BLOG_REDIRECTS[url.pathname]){response.writeHead(301,{location:RU_BLOG_REDIRECTS[url.pathname]});return response.end();}
+  if(url.pathname==='/faq'){response.writeHead(301,{location:'/how-it-works#faq'});return response.end();}
+  if(url.pathname==='/calculator'){response.writeHead(301,{location:'/customs'});return response.end();}
+  if(url.pathname.startsWith('/models/')){const target=modelPageRedirect(url.pathname.slice(8));if(target){response.writeHead(301,{location:target});return response.end();}}
   let boot={kind:'notFound',leadEnabled,privacyText};let status=200;
   const path=url.pathname.replace(/\/+$/,'')||'/';
   boot.path=path;boot.search=url.search;
@@ -63,12 +72,31 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
   }else if(path.startsWith('/cars/')){
    const listing=await catalog.get(decodeURIComponent(path.slice(6)));
    if(listing)boot={...boot,kind:'car',car:listing.car,carId:listing.car.id,carValue:listing.car};else status=404;
-  }else if(path==='/how-it-works')boot.kind='process';
+  }else if(path==='/blog'||findBlogPost(path))boot.kind='blog';
+  else if(findToolPage(path))boot.kind='tool';
+  else if(path==='/how-it-works')boot.kind='process';
+  else if(path==='/models')boot.kind='models';
   else if(path==='/faq')boot.kind='faq';
-  else if(['/favorites','/searches'].includes(path))boot.kind='private';
+  else if(['/favorites','/searches','/account','/login','/register'].includes(path))boot.kind='private';
   else if(path==='/privacy'&&privacyText)boot.kind='privacy';
   else status=404;
   if(status===404)boot.path='/not-found';
+  if(status===200&&['blog','models','tool'].includes(boot.kind)&&entry.apiRequests){
+   const requested=entry.apiRequests(boot);
+   boot.api={...(boot.api||{})};
+   await Promise.all(requested.map(async address=>{
+    const query=new URL(address,site.origin);let data;
+    try{
+     if(query.pathname==='/api/cars')data=await catalog.list(query.searchParams);
+     else if(query.pathname==='/api/cars/summary'&&catalog.summary)data=await catalog.summary(query.searchParams);
+     else if(query.pathname==='/api/model-facts'&&catalog.modelFacts)data=await catalog.modelFacts();
+     else if(query.pathname==='/api/catalog/meta')data=await catalog.sharedMeta(query.searchParams);
+     if(data!==undefined)boot.api[address]=data;
+    }catch{}
+   }));
+   if(boot.api['/api/catalog/meta']){boot.metaValue=boot.api['/api/catalog/meta'];boot.metaQuery='';}
+  }
+  if(landing&&isBrandGuideLanding(landing)&&catalog.brandGuide){boot.brandGuideValue=await catalog.brandGuide(landing.brand);boot.brandGuideBrand=landing.brand;}
   const seo=ruPageSeo(path,{car:boot.car,landing,search:url.search});
   const title=status===404?'Страница не найдена — ABDrive':seo.title;
   const canonical=site.origin+(boot.car?'/cars/'+encodeURIComponent(listingNumber(boot.car.id)):path);
@@ -79,7 +107,7 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
    .replace('</head>',()=>`<meta name="description" content="${escape(description)}"/><meta name="robots" content="${noindex?'noindex,follow':'index,follow'}"/><link rel="canonical" href="${escape(canonical)}"/></head>`)
    .replace('<div id="root">',()=>`<div id="root" data-prerender="${escape(path)}">`).replace('<!--abdrive-app-->',()=>entry.render(boot))
    .replace('<script id="abdrive-data" type="application/json">{}</script>',()=>`<script id="abdrive-data" type="application/json">${data}</script>`);
-  response.writeHead(status,{'content-type':'text/html; charset=utf-8','cache-control':status===200?'public,max-age=0,s-maxage=30':'no-store','x-content-type-options':'nosniff'});
+  response.writeHead(status,{'content-type':'text/html; charset=utf-8','cache-control':status===200?(boot.kind==='private'?'no-store':'public,max-age=0,s-maxage=30'):'no-store','x-content-type-options':'nosniff'});
   response.end(markup);
  };
 }

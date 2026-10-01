@@ -1,8 +1,10 @@
+import {createAccountApi} from './accounts.mjs';
+import {createRussianRates} from './pricing.mjs';
 import {russianModel} from "./shared-page.mjs";
 import {normalizeLead,saveLead} from './leads.mjs';
 
-const reply=(response,status,data)=>{
- response.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});
+const reply=(response,status,data,headers={})=>{
+ response.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff',...headers});
  response.end(JSON.stringify(data));
 };
 async function readBody(request){
@@ -21,12 +23,18 @@ function rateLimiter(){
  };
 }
 
-export function createAbdriveHandler({catalog,siteDatabase,site,consentVersion=null,frontend=null,log=console.error}){
+export function createAbdriveHandler({catalog,siteDatabase,site,consentVersion=null,registrationConsentVersion=consentVersion,frontend=null,log=console.error}){
  const allow=rateLimiter();
+ const accounts=createAccountApi({database:siteDatabase,catalog,site,consentVersion,registrationConsentVersion});
+ const rates=createRussianRates();
  return async(request,response)=>{
   try{
    const url=new URL(request.url,site.origin);
+   const accountResponse=await accounts(request,url,readBody);
+   if(accountResponse)return reply(response,accountResponse.status,accountResponse.body,accountResponse.headers);
+   if(request.method==='GET'&&url.pathname==='/api/rates')return reply(response,200,await rates());
    if(request.method==='GET'&&url.pathname==='/api/model-facts')return reply(response,200,await catalog.modelFacts());
+   if(request.method==='GET'&&url.pathname==='/api/brand-guide')return reply(response,200,await catalog.brandGuide(url.searchParams.get('brand')));
    if(request.method==='GET'&&url.pathname==='/api/model-catalog') {
     const model=await russianModel(catalog,`/catalog/${encodeURIComponent(url.searchParams.get('brand')||'')}/${encodeURIComponent(url.searchParams.get('model')||'')}`);
     return reply(response,model?200:404,model||{error:'not_found'});
@@ -34,6 +42,7 @@ export function createAbdriveHandler({catalog,siteDatabase,site,consentVersion=n
    if(request.method==='GET'&&url.pathname==='/api/health')return reply(response,200,{ok:true,site:site.id});
    if(request.method==='GET'&&['/api/catalog','/api/cars'].includes(url.pathname))return reply(response,200,await catalog.list(url.searchParams));
    if(request.method==='GET'&&url.pathname==='/api/catalog/meta')return reply(response,200,catalog.sharedMeta?await catalog.sharedMeta(url.searchParams):await catalog.meta(url.searchParams.get('brand')||''));
+   if(request.method==='GET'&&url.pathname==='/api/cars/summary')return reply(response,200,await catalog.summary(url.searchParams));
    if(request.method==='GET'&&url.pathname.startsWith('/api/cars/')){
     const found=await catalog.get(decodeURIComponent(url.pathname.slice(10)));
     return reply(response,found?200:404,found?found.car:{error:'not_found'});

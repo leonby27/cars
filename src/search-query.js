@@ -1,3 +1,5 @@
+import {SITE} from './site-profile.js';
+import {RU_PRICING} from '../config/ru-pricing.mjs';
 // Числовая грамматика строки поиска: цена, пробег и годы, написанные словами —
 // «от 25000 до 40000», «пробег до 50 тыс км», «2021-2023», «дешевле 30к», «$30000».
 // Числа с такими признаками вынимаются из запроса, остаток (rest) уходит на разбор
@@ -11,7 +13,7 @@ const KRW_USD = PRICING.krwBynPer1000 / 1000 / PRICING.usdByn;
 // каталога. Валюта без явного знака — та, что выбрана переключателем на сайте,
 // её передают параметром currency.
 const toUsd = (amount, currency) =>
-  currency === "BYN" ? amount / PRICING.usdByn : currency === "CNY" ? amount * CNY_USD : currency === "KRW" ? amount * KRW_USD : currency === "EUR" ? amount * (PRICING.eurByn / PRICING.usdByn) : amount;
+  SITE.market === "RU" ? amount * (RU_PRICING.rates[currency] || 1) : currency === "BYN" ? amount / PRICING.usdByn : currency === "CNY" ? amount * CNY_USD : currency === "KRW" ? amount * KRW_USD : currency === "EUR" ? amount * (PRICING.eurByn / PRICING.usdByn) : amount;
 
 // Годом считается только правдоподобный: «2050» и «1234» — суммы, а не годы.
 const isYearLike = (digits) => /^(19|20)\d{2}$/.test(digits) && Number(digits) >= 1990 && Number(digits) <= 2030;
@@ -21,7 +23,7 @@ const currencyOf = (word) =>
   word === "$" || word === "usd" || word === "дол" || word === "уе" || word.startsWith("долл") || word.startsWith("бакс")
     ? "USD"
     : word.startsWith("руб") || word === "р" || word === "byn" || word === "br" || word === "rub" || word === "бр" || word === "бел" || word.startsWith("белорус")
-      ? "BYN"
+      ? (SITE.market === "RU" ? "RUB" : "BYN")
       : word.startsWith("юан") || word === "cny" || word === "rmb"
         ? "CNY"
         : word.startsWith("вон") || word === "krw" || word === "won" || word === "₩"
@@ -91,6 +93,7 @@ const prepare = (query) =>
     .replace(/(^|[^0-9a-zа-я])б\/у([^0-9a-zа-я]|$)/g, "$1 $2")
     .replace(/[,/]/g, " или ")
     .replace(/~/g, " примерно ")
+    .replace(/₽/g, " rub ")
     .replace(/€/g, " евро ")
     .replace(/¥/g, " юаней ")
     .replace(/[–—−]/g, "-")

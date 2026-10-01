@@ -13,6 +13,9 @@ const SCAN = ["src", "server", "scripts"];
 // Файлы и папки, где страна — предмет текста, а не шаблон.
 const ALLOWED = [
   "src/model-texts/", // тексты обзоров: факты о китайских версиях
+  "src/markets/ru-blog/", // Russian editions of country-specific articles
+  "src/markets/ru-editorial.js", // Country-specific editorial metadata
+  "src/markets/ru-tool-texts.js", // Delivery and brand directory copy
   "src/blog-texts/", // статьи журнала
   "src/china-brands.js", // справочник китайских марок
   "src/city-names.js", // китайские города
