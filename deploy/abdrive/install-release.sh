@@ -48,7 +48,7 @@ done
 [[ $healthy == 1 ]]
 curl --fail --silent --max-time 15 http://127.0.0.1:8788/api/catalog/meta | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{let d=JSON.parse(s);console.log("Catalog vehicles:",d.total);process.exit(d.total>0?0:1)})'
 curl --fail --silent --max-time 15 http://127.0.0.1:8788/catalog -o /tmp/abdrive-release-check.html
-for path in / /china-brands /blog /catalog/byd /catalog/do-2000000-rub; do
+for path in / /china-brands /blog /catalog/byd /catalog/do-2000000-rub /catalog/tesla/model-y /catalog/petrol /catalog/suv; do
   curl --fail --silent --max-time 15 "http://127.0.0.1:8788$path" -o /dev/null
 done
 # Initial HTTP host only; never overwrite later HTTPS configuration.

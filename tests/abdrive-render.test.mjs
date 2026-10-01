@@ -14,6 +14,8 @@ const directory=resolve(process.env.ABDRIVE_BUILD_DIR||'dist-abdrive');
 test('RU uses shared pages, own metadata and safe data; BY tools and documents stay unavailable', {skip:!existsSync(resolve(directory,'ssr/entry-server.js'))},async()=>{
  const car={id:'che168-1',number:'1',title:'Test $& </script><script>alert(1)</script>',brand:'BYD',model:'Seal',year:2024,type:'Электромобиль',mileage:123,origin:'china',source:'Che168',bodyColor:'Black',battery:80,electricRange:550,checkedAt:'2026-10-01T09:00:00Z',facts:[{label:'Цвет кузова',value:'Чёрный'}],images:[],offer:{status:'unavailable',totalAmount:null,currency:'RUB'}};
  const catalog={list:async params=>{if(params.get('yearMin')==='invalid')throw new Error('invalid_filter');return {cars:[car],items:[car],total:1,page:1,hasMore:false};},get:async id=>['1','che168-1'].includes(id)?{car}:null,meta:async()=>({brands:[{brand:'BYD',count:1}],models:[{model:'Seal',count:1}],total:1}),sharedMeta:async()=>({brands:[{brand:'BYD',count:1}],models:[{model:'Seal',count:1}],bodyTypes:[],drives:[],countries:[],availability:{},total:1})};
+ catalog.summary=async()=>({total:1,powertrains:[{type:'Электромобиль',count:1}],bodyTypes:[{name:'SUV / кроссовер',count:1}]});
+ catalog.modelFacts=async()=>({models:[{brand:'Genesis',model:'GV70',powertrains:['Электромобиль'],bodyTypes:['SUV / кроссовер'],count:100},{brand:'Tesla',model:'Model Y',powertrains:['Электромобиль'],bodyTypes:['SUV / кроссовер'],count:10}]});
  const frontend=await createFrontend({buildDirectory:directory,catalog,site});
  const server=http.createServer(createAbdriveHandler({catalog,site,siteDatabase:{},frontend,log:()=>{}}));
  server.listen(0,'127.0.0.1');await once(server,'listening');const base=`http://127.0.0.1:${server.address().port}`;

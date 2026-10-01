@@ -110,7 +110,11 @@ export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>n
     return {cars:items,items,total:selection.total,page:q.page,limit:q.limit,offset:q.offset,hasMore:q.offset+q.limit<Math.min(selection.total,5000)};
    }
    const count=await db.query(`SELECT count(*)::int AS total ${from} WHERE ${q.where}`,q.args);
-   const cars=await db.query(`SELECT ${columns} ${from} WHERE ${q.where} ORDER BY ${q.order} LIMIT $${q.args.length+1} OFFSET $${q.args.length+2}`,[...q.args,q.limit,q.offset]);
+   // Sort only identifiers; load large source specifications/photos for this page.
+   const page=await db.query(`SELECT l.id ${from} WHERE ${q.where} ORDER BY ${q.order} LIMIT $${q.args.length+1} OFFSET $${q.args.length+2}`,[...q.args,q.limit,q.offset]);
+   const ids=page.rows.map(row=>row.id),positions=new Map(ids.map((id,i)=>[id,i]));
+   const cars=ids.length?await db.query(`SELECT ${columns} ${from} WHERE l.status='active' AND l.id=ANY($1::text[])`,[ids]):{rows:[],rowCount:0};
+   cars.rows.sort((a,b)=>positions.get(a.id)-positions.get(b.id));
    const total=count.rows[0].total;
    const rates=await getRates();
    const items=cars.rows.map(row=>publicCar(row,{rates,now:now()}));return {cars:items,items,total,page:q.page,limit:q.limit,offset:q.offset,hasMore:q.offset+cars.rowCount<Math.min(total,5000),refreshedAt:items.reduce((date,car)=>String(car.checkedAt||'')>date?String(car.checkedAt):date,'')};
