@@ -69,3 +69,18 @@ test('planner and fingerprint agree on audited render-only changes',async()=>{
   assert.notEqual(catalogBuildKey(dir,{}),first);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('feed compatibility is independent of journal/catalog preparation but includes prices and settings',async()=>{
+ const {feedBuildKey}=await import('../scripts/lib/catalog-build-cache.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'abcars-feed-key-'));
+ try{
+  for(const d of ['src','server','config','db','scripts/lib'])mkdirSync(join(dir,d),{recursive:true});
+  for(const f of ['package.json','package-lock.json','src/pricing.js'])writeFileSync(join(dir,f),'original');
+  const first=feedBuildKey(dir,{siteUrl:'https://abcars.by',freshDays:7});
+  for(const f of ['src/blog-posts.js','scripts/generate-seo-pages.mjs','scripts/lib/blog-cover.mjs'])writeFileSync(join(dir,f),'new journal selection');
+  assert.equal(feedBuildKey(dir,{siteUrl:'https://abcars.by',freshDays:7}),first);
+  assert.notEqual(feedBuildKey(dir,{siteUrl:'https://abcars.by',freshDays:3}),first);
+  writeFileSync(join(dir,'src/pricing.js'),'changed rates');
+  assert.notEqual(feedBuildKey(dir,{siteUrl:'https://abcars.by',freshDays:7}),first);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
