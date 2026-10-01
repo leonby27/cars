@@ -15,7 +15,7 @@ export function resolveRussianMotorPower(facts,{entries=RU_POWER_REFERENCE}={}) 
   if(entry.motorCode&&normalize(facts.motorCode)!==normalize(entry.motorCode))return false;
   if(entry.motorCount&&facts.motorCount!==entry.motorCount)return false;
   if(entry.drive&&facts.drive!==entry.drive)return false;
-  if(entry.peak&&!near(facts.electricPeakKw,entry.peak,1))return false;
+  if(entry.peak&&!near(facts.electricPeakKw,entry.peak,1)&&!(facts.electricPeakKw==null&&entry.models&&entry.battery))return false;
   if(entry.battery&&!near(facts.battery,entry.battery,.15))return false;
   // Unknown trim keeps all compatible candidates; a known trim excludes other versions.
   if(entry.variant&&facts.variant&&entry.variant!==facts.variant)return false;

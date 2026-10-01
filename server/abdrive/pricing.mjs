@@ -25,7 +25,7 @@ export function estimateRussianOffer(row,{rates=RU_PRICING.rates,tariffs=RU_PRIC
   if(['unknown','unknown-hybrid'].includes(power.kind))return unavailable('powertrain_type_needed');
   const {cc,iceHp:hp}=power;
   if(!electric&&(!cc||cc<500||cc>8000||!hp||hp<30||hp>2000))return unavailable('engine_specs_missing');
-  if(electric&&!power.continuousKw&&!power.electricPeakKw)return unavailable('motor_power_missing');
+  if(electric&&!power.continuousKw&&!power.electricPeakKw&&power.motorPower.method!=='reference')return unavailable('motor_power_missing');
   if([power.continuousKw,power.electricPeakKw].some(value=>value!==null&&(value<1||value>3000)))return unavailable('motor_power_conflict');
   if(power.continuousKw&&power.electricPeakKw&&power.continuousKw>power.electricPeakKw)return unavailable('motor_power_conflict');
   const origin=originForSource(row.source);

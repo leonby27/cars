@@ -50,6 +50,9 @@ test('Catalog database fields and full technical variant feed the same dictionar
  const power=russianPowertrain(row);assert.equal(power.motorPower.minKw,179);
  const kia=russianPowertrain({brand:'Kia',model:'Niro',model_year:2021,powertrain:'Электромобиль',drivetrain:'Передний',battery_kwh:'64',source_payload:{motorPowerKw:150}});
  assert.equal(kia.motorPower.minKw,28.68);
+ const withoutPeak={source:'Encar',price_cny:20000000,brand:'Kia',model:'Niro',model_year:2021,powertrain:'Электромобиль',drivetrain:'Передний',battery_kwh:64};
+ const quote=estimateRussianOffer(withoutPeak,{now});assert.equal(quote.status,'estimated');assert.equal(quote.inputs.electricPeakKw,null);assert.equal(quote.inputs.motorPower.minKw,28.68);
+ assert.equal(estimateRussianOffer({...withoutPeak,battery_kwh:null},{now}).reason,'motor_power_missing');
 });
 
 test('Unknown vehicles retain uncertainty instead of using a universal coefficient',()=>{
