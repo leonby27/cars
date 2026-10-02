@@ -15,6 +15,7 @@ import fs from "node:fs/promises";
 import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withoutCatalogFooter } from "./social-card.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const tokensPath = path.join(root, "runtime", "social-tokens.json");
@@ -156,6 +157,7 @@ async function waitForThreads(id, token, { tries = 12 } = {}) {
 }
 
 export async function publishToThreads({ text, photos = [], allowTextOnly = false, config, log = console.log }) {
+  text = withoutCatalogFooter(text);
   const { userId, token } = config.threads;
   if (!userId || !token) throw new Error("нет ключа доступа к Threads");
   const usable = photos.slice(0, 20);
@@ -405,6 +407,7 @@ const channelLink = (message) => {
 };
 
 export async function publishToTelegram({ text, photos = [], files = [], buttonUrl = "", allowTextOnly = false, config, log = console.log }) {
+  text = withoutCatalogFooter(text);
   const { token, channel } = config.telegram;
   if (!token || !channel) throw new Error("нет бота или канала для телеграма");
   if (!files.length && !photos.length && !allowTextOnly) throw new Error("Телеграм: публикация без картинки запрещена");

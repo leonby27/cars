@@ -9,7 +9,8 @@
  * /blog/ev-quota-extra-2026, /blog/ev-quota-end. Новые статьи о квоте получают «quota»
  * в адресе, поэтому правило по адресу подхватит их без правки списка.
  */
-const QUOTA_PATH = /^\/(ev-quota(\/|$)|blog\/[^/]*quota)/;
+export const QUOTA_LANDING_PATH_PATTERN = "^/(ev-quota(/|$)|blog/[^/]*quota)";
+const QUOTA_PATH = new RegExp(QUOTA_LANDING_PATH_PATTERN);
 
 /** Страница входа относится к квоте: адрес без метки и хвоста «?…», «#…». */
 export const isQuotaLandingPath = (landingPath = "") => {

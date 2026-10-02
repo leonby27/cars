@@ -1056,7 +1056,8 @@ const { models: popularModels, brands: brandModelTabs } = homePopularModels(live
 // Карточка витрины показывает не больше пяти кадров (HoverImagePreview) — остальные
 // фото и история цены в странице только утяжелили бы главную.
 const homeShowcase = live.showcase.map(({ images, priceHistory: _history, ...car }) => ({ ...car, images: Array.isArray(images) ? images.slice(0, 5) : images }));
-writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs, showcase: homeShowcase })}\n`);
+const catalogFacts = { total: live.activeCars || 0, updatedAt: live.catalogRefreshedAt || "" };
+writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs, showcase: homeShowcase, catalogFacts })}\n`);
 
 // Разделы, в которых есть хотя бы одна машина. Марки заведены заранее, под загрузку
 // каталога: пока импорт до марки не дошёл, её раздел пуст — в карту сайта и в ссылки
@@ -1251,6 +1252,8 @@ async function readLiveCatalog() {
   const nothing = { showcase: [], models: new Map(), modelChanged: new Map(), carEntries: [], activeCars: 0, catalogRefreshedAt: null, listPages: new Map(), stock: new Map(), collections: new Map(), changed: new Map(), priceStats: [] };
   if (cars.length) {
     return {
+      activeCars: cars.length,
+      catalogRefreshedAt: catalog.refreshedAt || null,
       showcase: cars.slice(0, showcaseSize),
       models: countByModel(cars),
       modelChanged: new Map(),

@@ -14,6 +14,7 @@ import { StripPhoto } from "./strip-photo.jsx";
 import { schedulePriceFit } from "./price-fit.js";
 import { scheduleSpecFit } from "./spec-fit.js";
 import { SearchField } from "./search-field.jsx";
+import { SegmentedControl } from "./segmented-control.jsx";
 import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
@@ -1212,18 +1213,6 @@ function ClientSeo({ path, car, landing, carPending = false }) {
 /* Both theme variants ship in the markup and CSS reveals the matching one: the
    theme attribute is set before first paint, so swapping `src` from React state
    would only add a flash of the wrong logo on hydration. */
-function SegmentedControl({ options, value, onChange, label, className = "", renderOption }) {
-  return (
-    <div className={`segmented-control${className ? ` ${className}` : ""}`} role="group" aria-label={label}>
-      {options.map((option) => (
-        <button key={option.value} type="button" className={value === option.value ? "active" : ""} aria-pressed={value === option.value} onClick={() => onChange(option.value)}>
-          {renderOption ? renderOption(option) : option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function CurrencySwitch({ currency, setCurrency, className = "" }) {
   return (
     <SegmentedControl
@@ -1851,7 +1840,7 @@ function CardSkeleton({ row }) {
 // пункта, а поисковик по ссылке доходит до раздела — фильтр в коде страницы был
 // кнопками, и до разделов марок и кузовов робот с каталога дойти не мог. `rel` —
 // «nofollow» для адресов, у которых нет своей страницы (сочетание фильтров).
-function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, optionHref, icon: Icon, mobileIcon: MobileIcon, mobileActionSheet = false }) {
+function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, optionHref, icon: Icon, mobileIcon: MobileIcon, mobileActionSheet = false, brandGrid = false }) {
   // В режиме мультивыбора value — массив, а первая опция играет роль «сбросить всё».
   const allOption = multiple ? options[0] : null;
   const selectedValues = multiple ? (Array.isArray(value) ? value : value && value !== allOption ? [value] : []) : [];
@@ -1875,8 +1864,8 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     // Поиск по списку идёт тем же приведением, что и поиск по каталогу: «skoda»
     // находит «Škoda», «mercedes benz» — «Mercedes-Benz».
     // Ищем и по набранному кириллицей: «ау» — это «au», а значит Audi.
-    if (!searchable) return options;
-    return listSearchMatches(options, query);
+    if (searchable && query.trim()) return listSearchMatches(options, query);
+    return options;
   }, [options, query, searchable]);
 
   const close = (restoreFocus = false) => {
@@ -1917,8 +1906,16 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
   // option has to be pulled into view instead of leaving the list at the top.
   useEffect(() => {
     if (!open) return;
-    optionsRef.current?.querySelector('[role="option"].active')?.scrollIntoView({ block: "nearest" });
-  }, [open, activeIndex]);
+    const list = optionsRef.current;
+    const active = list?.querySelector('[role="option"].active');
+    if (!list || !active) return;
+    if (brandGrid) {
+      const bounds = list.getBoundingClientRect();
+      const item = active.getBoundingClientRect();
+      if (item.top < bounds.top) list.scrollTop += item.top - bounds.top;
+      else if (item.bottom > bounds.bottom) list.scrollTop += item.bottom - bounds.bottom;
+    } else active.scrollIntoView({ block: "nearest" });
+  }, [open, activeIndex, brandGrid]);
 
   // Список привязан к краю кнопки (сортировка в выдаче — к правому) и шире её.
   // На узком экране он от этого уезжал за левый край: первые буквы пунктов
@@ -1931,7 +1928,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     const menu = root?.querySelector(".select-menu");
     if (!menu) return;
     menu.style.removeProperty("--select-menu-shift");
-    if (!open) return;
+    if (!open || brandGrid) return;
     const gutter = 8;
     const left = root.getBoundingClientRect().left + menu.offsetLeft;
     const right = left + menu.offsetWidth;
@@ -1940,7 +1937,39 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     const viewport = document.documentElement.clientWidth;
     const shift = left < gutter ? gutter - left : Math.min(0, viewport - gutter - right);
     if (shift) menu.style.setProperty("--select-menu-shift", `${Math.round(shift)}px`);
-  }, [open, filteredOptions.length, query]);
+  }, [open, filteredOptions.length, query, brandGrid]);
+
+  useLayoutEffect(() => {
+    if (!open || !brandGrid) return;
+    const menu = rootRef.current?.querySelector(".select-menu");
+    const row = rootRef.current?.closest(".unified-filter-primary");
+    if (!menu || !row) return;
+    const updateHeight = () => {
+      const viewport = window.visualViewport;
+      const bottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+      const available = Math.max(0, bottom - row.getBoundingClientRect().bottom - 8 - 12);
+      menu.style.setProperty("--brand-menu-height", `${Math.floor(available)}px`);
+    };
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(updateHeight);
+    };
+    // Keep the opening height while the page scrolls, so the menu moves with
+    // its trigger instead of growing toward a stationary viewport edge.
+    updateHeight();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(row);
+    window.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("resize", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      menu.style.removeProperty("--brand-menu-height");
+    };
+  }, [open, brandGrid]);
 
   // Внутри мобильной шторки фильтров меню раскрывается вниз и может уйти за
   // нижний край; докручиваем шторку, чтобы раскрытый список был виден целиком.
@@ -2010,13 +2039,18 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     : formatOption(value);
 
   return (
-    <div className={`select-field custom-select${className ? ` ${className}` : ""}${MobileIcon ? " has-mobile-icon" : ""}${hasSelection ? " has-selection" : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
+    <div className={`select-field custom-select${brandGrid ? " brand-grid-select" : ""}${className ? ` ${className}` : ""}${MobileIcon ? " has-mobile-icon" : ""}${hasSelection ? " has-selection" : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
       <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}`} aria-label={`${label}: ${triggerText}`} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
         {Icon && <Icon className="select-trigger-icon" size={20} weight="duotone" aria-hidden="true" />}
         {MobileIcon && <MobileIcon className="select-trigger-mobile-icon" size={22} weight="bold" aria-hidden="true" />}
         <b>{triggerText}</b>
         <CaretDown size={16} weight="bold" />
       </button>
+      {brandGrid && hasSelection && !disabled && (
+        <button type="button" className="brand-grid-clear" aria-label="Убрать марку" onClick={() => { onChange?.(options[0]); close(true); }}>
+          <span className="market-compare-search-clear" aria-hidden="true"><X size={12} weight="bold" /></span>
+        </button>
+      )}
       {!disabled && !actionSheetMode && (
         <div className={`select-menu${open ? " open" : ""}`} aria-hidden={!open} inert={open ? undefined : true}>
           {searchable && (
@@ -2038,7 +2072,10 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
               )}
             </div>
           )}
-          <div className="select-options" id={listId} role="listbox" aria-label={label} aria-multiselectable={multiple || undefined} ref={optionsRef}>
+          <div className="select-options" id={listId} role="listbox" aria-label={label} aria-multiselectable={multiple || undefined} ref={optionsRef} style={brandGrid ? {
+            "--brand-grid-rows": Math.max(1, Math.ceil(filteredOptions.length / 4)),
+            "--brand-grid-rows-mid": Math.max(1, Math.ceil(filteredOptions.length / 3)),
+          } : undefined}>
             {filteredOptions.length ? (
               filteredOptions.map((item, index) => {
                 const optionCount = optionCounts?.get(item);
@@ -2093,6 +2130,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
               <p className="select-empty">Ничего не найдено</p>
             )}
           </div>
+
         </div>
       )}
       {!disabled && actionSheetMode && open && typeof document !== "undefined" && createPortal(
@@ -2642,7 +2680,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
         </>
       ) : (
         <div className="filter-primary-row unified-filter-primary">
-          <SelectField label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} optionIcon={(brand) => (brand === "Все марки" ? <SquaresFour size={18} weight="fill" /> : <BrandMark brand={brand} />)} optionHref={optionHrefs?.brand} searchable />
+          <SelectField brandGrid label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} optionIcon={(brand) => (brand === "Все марки" ? <SquaresFour size={18} weight="fill" /> : <BrandMark brand={brand} />)} optionHref={optionHrefs?.brand} searchable />
           <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} optionCounts={optionCounts?.models} searchable multiple disabled={values.brand === "Все марки"} />
           {yearRange()}
           {priceRange()}
@@ -4785,13 +4823,12 @@ function useHomeModels() {
       : null;
   });
   useEffect(() => {
-    if (lists) return undefined;
     let alive = true;
     loadHomeModelFacts().then((rows) => {
       if (alive && rows) setLists(homePopularModels(rows));
     });
     return () => { alive = false; };
-  }, [lists]);
+  }, []);
   return lists || HOME_MODELS_EMPTY;
 }
 const HOME_MODELS_EMPTY = Object.freeze({ models: [], brands: [] });
@@ -5156,7 +5193,7 @@ const HomeConversionSections = memo(function HomeConversionSections({ navigate }
   );
 });
 
-function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorites, toggleFavorite, loading }) {
+function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorites, toggleFavorite, loading, loadError, onRetry }) {
   // Сумма без валюты в строке поиска читается в валюте переключателя сайта.
   const currency = useCurrency();
   const randomPool = useRef([]);
@@ -5262,15 +5299,16 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     if (feedSource.current === cars) return;
     feedSource.current = cars;
     randomPool.current = [];
-    // Каталог пришёл, а на экране встроенная витрина: карточки не меняем (иначе они
-    // перемешаются на глазах), новые машины для «Подгрузить ещё» берём из каталога
-    // без уже показанных.
+    // Каталог пришёл, а на экране встроенная витрина: сохраняем порядок карточек,
+    // обновляя известные цены и характеристики. Новые машины для «Подгрузить ещё»
+    // берём из каталога без уже показанных.
     if (feedFromBoot.current && cars.length && !window.history.state?.feed) {
       feedFromBoot.current = false;
       setFeedCars((current) => {
         const shown = new Set(current.map((item) => item.car.id));
+        const fresh = new Map(cars.map((car) => [car.id, car]));
         randomPool.current = shuffleCars(cars.filter((car) => !shown.has(car.id)));
-        return current;
+        return current.map((item) => fresh.has(item.car.id) ? { ...item, car: fresh.get(item.car.id) } : item);
       });
       return;
     }
@@ -5613,6 +5651,12 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             </div>
           </div>
         )}
+        {loadError && !searching && (
+          <p className="catalog-message" role="status">
+            {feedCars.length ? "Не удалось обновить каталог. Показаны сохранённые предложения. " : "Не удалось загрузить предложения. "}
+            <button type="button" className="text-button" onClick={onRetry}>Попробовать снова</button>
+          </p>
+        )}
         {/* На широком экране подборка всегда плиткой. На телефоне (и в выдаче
             поиска на любом экране) вид выбирает посетитель: списочные карточки
             каталога или плитка — на телефоне по две карточки в ряд. */}
@@ -5656,7 +5700,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
             )}
           </>
         ) : (
-          !showSkeletons && (
+          !showSkeletons && !loadError && (
             <button type="button" className="load-more featured-load-more" onClick={loadMore}>
               Подгрузить ещё
             </button>
@@ -16174,8 +16218,8 @@ export function App() {
       </Suspense>
     ) : staticPage ? (
       staticPage
-    ) : !showAccountFromAuthRoute && contentPath === "/" && !loadError ? (
-      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} catalogUpdatedAt={catalogUpdatedAt} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} />
+    ) : !showAccountFromAuthRoute && contentPath === "/" ? (
+      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} catalogUpdatedAt={catalogUpdatedAt} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} loadError={loadError} onRetry={retryCatalog} />
     ) : !showAccountFromAuthRoute && parseModelLandingPath(contentPath) && !modelLanding.landing && !modelLanding.provisional ? (
       // Раздел модели ещё не известен (переход внутри сайта): без имени модели каталог
       // не соберёт запрос. Неизвестная модель — «страницы нет».

@@ -12,7 +12,7 @@ import { BLOG_SOCIAL } from "../src/blog-social.js";
 import { carTitle } from "../src/car-title.js";
 import { typeset } from "../src/social-themes.js";
 import { blogCover, dropCover } from "./lib/blog-cover.mjs";
-import { withCatalogFooter } from "./lib/social-card.mjs";
+import { withoutCatalogFooter } from "./lib/social-card.mjs";
 import {
   CORE_MODELS,
   bestValueOfModel,
@@ -86,7 +86,7 @@ async function allNetworks(factory) {
   const drafts = {};
   for (const network of NETWORKS) {
     const draft = await factory(network);
-    drafts[network] = draft ? { ...draft, text:withCatalogFooter(draft.text, network) } : draft;
+    drafts[network] = draft ? { ...draft, text:withoutCatalogFooter(draft.text) } : draft;
   }
   const canonical = drafts.telegram || drafts.instagram || drafts.threads;
   if (!canonical || NETWORKS.some((network) => !drafts[network] || !sameCars(canonical, drafts[network]))) return null;
@@ -182,7 +182,7 @@ for (const { dayIndex, post:article } of journalSlotsForWeek(BLOG_POSTS, BLOG_SO
       coverCarIds:[],
       coverPhoto,
       photos:[coverPhoto],
-      texts:Object.fromEntries(NETWORKS.map((network) => [network, withCatalogFooter(drafts[network].text, network)])),
+      texts:Object.fromEntries(NETWORKS.map((network) => [network, withoutCatalogFooter(drafts[network].text)])),
     },
   };
 }
@@ -282,7 +282,7 @@ const threadPosts = selectedThreads.map((entry, index) => ({
   kind:"threads-file",
   sourceLine:entry.line,
   publishAt:minskIso(monday, THREADS_FILE_SLOTS[index].dayOffset, THREADS_FILE_SLOTS[index].time),
-  text:withCatalogFooter(entry.text, "threads"),
+  text:withoutCatalogFooter(entry.text),
 }));
 
 const manifest = {

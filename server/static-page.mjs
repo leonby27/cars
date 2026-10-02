@@ -12,8 +12,8 @@
 // назад» и живые подборки машин — собранная заранее страница уже на следующий день
 // разошлась бы с тем, что нарисует браузер. Главная — по той же причине: на ней блок
 // журнала с такими же датами, и сам набор материалов зависит от сегодняшнего дня.
-// Её файл сборки уже несёт готовую разметку (scripts/prerender-home.mjs) — он и
-// остаётся запасным ответом.
+// Главную рисуем из сохранённого снимка без ожидания базы. Даты и поисковая строка
+// остаются текущими, а данные блоков браузер обновит после первого кадра.
 //
 // Нет сборки приложения или отрисовка упала — отдаём файл сборки как есть: прежняя
 // страница с текстом для робота, приложение нарисует себя с нуля.
@@ -27,6 +27,7 @@ import { findBlogPost } from "../src/blog-posts.js";
 import { BLOG_TEXTS } from "../src/blog-texts.js";
 import { findToolPage } from "../src/tool-pages.js";
 import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
+import { homeBootFromSnapshot } from "../src/home-boot.js";
 
 const clientDir = fileURLToPath(new URL("../dist/client/", import.meta.url));
 // Популярные модели и витрина главной: их считает сборка (generate-seo-pages) и кладёт
@@ -74,16 +75,11 @@ async function catalogFacts() {
 
 /** Данные главной в том виде, в каком их встроил scripts/prerender-home.mjs, и цифры каталога. */
 async function homeBoot() {
-  const facts = await catalogFacts();
   try {
     const saved = JSON.parse((await cachedFile(homeDataFile)) || "null");
-    if (!saved) return facts;
-    const popularModels = Array.isArray(saved) ? saved : saved.models || [];
-    const brandModelTabs = Array.isArray(saved) ? [] : saved.brands || [];
-    const homeShowcase = Array.isArray(saved?.showcase) ? saved.showcase : [];
-    return { ...(popularModels.length || homeShowcase.length ? { popularModels, brandModelTabs, homeShowcase } : {}), ...facts };
+    return saved ? homeBootFromSnapshot(saved) : null;
   } catch {
-    return facts;
+    return null;
   }
 }
 
@@ -120,8 +116,14 @@ export async function renderStaticPage(rawPath, search = "") {
   // «Как это работает» тоже называет размер каталога: без настоящей цифры сервер
   // рисовал запасные «64 900», и робот видел их вместо живых 80 тысяч.
   const extra = path === "/" ? await homeBoot() : path === "/how-it-works" ? await catalogFacts() : {};
+  // Файл HTML уже содержит собственный согласованный снимок. Если соседний JSON
+  // утрачен, сохраняем его, а не рисуем пустые блоки поверх старых boot-данных.
+  if (path === "/" && !extra) return { status: 200, html: file };
   try {
-    const { markup, api } = await renderWithApi((answers) => entry.renderStaticApp(path, search, { ...extra, api: answers }, options));
+    const render = (api) => entry.renderStaticApp(path, search, { ...extra, api }, options);
+    // Главная не ждёт ни счётчиков, ни фильтров, ни обложек журнала. Сохранённые
+    // модели/машины уже видны, у остальных блоков собственная загрузка в браузере.
+    const { markup, api } = path === "/" ? { markup: render({}), api: {} } : await renderWithApi(render);
     // Цифры каталога — в данные страницы: первый кадр браузера рисует ту же строку.
     const html = markup ? dropHeadFaqIfRendered(injectAppRoot(file, markup, { path, boot: { api, ...(extra.catalogFacts ? { catalogFacts: extra.catalogFacts } : {}) } }), markup) : null;
     return { status: 200, html: html || file };

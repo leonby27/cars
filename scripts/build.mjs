@@ -1,8 +1,14 @@
 #!/usr/bin/env node
+import '../config/load-env.mjs';
+import { assertSiteProfile, resolveSiteProfile } from '../config/sites/index.mjs';
 import { spawn } from 'node:child_process';
 import { createWriteStream, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 
+const site = assertSiteProfile(resolveSiteProfile(process.env));
+// Children, including Vite and Node page generators, receive the identical site.
+process.env.SITE_ID = site.id;
+process.env.VITE_SITE_ID = site.id;
 const output = process.env.ABCARS_BUILD_DIR || 'dist';
 if (!['dist','dist.next'].includes(output)) throw new Error(`Unexpected build directory: ${output}`);
 const log = process.env.ABCARS_BUILD_LOG ? createWriteStream(process.env.ABCARS_BUILD_LOG) : null;

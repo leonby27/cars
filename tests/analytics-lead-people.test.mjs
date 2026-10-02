@@ -41,11 +41,24 @@ test("счётчик охватывает все заявки периода и 
     return { rows:Array.from({ length:250 }, (_, i) => ({ id:`draft-${i}`, phone:`+37529${String(i).padStart(7, "0")}`, kind:"car" })) };
   } } });
   assert.equal(counts.lead_people, 250);
+  assert.equal(counts.lead_submissions, 250);
+});
+
+test("режим с повторами сохраняет каждую заявку человека на авто и подбор", async () => {
+  const counts = await getAnalyticsLeadPeople("2026-10-01", "2026-10-02", { db:{ query:async () => ({ rows:[
+    { id:"draft-1", phone:"+375 (29) 123-45-67", kind:"car" },
+    { id:"draft-2", phone:"375291234567", kind:"car" },
+    { id:"draft-3", phone:"+375 29 123 45 67", kind:"custom_search" },
+    { id:"order-1", customer_id:"account-1", phone:"375291234567", kind:"car" },
+  ] }) } });
+  assert.equal(counts.lead_people, 1);
+  assert.equal(counts.lead_submissions, 4);
 });
 
 test("открытия объединяются по посетителю, красный счётчик остаётся по каждой заявке", async () => {
   const source = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
   assert.match(source, /count\(DISTINCT visitor_id\) FILTER \(WHERE event_name='availability_click' AND \$\{LIVE_VISITOR\}\)::int AS availability_modal_opens/);
+  assert.match(source, /count\(\*\) FILTER \(WHERE event_name='availability_click' AND \$\{LIVE_VISITOR\}\)::int AS availability_modal_open_events/);
   assert.match(source, /SELECT count\(\*\) FROM order_drafts WHERE created_at > \$1/);
   assert.match(source, /SELECT count\(\*\) FROM customer_orders WHERE created_at > \$1/);
 });
@@ -53,7 +66,7 @@ test("открытия объединяются по посетителю, кр�
 test("один человек и две новые заявки отображаются как 1 / 1 +2, без вычитания и обрезки", async () => {
   const vite = await createServer({ configFile:false, plugins:[react()], server:{ middlewareMode:true }, appType:"custom" });
   try {
-    const { LeadsFunnelCount } = await vite.ssrLoadModule("/src/analytics-page.jsx");
+    const { LeadsFunnelCount, LeadFunnelCard } = await vite.ssrLoadModule("/src/analytics-page.jsx");
     const render = (props) => renderToStaticMarkup(createElement(LeadsFunnelCount, props));
     const html = render({ opens:1, total:1, fresh:2 });
     assert.match(html, /<span>1<\/span><i aria-hidden="true">\/<\/i>/);
@@ -62,6 +75,22 @@ test("один человек и две новые заявки отобража
     assert.doesNotMatch(render({ opens:1, total:1, fresh:0 }), /<b/);
     assert.match(render({ opens:0, total:0, fresh:3 }), /aria-label="Новых заявок: 3">3<\/b>/);
     assert.match(render({ total:1, fresh:123 }), /aria-label="Новых заявок: 123">123<\/b>/);
+
+    const summary = { lead_people:1, lead_submissions:4, availability_modal_opens:2, availability_modal_open_events:7 };
+    const card = (mode) => renderToStaticMarkup(createElement(LeadFunnelCard, { summary, mode, fresh:3, onModeChange:() => {} }));
+    const unique = card("unique");
+    const repeated = card("all");
+    assert.match(unique, /<p>2 открытия окна \/ 1 заявка<\/p>/);
+    assert.match(repeated, /<p>7 открытий окна \/ 4 заявки<\/p>/);
+    assert.match(unique, /aria-pressed="true">Без пвтр<\/button>/);
+    assert.match(repeated, /aria-pressed="true">С пвтр<\/button>/);
+    assert.match(unique, /segmented-control analytics-lead-count-switch/);
+    for (const html of [unique, repeated]) {
+      assert.match(html, /aria-label="Без пвтр — без повторов" aria-description="[^"]*Каждый человек учитывается один раз за период/);
+      assert.match(html, /aria-label="С пвтр — с повторами" aria-description="[^"]*Считаем все открытия окна и заявки за период, включая повторные/);
+      assert.doesNotMatch(html, /analytics-lead-info/);
+    }
+    for (const html of [unique, repeated]) assert.match(html, /aria-label="Новых заявок: 3">3<\/b>/);
   } finally {
     await vite.close();
   }

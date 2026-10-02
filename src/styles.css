@@ -25011,3 +25011,99 @@ html[data-theme="dark"] .vehicle-market-advantages {
     order: 4;
   }
 }
+
+/* Desktop brand chooser shares the complete primary-filter row width. */
+@media (min-width: 701px) {
+  .unified-filter-primary { position: relative; }
+  .unified-filter-primary:has(> .custom-select.open) { z-index: 25; }
+  .unified-filter-primary > .brand-grid-select { position: static; display: flex; align-items: center; flex-direction: row; }
+  #root .brand-grid-select > .select-trigger { position: relative; inset: auto; }
+  #root .brand-grid-select.has-selection > .select-trigger b { padding-right: 32px; }
+  #root .brand-grid-select > .brand-grid-clear {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    margin-left: -66px;
+    margin-right: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+  }
+  #root .brand-grid-clear svg { position: static; }
+  #root .brand-grid-clear:hover .market-compare-search-clear { background: #9fa5ae; }
+  html[data-theme="dark"] #root .brand-grid-clear:hover .market-compare-search-clear { background: #898e96; }
+  #root .brand-grid-select .select-menu {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    max-height: var(--brand-menu-height, calc(100dvh - 24px));
+    overflow: hidden;
+    left: 0;
+    right: 0;
+    top: calc(100% + 8px);
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 16px;
+    border-radius: calc(18px * var(--corner-scale));
+  }
+  #root .brand-grid-select .select-search {
+    flex: 0 0 auto;
+    width: auto;
+    margin: 2px 0 12px;
+  }
+  #root .brand-grid-select .select-options {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(var(--brand-grid-rows), max-content);
+    column-gap: 24px;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  #root .brand-grid-select .select-options :is(button, a) {
+    break-inside: avoid;
+    margin-bottom: 2px;
+    min-height: 48px;
+    padding: 10px 12px;
+    font-size: 18px;
+    font-weight: 600;
+    background: transparent;
+  }
+  #root .brand-grid-select .select-options :is(button, a):hover,
+  #root .brand-grid-select .select-options :is(button, a).active { background: var(--surface); }
+  #root .brand-grid-select .select-options :is(button, a).selected { background: var(--accent-soft); }
+  #root .brand-grid-select .select-option-label { align-items: center; gap: 10px; }
+  #root .brand-grid-select .select-option-label > span:not(.select-option-icon) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #root .brand-grid-select .select-option-icon {
+    width: 52px;
+    height: 28px;
+    flex: 0 0 52px;
+    justify-content: center;
+  }
+  #root .brand-grid-select .select-option-icon .brand-logo { width: 100%; height: 28px; flex-basis: 100%; }
+  #root .brand-grid-select .brand-logo img[src$="/lexus.svg"] { width: 35px; }
+  #root .brand-grid-select .brand-logo img[src$="/leapmotor.svg"] { width: 18px; }
+  #root .brand-grid-select .brand-logo img[src$="/lincoln.svg"] { width: 28px; }
+  #root .brand-grid-select .select-option-count { flex: 0 0 auto; font-size: 16px; font-weight: 500; }
+}
+@media (min-width: 701px) and (max-width: 980px) {
+  #root .brand-grid-select .select-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(var(--brand-grid-rows-mid), max-content);
+    column-gap: 12px;
+  }
+  #root .brand-grid-select .select-options :is(button, a) { font-size: 16px; }
+  #root .brand-grid-select .select-option-icon { width: 40px; flex-basis: 40px; }
+}

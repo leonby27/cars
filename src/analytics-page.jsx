@@ -1,4 +1,5 @@
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
+import { SegmentedControl } from "./segmented-control.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
 import { Fragment, isValidElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -361,8 +362,15 @@ function AnalyticsDeviceSwitch({ value, onChange }) {
   </div>;
 }
 
-function OverviewSection({ data, period, device = "all", updates = {} }) {
+export function AnalyticsTrafficSwitch({ value, onChange }) {
+  return <div className="analytics-range analytics-traffic-switch" role="group" aria-label="Трафик по странице входа">
+    {[["all", "Все"], ["without-quota", "Без квоты"]].map(([id, label]) => <button key={id} type="button" className={value === id ? "active" : ""} aria-pressed={value === id} onClick={() => onChange(id)}>{label}</button>)}
+  </div>;
+}
+
+function OverviewSection({ data, period, device = "all", traffic = "all", updates = {} }) {
   const summary = data.summary || {};
+  const [leadCountMode, setLeadCountMode] = usePersistedChoice("analytics:lead-count-mode", ["unique", "all"], "unique");
   const [trendPeriod, setTrendPeriod] = usePersistedChoice("analytics:trend-period", trendPeriodIds, "90");
   const [trendData, setTrendData] = useState(null);
   const [trendLoading, setTrendLoading] = useState(true);
@@ -379,12 +387,12 @@ function OverviewSection({ data, period, device = "all", updates = {} }) {
   // остаётся прежний график — мигания нет.
   useEffect(() => {
     const controller = new AbortController();
-    const trendKey = `${trendPeriod}|${device}`;
+    const trendKey = `${trendPeriod}|${device}|${traffic}`;
     const cached = trendCache.current.get(trendKey);
     if (cached) setTrendData(cached);
-    setTrendLoading(!cached && !trendData);
+    setTrendLoading(!cached && (!trendData || trendData.traffic !== traffic));
     setTrendError("");
-    fetch(`/api/analytics/trend?period=${encodeURIComponent(trendPeriod)}&device=${encodeURIComponent(device)}`, { cache:"no-store", credentials:"same-origin", signal:controller.signal })
+    fetch(`/api/analytics/trend?period=${encodeURIComponent(trendPeriod)}&device=${encodeURIComponent(device)}&traffic=${encodeURIComponent(traffic)}`, { cache:"no-store", credentials:"same-origin", signal:controller.signal })
       .then(async (response) => {
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || "load_failed");
@@ -394,13 +402,7 @@ function OverviewSection({ data, period, device = "all", updates = {} }) {
       .catch((error) => { if (error.name !== "AbortError") setTrendError("Не удалось загрузить график."); })
       .finally(() => { if (!controller.signal.aborted) setTrendLoading(false); });
     return () => controller.abort();
-  }, [trendPeriod, device, data.generatedAt]);
-  // Заявки, регистрации и избранное берутся из самих таблиц сайта, поэтому совпадают
-  // с разделом «Заявки»; просмотры и посетители — единственное, что считается по событиям.
-  const leadsTotal = Number(summary.lead_people) || 0;
-  // Открытия окна по кнопке «Узнать точную цену и наличие» — событие из браузера, как
-  // просмотры, поэтому срез по устройству к ним применяется; к заявкам — нет.
-  const leadModalOpens = Number(summary.availability_modal_opens) || 0;
+  }, [trendPeriod, device, traffic, data.generatedAt]);
   const cards = [
     // Заход, на котором никто не двинул мышью, не прокрутил и не нажал ни одной
     // клавиши, в счёт не идёт: это машинный обход. Просто время на странице человеком
@@ -413,14 +415,13 @@ function OverviewSection({ data, period, device = "all", updates = {} }) {
     // устройству их не показываем — иначе «было» вышло бы меньше настоящего.
     ["Заходы", summary.visits, visitsNote(summary, period, data.days), device === "all" ? updates.overview : 0],
     ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, device === "all" ? updates.vehicle_cars : 0],
-    // Заявки — уникальные люди: на машину и на подбор вместе, без сложения групп.
-    // У заявок устройство не записывается, поэтому они всегда по всем устройствам.
-    // «+N» у них красный, как у пункта «Заявки» в меню: их нельзя пропустить.
-    ["Заявки", <LeadsFunnelCount opens={leadModalOpens} total={leadsTotal} fresh={updates.leads} />, `${formatNumber(leadModalOpens)} ${pluralRu(leadModalOpens, "открытие окна", "открытия окна", "открытий окна")} / ${formatNumber(leadsTotal)} ${pluralRu(leadsTotal, "заявка", "заявки", "заявок")}`, updates.leads, "is-leads"],
   ];
   return (
     <>
-      <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">{cards.map(([label,value,note,fresh,freshTone]) => <article key={label}><span className={freshTone === "is-leads" ? "analytics-lead-heading" : undefined}>{label}{freshTone === "is-leads" && <LeadCountingInfo />}</span><strong>{isValidElement(value) ? value : Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className={`analytics-kpi-split-count${freshTone ? ` ${freshTone}` : ""}`} /> : formatNumber(value)}</strong><p>{note}</p></article>)}</section>
+      <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">
+        {cards.map(([label,value,note,fresh]) => <article key={label}><span>{label}</span><strong>{isValidElement(value) ? value : Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className="analytics-kpi-split-count" /> : formatNumber(value)}</strong><p>{note}</p></article>)}
+        <LeadFunnelCard summary={summary} mode={leadCountMode} onModeChange={setLeadCountMode} fresh={updates.leads} traffic={traffic} />
+      </section>
       <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
           <h2>График</h2>
@@ -577,8 +578,49 @@ function useHoverTooltip(label) {
   return { anchor, handlers, node };
 }
 
-function LeadCountingInfo() {
-  const label = "За выбранный период один человек считается один раз: открытия окна — по посетителю в браузере, заявки — по телефону. Повторные открытия и заявки на разные машины не увеличивают итог. Красный +N показывает каждую новую заявку; все заявки сохранены в списке.";
+export function LeadFunnelCard({ summary = {}, mode = "unique", onModeChange, fresh = 0, traffic = "all" }) {
+  const withRepeats = mode === "all";
+  // Открытия учитывают выбранное устройство; сохранённые заявки — все устройства.
+  const opens = Number(withRepeats ? summary.availability_modal_open_events : summary.availability_modal_opens) || 0;
+  const total = Number(withRepeats ? summary.lead_submissions : summary.lead_people) || 0;
+  return <article>
+    <div className="analytics-lead-card-heading">
+      <span className="analytics-lead-heading">Заявки</span>
+      <LeadCountSwitch value={mode} onChange={onModeChange} traffic={traffic} />
+    </div>
+    <strong><LeadsFunnelCount opens={opens} total={total} fresh={fresh} /></strong>
+    <p>{formatNumber(opens)} {pluralRu(opens, "открытие окна", "открытия окна", "открытий окна")} / {formatNumber(total)} {pluralRu(total, "заявка", "заявки", "заявок")}</p>
+    {traffic === "without-quota" && <small className="analytics-traffic-note">Открытия — без квоты, заявки — все</small>}
+  </article>;
+}
+
+const leadCountingLabel = (withRepeats, traffic = "all") => (withRepeats
+    ? "Считаем все открытия окна и заявки за период, включая повторные."
+    : "Каждый человек учитывается один раз за период. Повторные открытия и заявки не добавляются.")
+    + (traffic === "without-quota" ? " Фильтр «Без квоты» действует на открытия окна. Заявки показаны все." : "");
+
+function LeadCountSwitch({ value, onChange, traffic }) {
+  const uniqueLabel = leadCountingLabel(false, traffic);
+  const allLabel = leadCountingLabel(true, traffic);
+  const uniqueTooltip = useHoverTooltip(uniqueLabel);
+  const allTooltip = useHoverTooltip(allLabel);
+  return <>
+    <SegmentedControl
+      options={[{ value:"unique", label:"Без пвтр" }, { value:"all", label:"С пвтр" }]}
+      value={value} onChange={onChange} label="Учёт повторных открытий и заявок"
+      className="analytics-lead-count-switch"
+      getOptionProps={({ value, label }) => {
+        const hint = value === "unique" ? uniqueTooltip : allTooltip;
+        return { ref:hint.anchor, ...hint.handlers, "aria-label":`${label} — ${value === "unique" ? "без повторов" : "с повторами"}`, "aria-description":value === "unique" ? uniqueLabel : allLabel };
+      }}
+    />
+    {uniqueTooltip.node}
+    {allTooltip.node}
+  </>;
+}
+
+function LeadCountingInfo({ withRepeats = false, traffic = "all" }) {
+  const label = leadCountingLabel(withRepeats, traffic);
   const { anchor, handlers, node } = useHoverTooltip(label);
   return <>
     <button ref={anchor} type="button" className="analytics-lead-info" aria-label={label} {...handlers}><Info size={17} aria-hidden="true" /></button>
@@ -1128,7 +1170,7 @@ function MobileAnalyticsPeriodSelect({ value, onChange }) {
   </div>;
 }
 
-function MobileAnalyticsNavigation({ active, section, period, setPeriod, device, setDevice, updates, onSection, logout }) {
+function MobileAnalyticsNavigation({ active, section, period, setPeriod, device, setDevice, traffic, setTraffic, updates, onSection, logout }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
@@ -1175,6 +1217,7 @@ function MobileAnalyticsNavigation({ active, section, period, setPeriod, device,
       </div>}
     </div>
     {active.ranged && <MobileAnalyticsPeriodSelect value={period} onChange={setPeriod} />}
+    {active.devices && <AnalyticsTrafficSwitch value={traffic} onChange={setTraffic} />}
     {active.devices && <AnalyticsDeviceSwitch value={device} onChange={setDevice} />}
   </div>;
 }
@@ -1329,7 +1372,7 @@ function SocialPostsSection({ active }) {
   );
 }
 
-function Dashboard({ data, period, setPeriod, device, setDevice, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads, removeLead }) {
+function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTraffic, loading, error, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads, removeLead }) {
   const [section, setSection] = useState("overview");
   // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
   // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
@@ -1341,11 +1384,11 @@ function Dashboard({ data, period, setPeriod, device, setDevice, reload, logout,
   const updatesReadPending = useRef(false);
   useEffect(() => watchAnalyticsExit(() => viewedSections.current), []);
   const loadUpdates = useCallback(async (viewing = "") => {
-    if (!viewing && updatesReadPending.current) return;
-    if (!viewing) updatesReadPending.current = true;
+    if (!viewing && updatesReadPending.current === traffic) return;
+    if (!viewing) updatesReadPending.current = traffic;
     const request = ++updatesRequest.current;
     try {
-      const response = await fetch(analyticsUpdatesUrl(viewing), { credentials:"same-origin", cache:"no-store" });
+      const response = await fetch(analyticsUpdatesUrl(viewing, traffic), { credentials:"same-origin", cache:"no-store" });
       if (response.ok) {
         const payload = await response.json();
         // Обновление среза и отметка «просмотрено» могут идти одновременно.
@@ -1354,8 +1397,8 @@ function Dashboard({ data, period, setPeriod, device, setDevice, reload, logout,
         for (const item of [viewing].flat()) viewedSections.current.add(item || "overview");
       }
     } catch { /* счётчики — не повод ломать раздел */ }
-    finally { if (!viewing) updatesReadPending.current = false; }
-  }, []);
+    finally { if (!viewing && updatesReadPending.current === traffic) updatesReadPending.current = false; }
+  }, [traffic]);
   // Автоматически открытый «Обзор» ещё не означает, что пользователь успел
   // заметить новое. Сохраняем его при закрытии страницы или явном нажатии.
   const openSection = (id) => {
@@ -1381,20 +1424,26 @@ function Dashboard({ data, period, setPeriod, device, setDevice, reload, logout,
   // «Обзор» прочитанным.
   // Заявки загружаются отдельно и не меняют ответ /updates. Не запрашиваем те же
   // счётчики повторно сразу после входа, когда приходит список заявок.
+  useEffect(() => { setUpdates({}); setContactFresh({}); }, [traffic]);
   useEffect(() => { loadUpdates(); }, [data.generatedAt, loadUpdates]);
   const active = [...sections, socialSection].find((item) => item.id === section) || sections[0];
   return (
-    <main className="analytics-page">
+    <main className="analytics-page" aria-busy={loading}>
       <header className="analytics-heading">
-        <div><h1>Аналитика и заявки</h1><p>Срез обновлён {formatDate(data.generatedAt, true)}</p></div>
+        <div><h1>Аналитика</h1></div>
         <div className="analytics-actions">
+          {active.devices && <AnalyticsTrafficSwitch value={traffic} onChange={setTraffic} />}
           {active.devices && <AnalyticsDeviceSwitch value={device} onChange={setDevice} />}
           {active.ranged && <div className="analytics-range" aria-label="Период аналитики">{analyticsPeriods.map(({ id, label }) => <button key={id} type="button" className={period === id ? "active" : ""} onClick={() => setPeriod(id)}>{label}</button>)}</div>}
           <button className="secondary analytics-logout" type="button" onClick={logout}><SignOut size={18} /> Выйти</button>
         </div>
       </header>
 
-      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} device={device} setDevice={setDevice} updates={updates} onSection={openSection} logout={logout} />
+      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} device={device} setDevice={setDevice} traffic={traffic} setTraffic={setTraffic} updates={updates} onSection={openSection} logout={logout} />
+
+      {loading && <p className="analytics-slice-loading" role="status">Обновляем аналитику…</p>}
+      {error && <div className="analytics-error" role="alert">{error} Показан предыдущий срез. <button type="button" onClick={() => reload()}>Повторить</button></div>}
+      {traffic === "without-quota" && ["vehicles", "leads", "customers"].includes(section) && <p className="analytics-traffic-note">Страница входа у сохранённых заявок, аккаунтов и избранного не записана — эти данные показаны полностью. Просмотры и действия на сайте отфильтрованы.</p>}
 
       <div className="analytics-layout">
         <div className="analytics-side-rail">
@@ -1409,7 +1458,7 @@ function Dashboard({ data, period, setPeriod, device, setDevice, reload, logout,
         </div>
 
         <div className="analytics-content">
-          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} device={device} updates={updates} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} device={device} traffic={data.traffic || "all"} updates={updates} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} summary={data.summary} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={() => { reloadLeads(); reload(period, { silent:true }); }} removeLead={removeLead} period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} updates={updates} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
@@ -1429,6 +1478,7 @@ export function AnalyticsPage() {
   // выбирается отдельно и не меняет карточки, таблицы и остальные разделы.
   const [period, setPeriod] = useState("today");
   const [device, setDevice] = usePersistedChoice("analytics:device", analyticsDeviceIds, "all");
+  const [traffic, setTraffic] = usePersistedChoice("analytics:traffic", ["all", "without-quota"], "all");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1443,8 +1493,10 @@ export function AnalyticsPage() {
   periodRef.current = period;
   const deviceRef = useRef(device);
   deviceRef.current = device;
-  // Срез в кэше — по паре «период и устройство».
-  const sliceKey = (targetPeriod, targetDevice = deviceRef.current) => `${targetPeriod}|${targetDevice}`;
+  const trafficRef = useRef(traffic);
+  trafficRef.current = traffic;
+  // У каждого сочетания периода, устройства и страницы входа свой кэш.
+  const sliceKey = (targetPeriod, targetDevice = deviceRef.current, targetTraffic = trafficRef.current) => `${targetPeriod}|${targetDevice}|${targetTraffic}`;
   const loadLeads = async ({ silent = false } = {}) => {
     if (!silent) { setLeadsLoading(true); setLeadsError(""); }
     try {
@@ -1464,17 +1516,18 @@ export function AnalyticsPage() {
   const load = async (requestedPeriod = period, { silent = false } = {}) => {
     const targetPeriod = typeof requestedPeriod === "string" ? requestedPeriod : period;
     const targetDevice = deviceRef.current;
-    const key = sliceKey(targetPeriod, targetDevice);
-    const isCurrent = () => periodRef.current === targetPeriod && deviceRef.current === targetDevice;
+    const targetTraffic = trafficRef.current;
+    const key = sliceKey(targetPeriod, targetDevice, targetTraffic);
+    const isCurrent = () => periodRef.current === targetPeriod && deviceRef.current === targetDevice && trafficRef.current === targetTraffic;
     const request = ++dashboardRequest.current;
     const cached = dashboardCache.current.get(key);
     if (cached && isCurrent()) setData(cached);
     if (!silent) {
-      setLoading(!cached && !data);
+      setLoading(!cached);
       setError("");
     }
     try {
-      const response = await fetch(`/api/analytics/dashboard?period=${encodeURIComponent(targetPeriod)}&device=${encodeURIComponent(targetDevice)}`, { cache:"no-store", credentials:"same-origin" });
+      const response = await fetch(`/api/analytics/dashboard?period=${encodeURIComponent(targetPeriod)}&device=${encodeURIComponent(targetDevice)}&traffic=${encodeURIComponent(targetTraffic)}`, { cache:"no-store", credentials:"same-origin" });
       if (response.status === 401) {
         if (request === dashboardRequest.current) { setAuthenticated(false); setData(null); }
         return;
@@ -1490,7 +1543,7 @@ export function AnalyticsPage() {
       if (!silent && request === dashboardRequest.current) setError(loadError.message === "analytics_storage_unavailable" ? "Хранилище аналитики ещё не подключено." : "Не удалось загрузить аналитику. Попробуйте ещё раз.");
     } finally { if (!silent && request === dashboardRequest.current) setLoading(false); }
   };
-  useEffect(() => { load(); }, [period, device]);
+  useEffect(() => { load(); }, [period, device, traffic]);
   // Цифры на открытой странице устаревали: страница брала их один раз при заходе, и
   // новая заявка, просмотр или регистрация появлялись только после обновления руками.
   // Раз в минуту перечитываем весь срез молча — карточки, таблицы, график, заявки и
@@ -1525,6 +1578,12 @@ export function AnalyticsPage() {
     if (cached) setData(cached);
     setDevice(nextDevice);
   };
+  const selectTraffic = (nextTraffic) => {
+    const cached = dashboardCache.current.get(sliceKey(periodRef.current, deviceRef.current, nextTraffic));
+    if (cached) setData(cached);
+    trafficRef.current = nextTraffic;
+    setTraffic(nextTraffic);
+  };
   const removeLead = async (leadId) => {
     const response = await fetch(`/api/analytics/leads/${encodeURIComponent(leadId)}`, { method:"DELETE", credentials:"same-origin" });
     if (response.status === 401) {
@@ -1551,5 +1610,5 @@ export function AnalyticsPage() {
   if (authenticated === false) return <Login onSuccess={load} />;
   if (error && !data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика недоступна</h1><p>{error}</p><button className="primary" type="button" onClick={load}>Повторить</button></section></main>;
   if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
-  return <Dashboard data={data} period={period} setPeriod={selectPeriod} device={device} setDevice={selectDevice} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} removeLead={removeLead} />;
+  return <Dashboard data={data} period={period} setPeriod={selectPeriod} device={device} setDevice={selectDevice} traffic={traffic} setTraffic={selectTraffic} loading={loading} error={error} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} removeLead={removeLead} />;
 }

@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { homeBootFromSnapshot } from "../src/home-boot.js";
 
 const arg = (name, fallback) => {
   const found = process.argv.find((value) => value.startsWith(`--${name}=`));
@@ -31,17 +32,11 @@ const indexPath = join(clientDir, "index.html");
 const { renderAppPage } = await import(pathToFileURL(join(process.cwd(), ssrDir, "entry-server.js")).href);
 // Популярные модели считает generate-seo-pages (он читает базу) и кладёт рядом со
 // сборкой. Нет файла — блока на главной просто нет; это не ошибка сборки.
-let popularModels = [];
-let brandModelTabs = [];
-let homeShowcase = [];
+let homeBoot = {};
 try {
   const saved = JSON.parse(readFileSync(join(clientDir, "..", "popular-models.json"), "utf8"));
-  // Прежний вид файла — просто список моделей; новый — модели и вкладки марок.
-  popularModels = Array.isArray(saved) ? saved : saved.models || [];
-  brandModelTabs = Array.isArray(saved) ? [] : saved.brands || [];
-  homeShowcase = Array.isArray(saved?.showcase) ? saved.showcase : [];
+  homeBoot = homeBootFromSnapshot(saved);
 } catch {}
-const homeBoot = popularModels.length || homeShowcase.length ? { popularModels, brandModelTabs, homeShowcase } : undefined;
 const app = renderAppPage("/", homeBoot);
 if (!app.includes("<h1>") || !app.includes("site-footer")) {
   console.error("[prerender] разметка главной собралась без заголовка или подвала — страницу не трогаем");
@@ -108,7 +103,7 @@ const foreignGuard =
 const replaced = withRoot.replace("</head>", `${hoisted.join("")}${foreignGuard}</head>`);
 // Те же данные — в страницу, чтобы браузер нарисовал первый кадр из них. Ставим
 // перед </head>: после загрузочного скрипта, который сам заводит window.__boot.
-const withBoot = homeBoot
+const withBoot = Object.keys(homeBoot).length
   ? replaced.replace("</head>", `<script>window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(homeBoot).replace(/</g, "\\u003c")});</script></head>`)
   : replaced;
 writeFileSync(indexPath, withBoot);

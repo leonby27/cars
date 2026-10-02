@@ -3,6 +3,7 @@
 // after checking that they render prepared data rather than prepare it.
 const renderOnly = new Set([
   'config/critical-classes.json',
+  'src/home-boot.js',
   'src/analytics.js', 'src/boot-api.js', 'src/counter-loader.js', 'src/price-fit.js', 'src/spec-fit.js',
   'src/model-text-load.js', 'src/model-text-imports.js', 'src/model-texts.js',
   'src/blog-text-load.js', 'src/blog-text-imports.js', 'src/blog-texts.js',

@@ -1,12 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  CATALOG_FOOTER,
   buildPostText,
   carNumber,
   carPageUrl,
   pickPhotos,
-  withCatalogFooter,
+  withoutCatalogFooter,
 } from "../scripts/lib/social-card.mjs";
 
 // Intl разделяет тысячи неразрывным пробелом — в ленте это правильно, а в тесте
@@ -103,9 +102,15 @@ test("номер машины берётся и из внешнего поля, 
   assert.equal(carNumber({ id: "che168-12345" }), "12345");
 });
 
-test("Threads и Telegram получают подпись каталога только когда ссылки на сайт ещё нет", () => {
-  assert.equal(withCatalogFooter("Короткий текст", "threads"), `Короткий текст\n\n${CATALOG_FOOTER}`);
-  assert.equal(withCatalogFooter("Короткий текст", "telegram"), `Короткий текст\n\n${CATALOG_FOOTER}`);
-  assert.equal(withCatalogFooter("Смотрите abcars.by/cars/123", "threads"), "Смотрите abcars.by/cars/123");
-  assert.equal(withCatalogFooter("Короткий текст", "instagram"), "Короткий текст");
+test("рекламная строка удаляется из ранее подготовленных постов, авторский текст и ссылки сохраняются", () => {
+  const question = "Из-за какого компромисса при покупке автомобиля вы потом жалели каждый день?";
+  assert.equal(withoutCatalogFooter(question), question);
+  for (const origin of ["из Китая", "из Китая и Кореи"]) {
+    for (const link of ["abcars.by", "https://abcars.by/", "[abcars.by](http://abcars.by/)"]) {
+      assert.equal(withoutCatalogFooter(`${question}\n\nКаталог авто с пробегом ${origin} — ${link}`), question);
+    }
+  }
+  const linked = "Смотрите abcars.by/cars/123\n\nИли https://abcars.by/blog/example";
+  assert.equal(withoutCatalogFooter(linked), linked);
+  assert.equal(withoutCatalogFooter(`${linked}\r\n\r\nКаталог авто с пробегом из Китая — abcars.by\r\n`), linked);
 });

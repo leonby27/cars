@@ -14,7 +14,7 @@ test("открытая аналитика сама перечитывает ци
   // один и тот же ответ, а счётчики разделов пересчитываются от него же.
   assert.match(page, /refresh\.current = \(\) => \{\s*load\(periodRef\.current, \{ silent:true \}\);\s*loadLeads\(\{ silent:true \}\);/);
   // График живёт своим запросом и без этой связки отставал бы от карточек.
-  assert.match(page, /\}, \[trendPeriod, device, data\.generatedAt\]\);/);
+  assert.match(page, /\}, \[trendPeriod, device, traffic, data\.generatedAt\]\);/);
 });
 
 test("в фоновой вкладке не ходим на сервер, а при возвращении обновляемся сразу", () => {

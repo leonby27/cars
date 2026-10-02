@@ -16,8 +16,6 @@
 // кнопка ведёт туда же.
 import { carTitle } from "../../src/car-title.js";
 import { socialPhotoHref } from "../../src/photo-source.js";
-// Подпись каталога — общая для сайта: «из Китая и Кореи» (src/origin.js).
-import { siteFromPhrase } from "../../src/origin.js";
 
 const formatNumber = (value) => new Intl.NumberFormat("ru-RU").format(Math.round(Number(value) || 0));
 
@@ -68,14 +66,12 @@ export const carNumber = (car) => String(car?.externalId || String(car?.id || ""
 
 const escapeHtml = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export const CATALOG_FOOTER = `Каталог авто с пробегом ${siteFromPhrase()} — abcars.by`;
-
-// В Threads и Telegram запись без адреса сайта должна всё равно вести человека
-// к каталогу. Если ссылка или адрес уже есть, второй раз подпись не добавляем.
-export function withCatalogFooter(text, network) {
-  const value = String(text || "").trimEnd();
-  if (!["threads", "telegram"].includes(network) || /(?:https?:\/\/)?(?:www\.)?abcars\.by\b/i.test(value)) return value;
-  return `${value}\n\n${CATALOG_FOOTER}`;
+// Убираем прежнюю рекламную строку также из уже подготовленных недельных пакетов.
+// Ссылки на конкретные машины и материалы остаются частью авторского текста.
+export function withoutCatalogFooter(text) {
+  return String(text || "")
+    .replace(/^[ \t]*Каталог авто с пробегом из Китая(?: и Кореи)?[ \t]*[—–-][ \t]*(?:\[abcars\.by\]\(https?:\/\/(?:www\.)?abcars\.by\/?\)|(?:https?:\/\/)?(?:www\.)?abcars\.by\/?)[ \t]*(?:\r?\n|$)/gim, "")
+    .trimEnd();
 }
 
 export function carPageUrl(car, site = "abcars.by") {

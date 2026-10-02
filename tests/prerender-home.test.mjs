@@ -81,3 +81,10 @@ test("машины витрины из сборки попадают в данн
   assert.ok(boot, "данных витрины в странице нет");
   assert.deepEqual(JSON.parse(boot[1]).homeShowcase, [{ id: "che168-1", title: "BYD Han 2023" }]);
 });
+
+test("saved catalog facts reach the browser even without saved cards", async () => {
+  const catalogFacts = { total: 12345, updatedAt: "2026-10-01T10:00:00.000Z" };
+  const html = await prerender({ saved: { catalogFacts } });
+  const boot = html.match(/window\.__boot = Object\.assign\(window\.__boot \|\| \{\}, (.*?)\);<\/script>/);
+  assert.deepEqual(JSON.parse(boot[1]).catalogFacts, catalogFacts);
+});

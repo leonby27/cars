@@ -159,10 +159,9 @@ export function callTelegram(method, payload, { token = process.env.TELEGRAM_BOT
 
 // Никогда не бросает исключений: недоставленное сообщение не должно ронять
 // прогон, ради которого оно отправлялось.
-export async function sendTelegram(text, { root, log = console.log } = {}) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+export async function sendTelegram(text, { root, log = console.log, token = process.env.TELEGRAM_BOT_TOKEN, chatId: configuredChatId } = {}) {
   if (!token) { log("[tg] TELEGRAM_BOT_TOKEN не задан — сообщение осталось в журнале"); return false; }
-  const chatId = await resolveChatId({ root, token, log });
+  const chatId = configuredChatId || await resolveChatId({ root, token, log });
   if (!chatId) { log("[tg] боту ещё никто не писал — некуда отправлять"); return false; }
 
   // Сначала досылаем то, что не ушло раньше: порядок сообщений сохраняется.

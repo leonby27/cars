@@ -1,11 +1,12 @@
 // Без `viewing` сервер только возвращает непрочитанные счётчики. Конкретный
 // раздел передаём после явного нажатия или при выходе из аналитики.
 // Несколько разделов сразу — массивом: сервер отметит их одним запросом.
-export const analyticsUpdatesUrl = (viewing = "") => {
+export const analyticsUpdatesUrl = (viewing = "", traffic = "all") => {
   const section = (Array.isArray(viewing) ? viewing : [viewing]).map((item) => String(item || "").trim()).filter(Boolean).join(",");
-  return section
+  const url = section
     ? `/api/analytics/updates?viewing=${encodeURIComponent(section)}`
     : "/api/analytics/updates";
+  return traffic === "without-quota" ? `${url}${section ? "&" : "?"}traffic=without-quota` : url;
 };
 
 // pagehide срабатывает при закрытии, перезагрузке и уходе со страницы.

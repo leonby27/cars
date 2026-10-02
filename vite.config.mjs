@@ -1,4 +1,6 @@
-import { defineConfig } from "vite";
+import "./config/load-env.mjs";
+import { defineConfig, loadEnv } from "vite";
+import { assertSiteProfile, resolveSiteProfile } from "./config/sites/index.mjs";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import { trimModelPages } from "./scripts/vite-trim-model-pages.mjs";
@@ -8,7 +10,10 @@ import { encarResizeQuery } from "./src/photo-source.js";
 // Сервер разработки — для расчёта популярных моделей теми же модулями, что и сборка.
 let server = null;
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const site = assertSiteProfile(resolveSiteProfile({ ...loadEnv(mode, process.cwd(), ""), ...process.env }));
+  return {
+  define: { __SITE_ID__: JSON.stringify(site.id) },
   base: "/",
   build: {
     outDir: join(process.env.ABCARS_BUILD_DIR || "dist", "client"),
@@ -114,6 +119,7 @@ export default defineConfig({
       },
     },
   ],
+  };
 });
 
 // Match production PDF viewing behavior in development and preview.

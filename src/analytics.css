@@ -215,15 +215,25 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
 /* «+N» у заявок в обзоре — красный, как у пункта «Заявки» в меню. */
 .analytics-kpi-split-count.is-leads > b { background:var(--accent); color:#fff; }
 .analytics-lead-heading { display:inline-flex; align-items:center; gap:6px; }
+.analytics-lead-card-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.analytics-lead-count-switch { flex:0 0 auto; margin-left:auto; padding:3px; border-radius:calc(10px * var(--corner-scale)); }
+.analytics-lead-count-switch button { height:28px; padding:0 8px; border-radius:calc(7px * var(--corner-scale)); font-size:12px; line-height:28px; white-space:nowrap; }
 .analytics-lead-info { display:inline-grid; place-items:center; flex:none; width:24px; height:24px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--muted); cursor:help; }
 .analytics-lead-info:hover, .analytics-lead-info:focus-visible { color:var(--ink); }
 .analytics-lead-info:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 /* Переключатель устройств — значками, та же «таблетка», что у периода. */
 .analytics-device-switch { flex:0 0 auto; }
+.analytics-traffic-switch { flex:0 0 auto; }
+.analytics-traffic-switch button { white-space:nowrap; }
+.analytics-traffic-switch button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+.analytics-traffic-note { display:block; margin:8px 0 0; color:var(--muted); font-size:13px; line-height:1.4; }
+.analytics-slice-loading { margin:0 0 12px; color:var(--muted); }
 .analytics-device-switch button { display:grid; place-items:center; flex:0 0 auto; padding:7px 10px; }
 /* В мобильной полосе — той же высоты 42px, что выбор раздела и периода. */
 .analytics-mobile-navigation .analytics-device-switch { height:42px; box-sizing:border-box; padding:3px; }
 .analytics-mobile-navigation .analytics-device-switch button { padding:0 8px; }
+.analytics-mobile-navigation .analytics-traffic-switch { height:42px; box-sizing:border-box; padding:3px; margin-left:auto; }
+.analytics-mobile-navigation .analytics-traffic-switch button { padding:0 8px; font-size:12px; }
 .analytics-sidebar-extra { margin-top:12px; }
 .analytics-sidebar-social { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }
 html[data-theme="light"] .analytics-sidebar-social { border:1px solid var(--line); }
@@ -299,8 +309,8 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
   .analytics-heading { margin-bottom:16px; }
   .analytics-actions, .analytics-side-rail { display:none; }
   .analytics-layout { grid-template-columns:1fr; gap:0; margin-top:0; }
-  .analytics-mobile-navigation { position:relative; z-index:8; display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:16px; }
-  .analytics-mobile-section-select { position:relative; min-width:0; flex:1; }
+  .analytics-mobile-navigation { position:relative; z-index:8; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:16px; }
+  .analytics-mobile-section-select { position:relative; min-width:0; flex:1 1 calc(100% - 128px); }
   .analytics-mobile-section-trigger, .analytics-mobile-period-trigger { height:42px; box-sizing:border-box; border:1px solid var(--line); border-radius:calc(11px * var(--corner-scale)); background:var(--panel-soft); color:var(--ink); }
   .analytics-mobile-section-trigger { width:100%; min-width:0; display:flex; align-items:center; gap:8px; padding:0 11px; font:inherit; font-size:14px; font-weight:800; text-align:left; cursor:pointer; }
   .analytics-mobile-section-trigger > svg { flex:none; color:var(--accent); }

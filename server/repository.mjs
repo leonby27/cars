@@ -9,7 +9,8 @@ import { pool, withTransaction } from "./db.mjs";
 import { ORIGIN_SOURCES, originForSource, originFromParam } from "../src/origin.js";
 import { koreanListingId } from "../src/listing-id.js";
 import { notifyLead } from "./lead-notify.mjs";
-import { estimateLandedCost } from "../src/pricing.js";
+import { estimateMarketOffer } from "../src/markets/estimate-offer.js";
+import { SITE } from "../src/site-profile.js";
 import { marketPriceStatsFromRowsAsync } from "./market-price-stats.mjs";
 import { searchTextWords, searchWordStem } from "../src/car-search-text.js";
 import { normalizeBodyType } from "../src/body-types.js";
@@ -59,7 +60,11 @@ export const vehicleSpecifications = (item) => ({ bodyType:item.bodyType,bodyStr
 export async function upsertCar(car, client = pool) {
   const item = normalizeCar(car);
   const checkedAt = item.checkedAt || item.importedAt || new Date().toISOString();
-  const estimatedTotalUsd = estimateLandedCost(item).totalUsd;
+  // This column remains BY-only until market_offers is introduced. The explicit
+  // site context prevents a future RU importer from silently reusing its price.
+  const offer = estimateMarketOffer(item, { siteId: SITE.id });
+  if (offer.status !== "estimated") throw new Error("Stored market price is not available");
+  const estimatedTotalUsd = offer.calculation.totalUsd;
   await client.query(`INSERT INTO vehicles (id, brand, model, model_year, powertrain, drivetrain, battery_kwh, electric_range_km, combined_range_km, specifications, updated_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
     ON CONFLICT (id) DO UPDATE SET brand=EXCLUDED.brand, model=EXCLUDED.model, model_year=EXCLUDED.model_year, powertrain=EXCLUDED.powertrain, drivetrain=EXCLUDED.drivetrain, battery_kwh=EXCLUDED.battery_kwh, electric_range_km=EXCLUDED.electric_range_km, combined_range_km=EXCLUDED.combined_range_km, specifications=EXCLUDED.specifications, updated_at=now()`,

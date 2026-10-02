@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { promisify } from "node:util";
-import { pool } from "./db.mjs";
+import { pool } from "./site-data/db.mjs";
 import { decryptPersonalField, encryptPersonalField } from "./personal-data.mjs";
 
 const scrypt = promisify(crypto.scrypt);

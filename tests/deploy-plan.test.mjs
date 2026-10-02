@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { deploymentPlan } from '../scripts/lib/deploy-plan.mjs';
 
 test('presentation and test-only changes reuse inputs without DB maintenance',()=>{
- for(const files of [['src/App.jsx','src/styles.css'],['src/icons.jsx','public/logo.svg'],['tests/pricing.test.mjs','AGENTS.md'],[]]){
+ for(const files of [['src/App.jsx','src/styles.css'],['src/home-boot.js'],['src/icons.jsx','public/logo.svg'],['tests/pricing.test.mjs','AGENTS.md'],[]]){
   const p=deploymentPlan(files);assert.equal(p.mode,'presentation');
   assert.equal(p.reuseCatalog,true);assert.equal(p.reuseFeed,true);
   assert.equal(p.recalculatePrices,false);assert.equal(p.checkDuplicates,false);assert.equal(p.migrate,false);
