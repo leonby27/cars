@@ -1,5 +1,8 @@
 # Prototype Instructions
 
+Bot protection (owner authorization, 2026-10-02): reduce non-search crawler load and stop rapid automatic catalog exports on both domains. Commercial SEO/bulk agents including Ahrefs/Semrush are denied. Training families share 6 requests/minute across both sites; preserve distinct search/user fetch agents. Public catalog reads have shared per-IP burst and sustained quotas even when an exporter changes UA, domain, URL/query or spoofed headers. Search exemptions require matching official provider IPs or forward-confirmed Yandex DNS, never UA alone; keep normal page/filter bursts, static assets, authentication, POST forms and local warmers available. Install via deploy/install-car-bot-protection.sh with validated nginx and backups; maintain verification lists automatically. This supersedes older crawler speed/exemption rules. See deploy/README-ai-crawlers.md.
+
+
 Visual review (owner instruction): Do not inspect rendered pages or screenshots to judge UI appearance after changes. Leave the local page available for the owner to review; use source-level or other nonvisual checks when needed.
 
 ABDrive vehicle card and account (owner correction, 2026-10-01): reuse the ABCars detail layout, price rows and info tooltips, delivery disclosure with «от N дней», availability button and account screens. Change only Russia/Moscow copy and RUB calculations; do not replace them with an expanded custom explanation panel. ABDrive authentication, profiles, favorites, searches and orders belong only to its dedicated private database and `abdrive_session` cookie. Never fall back to browser-only RU authentication/orders or write RU customers into the BY database.

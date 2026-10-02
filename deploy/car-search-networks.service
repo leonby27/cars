@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh verified search crawler networks for both car sites
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/car-bot-protection/update-search-networks.py --install
+TimeoutStartSec=240
+Nice=10
+CPUWeight=10
+MemoryMax=256M
