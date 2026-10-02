@@ -10,6 +10,7 @@
 // собрана, а браузер её оживляет. Если сборка приложения недоступна, отдаётся
 // простая версия с теми же данными — страница хуже, но живая.
 import { existsSync } from "node:fs";
+import { catalogMetaBoot } from "./app-render.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { brandModels, getCatalogMeta, listCars, modelCatalogFacts, modelClassStock, priceEdges } from "./repository.mjs";
 import { appShell } from "./dist-files.mjs";
@@ -207,8 +208,7 @@ export async function renderModelCatalogPage(brandSlug, slug, searchParams) {
     catalogValue: plain ? { items: data.cars, total: data.total, hasMore: data.hasMore, changedAt: data.changedAt } : null,
     catalogPath: path,
     catalogSearch: search,
-    metaValue: meta,
-    metaQuery: new URLSearchParams({ brand: data.model.brand }).toString(),
+    ...catalogMetaBoot(new URLSearchParams({ brand: data.model.brand }), meta),
   };
   // Текст обзора в том же виде, в каком его подгружает браузер (см. model-text-load.js).
   const text = review ? { intro: review.intro, stats: review.stats, sections: review.sections, versions: review.versions, faq: review.faq, disclaimer: review.disclaimer } : null;

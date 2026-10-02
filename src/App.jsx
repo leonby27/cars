@@ -691,7 +691,7 @@ function useRoute(user) {
     };
     Promise.race([requestCatalogMeta(query), new Promise((resolve) => setTimeout(resolve, CATALOG_META_WAIT_MS))]).then(go, go);
   }, [user]);
-  const navigateNow = (next, { replace = false, preserveScroll = false, catalogState = null } = {}) => {
+  const navigateNow = (next, { replace = false, preserveScroll = false, preserveCatalog = false, catalogState = null } = {}) => {
     if (next === -1) {
       window.history.back();
       return;
@@ -704,7 +704,7 @@ function useRoute(user) {
       ? modelPageRedirect(target.pathname.slice("/models/".length))
       : null;
     if (movedModel && movedModel !== target.pathname) {
-      navigateNow(movedModel, { replace: true, preserveScroll, catalogState });
+      navigateNow(movedModel, { replace: true, preserveScroll, preserveCatalog, catalogState });
       return;
     }
     const currentPath = appPath(window.location.pathname);
@@ -742,6 +742,9 @@ function useRoute(user) {
         targetUrl,
       );
     }
+    // Mark only the committed navigation, after the metadata wait. Background
+    // renders while waiting must not consume a filter transition.
+    catalogFilterMoveTarget = preserveCatalog ? targetPath : null;
     setRoute((current) => ({
       path: targetPath,
       restoreY: catalogState ? Number(catalogState.scrollY) || 0 : null,
@@ -4712,10 +4715,7 @@ const readModelPageView = () => (window.localStorage.getItem(catalogViewKey) ===
 // Фильтры каталога из параметров адреса. Одним разбором пользуются три входа:
 // обычное открытие каталога, ссылки страниц марок и разделов и умный поиск —
 // он приводит запрос к такому же набору параметров.
-// Раздел, на который увёл выбранный фильтр, — не новая страница: фильтры уже
-// выставлены, и пересоздавать каталог незачем. Без этого выдача на секунду
-// подменялась заглушками и «мигала». Флаг ставит сам каталог перед таким
-// переходом, а гасит его отрисовка, которая этот переход показала.
+
 let catalogFilterMoveTarget = null;
 
 function catalogFiltersFromParams(params) {
