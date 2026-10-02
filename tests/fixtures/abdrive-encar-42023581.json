@@ -1,0 +1,41 @@
+{
+  "id": "encar-42023581",
+  "source": "Encar",
+  "city": "창원",
+  "price_cny": 18300000,
+  "brand": "Hyundai",
+  "model": "Tucson",
+  "model_year": 2021,
+  "powertrain": "ДВС",
+  "drivetrain": "Полный",
+  "battery_kwh": null,
+  "specifications": {
+    "engine": "2.0L",
+    "gearbox": "Автомат",
+    "bodyType": "SUV / кроссовер",
+    "fuelType": "Дизель",
+    "bodyColor": "Silver",
+    "batteryType": null,
+    "enginePower": null,
+    "engineVolume": 2,
+    "transmission": "Automatic",
+    "vehicleClass": "SUV",
+    "batteryHealth": null
+  },
+  "source_payload": {
+    "sourcePrice": 18300000,
+    "sourceCurrency": "KRW",
+    "priceBasis": "Vehicle Price",
+    "sourceFuelType": "Diesel",
+    "engine": "2.0L",
+    "engineCc": 1998,
+    "drive": "Полный",
+    "transmission": "Automatic",
+    "rawSeries": "투싼 (NX4)",
+    "rawModel": "Diesel 2.0 4WD Modern",
+    "rawModelGroup": "투싼",
+    "technicalSpecs": {
+      "groups": []
+    }
+  }
+}

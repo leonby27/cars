@@ -1,7 +1,22 @@
 // Values are estimates for Russian quotations, never certificates for a particular VIN.
 // Each match is constrained by the powertrain/variant, not just the model name.
-export const RU_POWER_REFERENCE_VERSION='2026-10-02-v2';
+export const RU_POWER_REFERENCE_VERSION='2026-10-02-v3';
 export const RU_POWER_SOURCES={
+ koreaAvante:{url:'https://www.hyundai.com/kr/ko/brand/brandstory/model/avante-history/2020-avante',basis:'manufacturer-specification',note:'CN7 Korean Smartstream G1.6: 1598 cc, 123 PS. Only explicit ordinary 1.6 grades; not N Line.'},
+ koreaAvanteN:{url:'https://www.hyundai.com/kr/ko/brand/brandstory/model/avante-history/2021-avante-n',basis:'manufacturer-specification',note:'Korean CN7 N: 1998 cc, 280 PS. Explicit N grade only.'},
+ kiaK8new:{url:'https://www.kia.com/content/dam/kwp/kr/ko/vehicles/pdf/catalog/catalog_k8.pdf',basis:'manufacturer-specification',note:'Facelift K8 HEV: ICE 180 PS, motor peak 47.7 kW. No continuous-power inference.'},
+ bydQin2025:{url:'https://www.byd.com/material/__CN/domestic-official/user-manual/dynasty/第二代秦PLUS%20DM-i智驾版用户手册260918.pdf',basis:'manufacturer-nominal',note:'Second-generation Qin PLUS manual p.371: TZ210XYB nominal 55, peak 120 kW.'},
+ bydSongProOld:{url:'https://www.byd.com/material/domestic-official/user-manual/dynasty/宋ProDM-i冠军版&荣耀版用户手册-20251202.pdf',basis:'manufacturer-nominal',note:'Song Pro Champion/Glory manual p.291: TZ220XYF nominal/peak 60/132 kW; TZ220XYE 70/145 kW. Same motor code used as analogue only.'},
+ bydQin2026:{url:'https://www.byd.com/material/domestic-official/user-manual/dynasty/2026%E6%AC%BE%E7%A7%A6PLUS%20DM-i%E7%94%A8%E6%88%B7%E6%89%8B%E5%86%8C260430-new.pdf',basis:'manufacturer-nominal',note:'Qin PLUS 2026 manual p.391: TZ210QYA nominal 55, peak 120 kW. Match model, drive and battery.'},
+ liOne2020:{url:'https://manuals.lixiang.com/zh-cn/M012020COMMON/20250813183937/topic-1355-FE488D51.html',basis:'manufacturer-nominal',note:'ONE 2020: front 50/100 kW nominal/peak, rear 55/140.'},
+ liOne2021:{url:'https://manuals.lixiang.com/zh-cn/M012021COMMON/20250813183754/topic-1956-A0631CD8.html',basis:'manufacturer-nominal',note:'ONE 2021: front 50/100 kW nominal/peak, rear 62/145.'},
+ liL6:{"url": "https://manuals.lixiang.com/zh-cn/X042024PRO/20260731165616/topic-2023-6A98AC50.html", "basis": "manufacturer-nominal", "note": "Manufacturer motor nominal power, used as an estimate rather than VIN documentary 30-minute power."},
+ liL9new:{"url": "https://manuals.lixiang.com/zh-cn/X012024ULTRA/20260731094746/topic-2022-E548E38E.html", "basis": "manufacturer-nominal", "note": "Manufacturer motor nominal power, used as an estimate rather than VIN documentary 30-minute power."},
+ liL8:{"url": "https://manuals.lixiang.com/zh-cn/X022022MAX/20260422113430/topic-2025-FA0B5760.html", "basis": "manufacturer-nominal", "note": "Manufacturer motor nominal power, used as an estimate rather than VIN documentary 30-minute power."},
+ liL7:{"url": "https://manuals.lixiang.com/zh-cn/X032023MAX/20260731162530/topic-2025-C752710B.html", "basis": "manufacturer-nominal", "note": "Manufacturer motor nominal power, used as an estimate rather than VIN documentary 30-minute power."},
+ koreaTucson:{url:'https://autocatalogarchive.com/wp-content/uploads/2020/09/Hyundai-Tucson-2020-KR.pdf',basis:'manufacturer-specification',note:'Hyundai Korean NX4 brochure: 1598 cc petrol 180 PS, 1998 cc diesel 186 PS. Regional variant reference.'},
+ kiaK8:{url:'https://www.kia-uae.com/wp-content/uploads/2021/09/en_catalog_k8.pdf',basis:'manufacturer-specification',note:'Korean 2021 brochure: HEV ICE 180 PS, motor peak 44.2 kW. No continuous-power inference.'},
+ kiaRay:{url:'https://www.kia.com/kr/vehicles/ray/specification',basis:'manufacturer-specification',note:'Korean naturally aspirated gasoline 1.0: 76 PS. Family estimate; excludes turbo and electric versions.'},
  kiaSorento:{url:'https://www.kia.com/content/dam/kwp/kr/ko/vehicles/pdf/catalog/catalog_sorento.pdf',basis:'manufacturer-specification',note:'Korean Sorento brochure: HEV 1598 cc, ICE 180 PS, electric peak 47.7 kW.'},
  sorentoImport:{url:'https://komi.trust-encar.ru/auto/41649354',basis:'broker-reference',note:'Importer quotation for 2026 HEV 1.6 2WD Signature X Line: electric 30-minute estimate 21.5 kW, ICE 180 PS. Not a certificate for the quoted VIN.'},
  liL9:{url:'https://manuals.lixiang.com/zh-cn/X012022MAX/20250916140616/topic-2022-E548E38E.html',basis:'manufacturer-nominal',note:'L9 2022 manual: front nominal/peak 65/130 kW, rear 80/200 kW. 145 kW analogue estimate; corroborated by L9 SBKTS RU A-CN.PE83.10934 (2025), not documentary power of this listing.'},
@@ -10,9 +25,21 @@ export const RU_POWER_SOURCES={
  tesla:{url:'https://www.tesla.com/de_at/support/maximum-30-minute-power-values',basis:'manufacturer-30-minute',note:'Manufacturer European variant reference; Russian imported VIN remains unconfirmed.'},
  broker:{url:'https://whitebrokerdv.ru/articles/elektromobili-pod-lgotnyj-utilizacionnyj-sbor-2026',basis:'broker-reference',note:'Published importer variant data, not independently verified certificates.'},
 };
+const li=(id,model,years,peak,batteries,kw,source)=>({id,brand:'Li Auto',models:[model],kind:'series',years,drive:'all',peak,batteries,compatibleMotorCounts:[2],kw,source});
 const tesla=(model,years,variant,drive,kw)=>({id:`tesla-${model.replace(' ','-')}-${years[0]}-${variant}-${drive}`,brand:'Tesla',models:[model],kind:'electric',years,variant,drive,kw,source:'tesla'});
 const ev=(id,brand,models,years,peak,battery,kw)=>({id,brand,models,kind:'electric',years,drive:'front',peak,battery,kw,source:'broker'});
 export const RU_POWER_REFERENCE=[
+ {id:'qin-plus-dmi-2026-120-model',brand:'BYD',models:['Qin PLUS'],kind:'parallel',years:[2026,2026],drive:'front',peak:120,batteries:[15.8,15.87,25.28],compatibleMotorCodes:['TZ210QYA'],compatibleMotorCounts:[1],kw:55,source:'bydQin2026'},
+ {id:'byd-tz220xyf-132',brand:'BYD',kind:'parallel',years:[2021,2025],motorCode:'TZ220XYF',motorCount:1,drive:'front',peak:132,kw:60,source:'bydSongProOld'},
+ {id:'byd-tz220xye-145',brand:'BYD',kind:'parallel',years:[2021,2025],motorCode:'TZ220XYE',motorCount:1,drive:'front',peak:145,kw:70,source:'bydSongProOld'},
+ {id:'qin-plus-dmi-120-model',brand:'BYD',models:['Qin PLUS'],kind:'parallel',years:[2025,2025],drive:'front',peak:120,batteries:[7.68,15.8,15.87],compatibleMotorCodes:['TZ210QYA','TZ210XYB'],compatibleMotorCounts:[1],kw:55,source:'bydQin2025'},
+ {id:'yuan-plus-150-model',brand:'BYD',models:['Yuan PLUS','Atto 3'],kind:'electric',years:[2022,2025],drive:'front',peak:150,batteries:[49.92,60.48],compatibleMotorCodes:['TZ200XSQ'],compatibleMotorCounts:[1],kw:65,source:'bydEv'},
+ li('li-one-240','Li ONE',[2019,2020],240,[40.5],105,'liOne2020'),
+ li('li-one-245','Li ONE',[2021,2022],245,[40.5],112,'liOne2021'),
+ li('li-l7-330','L7',[2023,2025],330,[40.9,41.3,42.8,52.3],145,'liL7'),
+ li('li-l8-330','L8',[2022,2025],330,[40.9,41.3,42.8,52.3],145,'liL8'),
+ li('li-l9-2024-330','L9',[2024,2025],330,[42.6,52.3],145,'liL9new'),
+ li('li-l6-300','L6',[2024,2025],300,[36.8],134,'liL6'),
  {id:'sorento-kr-2026-hev-2wd',brand:'Kia',models:['Sorento'],kind:'parallel',years:[2026,2026],drive:'front',sources:['Encar'],trim:/\bHEV\s+1\.6\s+2WD\b/i,cc:1598,maxBattery:2,engine:{iceHp:180,iceKw:132.39,source:'kiaSorento'},peak:47.7,kw:21.5,source:'sorentoImport'},
  {id:'li-l9-2022-42-awd',brand:'Li Auto',models:['L9'],kind:'series',years:[2022,2023],drive:'all',peak:330,battery:42.6,compatibleMotorCodes:['TZ180XS118'],compatibleMotorCounts:[2],kw:145,source:'liL9'},
  {id:'byd-tz210xyb-120',brand:'BYD',kind:'parallel',years:[2021,2026],motorCode:'TZ210XYB',motorCount:1,drive:'front',peak:120,kw:55,source:'bydHybrid'},
@@ -44,4 +71,16 @@ export const RU_POWER_REFERENCE=[
  ev('niro-64','Kia',['Niro','Niro EV'],[2019,2022],150,64,28.68),
  ev('niro-65','Kia',['Niro','Niro EV'],[2022,2026],150,64.8,36.77),
  ev('kona-64','Hyundai',['Kona','Kona Electric'],[2020,2023],150,64,27.95),
+];
+
+// Regional engine overrides refine the imported international catalog.
+const koreanIce=(id,brand,model,years,cc,hp,fuel,source)=>({id,brand,models:[model],kind:'ice',years,cc,sources:['Encar'],fuel,engine:{iceHp:hp,iceKw:hp*.7355,source},source});
+export const RU_ENGINE_REFERENCE=[
+ {...koreanIce('avante-cn7-kr-16','Hyundai','Elantra',[2020,2026],1598,123,/gasoline|petrol/i,'koreaAvante'),trim:/\b1\.6\s+(?:Smart|Modern|Inspiration)\b/i,excludeTrim:/turbo|n.?line|터보/i},
+ {...koreanIce('avante-cn7-kr-n','Hyundai','Elantra',[2021,2026],1998,280,/gasoline|petrol/i,'koreaAvanteN'),trim:/\b2\.0\s+N\b/i},
+ {id:'k8-kr-hev-facelift',brand:'Kia',models:['K8'],kind:'parallel',years:[2024,2026],cc:1598,sources:['Encar'],trim:/더 뉴|the new/i,maxBattery:2,engine:{iceHp:180,iceKw:132.39,source:'kiaK8new'},peak:47.7,source:'kiaK8new'},
+ {id:'k8-kr-hev-2021',brand:'Kia',models:['K8'],kind:'parallel',years:[2021,2024],cc:1598,sources:['Encar'],excludeTrim:/더 뉴|the new/i,maxBattery:2,engine:{iceHp:180,iceKw:132.39,source:'kiaK8'},peak:44.2,source:'kiaK8'},
+ koreanIce('tucson-nx4-kr-petrol','Hyundai','Tucson',[2020,2026],1598,180,/gasoline|petrol/i,'koreaTucson'),
+ koreanIce('tucson-nx4-kr-diesel','Hyundai','Tucson',[2020,2026],1998,186,/diesel/i,'koreaTucson'),
+ {...koreanIce('ray-kr-na-10','Kia','Ray',[2020,2026],998,76,/gasoline|petrol/i,'kiaRay'),excludeTrim:/turbo|터보/i},
 ];

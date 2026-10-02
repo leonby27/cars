@@ -1,0 +1,577 @@
+{
+  "counts": {
+    "total": 132856,
+    "point": 64169,
+    "range": 31244,
+    "unavailable": 37443,
+    "reasons": {
+      "powertrain_type_needed": 6157,
+      "motor_power_missing": 2900,
+      "engine_specs_missing": 28197,
+      "year_missing": 189
+    }
+  },
+  "groups": 9279,
+  "models": [
+    [
+      "Kia Carnival ice",
+      {
+        "count": 2921,
+        "range": 0,
+        "unavailable": 2921
+      }
+    ],
+    [
+      "Tesla Model Y electric",
+      {
+        "count": 2041,
+        "range": 2039,
+        "unavailable": 2
+      }
+    ],
+    [
+      "Kia Ray ice",
+      {
+        "count": 1535,
+        "range": 0,
+        "unavailable": 1535
+      }
+    ],
+    [
+      "Kia K5 ice",
+      {
+        "count": 1338,
+        "range": 0,
+        "unavailable": 1338
+      }
+    ],
+    [
+      "Kia Sorento ice",
+      {
+        "count": 1156,
+        "range": 0,
+        "unavailable": 1156
+      }
+    ],
+    [
+      "Xiaomi SU7 electric",
+      {
+        "count": 989,
+        "range": 989,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Hyundai Casper ice",
+      {
+        "count": 936,
+        "range": 0,
+        "unavailable": 936
+      }
+    ],
+    [
+      "Hyundai Sonata ice",
+      {
+        "count": 893,
+        "range": 0,
+        "unavailable": 893
+      }
+    ],
+    [
+      "Kia Seltos ice",
+      {
+        "count": 838,
+        "range": 0,
+        "unavailable": 838
+      }
+    ],
+    [
+      "Hyundai Staria ice",
+      {
+        "count": 821,
+        "range": 0,
+        "unavailable": 821
+      }
+    ],
+    [
+      "Hyundai Elantra ice",
+      {
+        "count": 815,
+        "range": 0,
+        "unavailable": 815
+      }
+    ],
+    [
+      "Hyundai Grandeur parallel",
+      {
+        "count": 802,
+        "range": 800,
+        "unavailable": 2
+      }
+    ],
+    [
+      "Kia Sportage ice",
+      {
+        "count": 787,
+        "range": 0,
+        "unavailable": 787
+      }
+    ],
+    [
+      "Hyundai Santa Fe ice",
+      {
+        "count": 784,
+        "range": 0,
+        "unavailable": 784
+      }
+    ],
+    [
+      "Hyundai IONIQ 5 electric",
+      {
+        "count": 739,
+        "range": 0,
+        "unavailable": 739
+      }
+    ],
+    [
+      "Kia Mohave ice",
+      {
+        "count": 716,
+        "range": 0,
+        "unavailable": 716
+      }
+    ],
+    [
+      "Kia K3 ice",
+      {
+        "count": 705,
+        "range": 0,
+        "unavailable": 705
+      }
+    ],
+    [
+      "Kia Sorento parallel",
+      {
+        "count": 692,
+        "range": 0,
+        "unavailable": 692
+      }
+    ],
+    [
+      "Hyundai Tucson ice",
+      {
+        "count": 687,
+        "range": 0,
+        "unavailable": 687
+      }
+    ],
+    [
+      "Kia Picanto ice",
+      {
+        "count": 648,
+        "range": 0,
+        "unavailable": 648
+      }
+    ],
+    [
+      "Li Auto Li ONE series",
+      {
+        "count": 646,
+        "range": 591,
+        "unavailable": 55
+      }
+    ],
+    [
+      "ORA Good Cat electric",
+      {
+        "count": 586,
+        "range": 586,
+        "unavailable": 0
+      }
+    ],
+    [
+      "AITO M7 series",
+      {
+        "count": 578,
+        "range": 578,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Li Auto L7 series",
+      {
+        "count": 567,
+        "range": 567,
+        "unavailable": 0
+      }
+    ],
+    [
+      "AION Y electric",
+      {
+        "count": 567,
+        "range": 567,
+        "unavailable": 0
+      }
+    ],
+    [
+      "XPeng P7 electric",
+      {
+        "count": 542,
+        "range": 542,
+        "unavailable": 0
+      }
+    ],
+    [
+      "BYD Qin PLUS unknown-hybrid",
+      {
+        "count": 536,
+        "range": 0,
+        "unavailable": 536
+      }
+    ],
+    [
+      "Mercedes-Benz E-Class ice",
+      {
+        "count": 509,
+        "range": 0,
+        "unavailable": 509
+      }
+    ],
+    [
+      "KGM TIBOLI ice",
+      {
+        "count": 451,
+        "range": 0,
+        "unavailable": 451
+      }
+    ],
+    [
+      "Zeekr 001 electric",
+      {
+        "count": 450,
+        "range": 450,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Li Auto L8 series",
+      {
+        "count": 434,
+        "range": 434,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Hyundai Palisade ice",
+      {
+        "count": 423,
+        "range": 0,
+        "unavailable": 423
+      }
+    ],
+    [
+      "Denza D9 parallel",
+      {
+        "count": 410,
+        "range": 410,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Kia EV6 electric",
+      {
+        "count": 409,
+        "range": 2,
+        "unavailable": 407
+      }
+    ],
+    [
+      "BMW i3 electric",
+      {
+        "count": 404,
+        "range": 403,
+        "unavailable": 1
+      }
+    ],
+    [
+      "Kia K8 parallel",
+      {
+        "count": 403,
+        "range": 0,
+        "unavailable": 403
+      }
+    ],
+    [
+      "Kia K8 ice",
+      {
+        "count": 385,
+        "range": 0,
+        "unavailable": 385
+      }
+    ],
+    [
+      "Kia K9 ice",
+      {
+        "count": 378,
+        "range": 0,
+        "unavailable": 378
+      }
+    ],
+    [
+      "NIO ES6 electric",
+      {
+        "count": 374,
+        "range": 374,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Volkswagen ID.3 electric",
+      {
+        "count": 372,
+        "range": 372,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Hyundai Santa Fe parallel",
+      {
+        "count": 367,
+        "range": 104,
+        "unavailable": 263
+      }
+    ],
+    [
+      "Voyah FREE series",
+      {
+        "count": 363,
+        "range": 361,
+        "unavailable": 2
+      }
+    ],
+    [
+      "BMW X3 ice",
+      {
+        "count": 353,
+        "range": 0,
+        "unavailable": 353
+      }
+    ],
+    [
+      "BMW Gran Turismo ice",
+      {
+        "count": 340,
+        "range": 0,
+        "unavailable": 340
+      }
+    ],
+    [
+      "Audi A6 ice",
+      {
+        "count": 336,
+        "range": 0,
+        "unavailable": 336
+      }
+    ],
+    [
+      "AITO M5 series",
+      {
+        "count": 336,
+        "range": 336,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Kia Niro parallel",
+      {
+        "count": 324,
+        "range": 0,
+        "unavailable": 324
+      }
+    ],
+    [
+      "Buick GL8 parallel",
+      {
+        "count": 321,
+        "range": 321,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Leapmotor C11 electric",
+      {
+        "count": 318,
+        "range": 315,
+        "unavailable": 3
+      }
+    ],
+    [
+      "Kia Sportage parallel",
+      {
+        "count": 308,
+        "range": 4,
+        "unavailable": 304
+      }
+    ],
+    [
+      "Kia Niro electric",
+      {
+        "count": 305,
+        "range": 0,
+        "unavailable": 305
+      }
+    ],
+    [
+      "Li Auto L6 series",
+      {
+        "count": 302,
+        "range": 302,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Hyundai Kona ice",
+      {
+        "count": 301,
+        "range": 0,
+        "unavailable": 301
+      }
+    ],
+    [
+      "BMW X4 ice",
+      {
+        "count": 300,
+        "range": 0,
+        "unavailable": 300
+      }
+    ],
+    [
+      "XPeng MONA M03 electric",
+      {
+        "count": 288,
+        "range": 288,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Mercedes-Benz C-Class parallel",
+      {
+        "count": 287,
+        "range": 287,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Hyundai Grand Starex ice",
+      {
+        "count": 277,
+        "range": 0,
+        "unavailable": 277
+      }
+    ],
+    [
+      "BYD Yuan PLUS electric",
+      {
+        "count": 277,
+        "range": 277,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Kia K5 parallel",
+      {
+        "count": 274,
+        "range": 0,
+        "unavailable": 274
+      }
+    ],
+    [
+      "Kia Carnival parallel",
+      {
+        "count": 272,
+        "range": 18,
+        "unavailable": 254
+      }
+    ],
+    [
+      "NIO ES8 electric",
+      {
+        "count": 267,
+        "range": 267,
+        "unavailable": 0
+      }
+    ],
+    [
+      "AITO M9 series",
+      {
+        "count": 263,
+        "range": 263,
+        "unavailable": 0
+      }
+    ],
+    [
+      "Kia K7 ice",
+      {
+        "count": 259,
+        "range": 0,
+        "unavailable": 259
+      }
+    ],
+    [
+      "BYD Song PLUS DM-i unknown-hybrid",
+      {
+        "count": 250,
+        "range": 0,
+        "unavailable": 250
+      }
+    ],
+    [
+      "Li Auto L9 series",
+      {
+        "count": 245,
+        "range": 245,
+        "unavailable": 0
+      }
+    ],
+    [
+      "BYD Han electric",
+      {
+        "count": 245,
+        "range": 244,
+        "unavailable": 1
+      }
+    ],
+    [
+      "BYD Qin L unknown-hybrid",
+      {
+        "count": 243,
+        "range": 0,
+        "unavailable": 243
+      }
+    ],
+    [
+      "BYD Han unknown-hybrid",
+      {
+        "count": 241,
+        "range": 0,
+        "unavailable": 241
+      }
+    ],
+    [
+      "BYD Tang DM-i unknown-hybrid",
+      {
+        "count": 240,
+        "range": 0,
+        "unavailable": 240
+      }
+    ],
+    [
+      "Tesla Model 3 electric",
+      {
+        "count": 240,
+        "range": 240,
+        "unavailable": 0
+      }
+    ]
+  ]
+}

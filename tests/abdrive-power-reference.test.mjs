@@ -13,7 +13,7 @@ const tesla={brand:'Tesla',model:'Model Y',year:2024,kind:'electric',drive:'all'
 test('Qin 58676125 uses matching motor analogue, net ICE and a single utilization band',()=>{
  const offer=estimateRussianOffer(qin,{now});
  assert.equal(offer.status,'estimated');assert.equal(offer.inputs.continuousPowerKw,null);
- assert.equal(offer.inputs.motorPower.method,'reference');assert.deepEqual(offer.inputs.motorPower.referenceIds,['byd-tz210xyb-120']);
+ assert.equal(offer.inputs.motorPower.method,'reference');assert.ok(offer.inputs.motorPower.referenceIds.includes('byd-tz210xyb-120'));
  assert.equal(offer.inputs.icePowerKw,70);assert.equal(offer.inputs.motorPower.minKw,55);
  assert.equal(offer.rows.find(r=>r.id==='utilization').amount,900000);
  assert.equal(offer.totalAmount,2840000);assert.equal(offer.range,null);
@@ -52,7 +52,7 @@ test('Catalog database fields and full technical variant feed the same dictionar
  assert.equal(kia.motorPower.minKw,28.68);
  const withoutPeak={source:'Encar',price_cny:20000000,brand:'Kia',model:'Niro',model_year:2021,powertrain:'Электромобиль',drivetrain:'Передний',battery_kwh:64};
  const quote=estimateRussianOffer(withoutPeak,{now});assert.equal(quote.status,'estimated');assert.equal(quote.inputs.electricPeakKw,null);assert.equal(quote.inputs.motorPower.minKw,28.68);
- assert.equal(estimateRussianOffer({...withoutPeak,battery_kwh:null},{now}).reason,'motor_power_missing');
+ assert.equal(estimateRussianOffer({...withoutPeak,model:'Unknown Niro',battery_kwh:null},{now}).reason,'motor_power_missing');
 });
 
 test('Unknown vehicles retain uncertainty instead of using a universal coefficient',()=>{
@@ -84,11 +84,11 @@ test('Sorento kr-42396029 fills absent ICE power before quotation and uses HEV r
 
 test('Sorento completion cannot leak into another market, engine, year, drive or PHEV',()=>{
  for(const change of [{source:'Guazi'},{model:'Sportage'},{model_year:2025},{drivetrain:'Полный'},{powertrain:'ДВС',source_payload:{sourceFuelType:'Gasoline'}}]){
-  const power=russianPowertrain({...sorento,...change});assert.equal(power.engineReference,null,JSON.stringify(change));
+  const power=russianPowertrain({...sorento,...change});assert.ok(!power.engineReference?.referenceIds.includes('sorento-kr-2026-hev-2wd'),JSON.stringify(change));
  }
  for(const change of [{rawModel:'PHEV 1.6 2WD Signature'},{rawModel:null},{engineCc:2497},{enginePowerKw:117.7},{motorPowerKw:67},{battery:13.8},{sourceFuelType:'Plug-in Hybrid'}]){
   const power=russianPowertrain({...sorento,source_payload:{...sorento.source_payload,...change}});
-  assert.equal(power.engineReference,null,JSON.stringify(change));assert.notEqual(power.motorPower.method,'reference');
+  assert.ok(!power.engineReference?.referenceIds.includes('sorento-kr-2026-hev-2wd'),JSON.stringify(change));assert.notEqual(power.motorPower.method,'reference');
  }
 });
 
@@ -104,7 +104,7 @@ test('L9 xdnvvzmvnl uses nominal motor sum, preserves FOB and excludes generator
 });
 
 test('L9 estimate requires its generation, battery, peak and drive; conflicting motors are rejected',()=>{
- for(const change of [{model:'L8'},{model_year:2024},{drivetrain:'Задний'},{battery_kwh:52.3}])assert.equal(russianPowertrain({...l9,...change}).motorPower.method,'unknown');
+ for(const change of [{model:'L8'},{model_year:2026},{drivetrain:'Задний'},{battery_kwh:52.3}])assert.equal(russianPowertrain({...l9,...change}).motorPower.method,'unknown');
  for(const change of [{motorPowerKw:400},{motorModel:'TZ180XY999'},{motorCount:1}])assert.equal(russianPowertrain({...l9,source_payload:{...l9.source_payload,...change}}).motorPower.method,'unknown');
 });
 

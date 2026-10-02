@@ -1,6 +1,7 @@
 import {createAsyncCache} from '../async-cache.mjs';
 import {estimateRussianOffer} from './pricing.mjs';
 import {readFile,writeFile,rename} from 'node:fs/promises';
+import {createPricingCoverage} from './pricing-coverage.mjs';
 import {RU_PRICING} from '../../config/ru-pricing.mjs';
 
 export function createRussianPriceIndex(db,{getRates,now,cacheFile,forceRefresh=false,onProgress=()=>{}}) {
@@ -8,23 +9,24 @@ export function createRussianPriceIndex(db,{getRates,now,cacheFile,forceRefresh=
  let initial;
  if(cacheFile&&!forceRefresh)try{
   const saved=JSON.parse(await readFile(cacheFile,'utf8')),date=new Date(saved.date),age=now()-date;
-  if(saved.format===1&&saved.version===RU_PRICING.version&&age>=0&&age<900000&&date.getFullYear()===now().getFullYear()&&Array.isArray(saved.prices)&&saved.prices.every(([id,price])=>typeof id==='string'&&Number.isFinite(price)&&price>0))initial={prices:new Map(saved.prices),rates:saved.rates,date};
+  if(saved.format===1&&saved.version===RU_PRICING.version&&age>=0&&age<900000&&date.getFullYear()===now().getFullYear()&&Array.isArray(saved.prices)&&saved.prices.every(([id,price])=>typeof id==='string'&&Number.isFinite(price)&&price>0))initial={prices:new Map(saved.prices),rates:saved.rates,date,coverage:saved.coverage};
  }catch{ /* A missing or interrupted snapshot is rebuilt from the catalog. */ }
  return createAsyncCache(async()=>{
   const rates=await getRates(),date=now();
-  const result=new Map();let after='',scanned=0;
+  const result=new Map(),coverage=createPricingCoverage({version:RU_PRICING.version,date});let after='',scanned=0;
   for(;;){
    const rows=await db.query(`SELECT l.id,l.source,l.city,l.price_cny,v.brand,v.model,v.model_year,v.powertrain,v.drivetrain,v.battery_kwh,l.source_payload,v.specifications FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id WHERE l.status='active' AND l.id>$1 ORDER BY l.id LIMIT 1000`,[after]);
-   for(const row of rows.rows){const offer=estimateRussianOffer(row,{rates,now:date});if(offer.status==='estimated')result.set(row.id,offer.totalAmount);}
+   for(const row of rows.rows){const offer=estimateRussianOffer(row,{rates,now:date});coverage.add(row,offer);if(offer.status==='estimated')result.set(row.id,offer.totalAmount);}
    scanned+=rows.rows.length;onProgress(scanned);
    if(rows.rows.length<1000)break;after=rows.rows.at(-1).id;
   }
+  const report=coverage.finish();
   if(cacheFile){
    const temporary=cacheFile+'.'+process.pid+'.tmp';
-   await writeFile(temporary,JSON.stringify({format:1,version:RU_PRICING.version,prices:[...result],rates,date}),{mode:0o600});
+   await writeFile(temporary,JSON.stringify({format:1,version:RU_PRICING.version,prices:[...result],rates,date,coverage:report}),{mode:0o600});
    await rename(temporary,cacheFile);
   }
-  return {prices:result,rates,date};
+  return {prices:result,rates,date,coverage:report};
  },{ttl:300000,initial,initialAt:initial?+initial.date:0,now:()=>+now(),onError:error=>console.error('[abdrive] price refresh failed',error.code||error.message)});
  };
  let ready;

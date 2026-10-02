@@ -13,6 +13,7 @@ try{
  await client.query('SET statement_timeout=30000');client.release();
  const index=await createRussianPriceIndex(catalogPool,{getRates:createRussianRates(),now:()=>new Date(),cacheFile:process.env.ABDRIVE_PRICE_INDEX_FILE,forceRefresh:true,onProgress:count=>{if(count%20000===0)console.log('Prepared Russian prices:',count);}})();
  if(!index.prices.size)throw new Error('No Russian prices prepared');
+ console.log('Russian pricing coverage:',JSON.stringify(index.coverage.summary));
  console.log('Russian price index ready:',index.prices.size,'prices in',Math.round((Date.now()-started)/1000),'seconds');
  if(process.env.ABDRIVE_HOME_SNAPSHOT_FILE){
   const catalog=createRussianCatalog(catalogPool,{priceIndexFile:process.env.ABDRIVE_PRICE_INDEX_FILE});

@@ -1,0 +1,257 @@
+[
+  {
+    "id": "encar-40757159",
+    "source": "Encar",
+    "city": "부산",
+    "price_cny": 24900000,
+    "brand": "Kia",
+    "model": "Carnival",
+    "model_year": 2021,
+    "powertrain": "ДВС",
+    "drivetrain": "Не указан",
+    "battery_kwh": null,
+    "specifications": {
+      "engine": "2.2L",
+      "gearbox": "Автомат",
+      "bodyType": "Минивэн",
+      "fuelType": "Дизель",
+      "bodyColor": "White",
+      "batteryType": null,
+      "enginePower": null,
+      "engineVolume": 2.2,
+      "transmission": "Automatic",
+      "vehicleClass": "MPV",
+      "batteryHealth": null
+    },
+    "source_payload": {
+      "sourcePrice": 24900000,
+      "sourceCurrency": "KRW",
+      "priceBasis": "Vehicle Price",
+      "sourceFuelType": "Diesel",
+      "engine": "2.2L",
+      "engineCc": 2151,
+      "drive": "Не указан",
+      "transmission": "Automatic",
+      "rawSeries": "카니발 4세대",
+      "rawModel": "Diesel 9-Seater Prestige",
+      "rawModelGroup": "카니발",
+      "technicalSpecs": {
+        "groups": []
+      }
+    }
+  },
+  {
+    "id": "encar-41852006",
+    "source": "Encar",
+    "city": "서울",
+    "price_cny": 20500000,
+    "brand": "Kia",
+    "model": "K5",
+    "model_year": 2023,
+    "powertrain": "ДВС",
+    "drivetrain": "Не указан",
+    "battery_kwh": null,
+    "specifications": {
+      "engine": "2.0L",
+      "gearbox": "Автомат",
+      "bodyType": "Седан",
+      "fuelType": "Бензин",
+      "bodyColor": "Blue",
+      "batteryType": null,
+      "enginePower": null,
+      "engineVolume": 2,
+      "transmission": "Automatic",
+      "vehicleClass": "Mid-size",
+      "batteryHealth": null
+    },
+    "source_payload": {
+      "sourcePrice": 20500000,
+      "sourceCurrency": "KRW",
+      "priceBasis": "Vehicle Price",
+      "sourceFuelType": "Gasoline",
+      "engine": "2.0L",
+      "engineCc": 1999,
+      "drive": "Не указан",
+      "transmission": "Automatic",
+      "rawSeries": "K5 3세대",
+      "rawModel": "2.0 Prestige",
+      "rawModelGroup": "K5",
+      "technicalSpecs": {
+        "groups": []
+      }
+    }
+  },
+  {
+    "id": "encar-40043152",
+    "source": "Encar",
+    "city": "부천",
+    "price_cny": 27900000,
+    "brand": "Hyundai",
+    "model": "Grandeur",
+    "model_year": 2022,
+    "powertrain": "Гибрид",
+    "drivetrain": "Передний",
+    "battery_kwh": null,
+    "specifications": {
+      "engine": "2.4L 200HP",
+      "gearbox": "Автомат",
+      "tireRim": 17,
+      "bodyType": "Седан",
+      "fuelType": null,
+      "torqueNm": 205,
+      "bodyColor": "White",
+      "batteryType": null,
+      "enginePower": 200,
+      "acceleration": null,
+      "engineVolume": 2.4,
+      "transmission": "Automatic",
+      "vehicleClass": "Full-size",
+      "batteryHealth": null,
+      "tireSizeFront": "225/55 R17"
+    },
+    "source_payload": {
+      "sourcePrice": 27900000,
+      "sourceCurrency": "KRW",
+      "priceBasis": "Vehicle Price",
+      "sourceFuelType": "Hybrid",
+      "engine": "2.4L 200HP",
+      "engineCc": 2359,
+      "horsepower": 200,
+      "drive": "Передний",
+      "transmission": "Automatic",
+      "rawSeries": "더 뉴 그랜저 IG 하이브리드",
+      "rawModel": "Le Blanc",
+      "rawModelGroup": "그랜저",
+      "dimensions": "4990x1875x1470",
+      "curbWeight": 1675,
+      "technicalSpecs": {
+        "groups": []
+      }
+    }
+  },
+  {
+    "id": "encar-40095827",
+    "source": "Encar",
+    "city": "부산",
+    "price_cny": 15990000,
+    "brand": "Hyundai",
+    "model": "Elantra",
+    "model_year": 2021,
+    "powertrain": "ДВС",
+    "drivetrain": "Передний",
+    "battery_kwh": null,
+    "specifications": {
+      "engine": "1.6L",
+      "gearbox": "Автомат",
+      "bodyType": "Седан",
+      "fuelType": "Бензин",
+      "torqueNm": null,
+      "bodyColor": "Blue",
+      "batteryType": null,
+      "enginePower": null,
+      "acceleration": null,
+      "engineVolume": 1.6,
+      "transmission": "Automatic",
+      "vehicleClass": "Compact",
+      "batteryHealth": null
+    },
+    "source_payload": {
+      "sourcePrice": 15990000,
+      "sourceCurrency": "KRW",
+      "priceBasis": "Vehicle Price",
+      "sourceFuelType": "Gasoline",
+      "engine": "1.6L",
+      "engineCc": 1598,
+      "drive": "Передний",
+      "transmission": "Automatic",
+      "rawSeries": "아반떼 (CN7)",
+      "rawModel": "1.6 Modern",
+      "rawModelGroup": "아반떼",
+      "technicalSpecs": {
+        "groups": []
+      }
+    }
+  },
+  {
+    "id": "encar-40770175",
+    "source": "Encar",
+    "city": "인천",
+    "price_cny": 29200000,
+    "brand": "Kia",
+    "model": "K8",
+    "model_year": 2023,
+    "powertrain": "Гибрид",
+    "drivetrain": "Не указан",
+    "battery_kwh": null,
+    "specifications": {
+      "engine": "1.6L",
+      "gearbox": "Автомат",
+      "bodyType": "Седан",
+      "fuelType": null,
+      "bodyColor": "Dark Gray",
+      "batteryType": null,
+      "enginePower": null,
+      "engineVolume": 1.6,
+      "transmission": "Automatic",
+      "vehicleClass": "Full-size",
+      "batteryHealth": null
+    },
+    "source_payload": {
+      "sourcePrice": 29200000,
+      "sourceCurrency": "KRW",
+      "priceBasis": "Vehicle Price",
+      "sourceFuelType": "Hybrid",
+      "engine": "1.6L",
+      "engineCc": 1598,
+      "drive": "Не указан",
+      "transmission": "Automatic",
+      "rawSeries": "K8 하이브리드",
+      "rawModel": "Noblesse",
+      "rawModelGroup": "K8",
+      "technicalSpecs": {
+        "groups": []
+      }
+    }
+  },
+  {
+    "id": "encar-40651033",
+    "source": "Encar",
+    "city": "청주",
+    "price_cny": 31000000,
+    "brand": "Kia",
+    "model": "Mohave",
+    "model_year": 2021,
+    "powertrain": "ДВС",
+    "drivetrain": "Полный",
+    "battery_kwh": null,
+    "specifications": {
+      "engine": "3.0L",
+      "gearbox": "Автомат",
+      "bodyType": "SUV / кроссовер",
+      "fuelType": "Дизель",
+      "bodyColor": "White",
+      "batteryType": null,
+      "enginePower": null,
+      "engineVolume": 3,
+      "transmission": "Automatic",
+      "vehicleClass": "SUV",
+      "batteryHealth": null
+    },
+    "source_payload": {
+      "sourcePrice": 31000000,
+      "sourceCurrency": "KRW",
+      "priceBasis": "Vehicle Price",
+      "sourceFuelType": "Diesel",
+      "engine": "3.0L",
+      "engineCc": 2959,
+      "drive": "Полный",
+      "transmission": "Automatic",
+      "rawSeries": "모하비 더 마스터",
+      "rawModel": "Diesel 3.0 4WD 5-Seater Masters",
+      "rawModelGroup": "모하비",
+      "technicalSpecs": {
+        "groups": []
+      }
+    }
+  }
+]

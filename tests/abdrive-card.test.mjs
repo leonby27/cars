@@ -14,7 +14,7 @@ test('RU price groups retain every payment and show documented uncertainty insid
  assert.equal(russianPriceRows(korean).find(row=>row.id==='sea').value,'≈ 295 000 ₽');
  assert.equal(russianPriceRows(korean).find(row=>row.id==='origin').label,'Логистика в Корее');
  const fob={...car,offer:{...car.offer,rows:car.offer.rows.filter(row=>row.id!=='origin')}};assert.equal(russianPriceRows(fob).length,6);
- const range={...car,offer:{...car.offer,range:{min:3e6,max:5e6},rows:car.offer.rows.map(row=>row.id==='utilization'?{...row,minAmount:3400}:row)}};
+ const range={...car,offer:{...car.offer,range:{min:3e6,max:5e6},inputs:{motorPower:{method:'unknown'}},rows:car.offer.rows.map(row=>row.id==='utilization'?{...row,minAmount:3400}:row)}};
  assert.match(russianPriceRows(range).find(row=>row.id==='duty').description,/30-минутной мощности/);
 });
 

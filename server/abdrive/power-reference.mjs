@@ -1,4 +1,4 @@
-import {RU_POWER_REFERENCE,RU_POWER_SOURCES,RU_POWER_REFERENCE_VERSION} from '../../config/ru-power-reference.mjs';
+import {RU_POWER_REFERENCE,RU_ENGINE_REFERENCE,RU_POWER_SOURCES,RU_POWER_REFERENCE_VERSION} from '../../config/ru-power-reference.mjs';
 const normalize=value=>String(value??'').toLowerCase().replace(/[^a-zа-я0-9]/g,'');
 const near=(a,b,tolerance)=>Number.isFinite(a)&&Math.abs(a-b)<=tolerance;
 const bounds=value=>Array.isArray(value)?value:[value,value];
@@ -8,6 +8,8 @@ const matchesVariant=(facts,entry)=>{
  if(entry.models&&!entry.models.some(model=>normalize(model)===normalize(facts.model)))return false;
  if(entry.sources&&!entry.sources.includes(facts.source))return false;
  if(entry.trim&&!entry.trim.test(facts.description||''))return false;
+ if(entry.excludeTrim?.test(facts.description||''))return false;
+ if(entry.fuel&&!entry.fuel.test(facts.fuel||''))return false;
  if(entry.maxBattery&&/plug.?in|\bPHEV\b/i.test(facts.fuel||''))return false;
  if(entry.cc&&!near(facts.cc,entry.cc,5))return false;
  if(entry.maxBattery&&facts.battery>entry.maxBattery)return false;
@@ -20,14 +22,15 @@ const matchesVariant=(facts,entry)=>{
  if(entry.drive&&facts.drive!==entry.drive)return false;
  if(entry.peak&&!near(facts.electricPeakKw,entry.peak,1)&&!(facts.electricPeakKw==null&&entry.models&&(entry.battery||entry.engine)))return false;
  if(entry.battery&&!near(facts.battery,entry.battery,.15))return false;
+ if(entry.batteries&&!entry.batteries.some(b=>near(facts.battery,b,.15)))return false;
  if(entry.variant&&facts.variant&&entry.variant!==facts.variant)return false;
- if(facts.electricPeakKw&&bounds(entry.kw)[1]>facts.electricPeakKw)return false;
+ if(entry.kw!=null&&facts.electricPeakKw&&bounds(entry.kw)[1]>facts.electricPeakKw)return false;
  return true;
 };
 
 // Fill only missing source specifications, and only when every compatible entry agrees.
 // Keep these estimates and their provenance separate from documentary motor power.
-export function completeRussianPowertrain(facts,{entries=RU_POWER_REFERENCE}={}) {
+export function completeRussianPowertrain(facts,{entries=[...RU_POWER_REFERENCE,...RU_ENGINE_REFERENCE]}={}) {
  const matches=entries.filter(entry=>entry.engine&&matchesVariant(facts,entry));
  const completed={...facts},fields=[];
  for(const field of ['iceHp','iceKw','electricPeakKw']){
