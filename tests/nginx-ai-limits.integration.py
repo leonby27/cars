@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='car-bot-nginx-') as directory:
     families = ['google', 'bing', 'yandex', 'apple', 'duck', 'openai', 'perplexity', 'claude']
     networks.write_text('\n'.join(f'geo $car_net_{family} {{ default 0; 127.0.0.{10+index}/32 1; }}' for index, family in enumerate(families)))
     limits = path / 'limits.conf'
-    limits.write_text((root/'deploy/nginx-car-ai-limits.conf').read_text().replace('/etc/nginx/snippets/car-search-networks.conf', str(networks)).replace('127.0.0.0/8 1;', '127.0.0.1/32 1;'))
+    limits.write_text((root/'deploy/nginx-car-ai-limits.conf').read_text().replace('/etc/nginx/snippets/car-search-networks.conf', str(networks)).replace('127.0.0.0/8 1;', '127.0.0.1/32 1;').replace('$time_iso8601:$remote_addr', '$http_x_fixture_clock:$remote_addr').replace(r'37\.214\.32\.151', r'127\.0\.0\.30'))
     config = path / 'nginx.conf'
     config.write_text(f'''
 pid {path}/nginx.pid;
@@ -53,6 +53,7 @@ http {{
         listen 127.0.0.1:{port};
         server_name a.test b.test;
         if ($car_blocked_bot) {{ return 403; }}
+        if ($car_export_denied) {{ return 403; }}
         limit_req zone=car_training_v2 burst=1 nodelay;
         limit_req_status 429;
         add_header Retry-After $car_ai_retry_after always;
@@ -67,7 +68,7 @@ http {{
         }}
         # Exercise the sustained budget independently of the short burst gate.
         location = /api/cars/summary {{
-            limit_req zone=car_catalog_sustained burst=60 nodelay;
+            limit_req zone=car_catalog_sustained_v2 burst=30 nodelay;
             limit_req_status 429;
             add_header Retry-After $car_ai_retry_after always;
             proxy_pass http://127.0.0.1:{backend.server_port};
@@ -112,6 +113,17 @@ http {{
             assert all(request(agent, host=host, url=url)[0] == 403 for host in ['a.test','b.test'] for url in ['/cars/fixture','/api/cars?limit=100','/assets/fixture.js'])
             assert Backend.calls == before
 
+        # Temporary confirmed-exporter denial is shared and closes encoded URLs;
+        # auth, submissions/assets and expiration remain outside that denial.
+        before = Backend.calls
+        for host in ['a.test','b.test']:
+            for url in ['/api/cars?limit=1','/api/%63ars?limit=100','/cars/fixture','/feeds/yandex-cars.xml']:
+                assert request('Googlebot/2.1', address='127.0.0.30', host=host, url=url, headers={'X-Fixture-Clock':'2026-10-02T12:00:00Z','X-Forwarded-For':'66.249.64.1'})[0] == 403
+        assert Backend.calls == before
+        assert request(address='127.0.0.30',url='/api/auth/me',headers={'X-Fixture-Clock':'2026-10-03T12:00:00Z'})[0] == 200
+        assert request(address='127.0.0.30',url='/api/cars',method='POST',headers={'X-Fixture-Clock':'2026-10-03T12:00:00Z'})[0] == 200
+        assert request(address='127.0.0.30',url='/api/cars?limit=1',headers={'X-Fixture-Clock':'2026-10-04T00:00:00Z'})[0] == 200
+
         # Browser-looking exporter changes URL, domain, UA and spoofed headers.
         before = Backend.calls
         replies = [request('Mozilla/' + str(n), address='127.0.0.4', host='a.test' if n%2 else 'b.test', url='/api/cars?limit=100&offset='+str(n), headers={'X-Forwarded-For': '66.249.64.1','X-Real-IP':'66.249.64.1'}) for n in range(70)]
@@ -125,7 +137,7 @@ http {{
         assert request(address='127.0.0.4', url='/assets/fixture.js')[0] == 200
 
         sustained = [request(address='127.0.0.9',url='/api/cars/summary?offset='+str(n))[0] for n in range(90)]
-        assert sum(code==200 for code in sustained) == 61, collections.Counter(sustained)
+        assert sum(code==200 for code in sustained) == 31, collections.Counter(sustained)
         assert all(code==429 for code in sustained[-20:])
 
         # Genuine provider IP + matching UA bypass; forged name does not.
