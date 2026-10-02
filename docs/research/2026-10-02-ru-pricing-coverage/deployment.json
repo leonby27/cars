@@ -1,0 +1,69 @@
+{
+  "release": "20261002-pricing-coverage-82a723b",
+  "revision": "82a723b59a5cb3ea3fa674ff5b2d5a73179be5fd",
+  "coverage": {
+    "version": "ru-moscow-market-logistics-2026-10-01-power-2026-10-02-v3",
+    "date": "2026-10-02T03:56:23.251Z",
+    "total": 132856,
+    "point": 83054,
+    "range": 45770,
+    "wideRange": 34658,
+    "unavailable": 4032,
+    "reasons": {
+      "power_range_wide": 34658,
+      "power_range": 11112,
+      "powertrain_type_needed": 245,
+      "motor_power_missing": 433,
+      "engine_specs_missing": 3165,
+      "year_missing": 189
+    },
+    "variantGroups": 6736
+  },
+  "publicExamples": [
+    {
+      "id": "kr-42023581",
+      "title": "Hyundai Tucson 2021",
+      "total": 4040000,
+      "range": null,
+      "version": "ru-moscow-market-logistics-2026-10-01-power-2026-10-02-v3",
+      "htmlVerified": true
+    },
+    {
+      "id": "58676125",
+      "title": "BYD Qin PLUS 2026",
+      "total": 2830000,
+      "range": null,
+      "version": "ru-moscow-market-logistics-2026-10-01-power-2026-10-02-v3",
+      "htmlVerified": true
+    },
+    {
+      "id": "kr-42396029",
+      "title": "Kia Sorento 2026",
+      "total": 6610000,
+      "range": null,
+      "version": "ru-moscow-market-logistics-2026-10-01-power-2026-10-02-v3",
+      "htmlVerified": true
+    },
+    {
+      "id": "xdnvvzmvnl",
+      "title": "Li Auto L9 2022",
+      "total": 8070000,
+      "range": null,
+      "version": "ru-moscow-market-logistics-2026-10-01-power-2026-10-02-v3",
+      "htmlVerified": true
+    }
+  ],
+  "priceIndexMatchesExamples": true,
+  "tests": {
+    "passed": 1295,
+    "skipped": 6,
+    "note": "Full suite plus targeted rerun of three failures after fixture/environment correction."
+  },
+  "byProcessUnchanged": true,
+  "localQin": {
+    "total": 2840000,
+    "range": null,
+    "ratesDate": "2026-10-01",
+    "previewBackendAutoRestart": true
+  }
+}
