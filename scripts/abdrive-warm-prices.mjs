@@ -11,7 +11,7 @@ try{
  // Only the offline preparation connection gets a longer query timeout.
  const client=await catalogPool.connect();
  await client.query('SET statement_timeout=30000');client.release();
- const index=await createRussianPriceIndex(catalogPool,{getRates:createRussianRates(),now:()=>new Date(),cacheFile:process.env.ABDRIVE_PRICE_INDEX_FILE,forceRefresh:true,onProgress:count=>{if(count%20000===0)console.log('Prepared Russian prices:',count);}})();
+ const index=await createRussianPriceIndex(catalogPool,{getRates:createRussianRates(),now:()=>new Date(),cacheFile:process.env.ABDRIVE_PRICE_INDEX_FILE,onProgress:count=>{if(count%20000===0)console.log('Prepared Russian prices:',count);}})({requireFresh:true});
  if(!index.prices.size)throw new Error('No Russian prices prepared');
  console.log('Russian pricing coverage:',JSON.stringify(index.coverage.summary));
  console.log('Russian price index ready:',index.prices.size,'prices in',Math.round((Date.now()-started)/1000),'seconds');

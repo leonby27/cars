@@ -23,6 +23,9 @@ test('migration and duplicate changes run only the affected maintenance',()=>{
  assert.equal(deploymentPlan(['db/migrations/999_test.sql']).recalculatePrices,true);
  const p=deploymentPlan(['scripts/lib/cross-source-dedupe.mjs']);
  assert.equal(p.checkDuplicates,true);assert.equal(p.migrate,false);assert.equal(p.recalculatePrices,false);
+ const index=deploymentPlan(['db/migrations/045_vehicles_updated_at_index.sql']);
+ assert.equal(index.migrate,true);assert.equal(index.recalculatePrices,false);assert.equal(index.checkDuplicates,false);
+ assert.equal(index.reuseCatalog,true);
 });
 
 test('PageSpeed browser infrastructure rebuilds without rewriting vehicle prices',()=>{

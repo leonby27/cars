@@ -116,8 +116,8 @@ export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>n
    const cars=ids.length?await db.query(`SELECT ${columns} ${from} WHERE l.status='active' AND l.id=ANY($1::text[])`,[ids]):{rows:[],rowCount:0};
    cars.rows.sort((a,b)=>positions.get(a.id)-positions.get(b.id));
    const total=count.rows[0].total;
-   const rates=await getRates();
-   const items=cars.rows.map(row=>publicCar(row,{rates,now:now()}));return {cars:items,items,total,page:q.page,limit:q.limit,offset:q.offset,hasMore:q.offset+cars.rowCount<Math.min(total,5000),refreshedAt:items.reduce((date,car)=>String(car.checkedAt||'')>date?String(car.checkedAt):date,'')};
+   const index=await priceIndex();
+   const items=cars.rows.map(row=>publicCar(row,{rates:index.rates,now:index.date}));return {cars:items,items,total,page:q.page,limit:q.limit,offset:q.offset,hasMore:q.offset+cars.rowCount<Math.min(total,5000),refreshedAt:items.reduce((date,car)=>String(car.checkedAt||'')>date?String(car.checkedAt):date,'')};
     },{ttl:30000,onError:()=>{}}));
    }
    return pages.get(key)();
@@ -129,7 +129,8 @@ export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>n
    const result=await db.query(`SELECT ${columns} ${from} WHERE l.status='active' AND l.id=ANY($1::text[])
      ORDER BY CASE WHEN l.id=$2 THEN 0 ELSE 1 END,l.id LIMIT 1`,[ids,number]);
    const row=result.rows[0];
-   return row?{car:publicCar(row,{detail:true,rates:await getRates(),now:now()}),sourceVersion:sourceVersion(row),sourceUrl:row.source_url}:null;
+   const index=row?await priceIndex():null;
+   return row?{car:publicCar(row,{detail:true,rates:index.rates,now:index.date}),sourceVersion:sourceVersion(row),sourceUrl:row.source_url}:null;
   },
   async report(number) {
    if(!/^[a-zA-Z0-9-]{1,100}$/.test(number))return null;

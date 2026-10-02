@@ -21,10 +21,11 @@ if sql("SELECT datname FROM pg_database WHERE datname='abcars'")!='abcars':
 if sql("SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('catalog_listings','vehicles','listing_media')",'abcars')!='3':
     raise SystemExit('Catalog schema does not match')
 reader=secrets.token_hex(32); writer=secrets.token_hex(32)
-# Roles are unrelated to the BY owner and receive only these three read grants.
+# Roles are unrelated to the BY owner and receive only catalog read grants.
 sql(f"CREATE ROLE abdrive_catalog LOGIN NOINHERIT CONNECTION LIMIT 3 PASSWORD '{reader}'; CREATE ROLE abdrive_app LOGIN NOINHERIT CONNECTION LIMIT 6 PASSWORD '{writer}';")
 sql("ALTER ROLE abdrive_catalog SET default_transaction_read_only=on; ALTER ROLE abdrive_catalog SET statement_timeout='5s'; GRANT CONNECT ON DATABASE abcars TO abdrive_catalog;")
 sql("GRANT USAGE ON SCHEMA public TO abdrive_catalog; GRANT SELECT ON catalog_listings,vehicles,listing_media TO abdrive_catalog;",'abcars')
+sql("GRANT SELECT (id,vehicle_id,status,source,city,price_cny,source_payload,content_changed_at,sold_at) ON listings TO abdrive_catalog;",'abcars')
 sql('CREATE DATABASE abdrive OWNER abdrive_app;')
 sql('REVOKE ALL ON DATABASE abdrive FROM PUBLIC; GRANT CONNECT ON DATABASE abdrive TO abdrive_app;')
 sql('REVOKE CREATE ON SCHEMA public FROM PUBLIC;','abdrive')

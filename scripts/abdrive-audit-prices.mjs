@@ -1,4 +1,5 @@
-// Read the continuously refreshed coverage report, without scanning the database.
+// Read coverage from the last full calculation, without scanning the database.
+// Incremental price updates do not rebuild this diagnostic report; its date is explicit.
 import '../config/load-env.mjs';
 import {readFile,writeFile} from 'node:fs/promises';
 const args=process.argv.slice(2);

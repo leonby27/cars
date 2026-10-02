@@ -24,7 +24,7 @@ test('RU uses shared pages, own metadata and safe data; BY tools and documents s
    const response=await fetch(base+path);assert.equal(response.status,200,path);const html=await response.text();
    if(!["/favorites","/searches"].includes(path))assert.match(html,/<h1[ >]/);assert.match(html,/ABDrive/);assert.match(html,/https:\/\/abdrive.ru/);
    assert.match(html,/class="site-header"/);assert.match(html,/class="site-footer"/);
-   assert.match(html,/<select aria-label="Город доставки"/);assert.match(html,/<option value="moscow" selected="">Москва<\/option>/);
+   assert.match(html,/aria-label="Город доставки: Москва"/);assert.match(html,/role="option" aria-selected="true"/);
    assert.doesNotMatch(html,/aria-label="Валюта цен"|До Москвы · ₽/);
    assert.match(html,/src="\/abdrive\/logo-light\.svg\?v=3"/);assert.match(html,/src="\/abdrive\/logo-dark\.svg\?v=3"/);
    assert.match(html,/<link rel="icon" href="\/favicon\.svg\?v=3"/);
@@ -32,15 +32,17 @@ test('RU uses shared pages, own metadata and safe data; BY tools and documents s
   }
   const filtered=await fetch(base+'/catalog?brand=BYD&model=Seal&yearMax=2025&mileageMax=20000').then(r=>r.text());
   assert.match(filtered,/class="car-row"/);assert.match(filtered,/BYD Seal/);assert.match(filtered,/data-prerender="\/catalog"/);
-  const faq=await fetch(base+'/faq').then(r=>r.text());assert.match(faq,/home-faq-item/);assert.match(faq,/Сколько занимает доставка до Москвы/);
+  const faq=await fetch(base+'/faq').then(r=>r.text());assert.match(faq,/home-faq-item/);assert.match(faq,/Как заранее узнать маршрут/);
   const service=await fetch(base+'/how-it-works').then(r=>r.text());
-  for(const marker of ['service-video-shell','service-video-story','info-proof-section','service-opportunities-grid','service-catalog-section','service-assurance-section','service-purchase-flow','service-report','service-faq'])assert.ok(service.includes(marker),marker);
+  for(const marker of ['service-video-shell','service-video-story','info-proof-section','service-opportunities-grid','service-catalog-section','service-assurance-section','service-purchase-flow','service-faq'])assert.ok(service.includes(marker),marker);
+  // The independent RU editorial release omits the BY example report.
+  assert.doesNotMatch(service,/class="service-report/);
   assert.equal((service.match(/class="info-proof-icon /g)||[]).length,8);
   assert.equal((service.match(/class="service-purchase-flow-number"/g)||[]).length,6);
-  assert.equal((service.match(/class="faq-group"/g)||[]).length,4);
-  assert.equal((service.match(/class="home-faq-item"/g)||[]).length,13);
+  assert.equal((service.match(/class="faq-group"/g)||[]).length,3);
+  assert.equal((service.match(/class="home-faq-item"/g)||[]).length,9);
   assert.doesNotMatch(service,/скоро появятся|телефон уточняется|чат готовится/i);
-  assert.match(service,/Выдача в Москве/);assert.match(service,/Полная смета до Москвы/);
+  assert.match(service,/Получение в Москве/);assert.match(service,/Расчёт до Москвы/);
   assert.doesNotMatch(service,/tel:undefined|mailto:undefined|href="[^" ]*(?:ev-quota|price-belarus)|64900|64 000/);
   // Request every initially rendered illustration and both video encodes through the RU server.
   const media=new Set([...service.matchAll(/(?:src|srcSet)="(\/[^" ]+)"/g)].map(match=>match[1]));

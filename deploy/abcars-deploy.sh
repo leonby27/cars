@@ -156,17 +156,22 @@ fi
 find /var/cache/nginx/abcars -type f -delete
 # Only reinstall changed/missing unit files, with one daemon-reload for the batch.
 units_changed=0
-for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe; do
+rates_timer_changed=0
+for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe abcars-rates abcars-price-snapshot; do
   for suffix in service timer; do
     file="$name.$suffix"
     if ! cmp -s "deploy/$file" "/etc/systemd/system/$file"; then
       install -m644 "deploy/$file" "/etc/systemd/system/$file"
       units_changed=1
+      if [ "$file" = abcars-rates.timer ]; then rates_timer_changed=1; fi
     fi
   done
 done
 if [ "$units_changed" -eq 1 ]; then run units systemctl daemon-reload; fi
-for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe; do
+if [ "$rates_timer_changed" -eq 1 ] && systemctl is-active --quiet abcars-rates.timer; then
+  run rates-timer systemctl restart abcars-rates.timer
+fi
+for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe abcars-rates abcars-price-snapshot; do
   if ! systemctl is-enabled --quiet "$name.timer" || ! systemctl is-active --quiet "$name.timer"; then
     systemctl enable --now "$name.timer"
   fi

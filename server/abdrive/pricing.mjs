@@ -2,6 +2,7 @@ import {estimateRussianDelivery,russianDeliverySize} from '../../src/markets/ru-
 import {RU_PRICING} from '../../config/ru-pricing.mjs';
 import {russianPowertrain} from './powertrain.mjs';
 import {originForSource,inPhrase,ORIGIN_SOURCES} from '../../src/origin.js';
+import {readFile,writeFile,rename} from 'node:fs/promises';
 
 const positive=value=>Number.isFinite(Number(value))&&Number(value)>0?Number(value):null;
 export {customsFee,personalIceDuty,personalIceUtil,personalElectricUtil,electricExcise} from '../../src/markets/ru-customs.js';
@@ -12,7 +13,8 @@ export function estimateRussianOffer(row,{rates=RU_PRICING.rates,tariffs=RU_PRIC
   const unavailable=(reason)=>({...base,status:'unavailable',reason});
   const date=new Date(now),rateDate=new Date(rates.date+'T00:00:00Z');
   if(!Number.isFinite(+date)||date.getUTCFullYear()!==2026)return unavailable('rules_need_update');
-  if(!Number.isFinite(+rateDate)||+date-+rateDate>7*86400000||+rateDate-+date>86400000)return unavailable('rates_need_update');
+  // The published exchange rate is fixed for each half of the month.
+  if(!Number.isFinite(+rateDate)||+date-+rateDate>21*86400000||+rateDate-+date>86400000)return unavailable('rates_need_update');
   if(!['CNY','KRW','USD','EUR'].every(key=>positive(rates[key])))return unavailable('rates_need_update');
   if(tariffs.destinationId!=='moscow')return unavailable('destination_unavailable');
   const source=row.source_payload||{};
@@ -84,11 +86,28 @@ export function estimateRussianOffer(row,{rates=RU_PRICING.rates,tariffs=RU_PRIC
 }
 
 // Separate CBR rates; no dependency on the BY exchange updater or its database.
-export function createRussianRates({fetchImpl=fetch,now=()=>new Date()}={}) {
-  let current=RU_PRICING.rates,checkedAt=0,pending=null;
+export const russianRatePeriod=date=>{
+  const moscow=new Date(+date+3*3600000);
+  return `${moscow.toISOString().slice(0,7)}-${moscow.getUTCDate()<=15?'01':'16'}`;
+};
+
+export function createRussianRates({fetchImpl=fetch,now=()=>new Date(),cacheFile=process.env.ABDRIVE_PRICE_INDEX_FILE?`${process.env.ABDRIVE_PRICE_INDEX_FILE}.rates`:null}={}) {
+  let current=RU_PRICING.rates,period='',checkedAt=0,pending=null,loaded=null;
+  const initialize=async()=>{
+    if(!cacheFile)return;
+    try{
+      const saved=JSON.parse(await readFile(cacheFile,'utf8'));
+      if(saved.format===1&&typeof saved.period==='string'&&typeof saved.rates?.date==='string'
+        &&['USD','EUR','CNY','KRW'].every(key=>positive(saved.rates[key]))) {
+        current=saved.rates;period=saved.period;
+      }
+    }catch{ /* First run has no exchange-rate snapshot. */ }
+  };
   return async()=>{
+    await (loaded??=initialize());
     if(pending)return pending;
-    if(+now()-checkedAt<3600000)return current;
+    const wanted=russianRatePeriod(now());
+    if(period===wanted||+now()-checkedAt<3600000)return current;
     if(!pending)pending=(async()=>{
       checkedAt=+now();
       try {
@@ -107,7 +126,14 @@ export function createRussianRates({fetchImpl=fetch,now=()=>new Date()}={}) {
           if(nominal>0&&value>0)next[code]=value/nominal;
         }
         const rateTime=Date.parse(next.date+'T00:00:00Z');
-        if(['USD','EUR','CNY','KRW'].every(code=>positive(next[code]))&&next.date<=moscowDate&&rateTime>=Date.parse(current.date))current=next;
+        if(['USD','EUR','CNY','KRW'].every(code=>positive(next[code]))&&next.date<=moscowDate&&rateTime>=Date.parse(current.date)){
+          if(cacheFile){
+            const temporary=cacheFile+'.'+process.pid+'.tmp';
+            await writeFile(temporary,JSON.stringify({format:1,period:wanted,rates:next}),{mode:0o600});
+            await rename(temporary,cacheFile);
+          }
+          current=next;period=wanted;
+        }
       } catch { /* Keep the dated last good snapshot; the estimator checks its age. */ }
       return current;
     })().finally(()=>{pending=null;});

@@ -53,6 +53,24 @@ test('CBR refresh normalizes nominal KRW and preserves last good rates on failur
  fail=true;time=new Date(+now+3600001);assert.deepEqual(await getRates(),a);
 });
 
+test('Russian rates stay fixed for a half month and persist through a restart',async()=>{
+ const {mkdtemp,rm}=await import('node:fs/promises');
+ const {tmpdir}=await import('node:os');
+ const {join}=await import('node:path');
+ const dir=await mkdtemp(join(tmpdir(),'abdrive-rates-'));
+ try{
+  let time=new Date('2026-10-02T00:00:00Z'),calls=0;
+  const fetchImpl=async()=>{calls++;const day=time.getUTCDate()>=16?'16':'02';return {ok:true,text:async()=>`<ValCurs Date="${day}.10.2026">${[['USD',1,84],['EUR',1,95],['CNY',1,12.5],['KRW',1000,62]].map(([c,n,v])=>`<Valute><CharCode>${c}</CharCode><Nominal>${n}</Nominal><Value>${v}</Value></Valute>`).join('')}</ValCurs>`};};
+  const options={now:()=>time,fetchImpl,cacheFile:join(dir,'rates.json')};
+  const first=createRussianRates(options);
+  assert.equal((await first()).date,'2026-10-02');
+  time=new Date('2026-10-10T00:00:00Z');assert.equal((await first()).date,'2026-10-02');
+  assert.equal((await createRussianRates(options)()).date,'2026-10-02');assert.equal(calls,1);
+  time=new Date('2026-10-16T00:00:00Z');
+  assert.equal((await createRussianRates(options)()).date,'2026-10-16');assert.equal(calls,2);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+
 
 test('M9 uses exact displacement and separate motor power, returning full price bounds',()=>{
  const m9={...row,model_year:2025,price_cny:224400,powertrain:'Гибрид',specifications:{engineVolume:1.5,enginePower:163,transmission:'3-gear DHT'},source_payload:{horsepower:707,technicalSpecs:{groups:[

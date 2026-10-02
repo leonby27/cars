@@ -22,7 +22,7 @@ install -d -m 700 -o abdrive -g abdrive /var/cache/abdrive
 export ABDRIVE_PRICE_INDEX_FILE=/var/cache/abdrive/price-index.json
 export ABDRIVE_HOME_SNAPSHOT_FILE=/var/cache/abdrive/home-snapshot.json
 export DB_POOL_SIZE=1
-# Prepare the full RU price index while the previous application keeps serving.
+# Reuse the price index for code-only releases; update only changed listings.
 runuser -u abdrive --preserve-environment -- nice -n 10 node --max-old-space-size=512 scripts/abdrive-warm-prices.mjs
 old=""
 if [[ -L $base/current ]]; then old=$(readlink -e "$base/current" || true); fi

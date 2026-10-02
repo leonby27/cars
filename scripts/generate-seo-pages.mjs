@@ -1426,7 +1426,7 @@ async function readLiveCatalog() {
         highlight: blogHighlight(post, notable),
       });
     }
-    const priceSnapshot = await marketPriceSnapshot();
+    const priceSnapshot = await marketPriceSnapshot({requireFresh:true});
     writeFileSync(path.join(path.dirname(clientDir), "market-price-stats.json"), JSON.stringify(priceSnapshot));
     const prepared = {
       showcase,
