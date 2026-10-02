@@ -28,7 +28,7 @@ import { reuseFeed } from "./lib/reuse-feed.mjs";
 //   node scripts/yandex-feed.mjs --db --fresh-days=60   # старая локальная база
 // Без `--db` и без SEO_CARS_FROM_DB=1 скрипт в базу не ходит и ничего не пишет —
 // так он безопасно стоит в цепочке сборки на рабочей машине.
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
@@ -52,6 +52,13 @@ const args = new Map(process.argv.slice(2).map((arg) => {
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const buildDir = process.env.ABCARS_BUILD_DIR || "dist";
 const outPath = path.resolve(args.get("out") || path.join(root, buildDir, "client", "feeds", "yandex-cars.xml"));
+// Disabled by the owner on 2026-10-02; explicit opt-in is required to restore it.
+// Skip before revision reads or reuse, and remove stale copied output variants.
+if (process.env.ABCARS_YANDEX_FEED_ENABLED !== "1") {
+  for (const suffix of ["", ".gz", ".br", ".meta.json"]) rmSync(outPath + suffix, { force:true });
+  console.log("[feed] фид не собран: публикация отключена владельцем");
+  process.exit(0);
+}
 const freshDays = Math.max(1, Number(args.get("fresh-days")) || 7);
 // Лимит Яндекса на файл — 30 000 предложений; держим небольшой запас.
 const offerLimit = Math.min(30_000, Math.max(100, Number(args.get("limit")) || 29_500));

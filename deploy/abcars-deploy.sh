@@ -172,6 +172,10 @@ if [ "$rates_timer_changed" -eq 1 ] && systemctl is-active --quiet abcars-rates.
   run rates-timer systemctl restart abcars-rates.timer
 fi
 for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe abcars-rates abcars-price-snapshot; do
+  if [ "$name" = abcars-feed ] && [ "${ABCARS_YANDEX_FEED_ENABLED:-0}" != 1 ]; then
+    systemctl disable --now abcars-feed.timer
+    continue
+  fi
   if ! systemctl is-enabled --quiet "$name.timer" || ! systemctl is-active --quiet "$name.timer"; then
     systemctl enable --now "$name.timer"
   fi
