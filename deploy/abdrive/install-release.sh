@@ -13,7 +13,8 @@ next=$base/releases/$release
 mkdir -p "$next"
 tar -xzf "$archive" -C "$next" --no-same-owner
 cd "$next"
-nice -n 10 npm ci --omit=dev --ignore-scripts --no-audit --no-fund >/dev/null
+systemd-run --scope --quiet --property=CPUQuota=50% --property=CPUWeight=20 --property=IOWeight=20 \
+  nice -n 15 npm ci --omit=dev --ignore-scripts --no-audit --no-fund >/dev/null
 set -a
 source /etc/abdrive/environment
 set +a
@@ -23,7 +24,8 @@ export ABDRIVE_PRICE_INDEX_FILE=/var/cache/abdrive/price-index.json
 export ABDRIVE_HOME_SNAPSHOT_FILE=/var/cache/abdrive/home-snapshot.json
 export DB_POOL_SIZE=1
 # Reuse the price index for code-only releases; update only changed listings.
-runuser -u abdrive --preserve-environment -- nice -n 10 node --max-old-space-size=512 scripts/abdrive-warm-prices.mjs
+systemd-run --scope --quiet --property=CPUQuota=50% --property=CPUWeight=20 --property=IOWeight=20 \
+  runuser -u abdrive --preserve-environment -- nice -n 15 node --max-old-space-size=512 scripts/abdrive-warm-prices.mjs
 old=""
 if [[ -L $base/current ]]; then old=$(readlink -e "$base/current" || true); fi
 # Open tabs can request a deferred chunk after the release has changed.
