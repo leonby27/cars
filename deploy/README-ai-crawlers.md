@@ -1,4 +1,4 @@
-# Shared GPTBot and Meta crawl budgets
+# Shared GPTBot, Meta and ClaudeBot crawl budgets
 
 `nginx-car-ai-limits.conf` belongs in nginx's `http` context as
 `/etc/nginx/conf.d/car-ai-limits.conf`. `nginx-car-ai-limit-location.conf` belongs
@@ -11,7 +11,7 @@ excess requests return 429 with `Retry-After: 2`. Ordinary visitors, search bots
 ChatGPT user fetches and link previews have an empty key and bypass this budget.
 Static assets also bypass it. Existing BY bot rules remain in effect.
 
-Classification uses the declared GPTBot or meta-externalagent user-agent. This
+Classification uses the declared GPTBot, meta-externalagent or ClaudeBot user-agent. This
 is not authentication or an IP allowlist: a forged declaration is throttled too.
 Do not add an IP to an exemption based solely on its user-agent.
 

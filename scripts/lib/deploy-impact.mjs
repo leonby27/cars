@@ -14,6 +14,7 @@ const operationsOnly = new Set([
   'scripts/clean-dist.mjs', 'scripts/split-css.mjs', 'scripts/precompress-dist.mjs',
   'scripts/prerender-home.mjs', 'scripts/audit-blog-images.mjs',
   'db/migrations/045_vehicles_updated_at_index.sql',
+  'db/migrations/046_catalog_read_indexes.sql',
 ]);
 export const developmentOnly = file => /^(tests|research|docs)\//.test(file)
   || /(^|\/)(AGENTS|README)[^/]*\.md$/.test(file);

@@ -9,7 +9,7 @@
 // кэша каждый его заход был бы отдельным запросом к базе.
 import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { getCar, listCars, soldListingVisible } from "./repository.mjs";
+import { getCar, relatedCarCandidates, soldListingVisible } from "./repository.mjs";
 import { priceRating } from "./price-rating.mjs";
 import { publicCarWithoutReport } from "./report-access.mjs";
 import { appShell } from "./dist-files.mjs";
@@ -62,8 +62,7 @@ async function renderCarAppMarkup(route, car, related) {
 
 async function relatedCars(car) {
   if (!car.brand || !car.model) return [];
-  const params = new URLSearchParams({ brand: car.brand, model: car.model, sort: "price_asc", limit: String(relatedLimit + 1) });
-  const { items } = await listCars(params);
+  const items = await relatedCarCandidates(car.brand,car.model,relatedLimit+1);
   return (
     items
       .filter((item) => item.id !== car.id)

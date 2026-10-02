@@ -25,3 +25,14 @@ test('one changed catalog revision refreshes the aggregate, retaining the last r
  finish();await new Promise(setImmediate);
  assert.equal((await cache()).value,2);
 });
+
+test('explicit invalidation discards even an in-flight old snapshot',async()=>{
+ let revision='a',finish,loads=0;
+ const cache=createInputAwareCache(async input=>{
+  loads++;if(loads===1)await new Promise(resolve=>{finish=resolve;});
+  return {inputRevision:input.key};
+ },{readRevision:async()=>({key:revision,changedAt:0})});
+ const old=cache();await new Promise(setImmediate);
+ revision='b';cache.invalidate();finish();await old;
+ assert.equal((await cache()).inputRevision,'b');assert.equal(loads,2);
+});

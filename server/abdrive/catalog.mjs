@@ -86,7 +86,7 @@ export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>n
  const priceIndex=getPriceIndex||createRussianPriceIndex(db,{getRates,now,cacheFile:priceIndexFile});
  // HTML and the public API share the prepared card, including its RU quote.
  const cards=createBoundedCache({now:()=>+now()});
- const sharedMeta=new Map();
+
  const metadata=createAsyncCache(async()=>{
    const result=await db.query(`SELECT v.brand,v.model,count(*)::int AS count,min(l.id) AS sample_id,min(v.model_year) AS "yearMin",max(v.model_year) AS "yearMax",array_agg(l.id) AS ids,array_agg(DISTINCT v.powertrain) AS powertrains,array_agg(DISTINCT v.specifications->>'bodyType') AS "bodyTypes",max(COALESCE(v.electric_range_km,v.combined_range_km)) AS range,min(CASE WHEN v.specifications->>'acceleration' ~ '^[0-9]+([.][0-9]+)?$' THEN (v.specifications->>'acceleration')::numeric END) AS accel ${from} WHERE l.status='active' GROUP BY v.brand,v.model ORDER BY v.brand,v.model`);
    const photos=await db.query('SELECT DISTINCT ON (listing_id) listing_id,url FROM listing_media WHERE listing_id=ANY($1::text[]) ORDER BY listing_id,position',[result.rows.map(row=>row.sample_id)]);
@@ -165,9 +165,7 @@ export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>n
    return {...result.rows[0],powertrains:groups.rows,bodyTypes:bodies.rows};
   },
   async sharedMeta(params) {
-   const key=params.toString();
-   if(!sharedMeta.has(key)) {if(sharedMeta.size>=100)sharedMeta.delete(sharedMeta.keys().next().value); sharedMeta.set(key,createAsyncCache(()=>queryCatalogMeta(db,params.get('type'),params.get('brand'),params.getAll('bodyType'),params.get('country')),{ttl:60000,onError:()=>{}}));}
-   return sharedMeta.get(key)();
+   return queryCatalogMeta(db,params.get('type'),params.get('brand'),params.getAll('bodyType'),params.get('country'));
   },
   async meta(brand='') {
    if(typeof brand!=='string'||brand.length>100)throw new Error('invalid_filter');

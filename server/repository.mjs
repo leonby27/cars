@@ -1,3 +1,4 @@
+import {cachedCatalogRead,cachedCatalogValue,clearCatalogReadCache} from "./catalog-read-cache.mjs";
 import { readFileSync } from "node:fs";
 import { createAsyncCache } from "./async-cache.mjs";
 import { createInputAwareCache } from "./input-aware-cache.mjs";
@@ -220,6 +221,21 @@ async function listCarsPage(searchParams) {
   const total = countResult.rows[0].total;
   const items = itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row)));
   return { items, total, refreshedAt:countResult.rows[0].refreshed_at, changedAt:countResult.rows[0].changed_at || null, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
+}
+
+// Related cards need a small list, never total counts or refresh timestamps.
+// All cars of one model share the same prepared selection for up to one minute.
+export async function relatedCarCandidates(brand,model,limit=13) {
+  const params=new URLSearchParams({brand,model,sort:"price_asc"});
+  const {where,values}=buildCarFilters(params);
+  const order=buildCarOrder(params);
+  return cachedCatalogValue(pool,["related",brand,model,limit],async()=>{
+  const result=await pool.query(`WITH picked AS (
+    SELECT l.id FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
+    ORDER BY ${order} LIMIT $${values.length+1}
+  ) ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`,[...values,limit]);
+  return result.rows.map(row=>withoutDetailPayload(rowToCar(row)));
+  });
 }
 
 // Адрес карточки несёт короткий номер объявления («/cars/59334290»), а идентификатор
@@ -749,7 +765,8 @@ export async function createOrderDraft({ listingId, name = null, contact, calcul
 }
 
 export function clearCatalogCaches() {
+  clearCatalogReadCache();
   brandStockCache={at:0,value:null};
-  storedMarketStatsCache={at:0,value:null};
+  marketStats.invalidate();
   modelClassCache={at:0,value:null};
 }

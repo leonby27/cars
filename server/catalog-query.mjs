@@ -1,3 +1,4 @@
+import {cachedCatalogRead} from "./catalog-read-cache.mjs";
 import { ORIGIN_SOURCES, originForSource, originFromParam } from "../src/origin.js";
 import { searchTextWords } from "../src/car-search-text.js";
 import { DRIVE_TYPES, normalizeDrive, orderDrives, UNKNOWN_DRIVE } from "../src/drive-types.js";
@@ -151,10 +152,10 @@ export async function queryCatalogMeta(db, type, brand, bodyType, country = null
       SELECT GROUPING(v.brand) AS g_brand, GROUPING(l.source) AS g_source, v.brand, v.drivetrain AS drive, l.source,
         count(*) FILTER (WHERE ${w.type()} AND ${w.body()})::int AS brand_count,
         count(*) FILTER (WHERE v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан')::int AS drive_count,
-        count(*) FILTER (WHERE ${w.type()} AND ${w.brand()} AND ${w.body()})::int AS source_count
+        count(*) FILTER (WHERE ${w.type()} AND ${w.body()})::int AS source_count
       FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
       WHERE l.status='active' AND ${w.country()}
-      GROUP BY GROUPING SETS ((v.brand), (v.drivetrain), (l.source))
+      GROUP BY GROUPING SETS ((v.brand), (v.drivetrain), (l.source,v.brand))
     ) counted ORDER BY g_brand, brand, drive, source` };
   const n = filters();
   const narrow = { values:n.values, text:`SELECT * FROM (
@@ -174,9 +175,9 @@ export async function queryCatalogMeta(db, type, brand, bodyType, country = null
       WHERE l.status='active' AND ${n.type()} AND ${n.brand()} AND ${n.country()}
       GROUP BY GROUPING SETS ((v.model), (v.specifications->>'bodyType'), (${FUEL_SQL}), ())
     ) counted ORDER BY g_model, model, g_body, CASE WHEN g_body=0 THEN known_body_count END DESC, body_type` };
-  const [wideRows, narrowRows] = await Promise.all([db.query(wide.text, wide.values), db.query(narrow.text, narrow.values)]);
+  const [wideRows, narrowRows] = await Promise.all([cachedCatalogRead(db,wide.text,wide.values), cachedCatalogRead(db,narrow.text,narrow.values)]);
   const countryCounts = new Map();
-  for (const row of wideRows.rows.filter((row) => row.g_source === 0)) {
+  for (const row of wideRows.rows.filter((row) => row.g_source === 0 && (!brand || brand === "Все марки" || row.brand === brand))) {
     const origin = originForSource(row.source);
     countryCounts.set(origin, (countryCounts.get(origin) || 0) + Number(row.source_count));
   }
