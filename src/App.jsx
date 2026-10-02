@@ -2016,7 +2016,9 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
   const narrow = useNarrowViewport();
   // На широком экране «Ещё фильтры» раскрывают строку прямо в панели, на телефоне
   // фильтры живут в шторках: марка и модель, «Фильтры» целиком, цена, год, пробег.
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => initiallyExpanded && !window.matchMedia("(max-width: 700px)").matches);
+  // The viewport hook keeps the first browser render identical to the server.
+  // Reading matchMedia directly here breaks mobile hydration of filtered sections.
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(() => initiallyExpanded && !narrow);
   const [sheet, setSheet] = useState(null);
   const [sheetQuery, setSheetQuery] = useState("");
   const [brandGroup, setBrandGroup] = useState("Все");
