@@ -3,8 +3,9 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { catalogMetaBoot } from '../server/app-render.mjs';
+import { findCatalogLanding, landingFilterParams } from '../src/catalog-landings.js';
 const russian = process.env.TEST_SITE === 'abdrive';
 const buildDirectory = russian ? 'dist-abdrive' : 'dist';
 const renderer = await import(new URL(`../${buildDirectory}/ssr/entry-server.js`, import.meta.url));
@@ -48,9 +49,14 @@ const server = createServer(async (req, res) => {
       res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(value)); return;
     }
     if (url.pathname.startsWith('/catalog')) {
-      const params = new URLSearchParams(url.pathname.includes('/zeekr') ? 'brand=Zeekr' : '');
+      const params = landingFilterParams(findCatalogLanding(url.pathname));
+      const metaParams = new URLSearchParams(params);
+      if (metaParams.has('body')) {
+        metaParams.set('bodyType', metaParams.get('body'));
+        metaParams.delete('body');
+      }
       const boot = { catalogPath:url.pathname, catalogSearch:'', catalogSeed:'s3', catalogValue:listing(params),
-        catalogFacts:{ total:3, updatedAt:'2026-10-02T10:00:00Z' }, ...catalogMetaBoot(params, meta(params)) };
+        catalogFacts:{ total:3, updatedAt:'2026-10-02T10:00:00Z' }, ...catalogMetaBoot(metaParams, meta(params)) };
       const root = renderCatalogApp(url.pathname, url.search, boot);
       res.setHeader('content-type', 'text/html');
       res.end(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}</head><body><div id="root" data-prerender="${url.pathname}">${root}</div><script id="abdrive-data" type="application/json">${JSON.stringify(boot)}</script><script>window.__boot=${JSON.stringify(boot)}</script>${entry}</body></html>`); return;
@@ -65,7 +71,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
-const browser = await chromium.launch({ headless:true });
+const browser = await (process.env.TEST_BROWSER === 'webkit' ? webkit : chromium).launch({ headless:true });
 try {
   for (const mobile of [true, false]) {
     const context = await browser.newContext({ viewport:mobile ? { width:390, height:844 } : { width:1280, height:900 }, isMobile:mobile, hasTouch:mobile });
@@ -104,6 +110,15 @@ try {
     assert.equal(await page.locator('.maintenance-page').count(), 0);
     assert.equal(documents, 1, 'filter navigation must not reload the document');
     assert.deepEqual(errors, []);
+    // These sections initially expand additional filters. The mobile first render
+    // must use the server viewport snapshot before adopting the actual viewport.
+    for (const path of ['/catalog/electric', '/catalog/suv', '/catalog/china', '/catalog/korea']) {
+      await page.goto(base + path + '?nocount=1', { waitUntil:'domcontentloaded' });
+      await page.waitForFunction(() => Object.keys(document.querySelector('.favorites-link') || {}).some(k => k.startsWith('__reactProps')));
+      await page.waitForTimeout(600);
+      assert.equal(await page.locator('.maintenance-page').count(), 0);
+      assert.deepEqual(errors, [], path + ' must hydrate without regenerating the catalog');
+    }
     // A fresh direct brand visit exercises the same server/client snapshot contract.
     await page.goto(base + '/catalog/zeekr?nocount=1', { waitUntil:'domcontentloaded' });
     await page.waitForFunction(() => Object.keys(document.querySelector('.favorites-link') || {}).some(k => k.startsWith('__reactProps')));
@@ -126,7 +141,7 @@ try {
     assert.equal(await page.locator('.maintenance-page').count(), 0);
     assert.equal(await page.locator('.car-row').count(), 3, 'API failure retains the previous list');
     assert.deepEqual(errors, []);
-    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: hydration, Zeekr, 7X, delayed/failed API, preserved catalog, no reload/crash, direct brand URL`);
+    console.log(`PASS ${mobile ? 'mobile' : 'desktop'}: hydration, Zeekr, 7X, delayed/failed API, preserved catalog, no reload/crash, direct brand/filtered section URLs`);
     await context.close();
   }
 } finally {
