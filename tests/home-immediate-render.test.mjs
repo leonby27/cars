@@ -23,7 +23,7 @@ async function fixture(t, saved) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   for (const sub of ["server", "src", "dist/client/how-it-works"]) await mkdir(join(dir, sub), { recursive: true });
   await writeFile(join(dir, "package.json"), '{"type":"module"}');
-  for (const file of ["server/static-page.mjs", "server/root-inject.mjs", "src/home-boot.js"]) {
+  for (const file of ["server/static-page.mjs", "server/root-inject.mjs", "src/home-boot.js", "src/tracking-params.js"]) {
     await copyFile(new URL(`../${file}`, import.meta.url), join(dir, file));
   }
   const stubs = {
