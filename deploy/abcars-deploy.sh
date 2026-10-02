@@ -120,7 +120,8 @@ else
   echo "расчёт цены не менялся: пересчёт каталога пропущен"
 fi
 
-run build env ABCARS_REUSE_CATALOG="$reuse_catalog" ABCARS_REUSE_FEED="$reuse_feed" \
+run build systemd-run --scope --quiet --property=CPUQuota=100% --property=CPUWeight=20 --property=IOWeight=20 \
+  nice -n 15 env ABCARS_REUSE_CATALOG="$reuse_catalog" ABCARS_REUSE_FEED="$reuse_feed" \
   ABCARS_BUILD_DIR=dist.next ABCARS_BUILD_LOG="$log_dir/build.log" \
   ABCARS_BUILD_TIMINGS="$log_dir/build-timings.json" npm run build
 

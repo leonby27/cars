@@ -1274,7 +1274,7 @@ async function readLiveCatalog() {
     publishedPosts:blogPosts().map(post=>post.slug),
   });
   if (process.env.ABCARS_REUSE_CATALOG === "1") {
-    const {saved,reason} = readCatalogBuildCache(process.env.ABCARS_CATALOG_CACHE_FILE || path.join(root,"dist","catalog-build-data.bin"),key);
+    const {saved,reason} = readCatalogBuildCache(process.env.ABCARS_CATALOG_CACHE_FILE || path.join(root,"dist","catalog-build-data.bin"),key,{dataRevision:process.env.ABCARS_CATALOG_REVISION});
     if (saved) {
       // Preserve original age: consecutive UI releases cannot renew stale data.
       writeCatalogBuildCache(cachePath,saved);
@@ -1288,6 +1288,8 @@ async function readLiveCatalog() {
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
+    const {catalogDataRevision} = await import('./lib/catalog-data-revision.mjs');
+    const startDataRevision = await catalogDataRevision(pool);
     const { getModelFacts, listCars, marketPriceSnapshot, modelSummary, sectionStats } = await import("../server/repository.mjs");
     // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
     // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
@@ -1436,7 +1438,10 @@ async function readLiveCatalog() {
       // странице сравнения, чтобы её серверная разметка совпадала с приложением.
       priceStats: priceSnapshot.normal,
     };
-    writeCatalogBuildCache(cachePath,{key,rateKey:catalogRateKey(root),live:prepared,marketPrices:priceSnapshot});
+    // If an import ran during preparation, do not certify this as a reusable snapshot.
+    const dataRevision = await catalogDataRevision(pool);
+    writeCatalogBuildCache(cachePath,{key,rateKey:catalogRateKey(root),live:prepared,marketPrices:priceSnapshot,
+      dataRevision:dataRevision === startDataRevision ? dataRevision : undefined});
     return prepared;
   } catch (error) {
     console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);
