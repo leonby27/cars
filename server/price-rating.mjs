@@ -42,6 +42,7 @@
 // Считается по живым объявлениям каталога и говорит только о нём: это положение среди
 // наших цен, а не оценка рынка Беларуси.
 import { ORIGIN_SOURCES, originForSource } from "../src/origin.js";
+import {createBoundedCache} from "./bounded-cache.mjs";
 import { pool } from "./db.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 
@@ -57,7 +58,7 @@ export const PRICE_RATING_BATTERY_TOLERANCE = 0.1;
 // меняется раз в сутки, после ночного импорта.
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const CACHE_LIMIT = 200;
-const cache = new Map();
+let caches = new WeakMap();
 
 // Узкая выборка: только то, из чего считается цена, плюс пробег и номер. Целиком
 // строки брать нельзя — в них лежит исходный ответ источника, и у модели с двумя
@@ -122,15 +123,17 @@ const modelKey = (brand, model, origin) => `${String(brand)}::${String(model)}::
 
 async function comparablesForModel(brand, model, origin, { db = pool, now = Date.now() } = {}) {
   const key = modelKey(brand, model, origin);
-  const cached = cache.get(key);
-  if (cached && now - cached.at < CACHE_TTL_MS) return cached.rows;
-  const { rows } = await db.query(COMPARABLES_SQL, [brand, model, [...ORIGIN_SOURCES[origin]]]);
-  const value = rows.map(comparableFromRow).filter((item) => item.priceQuotaOn > 0);
-  // Кэш ограничиваем: моделей в каталоге под семьсот, и держать их все в памяти
-  // ради робота, который идёт по каталогу подряд, ни к чему.
-  if (cache.size >= CACHE_LIMIT) cache.clear();
-  cache.set(key, { at:now, rows:value });
-  return value;
+  let cached=caches.get(db);
+  if(!cached){
+    const clock={now};
+    cached={clock,read:createBoundedCache({ttl:CACHE_TTL_MS,maxEntries:CACHE_LIMIT,maxBytes:24*1024*1024,now:()=>clock.now})};
+    caches.set(db,cached);
+  }
+  cached.clock.now=now;
+  return cached.read(key,async()=>{
+    const {rows}=await db.query(COMPARABLES_SQL,[brand,model,[...ORIGIN_SOURCES[origin]]]);
+    return rows.map(comparableFromRow).filter(item=>item.priceQuotaOn>0);
+  });
 }
 
 /** Насколько сдвиг планки под пробег ограничен — доля от типичной цены набора. */
@@ -315,4 +318,4 @@ export async function priceRating(car, options = {}) {
 }
 
 /** Сброс памяти между тестами и после обновления каталога. */
-export const clearPriceRatingCache = () => cache.clear();
+export const clearPriceRatingCache = () => { caches=new WeakMap(); };

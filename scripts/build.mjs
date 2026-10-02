@@ -4,6 +4,19 @@ import { assertSiteProfile, resolveSiteProfile } from '../config/sites/index.mjs
 import { spawn } from 'node:child_process';
 import { createWriteStream, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
+import { catalogDataRevision } from './lib/catalog-data-revision.mjs';
+
+// Deploys reuse snapshots only after checking the actual catalog.
+if (process.env.SEO_CARS_FROM_DB === '1' || process.env.ABCARS_REUSE_CATALOG === '1' || process.env.ABCARS_REUSE_FEED === '1') {
+  const {pool} = await import('../server/db.mjs');
+  try {
+    process.env.ABCARS_CATALOG_REVISION = await catalogDataRevision(pool);
+  } catch (error) {
+    console.error('[build] catalog revision check failed; preparing fresh data:', error.code || error.message);
+    process.env.ABCARS_REUSE_CATALOG = '0';
+    process.env.ABCARS_REUSE_FEED = '0';
+  } finally { await pool.end(); }
+}
 
 const site = assertSiteProfile(resolveSiteProfile(process.env));
 // Children, including Vite and Node page generators, receive the identical site.

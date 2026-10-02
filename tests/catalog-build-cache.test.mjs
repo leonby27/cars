@@ -84,3 +84,41 @@ test('feed compatibility is independent of journal/catalog preparation but inclu
   assert.notEqual(feedBuildKey(dir,{siteUrl:'https://abcars.by',freshDays:7}),first);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('fresh snapshots are refused after import or visibility changes, including legacy snapshots',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'abcars-cache-revision-'));
+ try {
+  const file=join(dir,'cache');
+  writeCatalogBuildCache(file,{key:'rules',live:live(),marketPrices,createdAt:100,dataRevision:'before'});
+  assert.ok(readCatalogBuildCache(file,'rules',{now:200,dataRevision:'before'}).saved);
+  assert.match(readCatalogBuildCache(file,'rules',{now:200,dataRevision:'after'}).reason,/каталог изменился/);
+  assert.ok(readCatalogBuildCache(file,'rules',{now:86400100,dataRevision:'before'}).saved);
+  assert.ok(readCatalogBuildCache(file,'rules',{now:86400100}).reason);
+  writeCatalogBuildCache(file,{key:'rules',live:live(),marketPrices,createdAt:100});
+  assert.ok(readCatalogBuildCache(file,'rules',{now:200,dataRevision:'before'}).reason);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('rendering and crawler access changes agree between planner and both fingerprints',async()=>{
+ const {deploymentPlan}=await import('../scripts/lib/deploy-plan.mjs');
+ const {feedBuildKey}=await import('../scripts/lib/catalog-build-cache.mjs');
+ const dir=mkdtempSync(join(tmpdir(),'abcars-render-inputs-'));
+ try {
+  for(const d of ['src','server','config','db','scripts'])mkdirSync(join(dir,d),{recursive:true});
+  for(const f of ['package.json','package-lock.json'])writeFileSync(join(dir,f),'{}');
+  const catalog=catalogBuildKey(dir,{}),feed=feedBuildKey(dir,{});
+  for(const file of ['server/static-page.mjs','server/boot-screen.mjs',
+   'server/app-render.mjs','server/api-replay.mjs','server/root-inject.mjs','scripts/update-search-networks.py']) {
+   writeFileSync(join(dir,file),'updated presentation');
+   assert.equal(deploymentPlan([file]).reuseCatalog,true,file);
+   assert.equal(deploymentPlan([file]).reuseFeed,true,file);
+   assert.equal(catalogBuildKey(dir,{}),catalog,file);
+   assert.equal(feedBuildKey(dir,{}),feed,file);
+  }
+  // SEO helpers also format cached sitemap inputs, so remain conservative.
+  writeFileSync(join(dir,'server/seo-render.mjs'),'updated date formatting');
+  assert.equal(deploymentPlan(['server/seo-render.mjs']).reuseCatalog,false);
+  assert.notEqual(catalogBuildKey(dir,{}),catalog);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

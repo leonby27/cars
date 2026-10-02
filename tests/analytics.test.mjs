@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -597,7 +598,7 @@ test("момент последнего захода приводится к р�
 
 test("интерес к контактам собран в отдельном разделе с контактами, приложением и подпиской", async () => {
   const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const app = await readAppSource();
   const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
   assert.match(page, /label:"Клиенты"[\s\S]{0,120}label:"Интерес к контактам"/);
   for (const label of ["Просмотр телефона", "Клик по TG", "Клик по Viber", "Клик по Instagram", "О сервисе — задать вопрос", "О сервисе — Viber", "О сервисе — Telegram", "О сервисе — почта", "Интерес к приложению — QR", "Интерес к App Store", "Интерес к Google Play", "Интерес к подписке", "Открытие страницы «Контакты»", "Открытие страницы «О сервисе»"]) {

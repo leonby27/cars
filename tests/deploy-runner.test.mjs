@@ -13,6 +13,7 @@ function deploy({buildFails=false,healthFails=false,unitsChanged=false,lockFails
  writeFileSync(join(root,'dist/old'),'previous release');
  writeFileSync(join(root,'deploy/abcars-archive-assets.sh'),'exit 0\n');
  const stub=(name,body)=>writeFileSync(join(root,'bin',name),'#!/bin/bash\n'+body+'\n',{mode:0o755});
+ stub('systemd-run','while [[ $1 == --* ]]; do shift; done; exec "$@"');
  stub('flock',`exit ${lockFails?1:0}`);stub('sha256sum','echo "hash package-lock.json"');
  writeFileSync(join(root,'node_modules/.abcars-lock-hash'),'hash');
  stub('node','echo "1 1 0 0 0 0"');
@@ -54,7 +55,7 @@ test('changed units trigger one reload for all timers',()=>{
  const d=deploy({unitsChanged:true});try{
   assert.equal(d.result.status,0,d.result.stderr);
   assert.equal((d.calls.match(/systemctl daemon-reload/g)||[]).length,1);
-  assert.equal((d.calls.match(/install /g)||[]).length,6);
+  assert.equal((d.calls.match(/install /g)||[]).length,10);
  }finally{d.cleanup();}
 });
 test('concurrent deployment is rejected before build or service mutations',()=>{

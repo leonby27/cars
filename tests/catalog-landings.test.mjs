@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -214,7 +215,7 @@ test("адрес с одними подписями «не выбрано» ув
 test("поиск с главной не пишет в адрес подписи «не выбрано»", () => {
   // Ссылку собирает та же функция, что и сохранённый поиск: пустой набор фильтров
   // даёт «/catalog», выбранная марка — адрес, который сервер уводит на её раздел.
-  const code = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const code = readAppSource();
   const submit = code.split("\n").filter((line) => line.includes("onSubmit={() => navigate("));
   assert.equal(submit.length, 1, `строк с переходом из поиска найдено ${submit.length}`);
   assert.match(submit[0], /savedSearchCatalogHref\(/);
@@ -243,7 +244,7 @@ test("карточка машины в приложении ведёт в сво
   // поисковика с этими ссылками до посетителя не доходит: страница машины отдаётся
   // сразу нарисованной, и ссылки должны быть в самом приложении. До 08.09.2026 их
   // там не было — из 48 тысяч карточек в каталог вела одна общая ссылка.
-  const code = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const code = readAppSource();
   assert.match(code, /className="detail-section-links"/, "в карточке машины нет блока со ссылками на разделы");
   const start = code.indexOf("const modelPath = modelLandingPath(car.brand, car.model)");
   assert.ok(start > 0, "в карточке машины разделы собираются не из landingsForCar");

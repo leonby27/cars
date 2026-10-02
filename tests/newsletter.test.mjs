@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -61,7 +62,7 @@ test("Edge worker сохраняет email только после явного 
 });
 
 test("форма открывает подтверждение только после сохранения email", async () => {
-  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const app = await readAppSource();
   assert.match(app, /fetch\("\/api\/newsletter"/);
   assert.match(app, /body:JSON\.stringify\(\{ email, consent:true \}\)/);
   assert.match(app, /if \(!response\.ok\) throw new Error/);
@@ -78,7 +79,7 @@ test("форма открывает подтверждение только по
 
 test("дисклеймер плавно раскрывается только при фокусе в поле email", async () => {
   const [app, styles] = await Promise.all([
-    readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+    readAppSource(),
     readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
   ]);
   assert.match(app, /footer-newsletter-consent-reveal/);
@@ -96,7 +97,7 @@ test("подтверждение подписки сохраняет свобо�
 
 test("подписка и блок приложения стоят строкой ниже колонок ссылок", async () => {
   const [app, styles] = await Promise.all([
-    readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+    readAppSource(),
     readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
   ]);
   // Блок с приложением — самостоятельный элемент сетки, а не часть колонки с логотипом:

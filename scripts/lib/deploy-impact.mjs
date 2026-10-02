@@ -14,6 +14,11 @@ const operationsOnly = new Set([
   'scripts/deploy.mjs', 'scripts/deploy-plan.mjs', 'scripts/build.mjs',
   'scripts/clean-dist.mjs', 'scripts/split-css.mjs', 'scripts/precompress-dist.mjs',
   'scripts/prerender-home.mjs', 'scripts/audit-blog-images.mjs',
+  'scripts/update-search-networks.py', 'scripts/warm-api.mjs',
+  'server/static-page.mjs', 'server/boot-screen.mjs',
+  'server/app-render.mjs', 'server/api-replay.mjs', 'server/root-inject.mjs',
+  'db/migrations/045_vehicles_updated_at_index.sql',
+  'db/migrations/046_catalog_read_indexes.sql',
 ]);
 export const developmentOnly = file => /^(tests|research|docs)\//.test(file)
   || /(^|\/)(AGENTS|README)[^/]*\.md$/.test(file);
@@ -30,13 +35,13 @@ const catalogOnly = new Set([
   'scripts/lib/blog-cover.mjs', 'src/blog-posts.js', 'src/blog-social.js',
 ]);
 export const feedInput = file => catalogInput(file) && !catalogOnly.has(file);
-export const priceInput = file => !developmentOnly(file) && !presentationOnly(file) && (
+export const priceInput = file => !developmentOnly(file) && !presentationOnly(file) && !operationsOnly.has(file) && (
   file === 'scripts/backfill-estimates.mjs' || file === 'scripts/lib/che168-parser.mjs'
   || file.startsWith('db/migrations/') || file.startsWith('config/')
   || /^src\/.*\.js$/.test(file) && !['src/blog-posts.js','src/blog-social.js'].includes(file));
 export const duplicateInput = file => file === 'scripts/deduplicate-cross-source.mjs'
   || file === 'scripts/lib/cross-source-dedupe.mjs'
-  || file.startsWith('config/') && !presentationOnly(file) || file.startsWith('db/migrations/');
+  || file.startsWith('config/') && !presentationOnly(file) || file.startsWith('db/migrations/') && !operationsOnly.has(file);
 // Listener imports modules once. Unknown runtime changes still reload it;
 // audited presentation/editorial/deployment changes do not.
 export const botInput = file => catalogInput(file) && !catalogOnly.has(file)

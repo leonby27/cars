@@ -104,7 +104,7 @@ const replaced = withRoot.replace("</head>", `${hoisted.join("")}${foreignGuard}
 // Те же данные — в страницу, чтобы браузер нарисовал первый кадр из них. Ставим
 // перед </head>: после загрузочного скрипта, который сам заводит window.__boot.
 const withBoot = Object.keys(homeBoot).length
-  ? replaced.replace("</head>", `<script>window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(homeBoot).replace(/</g, "\\u003c")});</script></head>`)
+  ? replaced.replace("</head>", `<script id="home-data">window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(homeBoot).replace(/</g, "\\u003c")});</script></head>`)
   : replaced;
 writeFileSync(indexPath, withBoot);
 

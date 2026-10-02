@@ -17,6 +17,7 @@
 //
 // Нет сборки приложения или отрисовка упала — отдаём файл сборки как есть: прежняя
 // страница с текстом для робота, приложение нарисует себя с нуля.
+import { withoutTrackingParams } from "../src/tracking-params.js";
 import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { loadEntryServer } from "./app-render.mjs";
@@ -73,13 +74,18 @@ async function catalogFacts() {
   }
 }
 
-/** Данные главной в том виде, в каком их встроил scripts/prerender-home.mjs, и цифры каталога. */
-async function homeBoot() {
+/** Saved models, cards and catalog facts; unavailable data produces skeletons. */
+export function savedHomeBoot(text) {
   try {
-    const saved = JSON.parse((await cachedFile(homeDataFile)) || "null");
-    return saved ? homeBootFromSnapshot(saved) : null;
+    const saved = JSON.parse(text || "null");
+    return {
+      popularModels: Array.isArray(saved) ? saved : saved?.models || [],
+      brandModelTabs: Array.isArray(saved) ? [] : saved?.brands || [],
+      homeShowcase: Array.isArray(saved?.showcase) ? saved.showcase : [],
+      catalogFacts: saved?.catalogFacts || { total: 0, updatedAt: "" },
+    };
   } catch {
-    return null;
+    return { popularModels: [], brandModelTabs: [], homeShowcase: [], catalogFacts: { total: 0, updatedAt: "" } };
   }
 }
 
@@ -100,35 +106,61 @@ export const dropHeadFaqIfRendered = (html, markup) => {
  * Страница по адресу: `{ status, html }`; `null` — такого адреса у модуля нет или
  * файла сборки нет (тогда отвечает обычное правило сайта).
  */
-export async function renderStaticPage(rawPath, search = "") {
-  const path = `/${String(rawPath || "").replace(/^\/+|\/+$/g, "")}`;
-  if (!isStaticAppPath(path)) return null;
-  const file = await pageFile(path);
-  if (!file) return null;
-  const entry = await loadEntryServer();
-  if (!entry?.renderStaticApp) return { status: 200, html: file };
-  const post = path.startsWith("/blog/") ? findBlogPost(path) : null;
-  const options = {
-    blogSlug: post?.slug || null,
-    blogText: post ? BLOG_TEXTS[post.slug] || null : null,
-    toolTexts: findToolPage(path) ? TOOL_PAGE_TEXTS : null,
+// The homepage renders only saved data. Live API replay belongs to the other pages.
+// Cache meaningful search state, sharing HTML across advertising/analytics tags.
+export function createStaticPageRenderer({ readPage = pageFile, readHome = () => cachedFile(homeDataFile), loadEntry = loadEntryServer, renderApi = renderWithApi, getFacts = catalogFacts, now = () => new Date() } = {}) {
+  const homes = new Map();
+  let previousFile, previousSaved, previousDay, bytes = 0;
+  return async function renderStaticPage(rawPath, search = "") {
+    const path = `/${String(rawPath || "").replace(/^\/+|\/+$/g, "")}`;
+    if (!isStaticAppPath(path)) return null;
+    const file = await readPage(path);
+    if (!file) return null;
+    const entry = await loadEntry();
+    if (!entry?.renderStaticApp) return { status: 200, html: file };
+    const post = path.startsWith("/blog/") ? findBlogPost(path) : null;
+    const options = {
+      blogSlug: post?.slug || null,
+      blogText: post ? BLOG_TEXTS[post.slug] || null : null,
+      toolTexts: findToolPage(path) ? TOOL_PAGE_TEXTS : null,
+    };
+    let extra = {}, template = file, meaningfulSearch = search;
+    if (path === "/") {
+      const saved = await readHome();
+      const day = new Date(Number(now()) + 3 * 3600 * 1000).toISOString().slice(0, 10);
+      if (file !== previousFile || saved !== previousSaved || day !== previousDay) {
+        homes.clear(); bytes = 0;
+        previousFile = file; previousSaved = saved; previousDay = day;
+      }
+      const params = withoutTrackingParams(search).toString();
+      meaningfulSearch = params ? `?${params}` : "";
+      if (homes.has(meaningfulSearch)) return homes.get(meaningfulSearch);
+      extra = savedHomeBoot(saved);
+      // Replace the build's snapshot instead of embedding another copy of the cards.
+      template = file.replace(/<script id="home-data">[\s\S]*?<\/script>/, "");
+    } else if (path === "/how-it-works") extra = await getFacts();
+    try {
+      const { markup, api } = path === "/"
+        ? { markup: entry.renderStaticApp(path, meaningfulSearch, { ...extra, api: {} }, options), api: {} }
+        : await renderApi((answers) => entry.renderStaticApp(path, search, { ...extra, api: answers }, options));
+      const boot = path === "/" ? { ...extra, api } : { api, ...(extra.catalogFacts ? { catalogFacts: extra.catalogFacts } : {}) };
+      const html = markup ? dropHeadFaqIfRendered(injectAppRoot(template, markup, { path, boot }), markup) : null;
+      const response = { status: 200, html: html || file };
+      if (path === "/" && html) {
+        const size = Buffer.byteLength(html);
+        if (size <= 16 * 1024 * 1024) {
+          while (homes.size && (homes.size >= 32 || bytes + size > 16 * 1024 * 1024)) {
+            const key = homes.keys().next().value;
+            bytes -= Buffer.byteLength(homes.get(key).html); homes.delete(key);
+          }
+          homes.set(meaningfulSearch, response); bytes += size;
+        }
+      }
+      return response;
+    } catch (error) {
+      console.error(`готовая страница ${path}: отрисовка упала, отдаём файл сборки`, error);
+      return { status: 200, html: file };
+    }
   };
-  // «Как это работает» тоже называет размер каталога: без настоящей цифры сервер
-  // рисовал запасные «64 900», и робот видел их вместо живых 80 тысяч.
-  const extra = path === "/" ? await homeBoot() : path === "/how-it-works" ? await catalogFacts() : {};
-  // Файл HTML уже содержит собственный согласованный снимок. Если соседний JSON
-  // утрачен, сохраняем его, а не рисуем пустые блоки поверх старых boot-данных.
-  if (path === "/" && !extra) return { status: 200, html: file };
-  try {
-    const render = (api) => entry.renderStaticApp(path, search, { ...extra, api }, options);
-    // Главная не ждёт ни счётчиков, ни фильтров, ни обложек журнала. Сохранённые
-    // модели/машины уже видны, у остальных блоков собственная загрузка в браузере.
-    const { markup, api } = path === "/" ? { markup: render({}), api: {} } : await renderWithApi(render);
-    // Цифры каталога — в данные страницы: первый кадр браузера рисует ту же строку.
-    const html = markup ? dropHeadFaqIfRendered(injectAppRoot(file, markup, { path, boot: { api, ...(extra.catalogFacts ? { catalogFacts: extra.catalogFacts } : {}) } }), markup) : null;
-    return { status: 200, html: html || file };
-  } catch (error) {
-    console.error(`готовая страница ${path}: отрисовка упала, отдаём файл сборки`, error);
-    return { status: 200, html: file };
-  }
 }
+export const renderStaticPage = createStaticPageRenderer();

@@ -1,0 +1,10 @@
+[Unit]
+Description=Курсы НБРБ дважды в месяц, до актуализации каталога
+
+[Timer]
+OnCalendar=*-*-01,16 00:30:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

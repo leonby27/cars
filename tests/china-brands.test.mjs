@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -9,7 +10,7 @@ import { brandLandingPath } from "../src/catalog-landings.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const all = [...CHINA_BRANDS, ...CHINA_MADE_FOREIGN];
-const appSource = readFileSync(path.join(root, "src", "App.jsx"), "utf8");
+const appSource = readAppSource();
 const styles = readFileSync(path.join(root, "src", "styles.css"), "utf8");
 
 test("у каждой марки справочника есть файл значка", () => {

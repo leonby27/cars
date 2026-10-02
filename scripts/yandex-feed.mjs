@@ -28,7 +28,7 @@ import { reuseFeed } from "./lib/reuse-feed.mjs";
 //   node scripts/yandex-feed.mjs --db --fresh-days=60   # старая локальная база
 // Без `--db` и без SEO_CARS_FROM_DB=1 скрипт в базу не ходит и ничего не пишет —
 // так он безопасно стоит в цепочке сборки на рабочей машине.
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
@@ -52,12 +52,19 @@ const args = new Map(process.argv.slice(2).map((arg) => {
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const buildDir = process.env.ABCARS_BUILD_DIR || "dist";
 const outPath = path.resolve(args.get("out") || path.join(root, buildDir, "client", "feeds", "yandex-cars.xml"));
+// Disabled by the owner on 2026-10-02; explicit opt-in is required to restore it.
+// Skip before revision reads or reuse, and remove stale copied output variants.
+if (process.env.ABCARS_YANDEX_FEED_ENABLED !== "1") {
+  for (const suffix of ["", ".gz", ".br", ".meta.json"]) rmSync(outPath + suffix, { force:true });
+  console.log("[feed] фид не собран: публикация отключена владельцем");
+  process.exit(0);
+}
 const freshDays = Math.max(1, Number(args.get("fresh-days")) || 7);
 // Лимит Яндекса на файл — 30 000 предложений; держим небольшой запас.
 const offerLimit = Math.min(30_000, Math.max(100, Number(args.get("limit")) || 29_500));
 const feedKey = feedBuildKey(root, {siteUrl, freshDays, offerLimit});
 if (process.env.ABCARS_REUSE_FEED === "1" && buildDir === "dist.next"
-    && reuseFeed(path.join(root, "dist/client/feeds/yandex-cars.xml"), outPath, { key:feedKey })) {
+    && reuseFeed(path.join(root, "dist/client/feeds/yandex-cars.xml"), outPath, { key:feedKey, dataRevision:process.env.ABCARS_CATALOG_REVISION })) {
   console.log("[feed] сохранён свежий фид предыдущей сборки; плановое обновление — по таймеру");
   process.exit(0);
 }
@@ -75,6 +82,8 @@ if (!allowDb) {
 }
 
 const { pool } = await import("../server/db.mjs");
+const {catalogDataRevision} = await import("./lib/catalog-data-revision.mjs");
+const feedDataRevision = await catalogDataRevision(pool);
 
 const escapeXml = (value) => String(value ?? "")
   .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
@@ -121,6 +130,7 @@ const { rows } = await pool.query(
    WHERE l.status = 'active' AND l.estimated_total_usd > 0 AND l.last_seen_at > now() - ($1 || ' days')::interval`,
   [String(freshDays)],
 );
+const feedEndRevision = await catalogDataRevision(pool);
 await pool.end();
 
 // Машины по моделям: сколько их и от какой цены — для подборок и для порядка.
@@ -299,7 +309,7 @@ writeAtomic(outPath, xml);
 writeAtomic(`${outPath}.gz`, gzipSync(xml, { level: 9 }));
 writeAtomic(`${outPath}.br`, brotliCompressSync(xml, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 6 } }));
 
-writeAtomic(`${outPath}.meta.json`, JSON.stringify({key:feedKey}));
+writeAtomic(`${outPath}.meta.json`, JSON.stringify({key:feedKey,dataRevision:feedEndRevision === feedDataRevision ? feedDataRevision : undefined}));
 
 const totalCars = [...byModel.values()].reduce((sum, list) => sum + list.length, 0);
 console.log(`[feed] ${path.relative(root, outPath) || outPath}: ${collections.length} подборок (марки и модели), ${cars.length} машин из ${totalCars} свежих с фото (модели для соцсетей — ${coreCars}), ${sets.length} наборов; ${(Buffer.byteLength(xml) / 1_048_576).toFixed(1)} МБ, ${((Date.now() - started) / 1000).toFixed(1)} с`);

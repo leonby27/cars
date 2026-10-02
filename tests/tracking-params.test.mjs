@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -35,7 +36,7 @@ test("адрес раздела и модели с метками рекламы
 test("браузер сверяет встроенный список с адресом без меток — как сервер", () => {
   const address = "?utm_source=yandex&page=2&sort=newest&yclid=5";
   assert.equal(withoutTrackingParams(address).toString(), catalogBootSearch(new URLSearchParams(address.slice(1))));
-  const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const app = readAppSource();
   assert.match(app, /boot\.catalogSearch \|\| ""\) === withoutTrackingParams\(window\.location\.search\)\.toString\(\)/);
   assert.match(app, /const pageHref = \(n\) => \{[\s\S]{0,300}withoutTrackingParams\(window\.location\.search\)/);
 });

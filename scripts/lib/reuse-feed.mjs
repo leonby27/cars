@@ -3,11 +3,13 @@ import { dirname } from "node:path";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 
 // Only UI-only deploys opt in. A missing/old feed falls back to normal generation.
-export function reuseFeed(source, target, { now = Date.now(), maxAge = 24 * 3600_000, key } = {}) {
+export function reuseFeed(source, target, { now = Date.now(), maxAge = 24 * 3600_000, key, dataRevision } = {}) {
   try {
     const stat = statSync(source);
     if (Math.floor(stat.mtimeMs) > now || now - stat.mtimeMs >= maxAge) return false;
-    if (key && JSON.parse(readFileSync(source + '.meta.json', 'utf8')).key !== key) return false;
+    const meta = key ? JSON.parse(readFileSync(source + '.meta.json', 'utf8')) : null;
+    if (key && meta.key !== key) return false;
+    if (dataRevision && meta?.dataRevision !== dataRevision) return false;
     const raw = readFileSync(source);
     if (!raw.length) return false;
     mkdirSync(dirname(target), { recursive:true });

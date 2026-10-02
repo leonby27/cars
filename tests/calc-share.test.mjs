@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -39,7 +40,7 @@ test("ссылка на расчёт электромобиля сохраняе
 });
 
 test("электромобиль меняет переключатель возмещения на квоту", async () => {
-  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const app = await readAppSource();
   assert.match(app, /isElectric \? "Учитывать квоту на беспошлинный ввоз" : "Возмещение 50% по указу № 140"/);
   assert.match(app, /checked=\{isElectric \? Boolean\(quotaPricing\?\.on\) : refund50\}/);
   assert.doesNotMatch(app, /refund50: isElectric \? false : refund50/);

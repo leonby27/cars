@@ -1,0 +1,17 @@
+[Unit]
+Description=Обновление курсов НБРБ для цен abcars
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/local/bin/abcars-pricing.sh rates
+TimeoutStartSec=1800
+Nice=10
+CPUWeight=20
+IOWeight=20
+MemoryHigh=1500M
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abcars-rates

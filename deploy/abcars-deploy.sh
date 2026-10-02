@@ -120,7 +120,8 @@ else
   echo "расчёт цены не менялся: пересчёт каталога пропущен"
 fi
 
-run build env ABCARS_REUSE_CATALOG="$reuse_catalog" ABCARS_REUSE_FEED="$reuse_feed" \
+run build systemd-run --scope --quiet --property=CPUQuota=100% --property=CPUWeight=20 --property=IOWeight=20 \
+  nice -n 15 env ABCARS_REUSE_CATALOG="$reuse_catalog" ABCARS_REUSE_FEED="$reuse_feed" \
   ABCARS_BUILD_DIR=dist.next ABCARS_BUILD_LOG="$log_dir/build.log" \
   ABCARS_BUILD_TIMINGS="$log_dir/build-timings.json" npm run build
 
@@ -156,17 +157,26 @@ fi
 find /var/cache/nginx/abcars -type f -delete
 # Only reinstall changed/missing unit files, with one daemon-reload for the batch.
 units_changed=0
-for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe; do
+rates_timer_changed=0
+for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe abcars-rates abcars-price-snapshot; do
   for suffix in service timer; do
     file="$name.$suffix"
     if ! cmp -s "deploy/$file" "/etc/systemd/system/$file"; then
       install -m644 "deploy/$file" "/etc/systemd/system/$file"
       units_changed=1
+      if [ "$file" = abcars-rates.timer ]; then rates_timer_changed=1; fi
     fi
   done
 done
 if [ "$units_changed" -eq 1 ]; then run units systemctl daemon-reload; fi
-for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe; do
+if [ "$rates_timer_changed" -eq 1 ] && systemctl is-active --quiet abcars-rates.timer; then
+  run rates-timer systemctl restart abcars-rates.timer
+fi
+for name in abcars-search-traffic abcars-feed abcars-catalog-dedupe abcars-rates abcars-price-snapshot; do
+  if [ "$name" = abcars-feed ] && [ "${ABCARS_YANDEX_FEED_ENABLED:-0}" != 1 ]; then
+    systemctl disable --now abcars-feed.timer
+    continue
+  fi
   if ! systemctl is-enabled --quiet "$name.timer" || ! systemctl is-active --quiet "$name.timer"; then
     systemctl enable --now "$name.timer"
   fi

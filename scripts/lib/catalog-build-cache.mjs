@@ -26,7 +26,7 @@ export function inputKey(root, settings, relevant = catalogInput) {
   };
   for (const dir of ['src','server','config','db','scripts']) walk(dir);
   files.push('package.json','package-lock.json');
-  const hash = createHash('sha256').update(JSON.stringify({version:VERSION,v8:process.versions.v8,settings}));
+  const hash = createHash('sha256').update(JSON.stringify({version:VERSION,v8:process.versions.v8,calendarYear:new Date().getFullYear(),settings}));
   for (const file of files.sort()) hash.update(relative(root,join(root,file))).update('\0').update(readFileSync(join(root,file))).update('\0');
   return hash.digest('hex');
 }
@@ -34,10 +34,14 @@ export function inputKey(root, settings, relevant = catalogInput) {
 export const catalogBuildKey = (root, settings) => inputKey(root, settings, catalogInput);
 export const feedBuildKey = (root, settings) => inputKey(root, settings, feedInput);
 
-export function readCatalogBuildCache(file, key, { now = Date.now(), maxAge = CATALOG_CACHE_MAX_AGE } = {}) {
+export function readCatalogBuildCache(file, key, { now = Date.now(), maxAge = CATALOG_CACHE_MAX_AGE, dataRevision } = {}) {
   try {
     const saved = deserialize(readFileSync(file));
     if (saved.version !== VERSION || saved.key !== key) return {reason:'изменились правила подготовки данных'};
+    if (dataRevision && saved.dataRevision !== dataRevision) return {reason:'каталог изменился после подготовки снимка'};
+    // BY price age is anchored to the rate date, already covered by the code key.
+    // A verified unchanged catalog does not expire merely because a day passed.
+    if (dataRevision) maxAge = Infinity;
     if (!Number.isFinite(saved.createdAt) || saved.createdAt > now || now-saved.createdAt >= maxAge) return {reason:'сохранённые данные старше суток'};
     const {live,marketPrices} = saved;
     if (!live || !['models','modelChanged','modelPrices','listPages','stock','changed','collections'].every(k=>live[k] instanceof Map)
@@ -49,7 +53,7 @@ export function readCatalogBuildCache(file, key, { now = Date.now(), maxAge = CA
   } catch { return {reason:'сохранённых данных нет или файл повреждён'}; }
 }
 
-export function writeCatalogBuildCache(file, { key, live, marketPrices, createdAt = Date.now(), rateKey }) {
-  writeFileSync(file,serialize({version:VERSION,key,createdAt,live,marketPrices,rateKey}));
-  writeFileSync(`${file}.meta.json`,JSON.stringify({version:VERSION,key,createdAt,rateKey}));
+export function writeCatalogBuildCache(file, { key, live, marketPrices, createdAt = Date.now(), rateKey, dataRevision }) {
+  writeFileSync(file,serialize({version:VERSION,key,createdAt,live,marketPrices,rateKey,dataRevision}));
+  writeFileSync(`${file}.meta.json`,JSON.stringify({version:VERSION,key,createdAt,rateKey,dataRevision}));
 }

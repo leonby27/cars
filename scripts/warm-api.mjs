@@ -70,13 +70,13 @@ const warm = async (path) => {
   }
 };
 
-// По три за раз: на двух ядрах холодные запросы иначе встают в очередь друг за другом
-// и прогрев занимает дольше, чем сам по себе холодный ответ посетителю.
+// Прогреваем последовательно: холодные запросы не должны одновременно
+// занимать приложение и базу, пока сервер обслуживает посетителей.
 const run = async () => {
   const paths = [...new Set([...fixedPaths(), ...promoPaths()])];
   const results = [];
   const queue = [...paths];
-  const workers = Array.from({ length: 3 }, async () => {
+  const workers = Array.from({ length: 1 }, async () => {
     while (queue.length) {
       const path = queue.shift();
       results.push(await warm(path));

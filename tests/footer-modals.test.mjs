@@ -1,10 +1,11 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("окно приложения использует шестерёнку 80 px и заголовок в одну строку", async () => {
   const [app, styles] = await Promise.all([
-    readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+    readAppSource(),
     readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
   ]);
   assert.match(app, /app-unavailable-icon[^>]+app-gear\.png[^>]+width="80" height="80"/);
@@ -20,7 +21,7 @@ test("в компактных информационных окнах умень
 
 test("в контактах есть фирменный Threads с инверсией круга по теме", async () => {
   const [app, icons, styles] = await Promise.all([
-    readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+    readAppSource(),
     readFile(new URL("../src/icons.jsx", import.meta.url), "utf8"),
     readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
   ]);
