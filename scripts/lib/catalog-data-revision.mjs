@@ -3,6 +3,7 @@
 export async function catalogDataRevision(db) {
   const {rows} = await db.query(`SELECT
     (SELECT max(content_changed_at)::text FROM listings) AS content,
+    (SELECT max(last_seen_at)::text FROM listings) AS seen,
     (SELECT max(sold_at)::text FROM listings WHERE status='unavailable') AS sold,
     (SELECT max(updated_at)::text FROM vehicles) AS vehicles,
     (SELECT max(updated_at)::text FROM catalog_sources) AS sources,

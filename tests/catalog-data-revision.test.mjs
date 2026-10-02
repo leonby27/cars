@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 
 test('revision tracks content, sales, specs, visibility and deletion without loading payloads',async()=>{
- let state={content:'one',sold:null,vehicles:'one',sources:'one',listing_count:'100000',vehicle_count:'100000',visibility:'0:0'};
+ let state={content:'one',seen:'one',sold:null,vehicles:'one',sources:'one',listing_count:'100000',vehicle_count:'100000',visibility:'0:0'};
  const db={query:async sql=>{assert.doesNotMatch(sql,/source_payload|JOIN vehicles/);return {rows:[{...state}]};}};
  const before=await catalogDataRevision(db);
  for(const key of Object.keys(state)) {

@@ -26,7 +26,7 @@ export function inputKey(root, settings, relevant = catalogInput) {
   };
   for (const dir of ['src','server','config','db','scripts']) walk(dir);
   files.push('package.json','package-lock.json');
-  const hash = createHash('sha256').update(JSON.stringify({version:VERSION,v8:process.versions.v8,settings}));
+  const hash = createHash('sha256').update(JSON.stringify({version:VERSION,v8:process.versions.v8,calendarYear:new Date().getFullYear(),settings}));
   for (const file of files.sort()) hash.update(relative(root,join(root,file))).update('\0').update(readFileSync(join(root,file))).update('\0');
   return hash.digest('hex');
 }

@@ -108,7 +108,7 @@ test('rendering and crawler access changes agree between planner and both finger
   for(const d of ['src','server','config','db','scripts'])mkdirSync(join(dir,d),{recursive:true});
   for(const f of ['package.json','package-lock.json'])writeFileSync(join(dir,f),'{}');
   const catalog=catalogBuildKey(dir,{}),feed=feedBuildKey(dir,{});
-  for(const file of ['server/static-page.mjs','server/seo-render.mjs','server/boot-screen.mjs',
+  for(const file of ['server/static-page.mjs','server/boot-screen.mjs',
    'server/app-render.mjs','server/api-replay.mjs','server/root-inject.mjs','scripts/update-search-networks.py']) {
    writeFileSync(join(dir,file),'updated presentation');
    assert.equal(deploymentPlan([file]).reuseCatalog,true,file);
@@ -116,5 +116,9 @@ test('rendering and crawler access changes agree between planner and both finger
    assert.equal(catalogBuildKey(dir,{}),catalog,file);
    assert.equal(feedBuildKey(dir,{}),feed,file);
   }
+  // SEO helpers also format cached sitemap inputs, so remain conservative.
+  writeFileSync(join(dir,'server/seo-render.mjs'),'updated date formatting');
+  assert.equal(deploymentPlan(['server/seo-render.mjs']).reuseCatalog,false);
+  assert.notEqual(catalogBuildKey(dir,{}),catalog);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

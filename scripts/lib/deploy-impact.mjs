@@ -14,7 +14,7 @@ const operationsOnly = new Set([
   'scripts/clean-dist.mjs', 'scripts/split-css.mjs', 'scripts/precompress-dist.mjs',
   'scripts/prerender-home.mjs', 'scripts/audit-blog-images.mjs',
   'scripts/update-search-networks.py',
-  'server/static-page.mjs', 'server/seo-render.mjs', 'server/boot-screen.mjs',
+  'server/static-page.mjs', 'server/boot-screen.mjs',
   'server/app-render.mjs', 'server/api-replay.mjs', 'server/root-inject.mjs',
   'db/migrations/045_vehicles_updated_at_index.sql',
   'db/migrations/046_catalog_read_indexes.sql',
