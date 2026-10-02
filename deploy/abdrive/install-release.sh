@@ -20,6 +20,8 @@ set +a
 runuser -u abdrive --preserve-environment -- node scripts/abdrive-migrate.mjs
 install -d -m 700 -o abdrive -g abdrive /var/cache/abdrive
 export ABDRIVE_PRICE_INDEX_FILE=/var/cache/abdrive/price-index.json
+export ABDRIVE_HOME_SNAPSHOT_FILE=/var/cache/abdrive/home-snapshot.json
+export DB_POOL_SIZE=1
 # Prepare the full RU price index while the previous application keeps serving.
 runuser -u abdrive --preserve-environment -- nice -n 10 node --max-old-space-size=512 scripts/abdrive-warm-prices.mjs
 old=""

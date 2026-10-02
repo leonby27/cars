@@ -19,6 +19,7 @@ ProtectHome=true
 MemoryMax=768M
 Environment=NODE_OPTIONS=--max-old-space-size=512
 Environment=ABDRIVE_PRICE_INDEX_FILE=/var/cache/abdrive/price-index.json
+Environment=ABDRIVE_HOME_SNAPSHOT_FILE=/var/cache/abdrive/home-snapshot.json
 CacheDirectory=abdrive
 CPUQuota=50%
 Nice=10

@@ -33,3 +33,8 @@ for(const file of [
  mkdirSync(dirname(target),{recursive:true});
  cpSync(resolve('public',file),target);
 }
+
+// Serve precompressed public assets without spending application CPU on each request.
+const compression=spawnSync(process.execPath,['scripts/precompress-dist.mjs',`--dir=${output}/client`],{stdio:'inherit'});
+if(compression.error)throw compression.error;
+if(compression.status!==0)throw new Error('ABDrive asset compression failed');

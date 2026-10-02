@@ -15,3 +15,7 @@ Include `scripts/abdrive-warm-prices.mjs` in release archives. Before switching 
 Manual application rollback: resolve the previous directory in `/srv/abdrive/releases`, point `/srv/abdrive/current` to it atomically, restart only `abdrive`, then check its local health and catalog. Do not drop the private database when rolling back application code.
 
 Current installed release and unfinished items: `docs/architecture/two-sites.md`.
+
+Homepage performance: the same preparation script writes `/var/cache/abdrive/home-snapshot.json` before switching releases. It uses 20 public cards with five preview photos, model links and catalog facts; the runtime renders it before listening and refreshes in the background. The one offline database connection has a 30-second statement timeout; the live application's five-second limit is unchanged. Missing snapshots never block the homepage.
+
+The RU build creates Brotli assets. When deploying the 2026-10-02 first-load fix, also sync `nginx-https.conf` to the existing ABDrive vhost after backing it up, run `nginx -t`, and reload nginx. This routes public build assets directly from the current RU release; it must not replace BY configuration. The release installer does not otherwise overwrite existing HTTPS configuration.

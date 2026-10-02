@@ -4826,6 +4826,12 @@ function useHomeModels() {
     });
     return () => { alive = false; };
   }, [lists]);
+  useEffect(() => {
+    if (!IS_RU) return undefined;
+    let alive = true;
+    loadHomeModelFacts().then(rows => { if (alive && rows) setLists(homePopularModels(rows)); });
+    return () => { alive = false; };
+  }, []);
   return lists || HOME_MODELS_EMPTY;
 }
 const HOME_MODELS_EMPTY = Object.freeze({ models: [], brands: [] });
@@ -5190,7 +5196,7 @@ const HomeConversionSections = memo(function HomeConversionSections({ navigate }
   );
 });
 
-function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorites, toggleFavorite, loading }) {
+function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorites, toggleFavorite, loading, catalogError=false, onRetry }) {
   // Сумма без валюты в строке поиска читается в валюте переключателя сайта.
   const currency = useCurrency();
   const randomPool = useRef([]);
@@ -5601,6 +5607,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
       </section>
       {!searching && <PopularBrands navigate={navigate} cars={cars} apiMode={apiMode} />}
       <section className={searching ? "featured featured--search page-width" : "featured page-width"}>
+        {catalogError && <div className="catalog-message" role="status">Не удалось обновить каталог. <button type="button" onClick={onRetry}>Повторить</button></div>}
         {/* Во время поиска заголовок не показываем: выдача начинается сразу со
             строки с числом результатов, переключатель быстрого просмотра — там же. */}
         {!searching && (
@@ -16252,8 +16259,8 @@ export function App() {
       </Suspense>
     ) : staticPage ? (
       staticPage
-    ) : !showAccountFromAuthRoute && contentPath === "/" && !loadError ? (
-      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} catalogUpdatedAt={catalogUpdatedAt} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} />
+    ) : !showAccountFromAuthRoute && contentPath === "/" && (IS_RU || !loadError) ? (
+      <Home navigate={navigate} cars={cars} apiMode={apiMode} catalogTotal={catalogTotal} catalogUpdatedAt={catalogUpdatedAt} favorites={favorites} toggleFavorite={toggleFavorite} loading={loading} catalogError={IS_RU && loadError} onRetry={retryCatalog} />
     ) : !showAccountFromAuthRoute && parseModelLandingPath(contentPath) && !modelLanding.landing && !modelLanding.provisional ? (
       // Раздел модели ещё не известен (переход внутри сайта): без имени модели каталог
       // не соберёт запрос. Неизвестная модель — «страницы нет».

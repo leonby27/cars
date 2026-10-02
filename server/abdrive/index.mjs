@@ -22,7 +22,9 @@ if(process.env.ABDRIVE_PRIVACY_FILE){
 }
 const intake=intakeConfig(process.env,privacyText);
 const consentVersion=intake.consentVersion;
-const frontend=await createFrontend({buildDirectory:resolve(process.env.ABDRIVE_BUILD_DIR||'dist-abdrive'),catalog,site:SITE,privacyText,leadEnabled:intake.enabled});
+const frontend=await createFrontend({homeSnapshotFile:process.env.ABDRIVE_HOME_SNAPSHOT_FILE,buildDirectory:resolve(process.env.ABDRIVE_BUILD_DIR||'dist-abdrive'),catalog,site:SITE,privacyText,leadEnabled:intake.enabled});
+// Render the saved homepage once before accepting traffic; no live catalog wait.
+await frontend({method:'GET'},{writeHead(){},end(){}},new URL('/',SITE.origin));
 const server=http.createServer(createAbdriveHandler({catalog,siteDatabase:sitePool,site:SITE,consentVersion,registrationConsentVersion:privacyText?.trim()?process.env.ABDRIVE_CONSENT_VERSION:null,frontend}));
 let notifying=false;
 const timer=setInterval(async()=>{
