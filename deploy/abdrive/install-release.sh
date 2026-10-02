@@ -26,6 +26,13 @@ export DB_POOL_SIZE=1
 runuser -u abdrive --preserve-environment -- nice -n 10 node --max-old-space-size=512 scripts/abdrive-warm-prices.mjs
 old=""
 if [[ -L $base/current ]]; then old=$(readlink -e "$base/current" || true); fi
+# Open tabs can request a deferred chunk after the release has changed.
+# Carry recent immutable assets forward without replacing this build's files.
+# Preserve original timestamps so old generations expire rather than accumulate.
+if [[ -n $old && -d $old/dist-abdrive/client/assets ]]; then
+  cp -an "$old/dist-abdrive/client/assets/." "$next/dist-abdrive/client/assets/"
+  find "$next/dist-abdrive/client/assets" -type f -mtime +7 -delete
+fi
 by_pid=$(systemctl show abcars --property=MainPID --value)
 install -m 644 deploy/abdrive/abdrive.service /etc/systemd/system/abdrive.service
 systemctl daemon-reload
