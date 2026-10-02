@@ -202,7 +202,7 @@ const watchForHuman = () => {
 };
 
 export function trackEvent(eventName, details = {}) {
-  if (SITE.market === "RU") return;
+  if (SITE.market === "RU" && eventName !== "page_view") return;
   if (skipThisVisit()) return;
   // У события про машину примета — сама машина: «быстрый просмотр» из каталога и
   // открытая следом карточка — это один и тот же взгляд, а не два.

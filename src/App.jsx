@@ -87,6 +87,14 @@ const AccountPage = secondaryPage("AccountPage");
 const SavedSearchesPage = secondaryPage("SavedSearchesPage");
 const Favorites = secondaryPage("Favorites");
 const AnalyticsPage = lazy(() => import("./analytics-entry.jsx").then((m) => ({ default: m.AnalyticsPage })));
+const AbdriveAnalyticsPage = lazy(() => import("./abdrive-analytics-page.jsx"));
+// Private RU analytics loads after hydration: renderToString cannot finish a
+// lazy Suspense boundary, and statistics are fetched only in the browser.
+function AbdriveAnalyticsRoute() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => { setReady(true); }, []);
+  return ready ? <AbdriveAnalyticsPage /> : null;
+}
 
 const estimateLandedCost = IS_RU ? marketEstimate : estimateBelarusCost;
 const catalogPrice = car => IS_RU ? car?.offer?.totalAmount ?? null : estimateLandedCost(car).totalUsd;
@@ -1625,7 +1633,7 @@ function CardSkeleton({ row }) {
 // пункта, а поисковик по ссылке доходит до раздела — фильтр в коде страницы был
 // кнопками, и до разделов марок и кузовов робот с каталога дойти не мог. `rel` —
 // «nofollow» для адресов, у которых нет своей страницы (сочетание фильтров).
-function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, optionHref, icon: Icon, mobileIcon: MobileIcon, mobileActionSheet = false }) {
+function SelectField({ label, value, options, onChange, searchable = false, multiple = false, className = "", disabled = false, formatOption = (item) => item, optionCounts, optionIcon, optionHref, icon: Icon, mobileIcon: MobileIcon, mobileActionSheet = false, brandGrid = false }) {
   // В режиме мультивыбора value — массив, а первая опция играет роль «сбросить всё».
   const allOption = multiple ? options[0] : null;
   const selectedValues = multiple ? (Array.isArray(value) ? value : value && value !== allOption ? [value] : []) : [];
@@ -1649,8 +1657,8 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     // Поиск по списку идёт тем же приведением, что и поиск по каталогу: «skoda»
     // находит «Škoda», «mercedes benz» — «Mercedes-Benz».
     // Ищем и по набранному кириллицей: «ау» — это «au», а значит Audi.
-    if (!searchable) return options;
-    return listSearchMatches(options, query);
+    if (searchable && query.trim()) return listSearchMatches(options, query);
+    return options;
   }, [options, query, searchable]);
 
   const close = (restoreFocus = false) => {
@@ -1691,8 +1699,16 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
   // option has to be pulled into view instead of leaving the list at the top.
   useEffect(() => {
     if (!open) return;
-    optionsRef.current?.querySelector('[role="option"].active')?.scrollIntoView({ block: "nearest" });
-  }, [open, activeIndex]);
+    const list = optionsRef.current;
+    const active = list?.querySelector('[role="option"].active');
+    if (!list || !active) return;
+    if (brandGrid) {
+      const bounds = list.getBoundingClientRect();
+      const item = active.getBoundingClientRect();
+      if (item.top < bounds.top) list.scrollTop += item.top - bounds.top;
+      else if (item.bottom > bounds.bottom) list.scrollTop += item.bottom - bounds.bottom;
+    } else active.scrollIntoView({ block: "nearest" });
+  }, [open, activeIndex, brandGrid]);
 
   // Список привязан к краю кнопки (сортировка в выдаче — к правому) и шире её.
   // На узком экране он от этого уезжал за левый край: первые буквы пунктов
@@ -1705,7 +1721,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     const menu = root?.querySelector(".select-menu");
     if (!menu) return;
     menu.style.removeProperty("--select-menu-shift");
-    if (!open) return;
+    if (!open || brandGrid) return;
     const gutter = 8;
     const left = root.getBoundingClientRect().left + menu.offsetLeft;
     const right = left + menu.offsetWidth;
@@ -1714,7 +1730,39 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     const viewport = document.documentElement.clientWidth;
     const shift = left < gutter ? gutter - left : Math.min(0, viewport - gutter - right);
     if (shift) menu.style.setProperty("--select-menu-shift", `${Math.round(shift)}px`);
-  }, [open, filteredOptions.length, query]);
+  }, [open, filteredOptions.length, query, brandGrid]);
+
+  useLayoutEffect(() => {
+    if (!open || !brandGrid) return;
+    const menu = rootRef.current?.querySelector(".select-menu");
+    const row = rootRef.current?.closest(".unified-filter-primary");
+    if (!menu || !row) return;
+    const updateHeight = () => {
+      const viewport = window.visualViewport;
+      const bottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+      const available = Math.max(0, bottom - row.getBoundingClientRect().bottom - 8 - 12);
+      menu.style.setProperty("--brand-menu-height", `${Math.floor(available)}px`);
+    };
+    let frame = 0;
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(updateHeight);
+    };
+    // Keep the opening height while the page scrolls, so the menu moves with
+    // its trigger instead of growing toward a stationary viewport edge.
+    updateHeight();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(row);
+    window.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("resize", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      menu.style.removeProperty("--brand-menu-height");
+    };
+  }, [open, brandGrid]);
 
   // Внутри мобильной шторки фильтров меню раскрывается вниз и может уйти за
   // нижний край; докручиваем шторку, чтобы раскрытый список был виден целиком.
@@ -1784,13 +1832,18 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     : formatOption(value);
 
   return (
-    <div className={`select-field custom-select${className ? ` ${className}` : ""}${MobileIcon ? " has-mobile-icon" : ""}${hasSelection ? " has-selection" : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
+    <div className={`select-field custom-select${brandGrid ? " brand-grid-select" : ""}${className ? ` ${className}` : ""}${MobileIcon ? " has-mobile-icon" : ""}${hasSelection ? " has-selection" : ""}${open ? " open" : ""}${disabled ? " disabled" : ""}`} ref={rootRef}>
       <button ref={triggerRef} type="button" className={`select-trigger${Icon ? " with-icon" : ""}`} aria-label={`${label}: ${triggerText}`} aria-haspopup="listbox" aria-expanded={disabled ? false : open} aria-controls={listId} disabled={disabled} onClick={() => (open ? close() : setOpen(true))} onKeyDown={handleKeyDown}>
         {Icon && <Icon className="select-trigger-icon" size={20} weight="duotone" aria-hidden="true" />}
         {MobileIcon && <MobileIcon className="select-trigger-mobile-icon" size={22} weight="bold" aria-hidden="true" />}
         <b>{triggerText}</b>
         <CaretDown size={16} weight="bold" />
       </button>
+      {brandGrid && hasSelection && !disabled && (
+        <button type="button" className="brand-grid-clear" aria-label="Убрать марку" onClick={() => { onChange?.(options[0]); close(true); }}>
+          <span className="market-compare-search-clear" aria-hidden="true"><X size={12} weight="bold" /></span>
+        </button>
+      )}
       {!disabled && !actionSheetMode && (
         <div className={`select-menu${open ? " open" : ""}`} aria-hidden={!open} inert={open ? undefined : true}>
           {searchable && (
@@ -1812,7 +1865,10 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
               )}
             </div>
           )}
-          <div className="select-options" id={listId} role="listbox" aria-label={label} aria-multiselectable={multiple || undefined} ref={optionsRef}>
+          <div className="select-options" id={listId} role="listbox" aria-label={label} aria-multiselectable={multiple || undefined} ref={optionsRef} style={brandGrid ? {
+            "--brand-grid-rows": Math.max(1, Math.ceil(filteredOptions.length / 4)),
+            "--brand-grid-rows-mid": Math.max(1, Math.ceil(filteredOptions.length / 3)),
+          } : undefined}>
             {filteredOptions.length ? (
               filteredOptions.map((item, index) => {
                 const optionCount = optionCounts?.get(item);
@@ -1867,6 +1923,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
               <p className="select-empty">Ничего не найдено</p>
             )}
           </div>
+
         </div>
       )}
       {!disabled && actionSheetMode && open && typeof document !== "undefined" && createPortal(
@@ -2229,7 +2286,7 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
         </>
       ) : (
         <div className="filter-primary-row unified-filter-primary">
-          <SelectField label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} optionIcon={(brand) => (brand === "Все марки" ? <SquaresFour size={18} weight="fill" /> : <BrandMark brand={brand} />)} optionHref={optionHrefs?.brand} searchable />
+          <SelectField brandGrid label="Марка" value={values.brand} onChange={actions.brand} options={options.brands} optionCounts={optionCounts?.brands} optionIcon={(brand) => (brand === "Все марки" ? <SquaresFour size={18} weight="fill" /> : <BrandMark brand={brand} />)} optionHref={optionHrefs?.brand} searchable />
           <SelectField label="Модель" value={values.model} onChange={actions.model} options={options.models} optionCounts={optionCounts?.models} searchable multiple disabled={values.brand === "Все марки"} />
           {yearRange()}
           {priceRange()}
@@ -7231,7 +7288,7 @@ export function App() {
 
     IS_RU && contentPath === "/not-found" ? <NotFound navigate={navigate}/> :
     IS_RU && contentPath === "/privacy" ? <RussianPrivacyPage/> :
-    IS_RU && (contentPath.startsWith("/orders/") || ["/tracking", "/contacts", "/terms", "/analytics"].includes(contentPath)) ? <NotFound navigate={navigate}/> :
+    IS_RU && (contentPath.startsWith("/orders/") || ["/tracking", "/contacts", "/terms"].includes(contentPath)) ? <NotFound navigate={navigate}/> :
     contentPath === "/how-it-works" ? (
       <HowItWorksPage
         navigate={navigate}
@@ -7265,11 +7322,11 @@ export function App() {
     ) : null;
   const page =
     IS_RU && window.__boot?.filterError && window.__boot.path === contentPath && window.__boot.search === window.location.search ? <main className="simple-page page-width"><EmptyState title="Проверьте параметры поиска" description="Проверьте годы, пробег и другие фильтры. Поиск по итоговой цене пока недоступен."><AppLink href="/catalog" navigate={navigate}>Сбросить фильтры</AppLink></EmptyState></main> :
-    !IS_RU && contentPath === "/analytics" ? (
+    contentPath === "/analytics" ? (
       // Пока отдельный файл страницы едет по сети, показываем пустоту: страница
       // служебная, её открывают единицы, а ожидание — доли секунды.
       <Suspense fallback={null}>
-        <AnalyticsPage />
+        {IS_RU ? <AbdriveAnalyticsRoute /> : <AnalyticsPage />}
       </Suspense>
     ) : staticPage ? (
       staticPage

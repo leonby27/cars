@@ -18,7 +18,7 @@ export const RU_ORDER_STEPS = [
 ];
 export const RU_FAQ_GROUPS = RU_SERVICE_FAQ_GROUPS;
 export function ruPageSeo(path, {car=null, landing=null, search=''}={}) {
- const titles={'/':`Автомобили ${siteFromPhrase()} в Россию`, '/models':'Модели авто в каталоге ABDrive — комплектации и цены', '/catalog':`Каталог автомобилей ${siteFromPhrase()}`, '/how-it-works':'Порядок заказа автомобиля в ABDrive', '/faq':'Вопросы перед заказом автомобиля', '/tracking':'Статус доставки автомобиля до Москвы','/contacts':'Контакты ABDrive','/favorites':'Избранные автомобили','/searches':'Мои поиски','/privacy':'Обработка персональных данных','/account':'Личный кабинет','/login':'Вход','/register':'Регистрация'};
+ const titles={'/':`Автомобили ${siteFromPhrase()} в Россию`, '/models':'Модели авто в каталоге ABDrive — комплектации и цены', '/catalog':`Каталог автомобилей ${siteFromPhrase()}`, '/how-it-works':'Порядок заказа автомобиля в ABDrive', '/faq':'Вопросы перед заказом автомобиля', '/tracking':'Статус доставки автомобиля до Москвы','/contacts':'Контакты ABDrive','/favorites':'Избранные автомобили','/searches':'Мои поиски','/privacy':'Обработка персональных данных','/account':'Личный кабинет','/login':'Вход','/register':'Регистрация','/analytics':'Аналитика'};
  const post=findBlogPost(path);
  if(post||path==='/blog')return {title:post?.seoTitle||'Журнал ABDrive',description:post?.seoDescription||`Всё об автомобилях ${siteFromPhrase()}: подборки, сравнения и статьи.`,canonical:SITE.origin+path,indexable:!search};
  const tool=findToolPage(path);
@@ -32,5 +32,5 @@ export function ruPageSeo(path, {car=null, landing=null, search=''}={}) {
    : path==='/faq'
     ? 'Ответы ABDrive о проверке объявления, расчёте расходов, договоре и доставке автомобиля в Россию.'
     : `Сравните объявления ${siteFromPhrase()}, проверьте характеристики выбранного автомобиля и запросите подтверждение цены и условий доставки до Москвы.`;
- return {title:`${label} — ABDrive`,description, canonical:SITE.origin+(car?'/cars/'+encodeURIComponent(listingNumber(car.id)):path), indexable:Boolean(titles[path]||landing)&&!search&&!car&&!['/favorites','/searches','/privacy','/account','/login','/register'].includes(path)};
+ return {title:`${label} — ABDrive`,description, canonical:SITE.origin+(car?'/cars/'+encodeURIComponent(listingNumber(car.id)):path), indexable:Boolean(titles[path]||landing)&&!search&&!car&&!['/favorites','/searches','/privacy','/account','/login','/register','/analytics'].includes(path)};
 }

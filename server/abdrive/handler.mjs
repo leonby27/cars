@@ -1,3 +1,4 @@
+import {createAnalyticsApi} from './analytics.mjs';
 import {createAccountApi} from './accounts.mjs';
 import {createRussianRates} from './pricing.mjs';
 import {russianModel} from "./shared-page.mjs";
@@ -27,9 +28,12 @@ export function createAbdriveHandler({catalog,siteDatabase,site,consentVersion=n
  const allow=rateLimiter();
  const accounts=createAccountApi({database:siteDatabase,catalog,site,consentVersion,registrationConsentVersion});
  const rates=createRussianRates();
+ const analytics=createAnalyticsApi({database:siteDatabase,site});
  return async(request,response)=>{
   try{
    const url=new URL(request.url,site.origin);
+   const analyticsResponse=await analytics(request,url,readBody);
+   if(analyticsResponse)return reply(response,analyticsResponse.status,analyticsResponse.body,analyticsResponse.headers);
    const accountResponse=await accounts(request,url,readBody);
    if(accountResponse)return reply(response,accountResponse.status,accountResponse.body,accountResponse.headers);
    if(request.method==='GET'&&url.pathname==='/api/rates')return reply(response,200,await rates());

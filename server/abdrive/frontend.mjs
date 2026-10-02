@@ -92,7 +92,7 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
   else if(path==='/how-it-works')boot.kind='process';
   else if(path==='/models')boot.kind='models';
   else if(path==='/faq')boot.kind='faq';
-  else if(['/favorites','/searches','/account','/login','/register'].includes(path))boot.kind='private';
+  else if(['/favorites','/searches','/account','/login','/register','/analytics'].includes(path))boot.kind='private';
   else if(path==='/privacy'&&privacyText)boot.kind='privacy';
   else status=404;
   if(status===404)boot.path='/not-found';

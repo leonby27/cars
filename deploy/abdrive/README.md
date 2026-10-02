@@ -26,3 +26,13 @@ Homepage performance: the same preparation script writes `/var/cache/abdrive/hom
 The RU build creates Brotli assets. When deploying the 2026-10-02 first-load fix, also sync `nginx-https.conf` to the existing ABDrive vhost after backing it up, run `nginx -t`, and reload nginx. This routes public build assets directly from the current RU release; it must not replace BY configuration. The release installer does not otherwise overwrite existing HTTPS configuration.
 
 Deployment resource limits (2026-10-02): dependency installation and offline price preparation run in scopes capped at half a CPU, with low CPU/I/O priority. Code-only releases keep the persistent price index; `requireFresh` checks changes and does not force a full recalculation. Install the reviewed runner as `/usr/local/bin/abdrive-install-release.sh` and use it for subsequent release archives; updating this runner alone requires no application restart.
+
+Analytics overview: `/analytics` is private and excluded from indexing. Configure
+`ANALYTICS_PASSWORD` explicitly in `/etc/abdrive/environment`; an optional independent
+`ANALYTICS_SECRET` signs its cookie. There is no BY password or database fallback.
+The guarded RU migration includes `003_analytics.sql`. Only page visits are stored
+in the dedicated RU database, and a visit is counted after user interaction.
+Tabs opened within 30 minutes are merged by visitor; a return after 30 minutes
+starts another visit. History begins when this release is enabled, without
+importing external-counter or ABCars history. The overview has 7/30/90 day charts
+and optional Yandex, Google and ChatGPT source lines; other sidebar entries are disabled.
