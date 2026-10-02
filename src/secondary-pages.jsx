@@ -1926,10 +1926,10 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
     const target = (modelTarget && !firstRun ? modelTarget.split("?")[0] : null) || landingForFilters(filters, landingPath)?.path || "/catalog";
     if (target === landingPath) return undefined;
     const move = () => {
-      catalogFilterMoveTarget = target;
       navigate(target, {
         replace: true,
         preserveScroll: true,
+        preserveCatalog: true,
         catalogState: { catalog: { filters, sort, shuffleSeed, filtersExpanded, loadedCount: pageSize, order: [] }, scrollY: window.scrollY },
       });
     };

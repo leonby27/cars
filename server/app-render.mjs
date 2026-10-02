@@ -78,3 +78,10 @@ export function catalogBootSearch(params) {
 // бывает сорок) только раздували бы страницу: список встраивается в неё целиком.
 // История цены в браузере не нужна вовсе (стрелка цены берётся из двух полей записи).
 export const bootCars = (items) => items.map(({ priceHistory: _history, ...item }) => ({ ...item, images: (item.images || []).slice(0, 5) }));
+
+// metaValue may be replaced by the browser preload. Hydration reads the immutable
+// API snapshot so its first filter options/counts match the server's HTML.
+export function catalogMetaBoot(query, meta) {
+  const key = String(query || "");
+  return { metaValue: meta, metaQuery: key, api: { [`/api/catalog/meta${key ? `?${key}` : ""}`]: meta } };
+}

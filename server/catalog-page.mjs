@@ -5,7 +5,7 @@
 // тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
 import { brandCatalogGuide, brandModels, brandStock, getCatalogMeta, listCars, modelSummary, priceEdges } from "./repository.mjs";
-import { bootCars, catalogBootSearch, catalogSortFor, dailyShuffleSeed, plainCatalogSearch, renderCatalogAppMarkup } from "./app-render.mjs";
+import { bootCars, catalogBootSearch, catalogMetaBoot, catalogSortFor, dailyShuffleSeed, plainCatalogSearch, renderCatalogAppMarkup } from "./app-render.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { isBrandGuideLanding } from "../src/brand-guide.js";
 import { appShell } from "./dist-files.mjs";
@@ -111,8 +111,7 @@ async function catalogBoot({ path, filters, query, list, seed, guide = null, bra
     catalogPath: path,
     catalogSearch: catalogBootSearch(query),
     catalogSeed: seed,
-    metaValue: meta,
-    metaQuery: metaQuery.toString(),
+    ...catalogMetaBoot(metaQuery, meta),
     ...(guide && brand ? { brandGuideValue: guide, brandGuideBrand: brand } : {}),
   };
 }
