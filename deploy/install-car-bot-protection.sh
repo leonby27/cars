@@ -14,7 +14,7 @@ flock -n 9 || { echo 'Another ABDrive release is running'; exit 75; }
 exec 8>/run/lock/car-bot-protection.lock
 flock -n 8 || { echo 'Another crawler release/refresh is running'; exit 75; }
 backup=$(mktemp -d /var/backups/car-bot-protection.XXXXXX)
-files=(/etc/nginx/conf.d/car-ai-limits.conf /etc/nginx/snippets/car-ai-limit.conf /etc/nginx/snippets/car-search-networks.conf /etc/nginx/snippets/abcars-site.conf /etc/nginx/sites-available/abdrive /usr/local/lib/car-bot-protection/update-search-networks.py /etc/systemd/system/car-search-networks.service /etc/systemd/system/car-search-networks.timer /var/lib/car-bot-protection/search-state.json)
+files=(/etc/nginx/conf.d/car-ai-limits.conf /etc/nginx/snippets/car-ai-limit.conf /etc/nginx/snippets/car-search-networks.conf /etc/nginx/snippets/abcars-site.conf /etc/nginx/sites-available/abdrive /usr/local/lib/car-bot-protection/update-search-networks.py /etc/systemd/system/car-search-networks.service /etc/systemd/system/car-search-networks.timer /var/lib/car-bot-protection/search-state.json /etc/nginx/conf.d/abcars-bots.conf)
 for i in "${!files[@]}"; do
     if [[ -e ${files[$i]} ]]; then cp -a "${files[$i]}" "$backup/$i"; fi
 done
@@ -47,6 +47,10 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
     source = Path('/etc/nginx/snippets/abcars-proxy.conf').read_text() if 'abcars-site' in name else text
     if dependency not in source:
         raise RuntimeError(f'Shared dynamic limiter is not included: {name}')
+# AhrefsBot is a mixed SEO/Yep crawler: use the shared slow-crawl budget.
+legacy = Path('/etc/nginx/conf.d/abcars-bots.conf')
+text = legacy.read_text().replace('ahrefsbot|semrushbot', 'ahrefssiteaudit|semrushbot')
+legacy.write_text(text)
 PY
 install -m644 "$source_dir/nginx-car-ai-limits.conf" /etc/nginx/conf.d/car-ai-limits.conf
 install -m644 "$source_dir/nginx-car-ai-limit-location.conf" /etc/nginx/snippets/car-ai-limit.conf

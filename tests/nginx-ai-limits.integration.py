@@ -93,7 +93,7 @@ http {{
             finally: client.close()
 
         counts = {}
-        for agent in ['GPTBot/1.4', 'meta-externalagent/1.1', 'ClaudeBot/1.0', 'CCBot/2.0', 'GoogleOther/1.0', 'Amazonbot/1.0']:
+        for agent in ['AhrefsBot/7.0', 'GPTBot/1.4', 'meta-externalagent/1.1', 'ClaudeBot/1.0', 'CCBot/2.0', 'GoogleOther/1.0', 'Amazonbot/1.0']:
             before = Backend.calls
             replies = [request(agent, '127.0.0.2' if n%2 else '127.0.0.3', 'a.test' if n%3 else 'b.test') for n in range(10)]
             counts[agent] = dict(collections.Counter(status for status, _ in replies))
@@ -101,7 +101,7 @@ http {{
             assert Backend.calls-before == 2, 'Rejected training requests reached the backend'
             assert all(retry == '10' for status, retry in replies if status == 429)
             assert all(request(agent, url='/assets/fixture.js')[0] == 200 for _ in range(3))
-        for agent in ['AhrefsBot/7.0', 'SemrushBot/1.0', 'Bytespider/1.0', 'python-requests/2.0']:
+        for agent in ['AhrefsSiteAudit/6.1', 'SemrushBot/1.0', 'Bytespider/1.0', 'python-requests/2.0']:
             before = Backend.calls
             assert all(request(agent, host=host, url=url)[0] == 403 for host in ['a.test','b.test'] for url in ['/cars/fixture','/api/cars?limit=100','/assets/fixture.js'])
             assert Backend.calls == before
