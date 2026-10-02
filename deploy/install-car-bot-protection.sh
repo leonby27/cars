@@ -43,6 +43,9 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
         pos = text.index(marker)
         text = text[:pos] + rule + '\n' + text[pos:]
         path.write_text(text)
+    export_rule = 'if ($car_export_denied) { return 403; }'
+    if export_rule not in text:
+        text = text.replace(rule, rule + '\n' + export_rule)
     # Server-level slow budgets also cover photos outside dynamic proxy locations.
     guard = 'limit_req zone=car_training_v2 burst=1 nodelay;'
     if guard not in text:
