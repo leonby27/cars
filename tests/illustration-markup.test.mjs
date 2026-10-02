@@ -29,7 +29,7 @@ test("у правил с прямым потомком-картинкой ест
 
 // Вторая ловушка той же обёртки: браузер выбирает источник по типу и, не найдя файла,
 // показывает пустое место вместо картинки — запасной вариант уже не подставляется.
-const sources = ["../src/App.jsx", "../src/inspection-report.jsx", "../src/service-copy.js"]
+const sources = ["../src/App.jsx", "../src/secondary-pages.jsx", "../src/inspection-report.jsx", "../src/service-copy.js"]
   .map((file) => readFileSync(new URL(file, import.meta.url), "utf8"))
   .join("\n");
 const publicDir = new URL("../public/", import.meta.url);

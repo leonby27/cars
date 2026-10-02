@@ -1,3 +1,4 @@
+import {withoutTrackingParams} from "../../src/tracking-params.js";
 import {isBrandGuideLanding} from '../../src/brand-guide.js';
 import {RU_BLOG_REDIRECTS} from '../../src/markets/ru-editorial.js';
 import {MODEL_PAGES,modelPageRedirect} from '../../src/model-pages.js';
@@ -50,15 +51,18 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
   let boot={kind:'notFound',leadEnabled,privacyText};let status=200;
   const path=url.pathname.replace(/\/+$/,'')||'/';
   boot.path=path;boot.search=url.search;
+  const homeSearch=withoutTrackingParams(url.search).toString();
+  if(path==='/')boot.search=homeSearch?'?'+homeSearch:'';
   let landing=null;
   let homeValue;
   if(path==='/'){
    homeValue=home.get();
    const day=new Date().toISOString().slice(0,10);
-   if(!url.search&&cachedHome?.value===homeValue&&cachedHome.day===day){
+   if(cachedHome?.search===homeSearch&&cachedHome?.value===homeValue&&cachedHome.day===day){
     response.writeHead(200,cachedHome.headers);return response.end(cachedHome.markup);
    }
-   boot={...boot,...homeValue,kind:'home'};
+   const {metaValue,...savedHome}=homeValue;
+   boot={...boot,...savedHome,api:metaValue?{'/api/catalog/meta':metaValue}:{},kind:'home'};
   }else if(path==='/catalog'||path.startsWith('/catalog/')){
    const resolved=await russianLanding(catalog,path);
    if(!resolved)status=404;
@@ -108,7 +112,7 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
    if(boot.api['/api/catalog/meta']){boot.metaValue=boot.api['/api/catalog/meta'];boot.metaQuery='';}
   }
   if(landing&&isBrandGuideLanding(landing)&&catalog.brandGuide){boot.brandGuideValue=await catalog.brandGuide(landing.brand);boot.brandGuideBrand=landing.brand;}
-  const seo=ruPageSeo(path,{car:boot.car,landing,search:url.search});
+  const seo=ruPageSeo(path,{car:boot.car,landing,search:path==='/'?boot.search:url.search});
   const title=status===404?'Страница не найдена — ABDrive':seo.title;
   const canonical=site.origin+(boot.car?'/cars/'+encodeURIComponent(listingNumber(boot.car.id)):path);
   const noindex=status!==200||!seo.indexable;
@@ -119,7 +123,7 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
    .replace('<div id="root">',()=>`<div id="root" data-prerender="${escape(path)}">`).replace('<!--abdrive-app-->',()=>entry.render(boot))
    .replace('<script id="abdrive-data" type="application/json">{}</script>',()=>`<script id="abdrive-data" type="application/json">${data}</script>`);
   const headers={'content-type':'text/html; charset=utf-8','cache-control':status===200?(boot.kind==='private'?'no-store':'public,max-age=0,s-maxage=30'):'no-store','x-content-type-options':'nosniff'};
-  if(homeValue&&!url.search)cachedHome={value:homeValue,day:new Date().toISOString().slice(0,10),headers,markup};
+  if(homeValue)cachedHome={value:homeValue,search:homeSearch,day:new Date().toISOString().slice(0,10),headers,markup};
   response.writeHead(status,headers);
   response.end(markup);
  };

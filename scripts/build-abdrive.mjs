@@ -34,6 +34,11 @@ for(const file of [
  cpSync(resolve('public',file),target);
 }
 
+// Use the shared critical styles before compressing the modified HTML and CSS.
+const css=spawnSync(process.execPath,['scripts/split-css.mjs',`--dir=${output}/client`],{stdio:'inherit'});
+if(css.error)throw css.error;
+if(css.status!==0)throw new Error('ABDrive critical CSS preparation failed');
+
 // Serve precompressed public assets without spending application CPU on each request.
 const compression=spawnSync(process.execPath,['scripts/precompress-dist.mjs',`--dir=${output}/client`],{stdio:'inherit'});
 if(compression.error)throw compression.error;

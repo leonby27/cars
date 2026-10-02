@@ -34,14 +34,16 @@ const { renderAppPage } = await import(pathToFileURL(join(process.cwd(), ssrDir,
 let popularModels = [];
 let brandModelTabs = [];
 let homeShowcase = [];
+let catalogFacts = { total: 0, updatedAt: "" };
 try {
   const saved = JSON.parse(readFileSync(join(clientDir, "..", "popular-models.json"), "utf8"));
   // Прежний вид файла — просто список моделей; новый — модели и вкладки марок.
   popularModels = Array.isArray(saved) ? saved : saved.models || [];
   brandModelTabs = Array.isArray(saved) ? [] : saved.brands || [];
   homeShowcase = Array.isArray(saved?.showcase) ? saved.showcase : [];
+  catalogFacts = saved.catalogFacts || catalogFacts;
 } catch {}
-const homeBoot = popularModels.length || homeShowcase.length ? { popularModels, brandModelTabs, homeShowcase } : undefined;
+const homeBoot = { popularModels, brandModelTabs, homeShowcase, catalogFacts };
 const app = renderAppPage("/", homeBoot);
 if (!app.includes("<h1>") || !app.includes("site-footer")) {
   console.error("[prerender] разметка главной собралась без заголовка или подвала — страницу не трогаем");
@@ -109,7 +111,7 @@ const replaced = withRoot.replace("</head>", `${hoisted.join("")}${foreignGuard}
 // Те же данные — в страницу, чтобы браузер нарисовал первый кадр из них. Ставим
 // перед </head>: после загрузочного скрипта, который сам заводит window.__boot.
 const withBoot = homeBoot
-  ? replaced.replace("</head>", `<script>window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(homeBoot).replace(/</g, "\\u003c")});</script></head>`)
+  ? replaced.replace("</head>", `<script id="home-data">window.__boot = Object.assign(window.__boot || {}, ${JSON.stringify(homeBoot).replace(/</g, "\\u003c")});</script></head>`)
   : replaced;
 writeFileSync(indexPath, withBoot);
 

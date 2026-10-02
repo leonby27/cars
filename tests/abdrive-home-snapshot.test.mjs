@@ -63,7 +63,9 @@ test('Home HTTP response never waits for catalog; query state, metadata and curr
   const response=await fetch(base+'/',{signal:AbortSignal.timeout(3000)});assert.equal(response.status,200);const html=await response.text();
   assert.match(html,/<h1[ >]/);assert.match(html,/href="\/catalog\/byd\/qin-plus"/);assert.match(html,/2 840 000/);assert.equal(reads,0);
   const second=await fetch(base+'/').then(r=>r.text());assert.equal(second,html);
+  const tagged=await fetch(base+'/?utm_source=test&gclid=123&nocount=1').then(r=>r.text());assert.equal(tagged,html);
   const searched=await fetch(base+'/?q=Tesla').then(r=>r.text());const boot=JSON.parse(searched.match(/id="abdrive-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
   assert.equal(boot.search,'?q=Tesla');assert.equal(boot.catalogValue,undefined);assert.equal(reads,0);
+  assert.deepEqual(boot.api['/api/catalog/meta'],saved.boot.metaValue);assert.equal(boot.metaValue,undefined);
  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

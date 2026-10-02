@@ -1,8 +1,9 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const app = readAppSource();
 const styles = fs.readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
 test("vehicle gallery magnifier stays inside the desktop lens and uses the original image", () => {

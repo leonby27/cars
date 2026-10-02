@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -125,7 +126,7 @@ test("быстрый просмотр Метрика засчитывает ка
 });
 
 test("модалка быстрого просмотра сообщает Метрике о просмотре", () => {
-  const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const app = readAppSource();
   const open = app.slice(app.indexOf("const openQuickView = (nextCar)"));
   assert.ok(open.slice(0, 700).includes("trackMetrikaView("), "открытие модалки перестало считаться просмотром");
   assert.ok(open.slice(0, 700).includes('trackMetrikaGoal("quick_view")'), "цель быстрого просмотра пропала");

@@ -1,8 +1,9 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const app = readAppSource();
 const analytics = fs.readFileSync(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
 const renderer = fs.readFileSync(new URL("../server/seo-render.mjs", import.meta.url), "utf8");
 

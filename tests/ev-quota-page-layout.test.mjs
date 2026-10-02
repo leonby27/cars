@@ -1,10 +1,11 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
 import { findToolPage } from "../src/tool-pages.js";
 
-const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const app = readAppSource();
 const styles = fs.readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const quotaIcon = fs.readFileSync(new URL("../public/services/ev-quota-zero-percent-gold.png", import.meta.url));
 

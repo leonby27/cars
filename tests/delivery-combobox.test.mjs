@@ -1,10 +1,11 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+const app = await readAppSource();
 const styles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
-const combobox = app.slice(app.indexOf("function ComboboxField"), app.indexOf("function HomeFaqItem"));
+const combobox = app.slice(app.indexOf("function ComboboxField"), app.indexOf("function ToolDisclosures", app.indexOf("function ComboboxField")));
 const deliveryCalculator = app.slice(app.indexOf("function DeliveryCalculator"), app.indexOf("function CustomsCalculator"));
 
 test("delivery combobox closes after choosing an option", () => {
