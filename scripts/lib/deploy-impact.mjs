@@ -35,10 +35,13 @@ const catalogOnly = new Set([
   'scripts/lib/blog-cover.mjs', 'src/blog-posts.js', 'src/blog-social.js',
 ]);
 export const feedInput = file => catalogInput(file) && !catalogOnly.has(file);
+// These modules select homepage cards and share the existing social list. They
+// change prepared catalog inputs, but never change a vehicle's delivered price.
+const selectionOnly = new Set(['src/home-feed.js', 'src/social-priority-models.js']);
 export const priceInput = file => !developmentOnly(file) && !presentationOnly(file) && !operationsOnly.has(file) && (
   file === 'scripts/backfill-estimates.mjs' || file === 'scripts/lib/che168-parser.mjs'
   || file.startsWith('db/migrations/') || file.startsWith('config/')
-  || /^src\/.*\.js$/.test(file) && !['src/blog-posts.js','src/blog-social.js'].includes(file));
+  || /^src\/.*\.js$/.test(file) && !selectionOnly.has(file) && !['src/blog-posts.js','src/blog-social.js'].includes(file));
 export const duplicateInput = file => file === 'scripts/deduplicate-cross-source.mjs'
   || file === 'scripts/lib/cross-source-dedupe.mjs'
   || file.startsWith('config/') && !presentationOnly(file) || file.startsWith('db/migrations/') && !operationsOnly.has(file);

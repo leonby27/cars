@@ -20,20 +20,8 @@ import { buildPostText, carNumber, pickPhotos } from "./social-card.mjs";
 
 // Костяк ленты из SOCIAL_PLAN.md: по каждой модели показываем свои машины.
 // Имена моделей — ровно как в каталоге, они сверены с базой 17.09.2026.
-export const CORE_MODELS = [
-  { brand: "Zeekr", model: "001" }, { brand: "Zeekr", model: "7X" }, { brand: "Zeekr", model: "007GT" },
-  { brand: "Geely", model: "EX2" }, { brand: "Geely", model: "EX5" }, { brand: "Geely", model: "Monjaro" },
-  { brand: "Geely", model: "Galaxy Starship 7" }, { brand: "Geely", model: "Okavango" },
-  { brand: "BYD", model: "Han L" }, { brand: "BYD", model: "Qin L" }, { brand: "BYD", model: "Seagull" },
-  { brand: "BYD", model: "Song PLUS" }, { brand: "BYD", model: "Song PLUS DM-i" },
-  { brand: "BYD", model: "Yuan Pro" }, { brand: "BYD", model: "Yuan UP" },
-  { brand: "BMW", model: "iX3" }, { brand: "BMW", model: "i3" }, { brand: "BMW", model: "i5" }, { brand: "BMW", model: "i4" },
-  { brand: "Mercedes-Benz", model: "EQS" }, { brand: "Mercedes-Benz", model: "EQA" },
-  { brand: "Mercedes-Benz", model: "EQB" }, { brand: "Mercedes-Benz", model: "EQE" },
-  { brand: "Deepal", model: "L07" }, { brand: "Deepal", model: "SL03" },
-  { brand: "Deepal", model: "S07" }, { brand: "Deepal", model: "S05" },
-  { brand: "Xiaomi", model: "SU7" }, { brand: "Xiaomi", model: "YU7" },
-];
+import { CORE_MODELS } from "../../src/social-priority-models.js";
+export { CORE_MODELS };
 
 const money = (usd) => `${new Intl.NumberFormat("ru-RU").format(Math.round(usd))}$`;
 const number = (value) => new Intl.NumberFormat("ru-RU").format(Math.round(Number(value) || 0));

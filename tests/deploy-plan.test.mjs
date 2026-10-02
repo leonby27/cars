@@ -28,6 +28,16 @@ test('migration and duplicate changes run only the affected maintenance',()=>{
  assert.equal(index.reuseCatalog,true);
 });
 
+test('homepage priority selection prepares fresh cards without rewriting prices',()=>{
+ const p=deploymentPlan(['src/home-feed.js','src/social-priority-models.js','server/home-feed.mjs',
+  'server/repository.mjs','scripts/lib/social-blocks.mjs','scripts/generate-seo-pages.mjs',
+  'src/App.jsx','src/vehicle-market-savings.js']);
+ assert.equal(p.reuseCatalog,false);
+ assert.equal(p.recalculatePrices,false);
+ assert.equal(p.checkDuplicates,false);
+ assert.equal(p.migrate,false);
+});
+
 test('PageSpeed browser infrastructure rebuilds without rewriting vehicle prices',()=>{
  const p=deploymentPlan(['src/analytics.js','src/boot-api.js','src/counter-loader.js','src/price-fit.js','src/spec-fit.js',
   'src/model-text-load.js','src/model-text-imports.js','src/blog-text-load.js',

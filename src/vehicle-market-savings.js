@@ -15,7 +15,7 @@ export function vehicleMarketComparisonUrl(car, { quotaOn = false, refund50 = fa
 }
 
 /** Сначала год машины, затем вся модель; расширяем выборку только при нехватке данных. */
-function vehicleMarketSample(car, data, { quotaOn = false } = {}, allowSparseChoice = false) {
+export function vehicleMarketSample(car, data, { quotaOn = false } = {}, allowSparseChoice = false) {
   if (!car || car.available === false || !car.year || !car.type) return null;
   const card = data?.cards?.find((item) => item.brand === car.brand
     && normalizeModel(item.model) === normalizeModel(car.model) && item.type === car.type);

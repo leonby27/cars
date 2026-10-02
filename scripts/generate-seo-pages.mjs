@@ -4,6 +4,7 @@ import path from "node:path";
 import { catalogRateKey, catalogBuildKey, readCatalogBuildCache, writeCatalogBuildCache } from "./lib/catalog-build-cache.mjs";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
+import { selectHomeFeed } from "../src/home-feed.js";
 import { normalizeDrive } from "../src/drive-types.js";
 import { MODEL_PAGES, MODELS_INDEX } from "../src/model-pages.js";
 import { CATALOG_LANDINGS, HOME_SEO, brandLandingPath, catalogPageCount, landingApiParams, landingsForCar, modelLandingPath } from "../src/catalog-landings.js";
@@ -1254,7 +1255,7 @@ async function readLiveCatalog() {
     return {
       activeCars: cars.length,
       catalogRefreshedAt: catalog.refreshedAt || null,
-      showcase: cars.slice(0, showcaseSize),
+      showcase: selectHomeFeed(cars, showcaseSize),
       models: countByModel(cars),
       modelChanged: new Map(),
       carEntries: carsSitemap ? cars.map((car) => ({ loc: routeUrl(carRoute(car)), lastmod: isoDate(car.updated || car.importedAt), image: carSitemapPhoto(car.image || car.images?.[0]) })) : [],
@@ -1294,9 +1295,7 @@ async function readLiveCatalog() {
     const {catalogDataRevision} = await import('./lib/catalog-data-revision.mjs');
     const startDataRevision = await catalogDataRevision(pool);
     const { getModelFacts, listCars, marketPriceSnapshot, modelSummary, sectionStats } = await import("../server/repository.mjs");
-    // Витрина: по одной машине на модель и в случайном порядке. Обычная сортировка
-    // здесь не годится — «самые новые» это то, что записал последний импорт, и одна
-    // модель займёт весь блок.
+    // Витрина: общий случайный отбор с долей 75% приоритетных машин и разнообразием моделей.
     const showcaseAnswer = await listCars(new URLSearchParams({ sort: "variety", limit: String(showcaseSize) }));
     const showcase = showcaseAnswer.items;
     const facts = await getModelFacts();

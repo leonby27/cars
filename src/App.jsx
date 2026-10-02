@@ -30,7 +30,8 @@ import { CATALOG_INDEX_SEO, CATALOG_LANDINGS, HOME_H1_PARTS, HOME_SEO, brandLand
 import { modelLandingObject } from "./model-landing.js";
 import { modelSlug } from "./model-slug.js";
 
-import { FEED_CANDIDATE_WINDOW, seededRandom, shuffleCars, varietyOrder, varietyScore } from "./car-variety.js";
+import { seededRandom, shuffleCars, varietyOrder } from "./car-variety.js";
+import { selectHomeFeed, isHomePriority, HOME_PRIORITY_SHARE } from "./home-feed.js";
 import { estimateLandedCost, usdToByn, usdToRub, sourcePriceOf, sourceCurrencySymbol } from "./pricing.js";
 import { chooseDecreePricing, chooseQuotaPricing, getPricingState, getServerPricingState, restorePricingChoice, subscribePricing } from "./pricing-state.js";
 import { evQuotaPricingAvailable, evQuotaState } from "./ev-quota.js";
@@ -4030,37 +4031,17 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   // страница: до блоков под каталогом посетитель просто не доходит. Поэтому там
   // порция вдвое короче, а продолжение открывает кнопка «Подгрузить ещё».
   const batchSize = useCatalogCards ? 10 : 20;
-  const takeRandomBatch = (precedingCars = [], count = batchSize) => {
-    const batch = [];
-    if (!cars.length) return batch;
-    const candidates = [];
-    const refill = () => {
-      while (candidates.length < FEED_CANDIDATE_WINDOW) {
-        if (!randomPool.current.length) randomPool.current = shuffleCars(cars);
-        candidates.push(randomPool.current.pop());
-      }
-    };
-    while (batch.length < count) {
-      refill();
-      // Compare against the three cards before this slot, including the tail of
-      // the previous batch so "Подгрузить ещё" does not seam two similar cards.
-      const recent = [...precedingCars, ...batch.map((item) => item.car)].slice(-3);
-      let bestIndex = 0;
-      let bestScore = -Infinity;
-      candidates.forEach((car, index) => {
-        const score = varietyScore(car, recent);
-        if (score > bestScore) {
-          bestScore = score;
-          bestIndex = index;
-        }
-      });
-      const [car] = candidates.splice(bestIndex, 1);
-      batch.push({ car, key: `${car.id}-${nextItemKey.current}` });
-      nextItemKey.current += 1;
+  const takeRandomBatch = (precedingCars = [], count = batchSize, offset = 0) => {
+    if (!cars.length) return [];
+    const needed = Math.ceil(count * HOME_PRIORITY_SHARE);
+    if (randomPool.current.length < count || randomPool.current.filter(isHomePriority).length < needed) {
+      const recent = new Set(precedingCars.slice(-3).map(car => car.id));
+      randomPool.current = [...new Map([...randomPool.current, ...cars.filter(car => !recent.has(car.id))].map(car => [car.id, car])).values()];
     }
-    // Candidates that lost stay available for later batches.
-    randomPool.current.push(...candidates);
-    return batch;
+    const chosen = selectHomeFeed(randomPool.current, count, { preceding:precedingCars, offset });
+    const ids = new Set(chosen.map(car => car.id));
+    randomPool.current = randomPool.current.filter(car => !ids.has(car.id));
+    return chosen.map(car => ({ car, key:`${car.id}-${nextItemKey.current++}` }));
   };
   // Витрина, собранная вместе со страницей (window.__boot.homeShowcase, её кладёт
   // scripts/prerender-home.mjs): первый кадр рисуется из неё, и поисковик видит на
@@ -4103,7 +4084,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     if (restored.length >= batchSize) return restored;
     const seen = new Set(restored.map((item) => item.car.id));
     randomPool.current = shuffleCars(cars.filter((car) => !seen.has(car.id)));
-    return [...restored, ...takeRandomBatch(restored.map((item) => item.car), batchSize - restored.length)];
+    return [...restored, ...takeRandomBatch(restored.map((item) => item.car), batchSize - restored.length, restored.length)];
   };
   const [feedCars, setFeedCars] = useState(buildFeed);
   const { openQuickView, quickViewToggle, quickViewModal } = useVehicleQuickView({ apiMode:apiMode !== false, favorites, toggleFavorite, navigate });
@@ -4152,7 +4133,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     if (feedFromBoot.current && useCatalogCards) setFeedCars((current) => (current.length > batchSize ? current.slice(0, batchSize) : current));
   }, [useCatalogCards]);
 
-  const loadMore = () => setFeedCars((current) => [...current, ...takeRandomBatch(current.slice(-3).map((item) => item.car))]);
+  const loadMore = () => setFeedCars((current) => [...current, ...takeRandomBatch(current.slice(-3).map((item) => item.car), batchSize, current.length)]);
   const showSkeletons = loading && !feedCars.length;
 
   // Поиск из шапки: пока в строке есть текст, витрина «Каталог» ниже показывает

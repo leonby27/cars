@@ -20,6 +20,10 @@ import { carTitle } from "../src/car-title.js";
 import { DRIVE_TYPES, normalizeDrive, orderDrives, UNKNOWN_DRIVE } from "../src/drive-types.js";
 import { FUEL_TYPES, GEARBOX_TYPES, enginePower, engineVolume, fuelType, gearboxType } from "../src/engine-spec.js";
 
+import { marketComparison } from "./market-compare-data.mjs";
+import { homeFeedQuery, homeMarketReferences } from "./home-feed.mjs";
+import { selectHomeFeed } from "../src/home-feed.js";
+
 const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).slice(0, 2)) : Number(value) || null;
 // Include imported quote inputs that are not all stored in vehicles. Run times
 // and importer bookkeeping are deliberately absent: rechecking is not a change.
@@ -304,24 +308,15 @@ async function listCarsPage(searchParams) {
   const { where, values } = buildCarFilters(searchParams);
   const { limit, offset, beyondCap } = catalogPaging(searchParams);
   const order = buildCarOrder(searchParams);
-  // `sort=variety` feeds the home showcase: one random listing per model, then a
-  // random order over those. Ordinary sorting cannot do this — the newest page is
-  // whatever an import just wrote, so a single model can fill the whole block.
   if (searchParams.get("sort") === "variety") {
-    // Sample by id, not by full row: deduplicating over the selected columns made DISTINCT ON
-    // sort every active listing together with its source_payload (~950 ms). Sorting the narrow
-    // (brand, model, id) tuples and materialising full rows only for the chosen page is ~140 ms.
+    const comparison = await marketComparison(modelPriceStats);
+    const query = homeFeedQuery({ where, values, limit, references:homeMarketReferences(comparison), carSelect });
     const [itemsResult, countResult] = await Promise.all([
-      pool.query(`WITH sample AS (
-        SELECT DISTINCT ON (v.brand, v.model) l.id
-        FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
-        ORDER BY v.brand, v.model, random()
-      ), picked AS (SELECT id FROM sample ORDER BY random() LIMIT $${values.length + 1})
-      ${carSelect} FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY random()`, [...values, limit]),
+      pool.query(query.text, query.values),
       pool.query(`SELECT count(*)::int AS total, max(l.last_seen_at) AS refreshed_at FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values),
     ]);
-    // Витрина главной — одна выдача без листания: следующей страницы у неё нет.
-    return { items:itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row))), total:countResult.rows[0].total, refreshedAt:countResult.rows[0].refreshed_at, limit, offset:0, hasMore:false };
+    const candidates = itemsResult.rows.map(row => ({ ...withoutDetailPayload(rowToCar(row)), homeMarketSavingPercent:Number(row.home_market_saving_percent) || 0 }));
+    return { items:selectHomeFeed(candidates, limit), total:countResult.rows[0].total, refreshedAt:countResult.rows[0].refreshed_at, limit, offset:0, hasMore:false };
   }
   const [itemsResult, countResult] = await Promise.all([
     beyondCap
