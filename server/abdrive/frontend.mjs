@@ -2,6 +2,7 @@ import {isBrandGuideLanding} from '../../src/brand-guide.js';
 import {RU_BLOG_REDIRECTS} from '../../src/markets/ru-editorial.js';
 import {MODEL_PAGES,modelPageRedirect} from '../../src/model-pages.js';
 import {findBlogPost,blogPosts} from '../../src/blog-posts.js';
+import {BLOG_ENABLED} from '../../src/feature-flags.js';
 import {findToolPage, TOOL_PAGES} from '../../src/tool-pages.js';
 import {createRussianHomeSnapshot} from './home-snapshot.mjs';
 import {russianLanding} from "./shared-page.mjs";
@@ -39,7 +40,8 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
   }
   if(url.pathname==='/sitemap.xml'){
    response.writeHead(200,{'content-type':'application/xml; charset=utf-8'});
-   return response.end('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+['/','/catalog','/how-it-works','/models','/blog',...blogPosts().map(post=>post.path),...TOOL_PAGES.map(tool=>tool.path),...CATALOG_LANDINGS.map(landing=>landing.path),...MODEL_PAGES.map(page=>page.path)].map(path=>`<url><loc>${site.origin}${path}</loc></url>`).join('')+'</urlset>');
+   const editorialPaths=BLOG_ENABLED?['/blog',...blogPosts().map(post=>post.path)]:[];
+   return response.end('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+['/','/catalog','/how-it-works','/models',...editorialPaths,...TOOL_PAGES.map(tool=>tool.path),...CATALOG_LANDINGS.map(landing=>landing.path),...MODEL_PAGES.map(page=>page.path)].map(path=>`<url><loc>${site.origin}${path}</loc></url>`).join('')+'</urlset>');
   }
   if(RU_BLOG_REDIRECTS[url.pathname]){response.writeHead(301,{location:RU_BLOG_REDIRECTS[url.pathname]});return response.end();}
   if(url.pathname==='/faq'){response.writeHead(301,{location:'/how-it-works#faq'});return response.end();}
@@ -81,7 +83,7 @@ export async function createFrontend({buildDirectory,catalog,site,privacyText=nu
   }else if(path.startsWith('/cars/')){
    const listing=await catalog.get(decodeURIComponent(path.slice(6)));
    if(listing)boot={...boot,kind:'car',car:listing.car,carId:listing.car.id,carValue:listing.car};else status=404;
-  }else if(path==='/blog'||findBlogPost(path))boot.kind='blog';
+  }else if(BLOG_ENABLED&&(path==='/blog'||findBlogPost(path)))boot.kind='blog';
   else if(findToolPage(path))boot.kind='tool';
   else if(path==='/how-it-works')boot.kind='process';
   else if(path==='/models')boot.kind='models';

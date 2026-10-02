@@ -32,7 +32,9 @@ export const primeModelText = (slug, text) => {
  * Неизвестный адрес — `null`: страницы с таким обзором просто нет.
  */
 export async function loadModelText(slug) {
-  if (!slug) return null;
+  // Российская версия получает собственный справочный текст из фактов каталога;
+  // белорусские авторские обзоры не подставляем как региональную редакцию.
+  if (!slug || SITE.market === 'RU') return null;
   if (loaded.has(slug)) return loaded.get(slug);
   const { files } = await import("./model-text-imports.js");
   const file = files[`./model-texts/${slug}.js`];

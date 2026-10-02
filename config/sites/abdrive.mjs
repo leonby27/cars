@@ -8,7 +8,7 @@ export const ABDRIVE_SITE = {
   services: ['customs', 'delivery', 'brands', 'range'],
   flags: {
     GUAZI_PREVIEW_ENABLED: { production: false, local: false },
-    BLOG_ENABLED: { production: true, local: true },
+    BLOG_ENABLED: { production: false, local: false },
     REVIEWS_ENABLED: { production: false, local: false },
     BLOG_DRAFTS_VISIBLE: { production: false, local: false },
   },

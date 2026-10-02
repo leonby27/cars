@@ -50,9 +50,15 @@ done
 [[ $healthy == 1 ]]
 curl --fail --silent --max-time 15 http://127.0.0.1:8788/api/catalog/meta | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{let d=JSON.parse(s);console.log("Catalog vehicles:",d.total);process.exit(d.total>0?0:1)})'
 curl --fail --silent --max-time 15 http://127.0.0.1:8788/catalog -o /tmp/abdrive-release-check.html
-for path in / /china-brands /blog /catalog/byd /catalog/do-2000000-rub /catalog/tesla/model-y /catalog/petrol /catalog/suv; do
+for path in / /china-brands /catalog/byd /catalog/do-2000000-rub /catalog/tesla/model-y /catalog/petrol /catalog/suv; do
   curl --fail --silent --max-time 15 "http://127.0.0.1:8788$path" -o /dev/null
 done
+if [[ ${BLOG_ENABLED:-0} =~ ^(1|true|yes|on)$ ]]; then
+  curl --fail --silent --max-time 15 http://127.0.0.1:8788/blog -o /dev/null
+else
+  blog_status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 http://127.0.0.1:8788/blog)
+  [[ $blog_status == 404 ]]
+fi
 # Initial HTTP host only; never overwrite later HTTPS configuration.
 if [[ ! -e /etc/nginx/sites-available/abdrive ]]; then
   install -m 644 deploy/abdrive/nginx-http.conf /etc/nginx/sites-available/abdrive

@@ -12,6 +12,7 @@
 // только данные на входе и строки на выходе.
 import { landingFaqDelivery, landingFaqDuty } from "./landing-faq.js";
 import { fromPhrase, siteCountriesGenitive, siteFromPhrase, siteWording, ORIGINS } from "./origin.js";
+import { SITE } from "./site-profile.js";
 
 const RU = new Intl.NumberFormat("ru-RU");
 export const number = (value) => RU.format(Math.round(Number(value) || 0));
@@ -77,6 +78,24 @@ const fitModelTitle = (base, variants, limit = 80) => {
  * В заголовке — число машин и цена «от», как у разделов каталога (решение 25.09.2026).
  */
 export function modelCatalogSeo({ name, facts = null, review = null, page = 1, origin = null }) {
+  if (SITE.market === "RU") {
+    const total = Number(facts?.total) || 0;
+    const priceFrom = finite(facts?.priceFrom);
+    const priceTo = finite(facts?.priceTo);
+    const rub = (value) => `${number(value)} ₽`;
+    const price = priceFrom ? `от ${rub(priceFrom)}` : "расчёт по запросу";
+    const pageTail = page > 1 ? ` — страница ${page}` : "";
+    const titleBase = `${name} — ${total ? `${number(total)} предложений, ` : ""}${price} до Москвы | ABDrive`;
+    const title = titleBase.length <= 78 ? titleBase : `${name} — каталог и цена до Москвы | ABDrive`;
+    const stock = total
+      ? `${name}: ${cars(total)} в каталоге${priceFrom ? `, предварительная стоимость от ${rub(priceFrom)}${priceTo && priceTo > priceFrom ? ` до ${rub(priceTo)}` : ""}` : ""} до Москвы.`
+      : `${name}: предложений в каталоге сейчас нет. Можно отправить запрос на подбор и получить расчёт для доставки до Москвы.`;
+    return {
+      title: `${title}${pageTail}`.slice(0, 78),
+      description: `${stock} Сверьте комплектацию, год и характеристики в карточке выбранного автомобиля.${page > 1 ? ` Страница ${page} списка.` : ""}`.slice(0, 300),
+      h1: total ? `${name}: предложения и расчёт до Москвы` : `${name}: подбор и доставка в Москву`,
+    };
+  }
   const from = origin ? fromPhrase(origin) : siteFromPhrase();
   const base = `${name} ${from} в Беларусь`;
   const h1 = cleanModelHeading(review?.h1) || `Купить ${name} ${from} с доставкой в Беларусь`;
@@ -118,6 +137,16 @@ export const modelPageIndexable = ({ facts = null, review = null } = {}) => Bool
 
 /** Строка под заголовком: что есть и почём — шапка списка, а не текст. */
 export function modelStockLine(facts, { page = 1, pages = 1, first = 0, shown = 0 } = {}) {
+  if (SITE.market === "RU") {
+    const total = Number(facts?.total) || 0;
+    const from = finite(facts?.priceFrom);
+    const to = finite(facts?.priceTo);
+    const price = from ? ` Предварительная стоимость до Москвы — от ${number(from)} ₽${to && to > from ? ` до ${number(to)} ₽` : ""}.` : " Для части объявлений итог уточняется после проверки документов.";
+    if (!total) return `Предложений ${siteFromPhrase()} сейчас нет. Можно запросить подбор модели и расчёт до Москвы.`;
+    const years = yearsPhrase(facts?.yearMin, facts?.yearMax);
+    const paging = page > 1 && shown ? ` На этой странице показаны позиции ${number(first + 1)}–${number(first + shown)} из списка.` : "";
+    return `В каталоге ${cars(total)}${years ? `, ${years}` : ""}.${price}${paging}`;
+  }
   const total = Number(facts?.total) || 0;
   if (!total) return `Сейчас в наличии нет. Можно привезти под заказ: найдём вариант на площадках ${siteCountriesGenitive()} и рассчитаем цену до Минска.`;
   const parts = [`В наличии ${cars(total)}`];
@@ -148,6 +177,25 @@ const powertrainCount = (row) => {
  */
 export function modelAutoText({ name, facts }) {
   const total = Number(facts?.total) || 0;
+  if (SITE.market === "RU") {
+    const rows = [];
+    const years = yearsPhrase(facts?.yearMin, facts?.yearMax);
+    if (!total) return [`Предложений ${name} в каталоге ABDrive сейчас нет. Оставьте требования к году, версии и бюджету — подходящий автомобиль можно искать отдельно с расчётом расходов до Москвы.`];
+    const types = (facts.powertrains || []).filter((row) => row.count > 0);
+    const bodies = (facts.bodyTypes || []).filter((row) => row.name && row.count > 0);
+    rows.push(`Для ${name} в каталоге ABDrive собраны ${cars(total)}${years ? ` ${years}` : ""}. Это отдельные объявления: наличие и цену выбранного автомобиля нужно подтвердить у продавца.`);
+    if (types.length) rows.push(`По силовой установке представлены: ${types.map((row) => `${row.type.toLowerCase()} — ${number(row.count)} ${plural(row.count, "предложение", "предложения", "предложений")}`).join(", ")}. ${bodies.length ? `Встречаются кузова: ${bodies.map((row) => row.name.toLowerCase()).join(", ")}.` : ""}`);
+    const priceFrom = finite(facts.priceFrom), priceTo = finite(facts.priceTo);
+    if (priceFrom) rows.push(`Предварительная стоимость предложений начинается от ${number(priceFrom)} ₽${priceTo && priceTo > priceFrom ? ` и доходит до ${number(priceTo)} ₽` : ""}. На итог влияют документы, комплектация и подтверждённые расходы по конкретной машине.`);
+    const mileage = finite(facts.mileageMedian);
+    if (mileage) rows.push(`Медианный пробег объявлений — ${number(mileage)} км. Сравните его с историей обслуживания и результатами осмотра: один показатель не описывает состояние автомобиля целиком.`);
+    const tech = [];
+    if (finite(facts.batteryMax)) tech.push(`ёмкость батареи до ${RU.format(Number(facts.batteryMax))} кВт·ч`);
+    if (finite(facts.rangeMax)) tech.push(`заявленный запас хода до ${number(facts.rangeMax)} км`);
+    if (finite(facts.powerMax)) tech.push(`мощность до ${number(facts.powerMax)} л. с.`);
+    if (tech.length) rows.push(`В каталоге встречаются версии с такими максимальными характеристиками: ${tech.join(", ")}. Значения относятся к разным комплектациям; данные выбранного автомобиля проверяйте по его документам.`);
+    return rows;
+  }
   if (!total) {
     return [
       `${name} сейчас в каталоге нет. Эту модель можно привезти под заказ: найдём подходящий вариант на площадках ${siteCountriesGenitive()}, сверим историю и состояние и рассчитаем цену с доставкой до Минска.`,
@@ -197,6 +245,16 @@ const covered = (items, pattern) => (items || []).some((item) => pattern.test(St
  * сроки плюс авторские из обзора — без повторов по теме.
  */
 export function modelFaq({ name, facts, review = null }) {
+  if (SITE.market === "RU") {
+    const total = Number(facts?.total) || 0;
+    const from = finite(facts?.priceFrom);
+    const answers = [];
+    if (total && from) answers.push({ q: `Сколько стоит ${name} с доставкой до Москвы?`, a: `В каталоге ${cars(total)}; предварительная стоимость начинается от ${number(from)} ₽. Это ориентир по объявлениям, а не оферта: перед заказом подтверждают цену, комплектацию и расходы по конкретному автомобилю.` });
+    answers.push({ q: `Какие документы проверить у ${name} перед ввозом?`, a: `Сверьте VIN, год выпуска, тип силовой установки и характеристики в документах. По этим данным определяют применимые платежи и возможность оформления автомобиля в России.` });
+    answers.push({ q: `Как сравнить версии ${name}?`, a: `Сопоставьте не только название комплектации, но и привод, батарею или двигатель, системы помощи водителю, пробег и рынок для которого выпущена машина. Комплектации с одинаковым названием могут различаться.` });
+    answers.push({ q: `Что влияет на срок доставки ${name} до Москвы?`, a: `Срок зависит от местонахождения автомобиля, готовности экспортных документов, выбранного маршрута и перевозчика. Ожидаемую дату выдачи следует подтвердить в условиях конкретного заказа.` });
+    return answers;
+  }
   const own = (review?.faq || []).map((item) => ({ q: item.q, a: item.a }));
   const auto = [];
   const total = Number(facts?.total) || 0;
@@ -226,7 +284,9 @@ export const modelFaqTitle = (name) => `Частые вопросы про ${nam
  */
 export function modelLandingObject(data) {
   if (!data?.model) return null;
-  const { model, review = null, facts = null, links = null } = data;
+  const { model, facts = null, links = null } = data;
+  const review = SITE.market === "RU" ? null : data.review || null;
+  const modelLinks = links || { brandPath: null, sections: [], siblings: [], similar: [], journal: [] };
   const seo = modelCatalogSeo({ name: model.name, facts, review, page: 1 });
   const powertrains = facts?.powertrains || [];
   return {
@@ -244,7 +304,7 @@ export function modelLandingObject(data) {
     powertrain: powertrains.length === 1 ? powertrains[0].type : null,
     facts,
     review,
-    links: links || { brandPath: null, sections: [], siblings: [], similar: [], journal: [] },
+    links: SITE.market === "RU" ? { ...modelLinks, journal: [] } : modelLinks,
     inCatalog: Boolean(model.inCatalog),
   };
 }

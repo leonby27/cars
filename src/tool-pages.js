@@ -47,6 +47,32 @@ import { EV_QUOTA, evQuotaState, isEvQuotaExhausted } from "./ev-quota.js";
 // ночь, поэтому 1 января он сменится сам и никто не забудет его поправить.
 const IS_RU = SITE.market === 'RU';
 const CURRENT_YEAR = new Date().getFullYear();
+const RU_TOOL_METADATA = {
+  "/customs": {
+    h1: `Растаможка автомобиля в России: калькулятор пошлины и сборов ${CURRENT_YEAR}`,
+    seoTitle: `Растаможка авто в России ${CURRENT_YEAR}: калькулятор платежей | ABDrive`,
+    seoDescription: `Предварительно рассчитайте платежи при ввозе автомобиля в Россию. Ставки для машин с ДВС, электромобилей и гибридов, утильсбор и таможенный сбор.`,
+    lead: "Оцените таможенные платежи по параметрам выбранного автомобиля.",
+  },
+  "/delivery-cost": {
+    h1: "Стоимость доставки автомобиля до Москвы",
+    seoTitle: "Доставка авто до Москвы: стоимость и сроки | ABDrive",
+    seoDescription: "Этапы доставки автомобиля из Китая или Кореи: расходы до отправки, перевозка до Москвы, оформление и ориентир по срокам.",
+    lead: "Разберите расходы на маршрут и получение автомобиля.",
+  },
+  "/china-brands": {
+    h1: "Китайские марки автомобилей: производители и модели",
+    seoTitle: "Китайские марки автомобилей: производители и модели | ABDrive",
+    seoDescription: "Справочник китайских автомобильных марок, производителей и совместных проектов. Сверяйте бренд и комплектацию конкретной машины.",
+    lead: "Разбираемся в производителях и версиях для китайского рынка.",
+  },
+  "/range": {
+    h1: "Как оценить реальный запас хода электромобиля",
+    seoTitle: "Запас хода электромобиля: цикл и зимний пробег | ABDrive",
+    seoDescription: "Оцените запас хода с учётом методики CLTC, WLTP или EPA, температуры, скорости, типа и состояния батареи.",
+    lead: "Сравните сценарии поездки с паспортными данными автомобиля.",
+  },
+};
 
 export const TOOL_PAGES = Object.freeze([
   {
@@ -116,12 +142,8 @@ export const TOOL_PAGES = Object.freeze([
     seoDescription: `Одна и та же машина: сколько стоит в Беларуси и сколько выходит привезти ${siteFromPhrase()} под ключ. Сравнение по моделям и годам выпуска с разницей в деньгах.`,
     lead: "Честно сравниваем цены на одинаковые машины.",
   },
-].map(tool => !IS_RU ? tool : ({...tool,
-  h1: tool.h1.replace('в Беларуси', 'в России'),
-  seoTitle: tool.seoTitle.replaceAll('abcars.by', 'ABDrive').replaceAll('в Беларусь', 'в Россию').replaceAll('в Беларуси', 'в России'),
-  seoDescription: tool.seoDescription.replaceAll('до Минска', 'до Москвы'),
-  lead: tool.kind === 'cost' ? 'Считаем доставку до Москвы.' : tool.lead,
-})).filter((tool) => hasSiteService(SITE, ({ quota: "quota", customs: "customs", cost: "delivery", brands: "brands", range: "range", market: "marketComparison" })[tool.kind])));
+].map(tool => !IS_RU ? tool : ({...tool, ...RU_TOOL_METADATA[tool.path]}))
+ .filter((tool) => hasSiteService(SITE, ({ quota: "quota", customs: "customs", cost: "delivery", brands: "brands", range: "range", market: "marketComparison" })[tool.kind])));
 
 const BY_PATH = new Map(TOOL_PAGES.map((page) => [page.path, page]));
 

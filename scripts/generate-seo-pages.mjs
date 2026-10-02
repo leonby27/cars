@@ -17,6 +17,7 @@ import { rangeParamNames } from "../src/range-estimate.js";
 // Тексты страниц-инструментов лежат отдельно от «обложек»: браузер берёт их
 // отдельным файлом, а сборке нужны целиком — склеиваем запись с её текстами.
 import { TOOL_PAGE_TEXTS } from "../src/tool-page-texts.js";
+import { RU_TOOL_TEXTS } from "../src/markets/ru-tool-texts.js";
 // Справочник марок для страницы «Марки из Китая»: те же данные, что у приложения.
 import { CHINA_BRANDS, CHINA_MADE_FOREIGN } from "../src/china-brands.js";
 // Расчёт реального запаса хода: те же поправки, что в форме у человека.
@@ -30,7 +31,9 @@ import { PRICING, estimateLandedCost } from "../src/pricing.js";
 // Тексты информационных страниц берём из тех же данных, по которым их рисует
 // приложение: в разметке этих девяти страниц было по 32–43 слова — заголовок и одна
 // фраза, — а всё остальное появлялось только после запуска сайта в браузере.
-import { FAQ_GROUPS, HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "../src/purchase-info.js";
+import { FAQ_GROUPS as BY_FAQ_GROUPS, HOME_FAQ as BY_HOME_FAQ, HOME_FAQ_LEAD as BY_HOME_FAQ_LEAD, HOME_ORDER_STEPS as BY_HOME_ORDER_STEPS } from "../src/purchase-info.js";
+import { IS_RU, RU_FAQ, RU_FAQ_GROUPS, RU_FAQ_LEAD, RU_ORDER_STEPS, ruPageSeo } from "../src/markets/interface.js";
+import { RU_ABOUT_PRINCIPLES, RU_PURCHASE_FLOW_STEPS, RU_SERVICE_PROOF } from "../src/markets/ru-service-copy.js";
 import { TRACKING_FAQ } from "../src/tracking-info.js";
 import { LEGAL_COPY, LEGAL_DRAFT, LEGAL_DRAFT_NOTE } from "../src/legal-copy.js";
 import { COMPANY } from "../src/company-data.js";
@@ -40,6 +43,14 @@ import { ABOUT_PRINCIPLES, BEFORE_PAYMENT, PURCHASE_FLOW_STEPS, SERVICE_PROOF, S
 import { BLOG_ENABLED } from "../src/feature-flags.js";
 import { SAMPLE_REPORT, groups, indexChartSvg, percent } from "../src/blog-report.js";
 import { blogFigureHtml } from "../src/blog-figures.js";
+const HOME_FAQ = IS_RU ? RU_FAQ : BY_HOME_FAQ;
+const HOME_FAQ_LEAD = IS_RU ? RU_FAQ_LEAD : BY_HOME_FAQ_LEAD;
+const HOME_ORDER_STEPS = IS_RU ? RU_ORDER_STEPS : BY_HOME_ORDER_STEPS;
+const FAQ_GROUPS = IS_RU ? RU_FAQ_GROUPS : BY_FAQ_GROUPS;
+const SERVICE_PROOF_CONTENT = IS_RU ? RU_SERVICE_PROOF : SERVICE_PROOF;
+const ABOUT_PRINCIPLES_CONTENT = IS_RU ? RU_ABOUT_PRINCIPLES : ABOUT_PRINCIPLES;
+const PURCHASE_FLOW_CONTENT = IS_RU ? RU_PURCHASE_FLOW_STEPS : PURCHASE_FLOW_STEPS;
+const infoSeo = (path, fallback) => IS_RU ? ruPageSeo(path) : fallback;
 import { BLOG_INDEX, BLOG_TOP_POOL, blogApiParams, blogArticlePhotoParams, blogCarFigure, blogCarReason, blogCatalogHref, blogDuelRows, blogDuelSpecRows, blogHighlight, blogHighlightSort, blogListParams, blogPostSides, blogPostStats, blogPostTags, blogPosts, blogAllPosts, blogRelatedPosts, blogTopCars, blogFreshnessLabel, blogPostDateLabel, blogUpdatedAt, blogPostHidden } from "../src/blog-posts.js";
 import { BLOG_TEXTS, blogPostWithText } from "../src/blog-texts.js";
 // Разметку страниц держит общий модуль: этими же функциями сервер собирает страницу
@@ -163,17 +174,19 @@ const marketBelarus = existsSync(marketPath) ? JSON.parse(readFileSync(marketPat
 // одной ссылки на машину. Готовый файл вдобавок перекрыл бы правило переадресации, и
 // адрес с фильтрами (`/catalog?brand=BYD`) не дошёл бы до переброса на свой раздел.
 const publicPages = [
-  { route: "/", title: HOME_SEO.title, description: HOME_SEO.description, h1: HOME_SEO.h1.replace(/\u00a0/g, " "), lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." },
-  { route: "/how-it-works/", ...INFO_PAGES_SEO["how-it-works"] },
+  { route: "/", ...(IS_RU ? { ...ruPageSeo("/") , h1: "Автомобили из Китая и Кореи с расчётом до Москвы", lead: "Подбор объявления, проверка исходных данных и предварительная стоимость для доставки в Россию." } : { title: HOME_SEO.title, description: HOME_SEO.description, h1: HOME_SEO.h1.replace(/\u00a0/g, " "), lead: "Каталог актуальных объявлений, предварительный расчёт цены до Минска и проверка автомобиля перед оплатой." }) },
+  { route: "/how-it-works/", ...infoSeo("/how-it-works", INFO_PAGES_SEO["how-it-works"]) },
   // Страницы `/about` больше нет: у неё был тот же заголовок «О сервисе abcars.by», что
   // у `/how-it-works`, и обе отвечали на один запрос. Её содержательные блоки — наш
   // подход и «чего мы не обещаем» — перенесены вниз `/how-it-works`, а сам адрес
   // перебрасывается туда навсегда (правило в vercel.json).
-  { route: "/faq/", ...INFO_PAGES_SEO.faq },
-  { route: "/tracking/", ...INFO_PAGES_SEO.tracking },
-  { route: "/contacts/", ...INFO_PAGES_SEO.contacts },
-  { route: "/privacy/", title: "Политика конфиденциальности | abcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
-  { route: "/terms/", ...INFO_PAGES_SEO.terms },
+  { route: "/faq/", ...infoSeo("/faq", INFO_PAGES_SEO.faq) },
+  { route: "/tracking/", ...infoSeo("/tracking", INFO_PAGES_SEO.tracking) },
+  { route: "/contacts/", ...infoSeo("/contacts", INFO_PAGES_SEO.contacts) },
+  ...(!IS_RU ? [
+    { route: "/privacy/", title: "Политика конфиденциальности | abcars.by", description: "Политика обработки и защиты персональных данных пользователей сайта abcars.by.", h1: "Политика конфиденциальности", lead: "Правила получения, использования, хранения и удаления персональных данных." },
+    { route: "/terms/", ...INFO_PAGES_SEO.terms },
+  ] : []),
   // Общая страница «О моделях авто». Сами обзоры файлами не собираются: их отдаёт
   // сервер, потому что в них нужны живые цены и наличие. Готовый файл по такому адресу
   // перекрыл бы правило переадресации, и сервер до отрисовки не дошёл бы.
@@ -182,7 +195,7 @@ const publicPages = [
   // а не сервером: их содержимое не зависит от каталога, а остаток квоты обновляется
   // ежедневной задачей, которая и так пересобирает сайт.
   ...TOOL_PAGES.map((cover) => {
-    const tool = { ...cover, ...TOOL_PAGE_TEXTS[cover.path] };
+    const tool = { ...cover, ...(IS_RU ? RU_TOOL_TEXTS[cover.path] : TOOL_PAGE_TEXTS[cover.path]) };
     return { route: `${tool.path}/`, title: tool.seoTitle, description: tool.seoDescription, h1: tool.h1, lead: tool.lead, tool };
   }),
   // Журнал и его материалы. Файлами, а не сервером: текст подборки не зависит от
@@ -432,23 +445,25 @@ function toolArticle(tool) {
   // разметкой — поля, варианты ответов и подписи, — а следом идут посчитанные
   // суммы и таблицы ставок. Поля берутся из одного описания с приложением.
   if (tool.kind === "customs") {
-    // Заголовка над формой нет: страница и так называется калькулятором, второй
-    // такой же заголовок сразу под первым был лишним. Дату курса называем здесь —
-    // отдельной строки «ставки и курсы на такое-то число» на этой странице больше
-    // нет, а поисковику и пересказывающему нас чат-боту дата нужна.
-    live = `<section><form>${formHtml(calculatorFields(), "calc")}</form><p>Расчёт покажет ввозную пошлину, НДС, утилизационный и таможенный сборы отдельными строками и сумму платежа целиком — в белорусских рублях и в долларах, по курсу Национального банка на ${escapeHtml(PRICING.rateDate)}.</p></section>`;
-    // Дальше — ровно тот же порядок, что у человека в раскрывающихся пунктах:
-    // «что считает калькулятор», готовые суммы, ставки, разделы. Порядок и состав
-    // блоков у человека и у поисковика должны совпадать, иначе это две разные
-    // страницы. Разница только в обёртке: у человека всё свёрнуто, потому что за
-    // страницей приходят посчитать, а не читать.
-    sectionBlocks.unshift(
-      table(customsExample()),
-      `<section><h2>Ставки пошлины: полные таблицы</h2>${dutyRateTables().map((item) => table(item, "h3")).join("")}</section>`,
-    );
+    if (IS_RU) {
+      live = `<section><h2>Данные для предварительного расчёта</h2><p>Укажите тип силовой установки, год выпуска и цену автомобиля. Для машины с ДВС понадобятся объём и мощность двигателя; для гибрида — также документальная мощность электромоторов. Сумма остаётся предварительной до проверки даты выпуска, характеристик и права на применяемый коэффициент по документам.</p></section>`;
+    } else {
+      // Заголовка над формой нет: страница и так называется калькулятором, второй
+      // такой же заголовок сразу под первым был лишним. Дату курса называем здесь —
+      // отдельной строки «ставки и курсы на такое-то число» на этой странице больше
+      // нет, а поисковику и пересказывающему нас чат-боту дата нужна.
+      live = `<section><form>${formHtml(calculatorFields(), "calc")}</form><p>Расчёт покажет ввозную пошлину, НДС, утилизационный и таможенный сборы отдельными строками и сумму платежа целиком — в белорусских рублях и в долларах, по курсу Национального банка на ${escapeHtml(PRICING.rateDate)}.</p></section>`;
+      // Дальше — тот же порядок, что у человека в раскрывающихся пунктах.
+      sectionBlocks.unshift(
+        table(customsExample()),
+        `<section><h2>Ставки пошлины: полные таблицы</h2>${dutyRateTables().map((item) => table(item, "h3")).join("")}</section>`,
+      );
+    }
   }
   const sections = sectionBlocks.join("");
-  if (tool.kind === "cost") live = `${table(deliveryStages())}${table(deliveryStagesKorea())}`;
+  if (tool.kind === "cost") live = IS_RU
+    ? `<section><h2>Оценка маршрута</h2><p>Выберите город отправления и параметры автомобиля в калькуляторе. Состав и срок перевозки уточняются по доступному маршруту из Китая или Кореи; таможенные платежи, оформление документов и услуги исполнителя считаются отдельно.</p></section>`
+    : `${table(deliveryStages())}${table(deliveryStagesKorea())}`;
   // Сравнение с белорусским рынком: таблица «модель, там, у нас, разница» и вывод.
   if (tool.kind === "market") {
     const { rows, summary, collectedAt, brands } = marketCompare();
@@ -575,7 +590,8 @@ function infoArticle(route) {
       ? `<h3>${escapeHtml(report.recommendation.eyebrow)}</h3><h4>${escapeHtml(report.recommendation.title)}</h4><p>${escapeHtml(report.recommendation.summary)}</p><ol>${report.recommendation.steps.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`
       : "";
     const reportPowertrainNote = report.powertrainNote?.text ? `<p>${escapeHtml(report.powertrainNote.text)}</p>` : "";
-    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто ${siteFromPhrase()} с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что входит в сервис</h2>${list(SERVICE_PROOF.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и связь</h2>${list(ABOUT_PRINCIPLES.map((item) => [item.title, item.text]))}</section><section><h2>Покупка авто: от выбора до ключей</h2>${list(PURCHASE_FLOW_STEPS.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(report.presentation.title)}</h2><h3>${escapeHtml(report.vehicle.name)}</h3><p><strong>${escapeHtml(report.verdict.title)}.</strong> ${escapeHtml(report.verdict.summary)}</p>${list(report.risks.map((item) => [item.title, [item.status, item.note].filter(Boolean).join(". ")]))}${reportInspection}<h3>${escapeHtml(report.labels.evidenceTitle)}</h3>${reportPhotoGroups}<h3>${escapeHtml(report.labels.factsTitle)}</h3>${list(report.facts.map((item) => [item.label, item.metric === "photoCount" ? String(reportPhotos.length) : item.value]))}<h3>${escapeHtml(report.labels.findingsTitle)}</h3><ul>${report.findings.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul>${reportLimitations}${reportRecommendation}${reportPowertrainNote}</section>`;
+    if (IS_RU) return `<p>ABDrive помогает сопоставить объявление с задачей и подготовить исходные данные для расчёта. Заказ исполняет партнёр, указанный в договоре.</p><section><h2>Перед согласованием заказа</h2>${list(SERVICE_PROOF_CONTENT.map((item) => [item.title, item.text]))}</section><section><h2>Этапы работы</h2>${list(PURCHASE_FLOW_CONTENT.map((item) => [item.title, item.text]))}</section><section><h2>Что уточнить до оплаты</h2><ul><li>Актуальную цену и доступность машины.</li><li>Кто выступает исполнителем и кому направляется каждый платёж.</li><li>Состав сметы, возможные переменные расходы и порядок их согласования.</li><li>Срок, маршрут, документы и место выдачи в Москве.</li></ul></section><section><h2>Принципы проверки</h2>${list(ABOUT_PRINCIPLES_CONTENT.map((item) => [item.title, item.text]))}</section>`;
+    return `<p>Актуальные <a href="${hrefRoute("/")}">б/у авто ${siteFromPhrase()} с доставкой в Беларусь</a> собраны на главной.</p><section><h2>Что входит в сервис</h2>${list(SERVICE_PROOF_CONTENT.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(SERVICE_SECTIONS[0].title)}</h2><p>${escapeHtml(SERVICE_SECTIONS[0].text)}</p><p>До оплаты автомобиля вы получите:</p><ul>${BEFORE_PAYMENT.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section><section><h2>Проверка и связь</h2>${list(ABOUT_PRINCIPLES_CONTENT.map((item) => [item.title, item.text]))}</section><section><h2>Покупка авто: от выбора до ключей</h2>${list(PURCHASE_FLOW_CONTENT.map((item) => [item.title, item.text]))}</section><section><h2>${escapeHtml(report.presentation.title)}</h2><h3>${escapeHtml(report.vehicle.name)}</h3><p><strong>${escapeHtml(report.verdict.title)}.</strong> ${escapeHtml(report.verdict.summary)}</p>${list(report.risks.map((item) => [item.title, [item.status, item.note].filter(Boolean).join(". ")]))}${reportInspection}<h3>${escapeHtml(report.labels.evidenceTitle)}</h3>${reportPhotoGroups}<h3>${escapeHtml(report.labels.factsTitle)}</h3>${list(report.facts.map((item) => [item.label, item.metric === "photoCount" ? String(reportPhotos.length) : item.value]))}<h3>${escapeHtml(report.labels.findingsTitle)}</h3><ul>${report.findings.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul>${reportLimitations}${reportRecommendation}${reportPowertrainNote}</section>`;
   }
   const legal = route === "/privacy/" ? LEGAL_COPY.privacy : route === "/terms/" ? LEGAL_COPY.terms : null;
   if (legal) {
@@ -1271,7 +1287,7 @@ async function readLiveCatalog() {
   const key = catalogBuildKey(root, {
     siteUrl, carsSitemap, fullSitemap, carsPerModelInSitemap, listPagesInSitemap,
     showcaseSize, blogCarsOnPage, blogEnabled:BLOG_ENABLED,
-    publishedPosts:blogPosts().map(post=>post.slug),
+    publishedPosts:BLOG_ENABLED?blogPosts().map(post=>post.slug):[],
   });
   if (process.env.ABCARS_REUSE_CATALOG === "1") {
     const {saved,reason} = readCatalogBuildCache(process.env.ABCARS_CATALOG_CACHE_FILE || path.join(root,"dist","catalog-build-data.bin"),key);
@@ -1723,7 +1739,7 @@ writeFileSync(path.join(clientDir, "llms-full.txt"), llmsFull());
 // Список материалов, вошедших в эту сборку. По нему утреннее задание на сервере
 // понимает, надо ли пересобирать сайт ради журнала (scripts/blog-due.mjs).
 // Рядом со сборкой, а не внутри неё: посетителю этот файл не нужен.
-writeFileSync(path.join(clientDir, "..", "blog-published.json"), `${JSON.stringify(blogPosts().map((post) => post.slug), null, 1)}\n`);
+writeFileSync(path.join(clientDir, "..", "blog-published.json"), `${JSON.stringify(BLOG_ENABLED ? blogPosts().map((post) => post.slug) : [], null, 1)}\n`);
 
 // Keep the initial static catalog small. Full records are loaded only when a
 // visitor opens a vehicle page on a host without the database API.

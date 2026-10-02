@@ -26,6 +26,7 @@ import { BLOG_ENABLED } from "../src/feature-flags.js";
 import { blogPostsForModel } from "../src/blog-posts.js";
 // Страница модели — общая страница сайта: в крошках и ссылках стоит фраза «из Китая и Кореи».
 import { siteFromPhrase } from "../src/origin.js";
+import { SITE } from "../src/site-profile.js";
 
 const siteUrl = String(process.env.SITE_URL || "https://abcars.by").replace(/\/+$/, "");
 const allowIndexing = /^(1|true|yes)$/i.test(String(process.env.SEO_ALLOW_INDEXING || "false"));
@@ -101,10 +102,11 @@ export async function modelCatalogData({ brandSlug, modelSlug: slug, params = ne
   if (!brand || !/^[a-z0-9-]+$/.test(String(slug || ""))) return null;
   const models = await brandModels(brand);
   const model = modelFromSlug(models.map((row) => row.model), slug);
-  const review = reviewFor(brand, slug);
-  if (!model && !review) return null;
-  const name = review?.name || `${brand} ${model}`;
-  const modelName = model || review.model;
+  const sourceReview = reviewFor(brand, slug);
+  if (!model && (!sourceReview || SITE.market === "RU")) return null;
+  const review = SITE.market === "RU" ? null : sourceReview;
+  const name = sourceReview?.name || `${brand} ${model}`;
+  const modelName = model || sourceReview.model;
   const page = requestedPage(params);
   if (page === null) return { invalid: true };
   const { sort } = modelListQuery(params);

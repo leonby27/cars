@@ -1759,12 +1759,15 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
               <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
           </div>
         </div>
-        <div className="header-actions header-left-controls">{IS_RU ? <label className="market-destination">
-          <select aria-label="Город доставки" defaultValue={SITE.destination.id}>
-            <option value={SITE.destination.id}>{SITE.destination.name}</option>
-          </select>
-          <CaretDown size={14} weight="bold" aria-hidden="true" />
-        </label> : <>
+        <div className="header-actions header-left-controls">{IS_RU ? <div className="market-destination-shell">
+          <SelectField
+            className="market-destination"
+            label="Город доставки"
+            value={SITE.destination.name}
+            options={[SITE.destination.name]}
+            onChange={() => {}}
+          />
+        </div> : <>
           <EvQuotaButton quotas={quotas} navigate={navigate} />
           {decreeMode !== "menu" && <DecreePricingButton compact={decreeMode === "compact"} path={path} />}
           <button type="button" className="icon-label decree-pricing-button decree-measure" aria-hidden="true" inert tabIndex={-1}>
@@ -10533,16 +10536,16 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
       </div>
       <div className="service-light-region">
         <section className="service-opportunities page-width" aria-labelledby="service-opportunities-title">
-          <h2 id="service-opportunities-title">Возможности платформы</h2>
+          <h2 id="service-opportunities-title">{IS_RU ? "Как устроен каталог ABDrive" : "Возможности платформы"}</h2>
           <div className="service-opportunities-grid">
             <article className="service-opportunity-card service-opportunity-card-wide">
               <strong>{opportunitiesListingCount}</strong>
-              <p>Активных объявлений<br />для выбора автомобиля</p>
+              <p>{IS_RU ? <>Объявлений<br />для сравнения вариантов</> : <>Активных объявлений<br />для выбора автомобиля</>}</p>
               <Illustration src="/services/fast-convenient-car-rear.png" width="1254" height="1254" alt="Автомобиль с включёнными задними фонарями" loading="lazy" decoding="async" />
             </article>
             <article className="service-opportunity-card">
-              <strong>Еженедельно</strong>
-              <p>Обновляем наличие и цены в каталоге</p>
+              <strong>{IS_RU ? "Проверка данных" : "Еженедельно"}</strong>
+              <p>{IS_RU ? "Перед заказом уточняем цену и доступность у продавца" : "Обновляем наличие и цены в каталоге"}</p>
               <button className="primary service-opportunity-cta" type="button" onClick={() => navigate("/catalog")}>Перейти в каталог</button>
             </article>
             <article className="service-opportunity-card service-opportunity-card-no-cta">
@@ -10550,8 +10553,8 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
               <p>{IS_RU ? "Показываем расходы и ориентир цены до Москвы" : "Сразу показываем, из чего состоит цена под ключ"}</p>
             </article>
             <article className="service-opportunity-card service-opportunity-card-wide service-opportunity-card-convenience">
-              <strong>Удобно</strong>
-              <p>Множество фильтров, умный поиск, детали и всё для вашего удобства</p>
+              <strong>{IS_RU ? "Поиск по параметрам" : "Удобно"}</strong>
+              <p>{IS_RU ? "Сузьте список по марке, модели и характеристикам" : "Множество фильтров, умный поиск, детали и всё для вашего удобства"}</p>
               <Illustration className="service-opportunity-filter-dark" src="/services/convenient-filters.png" width="1254" height="1254" alt="Панель настройки фильтров" loading="lazy" decoding="async" />
               <Illustration className="service-opportunity-filter-light" src="/services/convenient-filters-light.png" width="1254" height="1254" alt="" aria-hidden="true" loading="lazy" decoding="async" />
             </article>
@@ -10594,7 +10597,7 @@ function HowItWorksPage({ navigate, cars, apiMode, favorites, toggleFavorite, lo
         </div>
       </section>
       <ServicePurchaseFlow />
-      <InspectionReport report={SERVICE_REPORT_EXAMPLE} />
+      {!IS_RU && <InspectionReport report={SERVICE_REPORT_EXAMPLE} />}
       {REVIEWS_ENABLED && <ReviewsSection navigate={navigate} />}
       <FaqSection navigate={navigate} />
       <ServiceContactCta />

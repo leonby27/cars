@@ -1,6 +1,6 @@
 import {SITE} from './site-profile.js';
-import {russianEditorialText} from './markets/ru-content.js';
 import {russianWording} from './markets/ru-editorial.js';
+import {chinaBrandByName} from './china-brands.js';
 import { isEvQuotaExhausted } from "./ev-quota.js";
 import { modelSlug } from "./model-slug.js";
 import { fromPhrase, originFromParam, originForSource, originOf, siteAdjective, siteAdjectiveCapital, siteFromPhrase, siteMarketplacesPhrase, siteWording, ORIGINS } from "./origin.js";
@@ -1806,12 +1806,61 @@ const withSeo = (landing) => {
 };
 
 function russianLandingContent(landing) {
- const localized={...russianWording(landing),notes:russianEditorialText(landing.notes)};
+ const localized={...russianWording(landing)};
+ const brandInfo=landing.brand?chinaBrandByName(landing.brand):null;
+ const name=landing.name||landing.brand||'автомобиля';
+ const notes=[];
+ if(landing.kind==='brand'){
+  const brandDescription=brandInfo?.about||`Марка ${landing.brand} представлена предложениями разных поколений и комплектаций.`;
+  notes.push(
+   `${landing.brand} — ${brandDescription} В разделе ABDrive собраны отдельные объявления этой марки, а не усреднённый прайс-лист. Откройте несколько карточек, чтобы сравнить реальные годы выпуска, пробеги и варианты оснащения, доступные сейчас.`,
+   `При сравнении ${landing.brand} смотрите на поколение, силовую установку и точную комплектацию: одинаковое имя модели не гарантирует одинаковых характеристик. Сверьте привод, двигатель или батарею, пробег и документы выбранного автомобиля; неполные данные попросите уточнить у продавца.`,
+   `Предварительная сумма в карточке показывает известные расходы для доставки ${landing.brand} до Москвы. Финальный расчёт зависит от подтверждённой цены и сведений из документов. До оплаты запросите у исполнителя разбивку, срок действия сметы и порядок согласования расходов, которые могут измениться.`,
+  );
+ } else if(landing.kind==='origin'){
+  const country=landing.origin==='korea'?'Кореи':'Китая';
+  notes.push(
+   `В этом разделе собраны автомобили, выставленные продавцами ${country}. Среди них бывают как местные марки, так и версии международных производителей, выпущенные для внутреннего рынка. Перед выбором уточните конкретную комплектацию: обозначения и набор оборудования могут отличаться от знакомых по другим рынкам.`,
+   `Маршрут ${country} — Москва зависит от города отправления, готовности экспортных документов и доступного перевозчика. Попросите исполнителя назвать этапы перевозки и ожидаемый срок именно для выбранного объявления; общий срок по стране не заменяет график отдельного заказа.`,
+   `До согласования выкупа сверьте VIN, год выпуска, пробег и историю повреждений. Попросите фотографии и перечень проведённых проверок, а расхождения между карточкой и документами зафиксируйте до оплаты. Состав итоговой сметы проверьте в карточке автомобиля и у исполнителя.`,
+  );
+ } else if(landing.kind==='powertrain'){
+  const electric=landing.powertrain==='Электромобиль';
+  const hybrid=landing.powertrain==='Гибрид';
+  const description=electric?'электромобили':hybrid?'гибриды':'автомобили с двигателем внутреннего сгорания';
+  notes.push(
+   `Фильтр объединяет ${description} ${siteFromPhrase()}. Сравнивая объявления, сначала проверьте, что тип силовой установки указан верно и относится к выбранной версии, а затем сопоставьте год, пробег, привод и комплектацию.`,
+   electric?`Для электромобиля важны документальная мощность тяговых электромоторов, ёмкость батареи и доступные сведения о её состоянии. Паспортный запас хода зависит от цикла измерения и условий эксплуатации, поэтому не используйте его как единственный критерий выбора.`:hybrid?`У гибридов схемы различаются: двигатель может передавать тягу на колёса либо работать генератором. Эта разница важна для технической классификации и расчёта обязательных платежей. Уточните устройство установки и характеристики по документам конкретной машины.`:`Для машины с ДВС запросите точные объём и мощность двигателя, дату выпуска и VIN. Даже небольшое расхождение в документах или годе производства способно изменить расчёт, поэтому подтверждайте характеристики до согласования сделки.`,
+   `Сумма в каталоге — предварительная оценка расходов до Москвы. После проверки исходных характеристик исполнитель подтверждает цену автомобиля, логистику и применимые платежи. Если информации для расчёта не хватает, сначала запросите документы или разъяснение продавца, а затем принимайте решение по смете.`,
+  );
+ } else if(landing.kind==='price'){
+  const budget=new Intl.NumberFormat('ru-RU').format(landing.landedMax*100);
+  notes.push(
+   `В подборку до ${budget} ₽ попадают объявления, у которых предварительная стоимость с доставкой и оформлением до Москвы укладывается в этот бюджет. Порог относится к расчётной сумме, а не к цене, указанной продавцом на исходной площадке.`,
+   `Используйте верхнюю границу, чтобы сузить поиск, а затем сравните карточки по году, пробегу, типу двигателя и комплектации. Чем полнее исходные данные, тем точнее предварительная оценка; неизвестные параметры могут потребовать отдельного подтверждения.`,
+   `Перед заказом проверьте наличие автомобиля и актуальность цены. Попросите исполнителя подтвердить состав сметы до Москвы, отметить расходы, зависящие от документов или курса, и записать порядок их изменения в договоре.`,
+  );
+ } else {
+  const body=landing.bodyType?landing.bodyType.toLowerCase():null;
+  const power=landing.powertrain==='Электромобиль'?'электрической':landing.powertrain==='Гибрид'?'гибридной':landing.powertrain==='ДВС'?'бензиновой или дизельной':null;
+  const topic=landing.kind==='bodyType'?`кузова «${name.toLowerCase()}»`:landing.kind==='brandBody'?`модели ${landing.brand} в кузове ${body}`:`категории «${name.toLowerCase()}»`;
+  notes.push(
+   `Раздел помогает отобрать ${topic} ${siteFromPhrase()}. В выдаче остаются конкретные объявления; откройте карточки и сравните год выпуска, пробег и оснащение. Состав результатов меняется вместе с каталогом, поэтому сохранённый ранее вариант может стать недоступен.`,
+   `При выборе учитывайте назначение и размеры автомобиля, число мест, привод и тип силовой установки${power?`; здесь собраны версии с ${power} установкой`:''}. Уточните комплектацию по VIN: у одной модели могут продаваться близкие по названию исполнения с разным оборудованием и техническими данными.`,
+   `Расчёт до Москвы относится к выбранному объявлению и использует доступные сведения о машине. Перед заказом подтвердите цену продавца, возможность экспорта и документы. Если характеристики в источнике неполные, итоговые расходы могут быть уточнены после ответа продавца и проверки партнёром.`,
+  );
+ }
+ localized.notes=notes;
+ const budgetTitle=landing.kind==='price'?`до ${new Intl.NumberFormat('ru-RU').format(landing.landedMax*100)} ₽`:null;
+ localized.lead=landing.kind==='brand'?`Объявления ${landing.brand} в каталоге ABDrive: комплектации, пробег и предварительная стоимость до Москвы.`:landing.kind==='price'?`Автомобили с расчётной стоимостью ${budgetTitle}.`:`Подборка ${name.toLowerCase()}: сравните характеристики предложений и расчёт расходов до Москвы.`;
+ localized.seoTitle=landing.kind==='brand'?`${landing.brand}: объявления и расчёт до Москвы | ABDrive`:landing.kind==='origin'?`${name}: предложения и маршрут до Москвы | ABDrive`:landing.kind==='price'?`${name} с расчётом до Москвы | ABDrive`:`${name}: предложения с доставкой до Москвы | ABDrive`;
+ localized.sourceSeoTitle=localized.seoTitle;
+ localized.seoDescription=notes.join(' ').slice(0,300);
+ localized.sourceSeoDescription=localized.seoDescription;
  if(landing.kind!=='price')return localized;
  const amount=landing.landedMax*100;
  const budget=new Intl.NumberFormat('ru-RU').format(amount)+' ₽';
- const replaceBudget=value=>typeof value==='string'?value.replace(/(?:\d[\d \u00a0]*\s*\$|\$\s*\d[\d \u00a0]*)/g,budget):Array.isArray(value)?value.map(replaceBudget):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,replaceBudget(v)])):value;
- return {...replaceBudget(localized),seoDescription:`Автомобили с пробегом ${siteFromPhrase()} до ${budget} с доставкой до Москвы и оформлением. Предварительный расчёт по российским правилам ввоза.`,sourceSeoDescription:`Автомобили с доставкой до Москвы в бюджете до ${budget}.`,notes:[`В этой подборке — автомобили, предварительная стоимость которых с доставкой до Москвы и оформлением укладывается в ${budget}.`,...localized.notes.slice(1).filter(note=>!/доллар|тысяч|\$/.test(note))],name:`${landing.powertrain?"Бензиновые автомобили":"Автомобили"} до ${budget}`,h1:`${landing.powertrain?"Бензиновые автомобили":"Автомобили"} из Китая и Кореи до ${budget}`,landedMax:amount,path:`/catalog/${landing.powertrain?'petrol-':''}do-${amount}-rub`,slug:`${landing.powertrain?'petrol-':''}do-${amount}-rub`};
+ return {...localized,seoDescription:`Подборка до ${budget}: реальные предложения с предварительной стоимостью, логистикой и оформлением до Москвы. Сравните карточки и подтвердите смету перед заказом.`,sourceSeoDescription:`Автомобили с расчётной стоимостью до ${budget} до Москвы.`,name:`${landing.powertrain?"Бензиновые автомобили":"Автомобили"} до ${budget}`,h1:`${landing.powertrain?"Бензиновые автомобили":"Автомобили"} из Китая и Кореи до ${budget}`,landedMax:amount,path:`/catalog/${landing.powertrain?'petrol-':''}do-${amount}-rub`,slug:`${landing.powertrain?'petrol-':''}do-${amount}-rub`};
 }
 
 export const CATALOG_LANDINGS = Object.freeze(CATALOG_LANDINGS_SOURCE.map(withSeo).map(landing=>SITE.market==='RU'?russianLandingContent(landing):landing));
