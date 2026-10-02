@@ -1,3 +1,4 @@
+import {cachedCatalogRead,cachedCatalogValue,clearCatalogReadCache} from "./catalog-read-cache.mjs";
 import { readFileSync } from "node:fs";
 import { createAsyncCache } from "./async-cache.mjs";
 import { createInputAwareCache } from "./input-aware-cache.mjs";
@@ -335,6 +336,21 @@ async function listCarsPage(searchParams) {
   const total = countResult.rows[0].total;
   const items = itemsResult.rows.map((row) => withoutDetailPayload(rowToCar(row)));
   return { items, total, refreshedAt:countResult.rows[0].refreshed_at, changedAt:countResult.rows[0].changed_at || null, limit, offset, hasMore:catalogHasMore(offset, items.length, total) };
+}
+
+// Related cards need a small list, never total counts or refresh timestamps.
+// All cars of one model share the same prepared selection for up to one minute.
+export async function relatedCarCandidates(brand,model,limit=13) {
+  const params=new URLSearchParams({brand,model,sort:"price_asc"});
+  const {where,values}=buildCarFilters(params);
+  const order=buildCarOrder(params);
+  return cachedCatalogValue(pool,["related",brand,model,limit],async()=>{
+  const result=await pool.query(`WITH picked AS (
+    SELECT l.id FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}
+    ORDER BY ${order} LIMIT $${values.length+1}
+  ) ${carSelect} FROM listings l JOIN vehicles v ON v.id=l.vehicle_id JOIN picked p ON p.id=l.id ORDER BY ${order}`,[...values,limit]);
+  return result.rows.map(row=>withoutDetailPayload(rowToCar(row)));
+  });
 }
 
 // Адрес карточки несёт короткий номер объявления («/cars/59334290»), а идентификатор
@@ -816,10 +832,10 @@ export async function getCatalogMeta(type, brand, bodyType, country = null) {
       SELECT GROUPING(v.brand) AS g_brand, GROUPING(l.source) AS g_source, v.brand, v.drivetrain AS drive, l.source,
         count(*) FILTER (WHERE ${w.type()} AND ${w.body()})::int AS brand_count,
         count(*) FILTER (WHERE v.drivetrain IS NOT NULL AND v.drivetrain<>'Не указан')::int AS drive_count,
-        count(*) FILTER (WHERE ${w.type()} AND ${w.brand()} AND ${w.body()})::int AS source_count
+        count(*) FILTER (WHERE ${w.type()} AND ${w.body()})::int AS source_count
       FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
       WHERE l.status='active' AND ${w.country()}
-      GROUP BY GROUPING SETS ((v.brand), (v.drivetrain), (l.source))
+      GROUP BY GROUPING SETS ((v.brand), (v.drivetrain), (l.source,v.brand))
     ) counted ORDER BY g_brand, brand, drive, source` };
   const n = filters();
   const narrow = { values:n.values, text:`SELECT * FROM (
@@ -839,9 +855,9 @@ export async function getCatalogMeta(type, brand, bodyType, country = null) {
       WHERE l.status='active' AND ${n.type()} AND ${n.brand()} AND ${n.country()}
       GROUP BY GROUPING SETS ((v.model), (v.specifications->>'bodyType'), (${FUEL_SQL}), ())
     ) counted ORDER BY g_model, model, g_body, CASE WHEN g_body=0 THEN known_body_count END DESC, body_type` };
-  const [wideRows, narrowRows] = await Promise.all([pool.query(wide.text, wide.values), pool.query(narrow.text, narrow.values)]);
+  const [wideRows, narrowRows] = await Promise.all([cachedCatalogRead(pool,wide.text,wide.values), cachedCatalogRead(pool,narrow.text,narrow.values)]);
   const countryCounts = new Map();
-  for (const row of wideRows.rows.filter((row) => row.g_source === 0)) {
+  for (const row of wideRows.rows.filter((row) => row.g_source === 0 && (!brand || brand === "Все марки" || row.brand === brand))) {
     const origin = originForSource(row.source);
     countryCounts.set(origin, (countryCounts.get(origin) || 0) + Number(row.source_count));
   }
@@ -935,7 +951,8 @@ export async function createOrderDraft({ listingId, name = null, contact, calcul
 }
 
 export function clearCatalogCaches() {
+  clearCatalogReadCache();
   brandStockCache={at:0,value:null};
-  storedMarketStatsCache={at:0,value:null};
+  marketStats.invalidate();
   modelClassCache={at:0,value:null};
 }
