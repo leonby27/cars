@@ -1,0 +1,11 @@
+[Unit]
+Description=Keep search crawler exemptions verified and current
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+RandomizedDelaySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

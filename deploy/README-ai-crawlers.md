@@ -1,34 +1,19 @@
-# Shared GPTBot, Meta and ClaudeBot crawl budgets
+# Shared crawler and catalog protection
 
-`nginx-car-ai-limits.conf` belongs in nginx's `http` context as
-`/etc/nginx/conf.d/car-ai-limits.conf`. `nginx-car-ai-limit-location.conf` belongs
-at `/etc/nginx/snippets/car-ai-limit.conf`, included by the BY proxy snippet and
-the RU dynamic location. Install both dependencies before either site config.
+Both sites reject commercial SEO/bulk crawlers (including Ahrefs and Semrush) before the application. Training crawlers have a shared **6 requests/minute** budget per family across domains, workers and source addresses, with one extra burst request. GPTBot, ClaudeBot and meta-externalagent are training families; OAI-SearchBot, Claude-SearchBot and user-directed fetches remain separate.
 
-The budget is **30 requests per minute per crawler**, across all nginx workers,
-source addresses and both domains. A burst admits up to three immediate requests;
-excess requests return 429 with `Retry-After: 2`. Ordinary visitors, search bots,
-ChatGPT user fetches and link previews have an empty key and bypass this budget.
-Static assets also bypass it. Existing BY bot rules remain in effect.
+Browser-looking exports cannot reset the catalog budget by changing User-Agent, query parameters, X-Forwarded-For or domain. Public collection reads allow 60/minute with a burst of 30, plus a sustained 12/minute with a burst of 60. Public vehicle/catalog reads allow 120/minute with a burst of 40. Limits apply before upstream/cache access and reply 429 with Retry-After: 10. GET/HEAD reads are covered, including normalized encoded API URLs and the BY named HTML rewrites. Account/auth endpoints, form POSTs and static build files are outside these visitor read budgets. The server's own addresses bypass visitor budgets so scheduled warmers continue working.
 
-Classification uses the declared GPTBot, meta-externalagent or ClaudeBot user-agent. This
-is not authentication or an IP allowlist: a forged declaration is throttled too.
-Do not add an IP to an exemption based solely on its user-agent.
+Search exemptions require both a matching agent and a verified source address. Official JSON feeds cover Google, Bing, Apple, DuckDuckGo, OpenAI search/user agents, Perplexity and Anthropic search/user agents. Yandex addresses require reverse DNS under yandex.ru/net/com plus matching forward DNS; no complete cloud network or User-Agent alone is trusted. A new/unverified search address receives the generous ordinary-read allowance until verified, rather than an unconditional denial. Network refresh runs every 15 minutes, downloads feeds at most daily, reads bounded log tails for Yandex and retains previous verified data on external failures. Yandex DNS refreshes daily, with a seven-day maximum stale allowance.
 
-For an authorized configuration release, run `bash deploy/install-car-ai-limits.sh`
-from the ABDrive release containing the matching BY/RU snippets. It backs up all
-four files, validates nginx, reloads it and restores the backup on failure.
-The normal application deploy does not install these nginx files. Keep the common
-files and BY proxy snippet synchronized in main; never deploy the RU application
-through the BY runner.
+Primary references: [Google verification](https://developers.google.com/crawling/docs/crawlers-fetchers/verify-google-requests), [Yandex verification](https://yandex.com/support/webmaster/en/robot-workings/check-yandex-robots), [Applebot](https://support.apple.com/en-us/119829), [OpenAI crawler roles](https://developers.openai.com/api/docs/bots), [Anthropic crawler roles and IP list](https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler), [nginx request limits](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html).
 
-Reproducible verification: `python3 tests/nginx-ai-limits.integration.py` on a
-machine with nginx. It starts a temporary listener and fixture backend on
-loopback, varies source IP and Host, and checks grouped budgets, separate bots,
-Retry-After, ordinary/search requests and static assets. It does not use the live
-listeners or production database.
+## Configuration release
 
-ABDrive additionally shares prepared public cards between HTML and JSON for at
-most 60 seconds (missing cards: 5 seconds), capped at 500 entries / 24 MiB of JSON.
-Concurrent loads share one query; a new price-index generation invalidates the
-cache. Lead/order submission explicitly bypasses it for an availability check.
+For an authorized nginx release, run `bash deploy/install-car-bot-protection.sh` as root from a checkout/archive containing the deploy files and `scripts/update-search-networks.py`. The old `install-car-ai-limits.sh` entry point delegates to it. This is independent of the application build; do not use the BY application runner for RU. Include the updater and both search-network units in any standalone protection archive.
+
+The installer prepares verified networks before changing the live files, takes the ABDrive release and shared protection locks, saves all previous files under `/var/backups/car-bot-protection.*`, patches only the denial rule in the existing BY/RU site configurations, installs shared limits, validates nginx, reloads it and enables the search refresh timer. Configuration failures restore the old files. Shared maps belong at `/etc/nginx/conf.d/car-ai-limits.conf`; the dynamic include is `/etc/nginx/snippets/car-ai-limit.conf`; generated verification maps are `/etc/nginx/snippets/car-search-networks.conf`. Keep these dependencies before the site includes. A normal application deployment does not install this policy.
+
+Verification: `python3 tests/search-networks.test.py` and `python3 tests/nginx-ai-limits.integration.py`. The nginx test uses two isolated workers and a fixture backend on loopback, verifies real/forged search identities, multi-domain/IP training budgets, commercial denials, anonymous export and sustained quotas, encoded API paths, named HTML rewrites, normal initial bursts, local warming, POST/auth/static access, and proves rejected requests never reach the backend. It does not use the production application or database.
+
+ABDrive's separate public-card cache remains bounded at 500 entries / 24 MiB, for at most 60 seconds (missing cards: 5 seconds). Lead/order submissions bypass it for a fresh availability check.
