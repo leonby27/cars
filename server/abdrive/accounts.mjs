@@ -135,7 +135,7 @@ export function createAccountApi({database,catalog,site,consentVersion=null,regi
    if(path==='/api/account/orders'&&method==='GET')return result(200,{orders:(await database.query('SELECT * FROM customer_orders WHERE customer_id=$1 ORDER BY updated_at DESC',[account.id])).rows.map(orderRow)});
    if(path==='/api/account/orders'&&method==='POST'){
     const body=await readBody(request),listingId=String(body?.listingId||'');if(!/^[a-zA-Z0-9-]{1,100}$/.test(listingId))fail(400,'invalid_listing_id');
-    const listing=await catalog.get(listingId);if(!listing||listing.car.available===false||listing.car.sold||listing.car.status==='sold')fail(404,'listing_not_found');
+    const listing=await catalog.get(listingId,{fresh:true});if(!listing||listing.car.available===false||listing.car.sold||listing.car.status==='sold')fail(404,'listing_not_found');
     const snapshot={siteId:site.id,market:site.market,...listing,assignment:'owner'};
     const row=(await database.query(`INSERT INTO customer_orders(customer_id,listing_id,snapshot,request_key) VALUES($1,$2,$3,$4) ON CONFLICT(customer_id,listing_id) DO UPDATE SET updated_at=now() RETURNING *`,[account.id,listing.car.id,snapshot,randomUUID()])).rows[0];
     return result(201,{order:orderRow(row)});

@@ -16,6 +16,11 @@ Manual application rollback: resolve the previous directory in `/srv/abdrive/rel
 
 Current installed release and unfinished items: `docs/architecture/two-sites.md`.
 
+Crawler budgets: include the shared `deploy/nginx-car-ai-*.conf`,
+`deploy/nginx-abcars-proxy.conf` and `deploy/install-car-ai-limits.sh` in releases
+that install nginx configuration. Follow `deploy/README-ai-crawlers.md`; the new
+site config depends on `/etc/nginx/snippets/car-ai-limit.conf` and its http zone.
+
 Homepage performance: the same preparation script writes `/var/cache/abdrive/home-snapshot.json` before switching releases. It uses 20 public cards with five preview photos, model links and catalog facts; the runtime renders it before listening and refreshes in the background. The one offline database connection has a 30-second statement timeout; the live application's five-second limit is unchanged. Missing snapshots never block the homepage.
 
 The RU build creates Brotli assets. When deploying the 2026-10-02 first-load fix, also sync `nginx-https.conf` to the existing ABDrive vhost after backing it up, run `nginx -t`, and reload nginx. This routes public build assets directly from the current RU release; it must not replace BY configuration. The release installer does not otherwise overwrite existing HTTPS configuration.

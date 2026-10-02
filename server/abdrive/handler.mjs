@@ -55,7 +55,7 @@ export function createAbdriveHandler({catalog,siteDatabase,site,consentVersion=n
     if(!consentVersion)return reply(response,503,{error:'lead_intake_not_configured'});
     const body=await readBody(request);const lead=normalizeLead(body);
     if(body.destinationId&&body.destinationId!==site.destination.id)throw new Error('unsupported_destination');
-    const listing=lead.listingId?await catalog.get(lead.listingId):null;
+    const listing=lead.listingId?await catalog.get(lead.listingId,{fresh:true}):null;
     if(lead.listingId&&!listing)return reply(response,409,{error:'listing_unavailable'});
     const client=await siteDatabase.connect();
     try{

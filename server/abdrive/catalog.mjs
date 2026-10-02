@@ -10,6 +10,7 @@ import {vehiclePublicFacts} from '../../src/vehicle-public-facts.js';
 import {listSearchVariants,findBrandInText,HERO_BRAND_RU} from '../../src/search-dictionary.js';
 import {sourceVersion} from '../catalog/offer-repository.mjs';
 import {createRussianRates,estimateRussianOffer} from './pricing.mjs';
+import {createBoundedCache} from '../bounded-cache.mjs';
 
 const columns=`l.id,l.source,l.external_id,l.source_url,l.title,l.city,l.mileage_km,l.price_cny,
  l.source_payload,l.last_checked_at,l.last_seen_at,l.first_seen_at,l.status,
@@ -80,9 +81,11 @@ export function publicCar(row,{detail=false,rates,now}={}) {
  };
 }
 
-export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>new Date(),priceIndexFile}={}) {
+export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>new Date(),priceIndexFile,getPriceIndex}={}) {
  const pages=new Map();
- const priceIndex=createRussianPriceIndex(db,{getRates,now,cacheFile:priceIndexFile});
+ const priceIndex=getPriceIndex||createRussianPriceIndex(db,{getRates,now,cacheFile:priceIndexFile});
+ // HTML and the public API share the prepared card, including its RU quote.
+ const cards=createBoundedCache({now:()=>+now()});
  const sharedMeta=new Map();
  const metadata=createAsyncCache(async()=>{
    const result=await db.query(`SELECT v.brand,v.model,count(*)::int AS count,min(l.id) AS sample_id,min(v.model_year) AS "yearMin",max(v.model_year) AS "yearMax",array_agg(l.id) AS ids,array_agg(DISTINCT v.powertrain) AS powertrains,array_agg(DISTINCT v.specifications->>'bodyType') AS "bodyTypes",max(COALESCE(v.electric_range_km,v.combined_range_km)) AS range,min(CASE WHEN v.specifications->>'acceleration' ~ '^[0-9]+([.][0-9]+)?$' THEN (v.specifications->>'acceleration')::numeric END) AS accel ${from} WHERE l.status='active' GROUP BY v.brand,v.model ORDER BY v.brand,v.model`);
@@ -122,15 +125,17 @@ export function createRussianCatalog(db,{getRates=createRussianRates(),now=()=>n
    }
    return pages.get(key)();
   },
-  async get(number) {
+  async get(number,{fresh=false}={}) {
    if(!/^[a-zA-Z0-9-]{1,100}$/.test(number))return null;
    const korea=koreanListingId(number);
    const ids=korea?[korea]:[number,`che168-${number}`,`guazi-${number}`];
+   const index=await priceIndex();
+   return cards(korea||number,async()=>{
    const result=await db.query(`SELECT ${columns} ${from} WHERE l.status='active' AND l.id=ANY($1::text[])
      ORDER BY CASE WHEN l.id=$2 THEN 0 ELSE 1 END,l.id LIMIT 1`,[ids,number]);
    const row=result.rows[0];
-   const index=row?await priceIndex():null;
    return row?{car:publicCar(row,{detail:true,rates:index.rates,now:index.date}),sourceVersion:sourceVersion(row),sourceUrl:row.source_url}:null;
+   },{version:index,bypass:fresh});
   },
   async report(number) {
    if(!/^[a-zA-Z0-9-]{1,100}$/.test(number))return null;
