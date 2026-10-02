@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createAsyncCache } from "./async-cache.mjs";
+import { createInputAwareCache } from "./input-aware-cache.mjs";
 import { repairVerifiedDrive, driveConflicts } from "../src/vehicle-spec-integrity.js";
 import crypto from "node:crypto";
 import { canonicalImportName, uniquePhotos } from "../config/import-policy.mjs";
@@ -18,7 +19,17 @@ import { DRIVE_TYPES, normalizeDrive, orderDrives, UNKNOWN_DRIVE } from "../src/
 import { FUEL_TYPES, GEARBOX_TYPES, enginePower, engineVolume, fuelType, gearboxType } from "../src/engine-spec.js";
 
 const normalizeScore = (value) => Number(value) > 100 ? Number(String(value).slice(0, 2)) : Number(value) || null;
-const contentHash = (car) => crypto.createHash("sha256").update(JSON.stringify({ price:car.sourcePrice ?? car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images })).digest("hex");
+// Include imported quote inputs that are not all stored in vehicles. Run times
+// and importer bookkeeping are deliberately absent: rechecking is not a change.
+const quoteInputFields = ['city','sourceCurrency','sourcePrice','usdPrice','priceBasis','fobPriceUsd','fobPort',
+  'manufactureDate','dimensions','curbWeight','technicalSpecs','sourceFuelType','fuelType','engine','transmission',
+  'engineCc','engineVolume','enginePower','enginePowerKw','engineHorsepower','engineNetPowerKw',
+  'motorPowerKw','motorHorsepower','horsepower','motorThirtyMinutePowerKw','motorModel','motorCount',
+  'modification','trim','rawModel','rawSeries','drive','driveType','battery','batteryCapacity'];
+export const importedContentHash = car => crypto.createHash("sha256").update(JSON.stringify({
+  price:car.sourcePrice ?? car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images,
+  quoteInputs:Object.fromEntries(quoteInputFields.map(key=>[key,car[key]])),
+})).digest("hex");
 export const SOLD_LISTING_RETENTION_MS = 14 * 86400_000;
 
 // Проданная машина ещё две недели открывается из избранного и по старой ссылке.
@@ -62,12 +73,15 @@ export async function upsertCar(car, client = pool) {
   const estimatedTotalUsd = estimateLandedCost(item).totalUsd;
   await client.query(`INSERT INTO vehicles (id, brand, model, model_year, powertrain, drivetrain, battery_kwh, electric_range_km, combined_range_km, specifications, updated_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
-    ON CONFLICT (id) DO UPDATE SET brand=EXCLUDED.brand, model=EXCLUDED.model, model_year=EXCLUDED.model_year, powertrain=EXCLUDED.powertrain, drivetrain=EXCLUDED.drivetrain, battery_kwh=EXCLUDED.battery_kwh, electric_range_km=EXCLUDED.electric_range_km, combined_range_km=EXCLUDED.combined_range_km, specifications=EXCLUDED.specifications, updated_at=now()`,
+    ON CONFLICT (id) DO UPDATE SET brand=EXCLUDED.brand, model=EXCLUDED.model, model_year=EXCLUDED.model_year, powertrain=EXCLUDED.powertrain, drivetrain=EXCLUDED.drivetrain, battery_kwh=EXCLUDED.battery_kwh, electric_range_km=EXCLUDED.electric_range_km, combined_range_km=EXCLUDED.combined_range_km, specifications=EXCLUDED.specifications,
+      updated_at=CASE WHEN ROW(vehicles.brand,vehicles.model,vehicles.model_year,vehicles.powertrain,vehicles.drivetrain,vehicles.battery_kwh,vehicles.electric_range_km,vehicles.combined_range_km,vehicles.specifications)
+        IS DISTINCT FROM ROW(EXCLUDED.brand,EXCLUDED.model,EXCLUDED.model_year,EXCLUDED.powertrain,EXCLUDED.drivetrain,EXCLUDED.battery_kwh,EXCLUDED.electric_range_km,EXCLUDED.combined_range_km,EXCLUDED.specifications)
+        THEN now() ELSE vehicles.updated_at END`,
     [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify(vehicleSpecifications(item))]);
   await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at, sold_at)
     VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()),NULL)
-    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', sold_at=NULL, content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / CASE WHEN listings.source='Encar' THEN 1354 ELSE 7.15 END)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash THEN now() ELSE listings.content_changed_at END`,
-    [item.id,item.source,item.externalId,item.sourceUrl,item.title,item.city,item.firstRegistration,item.mileage,item.sourcePrice ?? item.chinaPrice,item.guidePriceCny,item.owners,item.transfers,item.conditionGrade,item.appearanceScore,item.claims || item.incident,item.description,contentHash(item),JSON.stringify(item),checkedAt,item.importedAt || checkedAt,estimatedTotalUsd]);
+    ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', sold_at=NULL, content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / CASE WHEN listings.source='Encar' THEN 1354 ELSE 7.15 END)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash OR listings.status IS DISTINCT FROM 'active' THEN now() ELSE listings.content_changed_at END`,
+    [item.id,item.source,item.externalId,item.sourceUrl,item.title,item.city,item.firstRegistration,item.mileage,item.sourcePrice ?? item.chinaPrice,item.guidePriceCny,item.owners,item.transfers,item.conditionGrade,item.appearanceScore,item.claims || item.incident,item.description,importedContentHash(item),JSON.stringify(item),checkedAt,item.importedAt || checkedAt,estimatedTotalUsd]);
   await client.query("DELETE FROM listing_media WHERE listing_id=$1", [item.id]);
   const images = (item.images || [item.image]).filter(Boolean);
   if (images.length) await client.query(`INSERT INTO listing_media (listing_id, position, url)
@@ -676,13 +690,30 @@ export async function modelPriceMedians() {
 // A build supplies both refund scenarios; HTTP requests never need to prepare
 // the full catalog before serving the first visitor. Refreshes share one query.
 const marketStatsFile = new URL(`../${process.env.ABCARS_BUILD_DIR || "dist"}/market-price-stats.json`, import.meta.url);
+const marketPriceRuleFiles = [
+  '../src/pricing.js','../src/china-logistics.js','../src/korea-logistics.js',
+  '../src/engine-spec.js','../src/origin.js','../src/pricing-state.js',
+  './market-price-stats.mjs',
+];
+const marketPriceRuleKey = marketPriceRuleFiles.reduce((hash,file)=>hash.update(file).update(readFileSync(new URL(file,import.meta.url))),crypto.createHash('sha256')).digest('hex');
+const marketPriceRevision = async()=>{
+  const {rows}=await pool.query(`SELECT
+    (SELECT max(content_changed_at) FROM listings) AS listing_changed,
+    (SELECT max(sold_at) FROM listings WHERE status='unavailable') AS sold_changed,
+    (SELECT max(updated_at) FROM vehicles) AS vehicle_changed,
+    (SELECT max(updated_at) FROM catalog_sources) AS source_changed,
+    (SELECT count(*)::text || ':' || COALESCE(bit_xor(hashtextextended(listing_id,0)),0)::text
+      FROM catalog_hidden_duplicates) AS visibility_revision`);
+  const values=['listing_changed','sold_changed','vehicle_changed','source_changed'].map(key=>+new Date(rows[0]?.[key]||0));
+  return {key:`${values.join(':')}:${rows[0]?.visibility_revision}:${marketPriceRuleKey}`,changedAt:Math.max(...values)};
+};
 let marketSeed;
 try {
   const saved = JSON.parse(readFileSync(marketStatsFile, "utf8"));
   if (saved.version === 1 && Array.isArray(saved.normal) && Array.isArray(saved.refund50)) marketSeed = saved;
 } catch { /* First build has no previous snapshot. */ }
 
-const marketStats = createAsyncCache(async () => {
+const marketStats = createInputAwareCache(async (revision) => {
   const { rows } = await pool.query(`SELECT l.id, v.brand, v.model, v.model_year AS year,
       l.mileage_km, l.price_cny, l.source, l.city, v.powertrain AS type,
       p."usdPrice" AS usd_price, p."priceBasis" AS price_basis,
@@ -701,13 +732,13 @@ const marketStats = createAsyncCache(async () => {
     WHERE l.status='active' AND l.price_cny > 0 AND v.model_year IS NOT NULL
     ORDER BY l.listed_at DESC NULLS LAST, l.id`);
   return {
-    version:1, createdAt:Date.now(),
+    version:1, createdAt:Date.now(),inputRevision:revision.key,
     normal:await marketPriceStatsFromRowsAsync(rows),
     refund50:await marketPriceStatsFromRowsAsync(rows, { refund50:true }),
   };
-}, { initial:marketSeed, initialAt:marketSeed?.createdAt || 0 });
+}, { readRevision:marketPriceRevision, initial:marketSeed });
 
-export const marketPriceSnapshot = () => marketStats();
+export const marketPriceSnapshot = options => marketStats(options);
 export async function modelPriceStats({ refund50 = false } = {}) {
   const snapshot = await marketStats();
   return refund50 ? snapshot.refund50 : snapshot.normal;

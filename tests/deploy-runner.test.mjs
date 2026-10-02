@@ -54,7 +54,7 @@ test('changed units trigger one reload for all timers',()=>{
  const d=deploy({unitsChanged:true});try{
   assert.equal(d.result.status,0,d.result.stderr);
   assert.equal((d.calls.match(/systemctl daemon-reload/g)||[]).length,1);
-  assert.equal((d.calls.match(/install /g)||[]).length,6);
+  assert.equal((d.calls.match(/install /g)||[]).length,10);
  }finally{d.cleanup();}
 });
 test('concurrent deployment is rejected before build or service mutations',()=>{
