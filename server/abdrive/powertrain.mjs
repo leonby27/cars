@@ -1,4 +1,4 @@
-import {resolveRussianMotorPower} from './power-reference.mjs';
+import {resolveRussianMotorPower,completeRussianPowertrain} from './power-reference.mjs';
 import {enginePower,engineVolume} from '../../src/engine-spec.js';
 const number=value=>{const n=Number(String(value??'').trim().replace(',','.'));return Number.isFinite(n)&&n>0?n:null;};
 const first=(...values)=>values.map(number).find(value=>value!==null)??null;
@@ -26,14 +26,16 @@ export function russianPowertrain(row) {
   if(/range.?exten|extended.?range|\bEREV\b|\bREEV\b|gasoline electric drive|последовательн|увеличител.*хода|增程/i.test(fuel))kind='series';
   else if(/DHT|E.?CVT|dual.?clutch|automatic|\b[6789].?(?:AT|DCT)\b|автомат|робот/i.test(car.transmission||'')||/mild.hybrid|48\s*v/i.test(fuel))kind='parallel';
  }
- const description=[car.modification,car.trim,textSpec(/^Model Name$/i)].filter(Boolean).join(' ');
- const driveText=[row.drivetrain,car.drive,car.driveType,textSpec(/^(Drive (Mode|Type)|Driving method|Привод)$/i)].filter(Boolean).join(' ');
- const drive=/all.?wheel|four.?wheel|\b[4a]wd\b|полный/i.test(driveText)?'all':/front|\bfwd\b|передн/i.test(driveText)?'front':/rear|\brwd\b|задн/i.test(driveText)?'rear':null;
+ const description=[car.modification,car.trim,car.rawModel,textSpec(/^Model Name$/i)].filter(Boolean).join(' ');
+ const parseDrive=text=>/all.?wheel|four.?wheel|\b[4a]wd\b|полный/i.test(text)?'all':/front|\bfwd\b|передн/i.test(text)?'front':/rear|\brwd\b|задн/i.test(text)?'rear':null;
+ const drives=[...new Set([row.drivetrain,car.drive,car.driveType,textSpec(/^(Drive (Mode|Type)|Driving method|Привод)$/i)].map(parseDrive).filter(Boolean))];
+ const drive=drives.length===1?drives[0]:null;
  const motorCountText=textSpec(/^Number of Drive Motors$/i);
  const motorCount=/single|один/i.test(motorCountText)?1:/dual|two|два/i.test(motorCountText)?2:first(car.motorCount,motorCountText);
  const variant=/performance|性能/i.test(description)?'performance':/long.?range|maximum.?range|дальн|长续航/i.test(description)?'long-range':/standard|стандарт|rear.?wheel|\bRWD\b|后轮/i.test(description)?'standard':null;
  const power={kind,cc,iceHp:iceHp||(iceKw?iceKw/.7355:null),iceKw:engineKw,electricPeakKw,continuousKw};
- const motorPower=resolveRussianMotorPower({...power,brand:row.brand||car.brand,model:row.model||car.model,year:Number(description.match(/\b(20\d{2})\b/)?.[1]||row.model_year),
+ const facts=completeRussianPowertrain({...power,source:row.source,description,fuel,brand:row.brand||car.brand,model:row.model||car.model,year:Number(description.match(/\b(20\d{2})\b/)?.[1]||row.model_year),
   motorCode:car.motorModel||textSpec(/^Front Motor Model$/i),motorCount,drive,variant,battery:first(row.battery_kwh,car.battery,car.batteryCapacity,spec(/^Battery (Capacity|Energy).*kWh/i))});
- return {...power,motorPower};
+ const motorPower=resolveRussianMotorPower(facts);
+ return {...power,iceHp:facts.iceHp,iceKw:facts.iceKw,electricPeakKw:facts.electricPeakKw,engineReference:facts.engineReference,motorPower};
 }

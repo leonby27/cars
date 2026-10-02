@@ -69,7 +69,7 @@ export function estimateRussianOffer(row,{rates=RU_PRICING.rates,tariffs=RU_PRIC
   const lowSum=rows.reduce((sum,row)=>sum+(row.minAmount??row.amount),0);
   const range=lowSum!==sum?{min:Math.floor(lowSum/10000)*10000,max:Math.ceil(sum/10000)*10000}:null;
   return {...base,status:'estimated',totalAmount:Math.ceil(sum/10000)*10000,subtotal:sum,rows,range,estimateKind:range?'range':'point',
-    inputs:{powertrain:power.kind,engineCc:cc,icePowerKw:power.iceKw,electricPeakKw:power.electricPeakKw,continuousPowerKw:power.continuousKw,motorPower:power.motorPower},
+    inputs:{powertrain:power.kind,engineCc:cc,icePowerKw:power.iceKw,electricPeakKw:power.electricPeakKw,continuousPowerKw:power.continuousKw,motorPower:power.motorPower,engineReference:power.engineReference},
     ratesDate:rates.date,version:tariffs.version,calculatedAt:date.toISOString(),
     assumptions:['Предварительный расчёт для личного ввоза физическим лицом. Тарифы доставки и сопровождения — ориентиры, условия партнёра ещё не подтверждены.',
       'Возраст оценён по году модели, объём — по подробной спецификации или данным объявления. Дата выпуска, объём и мощность проверяются по документам.',

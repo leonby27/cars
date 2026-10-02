@@ -1,0 +1,183 @@
+{
+  "id": "guazi-xdnvvzmvnl",
+  "source": "Guazi",
+  "city": "Zhengzhou, China",
+  "price_cny": 254054,
+  "brand": "Li Auto",
+  "model": "L9",
+  "model_year": 2022,
+  "powertrain": "Гибрид",
+  "drivetrain": "Полный",
+  "battery_kwh": "42.60",
+  "specifications": {
+    "engine": "1.5L",
+    "gearbox": "Автомат",
+    "bodyType": "SUV / кроссовер",
+    "fuelType": null,
+    "torqueNm": 620,
+    "bodyColor": "Dark grey",
+    "batteryType": "NCM",
+    "enginePower": null,
+    "engineVolume": 1.5,
+    "transmission": "AT",
+    "batteryHealth": 92,
+    "bodyStructure": "SUV"
+  },
+  "source_payload": {
+    "priceBasis": "FOB",
+    "fobPriceUsd": 37965,
+    "fobPort": "Horgos",
+    "sourceFuelType": "Extended range",
+    "engine": "1.5L",
+    "engineVolume": 1.5,
+    "engineCc": 1500,
+    "engineHorsepower": 153.68,
+    "horsepower": 449,
+    "motorPowerKw": 330,
+    "motorHorsepower": 449,
+    "drive": "Полный",
+    "battery": 42.6,
+    "transmission": "AT",
+    "dimensions": "5218×1998×1800",
+    "curbWeight": 2520,
+    "technicalSpecs": {
+      "groups": [
+        {
+          "name": "Engine",
+          "items": [
+            {
+              "name": "Engine Model",
+              "value": "L2E15M"
+            },
+            {
+              "name": "Displacement (L)",
+              "value": "1.5"
+            },
+            {
+              "name": "Cylinder Arrangement",
+              "value": "L"
+            },
+            {
+              "name": "Number of Cylinders",
+              "value": "4"
+            },
+            {
+              "name": "Valves per Cylinder",
+              "value": "4"
+            },
+            {
+              "name": "Valve Train",
+              "value": "DOHC"
+            },
+            {
+              "name": "Maximum Horsepower (ps)",
+              "value": "153.68"
+            },
+            {
+              "name": "Maximum Power (kw)",
+              "value": "113"
+            },
+            {
+              "name": "WLTC Combined Fuel Consumption (L)",
+              "value": "0.86"
+            }
+          ]
+        },
+        {
+          "name": "Motor",
+          "items": [
+            {
+              "name": "Total Motor Power (kw)",
+              "value": "330"
+            },
+            {
+              "name": "Total Motor Torque (N·m)",
+              "value": "620"
+            },
+            {
+              "name": "Rear Motor Max Power (kw)",
+              "value": "200"
+            },
+            {
+              "name": "Rear Motor Max Torque (N·m)",
+              "value": "200"
+            },
+            {
+              "name": "Energy Consumption per 100km (kwh/100km)",
+              "value": "22.2"
+            },
+            {
+              "name": "Battery Capacity (kWh)",
+              "value": "42.6"
+            },
+            {
+              "name": "Battery Type",
+              "value": "NCM Battery"
+            },
+            {
+              "name": "Slow Charging Time (hours)",
+              "value": "6.5"
+            },
+            {
+              "name": "WLTC Combined Range (km)",
+              "value": "1100"
+            },
+            {
+              "name": "CLTC Electric Range (km)",
+              "value": "215"
+            },
+            {
+              "name": "Fast Charging",
+              "value": "Supported"
+            },
+            {
+              "name": "Fast Charging Time (hours)",
+              "value": "0.5"
+            }
+          ]
+        },
+        {
+          "name": "Body Structure",
+          "items": [
+            {
+              "name": "Wheelbase (mm)",
+              "value": "3105"
+            },
+            {
+              "name": "Length (mm)",
+              "value": "5218"
+            },
+            {
+              "name": "Width (mm)",
+              "value": "1998"
+            },
+            {
+              "name": "Height (mm)",
+              "value": "1800"
+            },
+            {
+              "name": "Front Track (mm)",
+              "value": "1725"
+            },
+            {
+              "name": "Rear Track (mm)",
+              "value": "1741"
+            },
+            {
+              "name": "Number of Doors",
+              "value": "5"
+            },
+            {
+              "name": "Number of Seats",
+              "value": "6"
+            },
+            {
+              "name": "Curb Weight (kg)",
+              "value": "2520"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

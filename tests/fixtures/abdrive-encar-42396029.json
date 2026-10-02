@@ -1,0 +1,41 @@
+{
+  "id": "encar-42396029",
+  "source": "Encar",
+  "city": "서울",
+  "price_cny": 55800000,
+  "brand": "Kia",
+  "model": "Sorento",
+  "model_year": 2026,
+  "powertrain": "Гибрид",
+  "drivetrain": "Передний",
+  "battery_kwh": null,
+  "specifications": {
+    "engine": "1.6L",
+    "gearbox": "Автомат",
+    "bodyType": "SUV / кроссовер",
+    "fuelType": null,
+    "bodyColor": "Dark Gray",
+    "batteryType": null,
+    "enginePower": null,
+    "engineVolume": 1.6,
+    "transmission": "Automatic",
+    "vehicleClass": "SUV",
+    "batteryHealth": null
+  },
+  "source_payload": {
+    "sourcePrice": 55800000,
+    "sourceCurrency": "KRW",
+    "priceBasis": "Vehicle Price",
+    "sourceFuelType": "Hybrid",
+    "engine": "1.6L",
+    "engineCc": 1598,
+    "drive": "Передний",
+    "transmission": "Automatic",
+    "rawSeries": "더 뉴 쏘렌토 4세대",
+    "rawModel": "HEV 1.6 2WD Signature X Line",
+    "rawModelGroup": "쏘렌토",
+    "technicalSpecs": {
+      "groups": []
+    }
+  }
+}

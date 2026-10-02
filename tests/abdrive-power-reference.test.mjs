@@ -66,3 +66,54 @@ test('Every reference has unique identity, bounded validity, evidence and physic
  assert.equal(new Set(RU_POWER_REFERENCE.map(e=>e.id)).size,RU_POWER_REFERENCE.length);
  for(const e of RU_POWER_REFERENCE){assert.ok(RU_POWER_SOURCES[e.source]?.url.startsWith('https://'));assert.ok(e.years[0]<=e.years[1]);const values=Array.isArray(e.kw)?e.kw:[e.kw];assert.ok(values.every(n=>n>0&&(!e.peak||n<=e.peak)));}
 });
+
+const sorento=JSON.parse(readFileSync(new URL('./fixtures/abdrive-encar-42396029.json',import.meta.url)));
+const l9=JSON.parse(readFileSync(new URL('./fixtures/abdrive-guazi-xdnvvzmvnl.json',import.meta.url)));
+test('Sorento kr-42396029 fills absent ICE power before quotation and uses HEV reference',()=>{
+ const original=structuredClone(sorento),offer=estimateRussianOffer(sorento,{now});
+ assert.equal(offer.status,'estimated');assert.equal(offer.totalAmount,6620000);assert.equal(offer.range,null);
+ assert.equal(offer.inputs.icePowerKw,132.39);assert.equal(offer.inputs.electricPeakKw,47.7);
+ assert.equal(offer.inputs.motorPower.minKw,21.5);assert.equal(offer.inputs.continuousPowerKw,null);
+ assert.deepEqual(offer.inputs.engineReference.fields,['iceHp','iceKw','electricPeakKw']);
+ assert.equal(offer.rows.find(r=>r.id==='utilization').amount,952800);
+ assert.deepEqual(sorento,original);
+ // Documentary values are never replaced by the reference estimate.
+ const documented=estimateRussianOffer({...sorento,source_payload:{...sorento.source_payload,enginePowerKw:132.4,motorThirtyMinutePowerKw:25}},{now});
+ assert.equal(documented.inputs.icePowerKw,132.4);assert.equal(documented.inputs.motorPower.method,'document');assert.equal(documented.inputs.motorPower.minKw,25);
+});
+
+test('Sorento completion cannot leak into another market, engine, year, drive or PHEV',()=>{
+ for(const change of [{source:'Guazi'},{model:'Sportage'},{model_year:2025},{drivetrain:'Полный'},{powertrain:'ДВС',source_payload:{sourceFuelType:'Gasoline'}}]){
+  const power=russianPowertrain({...sorento,...change});assert.equal(power.engineReference,null,JSON.stringify(change));
+ }
+ for(const change of [{rawModel:'PHEV 1.6 2WD Signature'},{rawModel:null},{engineCc:2497},{enginePowerKw:117.7},{motorPowerKw:67},{battery:13.8},{sourceFuelType:'Plug-in Hybrid'}]){
+  const power=russianPowertrain({...sorento,source_payload:{...sorento.source_payload,...change}});
+  assert.equal(power.engineReference,null,JSON.stringify(change));assert.notEqual(power.motorPower.method,'reference');
+ }
+});
+
+test('L9 xdnvvzmvnl uses nominal motor sum, preserves FOB and excludes generator',()=>{
+ const offer=estimateRussianOffer(l9,{now});
+ assert.equal(offer.status,'estimated');assert.equal(offer.range,null);assert.equal(offer.totalAmount,8080000);
+ assert.equal(offer.inputs.motorPower.minKw,145);assert.equal(offer.inputs.motorPower.maxKw,145);
+ assert.equal(offer.inputs.continuousPowerKw,null);assert.equal(offer.inputs.powertrain,'series');
+ assert.equal(offer.rows.find(r=>r.id==='utilization').amount,3024000);
+ assert.equal(offer.rows.some(r=>r.id==='origin'),false);
+ const documented=estimateRussianOffer({...l9,source_payload:{...l9.source_payload,motorThirtyMinutePowerKw:150}},{now});
+ assert.equal(documented.inputs.motorPower.minKw,150);assert.equal(documented.inputs.motorPower.method,'document');
+});
+
+test('L9 estimate requires its generation, battery, peak and drive; conflicting motors are rejected',()=>{
+ for(const change of [{model:'L8'},{model_year:2024},{drivetrain:'Задний'},{battery_kwh:52.3}])assert.equal(russianPowertrain({...l9,...change}).motorPower.method,'unknown');
+ for(const change of [{motorPowerKw:400},{motorModel:'TZ180XY999'},{motorCount:1}])assert.equal(russianPowertrain({...l9,source_payload:{...l9.source_payload,...change}}).motorPower.method,'unknown');
+});
+
+test('Catalog price index uses the same completed variants as detail pages',async()=>{
+ const {createRussianPriceIndex}=await import('../server/abdrive/price-index.mjs');
+ const {RU_PRICING}=await import('../config/ru-pricing.mjs');
+ const index=await createRussianPriceIndex({query:async()=>({rows:[sorento,l9]})},{getRates:async()=>RU_PRICING.rates,now:()=>now})();
+ for(const car of [sorento,l9]){
+  assert.equal(index.prices.get(car.id),estimateRussianOffer(car,{now}).totalAmount);
+  assert.equal(estimateRussianOffer({...car,id:'another-listing'},{now}).totalAmount,index.prices.get(car.id));
+ }
+});
