@@ -1,0 +1,205 @@
+{
+  "checked_at_utc": "2026-10-02T11:37:24.175569+00:00",
+  "window_start_utc": "2026-10-02T11:22:15+00:00",
+  "sites": {
+    "abcars.by": {
+      "crawler_families": {
+        "Apple": {
+          "requests": 165,
+          "statuses": {
+            "200": 164,
+            "404": 1
+          },
+          "ips": 112,
+          "cards": 63,
+          "bytes": 7670198
+        },
+        "ClaudeBot": {
+          "requests": 149,
+          "statuses": {
+            "200": 74,
+            "429": 74,
+            "404": 1
+          },
+          "ips": 1,
+          "cards": 73,
+          "bytes": 4953704
+        },
+        "Yandex": {
+          "requests": 401,
+          "statuses": {
+            "200": 401
+          },
+          "ips": 188,
+          "cards": 186,
+          "bytes": 16431531
+        },
+        "Keenable": {
+          "requests": 8,
+          "statuses": {
+            "200": 8
+          },
+          "ips": 7,
+          "cards": 8,
+          "bytes": 517073
+        },
+        "OpenAI-search": {
+          "requests": 37,
+          "statuses": {
+            "200": 36,
+            "404": 1
+          },
+          "ips": 12,
+          "cards": 31,
+          "bytes": 565871
+        },
+        "Meta": {
+          "requests": 8,
+          "statuses": {
+            "200": 5,
+            "429": 3
+          },
+          "ips": 7,
+          "cards": 0,
+          "bytes": 420233
+        },
+        "GoogleOther": {
+          "requests": 3,
+          "statuses": {
+            "200": 2,
+            "429": 1
+          },
+          "ips": 3,
+          "cards": 1,
+          "bytes": 103113
+        },
+        "Googlebot": {
+          "requests": 13,
+          "statuses": {
+            "200": 13
+          },
+          "ips": 3,
+          "cards": 5,
+          "bytes": 425674
+        },
+        "Ahrefs": {
+          "requests": 2,
+          "statuses": {
+            "200": 2
+          },
+          "ips": 2,
+          "cards": 1,
+          "bytes": 66558
+        },
+        "Bing": {
+          "requests": 9,
+          "statuses": {
+            "200": 5,
+            "404": 4
+          },
+          "ips": 5,
+          "cards": 4,
+          "bytes": 356895
+        }
+      },
+      "confirmed_exporter_successful_reads": 0,
+      "confirmed_exporter_denied_reads": 3,
+      "mass_catalog_export_after_changes": "Not established in this observation window; slow and distributed copying remains possible"
+    },
+    "abdrive.ru": {
+      "crawler_families": {
+        "GoogleOther": {
+          "requests": 47,
+          "statuses": {
+            "200": 45,
+            "429": 1,
+            "301": 1
+          },
+          "ips": 3,
+          "cards": 26,
+          "bytes": 2433589
+        },
+        "Meta": {
+          "requests": 76,
+          "statuses": {
+            "200": 26,
+            "429": 48,
+            "404": 2
+          },
+          "ips": 33,
+          "cards": 23,
+          "bytes": 1186023
+        },
+        "GPTBot": {
+          "requests": 46,
+          "statuses": {
+            "429": 46
+          },
+          "ips": 1,
+          "cards": 0,
+          "bytes": 0
+        },
+        "Googlebot": {
+          "requests": 20,
+          "statuses": {
+            "200": 20
+          },
+          "ips": 3,
+          "cards": 6,
+          "bytes": 1261526
+        },
+        "Ahrefs": {
+          "requests": 1,
+          "statuses": {
+            "200": 1
+          },
+          "ips": 1,
+          "cards": 1,
+          "bytes": 41596
+        },
+        "ClaudeBot": {
+          "requests": 6,
+          "statuses": {
+            "429": 5,
+            "200": 1
+          },
+          "ips": 1,
+          "cards": 1,
+          "bytes": 45420
+        }
+      },
+      "confirmed_exporter_successful_reads": 0,
+      "confirmed_exporter_denied_reads": 0,
+      "mass_catalog_export_after_changes": "Not established in this observation window; slow and distributed copying remains possible"
+    }
+  },
+  "checks": {
+    "feed_xml": 410,
+    "feed_gzip": 410,
+    "catalog_both_sites": 200,
+    "internal_build_data": 404,
+    "database_listens": "loopback only",
+    "firewall": "default deny incoming; only 22/80/443 allowed",
+    "external_protocol_probe": {
+      "5432": "no protocol response; timeout",
+      "8787": "no HTTP response; timeout",
+      "8788": "no HTTP response; timeout"
+    },
+    "feed_timer": "disabled",
+    "search_network_refresh": "success",
+    "captcha_in_reviewed_sources": "no implementation found"
+  },
+  "limitations": [
+    "15-minute observation window; not evidence against historical or distributed copying",
+    "IP quotas allow slow collection; API can return up to 100 cars per successful request",
+    "UA-labelled families are log labels, not proof of sender identity; search exemptions independently require provider networks",
+    "No full application security audit performed"
+  ],
+  "release": {
+    "feed_disabled_at_utc": "2026-10-02T11:33:17Z",
+    "feed_backup": "/var/backups/car-feed-disabled.dy7od7r2",
+    "protection_backup": "/var/backups/car-bot-protection.TDQ8B9",
+    "confirmed_exporter_denial_expires_utc": "2026-10-04T00:00:00Z",
+    "application_build_required": false
+  }
+}
