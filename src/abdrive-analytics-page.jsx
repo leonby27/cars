@@ -16,7 +16,7 @@ function Login({onSuccess}){
    onSuccess();
   }catch{setError('Не удалось войти. Попробуйте ещё раз.');}finally{setPending(false);}
  };
- return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика ABDrive</h1><form onSubmit={submit}><label><span>Пароль</span><input type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} required autoFocus /></label>{error&&<p className="analytics-error" role="alert">{error}</p>}<button className="primary" disabled={pending||!password}>{pending?'Проверяем…':'Войти'}</button></form></section></main>;
+ return <main className="analytics-login page-width"><section className="analytics-login-card"><form onSubmit={submit}><label><span>Пароль</span><input type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} required autoFocus /></label>{error&&<p className="analytics-error" role="alert">{error}</p>}<button className="primary" disabled={pending||!password}>{pending?'Проверяем…':'Войти'}</button></form></section></main>;
 }
 export default function AbdriveAnalyticsPage(){
  const requestId=useRef(0);

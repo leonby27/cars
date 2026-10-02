@@ -1,5 +1,7 @@
 # Prototype Instructions
 
+ABDrive analytics login (owner decision, 2026-10-02): omit the visible «Аналитика ABDrive» heading from the login form. Keep the independent analytics password only in the private server environment, never in source code or public assets.
+
 Bot protection (owner authorization, 2026-10-02): reduce non-search crawler load and stop rapid automatic catalog exports on both domains. Commercial SEO/bulk agents including AhrefsSiteAudit/Semrush are denied. AhrefsBot also feeds the Yep search engine and retains a shared low crawl budget instead of full denial. Training families share 6 requests/minute across both sites; preserve distinct search/user fetch agents. Public catalog reads have shared per-IP burst and sustained quotas even when an exporter changes UA, domain, URL/query or spoofed headers. Search exemptions require matching official provider IPs or forward-confirmed Yandex DNS, never UA alone; keep normal page/filter bursts, static assets, authentication, POST forms and local warmers available. Install via deploy/install-car-bot-protection.sh with validated nginx and backups; maintain verification lists automatically. This supersedes older crawler speed/exemption rules. See deploy/README-ai-crawlers.md.
 
 
