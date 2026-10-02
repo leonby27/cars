@@ -1,10 +1,11 @@
+import { readAppSource } from "./read-app-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const [toolPages, app, styles, png] = await Promise.all([
   readFile(new URL("../src/tool-pages.js", import.meta.url), "utf8"),
-  readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+  readAppSource(),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
   readFile(new URL("../public/services/price-comparison.png", import.meta.url)),
 ]);

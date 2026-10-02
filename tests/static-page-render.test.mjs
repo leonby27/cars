@@ -64,3 +64,25 @@ test("вопросы размечены один раз: копия из шап�
   // Приложение вопросов не разметило — шапка остаётся как есть.
   assert.equal(dropHeadFaqIfRendered(html, "<main></main>"), html);
 });
+
+// A cold homepage must still respond when the catalog is unavailable.
+test("home uses saved data once, shares tracking URLs and invalidates changed snapshots", async () => {
+  const { createStaticPageRenderer } = await import("../server/static-page.mjs");
+  let renders = 0, day = new Date("2026-10-02T12:00:00Z");
+  let saved = JSON.stringify({ models: [{ name: "BYD Seal" }], brands: [], showcase: [{ id: "che168-1" }], catalogFacts: { total: 132856, updatedAt: "2026-10-02" } });
+  const file = '<html><head><script id="home-data">old snapshot</script></head><body><div id="root"><main>old</main></div></body></html>';
+  const forbidden = () => { throw new Error("homepage must not wait for live catalog"); };
+  const render = createStaticPageRenderer({
+    readPage: async () => file, readHome: async () => saved, renderApi: forbidden, getFacts: forbidden, now: () => day,
+    loadEntry: async () => ({ renderStaticApp(path, search, boot) { renders++; assert.equal(path, "/"); assert.deepEqual(boot.api, {}); return `<main><h1>${boot.catalogFacts.total}</h1><p>${search}</p></main>`; } }),
+  });
+  const first = await render("/");
+  assert.match(first.html, /132856/); assert.doesNotMatch(first.html, /old snapshot/);
+  assert.match(first.html, /"homeShowcase":\[\{"id":"che168-1"\}\]/);
+  assert.equal(await render("/", "?utm_source=test&gclid=123&nocount=1"), first); assert.equal(renders, 1);
+  const searched = await render("/", "?q=Tesla&utm_campaign=test"); assert.match(searched.html, /\?q=Tesla/); assert.doesNotMatch(searched.html, /utm_campaign/); assert.equal(renders, 2);
+  saved = JSON.stringify({ catalogFacts: { total: 132857 }, models: [], brands: [], showcase: [] });
+  assert.match((await render("/")).html, /132857/); assert.equal(renders, 3);
+  day = new Date("2026-10-03T00:00:00Z"); await render("/"); assert.equal(renders, 4);
+  saved = "corrupt"; assert.match((await render("/")).html, /"homeShowcase":\[\]/); assert.equal(renders, 5);
+});

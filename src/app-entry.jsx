@@ -1,4 +1,5 @@
 import "./storage-guard.js";
+import { loadSecondaryPages, usesSecondaryPage } from "./secondary-page-load.jsx";
 import React from "react";
 import { captureCatalogFallback } from "./catalog-fallback.js";
 import { createRoot, hydrateRoot } from "react-dom/client";
@@ -134,7 +135,9 @@ const blogSlug = (() => {
   return unbased.startsWith("/blog/") ? findBlogPost(unbased.replace(/\/+$/, ""))?.slug || null : null;
 })();
 
-if (modelSlug) loadModelText(modelSlug).catch(() => null).then(start);
-else if (blogSlug) loadBlogText(blogSlug).catch(() => null).then(start);
-else if (isToolPath) loadToolPageTexts().catch(() => null).then(start);
-else start();
+const routePath = window.location.pathname.replace(/\/+$/, "") || "/";
+const routeReady = usesSecondaryPage(routePath) ? loadSecondaryPages() : Promise.resolve();
+const textReady = modelSlug ? loadModelText(modelSlug).catch(() => null)
+  : blogSlug ? loadBlogText(blogSlug).catch(() => null)
+  : isToolPath ? loadToolPageTexts().catch(() => null) : Promise.resolve();
+Promise.all([routeReady, textReady]).then(start);

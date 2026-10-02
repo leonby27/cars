@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 // Устройство материалов журнала: что обязано быть в каждом виде и как устроены блоки.
 //
 // Правила записаны словами в BLOG_TEXTS_TZ.md, а здесь стоят сторожа. Смысл разделения
@@ -125,7 +126,7 @@ test("у каждого источника есть название и адре
 // поисковика. Забыть `nofollow` в одном из них — обычная оплошность, а увидеть её
 // в готовой странице нельзя без запроса к серверу.
 test("ссылки на источники отдаются с nofollow", () => {
-  const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const app = readAppSource();
   const generator = readFileSync(new URL("../scripts/generate-seo-pages.mjs", import.meta.url), "utf8");
   const appBlock = app.slice(app.indexOf("function ArticleSources("), app.indexOf("function ArticleFaq("));
   assert.match(appBlock, /<ExternalLink href=\{source\.url\}>/, "в приложении блок источников не использует общий nofollow-компонент");

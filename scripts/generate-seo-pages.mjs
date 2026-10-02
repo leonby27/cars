@@ -1056,7 +1056,7 @@ const { models: popularModels, brands: brandModelTabs } = homePopularModels(live
 // Карточка витрины показывает не больше пяти кадров (HoverImagePreview) — остальные
 // фото и история цены в странице только утяжелили бы главную.
 const homeShowcase = live.showcase.map(({ images, priceHistory: _history, ...car }) => ({ ...car, images: Array.isArray(images) ? images.slice(0, 5) : images }));
-writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs, showcase: homeShowcase })}\n`);
+writeFileSync(path.join(path.dirname(clientDir), "popular-models.json"), `${JSON.stringify({ models: popularModels, brands: brandModelTabs, showcase: homeShowcase, catalogFacts: { total: live.activeCars, updatedAt: live.catalogRefreshedAt || "" } })}\n`);
 
 // Разделы, в которых есть хотя бы одна машина. Марки заведены заранее, под загрузку
 // каталога: пока импорт до марки не дошёл, её раздел пуст — в карту сайта и в ссылки

@@ -1,3 +1,4 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -8,7 +9,7 @@ import test from "node:test";
 // хранилища в браузере и частая запись истории в Safari. Проверки ниже держат
 // каждое из этих мест.
 
-const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const app = readAppSource();
 const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const entry = fs.readFileSync(new URL("../src/app-entry.jsx", import.meta.url), "utf8");
 

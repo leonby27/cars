@@ -1,9 +1,10 @@
+import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { createSeoRenderer } from "../server/seo-render.mjs";
 
-const appSource = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const appSource = readAppSource();
 const companySource = fs.readFileSync(new URL("../src/company-data.js", import.meta.url), "utf8");
 
 test("contact requisites stay hidden while footer keeps document links", () => {
