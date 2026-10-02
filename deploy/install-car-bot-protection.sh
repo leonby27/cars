@@ -43,6 +43,13 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
         pos = text.index(marker)
         text = text[:pos] + rule + '\n' + text[pos:]
         path.write_text(text)
+    # Server-level slow budgets also cover photos outside dynamic proxy locations.
+    guard = 'limit_req zone=car_training_v2 burst=1 nodelay;'
+    if guard not in text:
+        text = text.replace(rule, rule + '\n' + guard + '\nlimit_req_status 429;\nlimit_req_log_level notice;')
+    if 'abcars-site' in name and 'location = /robots.txt {' not in text:
+        text += '''\n# Keep AhrefsBot's Yep crawl separate from its audit crawler.\nlocation = /robots.txt {\n  brotli_static off;\n  brotli off;\n  gzip off;\n  sub_filter_types text/plain;\n  sub_filter 'User-agent: AhrefsBot' 'User-agent: AhrefsSiteAudit';\n  try_files $uri =404;\n}\n'''
+    path.write_text(text)
     dependency = '/etc/nginx/snippets/car-ai-limit.conf;'
     source = Path('/etc/nginx/snippets/abcars-proxy.conf').read_text() if 'abcars-site' in name else text
     if dependency not in source:
