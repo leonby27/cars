@@ -14,7 +14,7 @@ flock -n 9 || { echo 'Another ABDrive release is running'; exit 75; }
 exec 8>/run/lock/car-bot-protection.lock
 flock -n 8 || { echo 'Another crawler release/refresh is running'; exit 75; }
 backup=$(mktemp -d /var/backups/car-bot-protection.XXXXXX)
-files=(/etc/nginx/conf.d/car-ai-limits.conf /etc/nginx/snippets/car-ai-limit.conf /etc/nginx/snippets/car-search-networks.conf /etc/nginx/snippets/abcars-site.conf /etc/nginx/sites-available/abdrive /usr/local/lib/car-bot-protection/update-search-networks.py /etc/systemd/system/car-search-networks.service /etc/systemd/system/car-search-networks.timer /var/lib/car-bot-protection/search-state.json /etc/nginx/conf.d/abcars-bots.conf)
+files=(/etc/nginx/conf.d/car-ai-limits.conf /etc/nginx/snippets/car-ai-limit.conf /etc/nginx/snippets/car-search-networks.conf /etc/nginx/snippets/abcars-site.conf /etc/nginx/sites-available/abdrive /usr/local/lib/car-bot-protection/update-search-networks.py /etc/systemd/system/car-search-networks.service /etc/systemd/system/car-search-networks.timer /var/lib/car-bot-protection/search-state.json /etc/nginx/conf.d/abcars-bots.conf /etc/nginx/snippets/abcars-photo-location.conf)
 for i in "${!files[@]}"; do
     if [[ -e ${files[$i]} ]]; then cp -a "${files[$i]}" "$backup/$i"; fi
 done
@@ -47,6 +47,9 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
     guard = 'limit_req zone=car_training_v2 burst=1 nodelay;'
     if guard not in text:
         text = text.replace(rule, rule + '\n' + guard + '\nlimit_req_status 429;\nlimit_req_log_level notice;')
+    retry = 'add_header Retry-After $car_ai_retry_after always;'
+    if retry not in text:
+        text = text.replace(guard, guard + '\n' + retry)
     if 'abcars-site' in name and 'location = /robots.txt {' not in text:
         text += '''\n# Keep AhrefsBot's Yep crawl separate from its audit crawler.\nlocation = /robots.txt {\n  brotli_static off;\n  brotli off;\n  gzip off;\n  sub_filter_types text/plain;\n  sub_filter 'User-agent: AhrefsBot' 'User-agent: AhrefsSiteAudit';\n  try_files $uri =404;\n}\n'''
     path.write_text(text)
@@ -58,6 +61,11 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
 legacy = Path('/etc/nginx/conf.d/abcars-bots.conf')
 text = legacy.read_text().replace('ahrefsbot|semrushbot', 'ahrefssiteaudit|semrushbot')
 legacy.write_text(text)
+photos = Path('/etc/nginx/snippets/abcars-photo-location.conf')
+text = photos.read_text()
+if '/etc/nginx/snippets/car-ai-limit.conf;' not in text:
+    text = text.replace('  include /etc/nginx/snippets/abcars-headers.conf;', '  include /etc/nginx/snippets/car-ai-limit.conf;\n  include /etc/nginx/snippets/abcars-headers.conf;')
+    photos.write_text(text)
 PY
 install -m644 "$source_dir/nginx-car-ai-limits.conf" /etc/nginx/conf.d/car-ai-limits.conf
 install -m644 "$source_dir/nginx-car-ai-limit-location.conf" /etc/nginx/snippets/car-ai-limit.conf

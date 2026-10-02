@@ -55,6 +55,7 @@ http {{
         if ($car_blocked_bot) {{ return 403; }}
         limit_req zone=car_training_v2 burst=1 nodelay;
         limit_req_status 429;
+        add_header Retry-After $car_ai_retry_after always;
         location /photo/ {{ proxy_pass http://127.0.0.1:{backend.server_port}; }}
         location /assets/ {{ return 200 "asset"; }}
         # BY sends car HTML through a named location with a rewrite.
@@ -104,7 +105,7 @@ http {{
             assert Backend.calls-before == 2, 'Rejected training requests reached the backend'
             assert all(retry == '10' for status, retry in replies if status == 429)
             assert all(request(agent, url='/assets/fixture.js')[0] == 200 for _ in range(3))
-            assert request(agent, url='/photo/fixture.jpg')[0] == 429, 'Photo location bypassed the shared crawl budget'
+            assert request(agent, url='/photo/fixture.jpg') == (429, '10'), 'Photo location bypassed the shared crawl budget'
             assert request(agent, url='/robots.txt')[0] == 200
         for agent in ['AhrefsSiteAudit/6.1', 'SemrushBot/1.0', 'Bytespider/1.0', 'python-requests/2.0']:
             before = Backend.calls
