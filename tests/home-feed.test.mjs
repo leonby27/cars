@@ -7,8 +7,8 @@ import { CORE_MODELS as publicationModels } from "../scripts/lib/social-blocks.m
 import { homeMarketReferences } from "../server/home-feed.mjs";
 
 const cars = Array.from({ length:120 }, (_, i) => ({
-  id:String(i), brand:i < 40 ? "Zeekr" : `Other${i}`, model:i < 40 ? "001" : `Model${i}`,
-  homeMarketSavingPercent:i >= 40 && i < 80 ? 12 : 0, estimatedTotalUsd:25000, bodyType:"SUV",
+  id:String(i), brand:i < 80 ? "Zeekr" : `Other${i}`, model:i < 80 ? "001" : `Model${i}`,
+  homeMarketSavingPercent:i < 100 ? 12 : 0, estimatedTotalUsd:25000, bodyType:"SUV",
 }));
 
 test("home selection guarantees the priority share in desktop/mobile prefixes and append batches", () => {
@@ -23,13 +23,18 @@ test("home selection guarantees the priority share in desktop/mobile prefixes an
   assert.notDeepEqual(selectHomeFeed(cars, 20, { random:seededRandom(1) }), selectHomeFeed(cars, 20, { random:seededRandom(2) }));
 });
 
-test("social priority is the publication list, not every model from those brands", () => {
+test("priority requires both a publication model and a real market saving", () => {
   assert.equal(CORE_MODELS, publicationModels);
-  for (const model of CORE_MODELS) assert.equal(isHomePriority(model), true);
-  assert.equal(isHomePriority({ brand:"BMW", model:"X6" }), false);
-  assert.equal(isHomePriority({ brand:"Other", model:"A", homeMarketSavingPercent:1 }), true);
+  for (const model of CORE_MODELS) {
+    assert.equal(isHomePriority({ ...model, homeMarketSavingPercent:1 }), true);
+    for (const saving of [undefined, null, 0, -1]) {
+      assert.equal(isHomePriority({ ...model, homeMarketSavingPercent:saving }), false);
+    }
+  }
+  assert.equal(isHomePriority({ brand:"BMW", model:"X6", homeMarketSavingPercent:30 }), false);
+  assert.equal(isHomePriority({ brand:"Other", model:"A", homeMarketSavingPercent:1 }), false);
   assert.equal(isHomePriority({ brand:"Other", model:"A", homeMarketSavingPercent:0 }), false);
-  assert.equal(isHomePriority({ brand:"Zeekr", model:"001", available:false }), false);
+  assert.equal(isHomePriority({ brand:"Zeekr", model:"001", homeMarketSavingPercent:20, available:false }), false);
 });
 
 test("short/empty pools fill available slots without inventing priority or duplicating IDs", () => {

@@ -83,7 +83,7 @@ test('real Git diff permits already-built server rates but catches a newer local
 
 // Regressions from the last five production releases.
 test('contacts and comparison rendering reuse inputs, journal selection refreshes only catalog',()=>{
- for(const file of ['src/info-pages-seo.js','src/market-compare.js','src/vehicle-market-savings.js',
+ for(const file of ['src/search-dictionary.js','src/info-pages-seo.js','src/market-compare.js','src/vehicle-market-savings.js',
   'src/service-video-loading.js','config/critical-classes.json','src/blog-texts/example.js']) {
   const p=deploymentPlan([file]);
   assert.equal(p.reuseCatalog,true,file); assert.equal(p.reuseFeed,true,file);

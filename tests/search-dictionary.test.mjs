@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectHeroAliases, findBrandInText, listSearchMatches, listSearchVariants, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, translateBrandWords, translateModelWords } from "../src/search-dictionary.js";
+import { collectHeroAliases, findBrandInText, listSearchMatches, listSearchVariants, rankSearchEntries, relatedSearchBrands, resolveBrandAndModels, rewriteQueryNames, searchNormalize, translateBrandWords, translateModelWords } from "../src/search-dictionary.js";
 
 // Строка запроса проходит тот же путь, что и в приложении: разбор чисел отдаёт
 // остаток, он режется на слова, из них вынимаются кузов, привод, тип и коробка,
@@ -185,6 +185,33 @@ const resolve = (query) =>
     modelsOfBrand: async (brand) => entries(CATALOG[brand] || []),
   });
 const dictionaryText = (query) => parse(query).text;
+
+test("связи Dongfeng показывают только собственные марки в наличии и не расширяют Geely", () => {
+  const brands = [...entries(["Honda", "Nissan", "Voyah", "M-Hero", "Forthing", "Geely", "Zeekr"]), { name: "Nammi", count: 0 }];
+  assert.deepEqual(relatedSearchBrands("Dongfeng", brands), ["Voyah", "M-Hero", "Forthing"]);
+  assert.deepEqual(relatedSearchBrands("Geely", brands), []);
+  assert.deepEqual(relatedSearchBrands("Voyah", brands), []);
+});
+
+test("известная марка без наличия не становится поиском производителя в описании", async () => {
+  const context = {
+    brandEntries: entries(["Honda"]),
+    modelEntries: entries(["CR-V PHEV"]),
+    modelsOfBrand: async () => [],
+  };
+  for (const query of ["донгфенг", "дунфэн", "Dongfeng", "хавал", "Haval"]) {
+    const brand = /haval|хавал/i.test(query) ? "Haval" : "Dongfeng";
+    assert.deepEqual(await resolveBrandAndModels(dictionaryText(query), context), {
+      brand, models: [], matched: true, ignored: [],
+    });
+  }
+  assert.deepEqual(await resolveBrandAndModels(dictionaryText("донгфенг cr-v"), context), {
+    brand: "Dongfeng", models: [], matched: true, ignored: ["cr", "v"],
+  });
+  assert.deepEqual(await resolveBrandAndModels("lfp", context), {
+    brand: "", models: [], matched: false, ignored: [],
+  });
+});
 
 test("марку находим и когда она написана после модели", async () => {
   assert.deepEqual(await resolve("bmw ix3"), { brand: "BMW", models: ["iX3"], matched: true, ignored: [] });

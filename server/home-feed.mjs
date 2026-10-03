@@ -40,7 +40,7 @@ export function homeFeedQuery({ where, values, limit, references, carSelect }) {
       SELECT l.id, v.brand, v.model,
         CASE WHEN l.estimated_total_usd > 0 AND l.estimated_total_usd < r.median
           THEN (r.median-l.estimated_total_usd)/r.median*100 ELSE 0 END AS saving,
-        (s.brand IS NOT NULL OR COALESCE(l.estimated_total_usd > 0 AND l.estimated_total_usd < r.median, false)) AS priority
+        (s.brand IS NOT NULL AND COALESCE(l.estimated_total_usd > 0 AND l.estimated_total_usd < r.median, false)) AS priority
       FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id
       LEFT JOIN social s ON s.brand=v.brand AND s.model=v.model
       LEFT JOIN reference r ON r.brand=v.brand AND r.model=v.model AND r.type=v.powertrain AND r.year=v.model_year

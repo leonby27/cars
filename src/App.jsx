@@ -22,7 +22,7 @@ import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
 import { matchesSearchText, searchTextWords, searchWordStem } from "./car-search-text.js";
-import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, nameSpellings, rankSearchEntries, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
+import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, nameSpellings, rankSearchEntries, relatedSearchBrands, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels } from "./colors.js";
 import { cityName } from "./city-names.js";
 import { EXCLUDED_BRANDS, canonicalImportModel } from "../config/import-policy.mjs";
@@ -1603,6 +1603,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
   const triggerRef = useRef(null);
   const searchRef = useRef(null);
   const optionsRef = useRef(null);
+  const scrollIndicatorRef = useRef(null);
   const listId = useId();
   const actionSheetMode = Boolean(mobileActionSheet);
   const selectedIndex = Math.max(0, options.indexOf(highlighted));
@@ -1717,6 +1718,34 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
     };
   }, [open, brandGrid]);
 
+  // A native overlay scrollbar can stay invisible until the first scroll.
+  // Keep a quiet position indicator visible whenever this list overflows.
+  useLayoutEffect(() => {
+    if (!open || actionSheetMode) return;
+    const list = optionsRef.current;
+    const indicator = scrollIndicatorRef.current;
+    if (!list || !indicator) return;
+    const update = () => {
+      const overflow = list.scrollHeight - list.clientHeight;
+      const track = Math.max(0, list.clientHeight - 8);
+      indicator.hidden = overflow <= 1 || track <= 0;
+      if (indicator.hidden) return;
+      const height = Math.min(track, Math.max(24, track * list.clientHeight / list.scrollHeight));
+      const progress = Math.max(0, Math.min(1, list.scrollTop / overflow));
+      indicator.style.height = `${height}px`;
+      indicator.style.top = `${list.offsetTop + 4 + (track - height) * progress}px`;
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(list);
+    observer.observe(indicator.parentElement);
+    list.addEventListener("scroll", update, { passive: true });
+    return () => {
+      observer.disconnect();
+      list.removeEventListener("scroll", update);
+    };
+  }, [open, actionSheetMode, filteredOptions, brandGrid]);
+
   // Внутри мобильной шторки фильтров меню раскрывается вниз и может уйти за
   // нижний край; докручиваем шторку, чтобы раскрытый список был виден целиком.
   // В шторке одного фильтра список открывается вверх и виден целиком сам — крутить
@@ -1818,7 +1847,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
               )}
             </div>
           )}
-          <div className="select-options" id={listId} role="listbox" aria-label={label} aria-multiselectable={multiple || undefined} ref={optionsRef} style={brandGrid ? {
+          <div className="select-options select-options--indicator" id={listId} role="listbox" aria-label={label} aria-multiselectable={multiple || undefined} ref={optionsRef} style={brandGrid ? {
             "--brand-grid-rows": Math.max(1, Math.ceil(filteredOptions.length / 4)),
             "--brand-grid-rows-mid": Math.max(1, Math.ceil(filteredOptions.length / 3)),
           } : undefined}>
@@ -1876,7 +1905,7 @@ function SelectField({ label, value, options, onChange, searchable = false, mult
               <p className="select-empty">Ничего не найдено</p>
             )}
           </div>
-
+          <span className="select-scroll-indicator" ref={scrollIndicatorRef} aria-hidden="true" hidden />
         </div>
       )}
       {!disabled && actionSheetMode && open && typeof document !== "undefined" && createPortal(
@@ -1975,7 +2004,7 @@ const localAvailability = (cars) => ({
 
 // Шторка фильтра на телефоне: шапка с заголовком (и стрелкой «назад», когда шаг не
 // первый), прокручиваемая середина и кнопка результата, которая всегда видна внизу.
-function FilterSheet({ title, onBack = null, onClose, footer = null, fill = false, compact = false, icon = null, hideClose = false, scrollResetKey = null, children }) {
+function FilterSheet({ title, onBack = null, onClose, footer = null, controls = null, fill = false, compact = false, icon = null, hideClose = false, scrollResetKey = null, children }) {
   const titleId = useId();
   const bodyRef = useRef(null);
   // Шторка марок и моделей живёт между шагами: содержимое сменилось, а прокрутка
@@ -2017,6 +2046,7 @@ function FilterSheet({ title, onBack = null, onClose, footer = null, fill = fals
             </button>
           )}
         </header>
+        {controls && <div className="mobile-filter-sheet-controls">{controls}</div>}
         <div className="mobile-filter-sheet-body" ref={bodyRef}>{children}</div>
         {Boolean(footer) && <footer className="mobile-filter-sheet-actions">{footer}</footer>}
       </section>
@@ -2260,26 +2290,24 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
           onClose={() => setSheet(null)}
           footer={sheetFooter}
           scrollResetKey={sheet}
-          fill
-        >
-          {/* Крестик очистки — свой, как в строке поиска на главной: у браузерного
-              нет ни плашки, ни отступа от края. */}
-          <SearchField
-            className="sheet-search"
-            value={sheetQuery}
-            placeholder={sheet === "models" ? "Поиск модели" : "Поиск марки"}
-            ariaLabel={sheet === "models" ? "Поиск модели" : "Поиск марки"}
-            inputProps={{ autoComplete:"off" }}
-            onValueChange={(next) => {
-              setSheetQuery(next);
-              // Ищем всегда по всем маркам: на вкладке «Германия» запрос «Зикр»
-              // показывал пустоту, хотя марка в каталоге есть. Начали печатать —
-              // вкладка возвращается на «Все», чтобы было видно, где ищем.
-              if (next.trim()) setBrandGroup("Все");
-            }}
-          />
-          {sheet === "brands" ? (
-            <>
+          controls={<>
+            {/* Крестик очистки — свой, как в строке поиска на главной: у браузерного
+                нет ни плашки, ни отступа от края. */}
+            <SearchField
+              className="sheet-search"
+              value={sheetQuery}
+              placeholder={sheet === "models" ? "Поиск модели" : "Поиск марки"}
+              ariaLabel={sheet === "models" ? "Поиск модели" : "Поиск марки"}
+              inputProps={{ autoComplete:"off" }}
+              onValueChange={(next) => {
+                setSheetQuery(next);
+                // Ищем всегда по всем маркам: на вкладке «Германия» запрос «Зикр»
+                // показывал пустоту, хотя марка в каталоге есть. Начали печатать —
+                // вкладка возвращается на «Все», чтобы было видно, где ищем.
+                if (next.trim()) setBrandGroup("Все");
+              }}
+            />
+            {sheet === "brands" && (
               <div className="sheet-tabs" role="tablist" aria-label="Группы марок">
                 {BRAND_GROUPS.map((group) => (
                   <button type="button" key={group} role="tab" aria-selected={brandGroup === group} className={`sheet-tab${brandGroup === group ? " chosen" : ""}`} onClick={() => setBrandGroup(group)}>
@@ -2287,26 +2315,30 @@ function VehicleSearch({ constrained = false, selectedType, onTypeChange, values
                   </button>
                 ))}
               </div>
-              <div className="sheet-options">
+            )}
+          </>}
+          fill
+        >
+          {sheet === "brands" ? (
+            <>
+              <div className="popular-brands-grid sheet-brand-grid">
                 {/* Строка «Все марки» есть только в общей группе и только пока
                     не ищут: под вкладкой «Германия» она сбрасывала бы выбор ко
                     всему каталогу, а в результатах поиска была бы лишней. Значок
                     лежит в такой же коробке, как знак марки, иначе названия в
                     списке начинались бы на разной ширине от края. */}
                 {brandGroup === "Все" && !sheetQuery.trim() && (
-                  <button type="button" className={`sheet-option${brandChosen ? "" : " chosen"}`} onClick={() => { actions.brand("Все марки"); setSheet(null); }}>
+                  <button type="button" className={`brand-link${brandChosen ? "" : " chosen"}`} aria-pressed={!brandChosen} onClick={() => { actions.brand("Все марки"); setSheet(null); }}>
                     <span className="brand-logo" aria-hidden="true"><SquaresFour size={20} weight="fill" /></span>
-                    <span className="sheet-option-name">Все марки</span>
-                    <span className="sheet-option-count">{number(optionCounts?.brands?.get("Все марки") || 0)}</span>
-                    <CaretRight size={16} weight="bold" aria-hidden="true" />
+                    <span className="brand-name" title="Все марки">Все марки</span>
+                    <span className="brand-count">{number(optionCounts?.brands?.get("Все марки") || 0)}</span>
                   </button>
                 )}
                 {brandSheetRows.map((brand) => (
-                  <button type="button" key={brand} className={`sheet-option${values.brand === brand ? " chosen" : ""}`} onClick={() => { actions.brand(brand); setSheetQuery(""); setSheet("models"); }}>
+                  <button type="button" key={brand} className={`brand-link${values.brand === brand ? " chosen" : ""}`} aria-pressed={values.brand === brand} onClick={() => { actions.brand(brand); setSheetQuery(""); setSheet("models"); }}>
                     <BrandMark brand={brand} />
-                    <span className="sheet-option-name">{brand}</span>
-                    <span className="sheet-option-count">{number(optionCounts?.brands?.get(brand) || 0)}</span>
-                    <CaretRight size={16} weight="bold" aria-hidden="true" />
+                    <span className="brand-name" title={brand}>{brand}</span>
+                    <span className="brand-count">{number(optionCounts?.brands?.get(brand) || 0)}</span>
                   </button>
                 ))}
                 {!brandSheetRows.length && <p className="select-empty">Ничего не найдено</p>}
@@ -2740,6 +2772,7 @@ async function parseHeroSearchOnce(query, { apiMode, cars, currency }) {
       return [...counts].map(([name, count]) => ({ name, count }));
     },
   });
+  result.relatedBrands = relatedSearchBrands(found.brand, brandEntries);
   result.brand = found.brand;
   result.models = found.models;
   result.matched = found.matched;
@@ -4163,6 +4196,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
     apiQuery: restoredHero.apiQuery || null,
     all: null,
     corrected: null,
+    relatedBrands: restoredHero.relatedBrands || [],
   } : null));
   // Блок фильтров под поиском по умолчанию свёрнут на всех экранах
   // и открывается иконкой в строке поиска.
@@ -4186,7 +4220,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   // Номер попытки поиска: догрузка при прокрутке сверяется с ним, чтобы ответ
   // на старый запрос не подмешался к свежей выдаче.
   const heroSeq = useRef(0);
-  const emptyHeroResult = { items: [], total: 0, href: "/catalog", loading: false, loadingMore: false, hasMore: false, apiQuery: null, all: null, corrected: null };
+  const emptyHeroResult = { items: [], total: 0, href: "/catalog", loading: false, loadingMore: false, hasMore: false, apiQuery: null, all: null, corrected: null, relatedBrands: [] };
   useEffect(() => {
     // После возврата из карточки не ищем заново, пока запрос и сортировка те же:
     // повторный поиск обрезал бы догруженную выдачу и сбил восстановленную позицию.
@@ -4231,6 +4265,10 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           return;
         }
         const href = heroCatalogHref(parsed);
+        const relatedBrands = (parsed.relatedBrands || []).map((brand) => ({
+          brand,
+          href: heroCatalogHref({ ...parsed, brand, models: [], query: "" }),
+        }));
         if (apiMode !== false) {
           const apiParams = heroApiParams(parsed);
           if (heroSort === "default") {
@@ -4244,7 +4282,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           if (cancelled) return;
           const found = catalog.items.map(normalizeImportedCar);
           const ordered = heroSort === "default" ? varietyOrder(found, seededRandom(`${heroShuffleSeed}:0`)) : found;
-          setHeroSearch({ ...emptyHeroResult, items: ordered, total: Number(catalog.total) || 0, href, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null });
+          setHeroSearch({ ...emptyHeroResult, items: ordered, total: Number(catalog.total) || 0, href, relatedBrands, hasMore: Boolean(catalog.hasMore), apiQuery, corrected: parsed.correctedQuery || null });
         } else {
           const modelSet = new Set(parsed.models);
           // Итог «до Минска» есть не у всех статических карточек — для фильтра
@@ -4287,7 +4325,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
           // Карточки из статического каталога не всегда несут готовый итог «до Минска» —
           // для сортировки по цене досчитываем его так же, как избранное.
           const sorted = heroSort === "default" ? varietyOrder(matches, seededRandom(heroShuffleSeed)) : sortCars(matches.map((car) => (Number(car.estimatedTotalUsd) ? car : { ...car, estimatedTotalUsd: estimateLandedCost(car).totalUsd })), heroSort);
-          setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null });
+          setHeroSearch({ ...emptyHeroResult, items: sorted.slice(0, 24), total: sorted.length, href, relatedBrands, hasMore: sorted.length > 24, all: sorted, corrected: parsed.correctedQuery || null });
         }
       } catch {
         if (!cancelled) setHeroSearch({ ...emptyHeroResult });
@@ -4333,6 +4371,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         items: heroSearch.items.slice(0, 240),
         total: heroSearch.total,
         href: heroSearch.href,
+        relatedBrands: heroSearch.relatedBrands || [],
         hasMore: heroSearch.hasMore,
         apiQuery: heroSearch.apiQuery,
         shuffleSeed: heroShuffleSeed,
@@ -4431,6 +4470,14 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
         )}
         {/* При пустой выдаче строку не показываем вовсе: счётчик, «Быстрый
             просмотр» и сортировка не нужны, всё говорит блок-заглушка ниже. */}
+        {searching && !heroSearch.loading && heroSearch.relatedBrands?.length > 0 && (
+          <nav className="search-related-brands" aria-label="Другие марки Dongfeng">
+            <span>Другие марки Dongfeng:</span>
+            {heroSearch.relatedBrands.map(({ brand, href }) => (
+              <AppLink key={brand} href={href} navigate={navigate}>{brand}</AppLink>
+            ))}
+          </nav>
+        )}
         {searching && !searchEmpty && (
           <div className="search-results-bar">
             {/* Строка не исчезает на время пересчёта, иначе выдача дёргается при

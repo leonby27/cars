@@ -517,6 +517,17 @@ export const translateBrandWords = (words) => translateAliasWords(words, HERO_BR
 // Модели переводим после марок: «джили тигго» — сначала марка, потом её модель.
 export const translateModelWords = (words) => translateAliasWords(words, HERO_MODEL_RU);
 
+// Только явные связи для навигации, не расширение фильтра марки.
+// Собственные марки Dongfeng: dongfeng-global.com и отчёт DFM за 2024 год
+// (hkexnews.hk, 2025/0326/2025032601492.pdf). Совместные предприятия исключены.
+const RELATED_SEARCH_BRANDS = {
+  Dongfeng: ["Voyah", "M-Hero", "MHERO", "M Hero", "Aeolus", "Nammi", "Forthing", "eπ", "ePi"],
+};
+export const relatedSearchBrands = (brand, entries = []) => {
+  const names = new Set((RELATED_SEARCH_BRANDS[brand] || []).map((name) => name.toLocaleLowerCase("en")));
+  return entries.filter((entry) => Number(entry.count) > 0 && names.has(entry.name.toLocaleLowerCase("en"))).map((entry) => entry.name);
+};
+
 // Написания набранного, по которым ищем в списках марок и моделей. Кроме самой
 // строки пробуем её же в другой раскладке, её же латиницей буква в букву и её же
 // через словарь названий. Латиница буква в букву нужна для незаконченных слов:
@@ -652,9 +663,14 @@ export const resolveBrandAndModels = async (text, { brandEntries = [], modelEntr
   // и первой («bmw ix3»), и после модели («ix3 bmw»), поэтому ищем её в любом месте.
   const brandHit = findBrandInText(
     text,
-    brandEntries.map((entry) => entry.name),
+    [...new Set([...brandEntries.map((entry) => entry.name), ...HERO_BRAND_RU.map(([, name]) => name)])],
   );
   if (brandHit) {
+    // Марка остаётся фильтром даже при нулевом наличии. Иначе Dongfeng
+    // искался в описаниях Honda, где упоминается совместный производитель.
+    if (!brandEntries.some((entry) => entry.name === brandHit.name)) {
+      return { brand: brandHit.name, models: [], matched: true, ignored: brandHit.rest.split(" ").filter(Boolean) };
+    }
     const segments = splitModelSegments(brandHit.rest);
     if (!segments.length) return { brand: brandHit.name, models: [], matched: true, ignored: [] };
     const models = (await modelsOfBrand?.(brandHit.name)) || [];

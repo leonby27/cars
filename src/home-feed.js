@@ -5,7 +5,7 @@ export const HOME_PRIORITY_SHARE = 0.75;
 const modelKey = (car) => JSON.stringify([car.brand, car.model]);
 const socialModels = new Set(CORE_MODELS.map(modelKey));
 export const isHomePriority = (car) => car.available !== false
-  && (socialModels.has(modelKey(car)) || Number(car.homeMarketSavingPercent) > 0);
+  && socialModels.has(modelKey(car)) && Number(car.homeMarketSavingPercent) > 0;
 
 // Every four slots include three priority cars. The first ten slots therefore
 // include eight, and twenty include fifteen; appending preserves the same mix.
@@ -20,8 +20,8 @@ export function selectHomeFeed(cars, count, { random = Math.random, preceding = 
     let bestIndex = 0, bestScore = -Infinity;
     for (let index = 0; index < Math.min(pool.length, FEED_CANDIDATE_WINDOW); index++) {
       // Strong savings get a modest preference without turning the feed into
-      // repeated models; social-only cars remain eligible priority choices.
-      const score = varietyScore(pool[index], recent) + (Number(pool[index].homeMarketSavingPercent) >= 10 ? 2 : 0);
+      // repeated models. Both the social list and a real saving are required.
+      const score = varietyScore(pool[index], recent) + (isHomePriority(pool[index]) && Number(pool[index].homeMarketSavingPercent) >= 10 ? 2 : 0);
       if (score > bestScore) { bestIndex = index; bestScore = score; }
     }
     const [car] = pool.splice(bestIndex, 1);
