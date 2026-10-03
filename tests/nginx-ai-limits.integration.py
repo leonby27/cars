@@ -108,7 +108,7 @@ http {{
             assert all(request(agent, url='/assets/fixture.js')[0] == 200 for _ in range(3))
             assert request(agent, url='/photo/fixture.jpg') == (429, '10'), 'Photo location bypassed the shared crawl budget'
             assert request(agent, url='/robots.txt')[0] == 200
-        for agent in ['AhrefsSiteAudit/6.1', 'SemrushBot/1.0', 'Bytespider/1.0', 'python-requests/2.0']:
+        for agent in ['AhrefsSiteAudit/6.1', 'SERankingBacklinksBot/1.0', 'SemrushBot/1.0', 'Bytespider/1.0', 'python-requests/2.0']:
             before = Backend.calls
             assert all(request(agent, host=host, url=url)[0] == 403 for host in ['a.test','b.test'] for url in ['/cars/fixture','/api/cars?limit=100','/assets/fixture.js'])
             assert Backend.calls == before

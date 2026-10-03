@@ -536,6 +536,21 @@ html[data-theme="dark"] .hero-search-clear {
 .search-results-bar .search-results-note {
   margin: 0;
 }
+.search-related-brands {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 24px 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.search-related-brands a {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--ink);
+}
 /* Слова из поиска, которыми сужена выдача каталога: нажатие убирает их из отбора. */
 .catalog-text-chip {
   display: inline-flex;
@@ -7440,6 +7455,25 @@ html[data-theme="dark"] #root .load-more {
   flex-direction: column;
   gap: 2px;
 }
+.select-options--indicator {
+  padding-right: 8px;
+  scrollbar-width: none;
+}
+.select-options--indicator::-webkit-scrollbar {
+  display: none;
+}
+.select-scroll-indicator {
+  position: absolute;
+  right: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.4;
+  pointer-events: none;
+}
+.select-scroll-indicator[hidden] {
+  display: none;
+}
 .select-menu .select-options :is(button, a) {
   /* Пункт может быть и ссылкой (марка, тип двигателя, кузов — ведут на свои разделы). */
   box-sizing: border-box;
@@ -10271,6 +10305,18 @@ html[data-theme="dark"] #root .spec-search,
   display: flex;
   flex-direction: column;
 }
+.sheet-brand-grid .brand-link {
+  width: 100%;
+}
+.sheet-brand-grid .brand-link.chosen {
+  background: var(--accent-soft);
+}
+.sheet-brand-grid .brand-link.chosen .brand-name {
+  color: var(--accent-dark);
+}
+.sheet-brand-grid .select-empty {
+  column-span: all;
+}
 .sheet-option {
   display: flex;
   align-items: center;
@@ -10470,6 +10516,10 @@ html[data-theme="dark"] #root .spec-search,
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+  .mobile-filter-sheet-controls {
+    flex: 0 0 auto;
+    background: var(--panel);
   }
   .mobile-filter-sheet-header {
     flex: 0 0 auto;

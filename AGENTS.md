@@ -1,3 +1,9 @@
+Mobile brand picker pinned controls (owner decision, 2026-10-03): keep the search and brand-country tabs fixed above the scrolling brand list. Keep model search fixed in the same sheet when moving to model selection; the result button stays fixed below.
+
+Mobile catalog brand picker (owner decision, 2026-10-03): use the homepage's three-column brand layout inside the mobile brand sheet: logo beside the name, muted listing count below the name, alphabetic order down columns, and ellipsis for long names. Reuse the homepage classes and spacing. Preserve search, country tabs, the all-brands option, selected state, the show-cars footer and the transition to model selection.
+
+Dropdown scroll visibility (owner decision, 2026-10-03): shared select dropdowns must show a subtle gray position indicator immediately on opening when their options overflow, including the brand grid. Keep it visible without hover or a first scroll, update its size/position with scrolling, filtering and resizing, and hide it when the whole list fits. Do not depend on the operating system's auto-hidden scrollbar.
+
 # Prototype Instructions
 
 ABDrive analytics login (owner decision, 2026-10-02): omit the visible «Аналитика ABDrive» heading from the login form. Keep the independent analytics password only in the private server environment, never in source code or public assets.

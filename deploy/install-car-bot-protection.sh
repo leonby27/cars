@@ -63,6 +63,7 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
 # AhrefsBot is a mixed SEO/Yep crawler: use the shared slow-crawl budget.
 legacy = Path('/etc/nginx/conf.d/abcars-bots.conf')
 text = legacy.read_text().replace('ahrefsbot|semrushbot', 'ahrefssiteaudit|semrushbot')
+text = text.replace('ahrefssiteaudit|semrushbot', 'ahrefssiteaudit|serankingbacklinksbot|semrushbot')
 legacy.write_text(text)
 photos = Path('/etc/nginx/snippets/abcars-photo-location.conf')
 text = photos.read_text()

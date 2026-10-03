@@ -1,0 +1,22 @@
+[Unit]
+Description=Shared daily catalog-copy budget and visitor recovery
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=car-catalog-guard
+EnvironmentFile=-/etc/default/car-catalog-guard
+ExecStart=/usr/bin/python3 /usr/local/lib/car-catalog-guard/catalog-guard.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+MemoryMax=192M
+CPUWeight=20
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
