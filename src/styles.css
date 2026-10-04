@@ -24549,6 +24549,26 @@ html body #root .market-compare-sort .select-trigger {
   flex: 0 0 auto;
   margin-left: auto;
 }
+@media (min-width: 701px) {
+  /* Reserve the same 36px row with or without the vehicle action buttons. */
+  .catalog > .breadcrumbs {
+    min-height: 75px; /* 23px top + 36px row + 16px bottom. */
+    line-height: 24px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .detail-topbar > .breadcrumbs {
+    min-height: 36px;
+    line-height: 24px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .catalog > .breadcrumbs > *,
+  .detail-topbar > .breadcrumbs > * {
+    flex-shrink: 0;
+  }
+}
 .detail-title:has(.detail-header-price) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 386px;
@@ -25457,8 +25477,37 @@ html[data-theme="dark"] .header-drawer-heading .header-menu-trigger {
   pointer-events: none;
   transition: opacity var(--motion-fast) ease;
 }
-.site-header.is-scrolled::after {
-  opacity: 1;
+@media (max-width: 700px) {
+  .site-header.is-scrolled::after {
+    opacity: 1;
+  }
+}
+@media (min-width: 701px) {
+  .site-header .header-actions {
+    --header-control-bg: var(--header-trigger-bg);
+  }
+  .header-menu nav :is(a, .header-menu-account) {
+    min-height: 0;
+    padding: 12px 14px;
+    border-radius: calc(11px * var(--corner-scale));
+    line-height: normal;
+    transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+  }
+  .header-menu nav {
+    margin-bottom: 0;
+  }
+  .header-menu-theme + nav {
+    margin-top: 8px;
+  }
+  .header-menu nav a:is(:hover, .active) {
+    background: var(--panel-soft);
+  }
+  :root[data-theme="dark"] .header-menu nav a:hover {
+    background: #30353d;
+  }
+  :root[data-theme="dark"] .header-menu nav a.active {
+    background: #383e47;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .site-header::after {
