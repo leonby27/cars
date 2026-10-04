@@ -222,15 +222,21 @@
   .availability-lead-modal .modal-close {
     top: max(12px, env(safe-area-inset-top));
     right: max(12px, env(safe-area-inset-right));
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
+  }
+  .availability-lead-modal .modal-close::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
   }
   .availability-lead-modal .auth-modal-heading {
     flex: 0 0 auto;
     min-height: 44px;
-    padding-inline: 0 52px;
+    padding-inline: 52px;
     margin-bottom: 20px;
-    text-align: left;
+    text-align: center;
   }
   .availability-lead-modal .availability-lead-fields {
     display: block;
@@ -244,7 +250,6 @@
   }
   .availability-lead-modal .availability-lead-footer {
     display: block;
-    flex: 0 0 auto;
     padding-top: 18px;
     background: var(--panel);
   }

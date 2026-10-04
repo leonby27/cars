@@ -4,7 +4,7 @@ Deployment resource policy (owner request, 2026-10-02): avoid catalog-wide prepa
 
 # Prototype Instructions
 
-Mobile vehicle lead form (owner correction, 2026-10-04): open as a full-screen modal on mobile/touch layouts, with no outside gutters or rounded card frame and an always available close control at the top. Constrain it to the visible viewport above the keyboard, including mobile Safari viewport shifts. Let the fields fill and scroll within the remaining space; keep the submit action at the bottom and reveal the focused field without scrolling the underlying page. Respect device safe areas and preserve optional account creation and the legal copy.
+Vehicle lead form (owner correction, 2026-10-04): use the centered heading «Оставить заявку» and the same text on the submit button, without an arrow. Ask only for name and phone; remove optional account creation and password fields. Place the submit button and legal copy directly below the inputs, inside the scrolling form contents. On mobile/touch layouts, open full-screen without outside gutters or a rounded card frame. Keep the close control available at the top: 19px bold cross, 36px circle and at least a 44px touch target. Constrain the modal to the visible viewport above the keyboard, including mobile Safari viewport shifts, and reveal the focused field without scrolling the underlying page. Respect device safe areas and preserve the legal copy.
 
 Mobile brand picker pinned controls (owner decision, 2026-10-03): keep the search and brand-country tabs fixed above the scrolling brand list. Keep model search fixed in the same sheet when moving to model selection; the result button stays fixed below.
 

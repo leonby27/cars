@@ -3953,18 +3953,15 @@ function AvailabilityRequestModal({ onClose, preview = false }) {
   );
 }
 
-// Заявка от незарегистрированного: имя и телефон обязательны, аккаунт — по желанию.
-// Форма повторяет окно входа, но без вкладок: человек пришёл не заводить аккаунт, а
-// спросить про машину.
+// Заявка гостя: только имя и телефон, без регистрации аккаунта.
 function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   const backdropRef = useRef(null);
   const fieldsRef = useRef(null);
-  const [values, setValues] = useState({ name:"", phone:"+375", account:false, password:"", confirm:"", consent:true });
+  const [values, setValues] = useState({ name:"", phone:"+375" });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
-  const withAccount = values.account;
-  const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
+  const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.value }));
   const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
   const blockPhoneWhitespace = (event) => {
     if (/\s/.test(event.key)) event.preventDefault();
@@ -3988,14 +3985,9 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
     const phone = normalizeLocalPhone(values.phone);
     if (values.name.trim().length < 2) return setError(authMessages.invalid_name);
     if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
-    if (withAccount) {
-      if (values.password.length < 8) return setError(authMessages.invalid_password);
-      if (values.password !== values.confirm) return setError("Пароли не совпадают.");
-      if (!values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
-    }
     setPending(true);
     try {
-      await submitLead(car, { name:values.name.trim(), phone, createAccount:withAccount, password:values.password, confirm:values.confirm });
+      await submitLead(car, { name:values.name.trim(), phone });
       onDone();
     } catch (submitError) {
       setError(authMessages[submitError.message] || "Не удалось отправить заявку. Попробуйте ещё раз.");
@@ -4006,29 +3998,19 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   return (
     <div ref={backdropRef} className="modal-backdrop auth-modal-backdrop availability-lead-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
       <form className="auth-card auth-modal availability-lead-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="availability-lead-title">
-        <button className="modal-close" type="button" onClick={onClose} disabled={pending} aria-label="Закрыть"><X size={19} /></button>
+        <button className="modal-close" type="button" onClick={onClose} disabled={pending} aria-label="Закрыть"><X size={19} weight="bold" /></button>
         <div className="auth-modal-heading">
-          <h1 id="availability-lead-title">Узнать точную цену и наличие авто</h1>
+          <h1 id="availability-lead-title">Оставить заявку</h1>
         </div>
         <div ref={fieldsRef} className="availability-lead-fields">
           <p className="availability-lead-note">Заявку получит компания-импортёр и уточнит все детали.</p>
           <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
           <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
-          <label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
-          <div className={`auth-registration-reveal${withAccount ? " open" : ""}`} aria-hidden={!withAccount} inert={withAccount ? undefined : true}>
-            <div className="auth-registration-reveal-inner">
-              <PasswordField label="Пароль" autoComplete="new-password" value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : "Минимум 8 символов"} required={withAccount} disabled={!withAccount} />
-              <PasswordField label="Ещё раз пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Ещё раз пароль" : "Ещё раз"} required={withAccount} disabled={!withAccount} />
-              <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!withAccount} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
-            </div>
-          </div>
           {error && <div className="auth-error" role="alert">{error}</div>}
-        </div>
-        <div className="availability-lead-footer">
-          <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Получить точную цену"}<ArrowRight size={18} /></button>
-          {!withAccount && (
+          <div className="availability-lead-footer">
+            <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Оставить заявку"}</button>
             <p className="availability-lead-legal">Нажимая кнопку, вы соглашаетесь с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой конфиденциальности</a>.</p>
-          )}
+          </div>
         </div>
       </form>
     </div>

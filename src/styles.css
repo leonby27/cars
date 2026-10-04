@@ -11758,8 +11758,7 @@ html[data-theme="dark"] #root .spec-search,
 .auth-modal .auth-switch {
   margin-bottom: 20px;
 }
-/* Заявка из карточки: то же окно, что у входа, но без вкладок — сверху объяснение,
-   аккаунт по желанию, под кнопкой строка про условия для тех, кто его не заводит. */
+/* Заявка из карточки: объяснение, имя и телефон, затем отправка и условия. */
 .availability-lead-modal .auth-modal-heading {
   margin-bottom: 12px;
 }
@@ -11769,11 +11768,6 @@ html[data-theme="dark"] #root .spec-search,
   font-size: 15px;
   line-height: 1.5;
   text-align: center;
-}
-.availability-lead-modal .availability-lead-account {
-  margin-top: 20px;
-  color: var(--ink);
-  white-space: normal;
 }
 /* Кнопка отправки — зелёная, в тон «Узнать точную цену и наличие» в карточке:
    посетитель нажал зелёную кнопку и продолжает тем же цветом. */
