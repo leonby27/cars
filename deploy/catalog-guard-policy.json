@@ -1,0 +1,17 @@
+{
+  "early_check_networks": ["47.82.0.0/16", "47.79.0.0/16"],
+  "early_check_until_utc": "2026-10-11T00:00:00Z",
+  "behavior": {
+    "enabled": true,
+    "min_ips_hour": 32,
+    "details_hour": 250,
+    "min_ips_day": 128,
+    "details_day": 1000,
+    "network_clearance_units": 10000,
+    "network_clearance_details": 1000,
+    "ordinary_clearance_units": 8000,
+    "ordinary_clearance_details": 600,
+    "risk_clearance_units": 2000,
+    "risk_clearance_details": 100
+  }
+}

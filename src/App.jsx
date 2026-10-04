@@ -7,6 +7,9 @@ import { vehiclePhotoHref, retryVehiclePhoto } from "./photo-source.js";
 import { Fragment, Suspense, createContext, lazy, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
+import { bindModalViewport } from "./modal-viewport.js";
+import { PhoneField } from "./phone-field.jsx";
+import { completePhoneNumber } from "./phone-mask.js";
 
 import { Illustration } from "./illustration.jsx";
 import { StripPhoto } from "./strip-photo.jsx";
@@ -17,7 +20,7 @@ import { SegmentedControl } from "./segmented-control.jsx";
 import { homeModelBrands, homeModelEntries, homePopularModels } from "./home-popular-models.js";
 import { EmptyState } from "./empty-state.jsx";
 import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, BookmarkSimple, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Desktop, Engine, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, InstagramLogo, Lightning, List, LinkSimple, MagnifyingGlass, MapPin, Moon, Palette, RoadHorizon, Rows, ShareNetwork, ShieldCheck, SlidersHorizontal, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, UserCircle, UsersThree, X } from "./icons.jsx";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, BookmarkSimple, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Desktop, Engine, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightning, List, LinkSimple, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, ShareNetwork, ShieldCheck, SlidersHorizontal, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
 import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
@@ -1157,11 +1160,13 @@ function SiteLogo() {
 // Переключатель режима цен. Стоит над вкладками, потому что относится ко всему
 // сайту, а не к выбранной половине квоты: включённый показывает льготную цену,
 // выключенный — цену с пошлиной 15%.
-function QuotaPricingToggle() {
+function QuotaPricingToggle({ compact = false }) {
   const pricing = useQuotaPricing();
   const available = Boolean(pricing?.available);
   const on = Boolean(pricing?.on);
-  const hint = !available
+  const hint = compact
+    ? !available ? "Режим задан ссылкой." : on ? "По квоте — пошлина 0%." : "Без квоты — пошлина 15%."
+    : !available
     ? "Режим цены на электромобили задан ссылкой для проверки."
     : on
       ? "Цены на электромобили по квоте: пошлина 0%. Выключите — добавится пошлина 15%."
@@ -1181,19 +1186,19 @@ function QuotaPricingToggle() {
         </span>
         <span className="quick-view-toggle-label">Цены с квотами</span>
       </label>
-      <small>{hint}</small>
+      <small className={compact ? "quota-pricing-hint-compact" : undefined}>{hint}</small>
     </div>
   );
 }
 
-function EvQuotaPanel({ navigate, onDetails }) {
+function EvQuotaPanel({ navigate, onDetails, showDetails = true }) {
   return (
     <div className="quota-panel">
-      <QuotaPricingToggle />
-      <AppLink className="primary quota-panel-details" href="/ev-quota" navigate={navigate} onClick={onDetails}>
+      <QuotaPricingToggle compact={!showDetails} />
+      {showDetails && <AppLink className="primary quota-panel-details" href="/ev-quota" navigate={navigate} onClick={onDetails}>
         <Lightning size={17} weight="bold" aria-hidden="true" />
         <span>Подробнее</span>
-      </AppLink>
+      </AppLink>}
     </div>
   );
 }
@@ -1285,9 +1290,13 @@ function DecreePricingButton({ compact, path, className = "" }) {
 
 // The hidden full-size button remains measurable in every mode, so moving the
 // control into the menu cannot cause resize feedback or lose its natural width.
-function useHeaderDecreeMode(headerRef) {
+function useHeaderDecreeMode(headerRef, forceMenu = false) {
   const [mode, setMode] = useState("menu");
   useLayoutEffect(() => {
+    if (forceMenu) {
+      setMode("menu");
+      return undefined;
+    }
     const header = headerRef.current;
     const logo = header.querySelector(".wordmark");
     const menu = header.querySelector(".header-menu-shell");
@@ -1314,7 +1323,7 @@ function useHeaderDecreeMode(headerRef) {
       observer?.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [headerRef]);
+  }, [headerRef, forceMenu]);
   return mode;
 }
 
@@ -1379,13 +1388,20 @@ function EvQuotaButton({ quotas, navigate, className = "" }) {
   );
 }
 
-function Header({ navigate, favoritesCount, savedSearchesCount, path, user, themeMode, setThemeMode }) {
+function Header({ navigate, favoritesCount, savedSearchesCount, path, user, themeMode, setThemeMode, onBack = null }) {
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(() => typeof window !== "undefined" && window.scrollY > 0);
   const menuRef = useRef(null);
+  const menuPanelRef = useRef(null);
+  const menuTriggerRef = useRef(null);
+  const menuCloseRef = useRef(null);
   const headerRef = useRef(null);
-  const decreeMode = useHeaderDecreeMode(headerRef);
+  const mobile = useMediaQuery(NARROW_VIEWPORT);
+  const decreeMode = useHeaderDecreeMode(headerRef, mobile);
+  const accountHref = user ? "/account" : "/login";
+  const openAccount = (target) => user ? navigate(target) : navigate(target, { replace:true, preserveScroll:true });
   // Остаток квоты считается по вшитым в сборку сводкам — за сессию он не меняется.
   const quotas = useMemo(() => ({
     personal: evQuotaState({ audience: "personal" }),
@@ -1395,6 +1411,13 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   useEffect(() => {
     setMenuOpen(false);
   }, [path]);
+
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > 0);
+    update();
+    window.addEventListener("scroll", update, { passive:true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
 
   // Пока меню раскрыто, плавающие кнопки внизу экрана убираем — иначе на
   // телефоне они накрывают его нижние пункты.
@@ -1407,7 +1430,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   useEffect(() => {
     if (!menuOpen) return undefined;
     const closeMenu = (event) => {
-      if (event.key === "Escape" || (event.type === "pointerdown" && !menuRef.current?.contains(event.target))) {
+      if (event.key === "Escape" || (event.type === "pointerdown" && !menuRef.current?.contains(event.target) && !menuPanelRef.current?.contains(event.target))) {
         setMenuOpen(false);
       }
     };
@@ -1419,15 +1442,126 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (!menuOpen || !mobile) return undefined;
+    const bodyOverflow = document.body.style.overflow;
+    const rootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    menuCloseRef.current?.focus({ preventScroll:true });
+    const keepFocus = (event) => {
+      if (event.key !== "Tab") return;
+      const panel = menuPanelRef.current;
+      const controls = Array.from(panel.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]'))
+        .filter((control) => control.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first) return;
+      if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", keepFocus);
+    return () => {
+      document.removeEventListener("keydown", keepFocus);
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = rootOverflow;
+      menuTriggerRef.current?.focus({ preventScroll:true });
+    };
+  }, [menuOpen, mobile]);
+
+  const menuLinks = {
+    account: (
+      <AppLink href={accountHref} navigate={openAccount}>
+        <UserCircle size={24} weight="duotone" aria-hidden="true" /><span>{user ? "Мой аккаунт" : "Войти в аккаунт"}</span>
+      </AppLink>
+    ),
+    catalog: (
+      <AppLink href="/catalog" navigate={navigate} className={path === "/catalog" || path.startsWith("/catalog/") ? "active" : ""} aria-current={path === "/catalog" ? "page" : undefined}>
+        <CarProfile size={24} weight="duotone" aria-hidden="true" /><span>Автомобили</span>
+      </AppLink>
+    ),
+    service: (
+      <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>
+        <Info size={24} weight="duotone" aria-hidden="true" /><span>О сервисе</span>
+      </AppLink>
+    ),
+    models: (
+      <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>
+        <SquaresFour size={24} weight="duotone" aria-hidden="true" /><span>О моделях авто</span>
+      </AppLink>
+    ),
+    contacts: (
+      <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>
+        <MapPin size={24} weight="duotone" aria-hidden="true" /><span>Контакты</span>
+      </AppLink>
+    ),
+    searches: (
+      <AppLink href="/searches" navigate={navigate} className={`header-menu-searches${path === "/searches" ? " active" : ""}`} aria-current={path === "/searches" ? "page" : undefined}>
+        <BookmarkSimple size={24} weight="duotone" aria-hidden="true" /><span>Мои поиски{savedSearchesCount > 0 ? ` · ${savedSearchesCount}` : ""}</span>
+      </AppLink>
+    ),
+    favorites: (
+      <AppLink href="/favorites" navigate={(target) => user ? navigate(target) : navigate("/register", { replace:true, preserveScroll:true })}>
+        <Heart size={24} weight="duotone" aria-hidden="true" /><span>Избранное{favoritesCount > 0 ? ` · ${favoritesCount}` : ""}</span>
+      </AppLink>
+    ),
+    journal: (
+      BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate} className={path === BLOG_INDEX.path || path.startsWith(`${BLOG_INDEX.path}/`) ? "active" : ""} aria-current={path === BLOG_INDEX.path ? "page" : undefined}>
+        <Newspaper size={24} weight="duotone" aria-hidden="true" /><span>{BLOG_INDEX.name}</span>
+      </AppLink>
+    ),
+  };
+  const menuOrder = mobile
+    ? ["account", "favorites", "searches", "service", "contacts", "models", "journal"]
+    : ["catalog", "journal", "service", "models", "contacts", "searches"];
+
+  const menuPanel = (
+    <div
+      ref={menuPanelRef}
+      className={`header-menu${mobile ? " header-menu-drawer" : ""}${menuOpen ? " open" : ""}`}
+      role={mobile ? "dialog" : undefined}
+      aria-modal={mobile && menuOpen ? true : undefined}
+      aria-label={mobile ? "Меню сайта" : undefined}
+      id="header-menu"
+      aria-hidden={!menuOpen}
+      inert={menuOpen ? undefined : true}
+    >
+        {mobile && <div className="header-drawer-heading">
+          <h2>Меню</h2>
+          <button ref={menuCloseRef} type="button" className="header-menu-trigger" aria-label="Закрыть меню" onClick={() => setMenuOpen(false)}>
+            <X size={25} weight="bold" aria-hidden="true" />
+          </button>
+        </div>}
+        <div className="header-menu-settings">
+          {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
+        </div>
+        {mobile && <EvQuotaPanel navigate={navigate} showDetails={false} />}
+        {decreeMode === "menu" && <DecreePricingPanel />}
+        <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
+        <nav aria-label="Основная навигация" onClick={(event) => { if (event.target.closest("a[href]")) setMenuOpen(false); }}>
+          {menuOrder.map((key) => <Fragment key={key}>{menuLinks[key]}</Fragment>)}
+        </nav>
+    </div>
+  );
+
   return (
-    <header className="site-header">
+    <header className={`site-header site-header-mobile-layout${scrolled ? " is-scrolled" : ""}`}>
       <div className="header-inner" ref={headerRef}>
+        {onBack && <button type="button" className="header-menu-trigger header-back" aria-label="Назад" onClick={onBack}>
+          <ArrowLeft size={24} weight="bold" aria-hidden="true" />
+        </button>}
         <AppLink className="wordmark" href="/" navigate={navigate} onClick={playRefreshPulse} aria-label="abcars.by — на главную">
           <SiteLogo />
         </AppLink>
         <div className="header-menu-shell" ref={menuRef}>
           <button
             type="button"
+            ref={menuTriggerRef}
             className={`header-menu-trigger${menuOpen ? " open" : ""}`}
             aria-label={menuOpen ? "Закрыть меню" : "Открыть меню"}
             aria-expanded={menuOpen}
@@ -1437,34 +1571,10 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             <span className="header-menu-icon header-menu-icon-list"><List size={27} weight="bold" /></span>
             <span className="header-menu-icon header-menu-icon-close"><X size={25} weight="bold" /></span>
           </button>
-          <div
-            className={`header-menu${menuOpen ? " open" : ""}`}
-            id="header-menu"
-            aria-hidden={!menuOpen}
-            inert={menuOpen ? undefined : true}
-          >
-              <div className="header-menu-settings">
-                {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
-              </div>
-              {decreeMode === "menu" && <DecreePricingPanel />}
-              <nav aria-label="Основная навигация">
-                {/* Каталог и журнал — первыми (25.09.2026): главный раздел сайта в главном
-                    меню, как у всех сайтов в выдаче; до этого на каталог вели только
-                    подвал и кнопки на главной, а на журнал — только подвал. */}
-                <AppLink href="/catalog" navigate={navigate} className={path === "/catalog" || path.startsWith("/catalog/") ? "active" : ""} aria-current={path === "/catalog" ? "page" : undefined}>Автомобили</AppLink>
-                {BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate} className={path === BLOG_INDEX.path || path.startsWith(`${BLOG_INDEX.path}/`) ? "active" : ""} aria-current={path === BLOG_INDEX.path ? "page" : undefined}>{BLOG_INDEX.name}</AppLink>}
-                <AppLink href="/how-it-works" navigate={navigate} className={path === "/how-it-works" ? "active" : ""} aria-current={path === "/how-it-works" ? "page" : undefined}>О сервисе</AppLink>
-                <AppLink href="/models" navigate={navigate} className={path.startsWith("/models") ? "active" : ""} aria-current={path.startsWith("/models") ? "page" : undefined}>О моделях авто</AppLink>
-                <AppLink href="/contacts" navigate={navigate} className={path === "/contacts" ? "active" : ""} aria-current={path === "/contacts" ? "page" : undefined}>Контакты</AppLink>
-                {/* На узких экранах кнопке «Мои поиски» в шапке не хватает места,
-                    поэтому там она живёт в этом меню; на широких — прячется, чтобы
-                    не дублировать кнопку рядом с избранным. */}
-                <AppLink href="/searches" navigate={navigate} className={`header-menu-searches${path === "/searches" ? " active" : ""}`} aria-current={path === "/searches" ? "page" : undefined}>
-                  Мои поиски{savedSearchesCount > 0 ? ` · ${savedSearchesCount}` : ""}
-                </AppLink>
-              </nav>
-              <ThemeSwitch mode={themeMode} setMode={setThemeMode} />
-          </div>
+          {mobile ? createPortal(<>
+            <div className={`header-menu-backdrop${menuOpen ? " open" : ""}`} aria-hidden="true" onPointerDown={() => setMenuOpen(false)} />
+            {menuPanel}
+          </>, document.body) : menuPanel}
         </div>
         <div className="header-actions header-left-controls">
           <EvQuotaButton quotas={quotas} navigate={navigate} />
@@ -6240,27 +6350,30 @@ function PasswordField({ label, value, onChange, autoComplete, placeholder = "",
 }
 
 function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectTo = "/" }) {
+  const backdropRef = useRef(null);
+  const fieldsRef = useRef(null);
   const registering = mode === "register";
-  const [values, setValues] = useState({ name:"", phone:"+375", password:"", confirm:"", consent:true });
+  const [values, setValues] = useState({ name:"", password:"", confirm:"", consent:true });
+  const [phoneValue, setPhoneValue] = useState({ country:"BY", national:"" });
   const [error, setError] = useState("");
   // На телефоне подписи полей скрыты (styles.css), их роль играют плейсхолдеры.
   const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.type === "checkbox" ? event.target.checked : event.target.value }));
-  const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
-  const blockPhoneWhitespace = (event) => {
-    if (/\s/.test(event.key)) event.preventDefault();
-  };
+  useEffect(() => bindModalViewport(backdropRef.current, fieldsRef.current), []);
+  useEffect(() => {
+    fieldsRef.current?.querySelector("input:not([disabled])")?.focus({ preventScroll:true });
+  }, [registering]);
   const submit = async (event) => {
     event.preventDefault();
     setError("");
-    const phone = normalizeLocalPhone(values.phone);
+    const phone = completePhoneNumber(phoneValue);
     if (registering && values.name.trim().length < 2) return setError(authMessages.invalid_name);
-    if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (!phone) return setError(authMessages.invalid_phone);
     if (values.password.length < 8) return setError(authMessages.invalid_password);
     if (registering && values.password !== values.confirm) return setError("Пароли не совпадают.");
     if (registering && !values.consent) return setError("Подтвердите согласие с условиями и политикой конфиденциальности.");
     try {
-      await onAuthenticate(mode, values);
+      await onAuthenticate(mode, { ...values, phone });
       navigate(redirectTo, { replace:true, preserveScroll:true });
     } catch (authError) {
       setError(authMessages[authError.message] || "Не удалось продолжить. Попробуйте ещё раз.");
@@ -6268,42 +6381,48 @@ function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectT
   };
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
     const closeOnEscape = (event) => {
       if (event.key === "Escape" && !pending) onClose();
     };
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [onClose, pending]);
   return (
-    <div className="modal-backdrop auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
-      <form className="auth-card auth-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
-        <button className="modal-close" type="button" onClick={onClose} disabled={pending} aria-label="Закрыть"><X size={19} /></button>
+    <div ref={backdropRef} className="modal-backdrop auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
+      <form className="auth-card auth-modal account-auth-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+        <button className="modal-close" type="button" onClick={onClose} disabled={pending} aria-label="Закрыть"><X size={19} weight="bold" /></button>
         <div className="auth-modal-heading">
           <h1 id="auth-modal-title">{registering ? "Создайте аккаунт" : "С возвращением"}</h1>
         </div>
-        <div className="auth-switch" role="tablist" aria-label="Тип формы">
-          <button type="button" role="tab" aria-selected={!registering} className={!registering ? "active" : ""} onClick={() => navigate("/login", { replace:true })}>Вход</button>
-          <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register", { replace:true })}>Регистрация</button>
-        </div>
-        <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
-          <div className="auth-registration-reveal-inner">
-            <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required={registering} disabled={!registering} /></label>
+        <div ref={fieldsRef} className="auth-modal-fields">
+          <div className="auth-switch" role="tablist" aria-label="Тип формы">
+            <button type="button" role="tab" aria-selected={!registering} className={!registering ? "active" : ""} onClick={() => navigate("/login", { replace:true })}>Вход</button>
+            <button type="button" role="tab" aria-selected={registering} className={registering ? "active" : ""} onClick={() => navigate("/register", { replace:true })}>Регистрация</button>
           </div>
-        </div>
-        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
-        <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : registering ? "Минимум 8 символов" : ""} required />
-        <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
-          <div className="auth-registration-reveal-inner">
-            <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Повторите пароль" : "Ещё раз"} required={registering} disabled={!registering} />
-            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
+          <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
+            <div className="auth-registration-reveal-inner">
+              <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required={registering} disabled={!registering} /></label>
+            </div>
           </div>
+          <PhoneField value={phoneValue} onChange={setPhoneValue} CountrySelect={SelectField} />
+          <PasswordField label="Пароль" autoComplete={registering ? "new-password" : "current-password"} value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : registering ? "Минимум 8 символов" : ""} required />
+          <div className={`auth-registration-reveal${registering ? " open" : ""}`} aria-hidden={!registering} inert={registering ? undefined : true}>
+            <div className="auth-registration-reveal-inner">
+              <PasswordField label="Повторите пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Повторите пароль" : "Ещё раз"} required={registering} disabled={!registering} />
+              <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!registering} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
+            </div>
+          </div>
+          {error && <div className="auth-error" role="alert">{error}</div>}
+          <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : registering ? "Создать аккаунт" : "Войти"}</button>
         </div>
-        {error && <div className="auth-error" role="alert">{error}</div>}
-        <button className="primary auth-submit" type="submit" disabled={pending}>{pending ? "Подождите…" : registering ? "Создать аккаунт" : "Войти"}<ArrowRight size={18} /></button>      </form>
+      </form>
     </div>
   );
 }
@@ -7342,6 +7461,15 @@ export function App() {
       <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}
+          onBack={contentPath !== "/" ? () => {
+            if (window.history.length > 1 && window.history.state?.fromPath) {
+              navigate(-1);
+            } else if (detailId) {
+              backToCatalog(findCarByListing(cars, detailId)?.id || detailId);
+            } else {
+              navigate("/");
+            }
+          } : null}
           favoritesCount={favorites.size}
           savedSearchesCount={savedSearches.length}
           path={path}

@@ -23,13 +23,16 @@ test("страница квоты показывает выбор аудитор
   assert.doesNotMatch(component, /QuotaPricingToggle/);
 });
 
-test("меню квоты оставляет переключатель цен и ведёт за подробностями на отдельную страницу", () => {
+test("панель квоты сохраняет подробности, а мобильное меню может скрыть эту кнопку", () => {
   const panel = app.slice(
     app.indexOf("function EvQuotaPanel"),
     app.indexOf("const QUOTA_TOOLTIP"),
   );
 
-  assert.match(panel, /<QuotaPricingToggle \/>/);
+  assert.match(panel, /showDetails = true/);
+  assert.match(panel, /<QuotaPricingToggle compact=\{!showDetails\} \/>/);
+  assert.match(panel, /showDetails && <AppLink/);
+  assert.match(app, /<EvQuotaPanel navigate=\{navigate\} showDetails=\{false\} \/>/);
   assert.match(panel, /<AppLink className="primary quota-panel-details" href="\/ev-quota"[\s\S]*?<Lightning size=\{17\} weight="bold"[\s\S]*?<span>Подробнее<\/span>/);
   assert.doesNotMatch(panel, /QuotaAudienceTabs|QuotaAudienceResult|quota-panel-forecast/);
   assert.match(app, /<EvQuotaPanel navigate=\{navigate\} onDetails=\{\(\) => setOpen\(false\)\} \/>/);

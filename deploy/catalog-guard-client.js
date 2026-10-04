@@ -4,9 +4,10 @@
   window.__catalogGuardInstalled = true;
   const originalFetch = window.fetch.bind(window);
   let pending = null;
-  function verify() {
-    if (pending) return pending;
-    pending = new Promise(resolve => {
+  const aborted = () => new DOMException('The request was aborted.', 'AbortError');
+  function createVerification() {
+    const state = { waiting:0, promise:null, finish:null };
+    state.promise = new Promise(resolve => {
       const dialog = document.createElement('dialog');
       const label = document.createElement('span');
       label.textContent = 'Проверка для продолжения просмотра';
@@ -31,8 +32,10 @@
         done = true;
         window.removeEventListener('message', message);
         dialog.remove(); previousFocus?.focus?.();
-        pending = null; resolve(ok);
+        if (pending === state) pending = null;
+        resolve(ok);
       }
+      state.finish = finish;
       function message(event) {
         if (event.origin === location.origin && event.source === frame.contentWindow && event.data?.type === 'catalog-verified') finish(true);
       }
@@ -42,14 +45,41 @@
       if (dialog.showModal) dialog.showModal();
       else { dialog.setAttribute('open',''); dialog.style.cssText += ';position:fixed;inset:4vh auto auto 3vw'; }
     });
-    return pending;
+    return state;
+  }
+  function verify(signal) {
+    if (signal?.aborted) return Promise.reject(aborted());
+    if (!pending) pending = createVerification();
+    const state = pending;
+    state.waiting++;
+    return new Promise((resolve, reject) => {
+      let done = false;
+      function release() {
+        if (done) return false;
+        done = true; state.waiting--;
+        signal?.removeEventListener('abort', cancel);
+        return true;
+      }
+      function cancel() {
+        if (!release()) return;
+        reject(aborted());
+        if (!state.waiting) state.finish(false);
+      }
+      signal?.addEventListener('abort', cancel, { once:true });
+      state.promise.then(ok => { if (release()) resolve(ok); });
+      if (signal?.aborted) cancel();
+    });
   }
   window.fetch = async function(input, options) {
     const response = await originalFetch(input, options);
     const method = String(options?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
     if (method !== 'GET' || response.status !== 429 || response.headers.get('X-Catalog-Verification') !== '/_catalog-check') return response;
     // Keep existing page/form state; cancelled or aborted requests are not retried.
-    if (await verify() && !options?.signal?.aborted && !(input instanceof Request && input.signal.aborted)) return originalFetch(input, options);
+    const signal = options?.signal || (input instanceof Request ? input.signal : null);
+    if (await verify(signal)) {
+      if (signal?.aborted) throw aborted();
+      return originalFetch(input, options);
+    }
     const headers = new Headers(response.headers);
     headers.delete("X-Catalog-Verification");
     return new Response(response.body, {status:403, statusText:"Verification cancelled", headers});

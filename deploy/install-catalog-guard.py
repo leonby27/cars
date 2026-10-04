@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Standalone origin-only release; backups, rollback, no application rebuild."""
 import fcntl
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -11,12 +12,18 @@ import tempfile
 if os.geteuid()!=0:
     raise SystemExit('Run as root')
 source=Path(__file__).resolve().parent
+# Validate the candidate policy before touching live service/config files.
+spec=importlib.util.spec_from_file_location('catalog_guard_release',source/'catalog-guard.py')
+module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+module.load_policy(source/'catalog-guard-policy.json')
+module.load_behavior_policy(source/'catalog-guard-policy.json')
 handles=[]
 for name in ['abdrive-release','car-bot-protection','car-catalog-guard']:
     f=open('/run/lock/'+name+'.lock','w'); fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB); handles.append(f)
 backup=Path(tempfile.mkdtemp(prefix='car-catalog-guard.',dir='/var/backups'))
 destinations={
  'catalog-guard.py':'/usr/local/lib/car-catalog-guard/catalog-guard.py',
+ 'catalog-guard-policy.json':'/usr/local/lib/car-catalog-guard/catalog-guard-policy.json',
  'catalog-guard-client.js':'/usr/local/lib/car-catalog-guard/catalog-guard-client.js',
  'car-catalog-guard.service':'/etc/systemd/system/car-catalog-guard.service',
  'nginx-catalog-guard-server.conf':'/etc/nginx/snippets/catalog-guard-server.conf',

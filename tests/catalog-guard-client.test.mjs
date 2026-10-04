@@ -14,7 +14,7 @@ function browser() {
  const document={body:{append(node){children.push(node)}},activeElement:draft,createElement:element};
  const window={fetch:async()=>{calls++;return responses.shift() || new Response('{}',{status:200})},addEventListener(name,callback){events.set(name,callback)},removeEventListener(name){events.delete(name)}};
  const location={origin:'https://fixture.test'};
- vm.runInNewContext(source,{window,document,location,Request,Response,Headers,Promise});
+ vm.runInNewContext(source,{window,document,location,Request,Response,Headers,Promise,DOMException});
  const denied=()=>new Response('{}',{status:429,headers:{'X-Catalog-Verification':'/_catalog-check'}});
  return {window,children,responses,draft,denied,get calls(){return calls},get focus(){return focus},message(data){events.get('message')?.(data)}};
 }
@@ -45,4 +45,24 @@ test('closing verification leaves the page and draft intact and stops 429 retrie
  await tick();b.children[0].children[0].children[1].listeners.click();
  assert.equal((await result).status,403);assert.equal(b.calls,1);assert.equal(b.children.length,0);
  assert.equal(b.draft.value,'Сохранённый текст заявки');
+});
+test('aborting the last pending read closes verification and releases navigation',async()=>{
+ const b=browser(),controller=new AbortController();b.responses.push(b.denied());
+ const result=b.window.fetch('/api/cars',{signal:controller.signal});
+ const ended=result.then(()=> 'resolved',error=>error.name);
+ await tick();assert.equal(b.children.length,1);
+ controller.abort();await tick();
+ assert.equal(b.children.length,0,'an abandoned catalog query must not leave a modal over the new page');
+ assert.equal(await ended,'AbortError');assert.equal(b.calls,1);
+});
+test('one aborted request does not close verification needed by another request',async()=>{
+ const b=browser(),controller=new AbortController();b.responses.push(b.denied(),b.denied());
+ const first=b.window.fetch('/api/cars?offset=100',{signal:controller.signal}).then(()=> 'resolved',error=>error.name);
+ const second=b.window.fetch('/api/cars?offset=200');
+ await tick();controller.abort();await tick();
+ assert.equal(b.children.length,1);
+ assert.equal(await Promise.race([first,tick().then(()=> 'still waiting')]),'AbortError');
+ const frame=b.children[0].children[1];
+ b.message({origin:'https://fixture.test',source:frame.contentWindow,data:{type:'catalog-verified'}});
+ assert.equal((await second).status,200);assert.equal(b.calls,3);assert.equal(b.children.length,0);
 });
