@@ -6,6 +6,7 @@ import { Fragment, useCallback, useContext, useEffect, useId, useLayoutEffect, u
 import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
+import { bindModalViewport } from "./modal-viewport.js";
 import { Illustration } from "./illustration.jsx";
 import { SearchField } from "./search-field.jsx";
 import { EmptyState } from "./empty-state.jsx";
@@ -3956,6 +3957,8 @@ function AvailabilityRequestModal({ onClose, preview = false }) {
 // Форма повторяет окно входа, но без вкладок: человек пришёл не заводить аккаунт, а
 // спросить про машину.
 function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
+  const backdropRef = useRef(null);
+  const fieldsRef = useRef(null);
   const [values, setValues] = useState({ name:"", phone:"+375", account:false, password:"", confirm:"", consent:true });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -3966,6 +3969,7 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   const blockPhoneWhitespace = (event) => {
     if (/\s/.test(event.key)) event.preventDefault();
   };
+  useEffect(() => bindModalViewport(backdropRef.current, fieldsRef.current), []);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event) => {
@@ -4000,28 +4004,32 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
     }
   };
   return (
-    <div className="modal-backdrop auth-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
+    <div ref={backdropRef} className="modal-backdrop auth-modal-backdrop availability-lead-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
       <form className="auth-card auth-modal availability-lead-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="availability-lead-title">
         <button className="modal-close" type="button" onClick={onClose} disabled={pending} aria-label="Закрыть"><X size={19} /></button>
         <div className="auth-modal-heading">
           <h1 id="availability-lead-title">Узнать точную цену и наличие авто</h1>
         </div>
-        <p className="availability-lead-note">Заявку получит компания-импортёр и уточнит все детали.</p>
-        <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
-        <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
-        <label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
-        <div className={`auth-registration-reveal${withAccount ? " open" : ""}`} aria-hidden={!withAccount} inert={withAccount ? undefined : true}>
-          <div className="auth-registration-reveal-inner">
-            <PasswordField label="Пароль" autoComplete="new-password" value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : "Минимум 8 символов"} required={withAccount} disabled={!withAccount} />
-            <PasswordField label="Ещё раз пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Ещё раз пароль" : "Ещё раз"} required={withAccount} disabled={!withAccount} />
-            <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!withAccount} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
+        <div ref={fieldsRef} className="availability-lead-fields">
+          <p className="availability-lead-note">Заявку получит компания-импортёр и уточнит все детали.</p>
+          <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
+          <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
+          <label className="auth-consent availability-lead-account"><input type="checkbox" checked={withAccount} onChange={update("account")} /><span>Заодно создать аккаунт</span></label>
+          <div className={`auth-registration-reveal${withAccount ? " open" : ""}`} aria-hidden={!withAccount} inert={withAccount ? undefined : true}>
+            <div className="auth-registration-reveal-inner">
+              <PasswordField label="Пароль" autoComplete="new-password" value={values.password} onChange={update("password")} placeholder={mobileLayout ? "Пароль" : "Минимум 8 символов"} required={withAccount} disabled={!withAccount} />
+              <PasswordField label="Ещё раз пароль" autoComplete="new-password" value={values.confirm} onChange={update("confirm")} placeholder={mobileLayout ? "Ещё раз пароль" : "Ещё раз"} required={withAccount} disabled={!withAccount} />
+              <label className="auth-consent"><input type="checkbox" checked={values.consent} onChange={update("consent")} disabled={!withAccount} /><span>Согласен с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой</a></span></label>
+            </div>
           </div>
+          {error && <div className="auth-error" role="alert">{error}</div>}
         </div>
-        {error && <div className="auth-error" role="alert">{error}</div>}
-        <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Получить точную цену"}<ArrowRight size={18} /></button>
-        {!withAccount && (
-          <p className="availability-lead-legal">Нажимая кнопку, вы соглашаетесь с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой конфиденциальности</a>.</p>
-        )}
+        <div className="availability-lead-footer">
+          <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Получить точную цену"}<ArrowRight size={18} /></button>
+          {!withAccount && (
+            <p className="availability-lead-legal">Нажимая кнопку, вы соглашаетесь с <a href={LEGAL_DOCUMENTS.terms} target="_blank" rel="noopener noreferrer">условиями</a> и <a href={LEGAL_DOCUMENTS.privacy} target="_blank" rel="noopener noreferrer">политикой конфиденциальности</a>.</p>
+          )}
+        </div>
       </form>
     </div>
   );

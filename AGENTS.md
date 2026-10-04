@@ -4,6 +4,8 @@ Deployment resource policy (owner request, 2026-10-02): avoid catalog-wide prepa
 
 # Prototype Instructions
 
+Mobile vehicle lead form keyboard behavior (owner request, 2026-10-04): constrain the modal to the visible viewport above the keyboard, including mobile Safari viewport shifts. Scroll the fields inside the modal and keep the submit action accessible below them; reveal the focused field without scrolling the underlying page. Preserve optional account creation and the legal copy.
+
 Mobile brand picker pinned controls (owner decision, 2026-10-03): keep the search and brand-country tabs fixed above the scrolling brand list. Keep model search fixed in the same sheet when moving to model selection; the result button stays fixed below.
 
 Mobile catalog brand picker (owner decision, 2026-10-03): use the homepage's three-column brand layout inside the mobile brand sheet: logo beside the name, muted listing count below the name, alphabetic order down columns, and ellipsis for long names. Reuse the homepage classes and spacing. Preserve search, country tabs, the all-brands option, selected state, the show-cars footer and the transition to model selection.

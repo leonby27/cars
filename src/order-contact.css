@@ -119,6 +119,10 @@
 .availability-lead-modal {
   width: min(480px, 100%);
 }
+.availability-lead-fields,
+.availability-lead-footer {
+  display: contents;
+}
 .availability-lead-modal > h2,
 .availability-lead-modal > p {
   text-align: center;
@@ -189,5 +193,43 @@
   }
   .availability-lead-modal .order-contact-methods > div {
     gap: 12px 18px;
+  }
+}
+
+@media (max-width: 700px), (pointer: coarse) {
+  .availability-lead-backdrop {
+    inset: var(--modal-viewport-top, 0px) 0 auto;
+    height: var(--modal-viewport-height, 100dvh);
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .availability-lead-backdrop .availability-lead-modal {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+  }
+  .availability-lead-modal .auth-modal-heading {
+    flex: 0 0 auto;
+  }
+  .availability-lead-modal .availability-lead-fields {
+    display: block;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-padding-block: 8px;
+    padding: 3px;
+    margin: -3px;
+  }
+  .availability-lead-modal .availability-lead-footer {
+    display: block;
+    flex: 0 0 auto;
+    padding-top: 18px;
+    background: var(--panel);
+  }
+  .availability-lead-modal .availability-lead-footer .auth-submit {
+    margin-top: 0;
   }
 }
