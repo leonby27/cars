@@ -4,7 +4,7 @@ Deployment resource policy (owner request, 2026-10-02): avoid catalog-wide prepa
 
 # Prototype Instructions
 
-Mobile vehicle lead form keyboard behavior (owner request, 2026-10-04): constrain the modal to the visible viewport above the keyboard, including mobile Safari viewport shifts. Scroll the fields inside the modal and keep the submit action accessible below them; reveal the focused field without scrolling the underlying page. Preserve optional account creation and the legal copy.
+Mobile vehicle lead form (owner correction, 2026-10-04): open as a full-screen modal on mobile/touch layouts, with no outside gutters or rounded card frame and an always available close control at the top. Constrain it to the visible viewport above the keyboard, including mobile Safari viewport shifts. Let the fields fill and scroll within the remaining space; keep the submit action at the bottom and reveal the focused field without scrolling the underlying page. Respect device safe areas and preserve optional account creation and the legal copy.
 
 Mobile brand picker pinned controls (owner decision, 2026-10-03): keep the search and brand-country tabs fixed above the scrolling brand list. Keep model search fixed in the same sheet when moving to model selection; the result button stays fixed below.
 
