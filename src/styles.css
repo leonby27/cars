@@ -1741,6 +1741,10 @@ html body #root .app-search-field.home-popular-search {
   font-size: 16px;
   font-weight: 500;
   padding: 23px 0 16px;
+  scrollbar-width: none;
+}
+.breadcrumbs::-webkit-scrollbar {
+  display: none;
 }
 /* Крошки — ссылки (CrumbLink в App.jsx), но выглядят так же, как прежние кнопки:
    без подчёркивания и без цвета ссылки, в том числе у посещённой. */
@@ -5945,14 +5949,13 @@ html[data-theme="dark"] #root .load-more {
     display: none;
   }
   /* В журнале крошки нужны и на телефоне: из статьи возвращаются в журнал и на главную,
-     а другого пути назад на странице нет. Набраны мельче обычного и с небольшими
-     полями: это служебная строка, а не часть материала. Длинное название не переносится
+     а другого пути назад на странице нет. Длинное название не переносится
      на вторую строку, а уезжает за край: строка прокручивается вбок внутри себя. */
   .blog-page > .breadcrumbs {
     display: flex;
     flex-wrap: nowrap;
     padding: 8px 0 6px;
-    font-size: 14px;
+    font-size: 16px;
     overflow-x: auto;
     scrollbar-width: none;
     white-space: nowrap;
@@ -6685,8 +6688,9 @@ html[data-theme="dark"] #root .load-more {
 /* Детализация цены и списки в отчёте используют строки с пунктиром:
    название серое слева, значение обычным цветом у правого края,
    а в расчёте ещё значок «i» справа от суммы. Пунктир тянется на всё свободное
-   место, но не короче 12px; что не помещается — и название, и значение, —
-   обрезается многоточием, а не переносится. Шаг строк общий: строка 24px
+   место, но не короче 12px. В общих строках длинные названия и значения
+   обрезаются многоточием; в детализации цены сумма всегда остаётся полной.
+   Шаг строк общий: строка 24px
    (столько занимает кружок значка «i») и 8px между строками. Порядок в строке
    задан через order: пунктир — это ::after самой строки, он встаёт между
    названием и значением. */
@@ -6733,6 +6737,12 @@ html[data-theme="dark"] #root .load-more {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.price-breakdown > .facts-row > strong {
+  flex: 0 0 auto;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
 }
 /* Кружок значка шире самой иконки на 8px — сдвигаем, чтобы иконка вставала
    вровень с правым краем текста в соседнем блоке. */
@@ -11760,7 +11770,7 @@ html[data-theme="dark"] #root .spec-search,
 }
 /* Заявка из карточки: объяснение, имя и телефон, затем отправка и условия. */
 .availability-lead-modal .auth-modal-heading {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .availability-lead-modal .availability-lead-note {
   margin: 0 0 22px;
@@ -24666,7 +24676,7 @@ html[data-theme="dark"] :is(#root, body) .detail-header-price .price-dropdown {
     flex-wrap: nowrap;
     overflow-x: auto;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 16px;
   }
   .detail-topbar > .breadcrumbs > * {
     flex-shrink: 0;

@@ -7,6 +7,8 @@ import { createPortal } from "react-dom";
 import { appHref } from "./app-href.js";
 import { holdAnchor } from "./anchor-scroll.js";
 import { bindModalViewport } from "./modal-viewport.js";
+import { PhoneField } from "./phone-field.jsx";
+import { completePhoneNumber } from "./phone-mask.js";
 import { Illustration } from "./illustration.jsx";
 import { SearchField } from "./search-field.jsx";
 import { EmptyState } from "./empty-state.jsx";
@@ -198,6 +200,40 @@ function carDatesLine(car) {
   const checkedAt = new Date(car?.checkedAt || "");
   const updated = checked && Number.isFinite(checkedAt.getTime()) && startOfDayMs(checkedAt) > startOfDayMs(addedAt);
   return `Добавлено ${added}${updated ? ` · Обновлено ${checked}` : ""}`;
+}
+
+function Breadcrumbs({ children }) {
+  const trailRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const trail = trailRef.current;
+    const mobile = window.matchMedia("(max-width: 700px)");
+    let previousWidth = -1;
+    let previousScrollWidth = -1;
+    const scrollToEnd = () => {
+      if (mobile.matches) trail.scrollLeft = trail.scrollWidth;
+    };
+    const resize = () => {
+      if (trail.clientWidth === previousWidth && trail.scrollWidth === previousScrollWidth) return;
+      previousWidth = trail.clientWidth;
+      previousScrollWidth = trail.scrollWidth;
+      scrollToEnd();
+    };
+    // Start at the current page; keep manual swipes until the trail itself changes.
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(trail);
+    const contentObserver = new MutationObserver(scrollToEnd);
+    contentObserver.observe(trail, { childList: true, characterData: true, subtree: true });
+    mobile.addEventListener("change", scrollToEnd);
+    return () => {
+      observer.disconnect();
+      contentObserver.disconnect();
+      mobile.removeEventListener("change", scrollToEnd);
+    };
+  }, []);
+
+  return <div className="breadcrumbs" ref={trailRef}>{children}</div>;
 }
 
 // Хлебная крошка — настоящая ссылка: поисковик видит по ней путь вверх по разделам,
@@ -1478,11 +1514,11 @@ function Favorites({ navigate, favorites, toggleFavorite, cars, apiMode, onUnava
   const awaitingCars = hasUnresolved || saving;
   return (
     <main className="catalog favorites-page page-width">
-      <div className="breadcrumbs">
+      <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <span>/</span>
         <span>Избранное</span>
-      </div>
+      </Breadcrumbs>
       <div className="catalog-heading">
         <div className="section-heading-title">
           <h1>Избранное · {hasUnresolved ? favorites.size : favoriteCars.length}</h1>
@@ -1615,11 +1651,11 @@ function SavedSearchesPage({ navigate, searches, onDelete, saving = false, apiMo
   };
   return (
     <main className="catalog saved-searches-page page-width">
-      <div className="breadcrumbs">
+      <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <span>/</span>
         <span>Мои поиски</span>
-      </div>
+      </Breadcrumbs>
       <div className="catalog-heading">
         <div className="section-heading-title">
           <h1>Мои поиски · {searches.length}</h1>
@@ -2241,7 +2277,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
   }
   return (
     <main className="catalog page-width">
-      <div className="breadcrumbs">
+      <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         {landing ? (
@@ -2259,7 +2295,7 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
         ) : (
           `Каталог авто ${siteFromPhrase()}`
         )}
-      </div>
+      </Breadcrumbs>
       <div className="catalog-heading">
         <div>
           {/* Две половины заголовка — отдельными кусками, чтобы на телефоне каждая
@@ -3781,7 +3817,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
   return (
     <main className="detail page-width">
       <VehicleDetailBody car={car} navigate={navigate} favorite={favorite} toggleFavorite={toggleFavorite} goBack={goBack} priceRatingPending={apiMode !== false && car.priceRating === undefined} breadcrumbs={
-        <div className="breadcrumbs">
+        <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         <CrumbLink href="/catalog" onOpen={() => backToCatalog(car.id)}>Каталог авто {siteFromPhrase()}</CrumbLink>
@@ -3791,7 +3827,7 @@ function Detail({ car, cars, apiMode, navigate, backToCatalog, favorite, favorit
         <CrumbLink href={modelCrumbHref} onOpen={openModel}>{car.model}</CrumbLink>
         <CaretRight size={13} />
         {car.model} {car.year}
-      </div>
+      </Breadcrumbs>
       } />
       <SimilarCars car={car} cars={cars} onOpenCar={openSimilarCar} />
       {quickViewModal}
@@ -3957,15 +3993,12 @@ function AvailabilityRequestModal({ onClose, preview = false }) {
 function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   const backdropRef = useRef(null);
   const fieldsRef = useRef(null);
-  const [values, setValues] = useState({ name:"", phone:"+375" });
+  const [values, setValues] = useState({ name:"" });
+  const [phoneValue, setPhoneValue] = useState({ country:"BY", national:"" });
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const mobileLayout = useMediaQuery(NARROW_VIEWPORT);
   const update = (field) => (event) => setValues((current) => ({ ...current, [field]:event.target.value }));
-  const updatePhone = (event) => setValues((current) => ({ ...current, phone:sanitizePhoneInput(event.target.value) }));
-  const blockPhoneWhitespace = (event) => {
-    if (/\s/.test(event.key)) event.preventDefault();
-  };
   useEffect(() => bindModalViewport(backdropRef.current, fieldsRef.current), []);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -3982,9 +4015,9 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
   const submit = async (event) => {
     event.preventDefault();
     setError("");
-    const phone = normalizeLocalPhone(values.phone);
+    const phone = completePhoneNumber(phoneValue);
     if (values.name.trim().length < 2) return setError(authMessages.invalid_name);
-    if (phone.length < 11 || phone.length > 15) return setError(authMessages.invalid_phone);
+    if (!phone) return setError(authMessages.invalid_phone);
     setPending(true);
     try {
       await submitLead(car, { name:values.name.trim(), phone });
@@ -4004,8 +4037,8 @@ function AvailabilityLeadModal({ car, submitLead, onClose, onDone }) {
         </div>
         <div ref={fieldsRef} className="availability-lead-fields">
           <p className="availability-lead-note">Заявку получит компания-импортёр и уточнит все детали.</p>
-          <label className="auth-field"><span>Имя</span><input autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
-          <label className="auth-field"><span>Телефон</span><input type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={updatePhone} onKeyDown={blockPhoneWhitespace} placeholder={mobileLayout ? "Телефон" : "+375291234567"} maxLength={16} required /></label>
+          <label className="auth-field"><span>Имя</span><input autoFocus autoComplete="name" value={values.name} onChange={update("name")} placeholder={mobileLayout ? "Имя" : "Например, Алексей"} required /></label>
+          <PhoneField value={phoneValue} onChange={setPhoneValue} CountrySelect={SelectField} />
           {error && <div className="auth-error" role="alert">{error}</div>}
           <div className="availability-lead-footer">
             <button className="primary auth-submit availability-lead-submit" type="submit" disabled={pending}>{pending ? "Отправляем…" : "Оставить заявку"}</button>
@@ -4666,13 +4699,13 @@ function OrderDraft({ car, navigate }) {
   ];
   return (
     <main className="order-page page-width">
-      <div className="breadcrumbs">
+      <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => navigate("/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         <CrumbLink href={carHref(car)} onOpen={() => navigate(carHref(car))}>{car.title}</CrumbLink>
         <CaretRight size={13} />
         Предварительный заказ
-      </div>
+      </Breadcrumbs>
       <button className="back-mobile" onClick={() => navigate(carHref(car))}>
         <ArrowLeft size={18} />
         Назад к автомобилю
@@ -5974,13 +6007,13 @@ function ToolPage({ tool, navigate }) {
     <main className="model-page tool-page tool-page-aside blog-page page-width">
       {/* Крошки ведут через журнал, а не сразу на главную: расчёты — его раздел,
           и обратный путь должен это показывать. */}
-      <div className="breadcrumbs">
+      <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => goBackTo(navigate, "/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         <CrumbLink href={BLOG_INDEX.path} onOpen={() => goBackTo(navigate, BLOG_INDEX.path)}>{BLOG_INDEX.name}</CrumbLink>
         <CaretRight size={13} />
         {tool.name}
-      </div>
+      </Breadcrumbs>
       <BlogMasthead navigate={navigate} />
       <div className="blog-layout">
         {/* Всё содержимое страницы лежит в колонке сетки, включая оговорку: иначе
@@ -7802,11 +7835,11 @@ function BlogIndexPage({ navigate }) {
   const posts = blogPostsFor(filter);
   return (
     <main className="blog-page page-width">
-      <div className="breadcrumbs">
+      <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => goBackTo(navigate, "/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         {BLOG_INDEX.name}
-      </div>
+      </Breadcrumbs>
       <BlogMasthead navigate={navigate} main />
       <div className="blog-layout">
         <div className="blog-main">
@@ -8194,13 +8227,13 @@ function BlogArticleShell({ post, navigate, quickViewModal, children }) {
   const date = blogPostDateSentence(post);
   return (
     <main className="blog-page page-width">
-      <div className="breadcrumbs">
+      <Breadcrumbs>
         <CrumbLink href="/" onOpen={() => goBackTo(navigate, "/")}>Главная</CrumbLink>
         <CaretRight size={13} />
         <CrumbLink href={BLOG_INDEX.path} onOpen={() => goBackTo(navigate, BLOG_INDEX.path)}>{BLOG_INDEX.name}</CrumbLink>
         <CaretRight size={13} />
         {post.name}
-      </div>
+      </Breadcrumbs>
       <BlogMasthead navigate={navigate} />
       <div className="blog-layout">
         {/* В колонке сетки два блока: сама статья на своей подложке — так же, как обзор

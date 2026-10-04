@@ -123,6 +123,85 @@
 .availability-lead-footer {
   display: contents;
 }
+.availability-lead-modal {
+  --lead-phone-bg: #f0f1f3;
+  --lead-phone-focus-bg: #e9ebee;
+}
+.lead-phone-label {
+  font-size: 16px;
+  font-weight: 750;
+}
+.lead-phone-control {
+  display: flex;
+  min-width: 0;
+  border-radius: calc(10px * var(--corner-scale));
+  background: var(--lead-phone-bg);
+  color: var(--ink);
+}
+.lead-phone-control:focus-within {
+  background: var(--lead-phone-focus-bg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 34%, transparent);
+}
+.lead-phone-country {
+  position: relative;
+  display: flex;
+  flex: 0 0 112px;
+}
+.lead-phone-country::after {
+  content: "";
+  position: absolute;
+  inset: 12px 0;
+  width: 1px;
+  left: auto;
+  background: var(--line-strong);
+  pointer-events: none;
+}
+.lead-phone-country .custom-select {
+  flex: 1;
+  height: auto;
+  min-height: 44px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.lead-phone-country .select-trigger {
+  gap: 6px;
+  padding: 0 9px 0 12px;
+}
+.lead-phone-country .select-trigger b {
+  font-weight: 500;
+}
+.lead-phone-country .select-trigger > svg {
+  width: 12px;
+  height: 12px;
+}
+.lead-phone-country .select-menu {
+  min-width: 140px;
+}
+.lead-phone-country .select-options--indicator {
+  padding-right: 0;
+}
+.availability-lead-modal .auth-field .lead-phone-control input,
+.availability-lead-modal .auth-field .lead-phone-control input:focus {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+}
+html[data-theme="dark"] .availability-lead-modal {
+  --lead-phone-bg: #16191d;
+  --lead-phone-focus-bg: #1a1e23;
+}
+html[data-theme="dark"] body #root .lead-phone-country .custom-select {
+  background: transparent;
+}
+html[data-theme="dark"] body #root .availability-lead-modal .auth-field .lead-phone-control input,
+html[data-theme="dark"] body #root .availability-lead-modal .auth-field .lead-phone-control input:focus {
+  background: transparent;
+}
 .availability-lead-modal > h2,
 .availability-lead-modal > p {
   text-align: center;
@@ -173,6 +252,15 @@
   text-underline-offset: 2px;
 }
 @media (max-width: 700px) {
+  .lead-phone-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .order-contact-modal {
     padding: 25px 19px 20px;
   }
@@ -233,9 +321,8 @@
   }
   .availability-lead-modal .auth-modal-heading {
     flex: 0 0 auto;
-    min-height: 44px;
     padding-inline: 52px;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
     text-align: center;
   }
   .availability-lead-modal .availability-lead-fields {
