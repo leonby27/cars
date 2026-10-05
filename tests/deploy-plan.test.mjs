@@ -50,6 +50,16 @@ test('PageSpeed browser infrastructure rebuilds without rewriting vehicle prices
  assert.equal(deploymentPlan(['src/counter-loader.js'],{pricingRefreshed:true}).recalculatePrices,true);
 });
 
+test('analytics attribution releases never rewrite catalog prices',()=>{
+ const helpers=deploymentPlan(['src/analytics-acquisition.js','src/analytics-updates.js']);
+ assert.equal(helpers.reuseCatalog,true);assert.equal(helpers.reuseFeed,true);
+ assert.equal(helpers.recalculatePrices,false);assert.equal(helpers.restartBot,false);
+ const runtime=deploymentPlan(['src/analytics-acquisition.js','src/analytics-updates.js',
+  'server/analytics.mjs','server/analytics-traffic.mjs','server/handler.mjs']);
+ assert.equal(runtime.recalculatePrices,false);
+ assert.equal(runtime.checkDuplicates,false);assert.equal(runtime.migrate,false);
+});
+
 test('journal photos, film loading and critical CSS do not trigger database maintenance',()=>{
  const p=deploymentPlan(['config/critical-classes.json','scripts/generate-seo-pages.mjs',
   'scripts/lib/blog-cover.mjs','src/blog-posts.js','src/service-video-loading.js']);

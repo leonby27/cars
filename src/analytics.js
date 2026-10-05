@@ -1,3 +1,5 @@
+import { analyticsAcquisition } from "./analytics-acquisition.js";
+
 const visitorKey = "abcars-analytics-visitor";
 const sessionKey = "abcars-analytics-session";
 
@@ -60,6 +62,7 @@ const utmSource = (landingPath = "") => {
 };
 
 export const analyticsEntrySource = (referrer = "", ownHostname = "", landingPath = "") => {
+  if (analyticsAcquisition(landingPath) === "rsya") return "rsya";
   // Яндекс добавляет ysclid к части органических переходов. Он надёжнее Referer,
   // который браузер или настройка приватности могут вовсе не прислать.
   if (hasYandexClickId(landingPath)) return "yandex.ru";

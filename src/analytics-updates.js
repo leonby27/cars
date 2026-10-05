@@ -1,12 +1,18 @@
+import { analyticsAcquisitionKind } from "./analytics-acquisition.js";
+
 // Без `viewing` сервер только возвращает непрочитанные счётчики. Конкретный
 // раздел передаём после явного нажатия или при выходе из аналитики.
 // Несколько разделов сразу — массивом: сервер отметит их одним запросом.
-export const analyticsUpdatesUrl = (viewing = "", traffic = "all") => {
+export const analyticsUpdatesUrl = (viewing = "", traffic = "all", acquisition = "all") => {
   const section = (Array.isArray(viewing) ? viewing : [viewing]).map((item) => String(item || "").trim()).filter(Boolean).join(",");
   const url = section
     ? `/api/analytics/updates?viewing=${encodeURIComponent(section)}`
     : "/api/analytics/updates";
-  return traffic === "without-quota" ? `${url}${section ? "&" : "?"}traffic=without-quota` : url;
+  const params = [];
+  if (traffic === "without-quota") params.push("traffic=without-quota");
+  const channel = analyticsAcquisitionKind(acquisition);
+  if (channel !== "all") params.push(`acquisition=${channel}`);
+  return params.length ? `${url}${section ? "&" : "?"}${params.join("&")}` : url;
 };
 
 // pagehide срабатывает при закрытии, перезагрузке и уходе со страницы.

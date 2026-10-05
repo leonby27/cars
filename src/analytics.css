@@ -233,6 +233,7 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
 .analytics-mobile-navigation .analytics-device-switch { height:42px; box-sizing:border-box; padding:3px; }
 .analytics-mobile-navigation .analytics-device-switch button { padding:0 8px; }
 .analytics-mobile-navigation .analytics-traffic-switch { height:42px; box-sizing:border-box; padding:3px; margin-left:auto; }
+.analytics-mobile-navigation .analytics-acquisition-switch { margin-left:0; }
 .analytics-mobile-navigation .analytics-traffic-switch button { padding:0 8px; font-size:12px; }
 .analytics-sidebar-extra { margin-top:12px; }
 .analytics-sidebar-social { width:100%; min-height:42px; display:flex; align-items:center; gap:8px; padding:0 14px; border:0; border-radius:var(--analytics-block-radius); background:var(--panel); color:var(--muted); font-size:14px; font-weight:700; }

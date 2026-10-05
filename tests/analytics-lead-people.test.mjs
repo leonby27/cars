@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createServer } from "vite";
+import { createTestServer as createServer } from "./vite-test-server.mjs";
 import react from "@vitejs/plugin-react";
 import { countLeadPeople } from "../server/analytics-lead-people.mjs";
 import { getAnalyticsLeadPeople } from "../server/analytics.mjs";

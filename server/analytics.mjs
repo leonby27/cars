@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { analyticsAcquisition, analyticsAcquisitionKind } from "../src/analytics-acquisition.js";
 import { pool } from "./db.mjs";
 import { readCookie } from "./auth.mjs";
 import { countLeadPeople } from "./analytics-lead-people.mjs";
@@ -129,6 +130,8 @@ export function normalizeAnalyticsEvent(body = {}, { device = "", platform = "" 
   // событий открыт без пароля, поэтому любой мог бы набить таблицу чужими именами и
   // телефонами. Имя и телефон берутся из таблицы аккаунтов, где они уже есть.
   const safeProperties = {};
+  const acquisition = analyticsAcquisition(body.path);
+  if (acquisition !== "organic") safeProperties.acquisition = acquisition;
   if (properties.source) safeProperties.source = text(properties.source, 40);
   // Источник входа — только домен либо одна из служебных меток браузера. Полный
   // адрес реферера не принимаем, чтобы не хранить поисковые запросы и параметры.
@@ -544,9 +547,9 @@ const VISIT_STARTS = "gap IS NULL OR gap > interval '30 minutes' OR previous_day
 // величины, а считать их вторым запросом смысла нет. Заходы — это только первые шаги
 // захода, поэтому они отбираются условием в самом счётчике, а не в WHERE: иначе
 // просмотры внутри захода выпали бы из выборки вместе с остальными шагами.
-export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all" } = {}) {
+export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all", acquisition = "all" } = {}) {
   const range = normalizeAnalyticsRange(rangeValue, now);
-  const { db:trafficDb, events:EVENTS } = analyticsTrafficSource(db, traffic, PUBLIC_EVENT);
+  const { db:trafficDb, events:EVENTS } = analyticsTrafficSource(db, traffic, PUBLIC_EVENT, { acquisition });
   const DEVICE = deviceCondition(device);
   const from = range.from.toISOString();
   const to = range.to.toISOString();
@@ -582,6 +585,7 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
     GROUP BY day ORDER BY day`, [from, to, secondOfDay]);
   return {
     traffic:analyticsTrafficKind(traffic),
+    acquisition:analyticsAcquisitionKind(acquisition),
     days:range.days,
     period:range.period,
     from,
@@ -599,9 +603,9 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
 // словами, что и в карточке и на графике, чтобы числа сходились между собой.
 const VISITS_BENCHMARK_DAYS = 7;
 
-export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all" } = {}) {
+export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all", acquisition = "all" } = {}) {
   const range = typeof rangeValue === "string" ? normalizeAnalyticsRange(rangeValue, now) : rangeValue;
-  const { db:trafficDb, events:EVENTS } = analyticsTrafficSource(db, traffic, PUBLIC_EVENT);
+  const { db:trafficDb, events:EVENTS } = analyticsTrafficSource(db, traffic, PUBLIC_EVENT, { acquisition });
   const DEVICE = deviceCondition(device);
   // У многодневных срезов «в это время» смысла не имеет: там карточка показывает
   // среднее за день внутри самого периода, и сравнивать не с чем.
@@ -649,9 +653,9 @@ export async function getAnalyticsLeadPeople(from, to, { db = pool } = {}) {
   return { ...countLeadPeople(result.rows), lead_submissions:result.rows.length };
 }
 
-export async function getAnalyticsDashboard(rangeValue, { device = "", traffic = "all", db:storage = pool, now = Date.now() } = {}) {
+export async function getAnalyticsDashboard(rangeValue, { device = "", traffic = "all", acquisition = "all", db:storage = pool, now = Date.now() } = {}) {
   const range = normalizeAnalyticsRange(rangeValue, now);
-  const { db, events:EVENTS } = analyticsTrafficSource(storage, traffic, PUBLIC_EVENT);
+  const { db, events:EVENTS } = analyticsTrafficSource(storage, traffic, PUBLIC_EVENT, { acquisition });
   // Устройство режет только то, что считается по событиям сайта. Заявки, избранное
   // и регистрации берутся из таблиц, где устройства нет, — они всегда по всем.
   const deviceKind = analyticsDeviceKind(device);
@@ -709,7 +713,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
         FROM ${EVENTS} WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
       )
       SELECT count(*) FILTER (WHERE ${VISIT_STARTS})::int AS visits FROM steps`, [from, to]),
-    getVisitsBenchmark(range, { device:deviceKind, traffic, db:storage, now }),
+    getVisitsBenchmark(range, { device:deviceKind, traffic, acquisition, db:storage, now }),
     db.query(`SELECT
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int
         + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
@@ -898,6 +902,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
     period,
     device:deviceKind || "all",
     traffic:analyticsTrafficKind(traffic),
+    acquisition:analyticsAcquisitionKind(acquisition),
     from,
     to,
     generatedAt:new Date().toISOString(),
@@ -950,8 +955,8 @@ export async function readAnalyticsSeen(viewing = "") {
   return Object.fromEntries(stored.rows.map((row) => [row.section, row.seen_at?.toISOString?.() || row.seen_at]));
 }
 
-export async function getAnalyticsUpdates({ viewing = "", traffic = "all" } = {}, { now = Date.now() } = {}) {
-  const { db, events:EVENTS } = analyticsTrafficSource(pool, traffic, PUBLIC_EVENT, { to:`'${new Date(now).toISOString()}'::timestamptz` });
+export async function getAnalyticsUpdates({ viewing = "", traffic = "all", acquisition = "all" } = {}, { now = Date.now() } = {}) {
+  const { db, events:EVENTS } = analyticsTrafficSource(pool, traffic, PUBLIC_EVENT, { to:`'${new Date(now).toISOString()}'::timestamptz`, acquisition });
   const seenBySection = await readAnalyticsSeen(viewing);
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
   const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, cabinetOrders, customers, contactInterest] = await Promise.all([

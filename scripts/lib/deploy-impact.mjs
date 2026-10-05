@@ -7,6 +7,8 @@ const renderOnly = new Set([
   // Name parsing/navigation only: no catalog preparation or stored-price inputs.
   'src/search-dictionary.js',
   'src/analytics.js', 'src/boot-api.js', 'src/counter-loader.js', 'src/price-fit.js', 'src/spec-fit.js',
+  // Traffic attribution and CRM request URLs never prepare catalog or prices.
+  'src/analytics-acquisition.js', 'src/analytics-updates.js',
   'src/model-text-load.js', 'src/model-text-imports.js', 'src/model-texts.js',
   'src/blog-text-load.js', 'src/blog-text-imports.js', 'src/blog-texts.js',
   'src/info-pages-seo.js', 'src/service-copy.js', 'src/purchase-info.js', 'src/tracking-info.js',
