@@ -68,7 +68,7 @@ test('выбранный режим передаётся в обновления
 test('активность участвует в запросах, кэшах и защите от старых ответов; выход расположен под меню', async () => {
   const page = await readFile(new URL('../src/analytics-page.jsx', import.meta.url), 'utf8');
   const handler = await readFile(new URL('../server/handler.mjs', import.meta.url), 'utf8');
-  assert.match(page, /analytics:activity", \["all", "actions"\], "all", analyticsActivityKind/);
+  assert.match(page, /const \[activity, setActivity\] = useState\("actions"\)/);
   assert.match(page, /\$\{acquisition\}\|\$\{activity\}/);
   assert.match(page, /\$\{targetAcquisition\}\|\$\{targetActivity\}/);
   assert.match(page, /activityRef.current === targetActivity/);

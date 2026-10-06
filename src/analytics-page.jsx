@@ -1538,9 +1538,10 @@ export function AnalyticsPage() {
   // выбирается отдельно и не меняет карточки, таблицы и остальные разделы.
   const [period, setPeriod] = useState("today");
   const [device, setDevice] = usePersistedChoice("analytics:device", analyticsDeviceIds, "all");
-  const [traffic, setTraffic] = usePersistedChoice("analytics:traffic", ["all", "without-quota"], "all");
-  const [acquisition, setAcquisition] = usePersistedChoice("analytics:acquisition", ["all", "organic", "paid"], "all", analyticsAcquisitionKind);
-  const [activity, setActivity] = usePersistedChoice("analytics:activity", ["all", "actions"], "all", analyticsActivityKind);
+  // При каждом входе начинаем с рабочего среза, независимо от прошлого выбора.
+  const [traffic, setTraffic] = useState("without-quota");
+  const [acquisition, setAcquisition] = useState("organic");
+  const [activity, setActivity] = useState("actions");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1689,7 +1690,19 @@ export function AnalyticsPage() {
     setData(null);
     setLeads([]);
   };
-  if (authenticated === false) return <Login onSuccess={load} />;
+  const enterAnalytics = () => {
+    const alreadyDefault = trafficRef.current === "without-quota" && acquisitionRef.current === "organic" && activityRef.current === "actions";
+    trafficRef.current = "without-quota";
+    acquisitionRef.current = "organic";
+    activityRef.current = "actions";
+    setTraffic("without-quota");
+    setAcquisition("organic");
+    setActivity("actions");
+    // Если срез изменился, запрос запустит эффект фильтров; иначе перечитываем
+    // после успешного входа сами. Так вход не создаёт два одинаковых запроса.
+    if (alreadyDefault) load(periodRef.current);
+  };
+  if (authenticated === false) return <Login onSuccess={enterAnalytics} />;
   if (error && !data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика недоступна</h1><p>{error}</p><button className="primary" type="button" onClick={load}>Повторить</button></section></main>;
   if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
   return <Dashboard data={data} period={period} setPeriod={selectPeriod} device={device} setDevice={selectDevice} traffic={traffic} setTraffic={selectTraffic} acquisition={acquisition} setAcquisition={selectAcquisition} activity={activity} setActivity={selectActivity} loading={loading} error={error} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} removeLead={removeLead} />;

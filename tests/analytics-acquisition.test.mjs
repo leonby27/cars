@@ -93,7 +93,7 @@ test('счётчики и кэши учитывают независимые ф�
   assert.match(page, /\$\{trendPeriod\}\|\$\{device\}\|\$\{traffic\}\|\$\{acquisition\}/);
   assert.match(page, /\$\{targetPeriod\}\|\$\{targetDevice\}\|\$\{targetTraffic\}\|\$\{targetAcquisition\}/);
   assert.match(page, /acquisitionRef.current === targetAcquisition/);
-  assert.match(page, /\["all", "organic", "paid"\], "all", analyticsAcquisitionKind/);
+  assert.match(page, /const \[acquisition, setAcquisition\] = useState\("organic"\)/);
   assert.match(page, /const stored = normalize\(window.localStorage.getItem\(key\)\)/);
   assert.equal((page.match(/<AnalyticsAcquisitionSwitch value=\{acquisition\}/g) || []).length, 2);
   for (const days of ['7', '30', '90']) assert.match(page, new RegExp(`id:"${days}", label:"${days} дней"`));
