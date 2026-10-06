@@ -17,7 +17,7 @@ export function analyticsTrafficSource(db, traffic, publicEvent, { from = "$1::t
     ELSE 'organic' END)`;
   const filters = [
     withoutQuota ? `lower(split_part(split_part(traffic_landing_path, '?', 1), '#', 1)) !~ '${QUOTA_LANDING_PATH_PATTERN}'` : "true",
-    channel === "all" ? "true" : `${landingChannel} = '${channel}'`,
+    channel === "all" ? "true" : channel === "paid" ? `${landingChannel} IN ('paid', 'rsya')` : `${landingChannel} = 'organic'`,
   ];
   const cte = `WITH traffic_ordered AS (
     SELECT e.*, (created_at AT TIME ZONE 'Europe/Minsk')::date AS traffic_day,

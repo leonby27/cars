@@ -15,6 +15,15 @@
 .analytics-range button { border:0; border-radius:calc(9px * var(--corner-scale)); padding:7px 10px; background:transparent; color:var(--muted); font-weight:700; }
 .analytics-range button:hover { color:var(--ink); }
 .analytics-range button.active { background:var(--panel); color:var(--accent); box-shadow:0 1px 4px rgba(15,23,42,.08); font-weight:800; }
+.analytics-period-select { position:relative; width:142px; flex:none; }
+.analytics-period-trigger { width:100%; height:42px; display:flex; align-items:center; justify-content:space-between; gap:9px; box-sizing:border-box; padding:0 13px; border:1px solid var(--line); border-radius:calc(11px * var(--corner-scale)); background:var(--panel-soft); color:var(--ink); font:inherit; font-weight:800; white-space:nowrap; cursor:pointer; }
+.analytics-period-trigger > b { width:8px; height:8px; flex:none; margin-top:-4px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); pointer-events:none; transition:transform .16s ease; }
+.analytics-period-select.open .analytics-period-trigger > b { margin-top:4px; transform:rotate(225deg); }
+.analytics-period-menu { position:absolute; z-index:12; top:calc(100% + 7px); right:0; width:160px; display:grid; gap:3px; box-sizing:border-box; padding:6px; border:1px solid var(--line); border-radius:calc(12px * var(--corner-scale)); background:var(--panel); box-shadow:0 16px 38px rgba(0,0,0,.2); animation:analytics-mobile-menu-in .16s ease-out both; }
+html[data-theme="dark"] .analytics-period-menu { background:var(--menu-surface,var(--panel)); }
+.analytics-period-menu button { min-height:38px; padding:7px 10px; border:0; border-radius:calc(8px * var(--corner-scale)); background:transparent; color:var(--muted); font:inherit; font-weight:750; text-align:left; white-space:nowrap; cursor:pointer; }
+.analytics-period-menu button:hover, .analytics-period-menu button.selected { background:var(--surface); color:var(--accent); }
+.analytics-period-trigger:focus-visible, .analytics-period-menu button:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
 .analytics-logout { min-width:112px; min-height:41px; height:41px; padding:0 18px; box-sizing:border-box; font-size:14px; }
 .analytics-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
 /* В обзоре карточек три, а не четыре: «Машины в кабинете» убраны 18.09.2026 —
@@ -312,11 +321,11 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
   .analytics-layout { grid-template-columns:1fr; gap:0; margin-top:0; }
   .analytics-mobile-navigation { position:relative; z-index:8; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:16px; }
   .analytics-mobile-section-select { position:relative; min-width:0; flex:1 1 calc(100% - 128px); }
-  .analytics-mobile-section-trigger, .analytics-mobile-period-trigger { height:42px; box-sizing:border-box; border:1px solid var(--line); border-radius:calc(11px * var(--corner-scale)); background:var(--panel-soft); color:var(--ink); }
+  .analytics-mobile-section-trigger { height:42px; box-sizing:border-box; border:1px solid var(--line); border-radius:calc(11px * var(--corner-scale)); background:var(--panel-soft); color:var(--ink); }
   .analytics-mobile-section-trigger { width:100%; min-width:0; display:flex; align-items:center; gap:8px; padding:0 11px; font:inherit; font-size:14px; font-weight:800; text-align:left; cursor:pointer; }
   .analytics-mobile-section-trigger > svg { flex:none; color:var(--accent); }
   .analytics-mobile-section-trigger > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .analytics-mobile-section-trigger > b, .analytics-mobile-period-trigger > b { width:8px; height:8px; flex:none; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); pointer-events:none; transition:transform .16s ease; }
+  .analytics-mobile-section-trigger > b { width:8px; height:8px; flex:none; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); pointer-events:none; transition:transform .16s ease; }
   .analytics-mobile-section-trigger > b { margin:-4px 1px 0 auto; }
   .analytics-mobile-section-select.open .analytics-mobile-section-trigger > b { margin-top:4px; transform:rotate(225deg); }
   .analytics-mobile-section-menu { position:absolute; top:calc(100% + 7px); left:0; width:min(330px,calc(100vw - 28px)); display:grid; gap:3px; padding:7px; box-sizing:border-box; border:1px solid var(--line); border-radius:calc(14px * var(--corner-scale)); background:var(--panel); box-shadow:0 16px 38px rgba(0,0,0,.2); animation:analytics-mobile-menu-in .16s ease-out both; }
@@ -325,16 +334,9 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
   .analytics-mobile-section-menu button.active { background:var(--surface); color:var(--ink); }
   .analytics-mobile-section-menu button.active > svg { color:var(--accent); }
   .analytics-mobile-section-menu button:hover { color:var(--ink); }
-  .analytics-mobile-section-menu button:focus-visible, .analytics-mobile-section-trigger:focus-visible, .analytics-mobile-period-trigger:focus-visible, .analytics-mobile-period-menu button:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
+  .analytics-mobile-section-menu button:focus-visible, .analytics-mobile-section-trigger:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
   .analytics-mobile-menu-divider { height:1px; margin:4px 3px; background:var(--line); }
-  .analytics-mobile-period-select { position:relative; width:118px; flex:none; }
-  .analytics-mobile-period-trigger { width:100%; display:flex; align-items:center; justify-content:space-between; gap:9px; padding:0 13px; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
-  .analytics-mobile-period-trigger > b { margin-top:-4px; }
-  .analytics-mobile-period-select.open .analytics-mobile-period-trigger > b { margin-top:4px; transform:rotate(225deg); }
-  .analytics-mobile-period-menu { position:absolute; z-index:2; top:calc(100% + 7px); right:0; width:142px; display:grid; gap:3px; padding:6px; box-sizing:border-box; border:1px solid var(--line); border-radius:calc(12px * var(--corner-scale)); background:var(--panel); box-shadow:0 16px 38px rgba(0,0,0,.2); animation:analytics-mobile-menu-in .16s ease-out both; }
-  html[data-theme="dark"] .analytics-mobile-period-menu { background:var(--menu-surface,var(--panel)); }
-  .analytics-mobile-period-menu button { min-height:38px; padding:7px 10px; border:0; border-radius:calc(8px * var(--corner-scale)); background:transparent; color:var(--muted); font:inherit; font-size:14px; font-weight:750; text-align:left; cursor:pointer; }
-  .analytics-mobile-period-menu button:hover, .analytics-mobile-period-menu button.selected { background:var(--surface); color:var(--accent); }
+  .analytics-mobile-navigation .analytics-period-select { width:118px; }
   .analytics-kpi-split-count > b { min-width:25px; height:22px; font-size:16px; }
 }
 

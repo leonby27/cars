@@ -5,11 +5,23 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createTestServer as createServer } from './vite-test-server.mjs';
 import react from '@vitejs/plugin-react';
-import { analyticsAcquisition, analyticsAcquisitionKind } from '../src/analytics-acquisition.js';
+import { analyticsAdvertisingSource, analyticsAcquisition, analyticsAcquisitionKind } from '../src/analytics-acquisition.js';
 import { analyticsEntrySource } from '../src/analytics.js';
 import { analyticsUpdatesUrl } from '../src/analytics-updates.js';
 import { normalizeAnalyticsEvent, getAnalyticsTrend, getVisitsBenchmark } from '../server/analytics.mjs';
 import { analyticsTrafficSource } from '../server/analytics-traffic.mjs';
+import { deploymentPlan } from '../scripts/lib/deploy-plan.mjs';
+
+test('платный срез и селект периода не требуют подготовки каталога и пересчёта цен', () => {
+  const plan = deploymentPlan(['src/analytics-acquisition.js', 'src/analytics.js', 'src/analytics-page.jsx',
+    'src/analytics.css', 'server/analytics-traffic.mjs', 'scripts/lib/deploy-impact.mjs']);
+  assert.equal(plan.reuseCatalog, true);
+  assert.equal(plan.reuseFeed, true);
+  assert.equal(plan.recalculatePrices, false);
+  assert.equal(plan.migrate, false);
+  assert.equal(plan.checkDuplicates, false);
+  assert.equal(plan.restartBot, false);
+});
 
 test('РСЯ требует метку сети, органический ysclid и рекламный yclid различаются', () => {
   for (const path of [
@@ -25,7 +37,25 @@ test('РСЯ требует метку сети, органический ysclid
   }
   assert.equal(analyticsAcquisition('/?utm_content=x%26utm_source%3Drsya'), 'organic');
   assert.equal(analyticsAcquisitionKind("rsya'; DROP TABLE analytics_events; --"), 'all');
+  assert.equal(analyticsAcquisitionKind('rsya'), 'paid');
+  assert.equal(analyticsAcquisitionKind('paid'), 'paid');
   assert.equal(analyticsEntrySource('', 'abcars.by', '/?utm_source=yandex&utm_medium=cpc&utm_source_type=context'), 'rsya');
+});
+
+test('Директ без метки сети не становится прямым заходом или органическим Яндексом', () => {
+  for (const path of [
+    '/?yclid=123', '/?YCLID=123', '/?yclid=123&ysclid=456',
+    '/?utm_source=yandex&utm_medium=cpc&utm_source_type=search',
+  ]) {
+    assert.equal(analyticsAdvertisingSource(path), 'yandex-direct', path);
+    assert.equal(analyticsEntrySource('', 'abcars.by', path), 'yandex-direct', path);
+    assert.equal(analyticsEntrySource('https://yandex.by/search', 'abcars.by', path), 'yandex-direct', path);
+    assert.equal(analyticsAcquisition(path), 'paid', 'подпись не подменяет неизвестную сеть на РСЯ');
+  }
+  for (const path of ['/?ysclid=123', '/?yclid=', '/?gclid=123', '/?utm_content=x%26yclid%3D123', '/?utm_source=yandex']) {
+    assert.equal(analyticsAdvertisingSource(path), '', path);
+  }
+  assert.equal(analyticsAdvertisingSource('/?yclid=123&utm_source_type=context'), 'rsya');
 });
 
 test('категория сохраняется до сокращения длинного адреса и не берётся из тела события', () => {
@@ -40,9 +70,9 @@ test('источник применяется ко всему визиту до 
   const calls = [];
   const db = { query:async (sql, params) => { calls.push({ sql, params }); return { rows:[] }; } };
   const now = Date.parse('2026-10-05T12:00:00Z');
-  const trend = await getAnalyticsTrend('7', { db, now, acquisition:'rsya', device:'desktop', traffic:'without-quota' });
+  const trend = await getAnalyticsTrend('7', { db, now, acquisition:'paid', device:'desktop', traffic:'without-quota' });
   await getVisitsBenchmark('today', { db, now, acquisition:'organic' });
-  assert.equal(trend.acquisition, 'rsya');
+  assert.equal(trend.acquisition, 'paid');
   for (const { sql } of calls) {
     assert.match(sql, /first_value\(properties->>'acquisition'\)/);
     assert.match(sql, /traffic_previous_day IS DISTINCT FROM traffic_day/);
@@ -50,20 +80,23 @@ test('источник применяется ко всему визиту до 
     assert.doesNotMatch(sql.slice(0, sql.indexOf('traffic_numbered AS')), /properties->>'device'|human_action/);
   }
   assert.match(calls[0].sql, /!~.*quota/);
-  assert.match(calls[0].sql, /END\) = 'rsya'/);
+  assert.match(calls[0].sql, /END\) IN \('paid', 'rsya'\)/);
   assert.match(calls[1].sql, /END\) = 'organic'/);
   assert.equal(analyticsTrafficSource(db, 'all', 'true', { acquisition:'invalid' }).db, db);
 });
 
-test('счётчики и кэши учитывают независимые фильтры, периоды сокращены', async () => {
-  assert.equal(analyticsUpdatesUrl('', 'all', 'rsya'), '/api/analytics/updates?acquisition=rsya');
+test('счётчики и кэши учитывают независимые фильтры, периоды названы полностью', async () => {
+  assert.equal(analyticsUpdatesUrl('', 'all', 'paid'), '/api/analytics/updates?acquisition=paid');
+  assert.equal(analyticsUpdatesUrl('', 'all', 'rsya'), '/api/analytics/updates?acquisition=paid');
   assert.equal(analyticsUpdatesUrl(['overview', 'vehicles'], 'without-quota', 'organic'), '/api/analytics/updates?viewing=overview%2Cvehicles&traffic=without-quota&acquisition=organic');
   const page = await readFile(new URL('../src/analytics-page.jsx', import.meta.url), 'utf8');
   assert.match(page, /\$\{trendPeriod\}\|\$\{device\}\|\$\{traffic\}\|\$\{acquisition\}/);
   assert.match(page, /\$\{targetPeriod\}\|\$\{targetDevice\}\|\$\{targetTraffic\}\|\$\{targetAcquisition\}/);
   assert.match(page, /acquisitionRef.current === targetAcquisition/);
+  assert.match(page, /\["all", "organic", "paid"\], "all", analyticsAcquisitionKind/);
+  assert.match(page, /const stored = normalize\(window.localStorage.getItem\(key\)\)/);
   assert.equal((page.match(/<AnalyticsAcquisitionSwitch value=\{acquisition\}/g) || []).length, 2);
-  for (const days of ['7', '30', '90']) assert.match(page, new RegExp(`id:"${days}", label:"${days}"`));
+  for (const days of ['7', '30', '90']) assert.match(page, new RegExp(`id:"${days}", label:"${days} дней"`));
   const handler = await readFile(new URL('../server/handler.mjs', import.meta.url), 'utf8');
   assert.equal((handler.match(/acquisition:url.searchParams.get\("acquisition"\)/g) || []).length, 3);
 });
@@ -71,13 +104,20 @@ test('счётчики и кэши учитывают независимые ф�
 test('переключатель показывает три режима, заявки без источника явно помечены', async () => {
   const vite = await createServer({ configFile:false, plugins:[react()], server:{ middlewareMode:true, hmr:false }, appType:'custom' });
   try {
-    const { AnalyticsAcquisitionSwitch, LeadFunnelCard } = await vite.ssrLoadModule('/src/analytics-page.jsx');
-    const html = renderToStaticMarkup(createElement(AnalyticsAcquisitionSwitch, { value:'rsya', onChange:() => {} }));
-    assert.match(html, /aria-pressed="true"[^>]*>РСЯ<\/button>/);
-    assert.match(html, />Органик<\/button>/);
+    const { AnalyticsAcquisitionSwitch, LeadFunnelCard, VisitSource } = await vite.ssrLoadModule('/src/analytics-page.jsx');
+    const html = renderToStaticMarkup(createElement(AnalyticsAcquisitionSwitch, { value:'paid', onChange:() => {} }));
+    assert.match(html, /aria-pressed="true"[^>]*>Платные<\/button>/);
+    assert.match(html, />Бесплатные<\/button>/);
     assert.match(html, />Все<\/button>/);
-    const card = renderToStaticMarkup(createElement(LeadFunnelCard, { acquisition:'rsya', summary:{ lead_people:2, availability_modal_opens:3 } }));
-    assert.match(card, /Открытия — РСЯ, заявки — все/);
+    const card = renderToStaticMarkup(createElement(LeadFunnelCard, { acquisition:'paid', summary:{ lead_people:2, availability_modal_opens:3 } }));
+    assert.match(card, /Открытия — платные переходы, заявки — все/);
     assert.match(card, /Фильтр источника действует на открытия окна/);
+    for (const source of ['direct', 'yandex.by', 'unknown', '']) {
+      const saved = renderToStaticMarkup(createElement(VisitSource, { visit:{ source, landingPath:'/?yclid=123' } }));
+      assert.match(saved, /Яндекс\.Директ/);
+      assert.doesNotMatch(saved, /Прямой заход|Не определён|>РСЯ</);
+    }
+    const organic = renderToStaticMarkup(createElement(VisitSource, { visit:{ source:'direct', landingPath:'/?ysclid=123' } }));
+    assert.match(organic, />Яндекс</);
   } finally { await vite.close(); }
 });

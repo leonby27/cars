@@ -15,6 +15,8 @@ const renderOnly = new Set([
   'src/legal-copy.js', 'src/service-video-loading.js', 'src/vehicle-market-savings.js', 'src/market-compare.js',
 ]);
 const operationsOnly = new Set([
+  // Analytics attribution and the deployment policy do not prepare catalog data.
+  'server/analytics-traffic.mjs', 'scripts/lib/deploy-impact.mjs',
   'scripts/deploy.mjs', 'scripts/deploy-plan.mjs', 'scripts/build.mjs',
   'scripts/clean-dist.mjs', 'scripts/split-css.mjs', 'scripts/precompress-dist.mjs',
   'scripts/prerender-home.mjs', 'scripts/audit-blog-images.mjs',

@@ -207,9 +207,9 @@ test("мобильная навигация использует два каст
   const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
   assert.match(source, /className="analytics-mobile-navigation"/);
   assert.match(source, /className="analytics-mobile-section-trigger"[^>]*aria-haspopup="menu"/);
-  assert.match(source, /function MobileAnalyticsPeriodSelect[\s\S]*?className="analytics-mobile-period-trigger"[^>]*aria-haspopup="listbox"/);
-  assert.match(source, /className="analytics-mobile-period-menu" role="listbox"/);
-  assert.doesNotMatch(source, /analytics-mobile-period-select[\s\S]{0,200}<select/);
+  assert.match(source, /function AnalyticsPeriodSelect[\s\S]*?className="analytics-period-trigger"[^>]*aria-haspopup="listbox"/);
+  assert.match(source, /className="analytics-period-menu" role="listbox"/);
+  assert.doesNotMatch(source, /analytics-period-select[\s\S]{0,200}<select/);
   // Сброс аналитики из кабинета убран 17.09.2026 — в меню остались разделы и выход.
   assert.match(source, /analytics-mobile-section-menu[\s\S]*?Посты соц сетей[\s\S]*?Выйти/);
   assert.doesNotMatch(source, /sectionTotals|totals\[item\.id\]/);
