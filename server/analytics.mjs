@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { analyticsActivityKind } from "../src/analytics-activity.js";
+import { isKnownAnalyticsBotAgent } from "../src/analytics-bots.js";
 import { analyticsAcquisition, analyticsAcquisitionKind } from "../src/analytics-acquisition.js";
 import { pool } from "./db.mjs";
 import { readCookie } from "./auth.mjs";
@@ -221,12 +222,11 @@ export const fromOwnPage = (headers = {}, host = siteHost()) => {
 // Метка «не считать» живёт в localStorage конкретного браузера, а этот запускается
 // каждый раз заново и метки не помнит, поэтому 26.08.2026 мои проверки оказались
 // в разделе как живые посетители. Здесь он отсекается по подписи и навсегда.
-const BOT_AGENT = /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|curl|wget|python-requests|httpclient|http-client|libwww|okhttp|java\/|axios|node-fetch|go-http|lighthouse|pagespeed|gtmetrix|pingdom|uptime|monitor|preview|fetcher|archiver|ia_archiver|yandeximages|feed/i;
 export const isBotAgent = (agent = "") => {
   const value = String(agent || "").trim();
   // Браузер всегда представляется. Пустая подпись — это не человек.
   if (!value) return true;
-  return BOT_AGENT.test(value);
+  return isKnownAnalyticsBotAgent(value);
 };
 
 // Адрес арендованного сервера в дата-центре. Робота, который подделал подпись
@@ -414,14 +414,14 @@ export async function recordAnalyticsEvent(body, { db = pool, headers = null, co
 // Посетитель себя проявил: отмечаем живым весь его сегодняшний след. Отметка нужна
 // именно так, вдогонку, потому что заход записывается сразу — иначе человек, который
 // открыл страницу и ушёл, не притронувшись ни к чему, потерялся бы совсем. Теперь он
-// в базе есть, просто не попадает в число посетителей, а виден отдельной цифрой.
+// в базе есть и учитывается в режиме «Все» без подтверждения действия.
 export async function confirmHumanVisit(body = {}, { db = pool } = {}) {
   const visitorId = text(body.visitorId, 80);
   const sessionId = text(body.sessionId, 80);
   if (!visitorId || !sessionId) return { error:"invalid_event_identity" };
   // Отметок две. Слабая — просто время на открытой странице; её научился получать
   // обходчик, который ждёт свои пятнадцать секунд и уходит. Сильная — настоящее
-  // действие; в число посетителей раздел берёт только по ней. Сильная приходит и
+  // действие; режим «С действиями» берёт только по ней. Сильная приходит и
   // после слабой, поэтому строку обновляем, пока не проставлено само действие.
   const action = body.action === true;
   const result = await db.query(

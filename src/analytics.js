@@ -1,4 +1,5 @@
 import { analyticsAdvertisingSource } from "./analytics-acquisition.js";
+import { isKnownAnalyticsBotAgent } from "./analytics-bots.js";
 
 const visitorKey = "abcars-analytics-visitor";
 const sessionKey = "abcars-analytics-session";
@@ -108,8 +109,7 @@ export const isRepeatEvent = (key, now = Date.now()) => {
 // Сюда же встроенный браузер Claude (`claude/`): им проверяют правки на боевом
 // сайте, а метку «не считать» он не помнит — она живёт в хранилище браузера,
 // а он каждый раз чистый.
-const BOT_AGENT = /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i;
-export const isBotAgent = (agent = "") => BOT_AGENT.test(String(agent));
+export const isBotAgent = isKnownAnalyticsBotAgent;
 
 export const isSkippedVisit = ({ hostname, nocount, automated, agent = "", path = "" }) =>
   isAnalyticsPath(path) || isLocalVisit(hostname) || nocount === "1" || Boolean(automated) || isBotAgent(agent);
@@ -134,16 +134,15 @@ const skipThisVisit = () => {
 export const HUMAN_SIGNALS = ["pointermove", "pointerdown", "touchstart", "keydown", "wheel", "scroll"];
 // Время на странице тоже отмечаем, но отдельно и слабее: 26.08.2026 нашёлся обходчик,
 // который открывает страницу, ровно столько ждёт и уходит, ни к чему не притронувшись.
-// Поэтому одно лишь время человеком уже не делает — в посетители попадает только тот,
-// за кем есть действие, а отстоявшие своё без движения видны отдельной цифрой.
+// Поэтому одно лишь время не подтверждает действие: оно не переводит посетителя
+// в режим «С действиями». В режиме «Все» такой заход учитывается.
 export const HUMAN_DWELL_MS = 15_000;
 
 // Заход записываем сразу, а живым человеком он становится, когда посетитель себя
 // проявит: подвигает мышью, коснётся экрана, прокрутит, нажмёт клавишу или пробудет
-// на открытой странице 15 секунд. Робот, который снимает страницу и уходит, отметку
-// не получает — в числе посетителей его нет, но сам заход в базе остаётся и виден
-// отдельной цифрой. Так не теряется и человек, закрывший страницу через две секунды:
-// он просто попадёт не в людей, а в неподтверждённые заходы.
+// на открытой странице 15 секунд. В режиме «Все» учитываем и короткие заходы без
+// подтверждения: отсутствие действия не доказывает, что это робот. Явные роботы
+// исключаются отдельно до записи события, независимо от режима активности.
 let humanConfirmed = false;
 let humanActed = false;
 let watching = false;

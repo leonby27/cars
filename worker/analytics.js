@@ -1,3 +1,5 @@
+import { isKnownAnalyticsBotAgent } from "../src/analytics-bots.js";
+
 const EVENTS = new Set(["page_view", "vehicle_view", "availability_click", "availability_request_click", "registration_completed", "favorite_added", "search_saved", "custom_search_submitted", "search_query", "article_promo_shown", "article_promo_click", "contact_phone_reveal", "contact_telegram_click", "contact_viber_click", "contact_instagram_click", "app_download_qr_click", "app_download_app_store_click", "app_download_google_play_click", "app_download_qr_modal_open", "app_download_qr_deeplink_modal_open", "app_download_app_store_modal_open", "app_download_google_play_modal_open", "newsletter_subscribe_click", "newsletter_subscribe_modal_open"]);
 const COOKIE_NAME = "abcars_analytics";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -27,8 +29,7 @@ const cookieValue = (header, name) => String(header || "").split(";").map((item)
 // принимаем только со страницы настоящего адреса сайта и только от браузера, который
 // не называет себя роботом. Запрос мимо браузера и заход по числовому адресу сервера
 // в статистику не идут.
-const BOT_AGENT = /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|curl|wget|python-requests|httpclient|http-client|libwww|okhttp|java\/|axios|node-fetch|go-http|lighthouse|pagespeed|pingdom|uptime|monitor|preview|fetcher|archiver|feed/i;
-export const workerBotAgent = (agent) => { const value = String(agent || "").trim(); return !value || BOT_AGENT.test(value); };
+export const workerBotAgent = (agent) => { const value = String(agent || "").trim(); return !value || isKnownAnalyticsBotAgent(value); };
 export const workerOwnPage = (request, env) => {
   let site = "";
   try { site = new URL(String(env?.SITE_URL || "https://abcars.by")).hostname.toLowerCase().replace(/^www\./, ""); } catch { site = ""; }
