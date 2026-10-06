@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { analyticsActivityKind } from '../src/analytics-activity.js';
-import { analyticsUpdatesUrl, watchAnalyticsExit } from '../src/analytics-updates.js';
-import { ANALYTICS_SECTIONS, getAnalyticsTrend, getVisitsBenchmark, getAnalyticsUpdates } from '../server/analytics.mjs';
+import { analyticsUpdatesUrl, navigationViewedSections, watchAnalyticsExit } from '../src/analytics-updates.js';
+import { ANALYTICS_SECTIONS, getAnalyticsTrend, getVisitsBenchmark, getAnalyticsUpdates, readAnalyticsSeen } from '../server/analytics.mjs';
 import { pool } from '../server/db.mjs';
 
 test('активность по умолчанию включает все записанные заходы, неизвестные значения безопасны', () => {
@@ -52,6 +52,27 @@ test('непрочитанные счётчики применяют режим 
       assert.ok(saved.length >= 3);
       assert.ok(saved.every((sql) => !sql.includes('human_action')));
     }
+  } finally { pool.query = original; }
+});
+
+test('повторный обзор сохраняет отметки всех разделов, кроме заявок, одним запросом', async () => {
+  const original = pool.query;
+  const sections = navigationViewedSections('overview', 'overview');
+  assert.deepEqual([...sections].sort(), ANALYTICS_SECTIONS.filter((section) => section !== 'leads').sort());
+  const updates = [];
+  const seen = Object.fromEntries(ANALYTICS_SECTIONS.map((section) => [section, '2026-10-05T00:00:00Z']));
+  pool.query = async (sql, values) => {
+    if (sql.startsWith('UPDATE analytics_seen')) {
+      updates.push(values[0]);
+      for (const section of values[0]) seen[section] = '2026-10-06T08:00:00Z';
+    }
+    return { rows:sql === 'SELECT section, seen_at FROM analytics_seen' ? Object.entries(seen).map(([section, seen_at]) => ({ section, seen_at })) : [] };
+  };
+  try {
+    const stored = await readAnalyticsSeen(sections.join(','));
+    assert.deepEqual(updates, [sections]);
+    for (const section of sections) assert.equal(stored[section], '2026-10-06T08:00:00Z');
+    assert.equal(stored.leads, '2026-10-05T00:00:00Z');
   } finally { pool.query = original; }
 });
 

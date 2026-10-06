@@ -82,8 +82,9 @@ test("автоматически открытый обзор не гасит с�
 test("«Каталог» гасит все свои вкладки одним запросом при входе и выходе", async () => {
   assert.equal(analyticsUpdatesUrl(["vehicles", "vehicle_cars", "vehicle_favorites"]), "/api/analytics/updates?viewing=vehicles%2Cvehicle_cars%2Cvehicle_favorites");
   const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
-  assert.match(page, /sectionTabs\(id\)/, "вход в раздел гасит все его вкладки");
-  assert.match(page, /section === "vehicles" && id !== "vehicles" \? sectionTabs\("vehicles"\)/, "выход из каталога гасит его вкладки");
+  assert.match(page, /navigationViewedSections\(id, section\)/, "навигация передаёт все просмотренные разделы");
+  const updates = await readFile(new URL("../src/analytics-updates.js", import.meta.url), "utf8");
+  assert.match(updates, /current === "vehicles" && next !== "vehicles" \? sectionTabs\("vehicles"\)/, "выход из каталога гасит его вкладки");
   const server = await readFile(new URL("../server/analytics.mjs", import.meta.url), "utf8");
   assert.match(server, /split\(","\)/, "сервер принимает несколько разделов через запятую");
 });
@@ -237,8 +238,7 @@ test("счётчики отделяют просмотренное от ново
   // «Заявки», а в обзоре она держала нулевую колонку.
   assert.doesNotMatch(source, /"Машины в кабинете"/);
   assert.match(server, /cabinet_orders:cabinetOrders\.rows\[0\]\.n/);
-  // В боковом меню у «Каталога» три вкладки со своими счётчиками, и пункт меню
-  // показывает их сумму — иначе новые просмотры авто видно только внутри раздела.
+  // Общая функция скрывает плюсы каталога в обоих вариантах навигации.
   assert.match(source, /const fresh = sectionFreshCount\(updates, item\.id\)/);
 });
 
@@ -248,10 +248,12 @@ test("в разделе каталога вкладка авто стоит пе
   const worker = await readFile(new URL("../worker/analytics.js", import.meta.url), "utf8");
   assert.match(source, /const vehicleModes = \[\s*\{ id:"cars", label:"Авто" \},\s*\{ id:"catalog", label:"Каталог" \}/);
   assert.match(source, /function VehiclesSection[\s\S]*?useState\("cars"\)/);
-  assert.match(source, /const viewedIds = \[\.\.\.new Set\(\[\.\.\.sectionTabs\(id\)/);
+  assert.match(source, /const viewedIds = navigationViewedSections\(id, section\)/);
   assert.match(source, /section === "vehicles" \? <VehiclesSection/);
   assert.doesNotMatch(source, /CatalogSourceControls/);
   assert.match(source, /id:"vehicles", label:"Каталог"/);
+  const catalog = source.slice(source.indexOf("function VehiclesSection"), source.indexOf("function SearchesSection"));
+  assert.doesNotMatch(catalog, /analytics-tab-count|updates\.|fresh/);
   assert.match(source, /data\.catalogPages/);
   assert.match(server, /catalogPages:catalogPagesResult\.rows/);
   assert.match(server, /event_name='page_view'[\s\S]{0,220}split_part\(path, '\?', 1\) = '\/catalog'/);

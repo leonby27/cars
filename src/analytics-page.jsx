@@ -10,7 +10,7 @@ import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
 import { quotaVisitSplit } from "./analytics-quota-pages.js";
-import { analyticsUpdatesUrl, sectionFreshCount, sectionTabs, watchAnalyticsExit } from "./analytics-updates.js";
+import { analyticsUpdatesUrl, clearAnalyticsUpdates, navigationViewedSections, sectionFreshCount, watchAnalyticsExit } from "./analytics-updates.js";
 import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js";
 import { socialGeneration } from "./social-generations.js";
 import { carFrame, headlineSize, KINDS, resolvePlace, socialThemeQuery, socialTiles, tileHeadline } from "./social-themes.js";
@@ -840,7 +840,7 @@ const vehicleModes = [
 const modelTitle = (title) => String(title || "").replace(/\s+\d{4}\s*$/, "").trim() || title || "—";
 const favoriteOwners = (item) => Array.isArray(item.owners) && item.owners.length ? item.owners.join(", ") : "Имя не указано";
 
-function VehiclesSection({ data, updates, markViewed }) {
+function VehiclesSection({ data, markViewed }) {
   const [mode, setMode] = useState("cars");
   // Во всех представлениях сначала показываем то, что смотрели последним.
   const [sort, setSort] = useState({ column:"lastViewed", desc:true });
@@ -890,10 +890,7 @@ function VehiclesSection({ data, updates, markViewed }) {
   const toggleSort = (column) => setSort((current) => current.column === column.id ? { column:column.id, desc:!current.desc } : { column:column.id, desc:!column.text });
   return <section className="analytics-panel" aria-label="Каталог">
     <div className="analytics-panel-heading analytics-vehicles-heading"><div className="analytics-range" aria-label="Представление каталога">
-      {vehicleModes.map((item) => {
-        const fresh = item.id === "catalog" ? Number(updates.vehicles) || 0 : item.id === "models" ? 0 : Number(updates[`vehicle_${item.id}`]) || 0;
-        return <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}{fresh ? <b className="analytics-tab-count" title={`Нового с прошлого просмотра: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}</button>;
-      })}
+      {vehicleModes.map((item) => <button type="button" key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setVehicleMode(item.id)}>{item.label}</button>)}
     </div></div>
     <div className="analytics-table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.id} aria-sort={sort.column === column.id ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className={`analytics-sort${sort.column === column.id ? " active" : ""}`} onClick={() => toggleSort(column)}>{column.label}<span aria-hidden="true">{sort.column === column.id ? (sort.desc ? "↓" : "↑") : "↕"}</span></button></th>)}</tr></thead>
       <tbody>{rows.length ? rows.slice(0, visible).map((item) => <tr key={item.id} className={mode === "favorites" && (item.gone || item.status === "unavailable") ? "analytics-row-warning" : undefined}>
@@ -1468,11 +1465,12 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
     // 7/30/90 дней дальше не переопределяем.
     if (id === "search-traffic" && (period === "today" || period === "yesterday")) setPeriod("30");
     setSection(id);
-    // «Каталог» гасит все свои вкладки и при входе, и при выходе из него:
-    // пока он был открыт, могло набежать новое, и уносить его цифрой в меню незачем.
-    const viewedIds = [...new Set([...sectionTabs(id), ...(section === "vehicles" && id !== "vehicles" ? sectionTabs("vehicles") : [])])];
+    // Повторный клик обзора отмечает все разделы, кроме заявок.
+    // У каталога сохраняем отметки всех вкладок при входе и выходе.
+    const viewedIds = navigationViewedSections(id, section);
+    if (viewedIds.includes("contact_interest") && id !== "contact_interest") setContactFresh({});
     // Цифру гасим сразу, не дожидаясь ответа сервера.
-    setUpdates((current) => ({ ...current, ...Object.fromEntries(viewedIds.map((key) => [key, 0])), ...(id === "overview" ? { page_views:0 } : {}), ...(id === "contact_interest" ? { contact_interest_details:{} } : {}) }));
+    setUpdates((current) => clearAnalyticsUpdates(current, viewedIds));
     loadUpdates(viewedIds);
   };
   const markViewed = (id) => {
@@ -1520,7 +1518,7 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} device={device} traffic={data.traffic || "all"} acquisition={data.acquisition || "all"} activity={data.activity || "all"} updates={updates} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} summary={data.summary} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={() => { reloadLeads(); reload(period, { silent:true }); }} removeLead={removeLead} period={period} /></div>
-          <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} updates={updates} markViewed={markViewed} /> : null}</div>
+          <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "seo-positions"}><SeoPositionsSection /></div>

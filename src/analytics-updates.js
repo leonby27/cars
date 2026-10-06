@@ -33,13 +33,28 @@ export function watchAnalyticsExit(getViewedSections, target = window, send = fe
   return () => target.removeEventListener("pagehide", onPageHide);
 }
 
-// Внутри «Каталога» три вкладки со своими счётчиками: страницы каталога, авто и
-// избранное. Пункт бокового меню показывает их сумму — иначе просмотренные авто
-// видно только после того, как раздел откроешь.
+// Отметки каталога сохраняем для совместимости, но его новые просмотры
+// показываем только в общей карточке просмотров страниц в обзоре.
 export const SECTION_TABS = { vehicles:["vehicles", "vehicle_cars", "vehicle_favorites"] };
 
 // Все счётчики раздела: у «Каталога» — три вкладки, у остальных — он сам.
 export const sectionTabs = (section = "") => SECTION_TABS[section] || [section];
 
-export const sectionFreshCount = (updates = {}, section = "") =>
+export const sectionFreshCount = (updates = {}, section = "") => section === "vehicles" ? 0 :
   sectionTabs(section).reduce((sum, key) => sum + (Number(updates[key]) || 0), 0);
+
+// Только повторное нажатие активного обзора отмечает всё, кроме заявок.
+// Обычный вход в обзор по-прежнему позволяет сначала увидеть новые счётчики.
+const OVERVIEW_RESET_SECTIONS = ["overview", "vehicles", "vehicle_cars", "vehicle_favorites", "searches", "customers", "contact_interest"];
+export const navigationViewedSections = (next, current) => next === "overview" && current === "overview"
+  ? [...OVERVIEW_RESET_SECTIONS]
+  : [...new Set([...sectionTabs(next), ...(current === "vehicles" && next !== "vehicles" ? sectionTabs("vehicles") : [])])];
+
+export function clearAnalyticsUpdates(updates, viewedSections) {
+  return {
+    ...updates,
+    ...Object.fromEntries(viewedSections.map((key) => [key, 0])),
+    ...(viewedSections.includes("overview") ? { page_views:0 } : {}),
+    ...(viewedSections.includes("contact_interest") ? { contact_interest_details:{} } : {}),
+  };
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sectionFreshCount, watchAnalyticsExit } from '../src/analytics-updates.js';
+import { analyticsUpdatesUrl, clearAnalyticsUpdates, navigationViewedSections, sectionFreshCount, watchAnalyticsExit } from '../src/analytics-updates.js';
 
 test('closing analytics persists viewed sections without clearing them on entry or tab switch', async () => {
   const target = new EventTarget();
@@ -45,11 +45,41 @@ test('returning from browser history can persist another visit and network failu
   cleanup();
 });
 
-test('the catalog menu item counts every tab inside it', () => {
+test('catalog unread counts stay hidden while overview and leads keep their badges', () => {
   const updates = { overview:3, vehicles:0, vehicle_cars:5, vehicle_favorites:2, leads:1 };
-  assert.equal(sectionFreshCount(updates, 'vehicles'), 7, 'viewed cars and favorites must show up on the menu item');
+  assert.equal(sectionFreshCount(updates, 'vehicles'), 0);
   assert.equal(sectionFreshCount(updates, 'overview'), 3);
   assert.equal(sectionFreshCount(updates, 'searches'), 0, 'a section without data shows nothing');
   assert.equal(sectionFreshCount({}, 'vehicles'), 0);
-  assert.equal(sectionFreshCount({ vehicles:4 }, 'vehicles'), 4, 'catalog pages alone still count');
+  assert.equal(sectionFreshCount({ vehicles:4 }, 'vehicles'), 0);
+  assert.equal(sectionFreshCount(updates, 'leads'), 1);
+});
+
+
+test('reselecting overview clears all non-lead badges and sends one persistent reset', () => {
+  const sections = navigationViewedSections('overview', 'overview');
+  assert.deepEqual(sections, ['overview', 'vehicles', 'vehicle_cars', 'vehicle_favorites', 'searches', 'customers', 'contact_interest']);
+  const updates = { overview:3, page_views:20, vehicles:2, vehicle_cars:5, vehicle_favorites:4, searches:1, customers:2, contact_interest:8, contact_interest_details:{ contact_page_views:8 }, leads:6, cabinet_orders:2 };
+  const cleared = clearAnalyticsUpdates(updates, sections);
+  assert.equal(updates.page_views, 20, 'original state remains untouched');
+  for (const section of sections) assert.equal(cleared[section], 0);
+  assert.equal(cleared.page_views, 0);
+  assert.deepEqual(cleared.contact_interest_details, {});
+  assert.equal(cleared.leads, 6);
+  assert.equal(cleared.cabinet_orders, 2);
+  const url = new URL(analyticsUpdatesUrl(sections, 'without-quota', 'paid', 'actions'), 'http://localhost');
+  assert.deepEqual(url.searchParams.get('viewing').split(','), sections);
+  assert.equal(url.searchParams.get('traffic'), 'without-quota');
+  assert.equal(url.searchParams.get('acquisition'), 'paid');
+  assert.equal(url.searchParams.get('activity'), 'actions');
+});
+
+test('entering overview from another section does not reset other badges', () => {
+  assert.deepEqual(navigationViewedSections('overview', 'searches'), ['overview']);
+  const fromCatalog = navigationViewedSections('overview', 'vehicles');
+  assert.deepEqual(fromCatalog, ['overview', 'vehicles', 'vehicle_cars', 'vehicle_favorites']);
+  const cleared = clearAnalyticsUpdates({ overview:2, page_views:5, searches:3, leads:4, contact_interest_details:{ contact_phone_views:1 } }, ['overview']);
+  assert.equal(cleared.searches, 3);
+  assert.equal(cleared.leads, 4);
+  assert.deepEqual(cleared.contact_interest_details, { contact_phone_views:1 });
 });
