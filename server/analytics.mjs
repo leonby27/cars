@@ -541,7 +541,7 @@ const VISIT_STARTS = "gap IS NULL OR gap > interval '30 minutes' OR previous_day
 // иначе за один и тот же день карточка и точка графика показывали бы разные числа.
 // Источник у захода один — тот, с которого он начался: внутри захода человек ходит
 // по сайту, и ссылка поисковика есть только у первого шага.
-// Рядом с заходами день отдаёт и просмотры карточек: график умеет показывать обе
+// Рядом с заходами день отдаёт и просмотры страниц: график умеет показывать обе
 // величины, а считать их вторым запросом смысла нет. Заходы — это только первые шаги
 // захода, поэтому они отбираются условием в самом счётчике, а не в WHERE: иначе
 // просмотры внутри захода выпали бы из выборки вместе с остальными шагами.
@@ -577,9 +577,9 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
       count(*) FILTER (
         WHERE (${VISIT_STARTS}) AND entry_source ~ '^chatgpt$|(^|\\.)(chatgpt\\.com|chat\\.openai\\.com|openai\\.com)$'
       )::int AS chatgpt,
-      count(*) FILTER (WHERE event_name = 'vehicle_view')::int AS views,
+      count(*) FILTER (WHERE event_name = 'page_view')::int AS views,
       count(*) FILTER (WHERE (${VISIT_STARTS}) AND second_of_day < $3)::int AS visits_to_now,
-      count(*) FILTER (WHERE event_name = 'vehicle_view' AND second_of_day < $3)::int AS views_to_now
+      count(*) FILTER (WHERE event_name = 'page_view' AND second_of_day < $3)::int AS views_to_now
     FROM steps
     GROUP BY day ORDER BY day`, [from, to, secondOfDay]);
   return {
@@ -977,12 +977,14 @@ export async function getAnalyticsUpdates({ viewing = "", traffic = "all", acqui
     // выглядел новым заходом — после обновления страницы вылезал «+1», хотя
     // карточка «Заходы» не росла.
     db.query(`WITH steps AS (
-        SELECT created_at,
+        SELECT created_at, event_name,
           created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
           ${MINSK_DAY} AS day,
           lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
         FROM ${EVENTS} WHERE created_at > $1::timestamptz - interval '30 minutes' AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}
-      ) SELECT count(*) FILTER (WHERE created_at > $1 AND (${VISIT_STARTS}))::int AS n FROM steps`, [since.overview]),
+      ) SELECT count(*) FILTER (WHERE created_at > $1 AND (${VISIT_STARTS}))::int AS n,
+          count(*) FILTER (WHERE created_at > $1 AND event_name='page_view')::int AS page_views
+        FROM steps`, [since.overview]),
     db.query(`SELECT count(*)::int AS n FROM ${EVENTS}
       WHERE event_name='page_view' AND created_at > $1
         AND (split_part(path, '?', 1) = '/catalog' OR split_part(path, '?', 1) LIKE '/catalog/%')
@@ -1015,6 +1017,7 @@ export async function getAnalyticsUpdates({ viewing = "", traffic = "all", acqui
   const contactInterestDetails = contactInterest.rows[0];
   return {
     overview:overview.rows[0].n,
+    page_views:overview.rows[0].page_views,
     vehicles:vehicles.rows[0].n,
     vehicle_cars:vehicleCars.rows[0].n,
     vehicle_favorites:vehicleFavorites.rows[0].n,

@@ -5,11 +5,11 @@ const dateLabel = day => new Intl.DateTimeFormat("ru-RU", { day: "numeric", mont
 // по-разному, и без этого каждый всплеск приходится сверять с календарём.
 const weekdayLabel = day => new Intl.DateTimeFormat("ru-RU", { weekday: "short", timeZone: "Europe/Minsk" }).format(new Date(day));
 const pointLabel = day => `${dateLabel(day)}, ${weekdayLabel(day)}`;
-// Одна и та же картинка показывает заходы или просмотры карточек — меняются только
+// Одна и та же картинка показывает заходы или просмотры страниц — меняются только
 // подписи: на оси, в подсказке и в описании для чтения с экрана.
 const METRICS = {
   visits:{ axis:"Заходы", chart:"График заходов по дням", point:"заходов", tooltip:"Заходов" },
-  views:{ axis:"Просмотры авто", chart:"График просмотров авто по дням", point:"просмотров авто", tooltip:"Просмотров" },
+  views:{ axis:"Просмотры страниц", chart:"График просмотров страниц по дням", point:"просмотров страниц", tooltip:"Просмотров страниц" },
 };
 
 export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric = "visits" }) {

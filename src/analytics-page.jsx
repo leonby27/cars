@@ -338,7 +338,7 @@ function AnalyticsSplitCount({ total = 0, fresh = 0, className = "" }) {
 // вечеру не показывала утренние числа.
 const ANALYTICS_REFRESH_MS = 60_000;
 
-const trendMetrics = [["visits", "Посещения"], ["views", "Просмотры"]];
+const trendMetrics = [["visits", "Посещения"], ["views", "Просмотры страниц"]];
 const trendMetricIds = trendMetrics.map(([id]) => id);
 
 const visitsNote = (summary, period, days) => {
@@ -433,7 +433,7 @@ function OverviewSection({ data, period, device = "all", traffic = "all", acquis
     // Счётчики новых («+N») считаются по всем устройствам, поэтому в срезе по одному
     // устройству их не показываем — иначе «было» вышло бы меньше настоящего.
     ["Заходы", summary.visits, visitsNote(summary, period, data.days), device === "all" ? updates.overview : 0],
-    ["Просмотры авто", summary.vehicle_views, `${average(summary.vehicle_views, summary.visitors)} на посетителя`, device === "all" ? updates.vehicle_cars : 0],
+    ["Просмотры страниц", summary.page_views, `${average(summary.page_views, summary.visitors)} на посетителя`, device === "all" ? updates.page_views : 0],
   ];
   return (
     <>
@@ -1472,7 +1472,7 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
     // пока он был открыт, могло набежать новое, и уносить его цифрой в меню незачем.
     const viewedIds = [...new Set([...sectionTabs(id), ...(section === "vehicles" && id !== "vehicles" ? sectionTabs("vehicles") : [])])];
     // Цифру гасим сразу, не дожидаясь ответа сервера.
-    setUpdates((current) => ({ ...current, ...Object.fromEntries(viewedIds.map((key) => [key, 0])), ...(id === "contact_interest" ? { contact_interest_details:{} } : {}) }));
+    setUpdates((current) => ({ ...current, ...Object.fromEntries(viewedIds.map((key) => [key, 0])), ...(id === "overview" ? { page_views:0 } : {}), ...(id === "contact_interest" ? { contact_interest_details:{} } : {}) }));
     loadUpdates(viewedIds);
   };
   const markViewed = (id) => {

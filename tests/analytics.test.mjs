@@ -162,7 +162,7 @@ test("названия и состав разделов аналитики со�
   assert.match(source, /id:"searches", label:"Умный поиск"/);
   assert.doesNotMatch(source, />Визиты из поисковых систем</);
   assert.doesNotMatch(source, />Последние действия</);
-  assert.match(source, /\$\{average\(summary\.vehicle_views, summary\.visitors\)\} на посетителя/);
+  assert.match(source, /\$\{average\(summary\.page_views, summary\.visitors\)\} на посетителя/);
   assert.match(source, /item\.lastViewedAt \? formatVisitDate\(item\.lastViewedAt\)/);
 });
 
@@ -224,9 +224,8 @@ test("счётчики отделяют просмотренное от ново
   assert.match(source, /function AnalyticsSplitCount[\s\S]*?previousAmount = amount - newAmount/);
   assert.match(source, /analytics-split-count\$\{newAmount \? " has-fresh"/);
   assert.match(source, /\["Заходы"[^\n]*updates\.overview : 0\]/);
-  // Карточка «Просмотры авто» считает просмотры карточек машин (vehicle_cars),
-  // а не открытия страниц каталога: у тех свой счётчик.
-  assert.match(source, /\["Просмотры авто"[^\n]*updates\.vehicle_cars : 0\]/);
+  // Карточка считает просмотры всех страниц, с отметкой прочтения обзора.
+  assert.match(source, /\["Просмотры страниц"[^\n]*updates\.page_views : 0\]/);
   // «Регистрации» в обзоре заменены «Заявками» (28.09.2026), «+N» у них красный.
   // С 29.09.2026 карточка — воронка «открытий окна / заявок»: слева открытия окна по
   // кнопке «Узнать точную цену и наличие» (событие availability_click), справа заявки.
@@ -387,14 +386,14 @@ test("график обзора получает отдельный разреш
   assert.match(calls[0].sql, /AS google/);
 });
 
-// Переключатель над графиком показывает просмотры карточек теми же днями, что и
+// Переключатель над графиком показывает просмотры страниц теми же днями, что и
 // заходы, поэтому день отдаёт обе величины одним запросом.
-test("график получает и просмотры карточек по дням", async () => {
+test("график получает и просмотры всех страниц по дням", async () => {
   const calls = [];
   const db = { query:async (sql, values) => { calls.push({ sql, values }); return { rows:[] }; } };
   await getAnalyticsTrend("90", { db });
   const sql = calls[0].sql;
-  assert.match(sql, /event_name = 'vehicle_view'\)::int AS views/);
+  assert.match(sql, /event_name = 'page_view'\)::int AS views/);
   // Заходы — только первые шаги, но остальные шаги нужны для просмотров: отбор
   // заходов должен жить в счётчике, а не отсекать строки целиком.
   assert.match(sql, /count\(\*\) FILTER \(WHERE gap IS NULL/);
@@ -410,7 +409,7 @@ test("график отдаёт по каждому дню счёт к теку�
   await getAnalyticsTrend("90", { db, now:Date.parse("2026-09-12T09:30:00Z") });
   const sql = calls[0].sql;
   assert.match(sql, /AS visits_to_now/);
-  assert.match(sql, /AS views_to_now/);
+  assert.match(sql, /event_name = 'page_view' AND second_of_day < \$3\)::int AS views_to_now/);
   assert.match(sql, /second_of_day < \$3/);
   assert.match(sql, /extract\(epoch FROM \(created_at AT TIME ZONE 'Europe\/Minsk'\)::time\)/);
   // 12:30 по Минску — половина первого дня.

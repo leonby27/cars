@@ -36,14 +36,17 @@ test('непрочитанные счётчики применяют режим 
   pool.query = async (sql) => {
     calls.push(sql);
     if (sql === 'SELECT section, seen_at FROM analytics_seen') return { rows:ANALYTICS_SECTIONS.map((section) => ({ section, seen_at:'2026-10-05T00:00:00Z' })) };
-    return { rows:[{ n:0 }] };
+    return { rows:[{ n:0, page_views:7 }] };
   };
   try {
     for (const activity of ['all', 'actions']) {
-      await getAnalyticsUpdates({ activity, acquisition:'paid' }, { now:Date.parse('2026-10-06T08:00:00Z') });
+      const updates = await getAnalyticsUpdates({ activity, acquisition:'paid' }, { now:Date.parse('2026-10-06T08:00:00Z') });
+      assert.equal(updates.page_views, 7);
+      assert.equal(updates.overview, 0);
       const queries = calls.splice(0);
       const events = queries.filter((sql) => sql.includes('FROM traffic_events'));
       assert.equal(events.length, 6);
+      assert.match(events[0], /created_at > \$1 AND event_name='page_view'\)::int AS page_views/);
       assert.ok(events.every((sql) => sql.includes('WHERE human_action AND') === (activity === 'actions')));
       const saved = queries.filter((sql) => /FROM (order_drafts|customer_orders|customer_accounts)/.test(sql));
       assert.ok(saved.length >= 3);

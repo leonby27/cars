@@ -36,7 +36,8 @@ try {
   await add("b", "2026-10-02T06:20:00Z", "/contacts", "contact_phone_reveal");
   await add("c", "2026-10-02T07:00:00Z", "/catalog", "page_view", "mobile");
   await add("c", "2026-10-02T07:04:00Z", "/blog/ev-quota-extra-2026", "page_view", "mobile");
-  await add("c", "2026-10-02T07:05:00Z", "/cars/3", "vehicle_view", "mobile");
+  await add("c", "2026-10-02T07:05:00Z", "/cars/3", "page_view", "mobile");
+  await add("c", "2026-10-02T07:05:01Z", "/cars/3", "vehicle_view", "mobile");
   await add("c", "2026-10-02T07:06:00Z", "/", "search_query", "mobile", true, { query:"target", found:10 });
   await add("c", "2026-10-02T07:07:00Z", "/contacts", "contact_phone_reveal", "mobile");
   await add("d", "2026-10-02T08:00:00Z", "/blog/ev-quota-extra-2026");
@@ -60,6 +61,7 @@ try {
   const all = await getAnalyticsDashboard("today", { db, now, activity:"actions" });
   assert.equal(filtered.summary.visits, 4);
   assert.equal(filtered.summary.vehicle_views, 4);
+  assert.equal(filtered.summary.page_views, 6, "включены каталог, статья и страница авто без двойного счёта vehicle_view");
   assert.equal(filtered.summary.contact_phone_views, 1);
   assert.equal(filtered.summary.availability_modal_opens, 1);
   assert.equal(filtered.summary.availability_modal_open_events, 2);
@@ -73,7 +75,7 @@ try {
   const trend = await getAnalyticsTrend("7", options);
   const today = trend.daily.find((row) => row.day === "2026-10-02");
   assert.equal(today.visits, filtered.summary.visits);
-  assert.equal(today.views, filtered.summary.vehicle_views);
+  assert.equal(today.views, filtered.summary.page_views);
   assert.ok(!trend.daily.some((row) => row.day === "2026-09-25"), "продолжение квотного захода до начала периода не становится целевым");
   const desktop = await getAnalyticsDashboard("today", { ...options, device:"desktop" });
   assert.equal(desktop.summary.vehicle_views, 3, "фильтр устройства не меняет страницу входа");
@@ -98,6 +100,7 @@ try {
   await add("rsya-midnight", "2026-10-01T21:05:00Z", "/catalog");
   await add("rsya-benchmark", "2026-10-01T06:00:00Z", rsya);
   await add("rsya-boundary", "2026-09-25T11:50:00Z", rsya);
+  await add("rsya-boundary", "2026-09-25T12:04:59Z", "/cars/rsya-boundary");
   await add("rsya-boundary", "2026-09-25T12:05:00Z", "/cars/rsya-boundary", "vehicle_view");
   const adOptions = { db, now, activity:"actions", acquisition:"paid" };
   const ads = await getAnalyticsDashboard("today", adOptions);
@@ -131,6 +134,7 @@ try {
   assert.equal(ads.summary.lead_submissions, allWithAds.summary.lead_submissions);
   const adTrend = await getAnalyticsTrend("7", adOptions);
   assert.equal(adTrend.daily.find((row) => row.day === "2026-10-02").visits, ads.summary.visits);
+  assert.equal(adTrend.daily.find((row) => row.day === "2026-10-02").views, ads.summary.page_views);
   assert.equal(adTrend.daily.find((row) => row.day === "2026-09-25").views, 1, "источник входа найден до границы скользящего периода");
   const adBenchmark = await getVisitsBenchmark("today", adOptions);
   assert.equal(adBenchmark.visits_previous, 1);
@@ -162,7 +166,7 @@ try {
   const recordedTrend = await getAnalyticsTrend("7", { db, now, acquisition:"paid" });
   assert.equal(recordedTrend.activity, "all");
   assert.equal(recordedTrend.daily.find((row) => row.day === "2026-10-02").visits, recordedAds.summary.visits);
-  assert.equal(recordedTrend.daily.find((row) => row.day === "2026-10-02").views, recordedAds.summary.vehicle_views);
+  assert.equal(recordedTrend.daily.find((row) => row.day === "2026-10-02").views, recordedAds.summary.page_views);
   const recordedBenchmark = await getVisitsBenchmark("today", { db, now, acquisition:"paid" });
   assert.equal(recordedBenchmark.visits_previous, adBenchmark.visits_previous + 1);
   assert.equal(recordedAds.summary.visits_previous, recordedBenchmark.visits_previous);
