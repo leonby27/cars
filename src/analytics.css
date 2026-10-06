@@ -17,8 +17,9 @@
 .analytics-range button.active { background:var(--panel); color:var(--accent); box-shadow:0 1px 4px rgba(15,23,42,.08); font-weight:800; }
 .analytics-period-select { position:relative; width:142px; flex:none; }
 .analytics-acquisition-select { width:152px; }
-.analytics-activity-select { width:218px; }
-.analytics-acquisition-select .analytics-period-menu, .analytics-activity-select .analytics-period-menu { width:100%; }
+.analytics-activity-select { width:max-content; }
+.analytics-acquisition-select .analytics-period-menu { width:100%; }
+.analytics-activity-select .analytics-period-menu { width:max-content; min-width:100%; }
 .analytics-period-trigger { width:100%; height:42px; display:flex; align-items:center; justify-content:space-between; gap:9px; box-sizing:border-box; padding:0 13px; border:1px solid var(--line); border-radius:calc(11px * var(--corner-scale)); background:var(--panel-soft); color:var(--ink); font:inherit; font-weight:800; white-space:nowrap; cursor:pointer; }
 .analytics-period-trigger > b { width:8px; height:8px; flex:none; margin-top:-4px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); pointer-events:none; transition:transform .16s ease; }
 .analytics-period-select.open .analytics-period-trigger > b { margin-top:4px; transform:rotate(225deg); }
@@ -239,7 +240,6 @@ html[data-theme="dark"] .analytics-navigation button.active { background:rgb(255
 .analytics-traffic-switch button { white-space:nowrap; }
 .analytics-traffic-switch button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
 .analytics-traffic-note { display:block; margin:8px 0 0; color:var(--muted); font-size:13px; line-height:1.4; }
-.analytics-slice-loading { margin:0 0 12px; color:var(--muted); }
 .analytics-device-switch button { display:grid; place-items:center; flex:0 0 auto; padding:7px 10px; }
 /* В мобильной полосе — той же высоты 42px, что выбор раздела и периода. */
 .analytics-mobile-navigation .analytics-device-switch { height:42px; box-sizing:border-box; padding:3px; }
@@ -341,7 +341,7 @@ html[data-theme="dark"] .analytics-sidebar, html[data-theme="dark"] .lead-card, 
   .analytics-mobile-menu-divider { height:1px; margin:4px 3px; background:var(--line); }
   .analytics-mobile-navigation .analytics-period-select { width:118px; }
   .analytics-mobile-navigation .analytics-acquisition-select { width:auto; flex:1 1 115px; }
-  .analytics-mobile-navigation .analytics-activity-select { width:auto; flex:1.5 1 175px; }
+  .analytics-mobile-navigation .analytics-activity-select { width:max-content; flex:none; }
   .analytics-mobile-navigation :is(.analytics-acquisition-select, .analytics-activity-select) .analytics-period-trigger { padding-inline:10px; font-size:12px; }
   .analytics-kpi-split-count > b { min-width:25px; height:22px; font-size:16px; }
 }

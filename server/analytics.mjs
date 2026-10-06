@@ -658,6 +658,9 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
   const LIVE_VISITOR = activityCondition(activity);
   const range = normalizeAnalyticsRange(rangeValue, now);
   const { db, events:EVENTS } = analyticsTrafficSource(storage, traffic, PUBLIC_EVENT, { acquisition });
+  // Источник строки захода определяется до среза устройства/периода, даже
+  // когда верхний фильтр показывает все источники. Метки есть только у входа.
+  const { db:visitsDb, events:VISIT_EVENTS } = analyticsTrafficSource(storage, traffic, PUBLIC_EVENT, { acquisition, force:true });
   // Устройство режет только то, что считается по событиям сайта. Заявки, избранное
   // и регистрации берутся из таблиц, где устройства нет, — они всегда по всем.
   const deviceKind = analyticsDeviceKind(device);
@@ -841,11 +844,11 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
       ) t GROUP BY day`, [from, to]),
     // Та же граница в 30 минут, что у верхнего счётчика «Заходы». Для каждого
     // захода показываем первый открытый адрес, источник и число просмотренных страниц.
-    db.query(`WITH ordered AS (
-        SELECT visitor_id, created_at, path, event_name, properties, ${MINSK_DAY} AS day,
+    visitsDb.query(`WITH ordered AS (
+        SELECT visitor_id, created_at, path, event_name, properties, traffic_landing_path, traffic_landing_acquisition, ${MINSK_DAY} AS day,
           created_at - lag(created_at) OVER (PARTITION BY visitor_id ORDER BY created_at) AS gap,
           lag(${MINSK_DAY}) OVER (PARTITION BY visitor_id ORDER BY created_at) AS previous_day
-        FROM ${EVENTS}
+        FROM ${VISIT_EVENTS}
         WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
       ), marked AS (
         SELECT *, CASE WHEN ${VISIT_STARTS} THEN 1 ELSE 0 END AS starts_visit
@@ -856,6 +859,8 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
       )
       SELECT
         (array_agg(path ORDER BY created_at))[1] AS landing_path,
+        (array_agg(traffic_landing_path ORDER BY created_at))[1] AS acquisition_path,
+        (array_agg(traffic_landing_acquisition ORDER BY created_at))[1] AS landing_acquisition,
         (array_agg(nullif(properties->>'entrySource','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'entrySource','') IS NOT NULL))[1] AS entry_source,
         (array_agg(nullif(properties->>'device','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'device','') IS NOT NULL))[1] AS device,
         (array_agg(nullif(properties->>'platform','') ORDER BY created_at) FILTER (WHERE nullif(properties->>'platform','') IS NOT NULL))[1] AS platform,
@@ -918,7 +923,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
     // разделе он читался и работала ссылка «позвонить».
     registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
     searches:searchesResult.rows.map((row) => ({ query:row.query, asked:row.asked, people:row.people, found:row.found, lastAskedAt:row.last_asked })),
-    visits:visitDetailsResult.rows.map((row) => ({ source:row.entry_source || "", device:row.device || "", platform:row.platform || "", country:row.country || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at, returning:Boolean(row.came_back) })),
+    visits:visitDetailsResult.rows.map((row) => ({ acquisition:analyticsAcquisitionKind(row.landing_acquisition || analyticsAcquisition(row.acquisition_path || row.landing_path)), source:row.entry_source || "", device:row.device || "", platform:row.platform || "", country:row.country || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at, returning:Boolean(row.came_back) })),
   };
 }
 

@@ -110,6 +110,13 @@ try {
   assert.equal(adsWithoutQuota.summary.vehicle_views, 1);
   const desktopAds = await getAnalyticsDashboard("today", { ...adOptions, device:"desktop" });
   assert.equal(desktopAds.summary.vehicle_views, 2, "мобильная страница входа не теряет категорию у действий с компьютера");
+  assert.ok(ads.visits.every(visit => visit.acquisition === "paid"));
+  assert.ok(desktopAds.visits.every(visit => visit.acquisition === "paid"));
+  assert.ok(ads.visits.some(visit => visit.landingPath.includes("x".repeat(370)) && visit.acquisition === "paid"), "сохранённая рекламная категория переживает обрезанную метку");
+  const allDesktop = await getAnalyticsDashboard("today", { db, now, activity:"actions", device:"desktop" });
+  assert.equal(allDesktop.visits.filter(visit => visit.acquisition === "paid").length, desktopAds.visits.length, "рекламный сегмент полного списка совпадает с платным срезом после фильтра устройства");
+  const allRolling = await getAnalyticsDashboard("7", { db, now, activity:"actions" });
+  assert.ok(allRolling.visits.some(visit => visit.landingPath === "/cars/rsya-boundary" && visit.acquisition === "paid"), "начало рекламного захода найдено до границы периода");
   const organic = await getAnalyticsDashboard("today", { db, now, activity:"actions", acquisition:"organic" });
   assert.ok(organic.visits.some((row) => row.landingPath.includes("ysclid")));
   assert.ok(organic.visits.every((row) => !/yclid|utm_source=rsya|utm_source_type=context/.test(row.landingPath)));

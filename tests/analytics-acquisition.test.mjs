@@ -125,3 +125,42 @@ test('переключатель показывает три режима, за�
     assert.match(organic, />Яндекс</);
   } finally { await vite.close(); }
 });
+
+test('в заходах реклама объединяет платные источники и не смешивается с поиском, возвратами и остальным', async () => {
+  const vite = await createServer({ configFile:false, plugins:[react()], server:{ middlewareMode:true, hmr:false }, appType:'custom' });
+  try {
+    const { visitBucket, VisitsSection, VisitSource } = await vite.ssrLoadModule('/src/analytics-page.jsx');
+    const ads = [
+      { source:'direct', landingPath:'/?yclid=123', returning:true },
+      { source:'yandex.by', landingPath:'/?utm_source=yandex&utm_medium=cpc&utm_source_type=search' },
+      { source:'rsya', landingPath:'/' },
+      { source:'google.com', landingPath:'/?gclid=789' },
+      { source:'chatgpt.com', landingPath:'/?utm_medium=paid_social' },
+      { source:'direct', landingPath:'/cars/123', acquisition:'paid', returning:true },
+      { source:'direct', landingPath:'/?utm_campaign=' + 'x'.repeat(370), acquisition:'rsya' },
+    ];
+    assert.ok(ads.every(visit => visitBucket(visit) === 'paid'));
+    const savedAd=renderToStaticMarkup(createElement(VisitSource,{visit:ads[5]}));
+    assert.match(savedAd, />Реклама<\/span>/);
+    assert.doesNotMatch(savedAd, /Прямой заход/);
+    const free = [
+      { source:'direct', landingPath:'/?ysclid=organic' },
+      { source:'google.com', landingPath:'/' },
+      { source:'chatgpt.com', landingPath:'/' },
+      { source:'direct', landingPath:'/', returning:true },
+      { source:'direct', landingPath:'/' },
+      { source:'example.com', landingPath:'/?utm_campaign=yclid%3Dfake' },
+    ];
+    assert.deepEqual(free.map(visitBucket), ['yandex','google','chatgpt','returning','rest','rest']);
+    const visits=[...ads,...free].map((visit,index)=>({...visit,pageViews:1,createdAt:`2026-10-06T06:${String(index).padStart(2,'0')}:00Z`}));
+    const html=renderToStaticMarkup(createElement(VisitsSection,{visits,total:visits.length,unread:0}));
+    assert.match(html, />Все<b>13<\/b>/);
+    assert.match(html, />Реклама<b>7<\/b>/);
+    assert.match(html, />Яндекс<b>1<\/b>/);
+    assert.match(html, />Google<b>1<\/b>/);
+    assert.match(html, />ChatGPT<b>1<\/b>/);
+    assert.match(html, />Вернулись<b>1<\/b>/);
+    assert.match(html, />Остальное<b>2<\/b>/);
+    assert.ok(html.indexOf('>Реклама<b>') < html.indexOf('>Яндекс<b>'));
+  } finally { await vite.close(); }
+});

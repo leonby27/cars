@@ -6,10 +6,10 @@ export const analyticsTrafficKind = (value) => value === "without-quota" ? "with
 // Классифицируем весь заход до фильтра устройства и отчётного периода: иначе
 // продолжение квотного захода в каталоге могло бы стать новым целевым заходом.
 // Полночь ограничивает выборку: по правилам аналитики она всегда начинает заход.
-export function analyticsTrafficSource(db, traffic, publicEvent, { from = "$1::timestamptz", to = "$2::timestamptz", acquisition = "all" } = {}) {
+export function analyticsTrafficSource(db, traffic, publicEvent, { from = "$1::timestamptz", to = "$2::timestamptz", acquisition = "all", force = false } = {}) {
   const channel = analyticsAcquisitionKind(acquisition);
   const withoutQuota = analyticsTrafficKind(traffic) === "without-quota";
-  if (!withoutQuota && channel === "all") return { events:"analytics_events", db };
+  if (!withoutQuota && channel === "all" && !force) return { events:"analytics_events", db };
   const landingChannel = `coalesce(nullif(traffic_landing_acquisition, ''), CASE
     WHEN traffic_landing_path ~* '${RSYA_TAG_PATTERN}' OR
       (traffic_landing_path ~* '${NETWORK_TAG_PATTERN}' AND traffic_landing_path ~* '${YANDEX_AD_TAG_PATTERN}') THEN 'rsya'

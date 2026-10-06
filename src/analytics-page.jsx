@@ -1,5 +1,5 @@
 import { analyticsActivityKind } from "./analytics-activity.js";
-import { analyticsAdvertisingSource, analyticsAcquisitionKind } from "./analytics-acquisition.js";
+import { analyticsAdvertisingSource, analyticsAcquisition, analyticsAcquisitionKind } from "./analytics-acquisition.js";
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { SegmentedControl } from "./segmented-control.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
@@ -382,7 +382,7 @@ export function AnalyticsAcquisitionSwitch({ value, onChange }) {
 
 const analyticsActivities = [
   { id:"all", label:"Все", hint:"Все записанные переходы, включая заходы без подтверждённого действия" },
-  { id:"actions", label:"Только с действиями", hint:"Посетители с подтверждённым действием: движением мыши, прокруткой, касанием или нажатием клавиши" },
+  { id:"actions", label:"С действиями", hint:"Посетители с подтверждённым действием: движением мыши, прокруткой, касанием или нажатием клавиши" },
 ];
 
 export function AnalyticsActivitySelect({ value, onChange }) {
@@ -427,7 +427,7 @@ function OverviewSection({ data, period, device = "all", traffic = "all", acquis
   }, [trendPeriod, device, traffic, acquisition, activity, data.generatedAt]);
   const cards = [
     // В режиме «Все» считаем все записанные переходы; отсутствие действия
-    // не делает посетителя роботом. Режим «Только с действиями» выбирается отдельно.
+    // не делает посетителя роботом. Режим «С действиями» выбирается отдельно.
     // Заход — не вкладка: человек, вернувшийся вечером, считается вторым заходом, а
     // три карточки, открытые в трёх вкладках подряд, остаются одним.
     // Счётчики новых («+N») считаются по всем устройствам, поэтому в срезе по одному
@@ -496,6 +496,7 @@ const SOURCE_RULES = [
 
 // Значения, которые счётчик пишет вместо имени площадки.
 const SOURCE_WORDS = { direct:"Прямой заход", internal:"Переход по сайту", unknown:"Неизвестный источник" };
+const visitIsAdvertising = (visit) => analyticsAcquisitionKind(visit.acquisition || analyticsAcquisition(visit.landingPath)) === "paid";
 
 const visitSourceKey = (value, landingPath = "") => {
   const advertising = analyticsAdvertisingSource(landingPath);
@@ -529,6 +530,7 @@ const CHATGPT_MARK = "m297.06 130.97c7.26-21.79 4.76-45.66-6.85-65.48-17.46-30.4
 
 export function VisitSource({ visit }) {
   const sourceKey = visitSourceKey(visit.source, visit.landingPath);
+  const genericAdvertising = visitIsAdvertising(visit) && ["direct", "internal", "unknown"].includes(sourceKey);
   const logo = sourceKey === "google" ? "G" : sourceKey === "yandex" ? "Я" : null;
   return <span className="analytics-visit-source">
     {sourceKey === "chatgpt" && (
@@ -537,7 +539,7 @@ export function VisitSource({ visit }) {
       </i>
     )}
     {logo && <i className={`analytics-source-logo is-${sourceKey}`} aria-hidden="true">{logo}</i>}
-    <span>{visitSourceLabel(visit.source, visit.landingPath)}</span>
+    <span>{genericAdvertising ? "Реклама" : visitSourceLabel(visit.source, visit.landingPath)}</span>
   </span>;
 }
 
@@ -623,7 +625,7 @@ const leadCountingLabel = (withRepeats, traffic = "all", acquisition = "all", ac
     : "Каждый человек учитывается один раз за период. Повторные открытия и заявки не добавляются.")
     + (traffic === "without-quota" ? " Фильтр «Без квоты» действует на открытия окна. Заявки показаны все." : "")
     + (acquisition !== "all" ? " Фильтр источника действует на открытия окна. Заявки показаны все." : "")
-    + (activity === "actions" ? " Фильтр «Только с действиями» действует на открытия окна. Заявки показаны все." : "");
+    + (activity === "actions" ? " Фильтр «С действиями» действует на открытия окна. Заявки показаны все." : "");
 
 function LeadCountSwitch({ value, onChange, traffic, acquisition, activity }) {
   const uniqueLabel = leadCountingLabel(false, traffic, acquisition, activity);
@@ -741,7 +743,7 @@ function QuotaSplit({ visits }) {
 
 function VisitRow({ visit, number, unread }) {
   const landingPath = withoutYandexClickId(visit.landingPath || "/");
-  const sourceUnknown = !analyticsAdvertisingSource(visit.landingPath) && !hasYandexClickId(visit.landingPath) && (!visit.source || visit.source === "unknown");
+  const sourceUnknown = !visitIsAdvertising(visit) && !analyticsAdvertisingSource(visit.landingPath) && !hasYandexClickId(visit.landingPath) && (!visit.source || visit.source === "unknown");
   return <tr>
     <td><span className={`analytics-visit-number${unread ? " is-unread" : ""}`}>{number}</span></td>
     <td className={sourceUnknown ? "analytics-visit-source-unknown" : undefined}><VisitSource visit={visit} /></td>
@@ -753,14 +755,27 @@ function VisitRow({ visit, number, unread }) {
   </tr>;
 }
 
-function VisitsSection({ visits, total, unread }) {
+const NAMED_SOURCES = ["paid", "yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"];
+const BUCKET_LABELS = { paid:"Реклама", returning:"Вернулись", rest:"Остальное" };
+
+export const visitBucket = (visit) => {
+  const key = visitSourceKey(visit.source, visit.landingPath);
+  // Сервер сохраняет категорию полного захода, в том числе при обрезанной
+  // ссылке и после среза устройства. Для старых ответов восстанавливаем по меткам.
+  if (visitIsAdvertising(visit)
+    || key === "rsya" || key === "yandex-direct") return "paid";
+  if (key === "direct" && visit.returning) return "returning";
+  return NAMED_SOURCES.includes(key) ? key : "rest";
+};
+
+export function VisitsSection({ visits, total, unread }) {
   const [sourceFilter, setSourceFilter] = useState("all");
   // Свежие строки идут первыми, но номер — место захода во всей хронологии:
   // самый старый начинается с 1, каждый следующий получает номер больше.
   const newestNumber = Math.max(visits.length, Number(total) || 0);
   // Кнопки переключателя собираем по тем источникам, которые за выбранный период
   // правда были: список площадок длинный, и половина кнопок всегда вела бы в пустую
-  // таблицу. Порядок — по числу заходов, чтобы главное стояло слева. Число прямо на
+  // таблицу. Реклама объединяет все платные источники. Число прямо на
   // кнопке: иначе ради одной цифры пришлось бы щёлкать по каждому источнику.
   // Каналы, за которыми следим отдельно; всё прочее (прямые заходы, Bing, DuckDuckGo,
   // чужие сайты) собирается в «Остальное».
@@ -773,13 +788,6 @@ function VisitsSection({ visits, total, unread }) {
   // «Вернулись» — прямые заходы людей, которые у нас уже были: набрали адрес или открыли
   // закладку. Это половина всех прямых заходов и самые глубокие сеансы; без отдельной
   // вкладки они тонули в «Остальном» вместе с первыми заходами неизвестно откуда.
-  const NAMED_SOURCES = ["yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"];
-  const BUCKET_LABELS = { returning:"Вернулись", rest:"Остальное" };
-  const visitBucket = (visit) => {
-    const key = visitSourceKey(visit.source, visit.landingPath);
-    if (key === "direct" && visit.returning) return "returning";
-    return NAMED_SOURCES.includes(key) ? key : "rest";
-  };
   const sourceButtons = useMemo(() => {
     const counts = new Map();
     for (const visit of visits) {
@@ -1493,7 +1501,6 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
 
       <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} device={device} setDevice={setDevice} traffic={traffic} setTraffic={setTraffic} acquisition={acquisition} setAcquisition={setAcquisition} activity={activity} setActivity={setActivity} updates={updates} onSection={openSection} logout={logout} />
 
-      {loading && <p className="analytics-slice-loading" role="status">Обновляем аналитику…</p>}
       {error && <div className="analytics-error" role="alert">{error} Показан предыдущий срез. <button type="button" onClick={() => reload()}>Повторить</button></div>}
       {(traffic === "without-quota" || acquisition !== "all" || activity === "actions") && ["vehicles", "leads", "customers"].includes(section) && <p className="analytics-traffic-note">Сохранённые заявки, аккаунты и избранное показаны полностью. Выбранные фильтры действуют на просмотры и действия на сайте.</p>}
 

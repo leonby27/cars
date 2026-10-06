@@ -51,9 +51,9 @@ test("в переключателе заходов только источник
   // Набор кнопок задан списком и не пляшет от данных: Яндекс, Google, ChatGPT,
   // Threads, Instagram, Telegram, «Вернулись» (прямые заходы людей с историей) и
   // «Остальное» — всё прочее, включая первые прямые заходы.
-  assert.match(source, /const NAMED_SOURCES = \["yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"\]/);
+  assert.match(source, /const NAMED_SOURCES = \["paid", "yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"\]/);
   assert.match(source, /BUCKET_LABELS\[key\] \|\| sourceKeyLabel\(key\)/);
-  assert.match(source, /const BUCKET_LABELS = \{ returning:"Вернулись", rest:"Остальное" \}/);
+  assert.match(source, /const BUCKET_LABELS = \{ paid:"Реклама", returning:"Вернулись", rest:"Остальное" \}/);
   // Пустые источники в переключателе не показываем, а при единственном источнике
   // переключателя нет вовсе: выбирать не из чего.
   assert.match(source, /\.filter\(\(\[, , count\]\) => count > 0\)/);
@@ -975,7 +975,7 @@ test("прямые заходы вернувшихся людей собираю
   assert.match(server, /EXISTS \(SELECT 1 FROM analytics_events first_seen\s*WHERE first_seen\.visitor_id = numbered\.visitor_id AND first_seen\.created_at < min\(numbered\.created_at\)/);
   assert.match(server, /createdAt:row\.created_at, returning:Boolean\(row\.came_back\) \}\)\)/);
   const page = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
-  assert.match(page, /const NAMED_SOURCES = \["yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"\];/);
+  assert.match(page, /const NAMED_SOURCES = \["paid", "yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"\];/);
   assert.match(page, /returning:"Вернулись"/);
   assert.match(page, /if \(key === "direct" && visit\.returning\) return "returning";/);
   assert.match(page, /sourceFilter === "all" \|\| visitBucket\(visit\) === sourceFilter/);
