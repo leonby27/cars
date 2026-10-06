@@ -42,7 +42,7 @@ test('PageSpeed browser infrastructure rebuilds without rewriting vehicle prices
  const p=deploymentPlan(['src/analytics.js','src/boot-api.js','src/counter-loader.js','src/price-fit.js','src/spec-fit.js',
   'src/model-text-load.js','src/model-text-imports.js','src/blog-text-load.js',
   'src/blog-text-imports.js','server/handler.mjs']);
- assert.equal(p.mode,'full');
+ assert.equal(p.mode,'presentation');
  assert.equal(p.recalculatePrices,false);
  assert.equal(p.checkDuplicates,false);
  assert.equal(p.migrate,false);
@@ -56,6 +56,8 @@ test('analytics attribution releases never rewrite catalog prices',()=>{
  assert.equal(helpers.recalculatePrices,false);assert.equal(helpers.restartBot,false);
  const runtime=deploymentPlan(['src/analytics-acquisition.js','src/analytics-updates.js',
   'server/analytics.mjs','server/analytics-traffic.mjs','server/handler.mjs']);
+ assert.equal(runtime.reuseCatalog,true);assert.equal(runtime.reuseFeed,true);
+ assert.equal(runtime.restartBot,false);
  assert.equal(runtime.recalculatePrices,false);
  assert.equal(runtime.checkDuplicates,false);assert.equal(runtime.migrate,false);
 });

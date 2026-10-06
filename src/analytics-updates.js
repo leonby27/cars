@@ -1,9 +1,10 @@
+import { analyticsActivityKind } from "./analytics-activity.js";
 import { analyticsAcquisitionKind } from "./analytics-acquisition.js";
 
 // Без `viewing` сервер только возвращает непрочитанные счётчики. Конкретный
 // раздел передаём после явного нажатия или при выходе из аналитики.
 // Несколько разделов сразу — массивом: сервер отметит их одним запросом.
-export const analyticsUpdatesUrl = (viewing = "", traffic = "all", acquisition = "all") => {
+export const analyticsUpdatesUrl = (viewing = "", traffic = "all", acquisition = "all", activity = "all") => {
   const section = (Array.isArray(viewing) ? viewing : [viewing]).map((item) => String(item || "").trim()).filter(Boolean).join(",");
   const url = section
     ? `/api/analytics/updates?viewing=${encodeURIComponent(section)}`
@@ -12,16 +13,18 @@ export const analyticsUpdatesUrl = (viewing = "", traffic = "all", acquisition =
   if (traffic === "without-quota") params.push("traffic=without-quota");
   const channel = analyticsAcquisitionKind(acquisition);
   if (channel !== "all") params.push(`acquisition=${channel}`);
+  if (analyticsActivityKind(activity) === "actions") params.push("activity=actions");
   return params.length ? `${url}${section ? "&" : "?"}${params.join("&")}` : url;
 };
 
 // pagehide срабатывает при закрытии, перезагрузке и уходе со страницы.
 // keepalive позволяет запросу завершиться уже после закрытия вкладки.
 // Переключение на соседнюю вкладку не считается выходом из аналитики.
-export function watchAnalyticsExit(getViewedSections, target = window, send = fetch) {
+export function watchAnalyticsExit(getViewedSections, target = window, send = fetch, getFilters = () => ({})) {
   const onPageHide = () => {
+    const { traffic, acquisition, activity } = getFilters();
     for (const section of new Set(getViewedSections())) {
-      send(analyticsUpdatesUrl(section), {
+      send(analyticsUpdatesUrl(section, traffic, acquisition, activity), {
         credentials:"same-origin", cache:"no-store", keepalive:true,
       }).catch(() => {});
     }

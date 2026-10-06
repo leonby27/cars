@@ -8,7 +8,7 @@ const renderOnly = new Set([
   'src/search-dictionary.js',
   'src/analytics.js', 'src/boot-api.js', 'src/counter-loader.js', 'src/price-fit.js', 'src/spec-fit.js',
   // Traffic attribution and CRM request URLs never prepare catalog or prices.
-  'src/analytics-acquisition.js', 'src/analytics-updates.js',
+  'src/analytics-acquisition.js', 'src/analytics-activity.js', 'src/analytics-updates.js',
   'src/model-text-load.js', 'src/model-text-imports.js', 'src/model-texts.js',
   'src/blog-text-load.js', 'src/blog-text-imports.js', 'src/blog-texts.js',
   'src/info-pages-seo.js', 'src/service-copy.js', 'src/purchase-info.js', 'src/tracking-info.js',
@@ -16,7 +16,7 @@ const renderOnly = new Set([
 ]);
 const operationsOnly = new Set([
   // Analytics attribution and the deployment policy do not prepare catalog data.
-  'server/analytics-traffic.mjs', 'scripts/lib/deploy-impact.mjs',
+  'server/analytics-traffic.mjs', 'server/analytics.mjs', 'server/handler.mjs', 'scripts/lib/deploy-impact.mjs',
   'scripts/deploy.mjs', 'scripts/deploy-plan.mjs', 'scripts/build.mjs',
   'scripts/clean-dist.mjs', 'scripts/split-css.mjs', 'scripts/precompress-dist.mjs',
   'scripts/prerender-home.mjs', 'scripts/audit-blog-images.mjs',

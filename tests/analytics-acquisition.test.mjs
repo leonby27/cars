@@ -13,8 +13,8 @@ import { analyticsTrafficSource } from '../server/analytics-traffic.mjs';
 import { deploymentPlan } from '../scripts/lib/deploy-plan.mjs';
 
 test('платный срез и селект периода не требуют подготовки каталога и пересчёта цен', () => {
-  const plan = deploymentPlan(['src/analytics-acquisition.js', 'src/analytics.js', 'src/analytics-page.jsx',
-    'src/analytics.css', 'server/analytics-traffic.mjs', 'scripts/lib/deploy-impact.mjs']);
+  const plan = deploymentPlan(['src/analytics-acquisition.js', 'src/analytics-activity.js', 'src/analytics.js', 'src/analytics-page.jsx',
+    'src/analytics.css', 'server/analytics-traffic.mjs', 'server/analytics.mjs', 'server/handler.mjs', 'scripts/lib/deploy-impact.mjs']);
   assert.equal(plan.reuseCatalog, true);
   assert.equal(plan.reuseFeed, true);
   assert.equal(plan.recalculatePrices, false);
@@ -106,9 +106,13 @@ test('переключатель показывает три режима, за�
   try {
     const { AnalyticsAcquisitionSwitch, LeadFunnelCard, VisitSource } = await vite.ssrLoadModule('/src/analytics-page.jsx');
     const html = renderToStaticMarkup(createElement(AnalyticsAcquisitionSwitch, { value:'paid', onChange:() => {} }));
-    assert.match(html, /aria-pressed="true"[^>]*>Платные<\/button>/);
-    assert.match(html, />Бесплатные<\/button>/);
-    assert.match(html, />Все<\/button>/);
+    assert.match(html, /aria-label="Источник трафика: Платные"/);
+    assert.match(html, /aria-haspopup="listbox"[^>]*aria-expanded="false"/);
+    assert.match(html, />Платные<\/span>/);
+    assert.doesNotMatch(html, /aria-pressed|role="option"/);
+    for (const [value, label] of [['all', 'Все'], ['organic', 'Бесплатные']]) {
+      assert.ok(renderToStaticMarkup(createElement(AnalyticsAcquisitionSwitch, { value, onChange:() => {} })).includes(`Источник трафика: ${label}`));
+    }
     const card = renderToStaticMarkup(createElement(LeadFunnelCard, { acquisition:'paid', summary:{ lead_people:2, availability_modal_opens:3 } }));
     assert.match(card, /Открытия — платные переходы, заявки — все/);
     assert.match(card, /Фильтр источника действует на открытия окна/);

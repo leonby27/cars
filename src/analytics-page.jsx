@@ -1,3 +1,4 @@
+import { analyticsActivityKind } from "./analytics-activity.js";
 import { analyticsAdvertisingSource, analyticsAcquisitionKind } from "./analytics-acquisition.js";
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
 import { SegmentedControl } from "./segmented-control.jsx";
@@ -288,7 +289,7 @@ function TrendPeriodSelect({ value, onChange }) {
       <span>{selected.label}</span><b aria-hidden="true" />
     </button>
     {open && <div className="analytics-trend-period-menu" role="listbox" aria-label="Период графика посещений">
-      {trendPeriods.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === value} className={item.id === value ? "selected" : ""} onClick={() => choose(item.id)}>{item.label}</button>)}
+      {trendPeriods.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === selected.id} title={item.hint} className={item.id === selected.id ? "selected" : ""} onClick={() => choose(item.id)}>{item.label}</button>)}
     </div>}
   </div>;
 }
@@ -376,12 +377,19 @@ const analyticsAcquisitions = [
 ];
 
 export function AnalyticsAcquisitionSwitch({ value, onChange }) {
-  return <div className="analytics-range analytics-traffic-switch analytics-acquisition-switch" role="group" aria-label="Источник трафика">
-    {analyticsAcquisitions.map(({ id, label, hint }) => <button key={id} type="button" className={value === id ? "active" : ""} aria-pressed={value === id} title={hint} onClick={() => onChange(id)}>{label}</button>)}
-  </div>;
+  return <AnalyticsFilterSelect value={value} onChange={onChange} options={analyticsAcquisitions} label="Источник трафика" className="analytics-acquisition-select" />;
 }
 
-function OverviewSection({ data, period, device = "all", traffic = "all", acquisition = "all", updates = {} }) {
+const analyticsActivities = [
+  { id:"all", label:"Все", hint:"Все записанные переходы, включая заходы без подтверждённого действия" },
+  { id:"actions", label:"Только с действиями", hint:"Посетители с подтверждённым действием: движением мыши, прокруткой, касанием или нажатием клавиши" },
+];
+
+export function AnalyticsActivitySelect({ value, onChange }) {
+  return <AnalyticsFilterSelect value={value} onChange={onChange} options={analyticsActivities} label="Активность посетителей" className="analytics-activity-select" />;
+}
+
+function OverviewSection({ data, period, device = "all", traffic = "all", acquisition = "all", activity = "all", updates = {} }) {
   const summary = data.summary || {};
   const [leadCountMode, setLeadCountMode] = usePersistedChoice("analytics:lead-count-mode", ["unique", "all"], "unique");
   const [trendPeriod, setTrendPeriod] = usePersistedChoice("analytics:trend-period", trendPeriodIds, "90");
@@ -400,28 +408,26 @@ function OverviewSection({ data, period, device = "all", traffic = "all", acquis
   // остаётся прежний график — мигания нет.
   useEffect(() => {
     const controller = new AbortController();
-    const trendKey = `${trendPeriod}|${device}|${traffic}|${acquisition}`;
+    const trendKey = `${trendPeriod}|${device}|${traffic}|${acquisition}|${activity}`;
     const cached = trendCache.current.get(trendKey);
     if (cached) setTrendData(cached);
-    setTrendLoading(!cached && (!trendData || trendData.traffic !== traffic || trendData.acquisition !== acquisition));
+    setTrendLoading(!cached && (!trendData || trendData.traffic !== traffic || trendData.acquisition !== acquisition || trendData.activity !== activity));
     setTrendError("");
-    fetch(`/api/analytics/trend?period=${encodeURIComponent(trendPeriod)}&device=${encodeURIComponent(device)}&traffic=${encodeURIComponent(traffic)}&acquisition=${encodeURIComponent(acquisition)}`, { cache:"no-store", credentials:"same-origin", signal:controller.signal })
+    fetch(`/api/analytics/trend?period=${encodeURIComponent(trendPeriod)}&device=${encodeURIComponent(device)}&traffic=${encodeURIComponent(traffic)}&acquisition=${encodeURIComponent(acquisition)}&activity=${encodeURIComponent(activity)}`, { cache:"no-store", credentials:"same-origin", signal:controller.signal })
       .then(async (response) => {
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || "load_failed");
+        if (controller.signal.aborted) return;
         trendCache.current.set(trendKey, payload);
         setTrendData(payload);
       })
       .catch((error) => { if (error.name !== "AbortError") setTrendError("Не удалось загрузить график."); })
       .finally(() => { if (!controller.signal.aborted) setTrendLoading(false); });
     return () => controller.abort();
-  }, [trendPeriod, device, traffic, acquisition, data.generatedAt]);
+  }, [trendPeriod, device, traffic, acquisition, activity, data.generatedAt]);
   const cards = [
-    // Заход, на котором никто не двинул мышью, не прокрутил и не нажал ни одной
-    // клавиши, в счёт не идёт: это машинный обход. Просто время на странице человеком
-    // не считается — его выжидает обходчик, чтобы сойти за посетителя. Отдельной
-    // цифрой такие заходы больше не выводим (решение владельца 18.09.2026): под
-    // «Заходами» полезнее сравнение с обычным днём, чем счёт роботов.
+    // В режиме «Все» считаем все записанные переходы; отсутствие действия
+    // не делает посетителя роботом. Режим «Только с действиями» выбирается отдельно.
     // Заход — не вкладка: человек, вернувшийся вечером, считается вторым заходом, а
     // три карточки, открытые в трёх вкладках подряд, остаются одним.
     // Счётчики новых («+N») считаются по всем устройствам, поэтому в срезе по одному
@@ -433,7 +439,7 @@ function OverviewSection({ data, period, device = "all", traffic = "all", acquis
     <>
       <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">
         {cards.map(([label,value,note,fresh]) => <article key={label}><span>{label}</span><strong>{isValidElement(value) ? value : Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className="analytics-kpi-split-count" /> : formatNumber(value)}</strong><p>{note}</p></article>)}
-        <LeadFunnelCard summary={summary} mode={leadCountMode} onModeChange={setLeadCountMode} fresh={updates.leads} traffic={traffic} acquisition={acquisition} />
+        <LeadFunnelCard summary={summary} mode={leadCountMode} onModeChange={setLeadCountMode} fresh={updates.leads} traffic={traffic} acquisition={acquisition} activity={activity} />
       </section>
       <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
@@ -596,7 +602,7 @@ function useHoverTooltip(label) {
   return { anchor, handlers, node };
 }
 
-export function LeadFunnelCard({ summary = {}, mode = "unique", onModeChange, fresh = 0, traffic = "all", acquisition = "all" }) {
+export function LeadFunnelCard({ summary = {}, mode = "unique", onModeChange, fresh = 0, traffic = "all", acquisition = "all", activity = "all" }) {
   const withRepeats = mode === "all";
   // Открытия учитывают выбранное устройство; сохранённые заявки — все устройства.
   const opens = Number(withRepeats ? summary.availability_modal_open_events : summary.availability_modal_opens) || 0;
@@ -604,23 +610,24 @@ export function LeadFunnelCard({ summary = {}, mode = "unique", onModeChange, fr
   return <article>
     <div className="analytics-lead-card-heading">
       <span className="analytics-lead-heading">Заявки</span>
-      <LeadCountSwitch value={mode} onChange={onModeChange} traffic={traffic} acquisition={acquisition} />
+      <LeadCountSwitch value={mode} onChange={onModeChange} traffic={traffic} acquisition={acquisition} activity={activity} />
     </div>
     <strong><LeadsFunnelCount opens={opens} total={total} fresh={fresh} /></strong>
     <p>{formatNumber(opens)} {pluralRu(opens, "открытие окна", "открытия окна", "открытий окна")} / {formatNumber(total)} {pluralRu(total, "заявка", "заявки", "заявок")}</p>
-    {(traffic === "without-quota" || acquisition !== "all") && <small className="analytics-traffic-note">{acquisition !== "all" ? `Открытия — ${analyticsAcquisitionKind(acquisition) === "paid" ? "платные переходы" : "бесплатные переходы"}${traffic === "without-quota" ? ", без квоты" : ""}, заявки — все` : "Открытия — без квоты, заявки — все"}</small>}
+    {(traffic === "without-quota" || acquisition !== "all" || activity === "actions") && <small className="analytics-traffic-note">{acquisition !== "all" ? `Открытия — ${analyticsAcquisitionKind(acquisition) === "paid" ? "платные переходы" : "бесплатные переходы"}${traffic === "without-quota" ? ", без квоты" : ""}${activity === "actions" ? ", только с действиями" : ""}, заявки — все` : `Открытия — ${[traffic === "without-quota" ? "без квоты" : "", activity === "actions" ? "только с действиями" : ""].filter(Boolean).join(", ")}, заявки — все`}</small>}
   </article>;
 }
 
-const leadCountingLabel = (withRepeats, traffic = "all", acquisition = "all") => (withRepeats
+const leadCountingLabel = (withRepeats, traffic = "all", acquisition = "all", activity = "all") => (withRepeats
     ? "Считаем все открытия окна и заявки за период, включая повторные."
     : "Каждый человек учитывается один раз за период. Повторные открытия и заявки не добавляются.")
     + (traffic === "without-quota" ? " Фильтр «Без квоты» действует на открытия окна. Заявки показаны все." : "")
-    + (acquisition !== "all" ? " Фильтр источника действует на открытия окна. Заявки показаны все." : "");
+    + (acquisition !== "all" ? " Фильтр источника действует на открытия окна. Заявки показаны все." : "")
+    + (activity === "actions" ? " Фильтр «Только с действиями» действует на открытия окна. Заявки показаны все." : "");
 
-function LeadCountSwitch({ value, onChange, traffic, acquisition }) {
-  const uniqueLabel = leadCountingLabel(false, traffic, acquisition);
-  const allLabel = leadCountingLabel(true, traffic, acquisition);
+function LeadCountSwitch({ value, onChange, traffic, acquisition, activity }) {
+  const uniqueLabel = leadCountingLabel(false, traffic, acquisition, activity);
+  const allLabel = leadCountingLabel(true, traffic, acquisition, activity);
   const uniqueTooltip = useHoverTooltip(uniqueLabel);
   const allTooltip = useHoverTooltip(allLabel);
   return <>
@@ -1153,11 +1160,15 @@ function AnalyticsNavigationItems({ section, updates, onChoose, mobile = false }
 }
 
 export function AnalyticsPeriodSelect({ value, onChange }) {
+  return <AnalyticsFilterSelect value={value} onChange={onChange} options={analyticsPeriods} label="Период аналитики" />;
+}
+
+function AnalyticsFilterSelect({ value, onChange, options, label, className = "" }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
   const menuId = useId();
-  const selected = analyticsPeriods.find((item) => item.id === value) || analyticsPeriods[0];
+  const selected = options.find((item) => item.id === value) || options[0];
   useEffect(() => {
     if (!open) return undefined;
     const closeOutside = (event) => {
@@ -1196,17 +1207,17 @@ export function AnalyticsPeriodSelect({ value, onChange }) {
     const step = event.key === "ArrowDown" ? 1 : -1;
     options[(index + step + options.length) % options.length]?.focus();
   };
-  return <div className={`analytics-period-select${open ? " open" : ""}`} ref={rootRef} onKeyDown={handleKeyDown}>
-    <button ref={triggerRef} className="analytics-period-trigger" type="button" aria-label={`Период аналитики: ${selected.label}`} aria-haspopup="listbox" aria-controls={menuId} aria-expanded={open} onClick={() => setOpen((state) => !state)}>
+  return <div className={`analytics-period-select ${className}${open ? " open" : ""}`} ref={rootRef} onKeyDown={handleKeyDown}>
+    <button ref={triggerRef} className="analytics-period-trigger" type="button" aria-label={`${label}: ${selected.label}`} title={selected.hint} aria-haspopup="listbox" aria-controls={menuId} aria-expanded={open} onClick={() => setOpen((state) => !state)}>
       <span>{selected.label}</span><b aria-hidden="true" />
     </button>
-    {open && <div id={menuId} className="analytics-period-menu" role="listbox" aria-label="Период аналитики">
-      {analyticsPeriods.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === value} className={item.id === value ? "selected" : ""} onClick={() => choose(item.id)}>{item.label}</button>)}
+    {open && <div id={menuId} className="analytics-period-menu" role="listbox" aria-label={label}>
+      {options.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === selected.id} title={item.hint} className={item.id === selected.id ? "selected" : ""} onClick={() => choose(item.id)}>{item.label}</button>)}
     </div>}
   </div>;
 }
 
-function MobileAnalyticsNavigation({ active, section, period, setPeriod, device, setDevice, traffic, setTraffic, acquisition, setAcquisition, updates, onSection, logout }) {
+function MobileAnalyticsNavigation({ active, section, period, setPeriod, device, setDevice, traffic, setTraffic, acquisition, setAcquisition, activity, setActivity, updates, onSection, logout }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
@@ -1254,6 +1265,7 @@ function MobileAnalyticsNavigation({ active, section, period, setPeriod, device,
     </div>
     {active.ranged && <AnalyticsPeriodSelect value={period} onChange={setPeriod} />}
     {active.devices && <AnalyticsAcquisitionSwitch value={acquisition} onChange={setAcquisition} />}
+    {active.devices && <AnalyticsActivitySelect value={activity} onChange={setActivity} />}
     {active.devices && <AnalyticsTrafficSwitch value={traffic} onChange={setTraffic} />}
     {active.devices && <AnalyticsDeviceSwitch value={device} onChange={setDevice} />}
   </div>;
@@ -1409,7 +1421,7 @@ function SocialPostsSection({ active }) {
   );
 }
 
-function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTraffic, acquisition, setAcquisition, loading, error, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads, removeLead }) {
+function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTraffic, acquisition, setAcquisition, activity, setActivity, loading, error, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads, removeLead }) {
   const [section, setSection] = useState("overview");
   // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
   // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
@@ -1419,13 +1431,15 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
   const viewedSections = useRef(new Set());
   const updatesRequest = useRef(0);
   const updatesReadPending = useRef(false);
-  useEffect(() => watchAnalyticsExit(() => viewedSections.current), []);
+  const exitFilters = useRef({ traffic, acquisition, activity });
+  exitFilters.current = { traffic, acquisition, activity };
+  useEffect(() => watchAnalyticsExit(() => viewedSections.current, window, fetch, () => exitFilters.current), []);
   const loadUpdates = useCallback(async (viewing = "") => {
-    if (!viewing && updatesReadPending.current === `${traffic}|${acquisition}`) return;
-    if (!viewing) updatesReadPending.current = `${traffic}|${acquisition}`;
+    if (!viewing && updatesReadPending.current === `${traffic}|${acquisition}|${activity}`) return;
+    if (!viewing) updatesReadPending.current = `${traffic}|${acquisition}|${activity}`;
     const request = ++updatesRequest.current;
     try {
-      const response = await fetch(analyticsUpdatesUrl(viewing, traffic, acquisition), { credentials:"same-origin", cache:"no-store" });
+      const response = await fetch(analyticsUpdatesUrl(viewing, traffic, acquisition, activity), { credentials:"same-origin", cache:"no-store" });
       if (response.ok) {
         const payload = await response.json();
         // Обновление среза и отметка «просмотрено» могут идти одновременно.
@@ -1434,8 +1448,8 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
         for (const item of [viewing].flat()) viewedSections.current.add(item || "overview");
       }
     } catch { /* счётчики — не повод ломать раздел */ }
-    finally { if (!viewing && updatesReadPending.current === `${traffic}|${acquisition}`) updatesReadPending.current = false; }
-  }, [traffic, acquisition]);
+    finally { if (!viewing && updatesReadPending.current === `${traffic}|${acquisition}|${activity}`) updatesReadPending.current = false; }
+  }, [traffic, acquisition, activity]);
   // Автоматически открытый «Обзор» ещё не означает, что пользователь успел
   // заметить новое. Сохраняем его при закрытии страницы или явном нажатии.
   const openSection = (id) => {
@@ -1461,7 +1475,7 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
   // «Обзор» прочитанным.
   // Заявки загружаются отдельно и не меняют ответ /updates. Не запрашиваем те же
   // счётчики повторно сразу после входа, когда приходит список заявок.
-  useEffect(() => { setUpdates({}); setContactFresh({}); }, [traffic, acquisition]);
+  useEffect(() => { setUpdates({}); setContactFresh({}); }, [traffic, acquisition, activity]);
   useEffect(() => { loadUpdates(); }, [data.generatedAt, loadUpdates]);
   const active = [...sections, socialSection].find((item) => item.id === section) || sections[0];
   return (
@@ -1470,18 +1484,18 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
         <div><h1>Аналитика</h1></div>
         <div className="analytics-actions">
           {active.devices && <AnalyticsAcquisitionSwitch value={acquisition} onChange={setAcquisition} />}
+          {active.devices && <AnalyticsActivitySelect value={activity} onChange={setActivity} />}
           {active.devices && <AnalyticsTrafficSwitch value={traffic} onChange={setTraffic} />}
           {active.devices && <AnalyticsDeviceSwitch value={device} onChange={setDevice} />}
           {active.ranged && <AnalyticsPeriodSelect value={period} onChange={setPeriod} />}
-          <button className="secondary analytics-logout" type="button" onClick={logout}><SignOut size={18} /> Выйти</button>
         </div>
       </header>
 
-      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} device={device} setDevice={setDevice} traffic={traffic} setTraffic={setTraffic} acquisition={acquisition} setAcquisition={setAcquisition} updates={updates} onSection={openSection} logout={logout} />
+      <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} device={device} setDevice={setDevice} traffic={traffic} setTraffic={setTraffic} acquisition={acquisition} setAcquisition={setAcquisition} activity={activity} setActivity={setActivity} updates={updates} onSection={openSection} logout={logout} />
 
       {loading && <p className="analytics-slice-loading" role="status">Обновляем аналитику…</p>}
       {error && <div className="analytics-error" role="alert">{error} Показан предыдущий срез. <button type="button" onClick={() => reload()}>Повторить</button></div>}
-      {(traffic === "without-quota" || acquisition !== "all") && ["vehicles", "leads", "customers"].includes(section) && <p className="analytics-traffic-note">Источник и страница входа у сохранённых заявок, аккаунтов и избранного не записана — эти данные показаны полностью. Просмотры и действия на сайте отфильтрованы.</p>}
+      {(traffic === "without-quota" || acquisition !== "all" || activity === "actions") && ["vehicles", "leads", "customers"].includes(section) && <p className="analytics-traffic-note">Сохранённые заявки, аккаунты и избранное показаны полностью. Выбранные фильтры действуют на просмотры и действия на сайте.</p>}
 
       <div className="analytics-layout">
         <div className="analytics-side-rail">
@@ -1492,11 +1506,12 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
         </aside>
         <div className="analytics-sidebar-extra">
           <button className={`analytics-sidebar-social${section === "social" ? " active" : ""}`} type="button" aria-current={section === "social" ? "page" : undefined} onClick={() => openSection("social")}><InstagramLogo size={17} /> {socialSection.label}</button>
+          <button className="analytics-sidebar-logout" type="button" onClick={logout}><SignOut size={18} /> Выйти</button>
         </div>
         </div>
 
         <div className="analytics-content">
-          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} device={device} traffic={data.traffic || "all"} acquisition={data.acquisition || "all"} updates={updates} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} device={device} traffic={data.traffic || "all"} acquisition={data.acquisition || "all"} activity={data.activity || "all"} updates={updates} /></div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} summary={data.summary} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={() => { reloadLeads(); reload(period, { silent:true }); }} removeLead={removeLead} period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} updates={updates} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
@@ -1518,6 +1533,7 @@ export function AnalyticsPage() {
   const [device, setDevice] = usePersistedChoice("analytics:device", analyticsDeviceIds, "all");
   const [traffic, setTraffic] = usePersistedChoice("analytics:traffic", ["all", "without-quota"], "all");
   const [acquisition, setAcquisition] = usePersistedChoice("analytics:acquisition", ["all", "organic", "paid"], "all", analyticsAcquisitionKind);
+  const [activity, setActivity] = usePersistedChoice("analytics:activity", ["all", "actions"], "all", analyticsActivityKind);
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1536,8 +1552,10 @@ export function AnalyticsPage() {
   trafficRef.current = traffic;
   const acquisitionRef = useRef(acquisition);
   acquisitionRef.current = acquisition;
-  // У каждого сочетания периода, устройства, страницы входа и источника свой кэш.
-  const sliceKey = (targetPeriod, targetDevice = deviceRef.current, targetTraffic = trafficRef.current, targetAcquisition = acquisitionRef.current) => `${targetPeriod}|${targetDevice}|${targetTraffic}|${targetAcquisition}`;
+  const activityRef = useRef(activity);
+  activityRef.current = activity;
+  // У каждого сочетания периода, устройства, страницы входа, источника и активности свой кэш.
+  const sliceKey = (targetPeriod, targetDevice = deviceRef.current, targetTraffic = trafficRef.current, targetAcquisition = acquisitionRef.current, targetActivity = activityRef.current) => `${targetPeriod}|${targetDevice}|${targetTraffic}|${targetAcquisition}|${targetActivity}`;
   const loadLeads = async ({ silent = false } = {}) => {
     if (!silent) { setLeadsLoading(true); setLeadsError(""); }
     try {
@@ -1559,8 +1577,9 @@ export function AnalyticsPage() {
     const targetDevice = deviceRef.current;
     const targetTraffic = trafficRef.current;
     const targetAcquisition = acquisitionRef.current;
-    const key = sliceKey(targetPeriod, targetDevice, targetTraffic, targetAcquisition);
-    const isCurrent = () => periodRef.current === targetPeriod && deviceRef.current === targetDevice && trafficRef.current === targetTraffic && acquisitionRef.current === targetAcquisition;
+    const targetActivity = activityRef.current;
+    const key = sliceKey(targetPeriod, targetDevice, targetTraffic, targetAcquisition, targetActivity);
+    const isCurrent = () => periodRef.current === targetPeriod && deviceRef.current === targetDevice && trafficRef.current === targetTraffic && acquisitionRef.current === targetAcquisition && activityRef.current === targetActivity;
     const request = ++dashboardRequest.current;
     const cached = dashboardCache.current.get(key);
     if (cached && isCurrent()) setData(cached);
@@ -1569,7 +1588,7 @@ export function AnalyticsPage() {
       setError("");
     }
     try {
-      const response = await fetch(`/api/analytics/dashboard?period=${encodeURIComponent(targetPeriod)}&device=${encodeURIComponent(targetDevice)}&traffic=${encodeURIComponent(targetTraffic)}&acquisition=${encodeURIComponent(targetAcquisition)}`, { cache:"no-store", credentials:"same-origin" });
+      const response = await fetch(`/api/analytics/dashboard?period=${encodeURIComponent(targetPeriod)}&device=${encodeURIComponent(targetDevice)}&traffic=${encodeURIComponent(targetTraffic)}&acquisition=${encodeURIComponent(targetAcquisition)}&activity=${encodeURIComponent(targetActivity)}`, { cache:"no-store", credentials:"same-origin" });
       if (response.status === 401) {
         if (request === dashboardRequest.current) { setAuthenticated(false); setData(null); }
         return;
@@ -1585,7 +1604,7 @@ export function AnalyticsPage() {
       if (!silent && request === dashboardRequest.current) setError(loadError.message === "analytics_storage_unavailable" ? "Хранилище аналитики ещё не подключено." : "Не удалось загрузить аналитику. Попробуйте ещё раз.");
     } finally { if (!silent && request === dashboardRequest.current) setLoading(false); }
   };
-  useEffect(() => { load(); }, [period, device, traffic, acquisition]);
+  useEffect(() => { load(); }, [period, device, traffic, acquisition, activity]);
   // Цифры на открытой странице устаревали: страница брала их один раз при заходе, и
   // новая заявка, просмотр или регистрация появлялись только после обновления руками.
   // Раз в минуту перечитываем весь срез молча — карточки, таблицы, график, заявки и
@@ -1633,6 +1652,13 @@ export function AnalyticsPage() {
     acquisitionRef.current = nextAcquisition;
     setAcquisition(nextAcquisition);
   };
+  const selectActivity = (nextValue) => {
+    const nextActivity = analyticsActivityKind(nextValue);
+    const cached = dashboardCache.current.get(sliceKey(periodRef.current, deviceRef.current, trafficRef.current, acquisitionRef.current, nextActivity));
+    if (cached) setData(cached);
+    activityRef.current = nextActivity;
+    setActivity(nextActivity);
+  };
   const removeLead = async (leadId) => {
     const response = await fetch(`/api/analytics/leads/${encodeURIComponent(leadId)}`, { method:"DELETE", credentials:"same-origin" });
     if (response.status === 401) {
@@ -1659,5 +1685,5 @@ export function AnalyticsPage() {
   if (authenticated === false) return <Login onSuccess={load} />;
   if (error && !data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика недоступна</h1><p>{error}</p><button className="primary" type="button" onClick={load}>Повторить</button></section></main>;
   if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
-  return <Dashboard data={data} period={period} setPeriod={selectPeriod} device={device} setDevice={selectDevice} traffic={traffic} setTraffic={selectTraffic} acquisition={acquisition} setAcquisition={selectAcquisition} loading={loading} error={error} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} removeLead={removeLead} />;
+  return <Dashboard data={data} period={period} setPeriod={selectPeriod} device={device} setDevice={selectDevice} traffic={traffic} setTraffic={selectTraffic} acquisition={acquisition} setAcquisition={selectAcquisition} activity={activity} setActivity={selectActivity} loading={loading} error={error} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} removeLead={removeLead} />;
 }

@@ -40,8 +40,8 @@ test("график и сравнение с прошлой неделей при
   const calls = [];
   const db = { query:async (sql, params) => { calls.push({ sql, params }); return { rows:[] }; } };
   const now = Date.parse("2026-10-02T12:00:00Z");
-  await getAnalyticsTrend("7", { db, now, traffic:"without-quota", device:"desktop" });
-  await getVisitsBenchmark("today", { db, now, traffic:"without-quota" });
+  await getAnalyticsTrend("7", { db, now, traffic:"without-quota", device:"desktop", activity:"actions" });
+  await getVisitsBenchmark("today", { db, now, traffic:"without-quota", activity:"actions" });
   for (const { sql } of calls) {
     assert.match(sql, /first_value\(path\) OVER \(PARTITION BY visitor_id, traffic_visit/);
     assert.match(sql, /traffic_previous_day IS DISTINCT FROM traffic_day/);

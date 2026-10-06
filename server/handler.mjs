@@ -231,11 +231,11 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/dashboard") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
-      return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("period") || url.searchParams.get("days"), { device:url.searchParams.get("device"), traffic:url.searchParams.get("traffic"), acquisition:url.searchParams.get("acquisition") }));
+      return json(response, 200, await getAnalyticsDashboard(url.searchParams.get("period") || url.searchParams.get("days"), { device:url.searchParams.get("device"), traffic:url.searchParams.get("traffic"), acquisition:url.searchParams.get("acquisition"), activity:url.searchParams.get("activity") }));
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/trend") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
-      return json(response, 200, await getAnalyticsTrend(url.searchParams.get("period"), { device:url.searchParams.get("device"), traffic:url.searchParams.get("traffic"), acquisition:url.searchParams.get("acquisition") }));
+      return json(response, 200, await getAnalyticsTrend(url.searchParams.get("period"), { device:url.searchParams.get("device"), traffic:url.searchParams.get("traffic"), acquisition:url.searchParams.get("acquisition"), activity:url.searchParams.get("activity") }));
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
@@ -250,7 +250,7 @@ export async function handleApiRequest(request, response) {
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/updates") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
-      return json(response, 200, await getAnalyticsUpdates({ viewing:url.searchParams.get("viewing") || "", traffic:url.searchParams.get("traffic"), acquisition:url.searchParams.get("acquisition") }));
+      return json(response, 200, await getAnalyticsUpdates({ viewing:url.searchParams.get("viewing") || "", traffic:url.searchParams.get("traffic"), acquisition:url.searchParams.get("acquisition"), activity:url.searchParams.get("activity") }));
     }
     if (request.method === "DELETE" && url.pathname === "/api/analytics/events") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });

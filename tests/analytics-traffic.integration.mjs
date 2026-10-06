@@ -55,9 +55,9 @@ try {
   await add("boundary", "2026-09-25T12:05:00Z", "/cars/6", "vehicle_view");
   await add("benchmark", "2026-10-01T06:00:00Z", "/catalog");
 
-  const options = { db, now, traffic:"without-quota" };
+  const options = { db, now, activity:"actions", traffic:"without-quota" };
   const filtered = await getAnalyticsDashboard("today", options);
-  const all = await getAnalyticsDashboard("today", { db, now });
+  const all = await getAnalyticsDashboard("today", { db, now, activity:"actions" });
   assert.equal(filtered.summary.visits, 4);
   assert.equal(filtered.summary.vehicle_views, 4);
   assert.equal(filtered.summary.contact_phone_views, 1);
@@ -99,7 +99,7 @@ try {
   await add("rsya-benchmark", "2026-10-01T06:00:00Z", rsya);
   await add("rsya-boundary", "2026-09-25T11:50:00Z", rsya);
   await add("rsya-boundary", "2026-09-25T12:05:00Z", "/cars/rsya-boundary", "vehicle_view");
-  const adOptions = { db, now, acquisition:"paid" };
+  const adOptions = { db, now, activity:"actions", acquisition:"paid" };
   const ads = await getAnalyticsDashboard("today", adOptions);
   assert.equal(ads.summary.visits, 6);
   assert.equal(ads.summary.vehicle_views, 2);
@@ -110,15 +110,15 @@ try {
   assert.equal(adsWithoutQuota.summary.vehicle_views, 1);
   const desktopAds = await getAnalyticsDashboard("today", { ...adOptions, device:"desktop" });
   assert.equal(desktopAds.summary.vehicle_views, 2, "мобильная страница входа не теряет категорию у действий с компьютера");
-  const organic = await getAnalyticsDashboard("today", { db, now, acquisition:"organic" });
+  const organic = await getAnalyticsDashboard("today", { db, now, activity:"actions", acquisition:"organic" });
   assert.ok(organic.visits.some((row) => row.landingPath.includes("ysclid")));
   assert.ok(organic.visits.every((row) => !/yclid|utm_source=rsya|utm_source_type=context/.test(row.landingPath)));
-  const allWithAds = await getAnalyticsDashboard("today", { db, now });
+  const allWithAds = await getAnalyticsDashboard("today", { db, now, activity:"actions" });
   assert.ok(ads.visits.some((row) => row.landingPath.includes('yclid=123&utm_source_type=search')), "поисковая реклама входит в платные переходы");
   assert.ok(ads.visits.some((row) => row.landingPath === '/?yclid=456'), "Директ без метки сети входит в платные переходы");
   assert.ok(ads.visits.some((row) => row.landingPath.includes('gclid=789')), "другая распознанная реклама входит в платные переходы");
   assert.equal(allWithAds.summary.visits, organic.summary.visits + ads.summary.visits, "все заходы разделены на бесплатные и платные");
-  const legacy = await getAnalyticsDashboard('today', { db, now, acquisition:'rsya' });
+  const legacy = await getAnalyticsDashboard('today', { db, now, activity:"actions", acquisition:'rsya' });
   assert.equal(legacy.acquisition, 'paid');
   assert.equal(legacy.summary.visits, ads.summary.visits);
   assert.equal(ads.summary.lead_submissions, allWithAds.summary.lead_submissions);
@@ -127,6 +127,41 @@ try {
   assert.equal(adTrend.daily.find((row) => row.day === "2026-09-25").views, 1, "источник входа найден до границы скользящего периода");
   const adBenchmark = await getVisitsBenchmark("today", adOptions);
   assert.equal(adBenchmark.visits_previous, 1);
+  // Два платных посетителя без действий: один только читал, другой
+  // открыл авто. Признак dwell/human не заменяет подтверждённое действие.
+  await add("paid-reader", "2026-10-02T10:00:00Z", "/catalog?yclid=reader", "page_view", "mobile", false);
+  await client.query("UPDATE analytics_events SET human=true WHERE visitor_id='paid-reader'");
+  await add("paid-reader", "2026-10-02T10:05:00Z", "/cars/reader", "vehicle_view", "mobile", false);
+  await add("paid-no-action-quota", "2026-10-02T10:10:00Z", "/ev-quota?yclid=quota-reader", "page_view", "desktop", false);
+  await add("paid-no-action-quota", "2026-10-01T10:10:00Z", "/catalog?yclid=yesterday-reader", "page_view", "desktop", false);
+  // Служебный просмотр не подтверждает активность публичного посетителя.
+  await add("paid-reader", "2026-10-02T10:06:00Z", "/analytics", "page_view", "mobile", true);
+  const recordedAds = await getAnalyticsDashboard("today", { db, now, acquisition:"paid" });
+  const actionAds = await getAnalyticsDashboard("today", adOptions);
+  assert.equal(recordedAds.activity, "all");
+  assert.equal(actionAds.activity, "actions");
+  assert.equal(recordedAds.summary.visits, ads.summary.visits + 2);
+  assert.equal(actionAds.summary.visits, ads.summary.visits);
+  assert.equal(recordedAds.summary.vehicle_views, ads.summary.vehicle_views + 1);
+  assert.equal(recordedAds.summary.lead_submissions, actionAds.summary.lead_submissions);
+  const recordedFiltered = await getAnalyticsDashboard("today", { db, now, acquisition:"paid", traffic:"without-quota" });
+  assert.equal(recordedFiltered.summary.visits, adsWithoutQuota.summary.visits + 1);
+  const mobileRecorded = await getAnalyticsDashboard("today", { db, now, acquisition:"paid", device:"mobile" });
+  const mobileAction = await getAnalyticsDashboard("today", { ...adOptions, device:"mobile" });
+  assert.equal(mobileRecorded.summary.visits, mobileAction.summary.visits + 1);
+  const recordedAll = await getAnalyticsDashboard("today", { db, now });
+  const recordedFree = await getAnalyticsDashboard("today", { db, now, acquisition:"organic" });
+  assert.equal(recordedAll.summary.visits, recordedAds.summary.visits + recordedFree.summary.visits);
+  const recordedTrend = await getAnalyticsTrend("7", { db, now, acquisition:"paid" });
+  assert.equal(recordedTrend.activity, "all");
+  assert.equal(recordedTrend.daily.find((row) => row.day === "2026-10-02").visits, recordedAds.summary.visits);
+  assert.equal(recordedTrend.daily.find((row) => row.day === "2026-10-02").views, recordedAds.summary.vehicle_views);
+  const recordedBenchmark = await getVisitsBenchmark("today", { db, now, acquisition:"paid" });
+  assert.equal(recordedBenchmark.visits_previous, adBenchmark.visits_previous + 1);
+  assert.equal(recordedAds.summary.visits_previous, recordedBenchmark.visits_previous);
+  const actionTrend = await getAnalyticsTrend("7", adOptions);
+  assert.equal(actionTrend.daily.find((row) => row.day === "2026-10-02").visits, actionAds.summary.visits);
+  console.log("Activity filter verified: all recorded visits, strict action mode, dwell-only readers, public action scope, complete visits, source/quota/device combinations, graph, benchmark and independent saved leads.");
   console.log("Landing filter verified: all quota articles, complete visits, return visits, midnight, rolling-period boundary, devices, graph, benchmark, search and contacts.");
   console.log("Paid/free filter verified: RSYA and search advertising, yclid alone, Google ads, all = paid + free, legacy saved filter, untagged continuation, quota/device combination, long landing URL, midnight, rolling boundary, graph and benchmark.");
 } finally {

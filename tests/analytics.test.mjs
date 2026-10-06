@@ -230,7 +230,7 @@ test("счётчики отделяют просмотренное от ново
   // «Регистрации» в обзоре заменены «Заявками» (28.09.2026), «+N» у них красный.
   // С 29.09.2026 карточка — воронка «открытий окна / заявок»: слева открытия окна по
   // кнопке «Узнать точную цену и наличие» (событие availability_click), справа заявки.
-  assert.match(source, /<LeadFunnelCard summary=\{summary\} mode=\{leadCountMode\} onModeChange=\{setLeadCountMode\} fresh=\{updates\.leads\} traffic=\{traffic\} acquisition=\{acquisition\} \/>/);
+  assert.match(source, /<LeadFunnelCard summary=\{summary\} mode=\{leadCountMode\} onModeChange=\{setLeadCountMode\} fresh=\{updates\.leads\} traffic=\{traffic\} acquisition=\{acquisition\} activity=\{activity\} \/>/);
   assert.match(source, /открытие окна", "открытия окна", "открытий окна"/);
   assert.match(server, /event_name='availability_click' AND \$\{LIVE_VISITOR\}\)::int AS availability_modal_opens/);
   assert.doesNotMatch(source, /\["Регистрации"/);
@@ -423,7 +423,7 @@ test("график отдаёт по каждому дню счёт к теку�
 test("график считает заходы тем же правилом, что и карточка «Заходы»", async () => {
   const calls = [];
   const db = { query:async (sql, values) => { calls.push({ sql, values }); return { rows:[] }; } };
-  await getAnalyticsTrend("90", { db });
+  await getAnalyticsTrend("90", { db, activity:"actions" });
   const sql = calls[0].sql;
   assert.match(sql, /AS visits/);
   assert.doesNotMatch(sql, /count\(DISTINCT visitor_id\)/, "график считает заходы, а не уникальных посетителей");
@@ -998,9 +998,9 @@ test("срез по устройству режет события, но не п
   const calls = [];
   const db = { query:async (sql, params) => { calls.push({ sql, params }); return { rows:[] }; } };
   const now = Date.parse("2026-09-28T12:00:00Z");
-  await getVisitsBenchmark("today", { db, now, device:"mobile" });
-  await getAnalyticsTrend("7", { db, now, device:"desktop" });
-  await getVisitsBenchmark("today", { db, now, device:"tablet" });
+  await getVisitsBenchmark("today", { db, now, activity:"actions", device:"mobile" });
+  await getAnalyticsTrend("7", { db, now, activity:"actions", device:"desktop" });
+  await getVisitsBenchmark("today", { db, now, activity:"actions", device:"tablet" });
   assert.match(calls[0].sql, /\$2 AND path <> '\/analytics'[\s\S]*? AND properties->>'device' = 'mobile' AND visitor_id IN \(SELECT/);
   assert.match(calls[1].sql, /AND properties->>'device' = 'desktop' AND visitor_id IN \(SELECT/);
   assert.doesNotMatch(calls[2].sql, /properties->>'device'/);

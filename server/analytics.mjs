@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { analyticsActivityKind } from "../src/analytics-activity.js";
 import { analyticsAcquisition, analyticsAcquisitionKind } from "../src/analytics-acquisition.js";
 import { pool } from "./db.mjs";
 import { readCookie } from "./auth.mjs";
@@ -512,19 +513,16 @@ export function normalizeAnalyticsRange(value, now = Date.now()) {
 }
 
 const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path !~* '(^|[?&])nocount=1(&|$)'";
-// Признак живого человека не ограничен периодом: он у посетителя один на всю историю.
-// Раньше отметку искали внутри выбранного окна, и один и тот же день давал разные
-// цифры в карточках (окно — сутки) и на графике (окно — 90 дней): человек, который
-// сегодня только читал, а мышью двигал на прошлой неделе, попадал в график и не
-// попадал в карточку. Отметка приходит вдогонку отдельным запросом и порядок записи
-// не гарантирован, поэтому достаточно одного такого события, а не каждого. Именно
-// действием, а не просто отметкой «живой»: одно лишь время на странице выжидает
-// обходчик, который ходит через домашние адреса и по адресу неотличим от людей.
-const LIVE_VISITOR = `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE human_action AND ${PUBLIC_EVENT})`;
+// Режим «Только с действиями» сохраняет прежнее правило: достаточно одного
+// подтверждённого действия посетителя за всю историю. Период, источник,
+// страница входа и устройство не ограничивают поиск подтверждения. Отсутствие
+// действия само по себе не доказывает, что переход сделан роботом.
+const ACTION_VISITOR = `visitor_id IN (SELECT visitor_id FROM analytics_events WHERE human_action AND ${PUBLIC_EVENT})`;
+const activityCondition = (activity) => analyticsActivityKind(activity) === "actions" ? ACTION_VISITOR : "true";
 // Срез по устройству: компьютер или телефон, как их определил сервер при записи
 // события (deviceKindFromHeaders). Пусто — все устройства. Значение только из списка,
 // поэтому его можно вставить в запрос строкой. Условие ставится на сами события
-// выборки, а не на проверку живого посетителя (LIVE_VISITOR): живой он или робот,
+// выборки, а не на проверку действия посетителя (ACTION_VISITOR): она
 // от устройства не зависит. У событий до появления этой пометки устройства нет —
 // в срезах по устройству их не будет.
 export const analyticsDeviceKind = (value) => (value === "mobile" || value === "desktop" ? value : "");
@@ -547,7 +545,8 @@ const VISIT_STARTS = "gap IS NULL OR gap > interval '30 minutes' OR previous_day
 // величины, а считать их вторым запросом смысла нет. Заходы — это только первые шаги
 // захода, поэтому они отбираются условием в самом счётчике, а не в WHERE: иначе
 // просмотры внутри захода выпали бы из выборки вместе с остальными шагами.
-export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all", acquisition = "all" } = {}) {
+export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all", acquisition = "all", activity = "all" } = {}) {
+  const LIVE_VISITOR = activityCondition(activity);
   const range = normalizeAnalyticsRange(rangeValue, now);
   const { db:trafficDb, events:EVENTS } = analyticsTrafficSource(db, traffic, PUBLIC_EVENT, { acquisition });
   const DEVICE = deviceCondition(device);
@@ -586,6 +585,7 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
   return {
     traffic:analyticsTrafficKind(traffic),
     acquisition:analyticsAcquisitionKind(acquisition),
+    activity:analyticsActivityKind(activity),
     days:range.days,
     period:range.period,
     from,
@@ -603,7 +603,8 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
 // словами, что и в карточке и на графике, чтобы числа сходились между собой.
 const VISITS_BENCHMARK_DAYS = 7;
 
-export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all", acquisition = "all" } = {}) {
+export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all", acquisition = "all", activity = "all" } = {}) {
+  const LIVE_VISITOR = activityCondition(activity);
   const range = typeof rangeValue === "string" ? normalizeAnalyticsRange(rangeValue, now) : rangeValue;
   const { db:trafficDb, events:EVENTS } = analyticsTrafficSource(db, traffic, PUBLIC_EVENT, { acquisition });
   const DEVICE = deviceCondition(device);
@@ -653,7 +654,8 @@ export async function getAnalyticsLeadPeople(from, to, { db = pool } = {}) {
   return { ...countLeadPeople(result.rows), lead_submissions:result.rows.length };
 }
 
-export async function getAnalyticsDashboard(rangeValue, { device = "", traffic = "all", acquisition = "all", db:storage = pool, now = Date.now() } = {}) {
+export async function getAnalyticsDashboard(rangeValue, { device = "", traffic = "all", acquisition = "all", activity = "all", db:storage = pool, now = Date.now() } = {}) {
+  const LIVE_VISITOR = activityCondition(activity);
   const range = normalizeAnalyticsRange(rangeValue, now);
   const { db, events:EVENTS } = analyticsTrafficSource(storage, traffic, PUBLIC_EVENT, { acquisition });
   // Устройство режет только то, что считается по событиям сайта. Заявки, избранное
@@ -698,7 +700,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
       count(*) FILTER (WHERE event_name='newsletter_subscribe_modal_open' AND ${LIVE_VISITOR})::int AS newsletter_subscribe_modal_opens,
       count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts', '/contacts/') AND ${LIVE_VISITOR})::int AS contact_page_views,
       count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/how-it-works', '/how-it-works/') AND ${LIVE_VISITOR})::int AS about_page_views,
-      count(DISTINCT visitor_id) FILTER (WHERE NOT (${LIVE_VISITOR}))::int AS robot_visits
+      count(DISTINCT visitor_id) FILTER (WHERE NOT (${ACTION_VISITOR}))::int AS robot_visits
       FROM ${EVENTS} WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE}`, [from, to]),
     // «Заход» считаем по паузе, а не по вкладке: страница помнит номер захода, пока
     // вкладка открыта, поэтому три карточки, открытые в трёх вкладках, выглядели бы
@@ -713,7 +715,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
         FROM ${EVENTS} WHERE created_at >= $1 AND created_at < $2 AND ${PUBLIC_EVENT}${DEVICE} AND ${LIVE_VISITOR}
       )
       SELECT count(*) FILTER (WHERE ${VISIT_STARTS})::int AS visits FROM steps`, [from, to]),
-    getVisitsBenchmark(range, { device:deviceKind, traffic, acquisition, db:storage, now }),
+    getVisitsBenchmark(range, { device:deviceKind, traffic, acquisition, activity, db:storage, now }),
     db.query(`SELECT
       (SELECT count(*) FROM customer_orders WHERE created_at >= $1 AND created_at < $2 AND ${notStaffAccount("customer_id")})::int
         + (SELECT count(*) FROM order_drafts WHERE created_at >= $1 AND created_at < $2 AND coalesce(calculation->>'requestType','') <> 'catalog_search' AND ${notStaffContact("contact")})::int AS availability_clicks,
@@ -903,6 +905,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
     device:deviceKind || "all",
     traffic:analyticsTrafficKind(traffic),
     acquisition:analyticsAcquisitionKind(acquisition),
+    activity:analyticsActivityKind(activity),
     from,
     to,
     generatedAt:new Date().toISOString(),
@@ -955,7 +958,8 @@ export async function readAnalyticsSeen(viewing = "") {
   return Object.fromEntries(stored.rows.map((row) => [row.section, row.seen_at?.toISOString?.() || row.seen_at]));
 }
 
-export async function getAnalyticsUpdates({ viewing = "", traffic = "all", acquisition = "all" } = {}, { now = Date.now() } = {}) {
+export async function getAnalyticsUpdates({ viewing = "", traffic = "all", acquisition = "all", activity = "all" } = {}, { now = Date.now() } = {}) {
+  const LIVE_VISITOR = activityCondition(activity);
   const { db, events:EVENTS } = analyticsTrafficSource(pool, traffic, PUBLIC_EVENT, { to:`'${new Date(now).toISOString()}'::timestamptz`, acquisition });
   const seenBySection = await readAnalyticsSeen(viewing);
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
