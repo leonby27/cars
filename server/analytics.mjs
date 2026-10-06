@@ -547,7 +547,7 @@ const VISIT_STARTS = "gap IS NULL OR gap > interval '30 minutes' OR previous_day
 // просмотры внутри захода выпали бы из выборки вместе с остальными шагами.
 export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(), device = "", traffic = "all", acquisition = "all", activity = "all" } = {}) {
   const LIVE_VISITOR = activityCondition(activity);
-  const range = normalizeAnalyticsRange(rangeValue, now);
+  const range = typeof rangeValue === "object" && rangeValue !== null ? rangeValue : normalizeAnalyticsRange(rangeValue, now);
   const { db:trafficDb, events:EVENTS } = analyticsTrafficSource(db, traffic, PUBLIC_EVENT, { acquisition });
   const DEVICE = deviceCondition(device);
   const from = range.from.toISOString();

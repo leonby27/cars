@@ -45,10 +45,16 @@ test('SEO rebuild uses compatible cached data with unavailable DB and new page a
   writeFileSync(join(output,'index.html'),'<!doctype html><html><head><title>App</title><script type="module" src="/assets/new-ui.js"></script></head><body><div id="root"></div></body></html>');
   const key=catalogBuildKey(resolve('.'),{siteUrl:'https://abcars.by',carsSitemap:false,fullSitemap:false,carsPerModelInSitemap:0,listPagesInSitemap:3,showcaseSize:20,blogCarsOnPage:BLOG_TOP_POOL,blogEnabled:BLOG_ENABLED,publishedPosts:blogPosts().map(p=>p.slug)});
   const source=join(dir,'source.bin');writeCatalogBuildCache(source,{key,live:live(),marketPrices});
-  const out=execFileSync(process.execPath,['scripts/generate-seo-pages.mjs'],{encoding:'utf8',timeout:30000,env:{...process.env,SEO_OUTPUT_DIR:output,SEO_CATALOG:join(dir,'missing'),SEO_CARS_FROM_DB:'1',SEO_ALLOW_INDEXING:'0',SEO_CARS_SITEMAP:'0',SEO_SITEMAP_FULL:'0',SEO_VEHICLE_PAGES:'0',SITE_URL:'https://abcars.by',DATABASE_URL:'postgres://none:none@127.0.0.1:1/none',ABCARS_REUSE_CATALOG:'1',ABCARS_CATALOG_CACHE_FILE:source}});
+  const timingFile=join(dir,'catalog-timings.json'),decisionFile=join(dir,'catalog-decision.json');
+  const out=execFileSync(process.execPath,['scripts/generate-seo-pages.mjs'],{encoding:'utf8',timeout:30000,env:{...process.env,SEO_OUTPUT_DIR:output,SEO_CATALOG:join(dir,'missing'),SEO_CARS_FROM_DB:'1',SEO_ALLOW_INDEXING:'0',SEO_CARS_SITEMAP:'0',SEO_SITEMAP_FULL:'0',SEO_VEHICLE_PAGES:'0',SITE_URL:'https://abcars.by',DATABASE_URL:'postgres://none:none@127.0.0.1:1/none',ABCARS_REUSE_CATALOG:'1',ABCARS_CATALOG_CACHE_FILE:source,ABCARS_CATALOG_TIMINGS:timingFile,ABCARS_CATALOG_DECISION:decisionFile}});
   assert.match(out,/быстрый режим: готовые данные, без запросов к базе/);
   assert.match(readFileSync(join(output,'index.html'),'utf8'),/assets\/new-ui\.js/);
   assert.deepEqual(JSON.parse(readFileSync(join(output,'../market-price-stats.json'),'utf8')),marketPrices);
+  const timings=JSON.parse(readFileSync(timingFile));
+  assert.deepEqual(timings.map(t=>t.stage),['prepare-inputs','cache-check','render-pages']);
+  assert.ok(timings.every(t=>t.exitCode===0 && t.seconds>=0));
+  const decision=JSON.parse(readFileSync(decisionFile));
+  assert.equal(decision.mode,'reuse');assert.equal(decision.previous.key,key);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
@@ -56,13 +62,20 @@ test('planner and fingerprint agree on audited render-only changes',async()=>{
  const {deploymentPlan}=await import('../scripts/lib/deploy-plan.mjs');
  const dir=mkdtempSync(join(tmpdir(),'abcars-shared-key-'));
  try {
-  for(const d of ['src','server','config','db','scripts/lib'])mkdirSync(join(dir,d),{recursive:true});
+  for(const d of ['src','server/abdrive','config','db','scripts/lib'])mkdirSync(join(dir,d),{recursive:true});
   for(const f of ['package.json','package-lock.json'])writeFileSync(join(dir,f),'{}');
   const first=catalogBuildKey(dir,{});
-  for(const f of ['src/info-pages-seo.js','src/market-compare.js','src/vehicle-market-savings.js','config/critical-classes.json','scripts/deploy.mjs']){
+  const {feedBuildKey}=await import('../scripts/lib/catalog-build-cache.mjs');
+  const firstFeed=feedBuildKey(dir,{});
+  for(const f of ['src/info-pages-seo.js','src/market-compare.js','src/vehicle-market-savings.js','config/critical-classes.json','scripts/deploy.mjs',
+   'src/phone-mask.js','src/modal-viewport.js','src/auth-route.js','server/analytics.mjs','server/analytics-traffic.mjs',
+   'server/analytics-lead-people.mjs','server/handler.mjs','server/abdrive/analytics.mjs',
+   'scripts/lib/deploy-impact.mjs','scripts/lib/deploy-plan.mjs','scripts/lib/pricing-inputs.mjs','scripts/lib/build-metrics.mjs']){
    writeFileSync(join(dir,f),'changed rendering');
    assert.equal(deploymentPlan([f]).reuseCatalog,true,f);
    assert.equal(catalogBuildKey(dir,{}),first,f);
+   assert.equal(deploymentPlan([f]).reuseFeed,true,f);
+   assert.equal(feedBuildKey(dir,{}),firstFeed,f);
   }
   writeFileSync(join(dir,'src/blog-posts.js'),'changed selection');
   assert.equal(deploymentPlan(['src/blog-posts.js']).reuseCatalog,false);
@@ -93,6 +106,7 @@ test('fresh snapshots are refused after import or visibility changes, including 
   writeCatalogBuildCache(file,{key:'rules',live:live(),marketPrices,createdAt:100,dataRevision:'before'});
   assert.ok(readCatalogBuildCache(file,'rules',{now:200,dataRevision:'before'}).saved);
   assert.match(readCatalogBuildCache(file,'rules',{now:200,dataRevision:'after'}).reason,/каталог изменился/);
+  assert.equal(readCatalogBuildCache(file,'rules',{now:200,dataRevision:'after'}).metadata.dataRevision,'before');
   assert.ok(readCatalogBuildCache(file,'rules',{now:86400100,dataRevision:'before'}).saved);
   assert.ok(readCatalogBuildCache(file,'rules',{now:86400100}).reason);
   writeCatalogBuildCache(file,{key:'rules',live:live(),marketPrices,createdAt:100});

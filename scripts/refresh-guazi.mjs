@@ -23,7 +23,7 @@ const store = createGuaziRefreshStore({ pool, withTransaction, upsertCar, databa
 });
 try {
   await runGuaziRefresh({ root, newCircle: args.includes('--new-circle'), signal: controller.signal }, {
-    store, notify: text => sendTelegram(text, { root }),
+    store, notify: process.env.ABCARS_CIRCLE_REPORT_OWNER === 'scheduler' ? async () => {} : text => sendTelegram(text, { root }),
   });
 } catch (error) {
   console.error(String(error.message).split('\n')[0]);

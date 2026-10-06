@@ -58,6 +58,7 @@ import { PENDING_CYCLE_SQL, resumeRefreshCycle, startNewRefreshCycle, readCheckL
 import { estimateLandedCost } from "../src/pricing.js";
 import { IMPORT_BRANDS, EXCLUDED_BRANDS, canonicalImportBrand, sourceBrandOf, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { sendTelegram } from "./lib/telegram.mjs";
+import { circleFailure } from "./lib/circle-report.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ONLY_UNVERIFIED_RUN = process.argv.slice(2).some((arg) => arg === "--only-unverified" || arg === "--only-unverified=true");
@@ -465,12 +466,7 @@ async function markLockout(reason) {
   const until = new Date(Date.now() + LOCKOUT_HOURS * 3600_000).toISOString();
   await fs.writeFile(LOCKOUT_PATH, `${JSON.stringify({ until, reason, at: new Date().toISOString() }, null, 2)}\n`).catch(() => {});
   console.log(`[lockout] источник не пустил дважды — не тревожу его до ${until.slice(11, 16)} UTC`);
-  if (!tgQuiet) {
-    await sendTelegram(
-      [`⛔️ Источник не пускает`, "", `Прогон не начался: ${reason}.`, `Следующая попытка не раньше чем через ${LOCKOUT_HOURS} ч.`, "", "Стучаться чаще нельзя — от этого запрет только продлевается."].join("\n"),
-      { root: ROOT, log: console.log },
-    ).catch(() => {});
-  }
+  // Access failures are included in the single final report.
 }
 
 // Не пора ли ещё молчать: если запрет свежий, прогон даже не поднимает браузер.
@@ -576,8 +572,7 @@ async function reportBurst(reason, { force = false } = {}) {
   if (tgQuiet) { console.log("[tg] тихий режим: " + lines.join(" | ")); return; }
   // Стена и пауза — это будни, а не беда: сообщать о них не нужно, они видны
   // в журнале и попадают в итог. В телеграм уходит только итог прогона.
-  if (!force) { console.log(`[burst] ${bad ? "с заминкой" : "спокойно"}: ${reason} · ${lines.filter(Boolean).slice(2).join(" | ")}`); return; }
-  await sendTelegram(lines.join("\n"), { root: ROOT, log: console.log }).catch(() => {});
+  console.log(`[burst] ${bad ? "с заминкой" : "спокойно"}: ${reason} · ${lines.filter(Boolean).slice(2).join(" | ")}`);
 }
 
 async function safeFlight(url, expectMarker) {
@@ -798,7 +793,8 @@ let soldTotal = 0;
 const burstBrands = new Set();
 // Все марки за прогон — для итогового сообщения: burstBrands по ходу чистится.
 const allBrandsThisRun = new Set();
-const tgQuiet = dryRun || args.get("quiet") === "true";
+const tgQuiet = dryRun || args.get("quiet") === "true" || process.env.ABCARS_CIRCLE_REPORT_OWNER === 'scheduler';
+const runTotals = { brands: 0, priced: 0, rePriced: 0, added: 0, sold: 0, addFailed: 0, errors: [] };
 // Курсор читается до обхода, пишется после: ночь продолжает с места остановки.
 const verifiedThisRun = new Set();
 
@@ -994,8 +990,7 @@ async function purgePageCache(added) {
   }
 }
 
-// Отбивка по марке: успешно или нет, сколько новых, снятых, оставшихся и у скольких
-// изменилась цена. Одно сообщение на марку — так и просил Сергей.
+// Brand details remain in the server log; Telegram receives only the result.
 async function reportBrand(entry, res) {
   const head = res.ok ? `✅ ${entry.brand}` : `⚠️ ${entry.brand} — не до конца`;
   const lines = [
@@ -1010,14 +1005,13 @@ async function reportBrand(entry, res) {
   ];
   if (!res.ok && res.why) lines.push("", res.why);
   if (dryRun) lines.push("", "(пробный прогон, в базу ничего не пишется)");
-  if (tgQuiet) { console.log(`[tg] ${lines.join(" | ")}`); return; }
-  await sendTelegram(lines.join("\n"), { root: ROOT, log: console.log }).catch(() => {});
+  console.log(`[brand-result] ${lines.join(" | ")}`);
 }
 
 // Итог круга: последняя марка пройдена, каталог обновлён целиком.
 async function reportCircleDone(round, totals) {
   const lines = [
-    onlyUnverified ? "🏁 Проверка объявлений без повторного обновления завершена" : "🏁 Каталог обновлён целиком",
+    onlyUnverified ? "🏁 Проверка объявлений без повторного обновления завершена" : "✅ Круг 1 · Che168 завершён",
     `Круг №${round} закрыт: обойдено марок ${totals.brands}`,
     "",
     `За эту сессию проверено наших объявлений: ${totals.checked} · изменилось цен: ${totals.rePriced}`,
@@ -1309,7 +1303,7 @@ try {
   console.log(`[order] в очереди ${brandsToWalk.length} марок из ${allBrands.length}; первые: ${brandsToWalk.slice(0, 5).map((b) => `${b.brand} (${b.ourCars})`).join(", ")}`);
 
   // Пополнение по-прежнему ограничено; актуализация существующих карточек — нет.
-  const totals = { brands: 0, priced: 0, rePriced: 0, added: 0, sold: 0 };
+  const totals = runTotals;
 
   for (const entry of brandsToWalk) {
     if (stopped) break;
@@ -1446,6 +1440,8 @@ try {
     totals.priced += res.priced;
     totals.rePriced += res.rePriced;
     totals.added += added;
+    totals.addFailed += addFailed;
+    if (!res.ok || addFailed) totals.errors.push({ brand: entry.brand, error: `${res.why || 'Есть незавершённые проверки'}${addFailed ? `; не удалось добавить карточек: ${addFailed}` : ''}` });
     totals.sold += soldHere;
     console.log(`[brand] ${entry.brand}: ${res.priced} цен, ${res.rePriced} изменилось, +${added} новых, ${soldHere} снято, ${unchecked} осталось в текущем круге, ${res.pages} страниц, ${res.minutes} мин${res.ok ? "" : " — не до конца"}`);
     await reportBrand(entry, res);
@@ -1525,6 +1521,10 @@ try {
     seriesWalked,
     pricedByLists: seenPrices.size,
     discovered: discoveries.size,
+    added: totals.added,
+    addFailed: totals.addFailed,
+    errors: totals.errors,
+    remainingActive: (await pool.query("SELECT count(*)::int AS n FROM listings WHERE source='Che168' AND status='active'")).rows[0].n,
     discoveriesSkipped,
     prioritized: prioritized.size,
     rePriced: stats.rePriced,
@@ -1543,10 +1543,8 @@ try {
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
   await fs.writeFile(REPORT_PATH, `${JSON.stringify({ ...report, priceUpdates: stats.priceUpdates.map(({ id, title, oldUsd, usd }) => ({ id, title, oldUsd, usd })) }, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
-  // Отбивки по маркам уходят по ходу дела. Общее сообщение — одно и только когда
-  // круг закрыт: каталог обновлён целиком. Иначе сессия просто продолжится в
-  // следующий раз с того места, где остановилась, и сообщать об этом нечего.
-  if (circleClosed) {
+  // Only one result: a successful summary or detailed incomplete/error report.
+  if (circleClosed && !totals.addFailed) {
     await reportCircleDone(cursor.round || 1, {
       brands: doneNow.size,
       checked: verifiedThisRun.size,
@@ -1554,39 +1552,35 @@ try {
       rePriced: totals.rePriced,
       added: totals.added,
       sold: totals.sold,
-      remaining: (await pool.query("SELECT count(*)::int AS n FROM listings WHERE source='Che168' AND status='active'")).rows[0].n,
+      remaining: report.remainingActive,
       hours: Math.round((Date.now() - startedAt) / 360000) / 10,
     });
-  } else if (!wantedBrands && !brandLimit && !tgQuiet) {
-    // Прогон по всей очереди кончился, а круг не закрыт — раньше об этом молчали,
-    // и казалось, что круг прошёл. Говорим, какие марки не доделаны и что делать.
+  } else if (!tgQuiet) {
     const unfinished = allBrands.filter((item) => !doneNow.has(item.brand)).map((item) => item.brand);
-    const lines = [
-      `⏸ Круг №${cursor.round} пройден не до конца`,
-      "",
-      `Доделано марок: ${doneNow.size} из ${allBrands.length}`,
-      ...(unfinished.length ? [`Не до конца: ${unfinished.slice(0, 15).join(", ")}${unfinished.length > 15 ? ` и ещё ${unfinished.length - 15}` : ""}`] : []),
-      `Машин ждут проверки: ${remainingListings}`,
-      ...(stopped ? ["", "Прогон остановлен (стоп или источник перестал отвечать)."] : []),
-      "",
-      "«продолжить» — доделать только хвост, «круг» — начать заново со всех марок.",
-    ];
-    await sendTelegram(lines.join("\n"), { root: ROOT, log: console.log }).catch(() => {});
+    const reason = totals.addFailed ? `Не удалось добавить новых карточек: ${totals.addFailed}` : `Остались непроверенные машины${stopped ? '; прогон остановлен или источник перестал отвечать' : ''}`;
+    await sendTelegram(circleFailure('che', Error(reason), { report, cursor: nextCursor, elapsedMs: Date.now() - startedAt,
+      logTail: unfinished.length ? `Незавершённые марки: ${unfinished.join(', ')}` : null, logPath: '/tmp/circle.log' }), { root: ROOT, log: console.log }).catch(() => {});
   } else {
-    console.log("[tg] круг не закрыт — общего сообщения не отправляю, отбивки по маркам уже ушли");
+    console.log("[tg] итог передаст планировщик либо включён тихий режим");
   }
 } catch (error) {
-  if (!entryDenied) throw error;
-  // Отчёт нужен и здесь: утренняя проверка судит по нему, а не по журналу.
+  process.exitCode = 1;
+  // Persist failures as well, so the scheduler has current progress to report.
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
-  await fs.writeFile(REPORT_PATH, `${JSON.stringify({
+  const failedReport = {
     startedAt: new Date(startedAt).toISOString(),
     finishedAt: new Date().toISOString(),
     minutes: Math.round((Date.now() - startedAt) / 6000) / 10,
     shift,
-    entryDenied: true,
-    note: "источник не пустил: проверка «не робот» не пройдена",
-  }, null, 2)}\n`);
+    entryDenied,
+    note: entryDenied ? "источник не пустил: проверка «не робот» не пройдена" : error.message,
+    checkedThisRun: verifiedThisRun.size,
+    added: runTotals.added, sold: soldTotal, errors: runTotals.errors,
+  };
+  await fs.writeFile(REPORT_PATH, `${JSON.stringify(failedReport, null, 2)}\n`);
+  console.error(error.stack || error.message);
+  if (!tgQuiet) await sendTelegram(circleFailure('che', error, { report: failedReport, cursor, elapsedMs: Date.now() - startedAt,
+    logTail: error.stack, logPath: '/tmp/circle.log' }), { root: ROOT, log: console.log }).catch(() => {});
 } finally {
   if (browser) await browser.close().catch(() => {});
   await pool.end();

@@ -23,7 +23,7 @@ try {
   // The first deployment with this feature prepares a complete, trusted baseline.
   knownBase = false;
 }
-const plan = deploymentPlan(files,{knownBase,pricingRefreshed:ratesChanged});
+const plan = deploymentPlan(files,{knownBase,pricingRefreshed:ratesChanged,root:process.cwd()});
 console.error(`[выкладка] ${plan.mode === 'presentation' ? 'быстрая: используем совместимые готовые данные' : 'полная: обновляем данные'}`);
 console.error(`[выкладка] причина: ${plan.reasons.join(', ')}`);
 // Fixed numeric fields only; the shell does not evaluate file names as code.

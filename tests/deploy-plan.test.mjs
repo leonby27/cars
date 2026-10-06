@@ -46,7 +46,7 @@ test('PageSpeed browser infrastructure rebuilds without rewriting vehicle prices
  assert.equal(p.recalculatePrices,false);
  assert.equal(p.checkDuplicates,false);
  assert.equal(p.migrate,false);
- assert.equal(deploymentPlan(['src/new-price-helper.js']).recalculatePrices,true);
+ assert.equal(deploymentPlan(['src/new-price-helper.js']).recalculatePrices,false);
  assert.equal(deploymentPlan(['src/counter-loader.js'],{pricingRefreshed:true}).recalculatePrices,true);
 });
 
@@ -60,6 +60,19 @@ test('analytics attribution releases never rewrite catalog prices',()=>{
  assert.equal(runtime.restartBot,false);
  assert.equal(runtime.recalculatePrices,false);
  assert.equal(runtime.checkDuplicates,false);assert.equal(runtime.migrate,false);
+});
+
+test('audited forms and deployment policy reuse data; actual pricing dependencies refresh prices',()=>{
+ const p=deploymentPlan(['src/PhoneField.jsx','src/phone-mask.js','src/modal-viewport.js','src/auth-route.js',
+  'scripts/lib/deploy-impact.mjs','scripts/lib/deploy-plan.mjs','scripts/lib/pricing-inputs.mjs','scripts/lib/build-metrics.mjs']);
+ assert.equal(p.reuseCatalog,true);assert.equal(p.reuseFeed,true);
+ assert.equal(p.recalculatePrices,false);assert.equal(p.restartBot,false);
+ for(const file of ['src/pricing.js','src/ev-quota.js','src/china-logistics.js','src/korea-logistics.js',
+  'src/engine-spec.js','src/vehicle-spec-integrity.js','scripts/lib/guazi-parser.mjs']) {
+  assert.equal(deploymentPlan([file]).recalculatePrices,true,file);
+ }
+ assert.equal(deploymentPlan(['src/unrelated-new-helper.js']).recalculatePrices,false);
+ assert.equal(deploymentPlan(['src/unrelated-new-helper.js']).reuseCatalog,false);
 });
 
 test('journal photos, film loading and critical CSS do not trigger database maintenance',()=>{

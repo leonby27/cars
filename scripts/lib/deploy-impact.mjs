@@ -1,3 +1,5 @@
+import { pricingInputs } from './pricing-inputs.mjs';
+
 // One policy for both revision planning and snapshot compatibility.
 // Unknown runtime files remain conservative; extend audited exceptions only
 // after checking that they render prepared data rather than prepare it.
@@ -8,19 +10,23 @@ const renderOnly = new Set([
   'src/search-dictionary.js',
   'src/analytics.js', 'src/boot-api.js', 'src/counter-loader.js', 'src/price-fit.js', 'src/spec-fit.js',
   // Traffic attribution and CRM request URLs never prepare catalog or prices.
-  'src/analytics-acquisition.js', 'src/analytics-activity.js', 'src/analytics-updates.js',
+  'src/analytics-acquisition.js', 'src/analytics-activity.js', 'src/analytics-updates.js', 'src/analytics-plan.js',
+  'src/phone-mask.js', 'src/modal-viewport.js', 'src/auth-route.js',
   'src/model-text-load.js', 'src/model-text-imports.js', 'src/model-texts.js',
   'src/blog-text-load.js', 'src/blog-text-imports.js', 'src/blog-texts.js',
   'src/info-pages-seo.js', 'src/service-copy.js', 'src/purchase-info.js', 'src/tracking-info.js',
   'src/legal-copy.js', 'src/service-video-loading.js', 'src/vehicle-market-savings.js', 'src/market-compare.js',
 ]);
 const operationsOnly = new Set([
-  // Analytics attribution and the deployment policy do not prepare catalog data.
-  'server/analytics-traffic.mjs', 'server/analytics.mjs', 'server/handler.mjs', 'scripts/lib/deploy-impact.mjs',
   'scripts/deploy.mjs', 'scripts/deploy-plan.mjs', 'scripts/build.mjs',
   'scripts/clean-dist.mjs', 'scripts/split-css.mjs', 'scripts/precompress-dist.mjs',
   'scripts/prerender-home.mjs', 'scripts/audit-blog-images.mjs',
   'scripts/update-search-networks.py', 'scripts/warm-api.mjs',
+  'scripts/lib/deploy-impact.mjs', 'scripts/lib/deploy-plan.mjs',
+  'scripts/lib/pricing-inputs.mjs', 'scripts/lib/build-metrics.mjs',
+  // Reports and HTTP dispatch are not imported by catalog preparation.
+  'server/handler.mjs', 'server/analytics.mjs', 'server/analytics-traffic.mjs',
+  'server/analytics-lead-people.mjs', 'server/analytics-plan.mjs', 'server/abdrive/analytics.mjs',
   'server/static-page.mjs', 'server/boot-screen.mjs',
   'server/app-render.mjs', 'server/api-replay.mjs', 'server/root-inject.mjs',
   'db/migrations/045_vehicles_updated_at_index.sql',
@@ -44,10 +50,12 @@ export const feedInput = file => catalogInput(file) && !catalogOnly.has(file);
 // These modules select homepage cards and share the existing social list. They
 // change prepared catalog inputs, but never change a vehicle's delivered price.
 const selectionOnly = new Set(['src/home-feed.js', 'src/social-priority-models.js']);
-export const priceInput = file => !developmentOnly(file) && !presentationOnly(file) && !operationsOnly.has(file) && (
-  file === 'scripts/backfill-estimates.mjs' || file === 'scripts/lib/che168-parser.mjs'
-  || file.startsWith('db/migrations/') || file.startsWith('config/')
-  || /^src\/.*\.js$/.test(file) && !selectionOnly.has(file) && !['src/blog-posts.js','src/blog-social.js'].includes(file));
+export const priceInput = (file, dependencies = pricingInputs()) => Boolean(dependencies?.has(file))
+  || !developmentOnly(file) && !presentationOnly(file) && !operationsOnly.has(file) && (
+  file.startsWith('db/migrations/') || file.startsWith('config/')
+  || (!dependencies && (
+    file === 'scripts/backfill-estimates.mjs' || file === 'scripts/lib/che168-parser.mjs'
+    || /^src\/.*\.js$/.test(file) && !selectionOnly.has(file) && !['src/blog-posts.js','src/blog-social.js'].includes(file))));
 export const duplicateInput = file => file === 'scripts/deduplicate-cross-source.mjs'
   || file === 'scripts/lib/cross-source-dedupe.mjs'
   || file.startsWith('config/') && !presentationOnly(file) || file.startsWith('db/migrations/') && !operationsOnly.has(file);

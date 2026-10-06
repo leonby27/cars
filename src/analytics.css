@@ -55,6 +55,7 @@ html[data-theme="light"] .analytics-login-card { border:1px solid var(--line); }
 /* У всех крупных блоков один фиксированный радиус. Он не зависит от высоты панели,
    поэтому раскрытие содержимого не меняет форму углов. */
 .analytics-content .analytics-tabpanel > .analytics-panel:first-child,
+.analytics-plan > .analytics-panel:first-child,
 .analytics-search-traffic > .analytics-panel:first-child { margin-top:0; }
 .analytics-panel-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:16px; }
 .analytics-panel-heading h2, .analytics-collapse-trigger h2, .analytics-visits-heading h2 { margin:0 0 3px; font-size:19px; }
@@ -258,6 +259,30 @@ html[data-theme="light"] :is(.analytics-sidebar-social, .analytics-sidebar-logou
 /* Панели переключаются через hidden, а обёртка своей коробки не рисует. */
 .analytics-tabpanel { display:block; animation:analytics-panel-enter .16s ease-out both; }
 .analytics-tabpanel[hidden] { display:none; }
+.analytics-plan-heading { align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; }
+.analytics-plan-heading h2 { flex:1 1 360px; margin:0; font-size:19px; }
+.analytics-plan-heading .analytics-lead-info { vertical-align:middle; margin-left:4px; }
+.analytics-plan-scope { flex:none; }
+.analytics-plan-scope button { height:32px; padding-inline:12px; font-size:14px; white-space:nowrap; }
+.analytics-plan-chart { margin-top:0; }
+.analytics-plan-chart :is(.analytics-chart-axis, .analytics-chart-plot) { height:270px; }
+.analytics-plan-chart .analytics-chart-tooltip[data-position="below"] { top:calc(100% + 4px); bottom:auto; }
+.analytics-plan-chart .analytics-plan-line.is-plan { stroke:var(--chart-google,#4285f4); stroke-width:3; }
+.analytics-plan-chart .analytics-plan-line.is-actual { stroke:var(--ink); stroke-width:3; }
+.analytics-plan-point.is-actual { color:var(--ink); }
+.analytics-plan-chart .analytics-plan-point.is-plan { color:var(--chart-google,#4285f4); }
+.analytics-plan-legend { display:flex; flex-wrap:wrap; gap:12px 20px; margin-top:10px; color:var(--muted); font-size:13px; }
+.analytics-plan-legend span { display:inline-flex; align-items:center; gap:7px; }
+.analytics-plan-legend i { display:block; width:18px; border-top:2px solid var(--accent); }
+.analytics-plan-legend i.is-plan { border-color:var(--chart-google,#4285f4); }
+.analytics-plan-legend i.is-actual { border-color:var(--ink); }
+.analytics-plan .analytics-table-scroll { overflow-x:auto; margin-top:20px; }
+.analytics-plan-table { font-variant-numeric:tabular-nums; }
+.analytics-plan-table th, .analytics-plan-table td { white-space:nowrap; }
+.analytics-plan-table td:first-child { text-transform:capitalize; }
+@media (max-width:620px) {
+  .analytics-plan-legend { gap:10px 16px; }
+}
 .analytics-kpi-small { font-size:22px !important; letter-spacing:-.4px !important; }
 
 /* Заявки */

@@ -114,7 +114,7 @@ test('переключатель показывает три режима, за�
       assert.ok(renderToStaticMarkup(createElement(AnalyticsAcquisitionSwitch, { value, onChange:() => {} })).includes(`Источник трафика: ${label}`));
     }
     const card = renderToStaticMarkup(createElement(LeadFunnelCard, { acquisition:'paid', summary:{ lead_people:2, availability_modal_opens:3 } }));
-    assert.match(card, /Открытия — платные переходы, заявки — все/);
+    assert.doesNotMatch(card, /Открытия — платные переходы, заявки — все/);
     assert.match(card, /Фильтр источника действует на открытия окна/);
     for (const source of ['direct', 'yandex.by', 'unknown', '']) {
       const saved = renderToStaticMarkup(createElement(VisitSource, { visit:{ source, landingPath:'/?yclid=123' } }));

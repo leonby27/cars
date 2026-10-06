@@ -257,12 +257,16 @@ export function trackMetrikaView(url, options = {}) {
   }
 }
 
-// Отдельная отметка «машину посмотрели в модалке»: в отчётах такой просмотр ничем не
-// отличается от обычного, а по этой цели видно, каким способом смотрят машины.
-export function trackMetrikaGoal(goal, params = undefined) {
+// Цели только Яндекс Метрики, без изменения внутренней аналитики и GA4.
+export function trackYandexGoal(goal, params = undefined) {
   if (isAnalyticsPath(window.location.pathname)) return;
   const metrikaCounter = window.__ym;
   if (metrikaCounter && typeof window.ym === "function") window.ym(metrikaCounter, "reachGoal", goal, params);
+}
+
+export function trackMetrikaGoal(goal, params = undefined) {
+  if (isAnalyticsPath(window.location.pathname)) return;
+  trackYandexGoal(goal, params);
   const googleCounter = window.__ga;
   if (googleCounter && typeof window.gtag === "function") {
     window.gtag("event", goal, { ...(params || {}), send_to:googleCounter });

@@ -1,0 +1,30 @@
+{
+  "counter_id": 111868764,
+  "autogoals_enabled": false,
+  "active_goals": [
+    {
+      "id": 669988932,
+      "name": "Открытие формы заявки",
+      "type": "action",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "user",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": [],
+      "conditions": [
+        {
+          "type": "exact",
+          "url": "lead_form_open"
+        }
+      ]
+    }
+  ],
+  "all_goal_statuses": [
+    {
+      "id": 669988932,
+      "name": "Открытие формы заявки",
+      "status": "Active"
+    }
+  ]
+}

@@ -19,6 +19,7 @@ import { publicCarWithoutReport, reportGroupsForCar } from "./report-access.mjs"
 import { claimGuestAvailabilityLeads, createCustomerOrder, deleteCustomerOrder, listCustomerOrders, updateCustomerOrder } from "./orders.mjs";
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
 import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, deviceKindFromHeaders, devicePlatformFromHeaders, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword, visitorCountry } from "./analytics.mjs";
+import { getAnalyticsPlan } from "./analytics-plan.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
@@ -236,6 +237,10 @@ export async function handleApiRequest(request, response) {
     if (request.method === "GET" && url.pathname === "/api/analytics/trend") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
       return json(response, 200, await getAnalyticsTrend(url.searchParams.get("period"), { device:url.searchParams.get("device"), traffic:url.searchParams.get("traffic"), acquisition:url.searchParams.get("acquisition"), activity:url.searchParams.get("activity") }));
+    }
+    if (request.method === "GET" && url.pathname === "/api/analytics/plan") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      return json(response, 200, await getAnalyticsPlan());
     }
     if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });

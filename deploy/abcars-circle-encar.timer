@@ -1,0 +1,12 @@
+[Unit]
+Description=Circle 3 (Encar) on Saturday at 18:00 Minsk
+
+[Timer]
+OnCalendar=Sat *-*-* 18:00:00 Europe/Minsk
+Unit=abcars-circle@encar.service
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+
+[Install]
+WantedBy=timers.target

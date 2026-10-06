@@ -77,7 +77,7 @@ test("переключатель показывает выбранный реж�
     assert.match(html, /aria-pressed="true">Без квоты<\/button>/);
     assert.match(html, /aria-pressed="false">Все<\/button>/);
     const card = renderToStaticMarkup(createElement(LeadFunnelCard, { traffic:"without-quota", summary:{ lead_people:2, availability_modal_opens:3 } }));
-    assert.match(card, /Открытия — без квоты, заявки — все/);
+    assert.doesNotMatch(card, /Открытия — без квоты, заявки — все/);
     assert.match(card, /Заявки показаны все/);
   } finally { await vite.close(); }
 });

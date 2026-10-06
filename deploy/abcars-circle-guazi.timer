@@ -1,0 +1,12 @@
+[Unit]
+Description=Circle 2 (Guazi) on Wednesday at 18:00 Minsk
+
+[Timer]
+OnCalendar=Wed *-*-* 18:00:00 Europe/Minsk
+Unit=abcars-circle@guazi.service
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+
+[Install]
+WantedBy=timers.target

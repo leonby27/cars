@@ -1,0 +1,17 @@
+[Unit]
+Description=Weekly catalog circle (%i)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/abcars
+EnvironmentFile=/srv/abcars/.env.local
+ExecStart=/usr/bin/flock -n /run/lock/abcars-circle-%i.lock /usr/bin/node scripts/scheduled-circle.mjs %i
+TimeoutStartSec=infinity
+TimeoutStopSec=120
+Nice=10
+CPUWeight=20
+IOWeight=20
+StandardOutput=journal
+StandardError=journal

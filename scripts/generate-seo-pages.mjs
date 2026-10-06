@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { catalogRateKey, catalogBuildKey, readCatalogBuildCache, writeCatalogBuildCache } from "./lib/catalog-build-cache.mjs";
+import { buildMetrics, writeBuildReport } from "./lib/build-metrics.mjs";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { selectHomeFeed } from "../src/home-feed.js";
@@ -50,6 +51,8 @@ import { homePopularModels } from "../src/home-popular-models.js";
 import { IMAGE_WIDTH_SCHEMA, carRoute, carTitle, createSeoRenderer, escapeHtml, escapeXml, isoDate, linkifyText, listingNumber, number, photoHref, plural, stripSeoHead, trimRoute } from "../server/seo-render.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const metrics = buildMetrics(process.env.ABCARS_CATALOG_TIMINGS, {report:console.log});
+process.on('exit', code => metrics.finishPending(code || 1));
 // Пути можно переопределить: тесты прогоняют генератор на трёх машинах в своей
 // временной папке, чтобы не зависеть ни от дампа каталога, ни от общей сборки.
 const clientDir = process.env.SEO_OUTPUT_DIR ? path.resolve(process.env.SEO_OUTPUT_DIR) : path.join(root, process.env.ABCARS_BUILD_DIR || "dist", "client");
@@ -1040,7 +1043,8 @@ function publicPageBody(page) {
 }
 
 // Живые данные читаем до отрисовки страниц: витрина и счётчики моделей нужны главной.
-const live = await readLiveCatalog();
+const live = await metrics.measure('prepare-inputs', readLiveCatalog);
+const finishRendering = metrics.start('render-pages');
 
 // Популярные модели для главной (src/home-popular-models.js). Главная собирается при
 // сборке (scripts/prerender-home.mjs), поэтому список считаем здесь же и кладём рядом со
@@ -1272,33 +1276,46 @@ async function readLiveCatalog() {
   }
   const buildDir = path.dirname(clientDir);
   const cachePath = path.join(buildDir, "catalog-build-data.bin");
+  const finishCacheCheck = metrics.start('cache-check');
   const key = catalogBuildKey(root, {
     siteUrl, carsSitemap, fullSitemap, carsPerModelInSitemap, listPagesInSitemap,
     showcaseSize, blogCarsOnPage, blogEnabled:BLOG_ENABLED,
     publishedPosts:blogPosts().map(post=>post.slug),
   });
-  if (process.env.ABCARS_REUSE_CATALOG === "1") {
-    const {saved,reason} = readCatalogBuildCache(process.env.ABCARS_CATALOG_CACHE_FILE || path.join(root,"dist","catalog-build-data.bin"),key,{dataRevision:process.env.ABCARS_CATALOG_REVISION});
+  const decision = {requestedReuse:process.env.ABCARS_REUSE_CATALOG === "1", key, dataRevision:process.env.ABCARS_CATALOG_REVISION};
+  const saveDecision = () => writeBuildReport(process.env.ABCARS_CATALOG_DECISION, decision);
+  if (decision.requestedReuse) {
+    const {saved,reason,metadata} = readCatalogBuildCache(process.env.ABCARS_CATALOG_CACHE_FILE || path.join(root,"dist","catalog-build-data.bin"),key,{dataRevision:process.env.ABCARS_CATALOG_REVISION});
+    decision.previous = metadata;
     if (saved) {
       // Preserve original age: consecutive UI releases cannot renew stale data.
       writeCatalogBuildCache(cachePath,saved);
       writeFileSync(path.join(buildDir,"catalog-reused.json"),JSON.stringify({createdAt:saved.createdAt}));
       writeFileSync(path.join(buildDir,"market-price-stats.json"),JSON.stringify(saved.marketPrices));
       console.log("[catalog] быстрый режим: готовые данные, без запросов к базе");
+      Object.assign(decision, {mode:'reuse', reason:'совместимые правила и данные'});
+      saveDecision();
+      finishCacheCheck();
       return saved.live;
     }
+    Object.assign(decision, {mode:'full', reason});
     console.log(`[catalog] полная подготовка: ${reason}`);
-  } else console.log("[catalog] полная подготовка: изменились данные/правила или запрошена обычная сборка");
+  } else {
+    Object.assign(decision, {mode:'full', reason:'изменились данные/правила или запрошена обычная сборка'});
+    console.log(`[catalog] полная подготовка: ${decision.reason}`);
+  }
+  saveDecision();
+  finishCacheCheck();
   let pool = null;
   try {
     ({ pool } = await import("../server/db.mjs"));
     const {catalogDataRevision} = await import('./lib/catalog-data-revision.mjs');
-    const startDataRevision = await catalogDataRevision(pool);
+    const startDataRevision = await metrics.measure('revision-before', () => catalogDataRevision(pool));
     const { getModelFacts, listCars, marketPriceSnapshot, modelSummary, sectionStats } = await import("../server/repository.mjs");
     // Витрина: общий случайный отбор с долей 75% приоритетных машин и разнообразием моделей.
-    const showcaseAnswer = await listCars(new URLSearchParams({ sort: "variety", limit: String(showcaseSize) }));
+    const showcaseAnswer = await metrics.measure('showcase', () => listCars(new URLSearchParams({ sort: "variety", limit: String(showcaseSize) })));
     const showcase = showcaseAnswer.items;
-    const facts = await getModelFacts();
+    const facts = await metrics.measure('model-facts', getModelFacts);
     // `content_changed_at` ставится только когда данные объявления действительно
     // изменились (см. миграцию 021). `imported_at` для этого не годится: она одинаковая
     // у всех карточек, потому что приходит из последнего полного импорта, — и поисковику
@@ -1309,6 +1326,7 @@ async function readLiveCatalog() {
     // и роботу полезнее, и человеку из выдачи.
     // Первый снимок каждой машины — из той же таблицы, что и галерея карточки.
     const firstPhoto = "(SELECT m.url FROM listing_media m WHERE m.listing_id = l.id ORDER BY m.position LIMIT 1)";
+    const finishSitemap = metrics.start('sitemap-data');
     const rows = !carsSitemap
       ? []
       : carsPerModelInSitemap
@@ -1333,6 +1351,8 @@ async function readLiveCatalog() {
     // Сколько страниц в каждом разделе. Нужно карте сайта: страницы списка робот иначе
     // находит только переходами «дальше», а в разделе электромобилей их две сотни —
     // до середины он дошёл бы нескоро.
+    finishSitemap();
+    const finishSections = metrics.start('sections');
     const listPages = new Map();
     const stock = new Map();
     // Вместе с количеством берём дату последнего изменения раздела: тот же скан по базе,
@@ -1350,6 +1370,8 @@ async function readLiveCatalog() {
     }
     // Живые списки подборок журнала: сам список машин, сколько их всего и цифры
     // для полосы под вступлением. Считаем здесь же, на том же соединении с базой.
+    finishSections();
+    const finishCollections = metrics.start('blog-collections');
     const collections = new Map();
     for (const post of BLOG_ENABLED ? blogAllPosts() : []) {
       // Отчёт живого среза каталога не требует: все его цифры уже посчитаны.
@@ -1414,7 +1436,8 @@ async function readLiveCatalog() {
         highlight: blogHighlight(post, notable),
       });
     }
-    const priceSnapshot = await marketPriceSnapshot({requireFresh:true});
+    finishCollections();
+    const priceSnapshot = await metrics.measure('market-prices', () => marketPriceSnapshot({requireFresh:true}));
     writeFileSync(path.join(path.dirname(clientDir), "market-price-stats.json"), JSON.stringify(priceSnapshot));
     const prepared = {
       showcase,
@@ -1441,11 +1464,18 @@ async function readLiveCatalog() {
       priceStats: priceSnapshot.normal,
     };
     // If an import ran during preparation, do not certify this as a reusable snapshot.
-    const dataRevision = await catalogDataRevision(pool);
+    const dataRevision = await metrics.measure('revision-after', () => catalogDataRevision(pool));
+    const finishSnapshot = metrics.start('save-snapshot');
     writeCatalogBuildCache(cachePath,{key,rateKey:catalogRateKey(root),live:prepared,marketPrices:priceSnapshot,
       dataRevision:dataRevision === startDataRevision ? dataRevision : undefined});
+    finishSnapshot();
+    Object.assign(decision, {prepared:true, reusable:dataRevision === startDataRevision, preparedDataRevision:dataRevision});
+    saveDecision();
     return prepared;
   } catch (error) {
+    metrics.finishPending(1);
+    Object.assign(decision, {prepared:false, error:error.code || error.message});
+    saveDecision();
     console.warn(`Живые данные каталога не прочитаны: база недоступна (${error.code || error.message}). Витрина главной, счётчики моделей и карта сайта с машинами собраны не будут.`);
     return nothing;
   } finally {
@@ -1782,3 +1812,4 @@ if (Number.isFinite(listPagesInSitemap)) {
 // Адрес карты нигде не публикуется, поэтому печатаем его здесь: именно эту ссылку
 // вставляют в Google Search Console и Яндекс.Вебмастер.
 console.log(`Карта сайта: ${siteUrl}/${publicSitemapName} (в robots.txt), тот же указатель под зарегистрированным именем ${siteUrl}/${sitemapIndexName}.`);
+finishRendering();

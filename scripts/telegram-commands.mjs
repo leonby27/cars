@@ -110,7 +110,7 @@ async function handle(text) {
 
   if (cmd.kind === "circle") {
     await startRun(null, { newCircle: true });
-    return say("Запускаю полный круг: все марки, от мелких к крупным. По каждой пришлю отбивку.");
+    return say("Запускаю полный круг: все марки, от мелких к крупным. Итог пришлю после завершения круга.");
   }
 
   if (cmd.kind === "resume") {

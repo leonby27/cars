@@ -132,6 +132,32 @@ test("модалка быстрого просмотра сообщает Мет
   assert.ok(open.slice(0, 700).includes('trackMetrikaGoal("quick_view")'), "цель быстрого просмотра пропала");
 });
 
+test("открытие формы заявки отправляется только в Метрику", async () => {
+  const calls = [];
+  const googleCalls = [];
+  globalThis.window = {
+    location:{ pathname:"/cars/12345" },
+    __ym:111868764,
+    __ga:"G-964NJY891X",
+    ym:(...args) => calls.push(args),
+    gtag:(...args) => googleCalls.push(args),
+  };
+  try {
+    const { trackYandexGoal } = await import("../src/analytics.js");
+    trackYandexGoal("lead_form_open");
+    assert.deepEqual(calls, [[111868764, "reachGoal", "lead_form_open", undefined]]);
+    assert.deepEqual(googleCalls, []);
+    globalThis.window.location.pathname = "/analytics";
+    trackYandexGoal("lead_form_open");
+    delete globalThis.window.__ym;
+    globalThis.window.location.pathname = "/cars/12345";
+    trackYandexGoal("lead_form_open");
+    assert.equal(calls.length, 1, "CRM или отключённый счётчик отправили цель");
+  } finally {
+    delete globalThis.window;
+  }
+});
+
 // The service film is prepared fully before attaching a local object URL.
 test("политика безопасности разрешает подготовленное видео", () => {
   assert.match(nginxCsp, /(?:^|;)\s*media-src 'self' blob:/);

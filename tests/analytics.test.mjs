@@ -118,7 +118,7 @@ test("детализация заходов стоит сразу после г�
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   // Блок «Баннер в статьях» убран 28.09.2026.
   assert.doesNotMatch(source, /PromoSection|Баннер в статьях/);
-  assert.match(source, /<\/section>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{updates\.overview\} \/>/);
+  assert.match(source, /<AnalyticsTrendPanel[^>]*\/>\s*<VisitsSection visits=\{data\.visits \|\| \[\]\} total=\{summary\.visits\} unread=\{updates\.overview\} \/>/);
   assert.match(source, /function VisitsSection[\s\S]*?<section className="analytics-panel analytics-visits-panel">/);
   for (const heading of ["Номер", "Источник", "Страница входа", "Просмотров", "Дата"]) assert.match(source, new RegExp(`<th>${heading}<\\/th>`));
   assert.doesNotMatch(source, /<th>Источник входа<\/th>/);
@@ -130,8 +130,9 @@ test("детализация заходов стоит сразу после г�
 test("источники графика выключены по умолчанию и запоминаются", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   const chart = await readFile(new URL("../src/analytics-visits-chart.jsx", import.meta.url), "utf8");
-  assert.match(source, /analytics:trend-yandex", \["0", "1"\], "0"/);
-  assert.match(source, /analytics:trend-google", \["0", "1"\], "0"/);
+  assert.match(source, /storagePrefix = "analytics:trend"/);
+  assert.match(source, /`\$\{storagePrefix\}-yandex`, \["0", "1"\], "0"/);
+  assert.match(source, /`\$\{storagePrefix\}-google`, \["0", "1"\], "0"/);
   assert.match(source, /type="checkbox" checked=\{showYandex === "1"\}/);
   assert.match(source, /type="checkbox" checked=\{showGoogle === "1"\}/);
   assert.match(chart, /analytics-chart-source is-\$\{source\.id\}/);

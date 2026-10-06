@@ -2,17 +2,25 @@
 import '../config/load-env.mjs';
 import { assertSiteProfile, resolveSiteProfile } from '../config/sites/index.mjs';
 import { spawn } from 'node:child_process';
-import { createWriteStream, writeFileSync } from 'node:fs';
-import { performance } from 'node:perf_hooks';
+import { createWriteStream } from 'node:fs';
 import { catalogDataRevision } from './lib/catalog-data-revision.mjs';
+import { buildMetrics } from './lib/build-metrics.mjs';
+
+const log = process.env.ABCARS_BUILD_LOG ? createWriteStream(process.env.ABCARS_BUILD_LOG) : null;
+const report = text => { console.log(text); log?.write(text + '\n'); };
+const metrics = buildMetrics(process.env.ABCARS_BUILD_TIMINGS, {report:text => report(text.replace('[timings]', '[build]'))});
+process.on('exit', code => metrics.finishPending(code || 1));
 
 // Deploys reuse snapshots only after checking the actual catalog.
 if (process.env.SEO_CARS_FROM_DB === '1' || process.env.ABCARS_REUSE_CATALOG === '1' || process.env.ABCARS_REUSE_FEED === '1') {
+  const finish = metrics.start('catalog-revision');
   const {pool} = await import('../server/db.mjs');
   try {
     process.env.ABCARS_CATALOG_REVISION = await catalogDataRevision(pool);
+    finish();
   } catch (error) {
-    console.error('[build] catalog revision check failed; preparing fresh data:', error.code || error.message);
+    finish(1);
+    report(`[build] catalog revision check failed; preparing fresh data: ${error.code || error.message}`);
     process.env.ABCARS_REUSE_CATALOG = '0';
     process.env.ABCARS_REUSE_FEED = '0';
   } finally { await pool.end(); }
@@ -24,7 +32,6 @@ process.env.SITE_ID = site.id;
 process.env.VITE_SITE_ID = site.id;
 const output = process.env.ABCARS_BUILD_DIR || 'dist';
 if (!['dist','dist.next'].includes(output)) throw new Error(`Unexpected build directory: ${output}`);
-const log = process.env.ABCARS_BUILD_LOG ? createWriteStream(process.env.ABCARS_BUILD_LOG) : null;
 const stages = [
   ['clean', 'scripts/clean-dist.mjs'],
   ['client', 'node_modules/vite/bin/vite.js', 'build'],
@@ -35,10 +42,8 @@ const stages = [
   ['feed', 'scripts/yandex-feed.mjs'],
   ['compression', 'scripts/precompress-dist.mjs'],
 ];
-const timings = [];
-const report = text => { console.log(text); log?.write(text + '\n'); };
 for (const [name, ...args] of stages) {
-  const started = performance.now();
+  const finish = metrics.start(name);
   report(`[build] ${name}: start`);
   let tail = '';
   const code = await new Promise((resolve, reject) => {
@@ -52,10 +57,7 @@ for (const [name, ...args] of stages) {
     child.on('error', reject);
     child.on('close', code => resolve(code ?? 1));
   });
-  const seconds = Math.round((performance.now() - started) / 100) / 10;
-  timings.push({stage:name, seconds, exitCode:code});
-  report(`[build] ${name}: ${seconds}s, exit=${code}`);
-  if (process.env.ABCARS_BUILD_TIMINGS) writeFileSync(process.env.ABCARS_BUILD_TIMINGS, JSON.stringify(timings,null,2));
+  finish(code);
   if (code) {
     if (log) process.stderr.write(tail);
     process.exitCode = code;

@@ -1,0 +1,137 @@
+{
+  "counter_id": "111868764",
+  "autogoals_enabled": true,
+  "goals": [
+    {
+      "id": 600971047,
+      "name": "Автоцель: отправка формы",
+      "type": "form",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "auto",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": [],
+      "conditions": [],
+      "price_locations": []
+    },
+    {
+      "id": 600977687,
+      "name": "Автоцель: заполнил контактные данные",
+      "type": "contact_data",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "auto",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": []
+    },
+    {
+      "id": 600977688,
+      "name": "Автоцель: отправил контактные данные",
+      "type": "contact_data_sent",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "auto",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": []
+    },
+    {
+      "id": 601015935,
+      "name": "Автоцель: поиск по сайту",
+      "type": "search",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "auto",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": [],
+      "conditions": [
+        {
+          "type": "search",
+          "url": "q,text,query,search"
+        }
+      ]
+    },
+    {
+      "id": 602601701,
+      "name": "Быстрый просмотр машины",
+      "type": "action",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "user",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": [],
+      "conditions": [
+        {
+          "type": "exact",
+          "url": "quick_view"
+        }
+      ]
+    },
+    {
+      "id": 609761171,
+      "name": "Автоцель: переход в мессенджер",
+      "type": "messenger",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "auto",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": [],
+      "conditions": [
+        {
+          "type": "messenger",
+          "url": "all_messengers"
+        }
+      ]
+    },
+    {
+      "id": 639332373,
+      "name": "Автоцель: переход в соц.сеть",
+      "type": "social",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "auto",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": [],
+      "conditions": [
+        {
+          "type": "all_social"
+        }
+      ]
+    },
+    {
+      "id": 664437648,
+      "name": "Автоцель: скачивание файла",
+      "type": "file",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "auto",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": [],
+      "conditions": [
+        {
+          "type": "all_files"
+        }
+      ]
+    },
+    {
+      "id": 669723638,
+      "name": "Автоцель: клик по номеру телефона",
+      "type": "phone",
+      "default_price": 0.0,
+      "is_retargeting": 0,
+      "goal_source": "auto",
+      "is_favorite": 0,
+      "status": "Active",
+      "labels": [],
+      "conditions": [],
+      "hide_phone_number": false
+    }
+  ]
+}

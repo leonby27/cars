@@ -59,7 +59,7 @@ export async function startGuazi(root, newCircle) {
   for (let attempt = 0; attempt < 100; attempt++) {
     const state = await readJson(paths.state);
     const pid = await guaziRunning(root);
-    if (pid && state?.pid === pid && state.status === 'running') return 'Круг 2 · Guazi запущен. Отчёты будут приходить по маркам. Управление: «Статус 2», «Стоп 2».';
+    if (pid && state?.pid === pid && state.status === 'running') return 'Круг 2 · Guazi запущен. Итог придёт после завершения круга. Управление: «Статус 2», «Стоп 2».';
     if (ended) throw Error('Круг 2 не запустился. Проверьте runtime/guazi-refresh/worker.log на сервере.');
     await pause(100);
   }

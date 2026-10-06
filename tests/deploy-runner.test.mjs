@@ -17,7 +17,7 @@ function deploy({buildFails=false,healthFails=false,unitsChanged=false,lockFails
  stub('flock',`exit ${lockFails?1:0}`);stub('sha256sum','echo "hash package-lock.json"');
  writeFileSync(join(root,'node_modules/.abcars-lock-hash'),'hash');
  stub('node','echo "1 1 0 0 0 0"');
- stub('npm',`echo "npm $*" >> calls; ${buildFails?'exit 1':'mkdir -p dist.next; echo new > dist.next/new; echo data > dist.next/market-price-stats.json; echo data > dist.next/catalog-build-data.bin'}`);
+ stub('npm',`echo "npm $*" >> calls; printf '%s\\n' "$ABCARS_BUILD_TIMINGS" "$ABCARS_CATALOG_TIMINGS" "$ABCARS_CATALOG_DECISION" > metric-paths; ${buildFails?'exit 1':'mkdir -p dist.next; echo new > dist.next/new; echo data > dist.next/market-price-stats.json; echo data > dist.next/catalog-build-data.bin'}`);
  stub('systemctl','echo "systemctl $*" >> calls');
  stub('curl',`echo "curl" >> calls; exit ${healthFails?1:0}`);
  stub('find','echo "cache clear" >> calls');stub('cmp',`exit ${unitsChanged?1:0}`);
@@ -36,6 +36,8 @@ test('UI publication skips unchanged services and records successful result',()=
   assert.match(d.calls,/curl/);
   const run=readdirSync(join(d.root,'logs'))[0];
   assert.equal(JSON.parse(readFileSync(join(d.root,'logs',run,'result.json'))).exitCode,0);
+  assert.deepEqual(readFileSync(join(d.root,'metric-paths'),'utf8').trim().split('\n'),
+   ['build-timings.json','catalog-timings.json','catalog-decision.json'].map(file=>join(d.root,'logs',run,file)));
  }finally{d.cleanup();}
 });
 test('build failure leaves serving directory intact and never restarts service',()=>{

@@ -69,9 +69,11 @@ test('new round refreshes existing FOB, adds discoveries, and removes only after
   assert.equal(f.removals[0].evidence.observations.length, 2);
   assert.ok(f.writes.every(car => car.source === 'Guazi' && car.fobPort === 'Horgos' && car.fobPriceUsd === 28748));
   assert.equal(f.finalized, 1); assert.equal(f.releases, 1); assert.equal(f.closed, 1);
-  assert.match(f.messages[0], /^✅ Tesla\nМашин в выдаче источника: 2\nЦены изменились у: 0\nНовых заведено: 1\nСнято с продажи: 1\nОсталось в каталоге: 2\nСтраниц прочитано: 2/);
-  assert.match(f.messages[1], /^🏁 Каталог Guazi обновлён целиком/);
-  assert.match(f.messages[1], /В каталоге Guazi сейчас: 2/);
+  assert.equal(f.messages.length, 1);
+  assert.match(f.messages[0], /^🏁 Каталог Guazi обновлён целиком/);
+  assert.match(f.messages[0], /В каталоге Guazi сейчас: 2/);
+  assert.equal(state.summary.added, 1);
+  assert.equal(state.summary.remaining, 2);
   await assert.rejects(fs.stat(refreshPaths(f.root).lock), { code: 'ENOENT' });
 });
 
@@ -83,7 +85,7 @@ test('next round actually rereads lists and cards; completed round cannot be res
   const second = await f.run();
   assert.notEqual(second.run, first.run); assert.equal(f.reads.length, 2); assert.equal(f.searches.length, n * 2);
   assert.equal(f.writes.at(-1).fobPriceUsd, 29900); assert.equal(f.snapshots, 2);
-  assert.match(f.messages.at(-2), /Цены изменились у: 1/);
+  assert.equal(f.messages.length, 2);
   assert.match(f.messages.at(-1), /изменилось цен: 1/);
 });
 
@@ -98,7 +100,11 @@ test('blocked card saves committed checks; resume keeps initial snapshot and ski
   const resumed = await f.run(false);
   assert.equal(resumed.status, 'complete'); assert.equal(resumed.run, state.run); assert.equal(f.snapshots, 1);
   assert.equal(f.reads.filter(id => id === a).length, 1); assert.equal(f.reads.filter(id => id === b).length, 2);
-  assert.match(f.messages.at(-2), /^✅ Tesla\nМашин в выдаче источника: 2\nЦены изменились у: 0\nНовых заведено: 1/);
+  assert.equal(f.messages.length, 2);
+  assert.match(f.messages[0], /Источник|Source access check/);
+  assert.match(f.messages[0], /Последняя марка: Tesla/);
+  assert.match(f.messages[0], /Сохранено проверок: 1/);
+  assert.match(f.messages.at(-1), /За этот круг новых заведено: 1/);
 });
 
 test('catalog absence and a live detail only refresh price, keep active, and flag unverified availability', async t => {

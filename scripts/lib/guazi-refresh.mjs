@@ -10,6 +10,7 @@ import { readJson, writeJson, mapLimit } from './guazi-pilot-io.mjs';
 import { withGuaziRetries } from './guazi-retry.mjs';
 import { removeDeadProcessLock } from './guazi-server-runtime.mjs';
 import { orderGuaziBrands } from '../guazi-census.mjs';
+import { circleFailure } from './circle-report.mjs';
 
 export const refreshPaths = root => ({
   base: path.join(root, 'runtime', 'guazi-refresh'),
@@ -261,7 +262,7 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
       const countBrands = [...new Set([...brand.segments.flatMap(segment => segment.covers), ...brand.existing.map(row => row.brand)])];
       const remaining = await store.countActive(countBrands);
       state.brandsDone.push(brand.brand); await save();
-      await message(formatGuaziBrandReport({ brand: brand.brand, sourceCount: [...queue.values()].filter(job => job.listed).length,
+      log(formatGuaziBrandReport({ brand: brand.brand, sourceCount: [...queue.values()].filter(job => job.listed).length,
         priceChanged: brandResults.filter(result => result.priceChanged).length,
         added: byOutcome('added'), unavailable: byOutcome('unavailable'), remaining, pages, sections,
         elapsedMs: state.brandElapsedMs, review: byOutcome('review'), rejected: byOutcome('rejected') }));
@@ -273,17 +274,18 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     state.phase = 'dedupe'; await save();
     await store.finalize();
     const remainingActive = await store.countActive();
-    state.status = 'complete'; state.phase = 'complete'; state.finishedAt = new Date().toISOString(); await save();
-    await message(formatGuaziRoundReport({ brands: brands.length, checked: snapshot.length,
+    state.summary = { brands: brands.length, checked: snapshot.length,
       priceChanged: [...results.values()].filter(result => result.priceChanged).length,
       added: state.counts.added, unavailable: state.counts.unavailable, remaining: remainingActive,
-      elapsedMs: state.activeElapsedMs, review: state.counts.review, rejected: state.counts.rejected }));
+      elapsedMs: state.activeElapsedMs, review: state.counts.review, rejected: state.counts.rejected };
+    state.status = 'complete'; state.phase = 'complete'; state.finishedAt = new Date().toISOString(); await save();
+    await message(formatGuaziRoundReport(state.summary));
     return state;
   } catch (error) {
     if (ownsState) {
       state.status = signal?.aborted || error.code === 'GUAZI_PAUSED' ? 'paused' : error.code === 'SOURCE_BLOCKED' ? 'blocked' : 'error';
       state.error = String(error.message).split('\n')[0].slice(0, 240); await save();
-      await message(`Круг 2 · Guazi ${state.status === 'paused' ? 'остановлен' : 'прерван'}. Прогресс сохранён.\n${state.error}\nДля продолжения: «Продолжить 2».`);
+      await message(circleFailure('guazi', error, { state, elapsedMs: state.activeElapsedMs, logPath: paths.log }));
     }
     throw error;
   } finally {

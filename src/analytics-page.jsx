@@ -1,11 +1,12 @@
 import { analyticsActivityKind } from "./analytics-activity.js";
 import { analyticsAdvertisingSource, analyticsAcquisition, analyticsAcquisitionKind } from "./analytics-acquisition.js";
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
+import { AnalyticsPlanSection } from "./analytics-plan-section.jsx";
 import { SegmentedControl } from "./segmented-control.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
 import { Fragment, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, Info, InstagramLogo, MagnifyingGlass, SignOut, SquaresFour, Trash, Tray, UsersThree } from "./icons.jsx";
+import { CalendarBlank, CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, Info, InstagramLogo, MagnifyingGlass, SignOut, SquaresFour, Trash, Tray, UsersThree } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
@@ -389,18 +390,17 @@ export function AnalyticsActivitySelect({ value, onChange }) {
   return <AnalyticsFilterSelect value={value} onChange={onChange} options={analyticsActivities} label="Активность посетителей" className="analytics-activity-select" />;
 }
 
-function OverviewSection({ data, period, device = "all", traffic = "all", acquisition = "all", activity = "all", updates = {} }) {
-  const summary = data.summary || {};
-  const [leadCountMode, setLeadCountMode] = usePersistedChoice("analytics:lead-count-mode", ["unique", "all"], "unique");
-  const [trendPeriod, setTrendPeriod] = usePersistedChoice("analytics:trend-period", trendPeriodIds, "90");
+function AnalyticsTrendPanel({ data, period, device = "all", traffic = "all", acquisition = "all", activity = "all", storagePrefix = "analytics:trend", visitsOnly = false }) {
+  const [trendPeriod, setTrendPeriod] = usePersistedChoice(`${storagePrefix}-period`, trendPeriodIds, "90");
   const [trendData, setTrendData] = useState(null);
   const [trendLoading, setTrendLoading] = useState(true);
   const [trendError, setTrendError] = useState("");
   const trendCache = useRef(new Map());
-  const [trendMetric, setTrendMetric] = usePersistedChoice("analytics:trend-metric", trendMetricIds, "visits");
-  const [showYandex, setShowYandex] = usePersistedChoice("analytics:trend-yandex", ["0", "1"], "0");
-  const [showGoogle, setShowGoogle] = usePersistedChoice("analytics:trend-google", ["0", "1"], "0");
-  const [showChatgpt, setShowChatgpt] = usePersistedChoice("analytics:trend-chatgpt", ["0", "1"], "0");
+  const [selectedMetric, setTrendMetric] = usePersistedChoice(`${storagePrefix}-metric`, trendMetricIds, "visits");
+  const trendMetric = visitsOnly ? "visits" : selectedMetric;
+  const [showYandex, setShowYandex] = usePersistedChoice(`${storagePrefix}-yandex`, ["0", "1"], "0");
+  const [showGoogle, setShowGoogle] = usePersistedChoice(`${storagePrefix}-google`, ["0", "1"], "0");
+  const [showChatgpt, setShowChatgpt] = usePersistedChoice(`${storagePrefix}-chatgpt`, ["0", "1"], "0");
   const daily = trendData?.daily || [];
   const enabledSources = [showYandex === "1" ? "yandex" : "", showGoogle === "1" ? "google" : "", showChatgpt === "1" ? "chatgpt" : ""].filter(Boolean);
   // Кроме смены периода график перезапрашивается и на каждом круге самообновления
@@ -425,6 +425,30 @@ function OverviewSection({ data, period, device = "all", traffic = "all", acquis
       .finally(() => { if (!controller.signal.aborted) setTrendLoading(false); });
     return () => controller.abort();
   }, [trendPeriod, device, traffic, acquisition, activity, data.generatedAt]);
+  return (
+      <section className="analytics-panel analytics-trend">
+        <div className="analytics-trend-heading">
+          <h2>{visitsOnly ? "График посещений" : "График"}</h2>
+          {!visitsOnly && <div className="analytics-range analytics-trend-tabs" aria-label="Что показывать на графике">
+            {trendMetrics.map(([id, label]) => <button key={id} type="button" className={trendMetric === id ? "active" : ""} onClick={() => setTrendMetric(id)}>{label}</button>)}
+          </div>}
+          <div className="analytics-trend-controls">
+            <TrendPeriodSelect value={trendPeriod} onChange={setTrendPeriod} />
+            {trendMetric === "visits" && <>
+              <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
+              <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
+              <label className="analytics-chart-source-toggle is-chatgpt"><input type="checkbox" checked={showChatgpt === "1"} onChange={(event) => setShowChatgpt(event.target.checked ? "1" : "0")} /><span>ChatGPT</span></label>
+            </>}
+          </div>
+        </div>
+        {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} metric={trendMetric} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
+      </section>
+  );
+}
+
+function OverviewSection({ data, period, device = "all", traffic = "all", acquisition = "all", activity = "all", updates = {} }) {
+  const summary = data.summary || {};
+  const [leadCountMode, setLeadCountMode] = usePersistedChoice("analytics:lead-count-mode", ["unique", "all"], "unique");
   const cards = [
     // В режиме «Все» считаем все записанные переходы; отсутствие действия
     // не делает посетителя роботом. Режим «С действиями» выбирается отдельно.
@@ -441,23 +465,7 @@ function OverviewSection({ data, period, device = "all", traffic = "all", acquis
         {cards.map(([label,value,note,fresh]) => <article key={label}><span>{label}</span><strong>{isValidElement(value) ? value : Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className="analytics-kpi-split-count" /> : formatNumber(value)}</strong><p>{note}</p></article>)}
         <LeadFunnelCard summary={summary} mode={leadCountMode} onModeChange={setLeadCountMode} fresh={updates.leads} traffic={traffic} acquisition={acquisition} activity={activity} />
       </section>
-      <section className="analytics-panel analytics-trend">
-        <div className="analytics-trend-heading">
-          <h2>График</h2>
-          <div className="analytics-range analytics-trend-tabs" aria-label="Что показывать на графике">
-            {trendMetrics.map(([id, label]) => <button key={id} type="button" className={trendMetric === id ? "active" : ""} onClick={() => setTrendMetric(id)}>{label}</button>)}
-          </div>
-          <div className="analytics-trend-controls">
-            <TrendPeriodSelect value={trendPeriod} onChange={setTrendPeriod} />
-            {trendMetric === "visits" && <>
-              <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
-              <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
-              <label className="analytics-chart-source-toggle is-chatgpt"><input type="checkbox" checked={showChatgpt === "1"} onChange={(event) => setShowChatgpt(event.target.checked ? "1" : "0")} /><span>ChatGPT</span></label>
-            </>}
-          </div>
-        </div>
-        {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} metric={trendMetric} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
-      </section>
+      <AnalyticsTrendPanel data={data} period={period} device={device} traffic={traffic} acquisition={acquisition} activity={activity} />
       <VisitsSection visits={data.visits || []} total={summary.visits} unread={updates.overview} />
     </>
   );
@@ -616,7 +624,6 @@ export function LeadFunnelCard({ summary = {}, mode = "unique", onModeChange, fr
     </div>
     <strong><LeadsFunnelCount opens={opens} total={total} fresh={fresh} /></strong>
     <p>{formatNumber(opens)} {pluralRu(opens, "открытие окна", "открытия окна", "открытий окна")} / {formatNumber(total)} {pluralRu(total, "заявка", "заявки", "заявок")}</p>
-    {(traffic === "without-quota" || acquisition !== "all" || activity === "actions") && <small className="analytics-traffic-note">{acquisition !== "all" ? `Открытия — ${analyticsAcquisitionKind(acquisition) === "paid" ? "платные переходы" : "бесплатные переходы"}${traffic === "without-quota" ? ", без квоты" : ""}${activity === "actions" ? ", только с действиями" : ""}, заявки — все` : `Открытия — ${[traffic === "without-quota" ? "без квоты" : "", activity === "actions" ? "только с действиями" : ""].filter(Boolean).join(", ")}, заявки — все`}</small>}
   </article>;
 }
 
@@ -644,6 +651,37 @@ function LeadCountSwitch({ value, onChange, traffic, acquisition, activity }) {
     />
     {uniqueTooltip.node}
     {allTooltip.node}
+  </>;
+}
+
+const planTrafficLabels = {
+  all:"Весь бесплатный трафик: поиск, прямые заходы, ссылки, соцсети и ChatGPT. Без рекламных меток и входов на страницы о квоте. Только посетители с подтверждёнными действиями за всю историю, все страны и устройства.",
+  search:"Только бесплатные переходы из Яндекса и Google. Без рекламных меток и входов на страницы о квоте. Только посетители с подтверждёнными действиями за всю историю, все страны и устройства. Прямые заходы, ссылки, соцсети и ChatGPT сюда не входят.",
+};
+
+function PlanTrafficSwitch({ value, onChange }) {
+  const allTooltip = useHoverTooltip(planTrafficLabels.all);
+  const searchTooltip = useHoverTooltip(planTrafficLabels.search);
+  return <>
+    <SegmentedControl options={[{value:"all",label:"Весь трафик"},{value:"search",label:"Поисковой"}]} value={value} onChange={onChange} label="Трафик для плана" className="analytics-plan-scope" getOptionProps={({value}) => {
+      const hint = value === "search" ? searchTooltip : allTooltip;
+      return {ref:hint.anchor,...hint.handlers,"aria-description":planTrafficLabels[value]};
+    }} />
+    {allTooltip.node}{searchTooltip.node}
+  </>;
+}
+
+function PlanSection({ generatedAt }) {
+  const [scope,setScope] = usePersistedChoice("analytics:plan-scope",["all","search"],"all");
+  return <AnalyticsPlanSection generatedAt={generatedAt} scope={scope} info={<PlanTrafficInfo scope={scope}/>} controls={<PlanTrafficSwitch value={scope} onChange={setScope}/>} />;
+}
+
+function PlanTrafficInfo({ scope }) {
+  const label = `${planTrafficLabels[scope]} Значения — среднее за сутки; факт — по завершённым дням.`;
+  const { anchor, handlers, node } = useHoverTooltip(label);
+  return <>
+    <button ref={anchor} type="button" className="analytics-lead-info" aria-label={label} {...handlers}><Info size={17} aria-hidden="true" /></button>
+    {node}
   </>;
 }
 
@@ -1137,6 +1175,7 @@ const analyticsPeriods = [
 // «Все / Компьютеры / Телефоны». Заявки и клиенты берутся из таблиц без устройства.
 const sections = [
   { id:"overview", label:"Обзор", icon:SquaresFour, ranged:true, devices:true },
+  { id:"plan", label:"План", icon:CalendarBlank, ranged:false },
   { id:"seo-positions", label:"SEO позиции", icon:ChartLineUp, ranged:false },
   { id:"vehicles", label:"Каталог", icon:CarProfile, ranged:true, devices:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:true },
@@ -1500,7 +1539,6 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
       <MobileAnalyticsNavigation active={active} section={section} period={period} setPeriod={setPeriod} device={device} setDevice={setDevice} traffic={traffic} setTraffic={setTraffic} acquisition={acquisition} setAcquisition={setAcquisition} activity={activity} setActivity={setActivity} updates={updates} onSection={openSection} logout={logout} />
 
       {error && <div className="analytics-error" role="alert">{error} Показан предыдущий срез. <button type="button" onClick={() => reload()}>Повторить</button></div>}
-      {(traffic === "without-quota" || acquisition !== "all" || activity === "actions") && ["vehicles", "leads", "customers"].includes(section) && <p className="analytics-traffic-note">Сохранённые заявки, аккаунты и избранное показаны полностью. Выбранные фильтры действуют на просмотры и действия на сайте.</p>}
 
       <div className="analytics-layout">
         <div className="analytics-side-rail">
@@ -1517,6 +1555,7 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
 
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} device={device} traffic={data.traffic || "all"} acquisition={data.acquisition || "all"} activity={data.activity || "all"} updates={updates} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "plan"}>{section === "plan" ? <PlanSection generatedAt={data.generatedAt} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} summary={data.summary} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={() => { reloadLeads(); reload(period, { silent:true }); }} removeLead={removeLead} period={period} /></div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>

@@ -37,19 +37,21 @@ export const feedBuildKey = (root, settings) => inputKey(root, settings, feedInp
 export function readCatalogBuildCache(file, key, { now = Date.now(), maxAge = CATALOG_CACHE_MAX_AGE, dataRevision } = {}) {
   try {
     const saved = deserialize(readFileSync(file));
-    if (saved.version !== VERSION || saved.key !== key) return {reason:'изменились правила подготовки данных'};
-    if (dataRevision && saved.dataRevision !== dataRevision) return {reason:'каталог изменился после подготовки снимка'};
+    const metadata = {version:saved.version, key:saved.key, createdAt:saved.createdAt, rateKey:saved.rateKey, dataRevision:saved.dataRevision};
+    const refused = reason => ({reason, metadata});
+    if (saved.version !== VERSION || saved.key !== key) return refused('изменились правила подготовки данных');
+    if (dataRevision && saved.dataRevision !== dataRevision) return refused('каталог изменился после подготовки снимка');
     // BY price age is anchored to the rate date, already covered by the code key.
     // A verified unchanged catalog does not expire merely because a day passed.
     if (dataRevision) maxAge = Infinity;
-    if (!Number.isFinite(saved.createdAt) || saved.createdAt > now || now-saved.createdAt >= maxAge) return {reason:'сохранённые данные старше суток'};
+    if (!Number.isFinite(saved.createdAt) || saved.createdAt > now || now-saved.createdAt >= maxAge) return refused('сохранённые данные старше суток');
     const {live,marketPrices} = saved;
     if (!live || !['models','modelChanged','modelPrices','listPages','stock','changed','collections'].every(k=>live[k] instanceof Map)
       || !Array.isArray(live.showcase) || !Array.isArray(live.carEntries)
       || !marketPrices || marketPrices.version !== 1 || !Array.isArray(marketPrices.normal) || !Array.isArray(marketPrices.refund50)) {
-      return {reason:'сохранённые данные имеют другой формат'};
+      return refused('сохранённые данные имеют другой формат');
     }
-    return {saved};
+    return {saved, metadata};
   } catch { return {reason:'сохранённых данных нет или файл повреждён'}; }
 }
 
