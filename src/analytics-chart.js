@@ -22,11 +22,13 @@ export function visitsChart(daily, period, now = new Date(), metric = "visits") 
     const views = Number(item.views) || 0;
     // «В это время» показываем только у прошедших дней: у сегодняшнего оно совпадает
     // с итогом дня, и строка в подсказке была бы пустой по смыслу.
-    const toNow = Number(metric === "views" ? item.views_to_now : item.visits_to_now);
+    const sameTimeValue = key => item.day === today || item[key] == null || !Number.isFinite(Number(item[key])) ? null : Number(item[key]);
     return {
       ...item, visits, yandex, google, chatgpt, views,
       value: metric === "views" ? views : visits,
-      valueToNow: item.day === today || !Number.isFinite(toNow) ? null : toNow,
+      valueToNow: sameTimeValue(metric === "views" ? "views_to_now" : "visits_to_now"),
+      yandexToNow: sameTimeValue("yandex_to_now"),
+      googleToNow: sameTimeValue("google_to_now"),
       x: daily.length > 1 ? index / (daily.length - 1) * 100 : 50,
       y:chartY(metric === "views" ? views : visits),
       yandexY:chartY(yandex),

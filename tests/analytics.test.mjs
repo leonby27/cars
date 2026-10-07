@@ -412,6 +412,13 @@ test("график отдаёт по каждому дню счёт к теку�
   await getAnalyticsTrend("90", { db, now:Date.parse("2026-09-12T09:30:00Z") });
   const sql = calls[0].sql;
   assert.match(sql, /AS visits_to_now/);
+  for (const source of ["yandex", "google"]) {
+    const counter = [...sql.matchAll(/count\(\*\) FILTER \(\s*WHERE ([\s\S]*?)\)::int AS (\w+)/g)].find((match) => match[2] === `${source}_to_now`)?.[1];
+    assert.ok(counter, `${source}: сравнение должно быть в том же запросе`);
+    assert.match(counter, /gap IS NULL OR gap > interval '30 minutes' OR previous_day IS DISTINCT FROM day/);
+    assert.match(counter, /second_of_day < \$3/);
+    assert.ok(counter.includes(source));
+  }
   assert.match(sql, /event_name = 'page_view' AND second_of_day < \$3\)::int AS views_to_now/);
   assert.match(sql, /second_of_day < \$3/);
   assert.match(sql, /extract\(epoch FROM \(created_at AT TIME ZONE 'Europe\/Minsk'\)::time\)/);

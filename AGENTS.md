@@ -56,6 +56,8 @@ Circle Telegram reports (owner correction, 2026-10-05): send only one result for
 
 # Prototype Instructions
 
+Analytics source hover comparison (owner request, 2026-10-07): the Yandex and Google graph-point tooltips show «В это время» alongside the full daily total, using that source's visit starts before the current Minsk time of day. Apply the existing graph filters and omit the comparison for today or missing data, while showing a genuine zero.
+
 Vehicle price breakdown (owner correction, 2026-10-04): always display complete amounts and price ranges, including currency, in the shared vehicle page/quick-view breakdown. Prices must not shrink or be ellipsized; let long descriptions on the left truncate with an ellipsis while preserving the dotted leaders and info controls.
 
 Vehicle lead form (owner correction, 2026-10-04): use the centered heading «Оставить заявку» and the same text on the submit button, without an arrow. Focus the name input on opening and keep the heading-to-description spacing compact. Ask only for name and phone; remove optional account creation and password fields. Place the submit button and legal copy directly below the inputs, inside the scrolling form contents. On mobile/touch layouts, open full-screen without outside gutters or a rounded card frame. Keep the close control available at the top: 19px bold cross, 36px circle and at least a 44px touch target. Constrain the modal to the visible viewport above the keyboard, including mobile Safari viewport shifts, and reveal the focused field without scrolling the underlying page. Respect device safe areas and preserve the legal copy.

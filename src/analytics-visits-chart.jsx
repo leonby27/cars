@@ -20,8 +20,8 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
   const labelStep = Math.max(1, Math.ceil(points.length / 6));
   // Разбивка по поисковикам есть только у заходов: просмотр наследует источник захода.
   const sourceLines = metric === "visits" ? [
-    { id:"yandex", y:"yandexY", label:"Яндекс" },
-    { id:"google", y:"googleY", label:"Google" },
+    { id:"yandex", y:"yandexY", label:"Яндекс", toNow:"yandexToNow" },
+    { id:"google", y:"googleY", label:"Google", toNow:"googleToNow" },
     { id:"chatgpt", y:"chatgptY", label:"ChatGPT" },
   ].filter((item) => sources.includes(item.id)) : [];
   return <div className="analytics-line-chart" aria-label={labels.chart}>
@@ -39,10 +39,13 @@ export function AnalyticsVisitsChart({ daily, period, now, sources = [], metric 
           <span className="analytics-chart-marker" />
           <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointLabel(point.day)}<strong>{labels.tooltip}: {point.value}</strong>{point.valueToNow === null ? null : <span className="analytics-chart-tooltip-note">В это время: {point.valueToNow}</span>}</span>
         </button>)}
-        {sourceLines.flatMap((source) => points.map((point) => <button key={`${source.id}-${point.day}`} type="button" className={`analytics-chart-point analytics-chart-source-point is-${source.id}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointLabel(point.day)}: заходов из ${source.label} — ${point[source.id]}`}>
+        {sourceLines.flatMap((source) => points.map((point) => {
+          const valueToNow = point[source.toNow] ?? null;
+          return <button key={`${source.id}-${point.day}`} type="button" className={`analytics-chart-point analytics-chart-source-point is-${source.id}`} style={{ left:`${point.x}%`, top:`${point[source.y]}%`, width: `min(24px, ${100 / Math.max(1, points.length - 1)}%)` }} aria-label={`${pointLabel(point.day)}: заходов из ${source.label} — ${point[source.id]}${valueToNow === null ? "" : `, к этому времени суток — ${valueToNow}`}`}>
           <span className="analytics-chart-marker" />
-          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointLabel(point.day)}<strong>{source.label}: {point[source.id]}</strong></span>
-        </button>))}
+          <span className="analytics-chart-tooltip" role="tooltip" data-edge={point.x < 15 ? "left" : point.x > 85 ? "right" : "center"}>{pointLabel(point.day)}<strong>{source.label}: {point[source.id]}</strong>{valueToNow === null ? null : <span className="analytics-chart-tooltip-note">В это время: {valueToNow}</span>}</span>
+        </button>;
+        }))}
       </div>
     </div>
     <div className="analytics-chart-dates">{points.filter((_, index) => index % labelStep === 0 || index === points.length - 1).map(point => <span key={point.day} style={{ left: `${point.x}%` }} data-edge={point.x === 0 ? "left" : point.x === 100 ? "right" : "center"}>{pointLabel(point.day)}</span>)}</div>

@@ -75,3 +75,24 @@ test("подсказка знает, сколько набралось к тек
   const legacy = visitsChart([{ day:"2026-09-07", visits:12 }], "7", now);
   assert.equal(legacy.points[0].valueToNow, null);
 });
+
+test("Яндекс и Google сравниваются по своим заходам к текущему часу, включая ноль", () => {
+  const { points } = visitsChart([
+    { day:"2026-09-07", visits:12, yandex:8, google:3, visits_to_now:5, yandex_to_now:"4", google_to_now:0 },
+    { day:"2026-09-08", visits:20, yandex:11, google:6, visits_to_now:20, yandex_to_now:11, google_to_now:6 },
+  ], "7", "2026-09-07T22:00:00Z");
+  assert.equal(points[0].yandexToNow, 4);
+  assert.equal(points[0].googleToNow, 0);
+  assert.equal(points[1].yandexToNow, null, "сегодня определяется по Минску");
+  assert.equal(points[1].googleToNow, null);
+});
+
+test("отсутствующие и некорректные сравнения источников не превращаются в ноль", () => {
+  for (const value of [undefined, null, "invalid", Infinity]) {
+    const { points } = visitsChart([
+      { day:"2026-09-07", visits:12, yandex:8, google:3, yandex_to_now:value, google_to_now:value },
+    ], "7", now);
+    assert.equal(points[0].yandexToNow, null);
+    assert.equal(points[0].googleToNow, null);
+  }
+});

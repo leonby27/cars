@@ -579,6 +579,12 @@ export async function getAnalyticsTrend(rangeValue, { db = pool, now = Date.now(
       )::int AS chatgpt,
       count(*) FILTER (WHERE event_name = 'page_view')::int AS views,
       count(*) FILTER (WHERE (${VISIT_STARTS}) AND second_of_day < $3)::int AS visits_to_now,
+      count(*) FILTER (
+        WHERE (${VISIT_STARTS}) AND (path ~* '(^|[?&])ysclid=' OR entry_source ~ '(^|\\.)yandex\\.') AND second_of_day < $3
+      )::int AS yandex_to_now,
+      count(*) FILTER (
+        WHERE (${VISIT_STARTS}) AND entry_source ~ '(^|\\.)google\\.' AND second_of_day < $3
+      )::int AS google_to_now,
       count(*) FILTER (WHERE event_name = 'page_view' AND second_of_day < $3)::int AS views_to_now
     FROM steps
     GROUP BY day ORDER BY day`, [from, to, secondOfDay]);

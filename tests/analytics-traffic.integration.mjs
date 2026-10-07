@@ -172,6 +172,26 @@ try {
   assert.equal(recordedAds.summary.visits_previous, recordedBenchmark.visits_previous);
   const actionTrend = await getAnalyticsTrend("7", adOptions);
   assert.equal(actionTrend.daily.find((row) => row.day === "2026-10-02").visits, actionAds.summary.visits);
+
+  // Подсказки поисковиков: считаем начала заходов, а не повторные события;
+  // текущий час — строгая граница, одна для обоих источников и всех фильтров.
+  await add("source-time-ysclid", "2026-09-30T06:00:00Z", "/catalog?ysclid=test");
+  await add("source-time-ysclid", "2026-09-30T06:05:00Z", "/cars/test", "page_view", "desktop", true, { entrySource:"www.google.com" });
+  await add("source-time-yandex", "2026-09-30T11:59:59Z", "/catalog", "page_view", "desktop", true, { entrySource:"www.yandex.by" });
+  await add("source-time-yandex", "2026-09-30T12:05:00Z", "/catalog?ysclid=repeat");
+  await add("source-time-yandex-boundary", "2026-09-30T12:00:00Z", "/catalog?ysclid=boundary");
+  await add("source-time-yandex-late", "2026-09-30T13:00:00Z", "/catalog?ysclid=late");
+  await add("source-time-yandex-quota", "2026-09-30T10:00:00Z", "/ev-quota?ysclid=quota");
+  await add("source-time-google", "2026-09-30T06:00:00Z", "/catalog", "page_view", "desktop", true, { entrySource:"www.google.com" });
+  await add("source-time-google", "2026-09-30T06:05:00Z", "/catalog", "page_view", "desktop", true, { entrySource:"www.google.com" });
+  await add("source-time-google-boundary", "2026-09-30T12:00:00Z", "/catalog", "page_view", "desktop", true, { entrySource:"www.google.com" });
+  await add("source-time-google-late", "2026-09-30T13:00:00Z", "/catalog", "page_view", "desktop", true, { entrySource:"www.google.com" });
+  await add("source-time-google-mobile", "2026-09-30T07:00:00Z", "/catalog", "page_view", "mobile", false, { entrySource:"www.google.com" });
+  const sourceTime = (await getAnalyticsTrend("7", { db, now })).daily.find((row) => row.day === "2026-09-30");
+  assert.deepEqual([sourceTime.yandex, sourceTime.yandex_to_now, sourceTime.google, sourceTime.google_to_now], [5, 3, 4, 2]);
+  const filteredSourceTime = (await getAnalyticsTrend("7", { ...options, device:"desktop", acquisition:"organic" })).daily.find((row) => row.day === "2026-09-30");
+  assert.deepEqual([filteredSourceTime.yandex, filteredSourceTime.yandex_to_now, filteredSourceTime.google, filteredSourceTime.google_to_now], [4, 2, 3, 1]);
+  console.log("Source same-time comparison verified: visit starts, Yandex click IDs/referrers, Google referrers, exact Minsk time boundary and traffic/device/activity/acquisition filters.");
   console.log("Activity filter verified: all recorded visits, strict action mode, dwell-only readers, public action scope, complete visits, source/quota/device combinations, graph, benchmark and independent saved leads.");
   console.log("Landing filter verified: all quota articles, complete visits, return visits, midnight, rolling-period boundary, devices, graph, benchmark, search and contacts.");
   console.log("Paid/free filter verified: RSYA and search advertising, yclid alone, Google ads, all = paid + free, legacy saved filter, untagged continuation, quota/device combination, long landing URL, midnight, rolling boundary, graph and benchmark.");
