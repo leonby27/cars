@@ -1536,8 +1536,9 @@ const pageEntries = [
   // ради прямой ссылки и закрыта от индексации.
   // «/faq» — не страница: посетителя приложение сразу уводит к вопросам на «О сервисе»,
   // а сервер с 26.09.2026 отвечает постоянным перебросом туда же (nginx). Отдельный
-  // текст вопросов видел только робот.
-  ...publicPages.filter((page) => (!page.post || !blogPostHidden(page.post)) && page.route !== "/faq/").map((page) => ({
+  // текст вопросов видел только робот. Юридические адреса ведут на PDF —
+  // промежуточным перенаправлениям в карте сайта тоже не место.
+  ...publicPages.filter((page) => (!page.post || !blogPostHidden(page.post)) && !["/faq/", "/privacy/", "/terms/"].includes(page.route)).map((page) => ({
     loc: routeUrl(page.route),
     lastmod: page.post ? blogLastmod(page.post) : page.blogIndex ? blogIndexLastmod : page.tool ? toolLastmod(page.tool) : null,
   })),

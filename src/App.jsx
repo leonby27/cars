@@ -23,7 +23,7 @@ import { bindPhotoIntent, preloadPhoto } from "./photo-preload.js";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BatteryHigh, BookmarkSimple, CarProfile, CaretDown, CaretRight, ChatCircleText, Check, CheckCircle, ClipboardText, Desktop, Engine, Eye, EyeSlash, GasPump, Gauge, Gear, Heart, Images, Info, InstagramLogo, Lightning, List, LinkSimple, MagnifyingGlass, MapPin, Moon, Newspaper, Palette, RoadHorizon, Rows, ShareNetwork, ShieldCheck, SlidersHorizontal, SquaresFour, SteeringWheel, Sun, TelegramLogo, TelegramOfficialLogo, ThreadsLogo, Timer, Tire, UserCircle, UsersThree, X } from "./icons.jsx";
 import { matchesYearRange, sortCars } from "./car-filters.js";
 import { latinVariants, mileageBounds, mileageLabel, parseQueryRanges } from "./search-query.js";
-import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "./engine-spec.js";
+import { FUEL_TYPES, GEARBOX_TYPES, engineAspiration, engineBounds, engineLabel, enginePower, engineVolume, engineVolumeBadge, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel, powertrainName } from "./engine-spec.js";
 import { matchesSearchText, searchTextWords, searchWordStem } from "./car-search-text.js";
 import { collectHeroAliases, isHeroExcludeWord, listSearchMatches, listSearchVariants, nameSpellings, rankSearchEntries, relatedSearchBrands, resolveBrandAndModels, rewriteQueryNames, searchNormalize, splitModelSegments, swapKeyboardLayout, translateBrandWords, translateModelWords } from "./search-dictionary.js";
 import { COLOR_LABELS, colorLabelForWord, colorValuesForLabels, matchesColorLabels } from "./colors.js";
@@ -212,7 +212,6 @@ const typeValue = (label) => (label === "Электромобили" ? "Элек
 const tabSelection = (label) => (label === DIESEL_TAB ? { type: "ДВС", fuel: "Дизель" } : label === PETROL_TAB ? { type: "ДВС", fuel: "Бензин" } : { type: typeValue(label), fuel: ANY_FUEL });
 const tabLabel = (type, fuel) => (type === "ДВС" && fuel === "Дизель" ? DIESEL_TAB : typeLabel(type));
 // Тот же тип в карточке машины: там он стоит в единственном числе и рядом с пробегом.
-const powertrainName = (value) => (value === "ДВС" ? "Бензин" : value);
 // Кузов и модель выбираются списком, поэтому их значение хранится массивом.
 // Пустой массив = «все»; строку принимаем ради старых ссылок и history.state.
 const multiValues = (value, anyLabel) => (Array.isArray(value) ? value : [value]).filter((item) => item && item !== anyLabel);
@@ -3210,7 +3209,7 @@ function HoverImagePreview(props) {
   return <ActiveHoverImagePreview {...props} />;
 }
 
-function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, badge = null }) {
+function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobileOpen, badge = null, priority = false }) {
   const images = (car.images?.length ? car.images : [car.image]).slice(0, 5);
   const narrow = useNarrowViewport();
   // Один размер превью для телефона и компьютера, общий с серверной копией.
@@ -3298,7 +3297,7 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
 
   return (
     <div className={`${className} hover-image-preview`} ref={frameRef}>
-      {!strip && <img src={imageSource(images[active], frameWidth)} alt={car.title} loading="lazy" draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />}
+      {!strip && <img src={imageSource(images[active], frameWidth)} alt={car.title} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} draggable="false" onError={(event) => retryWithFullImage(event, images[active])} />}
       {strip && (
         <div
           className="car-row-mobile-image-strip"
@@ -3324,7 +3323,8 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
                 alt={index === 0 ? car.title : ""}
                 draggable="false"
                 onError={(event) => retryWithFullImage(event, image)}
-                loading="lazy"
+                loading={priority && index === 0 ? "eager" : "lazy"}
+                fetchPriority={priority && index === 0 ? "high" : "low"}
               />
             );
             // На последнем кадре ленты видно, что снимков больше, чем поместилось:
@@ -3362,7 +3362,7 @@ function ActiveHoverImagePreview({ car, className, mobileStrip = false, onMobile
   );
 }
 
-function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey, hideNewBadge = false }) {
+function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey, hideNewBadge = false, priority = false }) {
   const currency = useCurrency();
   const price = estimateLandedCost(car);
   // Карточка целиком нажимается мышью, но кнопкой не притворяется: роль кнопки на блоке
@@ -3371,7 +3371,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey, hideN
   return (
     <article className="featured-card" data-car-id={car.id} data-feed-key={anchorKey} onClick={onClick}>
       <CardLinkOverlay car={car} open={onClick} />
-      <HoverImagePreview car={car} className="featured-image" badge={hideNewBadge ? null : <NewListingBadge car={car} />} />
+      <HoverImagePreview car={car} priority={priority} className="featured-image" badge={hideNewBadge ? null : <NewListingBadge car={car} />} />
       {toggleFavorite && (
         <button
           type="button"
@@ -3391,7 +3391,7 @@ function FeaturedCard({ car, onClick, favorite, toggleFavorite, anchorKey, hideN
             ряд) для них нет места, и там строка остаётся одним пробегом. */}
         <p>
           {number(car.mileage)} км
-          <span className="featured-card-specs-more"> · {powertrainName(car.type)} · {car.drive}</span>
+          <span className="featured-card-specs-more"> · {powertrainName(car)} · {car.drive}</span>
         </p>
         <div className="featured-price">
           <TotalPrice car={car} price={price} currency={currency} />
@@ -4723,7 +4723,7 @@ function Home({ navigate, cars, apiMode, catalogTotal, catalogUpdatedAt, favorit
   );
 }
 
-function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) {
+function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey, priority = false }) {
   const currency = useCurrency();
   const open = () => (onOpen ? onOpen(car) : navigate(carHref(car)));
   const price = estimateLandedCost(car);
@@ -4780,7 +4780,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
           <Heart size={22} weight={favorite ? "fill" : "regular"} />
         </button>
       </div>
-      <HoverImagePreview car={car} className="car-row-image" mobileStrip onMobileOpen={open} badge={<NewListingBadge car={car} />} />
+      <HoverImagePreview car={car} priority={priority} className="car-row-image" mobileStrip onMobileOpen={open} badge={<NewListingBadge car={car} />} />
       <div className="car-row-info">
         <div className="row-title">
           <div>
@@ -4802,7 +4802,7 @@ function CarRow({ car, navigate, favorite, toggleFavorite, onOpen, anchorKey }) 
           </div>
         </div>
         <p className="summary">
-          {number(car.mileage)} км · {powertrainName(car.type)} · {car.drive} привод
+          {number(car.mileage)} км · {powertrainName(car)} · {car.drive} привод
         </p>
         <div className="mini-specs" ref={miniSpecsRef}>
           {car.battery && (

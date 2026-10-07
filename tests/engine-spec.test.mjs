@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { engineBounds, engineLabel, enginePower, engineVolume, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "../src/engine-spec.js";
+import { powertrainName, schemaFuelType, engineBounds, engineLabel, enginePower, engineVolume, fuelType, gearboxType, matchesEngineBounds, matchesPowerBounds, powerBounds, powerLabel } from "../src/engine-spec.js";
 
 test("объём мотора берётся из строки источника", () => {
   assert.equal(engineVolume({ engine:"1.4T 150HP L4" }), 1.4);
@@ -75,4 +75,16 @@ test("машину без известного мотора фильтр отс�
   // Фильтр не выбран — проходят все.
   assert.equal(matchesEngineBounds(electric, null), true);
   assert.equal(matchesPowerBounds(electric, null), true);
+});
+
+
+test("подпись и Schema.org различают топливо ДВС и электричество", () => {
+  const diesel = { type:"ДВС", sourceFuelType:"Diesel", fuelType:"Бензин" };
+  assert.equal(powertrainName(diesel), "Дизель");
+  assert.equal(schemaFuelType(diesel), "Дизель");
+  assert.equal(powertrainName({ type:"ДВС", fuelType:"Дизель" }), "Дизель");
+  assert.equal(powertrainName({ type:"ДВС" }), "ДВС");
+  assert.equal(schemaFuelType({ type:"ДВС" }), undefined);
+  assert.equal(schemaFuelType({ type:"Электромобиль" }), "Electric");
+  assert.equal(powertrainName({ type:"Гибрид", sourceFuelType:"Gasoline" }), "Гибрид");
 });

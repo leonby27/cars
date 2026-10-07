@@ -134,7 +134,7 @@ export function modelStockLine(facts, { page = 1, pages = 1, first = 0, shown = 
 const POWERTRAIN_WORDS = {
   "Электромобиль": ["электромобиль", "электромобиля", "электромобилей"],
   "Гибрид": ["гибрид", "гибрида", "гибридов"],
-  "ДВС": ["бензиновая машина", "бензиновые машины", "бензиновых машин"],
+  "ДВС": ["машина с ДВС", "машины с ДВС", "машин с ДВС"],
 };
 const powertrainCount = (row) => {
   const words = POWERTRAIN_WORDS[row.type] || [row.type, row.type, row.type];
@@ -158,7 +158,7 @@ export function modelAutoText({ name, facts }) {
   const types = (facts.powertrains || []).filter((row) => row.count > 0);
   const bodies = (facts.bodyTypes || []).filter((row) => row.name && row.count > 0);
   const first = [`${name} в каталоге abcars.by — ${cars(total)}${years ? ` ${years}` : ""}.`];
-  if (types.length === 1) first.push(`Все ${types[0].type === "ДВС" ? "с бензиновым двигателем" : types[0].type === "Гибрид" ? "гибридные" : "электрические"}.`);
+  if (types.length === 1) first.push(`Все ${types[0].type === "ДВС" ? "с двигателем внутреннего сгорания" : types[0].type === "Гибрид" ? "гибридные" : "электрические"}.`);
   else if (types.length > 1) first.push(`По типу двигателя: ${types.map(powertrainCount).join(", ")}.`);
   if (bodies.length === 1) first.push(`Кузов — ${bodies[0].name.toLowerCase()}.`);
   else if (bodies.length > 1) first.push(`Кузова: ${bodies.map((row) => row.name.toLowerCase()).join(", ")}.`);

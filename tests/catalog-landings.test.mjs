@@ -2,10 +2,10 @@ import { readAppSource } from "./read-app-source.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { EXCLUDED_BRANDS, IMPORT_BRANDS, MAINSTREAM_IMPORT_BRANDS } from "../config/import-policy.mjs";
+import { EXCLUDED_BRANDS, IMPORT_BRANDS, KOREA_IMPORT_BRANDS, MAINSTREAM_IMPORT_BRANDS } from "../config/import-policy.mjs";
 import { visibleLandings } from "../server/catalog-page.mjs";
 import { landingSeoDescription, landingSeoTitle, landingSubtitle } from "../src/catalog-landings.js";
-import { CATALOG_LANDINGS, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, priceBandsForCar, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
+import { CATALOG_LANDINGS, parseModelLandingPath, modelLandingPath, brandLandingPath, catalogLandingForFilters, catalogLandingForParams, catalogLandingRedirect, catalogPlaceholderRedirect, findCatalogLanding, landingApiParams, landingFilterParams, landingsForCar, priceBandsForCar, priceBandsForLanding, relatedLandings } from "../src/catalog-landings.js";
 import { createSeoRenderer, plural } from "../server/seo-render.mjs";
 import { isEvQuotaExhausted } from "../src/ev-quota.js";
 
@@ -36,7 +36,7 @@ test("у каждого раздела свой адрес, заголовок �
   for (const landing of CATALOG_LANDINGS) {
     assert.match(landing.path, /^\/catalog\/[a-z0-9-]+$/, landing.path);
     assert.ok(landing.seoTitle.length <= 70, `${landing.path}: заголовок ${landing.seoTitle.length} символов`);
-    assert.ok(landing.seoDescription.length >= 70 && landing.seoDescription.length <= 175, `${landing.path}: описание ${landing.seoDescription.length} символов`);
+    assert.ok(landing.seoDescription.length >= 70 && landing.seoDescription.length <= 160, `${landing.path}: описание ${landing.seoDescription.length} символов`);
     assert.ok(landing.notes.length >= 1, `${landing.path}: нет текста`);
     for (const note of landing.notes) assert.ok(note.length > 80, `${landing.path}: текст слишком короткий`);
   }
@@ -251,7 +251,7 @@ test("карточка машины в приложении ведёт в сво
   const block = code.slice(start, code.indexOf('className="detail-tool-links"'));
   assert.ok(block.includes("detail-section-links"), "блок ссылок на разделы собирается не из landingsForCar");
   // С 25.09.2026 к разделам машины добавлена её ценовая полоса.
-  assert.ok(block.includes("priceBandsForCar({ type: car.type"), "в карточке нет ссылки на ценовую полосу");
+  assert.ok(block.includes("priceBandsForCar({ ...car, type: car.type"), "в карточке нет ссылки на ценовую полосу");
   // У обычной машины разделов шесть: марка, тип двигателя, кузов, два сочетания и
   // страница её страны (29.09.2026) — по полю `origin`, а без него по источнику.
   const forCar = landingsForCar({ brand: "BYD", type: "Электромобиль", bodyType: "SUV / кроссовер", source: "Che168" });
@@ -286,7 +286,7 @@ test("ссылки между разделами идут по смыслу, а 
 test("ценовая полоса машины — самая узкая подходящая, у бензина ещё и своя", () => {
   // 25.09.2026: с карточек и обзоров на полосы «до N $» не вело ни одной ссылки.
   assert.deepEqual(priceBandsForCar({ type: "Электромобиль", landedUsd: 18_400 }).map((band) => band.path), ["/catalog/under-20000"]);
-  assert.deepEqual(priceBandsForCar({ type: "ДВС", landedUsd: 22_900 }).map((band) => band.path), ["/catalog/under-25000", "/catalog/petrol-under-25000"]);
+  assert.deepEqual(priceBandsForCar({ type: "ДВС", sourceFuelType: "Gasoline", landedUsd: 22_900 }).map((band) => band.path), ["/catalog/under-25000", "/catalog/petrol-under-25000"]);
   // Ровно на границе — ещё внутри полосы.
   assert.deepEqual(priceBandsForCar({ type: "Гибрид", landedUsd: 15_000 }).map((band) => band.path), ["/catalog/under-15000"]);
   // Дороже самой широкой полосы — полос нет; без цены — тоже.
@@ -367,7 +367,7 @@ test("марка раздела написана ровно так же, как 
   // видно только по нулю машин на странице.
   // Вычеркнутые марки — законное исключение: их разделы оставлены с предложением
   // привезти под заказ (31.08.2026), и марка там написана так же, как была в базе.
-  const allowed = new Set([...IMPORT_BRANDS, ...EXCLUDED_BRANDS]);
+  const allowed = new Set([...IMPORT_BRANDS, ...KOREA_IMPORT_BRANDS, ...EXCLUDED_BRANDS]);
   const strange = CATALOG_LANDINGS.filter((landing) => landing.brand && !allowed.has(landing.brand)).map((landing) => landing.brand);
   assert.deepEqual(strange, [], `таких марок нет ни в списке ввоза, ни среди вычеркнутых: ${strange.join(", ")}`);
 });
@@ -448,12 +448,72 @@ test("с живыми цифрами заголовок раздела назы�
   const byd = findCatalogLanding("/catalog/byd");
   assert.equal(landingSeoTitle(byd, { total: 5204, priceFrom: 9950 }), "BYD из Китая и Кореи в Беларусь — 5\u00a0204 в наличии, от 9\u00a0950 $ | abcars.by");
   const description = landingSeoDescription(byd, { total: 5204, priceFrom: 9950, priceTo: 88000, yearMin: 2021, yearMax: 2025 });
-  assert.match(description, /^В наличии 5\u00a0204 авто, цены от 9\u00a0950 до 88\u00a0000 \$ с доставкой до Минска, 2021–2025 годов выпуска\./);
-  // Прежний текст — с «б/у» и Минском — остаётся после цифр.
+  assert.match(description, /BYD из Китая и Кореи/);
+  assert.match(description, /в наличии 5\u00a0204 авто/);
+  assert.match(description, /от 9\u00a0950 до 88\u00a0000 \$ с доставкой до Минска/);
+  assert.match(description, /2021–2025/);
+  // Короткое описание сохраняет «б/у», цены и направление доставки.
   assert.match(description, /б\/у/);
 });
 
 test("подзаголовок один на все разделы: «китайские и корейские» и у Audi, и у BYD", () => {
   assert.equal(landingSubtitle(findCatalogLanding("/catalog/audi")), "Китайские и корейские автомобили с пробегом — купить с доставкой в Беларусь");
   assert.match(landingSubtitle(findCatalogLanding("/catalog/byd")), /^Китайские и корейские автомобили/);
+});
+
+
+test("дизель и ДВС с неизвестным топливом не получают бензиновые ссылки", () => {
+  for (const sourceFuelType of ["Diesel", ""]) {
+    const car = { brand:"Kia", type:"ДВС", bodyType:"SUV / кроссовер", sourceFuelType, landedUsd:22_900 };
+    assert.equal(landingsForCar(car).some((landing) => landing.fuel === "Бензин"), false);
+    assert.deepEqual(priceBandsForCar(car).map((band) => band.path), ["/catalog/under-25000"]);
+  }
+  assert.equal(landingsForCar({ type:"ДВС", sourceFuelType:"Gasoline" }).some((landing) => landing.path === "/catalog/petrol"), true);
+});
+
+test("Genesis и KGM имеют обычные индексируемые маршруты марки и модели", () => {
+  for (const [name, slug, model] of [["Genesis", "genesis", "G80"], ["KGM", "kgm", "Torres"]]) {
+    assert.equal(brandLandingPath(name), `/catalog/${slug}`);
+    assert.equal(landingApiParams(findCatalogLanding(`/catalog/${slug}`)).get("brand"), name);
+    assert.equal(parseModelLandingPath(modelLandingPath(name, model)).brand, name);
+  }
+});
+
+
+test("описания разделов сохраняют живые цены и не повторяют длинный вводный текст", () => {
+  for (const landing of CATALOG_LANDINGS) {
+    const description = landingSeoDescription(landing, { total:132503, priceFrom:12345, priceTo:987654, yearMin:2000, yearMax:2026 });
+    assert.ok(description.length <= 160, `${landing.path}: ${description.length}`);
+    assert.match(description, /132[\s ]503/);
+    assert.match(description, /12[\s ]345/);
+    assert.match(description, /Минска/);
+    if (landing.brand) assert.ok(description.toLocaleLowerCase("ru-RU").includes(landing.brand.toLocaleLowerCase("ru-RU")), `${landing.path}: потеряна марка`);
+    assert.match(description, landing.kind === "origin" && landing.origin === "korea" ? /из Кореи/ : landing.kind === "origin" ? /из Китая/ : /из Китая и Кореи/);
+  }
+  assert.notEqual(landingSeoTitle(findCatalogLanding("/catalog/denza-minivan")), landingSeoTitle(findCatalogLanding("/catalog/denza")));
+  assert.match(landingSeoTitle(findCatalogLanding("/catalog/nio-wagon")), /Универсалы NIO/);
+});
+
+test("короткие описания отличают марку, страну и бюджет при одинаковых цифрах", () => {
+  const stats = { total:5204, priceFrom:9950, priceTo:88000, yearMin:2021, yearMax:2025 };
+  const paths = ["/catalog/byd", "/catalog/genesis", "/catalog/korea", "/catalog/under-20000"];
+  const descriptions = paths.map((path) => landingSeoDescription(findCatalogLanding(path), stats));
+  assert.equal(new Set(descriptions).size, paths.length);
+  assert.match(descriptions[0], /BYD/);
+  assert.match(descriptions[1], /Genesis/);
+  assert.match(descriptions[2], /из Кореи/);
+  assert.match(descriptions[3], /до 20[\s ]000 \$/);
+});
+
+test("общий каталог без названия раздела получает осмысленное описание и без цены", () => {
+  assert.match(landingSeoDescription({ seoDescription:"Длинное описание. ".repeat(20) }), /^Каталог авто/);
+  for (const priceFrom of [0, 10000]) {
+    const description = landingSeoDescription({ seoDescription:"Общий каталог" }, { total:132503, priceFrom });
+    assert.match(description, /Каталог авто из Китая и Кореи/);
+    assert.match(description, /Минска/);
+    assert.doesNotMatch(description, /undefined|null/i);
+  }
+  const { html } = render().catalogIndexPage({ cars:[], total:132503 });
+  assert.match(html, /<meta name="description" content="Каталог авто из Китая и Кореи/);
+  assert.doesNotMatch(html, /<meta name="description" content="[^"]*undefined/i);
 });

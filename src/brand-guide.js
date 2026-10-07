@@ -25,7 +25,7 @@ export const guideYears = ({ yearMin, yearMax }) => yearMin && yearMax
   ? yearMin === yearMax ? String(yearMin) : `${yearMin}–${yearMax}`
   : "Нет данных";
 export const guidePowertrains = (values = []) => values
-  .map((value) => value === "ДВС" ? "бензин" : value.toLowerCase())
+  .map((value) => value === "ДВС" ? "ДВС" : value.toLowerCase())
   .join(", ") || "не указано";
 export const guideDate = (value) => {
   if (!value) return "";

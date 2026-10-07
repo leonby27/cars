@@ -113,7 +113,7 @@ export async function renderCarPage(id) {
     modelPage,
     // Разделы машины: марка, тип, кузов и их сочетания — плюс ценовая полоса по её
     // цене до Минска (см. priceBandsForCar). Те же ссылки рисует и приложение.
-    sections: [...landingsForCar(car), ...priceBandsForCar({ type: car.type, landedUsd: estimateLandedCost(car).totalUsd })],
+    sections: [...landingsForCar(car), ...priceBandsForCar({ ...car, type: car.type, landedUsd: estimateLandedCost(car).totalUsd })],
     journal: BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [],
     appRoot,
     appRootPath: route,

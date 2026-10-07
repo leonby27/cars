@@ -1,7 +1,7 @@
 // Текст обзора byd-song-max. Разбор страницы — в src/model-pages.js.
 export default {
   intro: [
-    "Song MAX — минивэн линейки Song на семь мест: тот же турбомотор 1,5 литра, что у кроссоверов [Song](/models/byd-song) и [Song PLUS](/models/byd-song-plus), но другой кузов и больше места в салоне.",
+    "Song MAX — минивэн линейки Song на семь мест: тот же турбомотор 1,5 литра, что у кроссоверов [Song](/catalog/byd/song) и [Song PLUS](/catalog/byd/song-plus), но другой кузов и больше места в салоне.",
     "Мотор — 1,5 турбо на 160 сил, роботизированная коробка, передний привод. Все машины в наличии — 2021 года.",
   ],
   stats: [
@@ -34,7 +34,7 @@ export default {
   ],
   versions: {
     title: "Версия Song MAX в каталоге",
-    note: "Техника общая с остальной линейкой Song: [Song](/models/byd-song), [Song PLUS](/models/byd-song-plus) и [Song Pro](/models/byd-song-pro-petrol).",
+    note: "Техника общая с остальной линейкой Song: [Song](/catalog/byd/song), [Song PLUS](/catalog/byd/song-plus) и [Song Pro](/catalog/byd/song-pro).",
     columns: ["Версия", "Двигатель", "Мощность", "Коробка"],
     rows: [["Song MAX 1.5T", "1,5 л, турбо", "160 л. с.", "робот"]],
   },

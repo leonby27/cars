@@ -1,4 +1,4 @@
-import { engineVolume, gearboxType } from "./engine-spec.js";
+import { engineVolume, gearboxType, powertrainName } from "./engine-spec.js";
 import { normalizeBodyType } from "./body-types.js";
 import { translateColor } from "./colors.js";
 
@@ -23,7 +23,7 @@ const powertrainLabel = (car) => {
   if (normalized === "электромобиль") return "электро";
   const hasEngine = normalized === "гибрид" || normalized === "двс";
   // «ДВС» — как тип записан в базе; покупателю показываем привычное слово.
-  const label = normalized === "двс" ? "бензин" : normalized;
+  const label = normalized === "двс" ? (powertrainName(car) === "ДВС" ? "ДВС" : powertrainName(car).toLocaleLowerCase("ru-RU")) : normalized;
   if (!hasEngine) return label;
   const volume = engineVolume(car);
   return volume === null ? label : `${label} ${volume.toFixed(1)} л`;

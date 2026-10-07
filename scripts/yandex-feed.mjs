@@ -1,3 +1,4 @@
+import { fuelType as fuelTypeOf, powertrainName } from "../src/engine-spec.js";
 import { feedBuildKey } from "./lib/catalog-build-cache.mjs";
 import { reuseFeed } from "./lib/reuse-feed.mjs";
 // Фид каталога для Яндекса: `/feeds/yandex-cars.xml`.
@@ -99,7 +100,7 @@ const isoDate = (value) => {
 
 // Значения, которые Яндекс понимает в параметрах транспорта (справка Вебмастера).
 const FUEL = { "Электромобиль": "Электро", "Гибрид": "Гибрид" };
-const fuelOf = (powertrain, fuelType) => FUEL[powertrain] || (/дизел/i.test(String(fuelType || "")) ? "Дизель" : "Бензин");
+const fuelOf = (car) => FUEL[car.type] || fuelTypeOf(car) || null;
 const GEARBOX = { "Автомат": "Автомат", "Робот": "Робот", "Вариатор": "Вариатор", "Механика": "Механика" };
 const gearboxOf = (powertrain, gearbox) => GEARBOX[gearbox] || (powertrain === "Электромобиль" ? "Автомат" : null);
 const DRIVE = new Set(["Передний", "Задний", "Полный"]);
@@ -122,6 +123,7 @@ const { rows } = await pool.query(
      v.specifications->>'bodyType' AS body_type,
      v.specifications->>'gearbox' AS gearbox,
      v.specifications->>'fuelType' AS fuel_type,
+     l.source_payload->>'sourceFuelType' AS source_fuel_type,
      NULLIF(v.specifications->>'engineVolume','') AS engine_volume,
      NULLIF(v.specifications->>'enginePower','') AS engine_power,
      l.source_payload->>'horsepower' AS horsepower,
@@ -225,11 +227,12 @@ const carOffer = ({ row, key }) => {
   const power = Number(row.horsepower) || Number(row.engine_power) || null;
   const volume = Number(row.engine_volume) || null;
   const gearbox = gearboxOf(row.powertrain, row.gearbox);
+  const engine = { type:row.powertrain, sourceFuelType:row.source_fuel_type, fuelType:row.fuel_type };
   const params = [
     ["Конверсия", coreKeys.has(key) ? 3 : 1],
     ["Год создания", row.model_year || null],
     ["Пробег", Number(row.mileage_km) || 0],
-    ["Топливо", fuelOf(row.powertrain, row.fuel_type)],
+    ["Топливо", fuelOf(engine)],
     ["Коробка передач", gearbox],
     ["Привод", DRIVE.has(row.drivetrain) ? row.drivetrain : null],
     ["Двигатель, л.с.", power ? Math.round(power) : null],
@@ -247,7 +250,7 @@ const carOffer = ({ row, key }) => {
     categoryId: categoryOf.get(row.body_type) || 1,
     setIds: [modelSetId.get(key) || brandSetId.get(row.brand)].filter(Boolean),
     pictures: row.photos.map(photoUrl).filter(Boolean),
-    description: `${name} ${fromPhrase(originForSource(row.source))}: пробег ${number(row.mileage_km)} км, ${String(row.powertrain === "ДВС" ? "бензин" : row.powertrain || "").toLowerCase()}. Цена с доставкой до Минска ≈ ${number(priceByn)} BYN (≈ ${number(row.estimated_total_usd)} $): автомобиль, доставка, таможенные платежи и сборы. Проверка перед покупкой.`,
+    description: `${name} ${fromPhrase(originForSource(row.source))}: пробег ${number(row.mileage_km)} км, ${powertrainName(engine).toLowerCase()}. Цена с доставкой до Минска ≈ ${number(priceByn)} BYN (≈ ${number(row.estimated_total_usd)} $): автомобиль, доставка, таможенные платежи и сборы. Проверка перед покупкой.`,
     params,
   };
 };

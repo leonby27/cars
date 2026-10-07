@@ -59,7 +59,7 @@ test("omits unavailable quick facts instead of inventing values", () => {
 
 test("объём мотора идёт рядом с топливом у бензиновых и гибридов", () => {
   assert.equal(
-    buildVehicleQuickInfo({ year:2023, mileage:62300, type:"ДВС", engine:"2.0T 184HP L4", drive:"Полный" }).join(", "),
+    buildVehicleQuickInfo({ year:2023, mileage:62300, type:"ДВС", sourceFuelType:"Gasoline", engine:"2.0T 184HP L4", drive:"Полный" }).join(", "),
     "2023 г., пробег 62 300 км, бензин 2.0 л, полный привод",
   );
   assert.equal(
@@ -74,7 +74,7 @@ test("без объёма остаётся одно слово, у электр�
     buildVehicleQuickInfo({ year:2025, type:"Гибрид", engine:"Range Extender 160 Horsepower" }).join(", "),
     "2025 г., гибрид",
   );
-  assert.equal(buildVehicleQuickInfo({ type:"ДВС" }).join(", "), "бензин");
+  assert.equal(buildVehicleQuickInfo({ type:"ДВС" }).join(", "), "ДВС");
   assert.equal(
     buildVehicleQuickInfo({ year:2025, type:"Электромобиль", engine:"2.0T 184HP L4", battery:94.5 }).join(", "),
     "2025 г., электро, батарея 94,5 кВт·ч",
@@ -84,7 +84,7 @@ test("без объёма остаётся одно слово, у электр�
 test("пары «название — значение» для карточки автомобиля", async () => {
   const { buildVehicleQuickFacts } = await import("../src/vehicle-quick-info.js");
   assert.deepEqual(
-    buildVehicleQuickFacts({ year:2024, mileage:20000, type:"ДВС", engine:"2.0T 184HP L4", drive:"Передний", acceleration:8.7 }),
+    buildVehicleQuickFacts({ year:2024, mileage:20000, type:"ДВС", sourceFuelType:"Gasoline", engine:"2.0T 184HP L4", drive:"Передний", acceleration:8.7 }),
     [
       { label:"Год выпуска", value:"2024" },
       { label:"Пробег", value:"20\u00a0000 км" },
@@ -103,7 +103,7 @@ test("дополняет короткий список известными ха
   const { buildVehicleQuickFacts } = await import("../src/vehicle-quick-info.js");
   assert.deepEqual(
     buildVehicleQuickFacts({
-      year:2024, mileage:110010, type:"ДВС", engine:"3.5L", drive:"Передний",
+      year:2024, mileage:110010, type:"ДВС", sourceFuelType:"Gasoline", engine:"3.5L", drive:"Передний",
       bodyType:"Минивэн", bodyColor:"Black", transmission:"Automatic", owners:1, seats:9,
       dimensions:"5218×1998×1800",
     }),
@@ -126,7 +126,7 @@ test("дополняет короткий список известными ха
   assert.equal(full.length, 8);
   assert.equal(full.at(-1).label, "Разгон до 100 км/ч");
   assert.equal(buildVehicleQuickFacts({
-    year:2024, mileage:110010, type:"ДВС", drive:"Передний",
+    year:2024, mileage:110010, type:"ДВС", sourceFuelType:"Gasoline", drive:"Передний",
     bodyType:"Минивэн", bodyColor:"Black", transmission:"Automatic",
     seats:9, acceleration:8.4,
   }).at(-1).label, "Разгон до 100 км/ч");
@@ -134,7 +134,7 @@ test("дополняет короткий список известными ха
 
 test("короткая карточка не подменяет последний факт при загрузке полных характеристик", () => {
   const car = {
-    year:2021, mileage:18300, type:"ДВС", drive:"Передний", horsepower:149.6,
+    year:2021, mileage:18300, type:"ДВС", sourceFuelType:"Gasoline", drive:"Передний", horsepower:149.6,
     bodyType:"SUV / кроссовер", bodyColor:"White", transmission:"Automatic",
     dimensions:"4560×1860×1720", seats:5,
   };
@@ -149,4 +149,14 @@ test("короткая карточка не подменяет последни
   assert.deepEqual(detailed.at(-1), { label:"Расход топлива", value:"7,4 л" });
   assert.deepEqual(buildVehicleQuickFacts({ ...car, _summary:true, acceleration:9.3 }).at(-1), { label:"Разгон до 100 км/ч", value:"9,3 с" });
   assert.equal(buildVehicleQuickFacts({ ...car, dimensions:"нет данных" }).some(({ label }) => label === "Длина"), false);
+});
+
+
+test("дизельные Carnival и Sorento показывают реальное топливо, неизвестное не угадывается", () => {
+  for (const model of ["Carnival", "Sorento"]) {
+    const car = { brand:"Kia", model, type:"ДВС", sourceFuelType:"Diesel", engine:"2.2L" };
+    assert.equal(buildVehicleQuickInfo(car).join(", "), "дизель 2.2 л");
+    assert.deepEqual(buildVehicleQuickFacts(car).find(({ label }) => label === "Двигатель"), { label:"Двигатель", value:"Дизель 2.2 л" });
+  }
+  assert.equal(buildVehicleQuickInfo({ type:"ДВС", engine:"2.2L" }).join(", "), "ДВС 2.2 л");
 });

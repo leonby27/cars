@@ -1,3 +1,4 @@
+import { schemaFuelType } from "../src/engine-spec.js";
 import { LEGAL_DOCUMENTS } from "../src/legal-documents.js";
 import { COMPANY } from "../src/company-data.js";
 import { vehiclePhotoHref as photoHref } from "../src/photo-source.js";
@@ -551,7 +552,7 @@ export function createSeoRenderer({ shell, siteUrl, allowIndexing = false }) {
       // Китайское имя той же модели: помогает поисковику связать карточку с запросом,
       // в котором машину назвали по-китайски.
       alternateName: (car.origin === "korea" ? null : chineseModelName(car.brand, car.model))?.zh || undefined,
-      fuelType: car.type || undefined,
+      fuelType: schemaFuelType(car),
       driveWheelConfiguration: car.drive || undefined,
       numberOfPreviousOwners: Number(car.owners) || undefined,
       ...vehicleDetails(car),

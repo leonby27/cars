@@ -2377,12 +2377,12 @@ function Catalog({ navigate, favorites, toggleFavorite, cars, apiMode, saveSearc
           {displayed.length ? (
             view === "grid" ? (
               <div className="featured-grid catalog-card-grid mobile-cards-grid">
-                {displayed.map((car) => (
-                  <FeaturedCard key={car.id} car={car} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
+                {displayed.map((car, index) => (
+                  <FeaturedCard key={car.id} car={car} priority={index === 0} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onClick={() => openCar(car)} />
                 ))}
               </div>
             ) : (
-              displayed.map((car) => <CarRow key={car.id} car={car} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpen={openCar} />)
+              displayed.map((car, index) => <CarRow key={car.id} car={car} priority={index === 0} navigate={navigate} favorite={favorites.has(car.id)} toggleFavorite={toggleFavorite} onOpen={openCar} />)
             )
           ) : remoteLoading ? (
             view === "grid" ? (
@@ -3739,7 +3739,7 @@ function PriceBreakdownRow({ label, value, description }) {
     <div className="facts-row">
       <b>{label}</b>
       <strong>{withApprox(value)}</strong>
-      <span className="price-info" tabIndex={0} aria-label={`Подробнее: ${label}`}>
+      <span className="price-info" role="img" tabIndex={0} aria-label={`Подробнее: ${label}`}>
         <Info size={16} />
         <ActionTooltip text={description} />
       </span>
@@ -3753,7 +3753,7 @@ function PriceLabel({ label, description }) {
   return (
     <div className="price-label">
       <b>{label}</b>
-      <span className="price-info" tabIndex={0} aria-label={`Подробнее: ${label}`}>
+      <span className="price-info" role="img" tabIndex={0} aria-label={`Подробнее: ${label}`}>
         <Info size={16} />
         <ActionTooltip text={description} />
       </span>
@@ -4246,7 +4246,7 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
   const sections = [
     ...(modelPath ? [{ path: modelPath, name: `Все ${car.brand} ${car.model} в наличии` }] : []),
     ...landingsForCar(car),
-    ...priceBandsForCar({ type: car.type, landedUsd: price.totalUsd }),
+    ...priceBandsForCar({ ...car, type: car.type, landedUsd: price.totalUsd }),
   ].filter((landing) => landing.path !== currentAppPath());
   // Материалы журнала про модель этой машины: сравнения с соседями по классу.
   const journal = BLOG_ENABLED && modelPage ? blogPostsForModel(modelPage.path) : [];
@@ -4419,20 +4419,20 @@ function VehicleDetailBody({ car, navigate, favorite, toggleFavorite, breadcrumb
             <section className="vehicle-quick-info" aria-label="Основная информация об автомобиле">
               <div className={`vehicle-quick-facts${quickInfoColumns.length > 1 ? " two-columns" : ""}`}>
                 {quickInfoColumns.map((column, index) => (
-                  <dl className="vehicle-quick-facts-column" key={index}>
+                  <div className="vehicle-quick-facts-column" key={index}>
                     {column.map(({ label, value }) => {
                       const Icon = VEHICLE_QUICK_FACT_ICONS[label] || Info;
                       return (
                         <div key={label} className="vehicle-quick-fact">
                           <Icon size={20} weight="duotone" aria-hidden="true" />
-                          <div className="vehicle-quick-fact-copy">
+                          <dl className="vehicle-quick-fact-copy">
                             <dt title={label}>{label}</dt>
                             <dd title={value}>{value}</dd>
-                          </div>
+                          </dl>
                         </div>
                       );
                     })}
-                  </dl>
+                  </div>
                 ))}
               </div>
               {car.source === "Guazi" && <VehicleConditionSummary car={car} />}
@@ -4729,7 +4729,7 @@ function OrderDraft({ car, navigate }) {
         <div>
           <h2>{car.title}</h2>
           <p>
-            {number(car.mileage)} км · {powertrainName(car.type)} · {car.drive} привод
+            {number(car.mileage)} км · {powertrainName(car)} · {car.drive} привод
           </p>
         </div>
         <div className="order-source-price">
@@ -6830,7 +6830,7 @@ const MARKET_POWERTRAIN_OPTIONS = Object.freeze([
   { key:"all", label:"Все типы" },
   { key:"Электромобиль", label:"Электро" },
   { key:"Гибрид", label:"Гибрид" },
-  { key:"ДВС", label:"Бензин" },
+  { key:"ДВС", label:"ДВС" },
 ]);
 
 const MARKET_PRICE_RANGE_VALUES = Object.freeze([
@@ -7904,7 +7904,7 @@ function BlogTopCard({ car, rank = null, post = null, list = [], navigate, onOpe
               повторялась десять раз и занимала место, а объяснение нужно один раз. */}
           <span className="blog-top-price">
             <ApproxSign /> {bynify(money(estimateLandedCost(car).totalUsd, currency))}
-            <span className="price-info" tabIndex={0} aria-label="Из чего складывается цена">
+            <span className="price-info" role="img" tabIndex={0} aria-label="Из чего складывается цена">
               <Info size={16} />
               <ActionTooltip text="Итог в Минске: выкуп машины, доставка, таможня и оформление. Предварительный расчёт по открытым тарифам." />
             </span>

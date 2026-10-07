@@ -1,7 +1,7 @@
 // Текст обзора changan-uni-z. Разбор страницы — в src/model-pages.js.
 export default {
   intro: [
-    "Самый новый в линейке рядом с [UNI-K](/models/changan-uni-k), [UNI-T](/models/changan-uni-t) и [UNI-V](/models/changan-uni-v): все машины в каталоге 2025 года.",
+    "Самый новый в линейке рядом с [UNI-K](/catalog/changan/uni-k), [UNI-T](/catalog/changan/uni-t) и [UNI-V](/catalog/changan/uni-v): все машины в каталоге 2025 года.",
     "Турбомотор 1,5 литра в двух настройках мощности — 188 и 192 силы, роботизированная коробка, передний привод.",
   ],
   stats: [

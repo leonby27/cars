@@ -16,7 +16,7 @@ export const FUEL_TYPES = ["Бензин", "Дизель"];
  * там всё сказано типом машины.
  */
 export const fuelType = (car) => {
-  const text = String(car?.sourceFuelType ?? "").toLocaleLowerCase("ru-RU");
+  const text = String(car?.sourceFuelType || car?.fuelType || "").toLocaleLowerCase("ru-RU");
   if (!text) return "";
   // Русские слова наравне с английскими: с 31.08.2026 карточки приходят с русской
   // версии источника, где написано «Бензин», «Дизель», «Бензин+48V мягкая
@@ -26,6 +26,16 @@ export const fuelType = (car) => {
   if (text.includes("gasoline") || text.includes("petrol") || text.includes("бензин")) return "Бензин";
   return "";
 };
+
+/** Подпись двигателя без предположений о топливе ДВС. */
+export const powertrainName = (car) => {
+  const type = String(car?.type ?? "").trim();
+  return type === "ДВС" ? fuelType(car) || type : type;
+};
+
+/** Schema.org ожидает топливо, а не внутреннюю классификацию «ДВС». */
+export const schemaFuelType = (car) =>
+  car?.type === "Электромобиль" ? "Electric" : fuelType(car) || undefined;
 
 const engineText = (car) => String(car?.engine ?? "").toUpperCase();
 

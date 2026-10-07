@@ -1,7 +1,7 @@
 // Текст обзора byd-song. Разбор страницы — в src/model-pages.js.
 export default {
   intro: [
-    "Базовая модель линейки, от которой пошли [Song PLUS](/models/byd-song-plus), [Song Pro](/models/byd-song-pro-petrol) и [Song MAX](/models/byd-song-max): тот же турбомотор 1,5 литра.",
+    "Базовая модель линейки, от которой пошли [Song PLUS](/catalog/byd/song-plus), [Song Pro](/catalog/byd/song-pro) и [Song MAX](/catalog/byd/song-max): тот же турбомотор 1,5 литра.",
     "Роботизированная коробка или, у части машин, механика. Привод передний. Все машины в наличии — 2020–2021 годов.",
   ],
   stats: [

@@ -205,7 +205,8 @@ button {
 }
 .wordmark-image {
   display: block;
-  width: auto;
+  aspect-ratio: 480 / 100;
+  width: calc(var(--wordmark-height) * 4.8);
   height: var(--wordmark-height);
 }
 .wordmark-image-dark {
@@ -6660,6 +6661,7 @@ html[data-theme="dark"] #root .load-more {
   color: var(--ink);
 }
 .vehicle-quick-fact-copy {
+  margin: 0;
   min-width: 0;
 }
 .vehicle-quick-fact :is(dt, dd) {

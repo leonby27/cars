@@ -67,13 +67,13 @@ const fixtureCars = [
   },
 ];
 
-async function build(env = {}) {
+async function build(env = {}, cars = fixtureCars) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "seo-build-"));
   const clientDir = path.join(dir, "client");
   await mkdir(clientDir, { recursive: true });
   await writeFile(path.join(clientDir, "index.html"), shell);
   const catalogPath = path.join(dir, "cars.json");
-  await writeFile(catalogPath, JSON.stringify({ generatedAt: "2026-08-18T19:18:05.086Z", cars: fixtureCars }));
+  await writeFile(catalogPath, JSON.stringify({ generatedAt: "2026-08-18T19:18:05.086Z", cars }));
   await run(process.execPath, [script], {
     env: { ...process.env, SEO_OUTPUT_DIR: clientDir, SEO_CATALOG: catalogPath, SITE_URL: "https://abcars.by", SEO_ALLOW_INDEXING: "", SEO_VEHICLE_PAGES: "", SEO_SITEMAP_TOKEN: "testtoken", ...env },
   });
@@ -90,6 +90,21 @@ async function build(env = {}) {
 const sitemapToken = "testtoken";
 const sitemapIndex = `sitemap-${sitemapToken}.xml`;
 const sitemapCars = `sitemap-${sitemapToken}-cars.xml`;
+
+test("корейские Genesis/KGM с достаточным наличием попадают в sitemap без статических файлов каталога", async () => {
+  const korean = [["Genesis", "G80"], ["KGM", "Torres"]].flatMap(([brand, model], index) =>
+    Array.from({ length:3 }, (_, offset) => ({
+      ...fixtureCars[0], id:`encar-${4400001 + index * 3 + offset}`, source:"Encar", origin:"korea", brand, model,
+      type:"ДВС", sourceFuelType:"Gasoline", engine:"2.0L", usdPrice:15000,
+    })));
+  const { read, missing } = await build({ SEO_ALLOW_INDEXING:"1", SEO_VEHICLE_PAGES:"1" }, [...fixtureCars, ...korean]);
+  const pages = await read(`sitemap-${sitemapToken}-pages.xml`);
+  for (const [brand, model] of [["genesis", "g80"], ["kgm", "torres"]]) {
+    assert.ok(pages.includes(`<loc>https://abcars.by/catalog/${brand}</loc>`));
+    assert.ok(pages.includes(`<loc>https://abcars.by/catalog/${brand}/${model}</loc>`));
+    await missing(`catalog/${brand}/index.html`);
+  }
+});
 
 test("удалённые страницы отсутствуют вместе со ссылками и картой сайта", async () => {
   const { read, missing } = await build({ SEO_ALLOW_INDEXING: "1" });
@@ -441,6 +456,7 @@ test("адреса не оканчиваются косой чертой ни в
     // Внутренние ссылки ведут туда же, куда указывает первоисточник.
     assert.doesNotMatch(html, /<a href="\/[^"]+\/"/, `${name}: внутренняя ссылка с чертой`);
   }
+  assert.doesNotMatch(pagesXml, /<loc>https:\/\/abcars\.by\/(?:privacy|terms)<\/loc>/, "перенаправления на PDF не должны попадать в sitemap");
   for (const [name, xml] of [["страницы", pagesXml], ["машины", carsXml]]) {
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
     assert.ok(locs.length, `карта «${name}» не должна быть пустой`);

@@ -1,3 +1,4 @@
+import { fuelType } from "./engine-spec.js";
 import { isEvQuotaExhausted } from "./ev-quota.js";
 import { modelSlug } from "./model-slug.js";
 import { fromPhrase, originFromParam, originForSource, originOf, siteAdjective, siteAdjectiveCapital, siteFromPhrase, siteMarketplacesPhrase, siteWording, ORIGINS } from "./origin.js";
@@ -448,6 +449,12 @@ const CATALOG_LANDINGS_SOURCE = ([
   brand("great-wall", "Great Wall", [
     "Great Wall — концерн, которому принадлежат Haval, ORA и Tank. Под собственным именем выпускает прежде всего пикапы: Wingle и Poer, рабочие машины с рамой и бензиновыми или дизельными моторами.",
     `Пикап растамаживается по тем же правилам, что и легковая машина, но при большом объёме мотора сумма выходит заметной. ${DUTY_ICE}`,
+  ]),
+  brand("genesis", "Genesis", [
+    "Сравнивайте объявления Genesis по году выпуска, пробегу, двигателю и комплектации. В карточке каждой машины указаны характеристики продавца и предварительная стоимость до Минска.",
+  ]),
+  brand("kgm", "KGM", [
+    "Сравнивайте объявления KGM по году выпуска, пробегу, двигателю и комплектации. В карточке каждой машины указаны характеристики продавца и предварительная стоимость до Минска.",
   ]),
   brand("hyundai", "Hyundai", [
     "В Китае Hyundai работает вместе с Beijing Automotive. Линейка местная: седаны Elantra и Lafesta, кроссоверы ix35 и Tucson. Часть моделей выпускалась только для китайского рынка и в Европе не продавалась.",
@@ -1526,7 +1533,7 @@ const CATALOG_LANDINGS_SOURCE = ([
   brandBody("nio-wagon", "NIO", "Универсал", {
     name: "Универсалы NIO",
     h1: "NIO ET5 Touring из Китая и Кореи с доставкой в Беларусь",
-    seoTitle: "NIO ET5T из Китая и Кореи — купить с пробегом | abcars.by",
+    seoTitle: "Универсалы NIO из Китая и Кореи — купить с пробегом | abcars.by",
     seoDescription: "Электрический универсал NIO ET5T (ET5 Touring) с пробегом из Китая и Кореи: батарея, запас хода и цена до Минска.",
     notes: [
       "ET5T — универсал на базе седана ET5: тот же запас хода и та же техника, но с большим багажником и панорамной крышей. Электрических универсалов на рынке единицы, и это самый доступный из них.",
@@ -1536,7 +1543,7 @@ const CATALOG_LANDINGS_SOURCE = ([
   brandBody("denza-minivan", "Denza", "Минивэн", {
     name: "Минивэны Denza",
     h1: "Минивэны Denza D9 б/у из Китая и Кореи с доставкой в Беларусь",
-    seoTitle: "Denza D9 из Китая и Кореи — купить с пробегом | abcars.by",
+    seoTitle: "Минивэны Denza из Китая и Кореи — купить с пробегом | abcars.by",
     seoDescription: "Denza D9 с пробегом из Китая и Кореи: семиместный минивэн, гибрид с розеткой и электрическая версия, цена до Минска.",
     notes: [
       "D9 — самый известный премиальный минивэн китайского рынка: техника BYD, семь мест, отдельные кресла во втором ряду. Большая часть объявлений — гибрид с розеткой, электрических версий заметно меньше.",
@@ -1697,7 +1704,7 @@ const FROM_ANY_ORIGIN = new RegExp(`\\s+из\\s+(${Object.values(ORIGINS).map((o
 
 const landingSubject = (landing) => {
   if (landing.kind === "price") return String(landing.name).replace(/^Автомобили/, "Авто").replace(/^Бензиновые(?! авто)/, "Бензиновые авто");
-  const head = String(landing.sourceSeoTitle || landing.seoTitle || landing.name).split(" | ")[0].split(" — ")[0];
+  const head = String(landing.sourceSeoTitle || landing.seoTitle || landing.name || "").split(" | ")[0].split(" — ")[0];
   const subject = head
     .replace(/^Купить\s+/i, "")
     .replace(/\s+(б\/у|с пробегом)(?=\s|$)/gi, "")
@@ -1766,21 +1773,37 @@ export const landingSeoTitle = (landing, stats = null) => {
 };
 
 /**
- * Описание раздела: сначала живые цифры (число, вилка цен до Минска, годы), потом
- * прежний текст — в нём остаются «б/у», «с пробегом» и Минск.
+ * Короткое описание сохраняет предмет раздела и страны даже с живыми цифрами.
+ * Сначала убираем общий текст, затем годы и верхнюю цену, но не марку или бюджет.
  */
 export const landingSeoDescription = (landing, stats = null) => {
   const base = landing.sourceSeoDescription || landing.seoDescription || "";
   const total = Number(stats?.total) || 0;
-  if (!total) return base;
+  if (!total) {
+    if (base.length <= 160) return base;
+    const from = landing.kind === "origin" ? fromPhrase(landing.origin) : siteFromPhrase();
+    return `${landingSubject(landing) || "Каталог авто"} с пробегом ${from}: характеристики и ориентировочная цена с доставкой до Минска.`;
+  }
   const from = Number(stats?.priceFrom) || 0;
   const to = Number(stats?.priceTo) || 0;
   const prices = from && to && to > from ? `цены от ${formatCount(from)} до ${formatCount(to)} $ с доставкой до Минска` : from ? `цены от ${formatCount(from)} $ с доставкой до Минска` : "";
   const yearMin = Number(stats?.yearMin) || 0;
   const yearMax = Number(stats?.yearMax) || 0;
   const years = yearMin && yearMax ? (yearMin === yearMax ? `${yearMin} года выпуска` : `${yearMin}–${yearMax} годов выпуска`) : "";
-  const lead = [`В наличии ${formatCount(total)} авто`, prices, years].filter(Boolean).join(", ");
-  return `${lead}. ${base}`.trim();
+  const origin = landing.kind === "origin" ? fromPhrase(landing.origin) : siteFromPhrase();
+  let subject = (landingSubject(landing) || "Каталог авто").replace(ADJECTIVE_HEAD(), "");
+  if (landing.brand && !subject.toLocaleLowerCase("ru-RU").includes(landing.brand.toLocaleLowerCase("ru-RU"))) subject = `${landing.brand} ${subject}`;
+  const heading = `${subject.charAt(0).toUpperCase()}${subject.slice(1)} ${origin}`;
+  const count = `в наличии ${formatCount(total)} авто б/у`;
+  const describe = (parts) => `${heading}: ${parts.filter(Boolean).join(", ")}.`;
+  const shortest = describe([count, from ? `от ${formatCount(from)} $ с доставкой до Минска` : "доставка до Минска"]);
+  const variants = [
+    `${describe([count, prices || "доставка до Минска", years])} ${base}`.trim(),
+    describe([count, prices || "доставка до Минска", years]),
+    describe([count, prices || "доставка до Минска"]),
+    shortest,
+  ];
+  return variants.find((description) => description.length <= 160) || shortest;
 };
 
 /** Заголовок страницы без «б/у» и «с пробегом»: они в подзаголовке и в тексте. */
@@ -1799,7 +1822,7 @@ const withSeo = (landing) => {
     lead: wording(landing.lead),
     h1: wording(cleanHeading(landing.h1)),
   };
-  return { ...prepared, seoTitle: landingSeoTitle(prepared) };
+  return { ...prepared, seoTitle: landingSeoTitle(prepared), seoDescription: landingSeoDescription(prepared) };
 };
 
 export const CATALOG_LANDINGS = Object.freeze(CATALOG_LANDINGS_SOURCE.map(withSeo));
@@ -1994,6 +2017,7 @@ export const landingsForCar = (car) => {
     // когда не известно ни то ни другое (страница модели без машин), страну не угадываем.
     if (landing.origin && (!(car.origin || car.source) || landing.origin !== (car.origin || originForSource(car.source)))) return false;
     if (landing.powertrain && landing.powertrain !== car.type) return false;
+    if (landing.fuel && landing.fuel !== fuelType(car)) return false;
     if (landing.bodyType && landing.bodyType !== car.bodyType) return false;
     // Ценовые полосы пропускаем: итоговая цена считается отдельно, и тянуть расчёт
     // в этот справочник незачем.
@@ -2009,14 +2033,14 @@ export const landingsForCar = (car) => {
  * карточки и обзора: до 25.09.2026 на полосу «до 20 000 $» с шести ключевых страниц
  * вела одна ссылка, и полосы держались только на общем каталоге.
  */
-export const priceBandsForCar = ({ type = null, landedUsd = null } = {}) => {
+export const priceBandsForCar = ({ type = null, landedUsd = null, ...car } = {}) => {
   const price = Number(landedUsd);
   if (!Number.isFinite(price) || price <= 0) return [];
   const bands = CATALOG_LANDINGS
     .filter((landing) => landing.kind === "price" && landing.landedMax >= price)
     .sort((left, right) => left.landedMax - right.landedMax);
   const general = bands.find((band) => !band.powertrain) || null;
-  const own = type ? bands.find((band) => band.powertrain === type) || null : null;
+  const own = type ? bands.find((band) => band.powertrain === type && (!band.fuel || band.fuel === fuelType(car))) || null : null;
   return [general, own].filter(Boolean);
 };
 
@@ -2027,7 +2051,7 @@ export const priceBandsForCar = ({ type = null, landedUsd = null } = {}) => {
 export const priceBandsForLanding = (landing) => {
   if (!landing) return [];
   return CATALOG_LANDINGS.filter((band) =>
-    band.kind === "price" && band.path !== landing.path && (!band.powertrain || band.powertrain === landing.powertrain));
+    band.kind === "price" && band.path !== landing.path && (!band.powertrain || (band.powertrain === landing.powertrain && (!band.fuel || band.fuel === landing.fuel))));
 };
 
 /**

@@ -4,7 +4,7 @@ import { brandCatalogGuide } from "../server/repository.mjs";
 import { pool } from "../server/db.mjs";
 import { createSeoRenderer } from "../server/seo-render.mjs";
 import { CATALOG_LANDINGS, brandLandingPath, findCatalogLanding } from "../src/catalog-landings.js";
-import { isBrandGuide, isBrandGuideLanding } from "../src/brand-guide.js";
+import { guidePowertrains, isBrandGuide, isBrandGuideLanding } from "../src/brand-guide.js";
 import { landingFaq } from "../src/landing-faq.js";
 import { siteFromPhrase } from "../src/origin.js";
 
@@ -173,4 +173,8 @@ test("сводка марки не встаёт на разделы «марка
   const faq = landingFaq(audiSuv, { total: 1250, guide: audiGuide });
   assert.match(faq[0].a, /1[\s  ]250/);
   assert.doesNotMatch(JSON.stringify(faq), /3[\s  ]219/);
+});
+
+test("сводка двигателя без сведений о топливе не называет ДВС бензином", () => {
+  assert.equal(guidePowertrains(["ДВС", "Гибрид"]), "ДВС, гибрид");
 });
