@@ -20,6 +20,8 @@ import { claimGuestAvailabilityLeads, createCustomerOrder, deleteCustomerOrder, 
 import { createCustomerSearch, deleteCustomerSearch, listCustomerSearches, normalizeSearchFilters } from "./searches.mjs";
 import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyticsToken, deleteAnalyticsLead, deviceKindFromHeaders, devicePlatformFromHeaders, fromAnalyticsPage, fromOwnPage, getAnalyticsDashboard, getAnalyticsLeads, getAnalyticsTrend, getAnalyticsUpdates, hasAnalyticsSession, hasRecentSiteRequest, isBotAgent, isDatacenterAddress, noteSiteRequest, recordAnalyticsEvent, resetAnalyticsData, verifyAnalyticsPassword, visitorCountry } from "./analytics.mjs";
 import { getAnalyticsPlan } from "./analytics-plan.mjs";
+import { getAnalyticsLeadSources } from "./analytics.mjs";
+import { normalizeLeadAttribution } from "../src/lead-attribution.js";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
@@ -242,6 +244,10 @@ export async function handleApiRequest(request, response) {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
       return json(response, 200, await getAnalyticsPlan());
     }
+    if (request.method === "GET" && url.pathname === "/api/analytics/lead-sources") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      return json(response, 200, await getAnalyticsLeadSources(url.searchParams.get("period"), url.searchParams.get("mode")));
+    }
     if (request.method === "GET" && url.pathname === "/api/analytics/leads") {
       if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
       return json(response, 200, await getAnalyticsLeads());
@@ -391,7 +397,7 @@ export async function handleApiRequest(request, response) {
       const body = await readJson(request);
       const listingId = String(body.listingId || "").trim();
       if (!listingId || listingId.length > 200) return json(response, 400, { error:"invalid_listing_id" });
-      const result = await createCustomerOrder(request, listingId);
+      const result = await createCustomerOrder(request, listingId, normalizeLeadAttribution(body.attribution));
       if (result.error === "unauthorized") return json(response, 401, result);
       if (result.error) return json(response, 404, result);
       return json(response, 201, result);
@@ -405,6 +411,7 @@ export async function handleApiRequest(request, response) {
         contactPhone:String(body.contactPhone || ""),
         contactMethods:Array.isArray(body.contactMethods) ? body.contactMethods : [],
         consent:body.consent === true,
+        attribution:normalizeLeadAttribution(body.attribution),
       });
       if (result.error === "unauthorized") return json(response, 401, result);
       if (result.error === "order_not_found") return json(response, 404, result);
@@ -632,7 +639,7 @@ export async function handleApiRequest(request, response) {
       if (contact.length > 200) return json(response, 400, { error:"contact_too_long" });
       // С какого устройства оставили заявку — для раздела «Заявки». Определяет сервер по
       // заголовкам, присланное браузером в теле перезаписывается.
-      calculation = { ...calculation, device:deviceKindFromHeaders(request.headers) || null, platform:devicePlatformFromHeaders(request.headers) || null };
+      calculation = { ...calculation, device:deviceKindFromHeaders(request.headers) || null, platform:devicePlatformFromHeaders(request.headers) || null, attribution:normalizeLeadAttribution(body.attribution) };
       const draft = await createOrderDraft({ listingId:body.listingId || null, name:name || null, contact, calculation });
       return json(response, 201, draft);
     }

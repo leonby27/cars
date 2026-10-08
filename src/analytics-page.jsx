@@ -6,7 +6,7 @@ import { SegmentedControl } from "./segmented-control.jsx";
 import { vehiclePhotoHref } from "./photo-source.js";
 import { Fragment, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarBlank, CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, Info, InstagramLogo, MagnifyingGlass, SignOut, SquaresFour, Trash, Tray, UsersThree } from "./icons.jsx";
+import { CalendarBlank, CarProfile, ChartLineUp, ChatCircleText, Desktop, DeviceMobile, Info, InstagramLogo, MagnifyingGlass, SignOut, SlidersHorizontal, SquaresFour, Trash, Tray, UsersThree, X } from "./icons.jsx";
 import { hasYandexClickId, withoutYandexClickId } from "./analytics.js";
 import { formatVisitDate } from "./analytics-format.js";
 import { analyticsNoCountHref } from "./analytics-links.js";
@@ -16,6 +16,7 @@ import { filterLeadsByPeriod, leadPeriodNote } from "./analytics-lead-period.js"
 import { socialGeneration } from "./social-generations.js";
 import { carFrame, headlineSize, KINDS, resolvePlace, socialThemeQuery, socialTiles, tileHeadline } from "./social-themes.js";
 import { buildSeoPositionRows } from "./seo-keywords.js";
+import { bindModalViewport } from "./modal-viewport.js";
 
 // В базе объявление хранится с приставкой источника («che168-59355862»), а адрес
 // карточки на сайте — только с номером. Ссылки этого раздела ведут на сайт, поэтому
@@ -339,7 +340,7 @@ function AnalyticsSplitCount({ total = 0, fresh = 0, className = "" }) {
 // вечеру не показывала утренние числа.
 const ANALYTICS_REFRESH_MS = 60_000;
 
-const trendMetrics = [["visits", "Посещения"], ["views", "Просмотры страниц"]];
+const trendMetrics = [["visits", "Посещения"], ["views", "Просмотры"]];
 const trendMetricIds = trendMetrics.map(([id]) => id);
 
 const visitsNote = (summary, period, days) => {
@@ -428,18 +429,18 @@ function AnalyticsTrendPanel({ data, period, device = "all", traffic = "all", ac
   return (
       <section className="analytics-panel analytics-trend">
         <div className="analytics-trend-heading">
-          <h2>{visitsOnly ? "График посещений" : "График"}</h2>
+          <div className="analytics-trend-title">
+            <h2>{visitsOnly ? "График посещений" : "График"}</h2>
+            <TrendPeriodSelect value={trendPeriod} onChange={setTrendPeriod} />
+          </div>
           {!visitsOnly && <div className="analytics-range analytics-trend-tabs" aria-label="Что показывать на графике">
             {trendMetrics.map(([id, label]) => <button key={id} type="button" className={trendMetric === id ? "active" : ""} onClick={() => setTrendMetric(id)}>{label}</button>)}
           </div>}
-          <div className="analytics-trend-controls">
-            <TrendPeriodSelect value={trendPeriod} onChange={setTrendPeriod} />
-            {trendMetric === "visits" && <>
+          {trendMetric === "visits" && <div className="analytics-trend-controls">
               <label className="analytics-chart-source-toggle is-yandex"><input type="checkbox" checked={showYandex === "1"} onChange={(event) => setShowYandex(event.target.checked ? "1" : "0")} /><span>Яндекс</span></label>
               <label className="analytics-chart-source-toggle is-google"><input type="checkbox" checked={showGoogle === "1"} onChange={(event) => setShowGoogle(event.target.checked ? "1" : "0")} /><span>Google</span></label>
               <label className="analytics-chart-source-toggle is-chatgpt"><input type="checkbox" checked={showChatgpt === "1"} onChange={(event) => setShowChatgpt(event.target.checked ? "1" : "0")} /><span>ChatGPT</span></label>
-            </>}
-          </div>
+          </div>}
         </div>
         {trendLoading ? <p className="analytics-empty">Загружаем график…</p> : trendError && !daily.length ? <p className="analytics-empty">{trendError}</p> : daily.length ? <div key={`${trendData.period}-${trendData.generatedAt}`} className="analytics-chart-swap"><AnalyticsVisitsChart daily={daily} period={period} now={trendData.generatedAt || data.generatedAt} sources={enabledSources} metric={trendMetric} /></div> : <p className="analytics-empty">За выбранный период событий ещё нет.</p>}
       </section>
@@ -463,7 +464,7 @@ function OverviewSection({ data, period, device = "all", traffic = "all", acquis
     <>
       <section className="analytics-kpis analytics-overview-kpis" aria-label="Ключевые метрики">
         {cards.map(([label,value,note,fresh]) => <article key={label}><span>{label}</span><strong>{isValidElement(value) ? value : Number(fresh) ? <AnalyticsSplitCount total={value} fresh={fresh} className="analytics-kpi-split-count" /> : formatNumber(value)}</strong><p>{note}</p></article>)}
-        <LeadFunnelCard summary={summary} mode={leadCountMode} onModeChange={setLeadCountMode} fresh={updates.leads} traffic={traffic} acquisition={acquisition} activity={activity} />
+        <LeadFunnelCard summary={summary} period={period} mode={leadCountMode} onModeChange={setLeadCountMode} fresh={updates.leads} traffic={traffic} acquisition={acquisition} activity={activity} />
       </section>
       <AnalyticsTrendPanel data={data} period={period} device={device} traffic={traffic} acquisition={acquisition} activity={activity} />
       <VisitsSection visits={data.visits || []} total={summary.visits} unread={updates.overview} />
@@ -612,7 +613,9 @@ function useHoverTooltip(label) {
   return { anchor, handlers, node };
 }
 
-export function LeadFunnelCard({ summary = {}, mode = "unique", onModeChange, fresh = 0, traffic = "all", acquisition = "all", activity = "all" }) {
+export function LeadFunnelCard({ summary = {}, period = "today", mode = "unique", onModeChange, fresh = 0, traffic = "all", acquisition = "all", activity = "all" }) {
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const sourceTriggerRef = useRef(null);
   const withRepeats = mode === "all";
   // Открытия учитывают выбранное устройство; сохранённые заявки — все устройства.
   const opens = Number(withRepeats ? summary.availability_modal_open_events : summary.availability_modal_opens) || 0;
@@ -622,9 +625,95 @@ export function LeadFunnelCard({ summary = {}, mode = "unique", onModeChange, fr
       <span className="analytics-lead-heading">Заявки</span>
       <LeadCountSwitch value={mode} onChange={onModeChange} traffic={traffic} acquisition={acquisition} activity={activity} />
     </div>
-    <strong><LeadsFunnelCount opens={opens} total={total} fresh={fresh} /></strong>
+    <strong><button ref={sourceTriggerRef} className="analytics-lead-sources-trigger" type="button" aria-label="Показать, откуда пришли заявки" aria-haspopup="dialog" onClick={() => setSourcesOpen(true)}><LeadsFunnelCount opens={opens} total={total} fresh={fresh} /></button></strong>
     <p>{formatNumber(opens)} {pluralRu(opens, "открытие окна", "открытия окна", "открытий окна")} / {formatNumber(total)} {pluralRu(total, "заявка", "заявки", "заявок")}</p>
+    {sourcesOpen && <LeadSourcesModal period={period} mode={mode} returnFocusRef={sourceTriggerRef} onClose={() => setSourcesOpen(false)} />}
   </article>;
+}
+
+function LeadSourcesModal({ period, mode, returnFocusRef, onClose }) {
+  const [sourceReport, setSourceReport] = useState(null);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const backdropRef = useRef(null);
+  const dialogRef = useRef(null);
+  const scrollerRef = useRef(null);
+  const closeRef = useRef(null);
+  const closeAction = useRef(onClose);
+  closeAction.current = onClose;
+  const titleId = useId();
+  useEffect(() => {
+    const controller = new AbortController();
+    setSourceReport(null);
+    setError("");
+    fetch(`/api/analytics/lead-sources?period=${encodeURIComponent(period)}&mode=${encodeURIComponent(mode)}`, { credentials:"same-origin", cache:"no-store", signal:controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(response.status === 401 ? "Войдите в аналитику заново." : "Не удалось загрузить источники заявок.");
+        const payload = await response.json();
+        if (!controller.signal.aborted) setSourceReport(payload);
+      })
+      .catch((error) => { if (!controller.signal.aborted) setError(error.message || "Не удалось загрузить источники заявок."); });
+    return () => controller.abort();
+  }, [period, mode, attempt]);
+  useEffect(() => {
+    const previousFocus = returnFocusRef.current || document.activeElement;
+    const root = document.getElementById("root");
+    const wasInert = root?.inert;
+    const bodyOverflow = document.body.style.overflow;
+    const rootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    if (root) root.inert = true;
+    closeRef.current?.focus({ preventScroll:true });
+    const keydown = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); closeAction.current(); }
+      if (event.key !== "Tab") return;
+      const targets = [...dialogRef.current.querySelectorAll('button, a[href], summary, [tabindex="0"]')].filter((node) => node.getClientRects().length);
+      const first = targets[0]; const last = targets.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    window.addEventListener("keydown", keydown);
+    const releaseViewport = bindModalViewport(backdropRef.current, scrollerRef.current);
+    return () => {
+      releaseViewport();
+      window.removeEventListener("keydown", keydown);
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = rootOverflow;
+      if (root) root.inert = wasInert;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll:true });
+    };
+  }, []);
+  return createPortal(<div ref={backdropRef} className="analytics-lead-sources-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section ref={dialogRef} className="analytics-lead-sources-modal" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <header><div><h2 id={titleId}>Откуда пришли заявки</h2><p>{leadPeriodNote(period)} · {mode === "all" ? "С повторами" : "Без повторов"}</p></div><button ref={closeRef} type="button" className="analytics-lead-sources-close" aria-label="Закрыть подробности заявок" onClick={onClose}><X size={20} aria-hidden="true" /></button></header>
+      <div ref={scrollerRef} className="analytics-lead-sources-content" aria-busy={!sourceReport && !error}>
+        {!sourceReport && !error && <div className="analytics-lead-sources-loading" role="status" aria-label="Загрузка источников"><span className="app-loader-spinner" aria-hidden="true" /></div>}
+        {error && <div role="alert" className="analytics-error">{error}<button type="button" onClick={() => setAttempt((value) => value + 1)}>Повторить</button></div>}
+        {sourceReport && <>
+          <p className="analytics-lead-sources-note">{mode === "all" ? "Показаны все заявки за период, включая повторные." : "Каждый человек учтён один раз, по источнику его первой заявки за период."} Заявки учитываются по всем источникам и устройствам.</p>
+          {!sourceReport.total ? <p className="analytics-empty">За выбранный период заявок пока нет.</p> : <>
+            <div className="analytics-lead-source-groups">{sourceReport.groups.map((group) => <div key={group.source || "unknown"}>{group.source ? <VisitSource visit={{ source:group.source }} /> : <span>Источник не записан</span>}<b>{formatNumber(group.count)}</b></div>)}</div>
+            <div className="analytics-lead-source-list">{sourceReport.leads.map((lead) => <details key={lead.id}>
+              <summary><span>{lead.attribution ? <VisitSource visit={{ source:lead.attribution.source, landingPath:lead.attribution.landingPath }} /> : "Источник не записан"}</span><time dateTime={lead.createdAt}>{formatLeadDate(lead.createdAt)}</time></summary>
+              <dl><div><dt>Заявка</dt><dd>{lead.kind === "custom_search" ? "Индивидуальный подбор" : "На автомобиль"} · {lead.origin === "account" ? "Личный кабинет" : "Форма сайта"}</dd></div>
+                {lead.attribution ? <>
+                  <LeadSourcePath label="Страница входа" path={lead.attribution.landingPath} />
+                  {lead.attribution.submittedPath && <LeadSourcePath label="Страница заявки" path={lead.attribution.submittedPath} />}
+                  {[...new URL(lead.attribution.landingPath, "https://abcars.invalid").searchParams].filter(([key]) => /^utm_(source|medium|campaign|content|term)$/i.test(key)).map(([key, value], index) => <div key={`${key}-${index}`}><dt>{key}</dt><dd>{value || "—"}</dd></div>)}
+                </> : <div><dt>Источник перехода</dt><dd>Не был записан при отправке этой заявки.</dd></div>}
+              </dl>
+            </details>)}</div>
+          </>}
+        </>}
+      </div>
+    </section>
+  </div>, document.body);
+}
+
+function LeadSourcePath({ label, path }) {
+  const visible = withoutYandexClickId(path);
+  return <div><dt>{label}</dt><dd><a href={analyticsNoCountHref(visible)} target="_blank" rel="nofollow noopener noreferrer">{visible === "/" ? "Главная" : visible}</a></dd></div>;
 }
 
 const leadCountingLabel = (withRepeats, traffic = "all", acquisition = "all", activity = "all") => (withRepeats
@@ -793,6 +882,23 @@ function VisitRow({ visit, number, unread }) {
   </tr>;
 }
 
+export function VisitCard({ visit, number, unread }) {
+  const landingPath = withoutYandexClickId(visit.landingPath || "/");
+  return <article className="analytics-visit-card">
+    <div className="analytics-visit-card-heading">
+      <span className={`analytics-visit-number${unread ? " is-unread" : ""}`} aria-label={`Заход ${number}`}>№{number}</span>
+      <VisitSource visit={visit} />
+      <time dateTime={visit.createdAt}>{formatVisitDate(visit.createdAt)}</time>
+    </div>
+    <dl className="analytics-visit-card-details">
+      <div className="analytics-visit-card-landing"><dt className="visually-hidden">Страница входа</dt><dd><a href={analyticsNoCountHref(landingPath)} target="_blank" rel="nofollow noopener noreferrer" title={landingPath === "/" ? "Главная" : landingPath}><span dir="ltr">{landingPath === "/" ? "Главная" : landingPath}</span></a></dd></div>
+      <div><dt className="visually-hidden">Устройство</dt><dd><VisitDevice device={visit.device} platform={visit.platform} /></dd></div>
+      <div><dt className="visually-hidden">Страна</dt><dd><VisitCountry country={visit.country} /></dd></div>
+      <div className="analytics-visit-card-views"><dt className="visually-hidden">Просмотров</dt><dd><span>Просмотров:</span> <strong>{formatNumber(visit.pageViews)}</strong></dd></div>
+    </dl>
+  </article>;
+}
+
 const NAMED_SOURCES = ["paid", "yandex", "google", "chatgpt", "threads", "instagram", "telegram", "returning"];
 const BUCKET_LABELS = { paid:"Реклама", returning:"Вернулись", rest:"Остальное" };
 
@@ -808,6 +914,14 @@ export const visitBucket = (visit) => {
 
 export function VisitsSection({ visits, total, unread }) {
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const viewport = window.matchMedia("(max-width:620px)");
+    const update = () => setMobile(viewport.matches);
+    update();
+    viewport.addEventListener("change", update);
+    return () => viewport.removeEventListener("change", update);
+  }, []);
   // Свежие строки идут первыми, но номер — место захода во всей хронологии:
   // самый старый начинается с 1, каждый следующий получает номер больше.
   const newestNumber = Math.max(visits.length, Number(total) || 0);
@@ -862,8 +976,10 @@ export function VisitsSection({ visits, total, unread }) {
           <QuotaSplit visits={filteredVisits.map(({ visit }) => visit)} />
         </div>
       </div>
-      <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Страна</th><th>Просмотров</th><th>Дата</th></tr></thead>
-        <tbody>{filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="7">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</td></tr>}</tbody></table></div>
+      {mobile ? <div className="analytics-visit-cards">
+        {filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitCard key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <p className="analytics-empty">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</p>}
+      </div> : <div className="analytics-table-wrap analytics-visits-table"><table><thead><tr><th>Номер</th><th>Источник</th><th>Тип</th><th>Страница входа</th><th>Страна</th><th>Просмотров</th><th>Дата</th></tr></thead>
+        <tbody>{filteredVisits.length ? filteredVisits.map(({ visit, index }) => <VisitRow key={`${visit.createdAt}-${visit.landingPath}-${index}`} visit={visit} number={newestNumber - index} unread={index < Number(unread || 0)} />) : <tr><td colSpan="7">{sourceFilter === "all" ? "За выбранный период заходов пока нет." : "За выбранный период таких заходов нет."}</td></tr>}</tbody></table></div>}
     </section>
   );
 }
@@ -1263,9 +1379,30 @@ function AnalyticsFilterSelect({ value, onChange, options, label, className = ""
 
 function MobileAnalyticsNavigation({ active, section, period, setPeriod, device, setDevice, traffic, setTraffic, acquisition, setAcquisition, activity, setActivity, updates, onSection, logout }) {
   const [open, setOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
+  const filtersRef = useRef(null);
+  const filtersTriggerRef = useRef(null);
+  const filtersId = useId();
+  const filtersTitleId = useId();
   const ActiveIcon = active.icon;
+  useEffect(() => {
+    setFiltersOpen(false);
+  }, [section]);
+  useEffect(() => {
+    if (!filtersOpen) return undefined;
+    filtersRef.current?.querySelector('.analytics-mobile-filters-panel button')?.focus();
+    const closeOutside = (event) => {
+      if (!filtersRef.current?.contains(event.target)) setFiltersOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [filtersOpen]);
+  const closeFilters = () => {
+    setFiltersOpen(false);
+    requestAnimationFrame(() => filtersTriggerRef.current?.focus());
+  };
   useEffect(() => {
     if (!open) return undefined;
     const closeOutside = (event) => {
@@ -1308,10 +1445,26 @@ function MobileAnalyticsNavigation({ active, section, period, setPeriod, device,
       </div>}
     </div>
     {active.ranged && <AnalyticsPeriodSelect value={period} onChange={setPeriod} />}
-    {active.devices && <AnalyticsAcquisitionSwitch value={acquisition} onChange={setAcquisition} />}
-    {active.devices && <AnalyticsActivitySelect value={activity} onChange={setActivity} />}
-    {active.devices && <AnalyticsTrafficSwitch value={traffic} onChange={setTraffic} />}
-    {active.devices && <AnalyticsDeviceSwitch value={device} onChange={setDevice} />}
+    {active.devices && <div className={`analytics-mobile-filters${filtersOpen ? " open" : ""}`} ref={filtersRef} onKeyDown={(event) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        closeFilters();
+      }
+    }} onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setFiltersOpen(false);
+    }}>
+      <button ref={filtersTriggerRef} className="analytics-mobile-filters-trigger" type="button" aria-label="Фильтры аналитики" title="Фильтры аналитики" aria-haspopup="dialog" aria-controls={filtersId} aria-expanded={filtersOpen} onClick={() => {
+        setOpen(false);
+        setFiltersOpen((value) => !value);
+      }}><SlidersHorizontal size={21} aria-hidden="true" /></button>
+      {filtersOpen && <div id={filtersId} className="analytics-mobile-filters-panel" role="dialog" aria-labelledby={filtersTitleId}>
+        <div className="analytics-mobile-filters-heading"><strong id={filtersTitleId}>Фильтры</strong><button type="button" aria-label="Закрыть фильтры" onClick={closeFilters}><X size={18} aria-hidden="true" /></button></div>
+        <div className="analytics-mobile-filter-field"><span>Источник трафика</span><AnalyticsAcquisitionSwitch value={acquisition} onChange={setAcquisition} /></div>
+        <div className="analytics-mobile-filter-field"><span>Активность посетителей</span><AnalyticsActivitySelect value={activity} onChange={setActivity} /></div>
+        <div className="analytics-mobile-filter-field"><span>Трафик по странице входа</span><AnalyticsTrafficSwitch value={traffic} onChange={setTraffic} /></div>
+        <div className="analytics-mobile-filter-field"><span>Устройства</span><AnalyticsDeviceSwitch value={device} onChange={setDevice} /></div>
+      </div>}
+    </div>}
   </div>;
 }
 
@@ -1741,6 +1894,6 @@ export function AnalyticsPage() {
   };
   if (authenticated === false) return <Login onSuccess={enterAnalytics} />;
   if (error && !data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Аналитика недоступна</h1><p>{error}</p><button className="primary" type="button" onClick={load}>Повторить</button></section></main>;
-  if (!data) return <main className="analytics-login page-width"><section className="analytics-login-card"><h1>Загружаем аналитику…</h1></section></main>;
+  if (!data) return <main className="app-loader" role="status" aria-label="Загрузка аналитики" aria-busy="true"><div className="app-loader-spinner" aria-hidden="true" /></main>;
   return <Dashboard data={data} period={period} setPeriod={selectPeriod} device={device} setDevice={selectDevice} traffic={traffic} setTraffic={selectTraffic} acquisition={acquisition} setAcquisition={selectAcquisition} activity={activity} setActivity={selectActivity} loading={loading} error={error} reload={load} logout={logout} leads={leads} leadsLoading={leadsLoading} leadsError={leadsError} leadsUnavailable={leadsUnavailable} reloadLeads={loadLeads} removeLead={removeLead} />;
 }

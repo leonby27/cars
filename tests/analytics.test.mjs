@@ -194,17 +194,17 @@ test("у раскрытого баннера есть отступ между з
   assert.match(styles, /\.analytics-collapse-trigger \+ \.analytics-figures \{ margin-top:16px; \}/);
 });
 
-test("на мобильном контролы графика и заходов стоят отдельной строкой", async () => {
+test("на мобильном период рядом с заголовком графика, чекбоксы слева отдельной строкой", async () => {
   const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
-  assert.match(styles, /\.analytics-trend-heading h2 \{ width:100%;[^}]*\}/);
-  assert.match(styles, /\.analytics-trend-controls \{ width:100%;[^}]*flex-wrap:nowrap;[^}]*gap:14px;[^}]*\}/);
-  assert.match(styles, /\.analytics-trend-period \{ margin-right:auto; \}/);
+  assert.match(styles, /\.analytics-trend-title \{ width:100%;[^}]*justify-content:space-between;[^}]*\}/);
+  assert.match(styles, /\.analytics-trend-controls \{ width:100%;[^}]*flex-wrap:wrap;[^}]*justify-content:flex-start;[^}]*gap:14px;[^}]*\}/);
+  assert.match(styles, /\.analytics-trend-period \{ margin-right:0; \}/);
   assert.match(styles, /\.analytics-visits-heading \{[^}]*flex-direction:column;[^}]*\}/);
   assert.match(styles, /\.analytics-visits-toolbar \{ width:100%; \}/);
   assert.match(styles, /\.analytics-visits-filter-count \{ margin-left:auto; \}/);
 });
 
-test("мобильная навигация использует два кастомных селекта и хранит служебные действия в меню", async () => {
+test("мобильная навигация использует селекты и кнопку фильтров в одной строке", async () => {
   const source = await readFile(new URL("../src/analytics-page.jsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../src/analytics.css", import.meta.url), "utf8");
   assert.match(source, /className="analytics-mobile-navigation"/);
@@ -217,7 +217,8 @@ test("мобильная навигация использует два каст
   assert.doesNotMatch(source, /sectionTotals|totals\[item\.id\]/);
   assert.match(source, /className=\{`analytics-navigation-fresh\$\{item\.id === "leads" \? " is-leads" : ""\}`\}/);
   assert.match(styles, /\.analytics-actions, \.analytics-side-rail \{ display:none; \}/);
-  assert.match(styles, /\.analytics-mobile-navigation \{[^}]*display:flex;[^}]*justify-content:space-between/);
+  assert.match(source, /className="analytics-mobile-filters-trigger"[^>]*aria-label="Фильтры аналитики"/);
+  assert.match(styles, /\.analytics-mobile-navigation \{[^}]*display:flex;[^}]*flex-wrap:nowrap/);
 });
 
 test("счётчики отделяют просмотренное от нового", async () => {
@@ -231,7 +232,7 @@ test("счётчики отделяют просмотренное от ново
   // «Регистрации» в обзоре заменены «Заявками» (28.09.2026), «+N» у них красный.
   // С 29.09.2026 карточка — воронка «открытий окна / заявок»: слева открытия окна по
   // кнопке «Узнать точную цену и наличие» (событие availability_click), справа заявки.
-  assert.match(source, /<LeadFunnelCard summary=\{summary\} mode=\{leadCountMode\} onModeChange=\{setLeadCountMode\} fresh=\{updates\.leads\} traffic=\{traffic\} acquisition=\{acquisition\} activity=\{activity\} \/>/);
+  assert.match(source, /<LeadFunnelCard summary=\{summary\} period=\{period\} mode=\{leadCountMode\} onModeChange=\{setLeadCountMode\} fresh=\{updates\.leads\} traffic=\{traffic\} acquisition=\{acquisition\} activity=\{activity\} \/>/);
   assert.match(source, /открытие окна", "открытия окна", "открытий окна"/);
   assert.match(server, /event_name='availability_click' AND \$\{LIVE_VISITOR\}\)::int AS availability_modal_opens/);
   assert.doesNotMatch(source, /\["Регистрации"/);
@@ -1024,7 +1025,7 @@ test("у заявки видно, с какого устройства её ос
   const orders = await readFile(new URL("../server/orders.mjs", import.meta.url), "utf8");
   // Новые заявки: устройство определяет сервер по заголовкам и кладёт в саму заявку.
   assert.match(handler, /calculation = \{ \.\.\.calculation, device:deviceKindFromHeaders\(request\.headers\)/);
-  assert.match(orders, /INSERT INTO customer_orders \(customer_id,listing_id,device,platform\)/);
+  assert.match(orders, /INSERT INTO customer_orders \(customer_id,listing_id,device,platform,lead_attribution\)/);
   // Старые — по нажатию кнопки заявки на той же машине рядом по времени.
   assert.match(server, /leadDeviceGuess\("d\.listing_id", "d\.created_at"\)/);
   assert.match(server, /e\.event_name='availability_request_click'/);

@@ -2,6 +2,7 @@ import { pool } from "./db.mjs";
 import { getSessionAccount } from "./auth.mjs";
 import { notifyLead } from "./lead-notify.mjs";
 import { deviceKindFromHeaders, devicePlatformFromHeaders } from "./analytics.mjs";
+import { normalizeLeadAttribution } from "../src/lead-attribution.js";
 
 const orderSelect = `SELECT o.id,o.listing_id,o.availability_status,o.availability_comment,o.availability_requested_at,o.availability_confirmed_at,
   o.contact_name,o.contact_phone,o.contact_methods,o.contact_saved_at,o.contact_consent_at,
@@ -70,18 +71,18 @@ export async function listCustomerOrders(request) {
   return { orders:result.rows.map(rowToCustomerOrder) };
 }
 
-export async function createCustomerOrder(request, listingId) {
+export async function createCustomerOrder(request, listingId, attribution = null) {
   const account = await getSessionAccount(request);
   if (!account) return { error:"unauthorized" };
   const listing = await pool.query("SELECT 1 FROM catalog_listings WHERE id=$1 AND status='active'", [listingId]);
   if (!listing.rowCount) return { error:"listing_not_found" };
   // Устройство заявки — для раздела «Заявки»; у уже заведённой машины не меняем.
   const result = await pool.query(
-    `INSERT INTO customer_orders (customer_id,listing_id,device,platform) VALUES ($1,$2,$3,$4)
+    `INSERT INTO customer_orders (customer_id,listing_id,device,platform,lead_attribution) VALUES ($1,$2,$3,$4,$5)
      ON CONFLICT (customer_id,listing_id) DO UPDATE SET updated_at=now(),
        device=COALESCE(customer_orders.device,EXCLUDED.device),platform=COALESCE(customer_orders.platform,EXCLUDED.platform)
      RETURNING id`,
-    [account.id,listingId,deviceKindFromHeaders(request.headers) || null,devicePlatformFromHeaders(request.headers) || null],
+    [account.id,listingId,deviceKindFromHeaders(request.headers) || null,devicePlatformFromHeaders(request.headers) || null,normalizeLeadAttribution(attribution)],
   );
   return { order:await getOrder(account.id, result.rows[0].id) };
 }
@@ -100,7 +101,7 @@ export async function claimGuestAvailabilityLeads(customerId, phone) {
   const result = await pool.query(
     `WITH guest AS (
         SELECT d.id,d.listing_id,d.customer_name,d.contact,d.created_at,
-          nullif(d.calculation->>'device','') AS device,nullif(d.calculation->>'platform','') AS platform
+          nullif(d.calculation->>'device','') AS device,nullif(d.calculation->>'platform','') AS platform,d.calculation->'attribution' AS lead_attribution
         FROM order_drafts d
         JOIN catalog_listings l ON l.id=d.listing_id
         WHERE d.calculation->>'requestType'='availability_check'
@@ -110,13 +111,13 @@ export async function claimGuestAvailabilityLeads(customerId, phone) {
         SELECT DISTINCT ON (listing_id) * FROM guest ORDER BY listing_id, created_at DESC
       ), claimed AS (
         INSERT INTO customer_orders (customer_id,listing_id,availability_status,availability_requested_at,
-          contact_name,contact_phone,contact_methods,contact_saved_at,contact_consent_at,created_at,updated_at,device,platform)
+          contact_name,contact_phone,contact_methods,contact_saved_at,contact_consent_at,created_at,updated_at,device,platform,lead_attribution)
         SELECT $1,listing_id,'requested',created_at,
           CASE WHEN char_length(customer_name) BETWEEN 2 AND 80 THEN customer_name END,
-          contact,ARRAY['phone'],created_at,created_at,created_at,now(),device,platform
+          contact,ARRAY['phone'],created_at,created_at,created_at,now(),device,platform,lead_attribution
         FROM latest
         ON CONFLICT (customer_id,listing_id) DO UPDATE
-          SET availability_status='requested',availability_requested_at=EXCLUDED.availability_requested_at,updated_at=now()
+          SET availability_status='requested',availability_requested_at=EXCLUDED.availability_requested_at,lead_attribution=EXCLUDED.lead_attribution,updated_at=now()
           WHERE customer_orders.availability_status='decision'
         RETURNING listing_id
       )
@@ -171,10 +172,10 @@ export async function updateCustomerOrder(request, orderId, action, values = {})
     if (comment.length > 600) return { error:"invalid_availability_comment" };
     const result = await pool.query(
       `UPDATE customer_orders
-        SET availability_status='requested',availability_comment=$3,availability_requested_at=now(),updated_at=now()
+        SET availability_status='requested',availability_comment=$3,availability_requested_at=now(),lead_attribution=coalesce($4,lead_attribution),updated_at=now()
         WHERE id=$1 AND customer_id=$2 AND availability_status='decision'
         RETURNING id`,
-      [orderId,account.id,comment || null],
+      [orderId,account.id,comment || null,normalizeLeadAttribution(values.attribution)],
     );
     if (!result.rowCount) {
       const existing = await getOrder(account.id, orderId);

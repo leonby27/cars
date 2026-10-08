@@ -63,7 +63,7 @@ import { BLOG_INDEX, blogApiParams, blogCatalogHref, blogDuelRows, blogDuelSpecR
 import { loadBlogText, loadedBlogText } from "./blog-text-load.js";
 import { embeddedApiValue } from "./boot-api.js";
 import { FAQ_GROUPS } from "./purchase-info.js";
-import { trackEvent, trackYandexGoal } from "./analytics.js";
+import { leadAttribution, trackEvent, trackYandexGoal } from "./analytics.js";
 import { missingFavoriteIsExpired } from "./favorite-cars.js";
 import { listingNumber } from "./listing-id.js";
 import { ANY_ACCEL, ANY_BATTERY, ANY_BODY_TYPE, ANY_COLOR, ANY_CONDITION, ANY_COUNTRY, ANY_ENGINE, ANY_FUEL, ANY_GEARBOX, ANY_MILEAGE, ANY_MODEL, ANY_OWNERS, ANY_POWER, ANY_PRICE_MAX, ANY_PRICE_MIN, ANY_RANGE, ANY_TIRE, ANY_YEAR_MAX, ANY_YEAR_MIN, ActionTooltip, AppLink, ApproxSign, AuthContext, AvailabilityContext, BlogCollectionCard, BlogCoverImage, BlogShareMenu, BrandMark, CarRow, CardSkeleton, CatalogFactsContext, ConsentField, CurrencySwitch, DecreePricingButton, EMPTY_AVAILABILITY, EMPTY_CATALOG_FACTS, EMPTY_CATALOG_META, EMPTY_ORDERED_LISTINGS, EXTERNAL_LINK_REL, EvQuotaButton, ExternalLink, FeaturedCard, FilterSheet, HomeFaqList, HoverImagePreview, IMAGE_ORIGINAL, IMAGE_WIDTH_CARD, NARROW_VIEWPORT, NotFound, OrderedListingsContext, POWERTRAIN_TABS, PasswordField, ScrollToTopButton, SegmentedControl, SelectField, SetOrderedListingsContext, SiteLogo, SoldVehiclePhoto, TotalPrice, VehicleSearch, ViewToggle, appendEngineRange, appendExclusions, appendMileageRange, appendMulti, appendPowerRange, appendPriceRange, appendYearRange, authMessages, batteryFloor, bootCatalogMeta, brandModelsCache, bynify, carHref, carOrigin, catalogFiltersFromParams, catalogMetaQuery, catalogUpdatedDate, catalogViewKey, clampPriceMax, clampYearMax, conditionGrades, countryKey, countryOptionsFor, createLocalOrder, currentAppPath, displayValue, emptyExclusions, exclusionValues, fetchCarsJson, filterNumber, formatDayAgo, hasExclusions, hasPriceRange, hasYearRange, heroCatalogHref, imageSource, itemsMatchingQuery, loadStaticCar, localAvailability, matchesAdvancedFilters, matchesExclusions, matchesMileageRange, matchesMulti, matchesPriceRange, matchesYears, matchingCatalogReturn, money, multiValues, normalizeImportedCar, normalizeLocalPhone, normalizeSavedFilters, number, parseHeroSearchOnce, patchHistoryState, pendingOrderKey, pluralRu, powertrainName, randomShuffleSeed, readCatalogView, readLocalOrders, renderInlineText, replaceHistoryEntry, requestCatalogMeta, retryWithFullImage, sameListing, sanitizePhoneInput, savedSearchCatalogHref, savedSearchKey, skeletonCards, startOfDayMs, storeLocalOrders, tabLabel, tabSelection, trackAvailabilityRequest, translateCity, typeValue, uniqueSorted, updateLocalOrder, useArticlePhotos, useCollectionCover, useCurrency, useDuelSides, useMediaQuery, useNarrowViewport, useQuotaPricing, useSetCurrency, useVehicleQuickView, withApprox } from "./App.jsx";
@@ -8736,7 +8736,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
         }
         const pendingListingId = window.localStorage.getItem(pendingOrderKey);
         if (pendingListingId) {
-          const createResponse = await fetch("/api/account/orders", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ listingId:pendingListingId }) });
+          const createResponse = await fetch("/api/account/orders", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ listingId:pendingListingId, attribution:leadAttribution() }) });
           if (!createResponse.ok) throw new Error("order_create_failed");
           window.localStorage.removeItem(pendingOrderKey);
         }
@@ -8779,7 +8779,7 @@ function CustomerOrdersPanel({ user, cars, apiMode, favorites, toggleFavorite, a
       if (localMode) {
         updated = updateLocalOrder(user.id, current.id, action, values).order;
       } else {
-        const response = await fetch(`/api/account/orders/${current.id}`, { method:"PATCH", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ action, ...values }) });
+        const response = await fetch(`/api/account/orders/${current.id}`, { method:"PATCH", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ action, ...values, attribution:action === "request_availability_check" ? leadAttribution() : undefined }) });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "order_update_failed");
         updated = payload.order;

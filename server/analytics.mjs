@@ -5,6 +5,7 @@ import { analyticsAcquisition, analyticsAcquisitionKind } from "../src/analytics
 import { pool } from "./db.mjs";
 import { readCookie } from "./auth.mjs";
 import { countLeadPeople } from "./analytics-lead-people.mjs";
+import { leadSourceReport } from "../src/lead-attribution.js";
 import { analyticsTrafficKind, analyticsTrafficSource } from "./analytics-traffic.mjs";
 
 export const ANALYTICS_EVENTS = new Set([
@@ -645,19 +646,30 @@ export async function getVisitsBenchmark(rangeValue, { db = pool, now = Date.now
 
 // Полная выборка без лимита карточек CRM: один человек может оставить заявки
 // на несколько машин и подбор. Для заказа используем постоянный телефон аккаунта.
-export async function getAnalyticsLeadPeople(from, to, { db = pool } = {}) {
+export async function getAnalyticsLeadRows(from, to, { db = pool } = {}) {
   const result = await db.query(`SELECT 'draft-' || d.id AS id, NULL AS customer_id,
-      d.contact AS phone,
+      d.contact AS phone, d.created_at, d.calculation->'attribution' AS attribution, 'site' AS origin,
       CASE WHEN d.calculation->>'requestType' = 'catalog_search' THEN 'custom_search' ELSE 'car' END AS kind
     FROM order_drafts d
     WHERE d.created_at >= $1 AND d.created_at < $2 AND ${notStaffContact("d.contact")}
     UNION ALL
     SELECT 'order-' || o.id AS id, o.customer_id,
-      coalesce(nullif(a.phone,''), o.contact_phone) AS phone, 'car' AS kind
+      coalesce(nullif(a.phone,''), o.contact_phone) AS phone,
+      coalesce(o.availability_requested_at, o.created_at) AS created_at, o.lead_attribution AS attribution, 'account' AS origin, 'car' AS kind
     FROM customer_orders o JOIN customer_accounts a ON a.id=o.customer_id
     WHERE coalesce(o.availability_requested_at, o.created_at) >= $1
       AND coalesce(o.availability_requested_at, o.created_at) < $2 AND ${notStaffAccount("o.customer_id")}`, [from, to]);
-  return { ...countLeadPeople(result.rows), lead_submissions:result.rows.length };
+  return result.rows;
+}
+
+export async function getAnalyticsLeadPeople(from, to, options = {}) {
+  const rows = await getAnalyticsLeadRows(from, to, options);
+  return { ...countLeadPeople(rows), lead_submissions:rows.length };
+}
+
+export async function getAnalyticsLeadSources(period, mode, { db = pool, now = Date.now() } = {}) {
+  const range = normalizeAnalyticsRange(period, now);
+  return { ...leadSourceReport(await getAnalyticsLeadRows(range.from, range.to, { db }), mode), period:range.period, generatedAt:new Date(now).toISOString() };
 }
 
 export async function getAnalyticsDashboard(rangeValue, { device = "", traffic = "all", acquisition = "all", activity = "all", db:storage = pool, now = Date.now() } = {}) {

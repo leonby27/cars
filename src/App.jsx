@@ -67,7 +67,7 @@ import { BLOG_INDEX, blogApiParams, blogArticlePhotoParams, blogPostSides, blogP
 import { embeddedApiValue, initialApiValue } from "./boot-api.js";
 import { HOME_FAQ, HOME_FAQ_LEAD, HOME_ORDER_STEPS } from "./purchase-info.js";
 import { TRACKING_FAQ } from "./tracking-info.js";
-import { stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
+import { leadAttribution, stopMetrika, trackEvent, trackMetrikaGoal, trackMetrikaView } from "./analytics.js";
 
 // Страница аналитики — служебная, посетителям не показывается. Её код (и код её
 // таблиц) не кладём в общий файл приложения, а подгружаем отдельным файлом при
@@ -4992,6 +4992,7 @@ function CustomSearchModal({ filters, onClose }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           listingId: null,
+          attribution:leadAttribution(),
           contact: `+${normalizedPhone}`,
           calculation: {
             requestType: "catalog_search",
@@ -6711,7 +6712,7 @@ export function App() {
         publishOrderedListings(orders);
         return true;
       }
-      const createResponse = await fetch("/api/account/orders", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ listingId:car.id }) });
+      const createResponse = await fetch("/api/account/orders", { method:"POST", credentials:"same-origin", headers:{ "content-type":"application/json" }, body:JSON.stringify({ listingId:car.id, attribution:leadAttribution() }) });
       if (!createResponse.ok) return false;
       const created = await createResponse.json().catch(() => ({}));
       // Заказ по этой машине мог уже существовать — тогда запрос не повторяем.
@@ -6720,7 +6721,7 @@ export function App() {
           method:"PATCH",
           credentials:"same-origin",
           headers:{ "content-type":"application/json" },
-          body:JSON.stringify({ action:"request_availability_check", comment:"" }),
+          body:JSON.stringify({ action:"request_availability_check", comment:"", attribution:leadAttribution() }),
         });
         if (!sent.ok) return false;
       }
@@ -7229,6 +7230,7 @@ export function App() {
       headers:{ "content-type":"application/json" },
       body:JSON.stringify({
         listingId:car.id,
+        attribution:leadAttribution(),
         name:form.name,
         contact:form.phone,
         consent:true,

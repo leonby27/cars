@@ -1,8 +1,25 @@
 import { analyticsAdvertisingSource } from "./analytics-acquisition.js";
 import { isKnownAnalyticsBotAgent } from "./analytics-bots.js";
+import { normalizeLeadAttribution } from "./lead-attribution.js";
 
 const visitorKey = "abcars-analytics-visitor";
 const sessionKey = "abcars-analytics-session";
+let leadEntry = null;
+
+export function leadAttribution() {
+  if (typeof window === "undefined" || isAnalyticsPath(window.location.pathname)) return null;
+  const now = Date.now();
+  const storageKey = "abcars-lead-entry";
+  try { leadEntry = JSON.parse(window.sessionStorage.getItem(storageKey)) || leadEntry; } catch {}
+  const sameDay = (a, b) => Math.floor((a + 10_800_000) / 86_400_000) === Math.floor((b + 10_800_000) / 86_400_000);
+  const path = `${window.location.pathname}${window.location.search}`;
+  if (!normalizeLeadAttribution(leadEntry) || !Number.isFinite(leadEntry.lastAt) || now < leadEntry.lastAt || now - leadEntry.lastAt > 1_800_000 || !sameDay(now, leadEntry.lastAt)) {
+    leadEntry = { source:analyticsEntrySource(window.document?.referrer, window.location.hostname, path), landingPath:path };
+  }
+  leadEntry = { ...leadEntry, submittedPath:path, lastAt:now };
+  try { window.sessionStorage.setItem(storageKey, JSON.stringify(leadEntry)); } catch {}
+  return normalizeLeadAttribution(leadEntry);
+}
 
 // Служебная CRM не является страницей сайта: её адрес не должен становиться ни
 // просмотром, ни целью, ни подтверждением «живого» посетителя. Учитываем также
@@ -204,6 +221,7 @@ const watchForHuman = () => {
 };
 
 export function trackEvent(eventName, details = {}) {
+  if (eventName === "page_view") leadAttribution();
   if (skipThisVisit()) return;
   // У события про машину примета — сама машина: «быстрый просмотр» из каталога и
   // открытая следом карточка — это один и тот же взгляд, а не два.
