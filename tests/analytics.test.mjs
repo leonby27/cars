@@ -215,7 +215,7 @@ test("мобильная навигация использует селекты 
   // Сброс аналитики из кабинета убран 17.09.2026 — в меню остались разделы и выход.
   assert.match(source, /analytics-mobile-section-menu[\s\S]*?Посты соц сетей[\s\S]*?Выйти/);
   assert.doesNotMatch(source, /sectionTotals|totals\[item\.id\]/);
-  assert.match(source, /className=\{`analytics-navigation-fresh\$\{item\.id === "leads" \? " is-leads" : ""\}`\}/);
+  assert.match(source, /className=\{`analytics-navigation-fresh\$\{item\.id === "leads" \? " is-leads" : item\.id === "partnership" \? " is-partnership" : ""\}`\}/);
   assert.match(styles, /\.analytics-actions, \.analytics-side-rail \{ display:none; \}/);
   assert.match(source, /className="analytics-mobile-filters-trigger"[^>]*aria-label="Фильтры аналитики"/);
   assert.match(styles, /\.analytics-mobile-navigation \{[^}]*display:flex;[^}]*flex-wrap:nowrap/);

@@ -53,6 +53,8 @@ export async function consumeRateLimit(bucket, { limit, windowSeconds }) {
 // не входит десять раз за десять минут и не отправляет десять заявок за час.
 export const RATE_LIMITS = {
   login:{ limit:10, windowSeconds:600 },
+  partnerLogin:{ limit:10, windowSeconds:600 },
+  partnerRegistration:{ limit:5, windowSeconds:3600 },
   register:{ limit:5, windowSeconds:3600 },
   accountDelete:{ limit:10, windowSeconds:600 },
   analyticsLogin:{ limit:10, windowSeconds:3600 },

@@ -1,3 +1,4 @@
+import { isPartnerPath } from "./partner-model.js";
 import { analyticsAcquisition, analyticsAdvertisingSource } from "./analytics-acquisition.js";
 import { leadPersonKey } from "./analytics-lead-people.js";
 
@@ -6,7 +7,7 @@ const cleanPath = (value) => {
   const path = value.slice(0, 2048);
   try {
     const url = new URL(path, "https://abcars.invalid");
-    return url.origin === "https://abcars.invalid" && !/^\/analytics(?:\/|$)/.test(url.pathname) ? path : "";
+    return url.origin === "https://abcars.invalid" && !/^\/analytics(?:\/|$)/.test(url.pathname) && !isPartnerPath(url.pathname) ? path : "";
   } catch { return ""; }
 };
 export function normalizeLeadAttribution(value) {

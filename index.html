@@ -136,7 +136,7 @@
         // `/analytics` — внутренняя CRM, а не страница сайта. На прямом входе не
         // создаём даже очередь счётчика: ни просмотр, ни Webvisor не должны начаться.
         const page = location.pathname.replace(/\/+$/, '') || '/';
-        if (page === '/analytics' || page.startsWith('/analytics/')) return;
+        if (page === '/analytics' || page.startsWith('/analytics/') || page === '/partner' || page.startsWith('/partner/')) return;
         const host = location.hostname;
         if (/^(localhost|127\.0\.0\.1|\[?::1\]?|.*\.local)$/i.test(host) || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return;
         // Свои заходы с обычного адреса сайта тоже можно не считать: откройте любую
@@ -188,7 +188,7 @@
         // те же исключения: CRM, локальная разработка, свои визиты и автоматические
         // проверки не должны искажать результат теста идеи.
         const page = location.pathname.replace(/\/+$/, '') || '/';
-        if (page === '/analytics' || page.startsWith('/analytics/')) return;
+        if (page === '/analytics' || page.startsWith('/analytics/') || page === '/partner' || page.startsWith('/partner/')) return;
         const host = location.hostname;
         if (/^(localhost|127\.0\.0\.1|\[?::1\]?|.*\.local)$/i.test(host) || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return;
         try {

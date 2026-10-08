@@ -206,7 +206,7 @@ const publicPages = [
     : []),
 ];
 
-const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/"];
+const privateRoutes = ["/favorites/", "/searches/", "/login/", "/register/", "/account/", "/analytics/", "/partner/"];
 // Названия закрытых разделов по-русски. Без них заголовок вкладки собирался из
 // самого адреса — «analytics | abcars.by», — а у аналитики он ещё и подменялся
 // приложением на «Страница не найдена»: закрытые разделы в перечень заголовков
@@ -218,6 +218,7 @@ const PRIVATE_ROUTE_NAMES = {
   "/register/": "Регистрация",
   "/account/": "Личный кабинет",
   "/analytics/": "Аналитика",
+  "/partner/": "Кабинет партнёра",
 };
 
 // В боевом HTML CRM не оставляем даже выключенный код внешних счётчиков. Проверка
@@ -1189,7 +1190,7 @@ for (const car of cars) {
 for (const route of privateRoutes) {
   const name = PRIVATE_ROUTE_NAMES[route] || "Личный раздел";
   const html = renderHtml({ title: `${name} | abcars.by`, description: "Личный раздел пользователя abcars.by.", canonical: route === "/analytics/" ? null : routeUrl(route), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
-  writeRoute(route, route === "/analytics/" ? withoutMetrika(html) : html);
+  writeRoute(route, ["/analytics/", "/partner/"].includes(route) ? withoutMetrika(html) : html);
 }
 
 const privateHtml = renderHtml({ title: "Личный раздел | abcars.by", description: "Личный раздел пользователя abcars.by.", canonical: routeUrl("/account/"), body: `<main class="page-width"><h1>Личный раздел</h1><p>Для работы этой страницы требуется JavaScript.</p></main>`, image: null, indexable: false });
@@ -1609,6 +1610,7 @@ const robots = allowIndexing
       "Disallow: /register",
       "Disallow: /orders",
       "Disallow: /analytics",
+      "Disallow: /partner",
       "Disallow: /app-shell",
       "Disallow: /car$",
       "Disallow: /car.html$",

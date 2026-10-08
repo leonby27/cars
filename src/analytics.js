@@ -1,3 +1,4 @@
+import { isPartnerPath } from "./partner-model.js";
 import { analyticsAdvertisingSource } from "./analytics-acquisition.js";
 import { isKnownAnalyticsBotAgent } from "./analytics-bots.js";
 import { normalizeLeadAttribution } from "./lead-attribution.js";
@@ -7,7 +8,7 @@ const sessionKey = "abcars-analytics-session";
 let leadEntry = null;
 
 export function leadAttribution() {
-  if (typeof window === "undefined" || isAnalyticsPath(window.location.pathname)) return null;
+  if (typeof window === "undefined" || (isAnalyticsPath(window.location.pathname) || isPartnerPath(window.location.pathname))) return null;
   const now = Date.now();
   const storageKey = "abcars-lead-entry";
   try { leadEntry = JSON.parse(window.sessionStorage.getItem(storageKey)) || leadEntry; } catch {}
@@ -129,7 +130,7 @@ export const isRepeatEvent = (key, now = Date.now()) => {
 export const isBotAgent = isKnownAnalyticsBotAgent;
 
 export const isSkippedVisit = ({ hostname, nocount, automated, agent = "", path = "" }) =>
-  isAnalyticsPath(path) || isLocalVisit(hostname) || nocount === "1" || Boolean(automated) || isBotAgent(agent);
+  isAnalyticsPath(path) || isPartnerPath(path) || isLocalVisit(hostname) || nocount === "1" || Boolean(automated) || isBotAgent(agent);
 
 const skipThisVisit = () => {
   let nocount = null;
@@ -277,13 +278,13 @@ export function trackMetrikaView(url, options = {}) {
 
 // Цели только Яндекс Метрики, без изменения внутренней аналитики и GA4.
 export function trackYandexGoal(goal, params = undefined) {
-  if (isAnalyticsPath(window.location.pathname)) return;
+  if (isAnalyticsPath(window.location.pathname) || isPartnerPath(window.location.pathname)) return;
   const metrikaCounter = window.__ym;
   if (metrikaCounter && typeof window.ym === "function") window.ym(metrikaCounter, "reachGoal", goal, params);
 }
 
 export function trackMetrikaGoal(goal, params = undefined) {
-  if (isAnalyticsPath(window.location.pathname)) return;
+  if (isAnalyticsPath(window.location.pathname) || isPartnerPath(window.location.pathname)) return;
   trackYandexGoal(goal, params);
   const googleCounter = window.__ga;
   if (googleCounter && typeof window.gtag === "function") {

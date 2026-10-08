@@ -22,6 +22,7 @@ import { analyticsCookie, clearAnalyticsCookie, confirmHumanVisit, createAnalyti
 import { getAnalyticsPlan } from "./analytics-plan.mjs";
 import { getAnalyticsLeadSources } from "./analytics.mjs";
 import { normalizeLeadAttribution } from "../src/lead-attribution.js";
+import { assignPartnerLead, authenticatePartner, createPartnerRegistrationRequest, createPartnerSession, deletePartnerSession, markPartnerRegistrationsSeen, normalizePartnerLogin, partnerCookie, partnerDashboard, partnerDirectory, provisionPartner, sessionPartner, updatePartnerRequest } from "./partners.mjs";
 import { checkRateLimit, clientAddress } from "./rate-limit.mjs";
 import { normalizeNewsletterEmail, subscribeToNewsletter, validNewsletterEmail } from "./newsletter.mjs";
 
@@ -275,6 +276,77 @@ export async function handleApiRequest(request, response) {
       const cached = await cachedGuaziImage(source.href);
       response.writeHead(200, {"content-type":cached.contentType,"content-length":String(cached.bytes.length),"cache-control":"public, max-age=604800, stale-while-revalidate=86400","x-content-type-options":"nosniff"});
       return response.end(cached.bytes);
+    }
+    if (url.pathname.startsWith("/api/partner/") && request.method !== "GET" && !sameOriginSettingRequest(request.headers)) return json(response, 403, { error:"invalid_source" });
+    if (request.method === "GET" && url.pathname === "/api/partner/me") {
+      return json(response, 200, { partner:await sessionPartner(request) });
+    }
+    if (request.method === "POST" && url.pathname === "/api/partner/registration-requests") {
+      const limit = await checkRateLimit("partnerRegistration", [clientAddress(request)]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
+      const result = await createPartnerRegistrationRequest(await readJson(request));
+      return json(response, result.error ? 400 : 201, result);
+    }
+    if (request.method === "POST" && url.pathname === "/api/partner/login") {
+      const body = await readJson(request);
+      const login = normalizePartnerLogin(body.login);
+      if (login.length > 64 || typeof body.password !== "string" || body.password.length > 200) return json(response, 400, { error:"invalid_credentials" });
+      const limit = await checkRateLimit("partnerLogin", [clientAddress(request), login]);
+      if (!limit.allowed) return tooManyRequests(response, limit.retryAfter);
+      const partner = await authenticatePartner({ login, password:body.password });
+      if (!partner) return json(response, 401, { error:"invalid_credentials" });
+      const token = await createPartnerSession(partner.id);
+      return json(response, 200, { partner }, { "set-cookie":partnerCookie(token, request) });
+    }
+    if (request.method === "POST" && url.pathname === "/api/partner/logout") {
+      await deletePartnerSession(request);
+      return json(response, 200, { ok:true }, { "set-cookie":partnerCookie("", request) });
+    }
+    if (request.method === "GET" && url.pathname === "/api/partner/dashboard") {
+      const result = await partnerDashboard(request);
+      return json(response, result.error ? 401 : 200, result);
+    }
+    const partnerRequestMatch = url.pathname.match(/^\/api\/partner\/requests\/([0-9a-f-]{36})$/i);
+    if (request.method === "PATCH" && partnerRequestMatch) {
+      const result = await updatePartnerRequest(request, partnerRequestMatch[1], await readJson(request));
+      return json(response, result.error === "unauthorized" ? 401 : result.error === "request_not_found" ? 404 : result.error ? 400 : 200, result);
+    }
+    if (request.method === "GET" && url.pathname === "/api/analytics/partners") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      return json(response, 200, await partnerDirectory());
+    }
+    if (request.method === "POST" && url.pathname === "/api/analytics/partner-registration-requests/seen") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      if (!sameOriginSettingRequest(request.headers)) return json(response, 403, { error:"invalid_source" });
+      const result = await markPartnerRegistrationsSeen(await readJson(request));
+      return json(response, result.error ? 400 : 200, result);
+    }
+    if (request.method === "POST" && url.pathname === "/api/analytics/partners") {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      if (!sameOriginSettingRequest(request.headers)) return json(response, 403, { error:"invalid_source" });
+      const body = await readJson(request);
+      try { return json(response, 201, { partner:await provisionPartner({ login:body.login, name:body.name, password:body.password }) }); }
+      catch (error) {
+        if (error.code === "23505") return json(response, 409, { error:"login_exists" });
+        if (error.message === "invalid_partner_credentials") return json(response, 400, { error:error.message });
+        throw error;
+      }
+    }
+    if (url.pathname === "/api/analytics/partner-assignments" && ["POST","DELETE"].includes(request.method)) {
+      if (!hasAnalyticsSession(request)) return json(response, 401, { error:"unauthorized" });
+      if (!sameOriginSettingRequest(request.headers)) return json(response, 403, { error:"invalid_source" });
+      const body = await readJson(request);
+      if (!/^(draft|order)-[0-9a-z-]+$/i.test(String(body.leadId || ""))) return json(response, 400, { error:"invalid_lead" });
+      if (request.method === "DELETE") {
+        await pool.query("DELETE FROM partner_requests WHERE lead_key=$1 AND NOT demo", [body.leadId]);
+        return json(response, 200, { ok:true });
+      }
+      if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(String(body.partnerId || ""))) return json(response, 400, { error:"invalid_partner" });
+      const { leads } = await getAnalyticsLeads();
+      const lead = leads.find((item) => item.id === body.leadId);
+      if (!lead) return json(response, 404, { error:"lead_not_found" });
+      const result = await assignPartnerLead(lead, body.partnerId, body.note || "");
+      return json(response, result.error === "partner_not_found" ? 404 : result.error ? 400 : 200, result);
     }
     if (request.method === "GET" && url.pathname === "/api/health") {
       // Без пароля — только «сайт жив» и размер каталога. Очередь задач, состояние

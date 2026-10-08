@@ -1,3 +1,4 @@
+import { PartnerAccessControl, PartnerAssignmentControl, PartnerRegistrationRequests, usePartnerDirectory } from "./partner-owner-controls.jsx";
 import { analyticsActivityKind } from "./analytics-activity.js";
 import { analyticsAdvertisingSource, analyticsAcquisition, analyticsAcquisitionKind } from "./analytics-acquisition.js";
 import { AnalyticsVisitsChart } from "./analytics-visits-chart.jsx";
@@ -143,7 +144,7 @@ function LeadCar({ car }) {
   );
 }
 
-function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
+function LeadCard({ lead, onDelete, deleting, deleteBlocked, partners, assignment, onAssigned }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const phoneHref = lead.customer.phone ? `tel:${lead.customer.phone.replace(/[^+\d]/g, "")}` : "";
@@ -189,11 +190,12 @@ function LeadCard({ lead, onDelete, deleting, deleteBlocked }) {
           {filters.map(([key, value]) => <span key={key}><b>{filterLabels[key] || key}:</b> {Array.isArray(value) ? value.join(", ") : value}</span>)}
         </div>
       )}
+      <PartnerAssignmentControl lead={lead} partners={partners || []} assignment={assignment} onAssigned={onAssigned} />
     </article>
   );
 }
 
-function LeadsSection({ leads, summary = {}, loading, error, unavailable, reload, removeLead, period }) {
+function LeadsSection({ leads, summary = {}, loading, error, unavailable, reload, removeLead, period, directory }) {
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
   const [deletingId, setDeletingId] = useState("");
@@ -232,8 +234,9 @@ function LeadsSection({ leads, summary = {}, loading, error, unavailable, reload
       <section className="analytics-panel">
         <div className="analytics-panel-heading">
           <div><h2>Заявки клиентов</h2><p>Автомобиль, контакты и комментарий — всё, что нужно, чтобы перезвонить</p></div>
-          <button className="analytics-reset-button" type="button" onClick={() => reload()} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button>
+          <button className="analytics-reset-button" type="button" onClick={() => { reload(); directory.reload(); }} disabled={loading}>{loading ? "Обновляем…" : "Обновить"}</button>
         </div>
+        <PartnerAccessControl partners={directory.partners} error={directory.error} reload={directory.reload} />
         <div className="lead-toolbar">
           <div className="analytics-range" aria-label="Тип заявки">
             {[["all", `Все · ${counts.all}`], ["car", `По автомобилю · ${counts.car}`], ["custom_search", `Подбор · ${counts.custom_search}`]].map(([value, label]) => (
@@ -244,7 +247,7 @@ function LeadsSection({ leads, summary = {}, loading, error, unavailable, reload
         </div>
         {error && <div className="analytics-error" role="alert">{error}</div>}
         {filtered.length ? (
-          <div className="lead-list">{filtered.map((lead) => <LeadCard key={lead.id} lead={lead} onDelete={deleteLead} deleting={deletingId === lead.id} deleteBlocked={Boolean(deletingId) && deletingId !== lead.id} />)}</div>
+          <div className="lead-list">{filtered.map((lead) => <LeadCard key={lead.id} lead={lead} onDelete={deleteLead} deleting={deletingId === lead.id} deleteBlocked={Boolean(deletingId) && deletingId !== lead.id} partners={directory.partners} assignment={directory.assignments.find((item) => item.lead_key === lead.id)} onAssigned={directory.onAssigned} />)}</div>
         ) : (
           <p className="analytics-empty">{unavailable ? "Заявки хранятся на основном сайте — на этой копии их нет." : !leads.length ? "Заявок пока не было. Как только клиент оставит контакты, они появятся здесь." : periodLeads.length ? "По этому условию заявок нет." : "За выбранный период заявок нет."}</p>
         )}
@@ -1295,6 +1298,7 @@ const sections = [
   { id:"seo-positions", label:"SEO позиции", icon:ChartLineUp, ranged:false },
   { id:"vehicles", label:"Каталог", icon:CarProfile, ranged:true, devices:true },
   { id:"leads", label:"Заявки", icon:Tray, ranged:true },
+  { id:"partnership", label:"Заявки на партнёрство", icon:UsersThree, ranged:false },
   { id:"searches", label:"Умный поиск", icon:MagnifyingGlass, ranged:true, devices:true },
   { id:"customers", label:"Клиенты", icon:UsersThree, ranged:true },
   { id:"contact_interest", label:"Интерес к контактам", icon:ChatCircleText, ranged:true, devices:true },
@@ -1313,7 +1317,7 @@ function AnalyticsNavigationItems({ section, updates, onChoose, mobile = false }
       <button key={item.id} type="button" role={mobile ? "menuitem" : undefined} className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => onChoose(item.id)}>
         <Icon size={21} weight="duotone" />
         <span>{item.label}</span>
-        {fresh ? <b className={`analytics-navigation-fresh${item.id === "leads" ? " is-leads" : ""}`} title={`Нового с прошлого захода: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}
+        {fresh ? <b className={`analytics-navigation-fresh${item.id === "leads" ? " is-leads" : item.id === "partnership" ? " is-partnership" : ""}`} title={`Нового с прошлого захода: ${fresh}`}>{fresh > 99 ? "99+" : fresh}</b> : null}
       </button>
     );
   });
@@ -1620,6 +1624,7 @@ function SocialPostsSection({ active }) {
 
 function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTraffic, acquisition, setAcquisition, activity, setActivity, loading, error, reload, logout, leads, leadsLoading, leadsError, leadsUnavailable, reloadLeads, removeLead }) {
   const [section, setSection] = useState("overview");
+  const directory = usePartnerDirectory(data.generatedAt);
   // Красные счётчики у пунктов: сколько нового появилось с прошлого захода сюда.
   // Отметки «просмотрено» держит сервер — иначе просмотр с телефона не гасил бы
   // цифры на компьютере.
@@ -1662,9 +1667,10 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
     const viewedIds = navigationViewedSections(id, section);
     if (viewedIds.includes("contact_interest") && id !== "contact_interest") setContactFresh({});
     // Цифру гасим сразу, не дожидаясь ответа сервера.
-    setUpdates((current) => clearAnalyticsUpdates(current, viewedIds));
-    loadUpdates(viewedIds);
+    if (id !== "partnership") setUpdates((current) => clearAnalyticsUpdates(current, viewedIds));
+    if (id !== "partnership") loadUpdates(viewedIds);
   };
+  const onPartnershipViewed = useCallback(() => { loadUpdates(); }, [loadUpdates]);
   const markViewed = (id) => {
     setUpdates((current) => ({ ...current, [id]:0 }));
     loadUpdates(id);
@@ -1709,7 +1715,8 @@ function Dashboard({ data, period, setPeriod, device, setDevice, traffic, setTra
         <div className="analytics-content">
           <div className="analytics-tabpanel" hidden={section !== "overview"}><OverviewSection data={data} period={period} device={device} traffic={data.traffic || "all"} acquisition={data.acquisition || "all"} activity={data.activity || "all"} updates={updates} /></div>
           <div className="analytics-tabpanel" hidden={section !== "plan"}>{section === "plan" ? <PlanSection generatedAt={data.generatedAt} /> : null}</div>
-          <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} summary={data.summary} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={() => { reloadLeads(); reload(period, { silent:true }); }} removeLead={removeLead} period={period} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "leads"}><LeadsSection leads={leads} summary={data.summary} loading={leadsLoading} error={leadsError} unavailable={leadsUnavailable} reload={() => { reloadLeads(); reload(period, { silent:true }); }} removeLead={removeLead} period={period} directory={directory} /></div>
+          <div className="analytics-tabpanel" hidden={section !== "partnership"}>{section === "partnership" ? <PartnerRegistrationRequests directory={directory} onViewed={onPartnershipViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "vehicles"}>{section === "vehicles" ? <VehiclesSection data={data} markViewed={markViewed} /> : null}</div>
           <div className="analytics-tabpanel" hidden={section !== "searches"}><SearchesSection data={data} /></div>
           <div className="analytics-tabpanel" hidden={section !== "search-traffic"}><SearchTrafficSection period={period} /></div>

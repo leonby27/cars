@@ -1,3 +1,4 @@
+import { isPartnerPath } from "../src/partner-model.js";
 import crypto from "node:crypto";
 import { analyticsActivityKind } from "../src/analytics-activity.js";
 import { isKnownAnalyticsBotAgent } from "../src/analytics-bots.js";
@@ -51,7 +52,7 @@ export const isInternalAnalyticsPath = (value = "") => {
   let pathname = String(value || "");
   try { pathname = new URL(pathname, "https://abcars.invalid").pathname; } catch { pathname = pathname.split(/[?#]/, 1)[0]; }
   const clean = pathname.replace(/\/+$/, "") || "/";
-  return clean === "/analytics" || clean.startsWith("/analytics/");
+  return clean === "/analytics" || clean.startsWith("/analytics/") || isPartnerPath(clean);
 };
 
 // `nocount=1` — только наша служебная метка. Она может остаться в старых событиях,
@@ -429,6 +430,7 @@ export async function confirmHumanVisit(body = {}, { db = pool } = {}) {
     `UPDATE analytics_events SET human = true, human_action = human_action OR $3
        WHERE visitor_id = $1 AND session_id = $2 AND NOT (human AND (human_action OR NOT $3))
          AND path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%'
+         AND path <> '/partner' AND path NOT LIKE '/partner/%' AND path NOT LIKE '/partner?%'
          AND created_at > now() - interval '12 hours'`,
     [visitorId, sessionId, action],
   );
@@ -513,7 +515,7 @@ export function normalizeAnalyticsRange(value, now = Date.now()) {
   return { period:String(days), days, from:new Date(now - days * 86_400_000), to:new Date(now) };
 }
 
-const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path !~* '(^|[?&])nocount=1(&|$)'";
+const PUBLIC_EVENT = "path <> '/analytics' AND path NOT LIKE '/analytics/%' AND path NOT LIKE '/analytics?%' AND path <> '/partner' AND path NOT LIKE '/partner/%' AND path NOT LIKE '/partner?%' AND path !~* '(^|[?&])nocount=1(&|$)'";
 // Режим «Только с действиями» сохраняет прежнее правило: достаточно одного
 // подтверждённого действия посетителя за всю историю. Период, источник,
 // страница входа и устройство не ограничивают поиск подтверждения. Отсутствие
@@ -889,7 +891,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
         -- срок. По этому признаку кабинет собирает вкладку «Вернулись».
         EXISTS (SELECT 1 FROM analytics_events first_seen
           WHERE first_seen.visitor_id = numbered.visitor_id AND first_seen.created_at < min(numbered.created_at)
-            AND first_seen.path <> '/analytics' AND first_seen.path NOT LIKE '/analytics/%' AND first_seen.path !~* '(^|[?&])nocount=1(&|$)') AS came_back
+            AND first_seen.path <> '/analytics' AND first_seen.path NOT LIKE '/analytics/%' AND first_seen.path <> '/partner' AND first_seen.path NOT LIKE '/partner/%' AND first_seen.path NOT LIKE '/partner?%' AND first_seen.path !~* '(^|[?&])nocount=1(&|$)') AS came_back
       FROM numbered
       GROUP BY visitor_id, visit_number
       ORDER BY min(created_at) DESC`, [from, to]),
@@ -986,7 +988,7 @@ export async function getAnalyticsUpdates({ viewing = "", traffic = "all", acqui
   const { db, events:EVENTS } = analyticsTrafficSource(pool, traffic, PUBLIC_EVENT, { to:`'${new Date(now).toISOString()}'::timestamptz`, acquisition });
   const seenBySection = await readAnalyticsSeen(viewing);
   const since = Object.fromEntries(ANALYTICS_SECTIONS.map((name) => [name, seenMoment(seenBySection[name], now)]));
-  const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, cabinetOrders, customers, contactInterest] = await Promise.all([
+  const [overview, vehicles, vehicleCars, vehicleFavorites, searches, leads, cabinetOrders, customers, contactInterest, partnership] = await Promise.all([
     // Ярлык и красные номера считают именно заходы по той же 30-минутной границе,
     // что верхняя карточка. Иначе два новых захода одного человека давали бы одну
     // плашку, а таблица и счётчик расходились бы.
@@ -1031,6 +1033,7 @@ export async function getAnalyticsUpdates({ viewing = "", traffic = "all", acqui
       count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/contacts','/contacts/'))::int AS contact_page_views,
       count(*) FILTER (WHERE event_name='page_view' AND split_part(path, '?', 1) IN ('/how-it-works','/how-it-works/'))::int AS about_page_views
       FROM ${EVENTS} WHERE created_at > $1 AND ${PUBLIC_EVENT} AND ${LIVE_VISITOR}`, [since.contact_interest]),
+    pool.query("SELECT count(*)::int AS n FROM partner_registration_requests WHERE seen_at IS NULL"),
   ]);
   const contactInterestDetails = contactInterest.rows[0];
   return {
@@ -1041,6 +1044,7 @@ export async function getAnalyticsUpdates({ viewing = "", traffic = "all", acqui
     vehicle_favorites:vehicleFavorites.rows[0].n,
     searches:searches.rows[0].n,
     leads:leads.rows[0].n,
+    partnership:partnership.rows[0].n,
     cabinet_orders:cabinetOrders.rows[0].n,
     customers:customers.rows[0].n,
     contact_interest:Object.values(contactInterestDetails).reduce((sum, value) => sum + (Number(value) || 0), 0),

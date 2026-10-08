@@ -31,7 +31,7 @@ export function countersAfterAppReady() {
   if (!queue) {
     queue = createCounterQueue({
       idle: (run) => window.requestIdleCallback ? window.requestIdleCallback(run, { timeout: 2000 }) : window.setTimeout(run, 0),
-      allowed: () => !/^\/analytics(?:\/|$)/.test(window.location.pathname),
+      allowed: () => !/^\/(?:analytics|partner)(?:\/|$)/.test(window.location.pathname),
     });
     const waiting = window.__counterQueue || [];
     window.__counterQueue = queue;

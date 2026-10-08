@@ -1,3 +1,4 @@
+import { PasswordField } from "./password-field.jsx";
 import { secondaryPage } from "./secondary-page-load.jsx";
 
 import { isAuthEntryPath, preservesAuthScroll, resolveAuthRoute, resolvePostAuthPath } from "./auth-route.js";
@@ -85,6 +86,7 @@ const VehicleQuickViewModal = secondaryPage("VehicleQuickViewModal");
 const AccountPage = secondaryPage("AccountPage");
 const SavedSearchesPage = secondaryPage("SavedSearchesPage");
 const Favorites = secondaryPage("Favorites");
+const PartnerPage = lazy(() => import("./partner-entry.jsx").then((m) => ({ default: m.PartnerPage })));
 const AnalyticsPage = lazy(() => import("./analytics-entry.jsx").then((m) => ({ default: m.AnalyticsPage })));
 
 const numberFormatter = new Intl.NumberFormat("ru-RU");
@@ -1002,6 +1004,7 @@ const privateRouteSeo = {
   // запасного варианта — «Страница не найдена», — хотя раздел открывался
   // нормально. Из поиска он всё равно закрыт: ниже все эти адреса помечаются
   // «не индексировать».
+  "/partner": ["Кабинет партнёра | abcars.by", "Закрытый кабинет партнёра abcars.by."],
   "/analytics": ["Аналитика | abcars.by", "Закрытый раздел статистики и заявок abcars.by."],
 };
 
@@ -1053,7 +1056,7 @@ function ClientSeo({ path, car, landing, carPending = false }) {
     }
     // Машина ещё грузится — заголовок «Страница не найдена» ставить рано.
     if (carPending && !car) return;
-    const privatePage = ["/favorites", "/searches", "/login", "/register", "/account", "/analytics"].includes(path) || path.startsWith("/orders/");
+    const privatePage = ["/favorites", "/searches", "/login", "/register", "/account", "/analytics", "/partner"].includes(path) || path.startsWith("/orders/");
     const detailTitle = car?.title || (car ? carTitle(car.brand, car.model, car.year) : null);
     // Заголовок и описание страницы марки, типа двигателя или кузова лежат в её
     // описании (src/catalog-landings.js) — там же, откуда их берёт сервер, когда
@@ -1388,6 +1391,7 @@ function EvQuotaButton({ quotas, navigate, className = "" }) {
 }
 
 function Header({ navigate, favoritesCount, savedSearchesCount, path, user, themeMode, setThemeMode, onBack = null }) {
+  const partnerMode = path === "/partner";
   const currency = useCurrency();
   const setCurrency = useSetCurrency();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1398,7 +1402,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
   const menuCloseRef = useRef(null);
   const headerRef = useRef(null);
   const mobile = useMediaQuery(NARROW_VIEWPORT);
-  const decreeMode = useHeaderDecreeMode(headerRef, mobile);
+  const decreeMode = useHeaderDecreeMode(headerRef, mobile || partnerMode);
   const accountHref = user ? "/account" : "/login";
   const openAccount = (target) => user ? navigate(target) : navigate(target, { replace:true, preserveScroll:true });
   // Остаток квоты считается по вшитым в сборку сводкам — за сессию он не меняется.
@@ -1509,6 +1513,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
         <Heart size={24} weight="duotone" aria-hidden="true" /><span>Избранное{favoritesCount > 0 ? ` · ${favoritesCount}` : ""}</span>
       </AppLink>
     ),
+    partner: (<AppLink href="/partner" navigate={navigate} className={path === "/partner" ? "active" : ""}><UsersThree size={24} weight="duotone" aria-hidden="true" /><span>Вход для партнёров</span></AppLink>),
     journal: (
       BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate} className={path === BLOG_INDEX.path || path.startsWith(`${BLOG_INDEX.path}/`) ? "active" : ""} aria-current={path === BLOG_INDEX.path ? "page" : undefined}>
         <Newspaper size={24} weight="duotone" aria-hidden="true" /><span>{BLOG_INDEX.name}</span>
@@ -1516,8 +1521,8 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
     ),
   };
   const menuOrder = mobile
-    ? ["account", "favorites", "searches", "service", "contacts", "models", "journal"]
-    : ["catalog", "journal", "service", "models", "contacts", "searches"];
+    ? ["account", "favorites", "searches", "service", "contacts", "models", "journal", "partner"]
+    : ["catalog", "journal", "service", "models", "contacts", "searches", "partner"];
 
   const menuPanel = (
     <div
@@ -1525,7 +1530,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
       className={`header-menu${mobile ? " header-menu-drawer" : ""}${menuOpen ? " open" : ""}`}
       role={mobile ? "dialog" : undefined}
       aria-modal={mobile && menuOpen ? true : undefined}
-      aria-label={mobile ? "Меню сайта" : undefined}
+      aria-label={mobile ? (partnerMode ? "Меню партнёра" : "Меню сайта") : undefined}
       id="header-menu"
       aria-hidden={!menuOpen}
       inert={menuOpen ? undefined : true}
@@ -1536,6 +1541,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             <X size={25} weight="bold" aria-hidden="true" />
           </button>
         </div>}
+        {!partnerMode && <>
         <div className="header-menu-settings">
           {setCurrency && <CurrencySwitch currency={currency} setCurrency={setCurrency} className="header-menu-currency" />}
         </div>
@@ -1545,18 +1551,21 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
         <nav aria-label="Основная навигация" onClick={(event) => { if (event.target.closest("a[href]")) setMenuOpen(false); }}>
           {menuOrder.map((key) => <Fragment key={key}>{menuLinks[key]}</Fragment>)}
         </nav>
+        </>}
     </div>
   );
 
   return (
-    <header className={`site-header site-header-mobile-layout${scrolled ? " is-scrolled" : ""}`}>
+    <header className={`site-header site-header-mobile-layout${partnerMode ? " partner-header" : ""}${scrolled ? " is-scrolled" : ""}`}>
       <div className="header-inner" ref={headerRef}>
         {onBack && <button type="button" className="header-menu-trigger header-back" aria-label="Назад" onClick={onBack}>
           <ArrowLeft size={24} weight="bold" aria-hidden="true" />
         </button>}
+        {partnerMode ? <span className="wordmark partner-header-title">Мой кабинет</span> : (
         <AppLink className="wordmark" href="/" navigate={navigate} onClick={playRefreshPulse} aria-label="abcars.by — на главную">
           <SiteLogo />
         </AppLink>
+        )}
         <div className="header-menu-shell" ref={menuRef}>
           <button
             type="button"
@@ -1575,6 +1584,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             {menuPanel}
           </>, document.body) : menuPanel}
         </div>
+        {!partnerMode && <>
         <div className="header-actions header-left-controls">
           <EvQuotaButton quotas={quotas} navigate={navigate} />
           {decreeMode !== "menu" && <DecreePricingButton compact={decreeMode === "compact"} path={path} />}
@@ -1617,6 +1627,7 @@ function Header({ navigate, favoritesCount, savedSearchesCount, path, user, them
             <span>{user ? String(user.name || "").split(" ")[0] || "Кабинет" : "Войти"}</span>
           </button>
         </div>
+        </>}
       </div>
     </header>
   );
@@ -5962,7 +5973,7 @@ function SiteFooter({ navigate }) {
           <p>Помогаем выбрать и купить автомобиль {siteFromPhrase()} в Беларусь.</p>
         </div>
         <FooterAppDownload onOpen={openAppUnavailable} />
-        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<a href={"/how-it-works#faq"}>Вопросы и ответы</a></div>
+        <div className="footer-column footer-navigation"><b>Навигация</b><AppLink href="/catalog" navigate={navigate}>Автомобили</AppLink><AppLink href="/how-it-works" navigate={navigate}>О сервисе</AppLink>{BLOG_ENABLED && <AppLink href={BLOG_INDEX.path} navigate={navigate}>{BLOG_INDEX.name}</AppLink>}<a href={"/how-it-works#faq"}>Вопросы и ответы</a><AppLink href="/partner" navigate={navigate}>Вход для партнёров</AppLink></div>
         <div className="footer-column footer-tools"><b>Расчёты</b>{TOOL_PAGES.map((tool) => <AppLink key={tool.path} href={tool.path} navigate={navigate}>{tool.name}</AppLink>)}</div>
         <div className="footer-column footer-contacts">
           <b>Связаться</b>
@@ -6335,20 +6346,6 @@ async function localDeleteAccount(userId, password) {
   window.localStorage.removeItem(pendingOrderKey);
 }
 
-function PasswordField({ label, value, onChange, autoComplete, placeholder = "", required = false, disabled = false }) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <label className="auth-field">
-      <span>{label}</span>
-      <div className="password-input">
-        <input type={visible ? "text" : "password"} autoComplete={autoComplete} value={value} onChange={onChange} placeholder={placeholder} required={required} disabled={disabled} />
-        <button type="button" aria-label={visible ? "Скрыть пароль" : "Показать пароль"} aria-pressed={visible} onClick={() => setVisible((current) => !current)} disabled={disabled}>
-          {visible ? <EyeSlash size={20} /> : <Eye size={20} />}
-        </button>
-      </div>
-    </label>
-  );
-}
 
 function AuthModal({ mode, navigate, onAuthenticate, pending, onClose, redirectTo = "/" }) {
   const backdropRef = useRef(null);
@@ -6589,6 +6586,8 @@ const bootRelatedSync = () => (Array.isArray(window.__boot?.relatedValue) ? wind
 export function App() {
   const [user, setUser] = useState(null);
   const { path, navigate, backToCatalog } = useRoute(user);
+  const [partnerSection, setPartnerSection] = useState("overview");
+  useEffect(() => { setPartnerSection("overview"); }, [path]);
   const [authLoading, setAuthLoading] = useState(true);
   const { authRoute, authBackgroundPath, authModalOpen, contentPath } = resolveAuthRoute(path, window.history.state?.fromPath, user, authLoading);
   // Фон модального окна и загрузка его автомобиля используют один адрес.
@@ -6737,7 +6736,7 @@ export function App() {
   // иначе весь визит выглядит как одна страница.
   const metrikaStarted = useRef(false);
   useEffect(() => {
-    if (path === "/analytics") {
+    if (path === "/analytics" || path === "/partner") {
       stopMetrika();
       return;
     }
@@ -7399,7 +7398,9 @@ export function App() {
       <ToolPage tool={findToolPage(contentPath)} navigate={navigate} />
     ) : null;
   const page =
-    contentPath === "/analytics" ? (
+    contentPath === "/partner" ? (
+      <Suspense fallback={<main className="app-loader" role="status" aria-label="Загрузка кабинета"><span className="app-loader-spinner" aria-hidden="true" /></main>}><PartnerPage navigate={navigate} section={partnerSection} setSection={setPartnerSection} CountrySelect={SelectField} /></Suspense>
+    ) : contentPath === "/analytics" ? (
       // Пока отдельный файл страницы едет по сети, показываем пустоту: страница
       // служебная, её открывают единицы, а ожидание — доли секунды.
       <Suspense fallback={null}>
@@ -7463,7 +7464,7 @@ export function App() {
       <div className={`app-content${contentPath === "/how-it-works" ? " service-video-shell service-video-header-active service-dark-region-active" : ""}`} aria-hidden={authModalOpen ? "true" : undefined} inert={authModalOpen ? true : undefined}>
         <Header
           navigate={navigate}
-          onBack={contentPath !== "/" ? () => {
+          onBack={contentPath === "/partner" ? (partnerSection !== "overview" ? () => setPartnerSection("overview") : null) : contentPath !== "/" ? () => {
             if (window.history.length > 1 && window.history.state?.fromPath) {
               navigate(-1);
             } else if (detailId) {

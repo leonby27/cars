@@ -85,6 +85,8 @@ const PATTERN = /(из|в)(\s| )Кита[яе](?!(\s| )и(\s| ))/;
 const files = [];
 const walk = (dir) => {
   for (const name of readdirSync(dir)) {
+    // Vite creates transient copies of model-pages during parallel SSR checks.
+    if (name.endsWith(".tmp.js")) continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) walk(path);
     else if (/\.(js|jsx|mjs)$/.test(name)) files.push(path);

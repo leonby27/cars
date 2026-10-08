@@ -1,0 +1,14 @@
+.compact-select { position:relative; min-width:0; display:grid; gap:8px; }
+.compact-select > span { font-size:13px; color:var(--muted); }
+.compact-select > .select-trigger { display:flex; justify-content:space-between; gap:12px; align-items:center; width:100%; min-height:48px; padding:12px 14px; border:1px solid var(--line); background:var(--surface); border-radius:12px; color:var(--ink); font:inherit; text-align:left; cursor:pointer; }
+.compact-select > .select-trigger > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.compact-select > .select-trigger > b { font-size:16px; font-weight:500; flex:none; }
+.compact-select-menu { position:absolute; left:0; top:100%; min-width:100%; width:max-content; max-width:min(320px,calc(100vw - 50px)); margin-top:6px; border:1px solid var(--line); border-radius:12px; background:var(--panel); box-shadow:0 12px 30px #0003; z-index:80; }
+.compact-select-options button { display:block; width:100%; border:0; background:none; color:var(--ink); padding:11px 12px; border-radius:8px; font:inherit; text-align:left; cursor:pointer; }
+.compact-select-options button[aria-selected=true] { background:var(--surface); color:var(--accent); }
+.compact-select-options button:hover,.compact-select-options button:focus-visible { background:var(--surface); outline:1px solid var(--line); }
+
+.compact-select-options { max-height:240px; overflow:auto; scrollbar-width:none; padding:6px 13px 6px 6px; }
+.compact-select-options::-webkit-scrollbar { display:none; }
+.compact-select-scroll { position:absolute; right:5px; top:8px; bottom:8px; width:3px; border-radius:3px; background:var(--line); pointer-events:none; }
+.compact-select-scroll i { position:absolute; width:3px; background:var(--muted); opacity:.55; border-radius:3px; }

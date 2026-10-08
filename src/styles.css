@@ -25516,3 +25516,11 @@ html[data-theme="dark"] .header-drawer-heading .header-menu-trigger {
     transition: none;
   }
 }
+
+/* Кабинет партнёра: отдельное название и пустое меню, без общих настроек сайта. */
+.partner-header .header-inner { display:grid; grid-template-columns:48px minmax(0,1fr) 48px; gap:8px; }
+.partner-header .header-back { display:grid; grid-area:1 / 1; justify-self:start; }
+.partner-header .partner-header-title { grid-area:1 / 2; justify-self:center; font-size:24px; font-weight:800; letter-spacing:-.025em; white-space:nowrap; }
+.partner-header .header-menu-shell { grid-area:1 / 3; justify-self:end; margin-left:0; }
+.partner-header .header-menu:not(.header-menu-drawer) { min-height:96px; }
+@media(max-width:380px) { .partner-header .partner-header-title { font-size:21px; } }

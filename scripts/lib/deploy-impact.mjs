@@ -11,6 +11,7 @@ const renderOnly = new Set([
   'src/analytics.js', 'src/boot-api.js', 'src/counter-loader.js', 'src/price-fit.js', 'src/spec-fit.js',
   // Traffic attribution and CRM request URLs never prepare catalog or prices.
   'src/analytics-acquisition.js', 'src/analytics-activity.js', 'src/analytics-updates.js', 'src/analytics-plan.js',
+  'src/partner-model.js', 'src/lead-attribution.js', 'src/analytics-lead-people.js',
   'src/phone-mask.js', 'src/modal-viewport.js', 'src/auth-route.js',
   'src/model-text-load.js', 'src/model-text-imports.js', 'src/model-texts.js',
   'src/blog-text-load.js', 'src/blog-text-imports.js', 'src/blog-texts.js',
@@ -25,6 +26,7 @@ const operationsOnly = new Set([
   'scripts/lib/deploy-impact.mjs', 'scripts/lib/deploy-plan.mjs',
   'scripts/lib/pricing-inputs.mjs', 'scripts/lib/build-metrics.mjs',
   // Reports and HTTP dispatch are not imported by catalog preparation.
+  'server/partners.mjs', 'scripts/provision-partner.mjs', 'db/migrations/049_partner_portal.sql', 'db/migrations/050_partner_registration_requests.sql', 'db/migrations/051_partner_registration_seen.sql', 'db/migrations/048_lead_attribution.sql',
   'server/handler.mjs', 'server/analytics.mjs', 'server/analytics-traffic.mjs',
   'server/analytics-lead-people.mjs', 'server/analytics-plan.mjs', 'server/abdrive/analytics.mjs',
   'server/static-page.mjs', 'server/boot-screen.mjs',
