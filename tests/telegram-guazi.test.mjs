@@ -26,7 +26,7 @@ test('duplicate start, abandoned checkpoint, and empty resume are rejected witho
 test('status reports a dead worker honestly and never starts or stops it', async () => {
   const state = { status: 'running', brand: 'Tesla', counts: { updated: 12, added: 3, unavailable: 1, review: 2 }, brandsDone: ['Nio'], brandsTotal: 39 };
   assert.match(formatGuaziStatus(state, null), /процесс не работает/);
-  const f = setup(state); await f.run('guazi-status'); assert.match(f.messages[0], /обновлено: 12/i); assert.match(f.messages[0], /На проверку: 2/);
+  const f = setup(state); await f.run('guazi-status'); assert.match(f.messages[0], /обновлено: 12/i); assert.match(f.messages[0], /Пропущено автоматически: 2/);
   assert.deepEqual(f.starts, []); assert.deepEqual(f.stops, []);
 });
 

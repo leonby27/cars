@@ -31,13 +31,15 @@ async function fixture(t, { active = [a], listed = [a, b] } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'guazi-refresh-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const rows = new Map(active.map(id => [id, { ...snapshotRow(id), status: 'active', fobPriceUsd: 28748 }]));
-  const f = { root, rows, listed, reads: [], searches: [], writes: [], removals: [], messages: [], finalized: 0, releases: 0, closed: 0, snapshots: 0 };
+  const f = { root, rows, listed, reads: [], searches: [], writes: [], removals: [], messages: [], finalized: 0, releases: 0, closed: 0, snapshots: 0, skips: [], audits: [] };
   f.store = {
     target: 'test-only', acquire: async () => async () => { f.releases++; },
-    snapshot: async () => { f.snapshots++; return [...rows.values()].filter(x => x.status === 'active').map(({ status, ...row }) => row); },
-    upsert: async car => { const previous = rows.get(car.externalId); f.writes.push(car); rows.set(car.externalId, { ...snapshotRow(car.externalId), status: 'active', fobPriceUsd: car.fobPriceUsd }); return { action: previous ? 'updated' : 'added', priceChanged: !!previous && previous.fobPriceUsd !== car.fobPriceUsd }; },
+    snapshot: async () => { f.snapshots++; return [...rows.values()].filter(x => ['active','skipped'].includes(x.status)); },
+    upsert: async car => { const previous = rows.get(car.externalId); f.writes.push(car); rows.set(car.externalId, { ...snapshotRow(car.externalId), status: 'active', fobPriceUsd: car.fobPriceUsd }); return { action: !previous ? 'added' : previous.status === 'skipped' ? 'reactivated' : 'updated', quoteChanged: !!previous && previous.fobPriceUsd !== car.fobPriceUsd, priceChanged: !!previous && Math.abs(previous.fobPriceUsd-car.fobPriceUsd)>=100 }; },
     countActive: async brands => [...rows.values()].filter(row => row.status === 'active' && (!brands || brands.includes(row.brand))).length,
-    markUnavailable: async (row, evidence) => { f.removals.push({ row, evidence }); rows.get(row.externalId).status = 'unavailable'; },
+    markUnavailable: async (row, evidence) => { f.removals.push({ row, evidence }); if (rows.has(row.externalId)) rows.get(row.externalId).status = 'unavailable'; },
+    markSkipped: async (row, details) => { f.skips.push({ row, details }); if(rows.has(row.externalId)) rows.get(row.externalId).status='skipped'; },
+    audit: async input => { f.audits.push(input); const actual = await f.store.countActive(); assert.equal(actual,input.expectedRemaining); return { active:actual,invalid:0,mismatches:0 }; },
     finalize: async () => { f.finalized++; },
   };
   f.detail = async id => f.listed.includes(id) ? capture(id) : missing(id);
@@ -46,7 +48,7 @@ async function fixture(t, { active = [a], listed = [a, b] } = {}) {
     return { data: { totalCount: ids.length, list: body.clientScene === 'count' ? [] : ids.map(listing) } };
   };
   f.deps = {
-    store: f.store, policy, notify: async text => f.messages.push(text),
+    store: f.store, policy, notify: async text => f.messages.push(text), log: () => {},
     browserFactory: async options => {
       assert.equal(options.publicOnly, true); assert.equal(options.authState, undefined); assert.equal(options.requestInterval, 750);
       return { publicBootstrap: async () => {}, publicSearch: async body => { f.searches.push(body); return f.search(body); },
@@ -64,7 +66,7 @@ test('new round refreshes existing FOB, adds discoveries, and removes only after
   const f = await fixture(t, { active: [a, c] });
   const state = await f.run();
   assert.equal(state.status, 'complete');
-  assert.deepEqual(state.counts, { checked: 3, updated: 1, added: 1, unavailable: 1, review: 0, rejected: 0 });
+  assert.deepEqual(state.counts, { checked: 3, updated: 1, added: 1, unavailable: 1, review: 0, skipped: 0, rejected: 0 });
   assert.equal(f.reads.filter(id => id === c).length, 2);
   assert.equal(f.removals[0].evidence.observations.length, 2);
   assert.ok(f.writes.every(car => car.source === 'Guazi' && car.fobPort === 'Horgos' && car.fobPriceUsd === 28748));
@@ -107,12 +109,12 @@ test('blocked card saves committed checks; resume keeps initial snapshot and ski
   assert.match(f.messages.at(-1), /За этот круг новых заведено: 1/);
 });
 
-test('catalog absence and a live detail only refresh price, keep active, and flag unverified availability', async t => {
+test('catalog absence is retried automatically then skipped without a false sale or price write', async t => {
   const f = await fixture(t, { listed: [] });
   f.detail = async id => capture(id);
   const state = await f.run();
-  assert.equal(state.counts.review, 1); assert.equal(f.removals.length, 0); assert.equal(f.rows.get(a).status, 'active');
-  assert.equal(f.writes[0].availabilityStatus, 'unverified');
+  assert.equal(state.counts.skipped, 1); assert.equal(f.removals.length, 0); assert.equal(f.rows.get(a).status, 'skipped');
+  assert.equal(f.writes.length, 0); assert.equal(f.reads.length,2);
 });
 
 test('explicit sold status removes existing cars in one read, even with a stale listing and FOB price', async t => {
@@ -137,8 +139,8 @@ test('under offer, unknown status and hidden price alone never mean sold', async
   for (const displayStatus of [undefined, null, 0, 2, 3, 99, '1', true]) {
     const f = await fixture(t, { listed: [] });
     f.detail = async id => { const value = capture(id); Object.assign(value.rawData, { displayStatus, showPrice: 0 }); return value; };
-    assert.equal((await f.run()).counts.review, 1);
-    assert.equal(f.removals.length, 0); assert.equal(f.rows.get(a).status, 'active');
+    assert.equal((await f.run()).counts.skipped, 1);
+    assert.equal(f.removals.length, 0); assert.equal(f.rows.get(a).status, 'skipped');
   }
 });
 
@@ -166,7 +168,7 @@ test('sold recognition uses the exact product identity, never another car or a n
 test('missing page for a listed car never removes it; incomplete discovery performs no writes', async t => {
   const f = await fixture(t, { listed: [a] });
   f.detail = async id => missing(id);
-  assert.equal((await f.run()).counts.review, 1); assert.equal(f.removals.length, 0);
+  assert.equal((await f.run()).counts.skipped, 1); assert.equal(f.removals.length, 0);
   f.search = async body => { if (body.clientScene !== 'count') throw blocked(); return { data: { totalCount: 1 } }; };
   await assert.rejects(f.run(), { code: 'SOURCE_BLOCKED' });
   assert.equal(f.writes.length, 0); assert.equal(f.removals.length, 0); assert.equal((await f.state()).status, 'blocked');
@@ -178,7 +180,7 @@ test('failed second missing-page check preserves the vehicle and remains resumab
   await assert.rejects(f.run(), { code: 'SOURCE_BLOCKED' });
   assert.equal(f.removals.length, 0); assert.equal((await f.state()).counts.checked, 0);
   f.detail = async id => capture(id);
-  assert.equal((await f.run(false)).counts.review, 1); assert.equal(f.rows.get(a).status, 'active');
+  assert.equal((await f.run(false)).counts.skipped, 1); assert.equal(f.rows.get(a).status, 'skipped');
 });
 
 test('zero census counts do not suppress fresh discovery', async t => {
@@ -207,9 +209,9 @@ test('DB failure is not checkpointed; retry rereads the card, and incompatible d
 test('missing Horgos quote retains existing FOB; unknown historical brand cannot be removed without a scan', async t => {
   const f = await fixture(t, { listed: [a] });
   f.detail = async id => { const value = capture(id); value.rawData.prices[0].enName = 'Shanghai, China'; return value; };
-  assert.equal((await f.run()).counts.review, 1); assert.equal(f.writes.length, 0);
+  assert.equal((await f.run()).counts.skipped, 1); assert.equal(f.writes.length, 0);
   f.rows.get(a).brand = 'Historical unknown'; f.listed = []; f.detail = async id => missing(id);
-  assert.equal((await f.run()).counts.review, 1); assert.equal(f.removals.length, 0);
+  assert.equal((await f.run()).counts.skipped, 1); assert.equal(f.removals.length, 0);
 });
 
 test('live process lock prevents a second collector without deleting the lock', async t => {
@@ -253,11 +255,11 @@ test('database store reports a price change only when an existing Horgos FOB quo
   const store = createGuaziRefreshStore({ databaseUrl: 'postgres://test:secret@localhost/test',
     withTransaction: fn => fn({ query: async () => ({ rows: previous ? [previous] : [] }) }),
     upsertCar: async car => saved.push(car) });
-  assert.deepEqual(await store.upsert(fresh), { action: 'updated', priceChanged: true });
+  assert.deepEqual(await store.upsert(fresh), { action: 'updated', priceChanged: true, quoteChanged:true });
   previous.source_payload.fobPriceUsd = 28748;
-  assert.deepEqual(await store.upsert(fresh), { action: 'updated', priceChanged: false });
+  assert.deepEqual(await store.upsert(fresh), { action: 'updated', priceChanged: false, quoteChanged:false });
   previous = null;
-  assert.deepEqual(await store.upsert(fresh), { action: 'added', priceChanged: false });
+  assert.deepEqual(await store.upsert(fresh), { action: 'added', priceChanged: false, quoteChanged:false });
   assert.equal(saved.length, 3);
 });
 
@@ -267,7 +269,7 @@ test('database removal is source-scoped and rejects mismatched or single evidenc
   await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [missing(a)] }), /Unconfirmed/);
   await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [missing(a), missing(b)] }), /Unconfirmed/);
   await store.markUnavailable(snapshotRow(a), { run: 'test', observations: [missing(a), missing(a)] });
-  assert.match(queries[0].sql, /source='Guazi' AND status='active'/); assert.equal(queries[0].params[0], `guazi-${a}`);
+  assert.match(queries[0].sql, /source='Guazi' AND status IN \('active','skipped'\)/); assert.equal(queries[0].params[0], `guazi-${a}`);
 });
 
 test('database accepts one explicit sold card, rejects unknown status and mismatched identities', async () => {
@@ -278,6 +280,85 @@ test('database accepts one explicit sold card, rejects unknown status and mismat
   await assert.rejects(store.markUnavailable(snapshotRow(a), { observations: [{ ...sold(a), rawData: { productId: b, displayStatus: 1 } }] }), /Unconfirmed/);
   await store.markUnavailable(snapshotRow(a), { run: 'test', observations: [sold(a)] });
   assert.equal(queries.length, 1); assert.equal(queries[0].params[0], `guazi-${a}`);
-  assert.match(queries[0].sql, /source='Guazi' AND status='active'/);
+  assert.match(queries[0].sql, /source='Guazi' AND status IN \('active','skipped'\)/);
   assert.equal(JSON.parse(queries[0].params[1]).observations[0].rawData.displayStatus, 1);
+});
+
+test('a failed FOB quote is retried at round end and recovered without double counting or manual work', async t => {
+  const f = await fixture(t, { listed:[a] }); let calls=0;
+  f.detail = async id => capture(id,++calls===1?'$9,999,999':'$29,900');
+  const state=await f.run();
+  assert.equal(state.counts.checked,1);assert.equal(state.counts.updated,1);assert.equal(state.counts.skipped,0);
+  assert.equal(state.summary.reactivated,0);assert.equal(state.summary.remaining,1);
+  assert.equal(f.skips.length,1);assert.equal(f.rows.get(a).fobPriceUsd,29900);assert.equal(f.rows.get(a).status,'active');
+  assert.equal(f.audits.length,1);assert.equal(f.reads.length,2);
+});
+
+test('persistent policy skips preserve the old quote, are hidden, and get another chance next round', async t => {
+  const f=await fixture(t,{listed:[a]}); f.detail=async id=>capture(id,'$6,500');
+  const first=await f.run();assert.equal(first.counts.skipped,1);assert.equal(first.counts.review,0);
+  assert.equal(f.rows.get(a).status,'skipped');assert.equal(f.rows.get(a).fobPriceUsd,28748);assert.equal(f.removals.length,0);
+  assert.equal(first.summary.remaining,0);assert.match(f.messages.at(-1),/Пропущено автоматически: 1/);
+  f.detail=async id=>capture(id,'$7,500');const second=await f.run();
+  assert.equal(second.snapshotTotal,1);assert.equal(second.summary.reactivated,1);assert.equal(second.summary.remaining,1);
+  assert.equal(f.rows.get(a).status,'active');
+});
+
+test('an unlisted card which becomes sold before the automatic retry is removed and the skip count is replaced',async t=>{
+  const f=await fixture(t,{listed:[]});let calls=0;f.detail=async id=>++calls===1?capture(id):sold(id);
+  const state=await f.run();assert.equal(state.counts.checked,1);assert.equal(state.counts.skipped,0);
+  assert.equal(state.counts.unavailable,1);assert.equal(f.rows.get(a).status,'unavailable');assert.equal(f.writes.length,0);
+});
+
+test('uncertain new discoveries are skipped without publishing and do not block valid cars',async t=>{
+  const f=await fixture(t,{active:[],listed:[a,b]});f.detail=async id=>{const x=capture(id);if(id===a)x.rawData.prices[0].enName='Shanghai, China';return x;};
+  const state=await f.run();assert.equal(state.counts.checked,2);assert.equal(state.counts.skipped,1);assert.equal(state.counts.added,1);
+  assert.equal(f.rows.has(a),false);assert.equal(f.rows.has(b),true);assert.equal(state.status,'complete');
+});
+
+test('failed automatic recheck resumes with its saved identity, without repeating completed main work',async t=>{
+  const f=await fixture(t,{listed:[a,b]});let calls=0;
+  f.detail=async id=>{if(id===a){calls++;if(calls===2)throw blocked();if(calls===1)return capture(id,'$6,500');}return capture(id);};
+  await assert.rejects(f.run(),{code:'SOURCE_BLOCKED'});assert.equal((await f.state()).phase,'recheck');
+  assert.equal((await f.state()).counts.checked,2);assert.equal(f.rows.get(a).status,'skipped');
+  const resumed=await f.run(false);assert.equal(resumed.status,'complete');assert.equal(resumed.counts.checked,2);
+  assert.equal(resumed.counts.skipped,0);assert.equal(resumed.counts.updated,1);assert.equal(resumed.counts.added,1);
+  assert.equal(f.reads.filter(id=>id===b).length,1);assert.equal(f.rows.get(a).status,'active');
+});
+
+test('database integrity failure cannot produce a successful completion and audit can resume',async t=>{
+  const f=await fixture(t,{listed:[a]});const audit=f.store.audit;
+  f.store.audit=async()=>{throw Object.assign(Error('wrong stored count'),{code:'GUAZI_INTEGRITY_FAILED'});};
+  await assert.rejects(f.run(),{code:'GUAZI_INTEGRITY_FAILED'});
+  assert.equal((await f.state()).status,'error');assert.equal((await f.state()).phase,'audit');assert.match(f.messages[0],/не завершён/);
+  f.store.audit=audit;assert.equal((await f.run(false)).status,'complete');assert.equal(f.reads.length,1);
+});
+
+test('minor FOB movement is tracked separately, with a $100 threshold for reported price changes',async()=>{
+  const car={...snapshotRow(a),source:'Guazi',priceBasis:'FOB',fobPort:'Horgos',fobPriceUsd:28748,chinaPrice:200000,checkedAt:'2026-10-08',images:['https://global-image-pub.guazistatic-global.com/car.jpg']};
+  const store=createGuaziRefreshStore({databaseUrl:'postgres://localhost/test',withTransaction:fn=>fn({query:async()=>({rows:[{source:'Guazi',status:'active',source_payload:{fobPriceUsd:28700}}]})}),upsertCar:async()=>{}});
+  assert.deepEqual(await store.upsert(car),{action:'updated',quoteChanged:true,priceChanged:false});
+  assert.equal((await store.upsert({...car,fobPriceUsd:28800})).priceChanged,true);
+});
+
+test('missing photos or mileage are ordinary skips, while corrupt identities still fail the round',async t=>{
+  for(const field of ['gallery','mileage']){
+    const f=await fixture(t,{listed:[a]});
+    f.detail=async id=>{const x=capture(id);if(field==='gallery')x.rawData.images=[];else x.rawData.vehicleDetails.find(d=>d.key==='mileage').value='';return x;};
+    const state=await f.run();assert.equal(state.status,'complete');assert.equal(state.counts.skipped,1);assert.equal(f.writes.length,0);
+  }
+  const f=await fixture(t,{listed:[a]});f.detail=async id=>{const x=capture(id);x.rawData.productId=b;x.rawData.images=[];return x;};
+  await assert.rejects(f.run(),/identity mismatch/);assert.equal((await f.state()).counts.checked,0);
+});
+
+test('unfinished legacy review journals are automatically rechecked using their persisted discovery identity',async t=>{
+  const f=await fixture(t,{listed:[a]});f.detail=async id=>capture(id,'$6,500');const audit=f.store.audit;
+  f.store.audit=async()=>{throw Error('audit unavailable');};await assert.rejects(f.run(),/audit unavailable/);
+  const state=await f.state();const file=path.join(refreshPaths(f.root).base,state.run,'results.jsonl');
+  const r=JSON.parse((await fs.readFile(file,'utf8')).trim().split('\n').at(-1));delete r.job;delete r.rechecked;r.outcome='review';
+  await fs.writeFile(file,JSON.stringify(r)+'\n');
+  f.detail=async id=>capture(id,'$29,000');f.store.audit=audit;
+  const resumed=await f.run(false);assert.equal(resumed.status,'complete');assert.equal(resumed.counts.checked,1);
+  assert.equal(resumed.counts.review,0);assert.equal(resumed.counts.skipped,0);assert.equal(resumed.counts.updated,1);
+  assert.equal(f.rows.get(a).status,'active');
 });

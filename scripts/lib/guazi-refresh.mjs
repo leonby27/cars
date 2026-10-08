@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { openGuaziBrowser } from './guazi-pilot-browser.mjs';
-import { makeSegments, searchBody, listCandidate, normalizeCoreCard, evaluateCoreCard } from './guazi-core.mjs';
+import { makeSegments, searchBody, listCandidate } from './guazi-core.mjs';
 import { productId } from './guazi-pilot-data.mjs';
-import { isGuaziSoldCard } from './guazi-availability.mjs';
+import { checkGuaziJob } from './guazi-refresh-check.mjs';
 import { discoverPartition, DISCOVERY_VERSION } from './guazi-discovery.mjs';
 import { readJson, writeJson, mapLimit } from './guazi-pilot-io.mjs';
 import { withGuaziRetries } from './guazi-retry.mjs';
@@ -18,7 +18,7 @@ export const refreshPaths = root => ({
   lock: path.join(root, 'runtime', 'guazi-refresh', 'worker.lock'),
   log: path.join(root, 'runtime', 'guazi-refresh', 'worker.log'),
 });
-const emptyCounts = () => ({ checked: 0, updated: 0, added: 0, unavailable: 0, review: 0, rejected: 0 });
+const emptyCounts = () => ({ checked: 0, updated: 0, added: 0, unavailable: 0, review: 0, skipped: 0, rejected: 0 });
 const stopError = () => Object.assign(new Error('Guazi refresh paused'), { code: 'GUAZI_PAUSED' });
 const minutes = ms => Math.round(ms / 6000) / 10;
 const discoveryPages = node => node.children?.length
@@ -28,31 +28,33 @@ const discoverySections = node => node.children?.length
   ? node.children.reduce((total, child) => total + discoverySections(child), 0)
   : Number(node.done || false);
 
-export function formatGuaziBrandReport({ brand, sourceCount, priceChanged, added, unavailable, remaining, pages, sections, elapsedMs, review, rejected }) {
+export function formatGuaziBrandReport({ brand, sourceCount, priceChanged, added, unavailable, remaining, pages, sections, elapsedMs, review, skipped, reactivated, rejected }) {
   return [
     `✅ ${brand}`,
     `Машин в выдаче источника: ${sourceCount}`,
-    `Цены изменились у: ${priceChanged}`,
+    `Цены изменились от $100 у: ${priceChanged}`,
     `Новых заведено: ${added}`,
     `Снято с продажи: ${unavailable}`,
     `Осталось в каталоге: ${remaining}`,
     `Страниц прочитано: ${pages}${sections > 1 ? ` в ${sections} разделах выдачи` : ''} · ${minutes(elapsedMs)} мин`,
-    ...(review ? [`Нужно проверить: ${review}`] : []),
+    ...((skipped || review) ? [`Пропущено автоматически: ${(skipped || 0) + (review || 0)}`] : []),
+    ...(reactivated ? [`Вернулось в продажу: ${reactivated}`] : []),
     ...(rejected ? [`Отклонено новых: ${rejected}`] : []),
   ].join('\n');
 }
 
-export function formatGuaziRoundReport({ brands, checked, priceChanged, added, unavailable, remaining, elapsedMs, review, rejected }) {
+export function formatGuaziRoundReport({ brands, checked, priceChanged, added, unavailable, remaining, elapsedMs, review, skipped, reactivated, rejected }) {
   return [
     '🏁 Каталог Guazi обновлён целиком',
     `Круг 2 закрыт: обойдено марок ${brands}`,
     '',
-    `За этот круг проверено наших объявлений: ${checked} · изменилось цен: ${priceChanged}`,
+    `За этот круг проверено наших объявлений: ${checked} · изменилось цен: ${priceChanged} (от $100)`,
     `За этот круг новых заведено: ${added}`,
     `За этот круг снято с продажи: ${unavailable}`,
     `В каталоге Guazi сейчас: ${remaining}`,
     `Заняло: ${Math.round(elapsedMs / 360000) / 10} ч`,
-    ...(review ? [`Нужно проверить: ${review}`] : []),
+    ...((skipped || review) ? [`Пропущено автоматически: ${(skipped || 0) + (review || 0)}`] : []),
+    ...(reactivated ? [`Вернулось в продажу: ${reactivated}`] : []),
     ...(rejected ? [`Отклонено новых: ${rejected}`] : []),
   ].join('\n');
 }
@@ -136,7 +138,9 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     const record = result => {
       recording = recording.then(async () => {
         await fs.appendFile(resultsFile, JSON.stringify({ ...result, at: new Date().toISOString() }) + '\n');
-        results.set(result.id, result); state.counts.checked++; state.counts[result.outcome]++;
+        const previous = results.get(result.id);
+        if (previous) state.counts[previous.outcome]--; else state.counts.checked++;
+        results.set(result.id, result); state.counts[result.outcome]++;
       });
       return recording;
     };
@@ -207,50 +211,8 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
         checkStop();
         await mapLimit(jobs.slice(offset, offset + 25), 4, async job => {
           if (failure || signal?.aborted) return;
-          const { candidate, listed } = job;
-          const id = candidate.id;
           try {
-            if (candidate.violations.length && !active.has(id)) {
-              await record({ id, brand: brand.brand, outcome: 'rejected', reason: candidate.violations.join(',') }); return;
-            }
-            let capture = await retry(() => reader.card(candidate.url, { allowMissing: true }));
-            if (capture.unavailable) {
-              if (listed || !brand.segments.length) {
-                await record({ id, brand: brand.brand, outcome: 'review', reason: 'Listed car has a missing detail page; retained' }); return;
-              }
-              // Absence from the completed brand scan PLUS two ordinary source
-              // 404/410 pages. A transient error at either read stops the round.
-              const second = await retry(() => reader.card(candidate.url, { allowMissing: true }));
-              if (second.unavailable) {
-                await store.markUnavailable(active.get(id), { run: state.run, observations: [capture, second] });
-                await record({ id, brand: brand.brand, outcome: 'unavailable' }); return;
-              }
-              capture = second;
-            }
-            // Same detail request, no extra lookup: Guazi explicitly marks sold
-            // cards even while their old prices and catalog links still exist.
-            if (isGuaziSoldCard(capture, id)) {
-              if (active.has(id)) {
-                await store.markUnavailable(active.get(id), { run: state.run, observations: [{
-                  url: capture.url, observedAt: capture.observedAt,
-                  rawData: { productId: id, displayStatus: capture.rawData.displayStatus },
-                }] });
-              }
-              await record({ id, brand: brand.brand, outcome: active.has(id) ? 'unavailable' : 'rejected', reason: 'Guazi marks the detail card as sold (displayStatus=1)' });
-              return;
-            }
-            const card = normalizeCoreCard(capture, config);
-            const segment = job.segment || segments.find(s => s.brand === card.catalogIdentity.sourceBrand && s.sourceFuelNames.includes(card.fuel));
-            const evaluation = segment ? evaluateCoreCard(card, segment, config) : { status: 'needs_review', reason: 'No matching source segment' };
-            if (!evaluation.car) {
-              await record({ id, brand: brand.brand, outcome: active.has(id) || evaluation.status === 'needs_review' ? 'review' : 'rejected', reason: evaluation.reason }); return;
-            }
-            const car = { ...evaluation.car, checkedAt: card.observedAt, available: true, refreshRun: state.run,
-              availabilityStatus: listed ? 'observed_in_catalog' : 'unverified',
-              ...(job.partition === undefined ? {} : { sourceExportPolicyEligible: job.partition }) };
-            const { action, priceChanged } = await store.upsert(car);
-            await record({ id, brand: brand.brand, outcome: !listed ? 'review' : action === 'added' ? 'added' : 'updated', priceChanged,
-              ...(!listed ? { reason: 'Detail and price refreshed, but absent from catalog; availability remains unverified' } : {}) });
+            await record(await checkGuaziJob(job, { brand: brand.brand, active, segments, config, reader, retry, store, run: state.run }));
           } catch (error) { failure ||= error; }
         });
         await recording; await save();
@@ -265,8 +227,28 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
       log(formatGuaziBrandReport({ brand: brand.brand, sourceCount: [...queue.values()].filter(job => job.listed).length,
         priceChanged: brandResults.filter(result => result.priceChanged).length,
         added: byOutcome('added'), unavailable: byOutcome('unavailable'), remaining, pages, sections,
-        elapsedMs: state.brandElapsedMs, review: byOutcome('review'), rejected: byOutcome('rejected') }));
+        elapsedMs: state.brandElapsedMs, review: byOutcome('review'), skipped: byOutcome('skipped'), rejected: byOutcome('rejected') }));
       brandTick = null;
+    }
+    // Recheck the small uncertain set after the long main traversal. Replacement
+    // results, including completed retries, are replayed on resume without losing
+    // source URLs or double-counting checks. Legacy review journals are supported.
+    state.phase = 'recheck'; await save();
+    for (const result of [...results.values()].filter(r => ['skipped','review'].includes(r.outcome) && !r.rechecked)) {
+      checkStop();
+      let job = result.job && { ...result.job, segment: segments.find(s => s.id === result.job.segmentId) };
+      if (!job) {
+        const row = active.get(result.id);
+        if (row) job = { candidate: { id: result.id, url: row.sourceUrl, violations: [] }, listed: false };
+        for (const segment of segments) for (const partition of config.exportEligibilityPartitions) {
+          const discovery = await readJson(path.join(out, 'discovery', `${segment.id}-${partition}.json`));
+          const item = discovery?.candidates?.[result.id];
+          if (item) job = { candidate: listCandidate(item, segment), segment, partition, listed: true };
+        }
+      }
+      if (!job) throw Error(`Missing retry identity for Guazi ${result.id}`);
+      await record(await checkGuaziJob(job, { brand: result.brand, active, segments, config, reader, retry, store, run: state.run, rechecked: true }));
+      await save();
     }
     const unchecked = snapshot.filter(row => !results.has(row.externalId));
     if (unchecked.length) throw Error(`Incomplete Guazi refresh: ${unchecked.length} starting listings unchecked`);
@@ -274,9 +256,14 @@ export async function runGuaziRefresh({ root, newCircle = false, signal }, {
     state.phase = 'dedupe'; await save();
     await store.finalize();
     const remainingActive = await store.countActive();
+    state.phase = 'audit'; await save();
+    const expectedRemaining = [...results.values()].filter(r => ['updated','added'].includes(r.outcome)).length;
+    state.audit = await store.audit({ run: state.run, results: [...results.values()], expectedRemaining });
     state.summary = { brands: brands.length, checked: snapshot.length,
       priceChanged: [...results.values()].filter(result => result.priceChanged).length,
-      added: state.counts.added, unavailable: state.counts.unavailable, remaining: remainingActive,
+      reactivated: [...results.values()].filter(r => r.action === 'reactivated').length,
+      priceChangeThresholdUsd: 100, minorPriceChanges: [...results.values()].filter(r => r.quoteChanged && !r.priceChanged).length,
+      skipped: state.counts.skipped, added: state.counts.added, unavailable: state.counts.unavailable, remaining: remainingActive,
       elapsedMs: state.activeElapsedMs, review: state.counts.review, rejected: state.counts.rejected };
     state.status = 'complete'; state.phase = 'complete'; state.finishedAt = new Date().toISOString(); await save();
     await message(formatGuaziRoundReport(state.summary));

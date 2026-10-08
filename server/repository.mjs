@@ -42,6 +42,7 @@ export const SOLD_LISTING_RETENTION_MS = 14 * 86400_000;
 // После этого она снова становится обычной исчезнувшей карточкой (404), чтобы
 // старые объявления не копились в выдаче поисковиков и в аккаунтах без срока.
 export function soldListingVisible(car, now = Date.now()) {
+  if (car?.availabilityStatus === 'skipped') return false;
   if (!car || car.available !== false) return Boolean(car);
   const soldAt = new Date(car.soldAt || car.checkedAt || "").getTime();
   return Number.isFinite(soldAt) && now - soldAt < SOLD_LISTING_RETENTION_MS;
@@ -251,8 +252,9 @@ export function rowToCar(row) {
   // `available` и `soldAt` позволяют внешним страницам оставить его на две недели.
   // Строка без столбца состояния (узкие выборки) считается живой.
   const available = row.status === undefined || row.status === "active";
-  const soldAt = available ? null : row.sold_at || row.last_checked_at || row.last_seen_at || null;
-  return normalizeCar({ ...raw, available, soldAt, id:row.id, externalId:row.external_id, source:row.source, origin:originForSource(row.source), sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:available ? "Карточка доступна" : "Продано", statusTone:available ? "green" : "red", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, previousPriceUsd:Number(row.previous_price_usd) || null, priceChangedAt:row.price_changed_at, sourceId:raw.sourceId || `${SOURCE_CODES[row.source] || "GZ"}-${row.external_id}`, ...row.specifications });
+  const skipped = row.status === 'skipped';
+  const soldAt = available || skipped ? null : row.sold_at || row.last_checked_at || row.last_seen_at || null;
+  return normalizeCar({ ...raw, available, soldAt, ...(skipped ? {availabilityStatus:"skipped"} : {}), id:row.id, externalId:row.external_id, source:row.source, origin:originForSource(row.source), sourceUrl:row.source_url, title:row.title, brand:row.brand, model:row.model, year:row.model_year, type:row.powertrain, drive:row.drivetrain, battery:Number(row.battery_kwh) || null, electricRange:row.electric_range_km, combinedRange:row.combined_range_km, city:row.city, firstRegistration:row.first_registration, mileage:row.mileage_km, chinaPrice:row.price_cny, guidePriceCny:row.guide_price_cny, owners:row.owners, transfers:row.transfers, conditionGrade:row.condition_grade, appearanceScore:Number(row.appearance_score) || null, claims:row.claims, description:row.description, status:skipped ? "Карточка недоступна" : available ? "Карточка доступна" : "Продано", statusTone:skipped ? "muted" : available ? "green" : "red", images:row.images, image:row.images?.[0], checkedAt:row.last_checked_at, importedAt:row.imported_at, firstSeenAt:row.first_seen_at, previousPriceUsd:Number(row.previous_price_usd) || null, priceChangedAt:row.price_changed_at, sourceId:raw.sourceId || `${SOURCE_CODES[row.source] || "GZ"}-${row.external_id}`, ...row.specifications });
 }
 
 export function withoutDetailPayload(car) {

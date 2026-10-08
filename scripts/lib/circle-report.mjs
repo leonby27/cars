@@ -7,7 +7,7 @@ export function safeDiagnostic(value) {
     .replace(/((?:token|password|authorization|cookie|secret|api[_-]?key)\s*[=:]\s*)[^\s,;]+/gi, '$1[скрыто]');
 }
 export function circleSummary(source, { report, state, importReport, elapsedMs } = {}) {
-  let checked, changed, added, sold, remaining, rejected, review;
+  let checked, changed, added, sold, remaining, rejected, skipped, reactivated;
   if (source === 'che') {
     checked = report?.checkedThisRun; changed = report?.rePriced; added = report?.added;
     sold = report?.sold; remaining = report?.remainingActive;
@@ -15,26 +15,29 @@ export function circleSummary(source, { report, state, importReport, elapsedMs }
     checked = state?.summary?.checked ?? state?.snapshotTotal;
     changed = state?.summary?.priceChanged; added = state?.counts?.added;
     sold = state?.counts?.unavailable; remaining = state?.summary?.remaining;
-    rejected = state?.counts?.rejected; review = state?.counts?.review;
+    rejected = state?.counts?.rejected;
+    skipped = (state?.counts?.skipped || 0) + (state?.counts?.review || 0);
+    reactivated = state?.summary?.reactivated;
     elapsedMs = state?.activeElapsedMs ?? elapsedMs;
   } else {
     checked = report?.active; changed = report?.priceChanged; sold = report?.sold;
     added = importReport?.imported ?? 0; rejected = importReport?.rejected;
   }
   return [
-    `${review ? '⚠️' : '✅'} ${labels[source]} завершён`,
+    `✅ ${labels[source]} завершён`,
     source === 'guazi' ? 'Итоги всего круга:' : 'Итоги этого запуска:',
-    count('Проверено объявлений', checked), count('Изменилось цен', changed),
+    count('Проверено объявлений', checked), count(source === 'guazi' && state?.summary?.priceChangeThresholdUsd === 100 ? 'Изменилось цен (от $100)' : 'Изменилось цен', changed),
     count('Добавлено', added), count('Снято с продажи', sold),
+    reactivated ? count('Вернулось в продажу', reactivated) : null,
     count('Осталось в каталоге источника', remaining),
-    review ? count('Требуют ручной проверки', review) : null,
+    skipped ? count('Пропущено автоматически', skipped) : null,
     rejected ? count('Отклонено по правилам отбора', rejected) : null,
     duration(elapsedMs),
   ].filter(Boolean).join('\n');
 }
 
 export function circleFailure(source, error, { report, state, importReport, cursor, elapsedMs, logTail, logPath } = {}) {
-  const phases = { census: 'подсчёт марок', discovery: 'поиск машин', details: 'проверка карточек', dedupe: 'сверка дублей', complete: 'завершение' };
+  const phases = { census: 'подсчёт марок', discovery: 'поиск машин', details: 'проверка карточек', recheck: 'автоматическая перепроверка', audit: 'проверка целостности каталога', dedupe: 'сверка дублей', complete: 'завершение' };
   const counts = state?.counts;
   return safeDiagnostic([
     `❌ ${labels[source]} не завершён`,

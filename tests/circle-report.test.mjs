@@ -10,7 +10,7 @@ test('success summaries use each source actual metrics and duration', () => {
   assert.match(che, /Длительность: 2 мин/);
   const guazi = circleSummary('guazi', { state: { snapshotTotal: 12, counts: { added: 3, unavailable: 4, review: 1 }, summary: { priceChanged: 5 }, activeElapsedMs: 180000 }, elapsedMs: 60000 });
   assert.match(guazi, /Итоги всего круга/);
-  assert.match(guazi, /Требуют ручной проверки: 1/);
+  assert.match(guazi, /Пропущено автоматически: 1/);
   assert.match(guazi, /Длительность: 3 мин/);
   const encar = circleSummary('encar', { report: { active: 20, priceChanged: 6, sold: 2 }, importReport: { imported: 8, rejected: 4 } });
   assert.match(encar, /Добавлено: 8/);
@@ -30,4 +30,11 @@ test('failure details carry source code, stage, saved progress, and bounded curr
 test('diagnostics redact credentials in database URLs and Telegram paths', () => {
   const text = safeDiagnostic('postgresql://abcars:supersecret@localhost/db /bot123456:fake_test_token/token password=hunter2');
   assert.ok(!text.includes('supersecret')); assert.ok(!text.includes('fake_test_token')); assert.ok(!text.includes('hunter2'));
+});
+
+test('automatic omissions keep a green single result and reactivations and significant prices are explicit',()=>{
+  const text=circleSummary('guazi',{state:{counts:{skipped:81,review:0},summary:{priceChanged:7,priceChangeThresholdUsd:100,reactivated:172}}});
+  assert.match(text,/^✅/);assert.match(text,/Пропущено автоматически: 81/);
+  assert.match(text,/Вернулось в продажу: 172/);assert.match(text,/Изменилось цен \(от \$100\): 7/);
+  assert.doesNotMatch(text,/ручной|⚠️/);
 });

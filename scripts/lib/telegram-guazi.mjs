@@ -28,14 +28,14 @@ export function formatGuaziStatus(state, busy) {
   if (!state) return busy ? '🟢 Круг 2 · Guazi запускается.' : '⚪️ Круг 2 · Guazi ещё не запускался.';
   const labels = { complete: 'завершён', paused: 'остановлен', blocked: 'остановлен: проверка доступа', error: 'прерван из-за ошибки' };
   const counts = state.counts || {};
-  const phases = { census: 'подсчёт марок', discovery: 'поиск машин', details: 'проверка карточек', dedupe: 'сверка дублей' };
+  const phases = { census: 'подсчёт марок', discovery: 'поиск машин', details: 'проверка карточек', recheck: 'автоматическая перепроверка', audit: 'проверка целостности каталога', dedupe: 'сверка дублей' };
   return [
     `${busy ? '🟢' : '⚪️'} Круг 2 · Guazi: ${busy ? 'идёт' : labels[state.status] || 'процесс не работает; можно продолжить'}`,
     state.brand ? `Марка: ${state.brand}` : null,
     busy && phases[state.phase] ? `Этап: ${phases[state.phase]}` : null,
     `Марок завершено: ${state.brandsDone?.length || 0}/${state.brandsTotal ?? '?'}`,
     `Обновлено: ${counts.updated || 0} · добавлено: ${counts.added || 0} · снято: ${counts.unavailable || 0}`,
-    `На проверку: ${counts.review || 0} · отклонено новых: ${counts.rejected || 0}`,
+    `Пропущено автоматически: ${(counts.skipped || 0) + (counts.review || 0)} · отклонено новых: ${counts.rejected || 0}`,
     state.updatedAt ? `Данные на: ${new Date(state.updatedAt).toLocaleString('ru-RU', { timeZone: 'Europe/Minsk' })} (Минск)` : null,
     state.error ? `Причина: ${state.error}` : null,
   ].filter(Boolean).join('\n');

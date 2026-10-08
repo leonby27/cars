@@ -68,6 +68,14 @@ test("проданная машина видна ровно две недели"
   assert.equal(soldListingVisible(rowToCar(listingRow("unavailable", expiredAt)), now), false);
 });
 
+test('automatically skipped cards are unavailable, never labeled sold, and have no sale retention', async () => {
+  const row=listingRow('skipped',new Date().toISOString());
+  const car=rowToCar(row);
+  assert.equal(car.available,false);assert.equal(car.soldAt,null);
+  assert.equal(car.status,'Карточка недоступна');assert.equal(soldListingVisible(car),false);
+  assert.equal((await requestCar(row.id,'skipped',new Date().toISOString())).status,404);
+});
+
 test("недавно проданная машина отвечает карточкой, старая — как несуществующая", async () => {
   const recentAt = new Date(Date.now() - 86400_000).toISOString();
   const oldAt = new Date(Date.now() - SOLD_LISTING_RETENTION_MS - 1000).toISOString();
