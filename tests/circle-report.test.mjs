@@ -32,6 +32,20 @@ test('diagnostics redact credentials in database URLs and Telegram paths', () =>
   assert.ok(!text.includes('supersecret')); assert.ok(!text.includes('fake_test_token')); assert.ok(!text.includes('hunter2'));
 });
 
+test('Encar failure distinguishes transport, malformed data, database errors and saved queue', () => {
+  const text = circleFailure('encar', Error('incomplete'), { report: {
+    readFailed: 12, parseFailed: 1, writeFailed: 45, unknown: 58, remainingListings: 60,
+    responseStatuses: { 0: 10, 503: 2 }, checkpointPath: '/srv/abcars/runtime/encar-refresh-checkpoint.json', walk: {},
+  } });
+  assert.match(text, /Ошибок чтения карточек: 12/);
+  assert.match(text, /Ошибок разбора карточек: 1/);
+  assert.match(text, /Ошибок записи в базу: 45/);
+  assert.match(text, /сеть\/таймаут — 10/);
+  assert.match(text, /HTTP 503 — 2/);
+  assert.match(text, /--resume/);
+  assert.doesNotMatch(text, /Карточек без ответа: 58/);
+});
+
 test('automatic omissions keep a green single result and reactivations and significant prices are explicit',()=>{
   const text=circleSummary('guazi',{state:{counts:{skipped:81,review:0},summary:{priceChanged:7,priceChangeThresholdUsd:100,reactivated:172}}});
   assert.match(text,/^✅/);assert.match(text,/Пропущено автоматически: 81/);

@@ -180,6 +180,78 @@ test("фильтр списка, адреса и кандидаты из стр�
   assert.deepEqual(encarModelGroups(facets).slice(0, 3).map((group) => group.name), ["그랜저", "싼타페", "아반떼"]);
 });
 
+test('Volkswagen dotted model names use Encar facet escaping through the actual list walk', async () => {
+  const calls = [];
+  const client = new EncarClient({ pace: 0, wait: async () => {}, fetcher: async url => {
+    const query = new URL(url).searchParams.get('q');
+    calls.push(query);
+    if (new URL(url).searchParams.has('inav')) return {
+      status: 200, text: async () => JSON.stringify({ Count: 106, iNav: { Nodes: [{ DisplayName: '모델그룹', Facets: [{ Value: 'ID.4', Count: 94 }, { Value: 'ID.5', Count: 12 }] }] } }),
+    };
+    return /ModelGroup\.ID_\.[45]\._\./.test(query)
+      ? { status: 200, text: async () => JSON.stringify({ Count: 0, SearchResults: [] }) }
+      : { status: 400, text: async () => '' };
+  } });
+  const stats = await client.walk({ brands: ['Volkswagen'], onItem: () => {} });
+  assert.equal(stats.broken, undefined);
+  assert.equal(calls.length, 3);
+  assert.ok(calls.some(query => query.includes('ModelGroup.ID_.4')));
+  assert.ok(calls.some(query => query.includes('ModelGroup.ID_.5')));
+});
+
+test('bad filters do not wait/retry; missing facets and short lists cannot look complete', async () => {
+  const waits = [], calls = [];
+  const client = new EncarClient({ pace: 0, wait: async ms => waits.push(ms), fetcher: async url => {
+    calls.push(url); return { status: 400, text: async () => '' };
+  } });
+  assert.equal((await client.patientList('bad', 0, 1)).status, 400);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(waits, []);
+  const failed = await client.walk({ brands: ['Volkswagen'], onItem: () => {} });
+  assert.equal(failed.broken, 1);
+  assert.match(failed.errors[0].error, /HTTP 400/);
+  const short = new EncarClient({ pace: 0, wait: async () => {}, fetcher: async url => ({
+    status: 200, text: async () => JSON.stringify(new URL(url).searchParams.has('inav')
+      ? { Count: 4, iNav: { Nodes: [{ DisplayName: '모델그룹', Facets: [{ Value: 'ID.4', Count: 4 }] }] } }
+      : { Count: 4, SearchResults: [] }),
+  }) });
+  const stats = await short.walk({ brands: ['Volkswagen'], onItem: () => {} });
+  assert.equal(stats.broken, 1);
+  assert.match(stats.errors[0].error, /Incomplete list/);
+});
+
+test('HTTP 200 with invalid or incomplete detail data stays an error, never a sold/policy omission', async () => {
+  for (const body of ['<html>access denied</html>', '{}', 'null', '[]']) {
+    const client = new EncarClient({ pace: 0, attempts: 2, wait: async () => {}, fetcher: async () => ({ status: 200, text: async () => body }) });
+    await assert.rejects(client.car('42669517', { usdPerKrw }), error => error.stage === 'parse' && /^ENCAR_INVALID_/.test(error.code));
+  }
+  const responses = ['<html>temporary failure</html>', JSON.stringify(sample('grandeur').detail)];
+  const client = new EncarClient({ pace: 0, wait: async () => {}, fetcher: async () => ({ status: 200, text: async () => responses.shift() }) });
+  const result = await client.car(sample('grandeur').listItem.Id, { usdPerKrw, history: false });
+  assert.equal(result.car.model, 'Grandeur');
+  assert.equal(client.requests, 2);
+});
+
+test('fractional PV5/EV9 distances save as integer kilometres while precise source facts and battery stay intact', async () => {
+  for (const range of [400.7, 434.5]) {
+    const car = { ...build('ioniq5'), electricRange: range, combinedRange: 700.4, range, battery: 99.8 };
+    const queries = [];
+    await upsertCar(car, { query: async (sql, values) => {
+      if (sql.startsWith('INSERT INTO vehicles')) {
+        assert.ok(Number.isInteger(values[7]) && Number.isInteger(values[8]), 'PostgreSQL integer parameters');
+        assert.equal(values[7], Math.round(range));
+        assert.equal(values[8], 700);
+        assert.equal(values[6], 99.8);
+      }
+      queries.push({ sql, values }); return { rows: [] };
+    } });
+    const payload = JSON.parse(queries.find(query => query.sql.startsWith('INSERT INTO listings')).values[17]);
+    assert.equal(payload.electricRange, range);
+    assert.equal(payload.combinedRange, 700.4);
+    assert.equal(car.electricRange, range);
+  }
+});
+
 test("клиент: 404 на списке — закрытая сеть, 404 на карточке — снятая машина, повторы на 429", async () => {
   const responses = [];
   const fetcher = async (url) => {

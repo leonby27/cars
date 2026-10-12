@@ -1,151 +1,65 @@
-// Актуализация корейских машин (Encar): цены, наличие, находки для пополнения.
-//
-// Один проход по спискам площадки (те же срезы, что у пополнения) даёт номер и
-// цену каждой живой машины. Дальше три ветки для наших активных объявлений:
-//   • видели, цена та же   — отмечаем «проверена сегодня» пачкой;
-//   • видели, цена другая  — перечитываем карточку и переписываем (стрелка цены);
-//   • не видели            — проверяем карточку: 404 или статус не ADVERTISE —
-//                            продана; иначе переписываем (переехала в другой срез).
-// Всё незнакомое и подходящее складывается в runtime/encar-discoveries.json —
-// пополнение берёт его через `--discoveries` и не обходит списки второй раз.
-//
-// Отсутствие в списке само по себе не значит «продана» — только карточка. Это
-// правило Che168 (память che168-fake-wall-sold-pages), здесь оно то же.
-//
-//   npm run refresh:encar                    полный проход
-//   npm run refresh:encar -- --brands=Hyundai --detail-limit=200
-import fs from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { EncarClient, EncarGeoBlockedError } from "./lib/encar-client.mjs";
-import { loadKoreaSpecs } from "./lib/korea-specs.mjs";
-import { ENCAR_MANUFACTURERS } from "./lib/encar-parser.mjs";
-import { canonicalImportBrand, importPolicyViolation } from "../config/import-policy.mjs";
-import { sourceUsdRate } from "../src/pricing.js";
-import { pool } from "../server/db.mjs";
-import { upsertCar } from "../server/repository.mjs";
+// Encar refresh: list snapshot -> existing cards -> discoveries for import.
+// A missing list entry alone never marks a sale; the detail page decides.
+// --resume retries only the saved unresolved queue after a complete list walk.
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { EncarClient } from './lib/encar-client.mjs';
+import { loadKoreaSpecs } from './lib/korea-specs.mjs';
+import { runEncarRefresh } from './lib/encar-refresh.mjs';
+import { ENCAR_MANUFACTURERS } from './lib/encar-parser.mjs';
+import { canonicalImportBrand, importPolicyViolation } from '../config/import-policy.mjs';
+import { sourceUsdRate } from '../src/pricing.js';
+import { pool, withTransaction } from '../server/db.mjs';
+import { upsertCar } from '../server/repository.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REPORT_PATH = path.join(ROOT, "runtime", "encar-refresh-report.json");
-const DISCOVERIES_PATH = path.join(ROOT, "runtime", "encar-discoveries.json");
-
-const args = new Map(process.argv.slice(2).map((arg) => {
-  const [key, value = "true"] = arg.replace(/^--/, "").split("=");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const args = new Map(process.argv.slice(2).map(arg => {
+  const [key, value = 'true'] = arg.replace(/^--/, '').split('=');
   return [key, value];
 }));
-const pace = Number(args.get("pace") || 300);
-const concurrency = Math.max(1, Number(args.get("concurrency") || 2));
-const brandFilter = args.get("brands")?.split(",").map((brand) => canonicalImportBrand(brand.trim())).filter(Boolean) || null;
-const yearFrom = Number(args.get("year-from") || 2020);
-// Сколько карточек «не видели в списке» проверять за прогон; 0 — все.
-const detailLimit = Number(args.get("detail-limit") || 0);
-const maxMinutes = Number(args.get("max-minutes") || 0);
+const numeric = (key, fallback, minimum = 0) => {
+  const value = Number(args.get(key) ?? fallback);
+  if (!Number.isFinite(value) || value < minimum || (key !== 'max-minutes' && !Number.isInteger(value))) throw new Error(`Invalid --${key}`);
+  return value;
+};
+const concurrency = numeric('concurrency', 2, 1);
+const pace = numeric('pace', 300);
+const yearFrom = numeric('year-from', 2020, 1900);
+const detailLimit = numeric('detail-limit', 0);
+const maxMinutes = numeric('max-minutes', 0);
 const deadline = maxMinutes > 0 ? Date.now() + maxMinutes * 60_000 : Infinity;
-const outOfTime = () => Date.now() >= deadline;
-const dryRun = args.get("dry") === "true";
-
-const usdPerKrw = sourceUsdRate("KRW");
-const brands = Object.keys(ENCAR_MANUFACTURERS).filter((brand) => !brandFilter || brandFilter.includes(brand));
-const startedAt = new Date().toISOString();
-const log = (line) => console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
-// Справочник характеристик по модели и комплектации (config/korea-specs, см.
-// scripts/build-korea-specs.mjs): без него карточки заводятся без мощности и размеров.
-const koreaSpecs = await loadKoreaSpecs(path.join(ROOT, "config", "korea-specs"));
-log(`[specs] справочник характеристик: марок ${Object.keys(koreaSpecs).length}`);
-const client = new EncarClient({ pace, log, specs: koreaSpecs });
-
-const summary = { startedAt, brands, active: 0, seenSamePrice: 0, priceChanged: 0, rewritten: 0, unseen: 0, sold: 0, stillAlive: 0, unknown: 0, discoveries: 0, requests: 0, errors: [] };
+const brandFilter = args.get('brands')?.split(',').map(brand => canonicalImportBrand(brand.trim())).filter(Boolean) || null;
+const brands = Object.keys(ENCAR_MANUFACTURERS).filter(brand => !brandFilter || brandFilter.includes(brand));
+const log = line => console.log(`${new Date().toISOString().slice(11, 19)} ${line}`);
+const dryRun = args.get('dry') === 'true';
+const runtimeFile = name => path.join(ROOT, 'runtime', `${name}${dryRun ? '-dry' : ''}.json`);
+let stopping = false;
+const requestStop = () => { stopping = true; };
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, requestStop);
 
 try {
-  // Активные корейские объявления с ценой в вонах.
-  const { rows } = await pool.query("SELECT id, external_id, price_cny FROM listings WHERE source='Encar' AND status='active'");
-  const active = new Map(rows.map((row) => [String(row.external_id), { id: row.id, won: Number(row.price_cny) }]));
-  const known = new Set((await pool.query("SELECT external_id FROM listings WHERE source='Encar'")).rows.map((row) => String(row.external_id)));
-  summary.active = active.size;
-  log(`[refresh] активных корейских машин ${active.size}, всего известных ${known.size}`);
-
-  // Проход по спискам: цена каждой живой машины и находки.
-  const seenPrice = new Map();
-  const discoveries = new Map();
-  const stats = await client.walk({
-    brands, yearFrom, minYear: yearFrom,
-    onItem: (candidate) => {
-      const won = candidate.priceMan ? Math.round(candidate.priceMan * 10_000) : null;
-      seenPrice.set(candidate.externalId, won);
-      if (!known.has(candidate.externalId) && !discoveries.has(candidate.externalId)) {
-        discoveries.set(candidate.externalId, { externalId: candidate.externalId, year: candidate.year, type: candidate.type, priceMan: candidate.priceMan, brand: canonicalImportBrand(candidate.manufacturer), modelGroup: candidate.modelGroup });
-      }
-    },
-    onSlice: ({ label, total, items }) => log(`[list] ${label}: ${items} из ${total}`),
-    stop: outOfTime,
+  if (!brands.length) throw new Error('Encar: ни одной поддерживаемой марки');
+  const usdPerKrw = sourceUsdRate('KRW');
+  if (!(usdPerKrw > 0)) throw new Error('Encar: курс воны не задан');
+  const specs = await loadKoreaSpecs(path.join(ROOT, 'config', 'korea-specs'));
+  log(`[specs] справочник характеристик: марок ${Object.keys(specs).length}`);
+  const client = new EncarClient({ pace, log, specs });
+  await runEncarRefresh({
+    client, db: pool,
+    // A failed card write rolls back facts, listing, media and history together.
+    upsert: car => withTransaction(db => upsertCar(car, db)),
+    policyViolation: importPolicyViolation, canonicalBrand: canonicalImportBrand,
+    brands, yearFrom, usdPerKrw, concurrency, detailLimit,
+    dryRun, resume: args.get('resume') === 'true',
+    stop: () => stopping || Date.now() >= deadline, log,
+    checkpointPath: runtimeFile('encar-refresh-checkpoint'),
+    reportPath: runtimeFile('encar-refresh-report'),
+    discoveriesPath: runtimeFile('encar-discoveries'),
   });
-  summary.walk = stats;
-  summary.discoveries = discoveries.size;
-  await fs.mkdir(path.dirname(DISCOVERIES_PATH), { recursive: true });
-  await fs.writeFile(DISCOVERIES_PATH, `${JSON.stringify({ generatedAt: new Date().toISOString(), source: "Encar", yearFrom, items: [...discoveries.values()] }, null, 2)}\n`);
-  log(`[walk] в списках ${seenPrice.size} машин, находок ${discoveries.size}`);
-
-  // Ветки для активных объявлений.
-  const samePrice = [];
-  const changed = [];
-  const unseen = [];
-  for (const [externalId, listing] of active) {
-    if (!seenPrice.has(externalId)) { unseen.push(externalId); continue; }
-    const won = seenPrice.get(externalId);
-    if (won === null || Math.abs(won - listing.won) < 10_000) samePrice.push(listing.id);
-    else changed.push(externalId);
-  }
-  summary.seenSamePrice = samePrice.length;
-  summary.priceChanged = changed.length;
-  summary.unseen = unseen.length;
-  log(`[refresh] цена та же ${samePrice.length} · цена изменилась ${changed.length} · не в списках ${unseen.length}`);
-
-  if (!dryRun && samePrice.length) {
-    for (let offset = 0; offset < samePrice.length; offset += 1000) {
-      await pool.query("UPDATE listings SET last_seen_at=now(), last_checked_at=now() WHERE id=ANY($1::text[])", [samePrice.slice(offset, offset + 1000)]);
-    }
-  }
-
-  const markSold = async (externalId) => {
-    summary.sold += 1;
-    if (dryRun) return;
-    await pool.query("UPDATE listings SET status='unavailable', sold_at=COALESCE(sold_at, now()), last_checked_at=now() WHERE source='Encar' AND external_id=$1", [externalId]);
-  };
-  const queue = [...changed, ...(detailLimit > 0 ? unseen.slice(0, detailLimit) : unseen)];
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < queue.length && !outOfTime()) {
-      const externalId = queue[cursor++];
-      try {
-        const { status, car, detail } = await client.car(externalId, { usdPerKrw, history: true });
-        summary.requests = client.requests;
-        if (status === 404 || (status === 200 && detail && detail.advertisement?.status && detail.advertisement.status !== "ADVERTISE")) { await markSold(externalId); continue; }
-        if (status !== 200) { summary.unknown += 1; continue; }
-        if (!car || importPolicyViolation(car)) {
-          // Живая, но больше не наша (например, пропали фото): считаем снятой из каталога.
-          await markSold(externalId);
-          continue;
-        }
-        summary.stillAlive += 1;
-        if (!dryRun) { await upsertCar(car); summary.rewritten += 1; }
-      } catch (error) {
-        if (error instanceof EncarGeoBlockedError) throw error;
-        summary.unknown += 1;
-        if (summary.errors.length < 20) summary.errors.push({ externalId, error: String(error.message).slice(0, 120) });
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: concurrency }, worker));
-  summary.requests = client.requests;
-  summary.finishedAt = new Date().toISOString();
-  await fs.writeFile(REPORT_PATH, `${JSON.stringify(summary, null, 2)}\n`);
-  log(`[done] проданы ${summary.sold}, переписаны ${summary.rewritten}, без ответа ${summary.unknown}, находок ${summary.discoveries}, запросов ${summary.requests}`);
 } catch (error) {
-  summary.fatal = error.message;
-  await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
-  await fs.writeFile(REPORT_PATH, `${JSON.stringify(summary, null, 2)}\n`).catch(() => {});
   console.error(`[fail] ${error.message}`);
   process.exitCode = 1;
 } finally {
+  for (const signal of ['SIGTERM', 'SIGINT']) process.off(signal, requestStop);
   await pool.end().catch(() => {});
 }

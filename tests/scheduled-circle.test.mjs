@@ -23,7 +23,7 @@ test('Encar imports all fresh discoveries only after a verified refresh', () => 
   const discoveries = { generatedAt: iso, items: [{}, {}, {}] };
   assert.deepEqual(encarImportPlan(discoveries, report, startedAt).args, ['scripts/import-encar.mjs', '--discoveries', '--limit=3']);
   assert.equal(encarImportPlan({ ...discoveries, items: [] }, report, startedAt), null);
-  for (const bad of [null, { ...report, fatal: 'failed' }, { ...report, startedAt: '2026-10-04' }, { ...report, unknown: 1 }, { ...report, walk: { broken: 1 } }]) assert.throws(() => encarImportPlan(discoveries, bad, startedAt));
+  for (const bad of [null, { ...report, fatal: 'failed' }, { ...report, startedAt: '2026-10-04' }, { ...report, unknown: 1 }, { ...report, complete: false }, { ...report, remainingListings: 1 }, { ...report, walk: { stopped: true } }, { ...report, walk: { broken: 1 } }]) assert.throws(() => encarImportPlan(discoveries, bad, startedAt));
   assert.throws(() => encarImportPlan({ ...discoveries, generatedAt: 'bad' }, report, startedAt));
 });
 test('busy source is skipped without reading or overwriting its checkpoint', async () => {
@@ -80,6 +80,14 @@ test('Encar import request errors produce detailed failure instead of a green su
   assert.equal(messages.length, 1);
   assert.match(messages[0], /503/);
   assert.match(messages[0], /не завершён/);
+});
+
+test('Encar import partial/fatal reports cannot produce a green completion', async () => {
+  for (const partial of [{ complete: false }, { fatal: 'failed batch' }, { walk: { broken: 1 } }]) {
+    await assert.rejects(runScheduledCircle('encar', { now: () => startedAt, running: async () => false, run: async () => {},
+      readState: async name => name.includes('discoveries') ? { generatedAt: iso, items: [{}] } : name.includes('import-report') ? { ...report, final: true, ...partial } : report,
+    }), /пополнение не завершено/);
+  }
 });
 test('Che168 stale reports or partial cursors never report completion', async () => {
   for (const cursor of [null, { startedAt: iso }, { startedAt: null }]) {

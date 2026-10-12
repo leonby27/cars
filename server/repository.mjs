@@ -76,6 +76,16 @@ export const vehicleSpecifications = (item) => ({ bodyType:item.bodyType,bodyStr
 // стрелка цены на карточке, и прошлая цена считаются точно.
 export async function upsertCar(car, client = pool) {
   const item = normalizeCar(car);
+  // Distances can be fractional in source/spec data. PostgreSQL integer columns
+  // store whole kilometres; keep the precise originals in source_payload/specs.
+  const distanceKm = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const rounded = Math.round(Number(value));
+    if (!Number.isSafeInteger(rounded) || rounded < 0 || rounded > 2147483647) throw new Error(`Invalid range in kilometres: ${value}`);
+    return rounded;
+  };
+  const electricRangeKm = distanceKm(item.electricRange);
+  const combinedRangeKm = distanceKm(item.combinedRange);
   const checkedAt = item.checkedAt || item.importedAt || new Date().toISOString();
   // This column remains BY-only until market_offers is introduced. The explicit
   // site context prevents a future RU importer from silently reusing its price.
@@ -88,7 +98,7 @@ export async function upsertCar(car, client = pool) {
       updated_at=CASE WHEN ROW(vehicles.brand,vehicles.model,vehicles.model_year,vehicles.powertrain,vehicles.drivetrain,vehicles.battery_kwh,vehicles.electric_range_km,vehicles.combined_range_km,vehicles.specifications)
         IS DISTINCT FROM ROW(EXCLUDED.brand,EXCLUDED.model,EXCLUDED.model_year,EXCLUDED.powertrain,EXCLUDED.drivetrain,EXCLUDED.battery_kwh,EXCLUDED.electric_range_km,EXCLUDED.combined_range_km,EXCLUDED.specifications)
         THEN now() ELSE vehicles.updated_at END`,
-    [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,item.electricRange,item.combinedRange,JSON.stringify(vehicleSpecifications(item))]);
+    [item.id,item.brand,item.model,item.year,item.type,item.drive,item.battery,electricRangeKm,combinedRangeKm,JSON.stringify(vehicleSpecifications(item))]);
   await client.query(`INSERT INTO listings (id, vehicle_id, source, external_id, source_url, title, city, first_registration, mileage_km, price_cny, guide_price_cny, owners, transfers, condition_grade, appearance_score, claims, description, status, content_hash, source_payload, last_seen_at, last_checked_at, imported_at, estimated_total_usd, listed_at, sold_at)
     VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,now(),$19,$20,$21,COALESCE(NULLIF($18::jsonb->>'sourceListedAt','')::timestamptz, now()),NULL)
     ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, city=EXCLUDED.city, first_registration=EXCLUDED.first_registration, mileage_km=EXCLUDED.mileage_km, price_cny=EXCLUDED.price_cny, guide_price_cny=EXCLUDED.guide_price_cny, owners=EXCLUDED.owners, transfers=EXCLUDED.transfers, condition_grade=EXCLUDED.condition_grade, appearance_score=EXCLUDED.appearance_score, claims=EXCLUDED.claims, description=EXCLUDED.description, status='active', sold_at=NULL, content_hash=EXCLUDED.content_hash, source_payload=EXCLUDED.source_payload, last_seen_at=now(), last_checked_at=EXCLUDED.last_checked_at, imported_at=EXCLUDED.imported_at, estimated_total_usd=EXCLUDED.estimated_total_usd, listed_at=COALESCE(NULLIF(EXCLUDED.source_payload->>'sourceListedAt','')::timestamptz, listings.first_seen_at), previous_price_usd=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN COALESCE((listings.source_payload->>'usdPrice')::numeric, round(listings.price_cny / CASE WHEN listings.source='Encar' THEN 1354 ELSE 7.15 END)) ELSE listings.previous_price_usd END, price_changed_at=CASE WHEN abs(listings.price_cny - EXCLUDED.price_cny) >= CASE WHEN EXCLUDED.source='Encar' THEN 140000 ELSE 700 END THEN now() ELSE listings.price_changed_at END, content_changed_at=CASE WHEN listings.content_hash IS DISTINCT FROM EXCLUDED.content_hash OR listings.status IS DISTINCT FROM 'active' THEN now() ELSE listings.content_changed_at END`,

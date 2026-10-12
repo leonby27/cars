@@ -22,7 +22,7 @@ export function sourceIsRunning(source, processList) {
 
 export function encarImportPlan(discoveries, report, startedAt) {
   if (!report?.finishedAt || report.fatal || Date.parse(report.startedAt) < startedAt || !Number.isFinite(Date.parse(report.startedAt))) throw Error('Нет свежего завершённого отчёта Encar');
-  if (report.walk?.broken || report.unknown) throw Error('Encar: не все списки или карточки проверены; пополнение отложено');
+  if (report.complete === false || report.remainingListings || report.walk?.broken || report.walk?.stopped || report.unknown) throw Error('Encar: не все списки или карточки проверены; пополнение отложено');
   if (!Array.isArray(discoveries?.items) || Date.parse(discoveries.generatedAt) < startedAt || !Number.isFinite(Date.parse(discoveries.generatedAt))) throw Error('Нет свежих находок Encar');
   if (!discoveries.items.length) return null;
   return { command: 'node', args: ['scripts/import-encar.mjs', '--discoveries', `--limit=${discoveries.items.length}`], log: 'runtime/encar-circle.log' };
@@ -48,6 +48,7 @@ export async function runScheduledCircle(source, { readState, running, run, noti
         await run(step);
         importReport = await readState('runtime/encar-import-report.json');
         if (!importReport?.final || !Number.isFinite(Date.parse(importReport.startedAt)) || Date.parse(importReport.startedAt) < startedAt) throw Error('Нет свежего итогового отчёта пополнения Encar');
+        if (importReport.fatal || importReport.complete === false || importReport.walk?.broken) throw Error(`Encar: пополнение не завершено${importReport.fatal ? `: ${importReport.fatal}` : ''}`);
         const failures = Object.entries(importReport.rejectedByReason || {}).filter(([reason]) => /^(?:detail request failed|detail error:)/.test(reason));
         if (failures.length) throw Error(`Encar: ошибки чтения новых карточек: ${failures.map(([reason, count]) => `${reason} — ${count}`).join('; ')}`);
       }

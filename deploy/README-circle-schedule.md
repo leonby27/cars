@@ -30,6 +30,29 @@ import reports are checked for request errors, not only process exit status.
 Logs remain `/tmp/circle.log`,
 `runtime/guazi-refresh/worker.log`, and `runtime/encar-circle.log`.
 
+Encar refresh saves its unresolved detail queue atomically to
+`runtime/encar-refresh-checkpoint.json`, after the list snapshot, every 100
+processed cards or 30 seconds, and on a graceful stop. Resume it with
+`npm run refresh:encar -- --resume` using the same `--brands` / `--year-from`
+settings. Completed cards are omitted; failed and unattempted cards are retried.
+A hard process kill can replay the last unsaved successful writes; upserts are
+idempotent. Resume retains the original list/discovery date and cumulative
+counts. A broken/stopped list walk needs a new full refresh (without `--resume`);
+weekly launches always take a new list snapshot. The October 10 failed run
+predates this checkpoint format and cannot be resumed through this option.
+
+`--detail-limit` and `--max-minutes` never turn an incomplete refresh into a
+successful circle. Import stays blocked while any details or lists remain
+unresolved. Dry runs write separate `*-dry.json` files and cannot overwrite the
+live queue/discoveries/report. Network/HTTP, parsing and database failures are
+counted separately; HTTP/network codes and representative errors appear in the
+report and per-card log. Each live card rewrite is a database transaction.
+
+Encar filters escape literal dots using the marketplace grammar (`ID_.4`,
+`ID_.5`). Fractional electric/combined ranges are rounded to whole kilometres
+only for the database integer columns; exact source values remain in the saved
+payload and original technical specifications.
+
 Stop future scheduling with:
 `systemctl disable --now abcars-circle-che.timer abcars-circle-guazi.timer abcars-circle-encar.timer`.
 This does not stop a currently running collector. Stop a scheduled collector

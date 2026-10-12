@@ -6,6 +6,11 @@ export function safeDiagnostic(value) {
     .replace(/(\/bot)\d+:[A-Za-z0-9_-]+/g, '$1[скрыто]')
     .replace(/((?:token|password|authorization|cookie|secret|api[_-]?key)\s*[=:]\s*)[^\s,;]+/gi, '$1[скрыто]');
 }
+const errorExamples = report => {
+  const errors = report?.errors || [];
+  const firstByStage = ['read', 'parse', 'write'].map(stage => errors.find(item => item.stage === stage)).filter(Boolean);
+  return [...firstByStage, ...errors.filter(item => !firstByStage.includes(item))].slice(0, 5);
+};
 export function circleSummary(source, { report, state, importReport, elapsedMs } = {}) {
   let checked, changed, added, sold, remaining, rejected, skipped, reactivated;
   if (source === 'che') {
@@ -54,12 +59,17 @@ export function circleFailure(source, error, { report, state, importReport, curs
     count('Снято с продажи', counts?.unavailable ?? report?.sold),
     count('Осталось проверить объявлений', report?.remainingListings),
     count('Незавершённых марок', report?.remainingBrands),
-    count('Карточек без ответа', report?.unknown ?? report?.noAnswer),
+    count(source === 'encar' && Number.isFinite(report?.readFailed) ? 'Ошибок чтения карточек' : 'Карточек без ответа', report?.readFailed ?? report?.unknown ?? report?.noAnswer),
+    count('Ошибок разбора карточек', report?.parseFailed),
+    count('Ошибок записи в базу', report?.writeFailed),
+    report?.responseStatuses && Object.keys(report.responseStatuses).length ? `Ответы карточек: ${Object.entries(report.responseStatuses).map(([status, total]) => `${status === '0' ? 'сеть/таймаут' : `HTTP ${status}`} — ${total}`).join('; ')}` : null,
     count('Оборванных разделов выдачи', report?.walk?.broken),
-    report?.errors?.length ? `Ошибки: ${report.errors.slice(0, 5).map(item => `${item.externalId || item.brand}: ${item.error}`).join('; ')}` : null,
+    source === 'encar' && report?.walk?.errors?.length ? `Ошибки выдачи: ${report.walk.errors.slice(0, 3).map(item => `${item.label}${item.status === undefined ? '' : ` (HTTP ${item.status})`}: ${item.error}`).join('; ')}` : null,
+    report?.errors?.length ? `Ошибки: ${errorExamples(report).map(item => `${item.externalId || item.brand}: ${item.error}`).join('; ')}` : null,
     duration(elapsedMs),
     source === 'guazi' && state?.status !== 'complete' ? 'Прогресс круга сохранён. Продолжение: «Продолжить 2».' : null,
     source === 'che' && cursor?.startedAt ? 'Прогресс круга сохранён. Продолжение: «Продолжить».' : null,
+    source === 'encar' && report?.remainingListings && report?.checkpointPath && !report.walk?.broken && !report.walk?.stopped ? 'Очередь сохранена. Повтор незавершённых карточек: npm run refresh:encar -- --resume' : null,
     logPath ? `Полный журнал: ${logPath}` : null,
     logTail ? `Последние записи текущего запуска:\n${safeDiagnostic(logTail).slice(-1500)}` : null,
   ].filter(Boolean).join('\n')).slice(0, 3900);

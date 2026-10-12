@@ -31,6 +31,7 @@ import { EncarClient, EncarGeoBlockedError } from "./lib/encar-client.mjs";
 import { loadKoreaSpecs } from "./lib/korea-specs.mjs";
 import { ENCAR_MANUFACTURERS } from "./lib/encar-parser.mjs";
 import { createEncarImportIdentity } from "./lib/encar-import-identity.mjs";
+import { safeDiagnostic } from "./lib/circle-report.mjs";
 import { MAX_LANDED_USD, canonicalImportBrand, importPolicyViolation, isAbovePriceCeiling } from "../config/import-policy.mjs";
 import { estimateLandedCost, sourceUsdRate } from "../src/pricing.js";
 
@@ -90,6 +91,7 @@ const rejected = new Map();
 const rejectionExamples = [];
 let checkpointed = 0;
 let detailReads = 0;
+let walkStats = null, discoveryFailure = null, fatal = null;
 const reject = (reason, externalId) => {
   rejected.set(reason, (rejected.get(reason) || 0) + 1);
   if (rejectionExamples.length < 40) rejectionExamples.push({ externalId, reason });
@@ -113,9 +115,13 @@ const report = (extra = {}) => ({
   requests: client.requests,
   throttled: client.throttled,
   detailReads,
-  imported: accepted.length,
-  importedByBrand: Object.fromEntries([...Map.groupBy(accepted, (car) => car.brand)].map(([brand, cars]) => [brand, cars.length])),
-  importedByType: Object.fromEntries([...Map.groupBy(accepted, (car) => car.type)].map(([type, cars]) => [type, cars.length])),
+  accepted: accepted.length,
+  imported: checkpointed,
+  importedByBrand: Object.fromEntries([...Map.groupBy(accepted.slice(0, checkpointed), (car) => car.brand)].map(([brand, cars]) => [brand, cars.length])),
+  importedByType: Object.fromEntries([...Map.groupBy(accepted.slice(0, checkpointed), (car) => car.type)].map(([type, cars]) => [type, cars.length])),
+  walk: walkStats,
+  fatal: fatal || discoveryFailure,
+  complete: !fatal && !discoveryFailure && !walkStats?.broken && (accepted.length >= limit || (!outOfTime() && cursor >= candidates.length)),
   rejected: [...rejected.values()].reduce((total, value) => total + value, 0),
   rejectedByReason: Object.fromEntries([...rejected].sort((a, b) => b[1] - a[1])),
   rejectionExamples,
@@ -200,7 +206,7 @@ async function discover() {
     log(`[new] ${candidates.length} к скачиванию · ${known} уже заведены или повторы`);
     return;
   }
-  const stats = await client.walk({
+  const stats = walkStats = await client.walk({
     brands, yearFrom, priceMin, priceMax, minYear: yearFrom,
     onItem: (candidate) => { enqueue({ ...candidate, brand: null }); },
     onSlice: ({ label, total, items }) => log(`[list] ${label}: ${items} из ${total}`),
@@ -224,10 +230,10 @@ async function worker() {
     }
     const candidate = candidates[cursor++];
     try {
-      const { status, car, detail } = await client.car(candidate.externalId, { usdPerKrw, history: withHistory });
+      const { status, car, detail, error } = await client.car(candidate.externalId, { usdPerKrw, history: withHistory });
       detailReads += 1;
       if (status === 404) { reject("listing gone (404)", candidate.externalId); continue; }
-      if (status !== 200) { reject(`detail request failed (${status})`, candidate.externalId); continue; }
+      if (status !== 200) { reject(`detail request failed (${status})${error ? `: ${safeDiagnostic(error.code || error.cause?.code || error.message).slice(0, 100)}` : ''}`, candidate.externalId); continue; }
       if (!car) {
         const fuel = detail?.spec?.fuelName || "?";
         const ad = detail?.advertisement?.status || "?";
@@ -251,14 +257,17 @@ async function worker() {
 
 try {
   await Promise.all([
-    discover().catch((error) => { log(`[walk] обход оборван: ${error.message}`); if (error instanceof EncarGeoBlockedError) throw error; }).finally(() => { discovering = false; }),
+    discover().catch((error) => { discoveryFailure = safeDiagnostic(error.message); log(`[walk] обход оборван: ${discoveryFailure}`); }).finally(() => { discovering = false; }),
     ...Array.from({ length: concurrency }, worker),
   ]);
   await checkpoint(true);
+  if (discoveryFailure || walkStats?.broken) throw new Error(discoveryFailure || `Encar: оборванных разделов выдачи ${walkStats.broken}`);
+  if (!report().complete) throw new Error('Encar: пополнение прервано; повторный запуск пропустит уже сохранённые объявления');
   const final = report({ finishedAt: new Date().toISOString(), final: true, candidates: candidates.length });
   log(`[done] принято ${final.imported}, отклонено ${final.rejected}, запросов ${final.requests}`);
   console.log(JSON.stringify({ importedByBrand: final.importedByBrand, importedByType: final.importedByType, rejectedByReason: final.rejectedByReason }, null, 2));
 } catch (error) {
+  fatal = safeDiagnostic(error.message);
   await checkpoint(true).catch(() => {});
   console.error(`[fail] ${error.message}`);
   process.exitCode = 1;
