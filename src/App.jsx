@@ -52,7 +52,7 @@ import { carTitle, carTitleDetails } from "./car-title.js";
 import { splitInlineLinks } from "./inline-links.js";
 
 import { formatRoundedListingCount } from "./catalog-count.js";
-import { COMPANY } from "./company-data.js";
+import { COMPANY, PHONE_CONTACT_NOTE } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
 
 import { TOOL_PAGES, findToolPage } from "./tool-pages.js";
@@ -5913,6 +5913,7 @@ function SiteFooter({ navigate }) {
   // Телефон жил в шапке, 25.09.2026 переехал сюда под соцсети — та же кнопка
   // «показать номер» и то же событие в статистике.
   const [phoneRevealed, setPhoneRevealed] = useState(false);
+  const phoneNoteId = useId();
   const togglePhone = () => {
     if (!phoneRevealed) trackEvent("contact_phone_reveal");
     setPhoneRevealed(!phoneRevealed);
@@ -5988,11 +5989,14 @@ function SiteFooter({ navigate }) {
             type="button"
             className={`phone-reveal${phoneRevealed ? " is-revealed" : ""}`}
             aria-expanded={phoneRevealed}
+            aria-describedby={phoneRevealed ? phoneNoteId : undefined}
             onClick={togglePhone}
           >
             <Phone size={18} weight="fill" aria-hidden="true" />
             {phoneRevealed ? COMPANY.phone : "+375 показать номер"}
+            {phoneRevealed && <ActionTooltip className="footer-phone-tooltip" text={PHONE_CONTACT_NOTE} showOnMount />}
           </button>
+          <span id={phoneNoteId} hidden>{PHONE_CONTACT_NOTE}</span>
         </div>
         <form className="footer-newsletter" onSubmit={subscribeNewsletter} noValidate>
           <span className="footer-newsletter-title">

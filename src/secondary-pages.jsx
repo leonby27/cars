@@ -44,7 +44,7 @@ import { brandNotice } from "./brand-notice.js";
 import { translateSpecGroup, translateTechnicalSpecs } from "./spec-translations.js";
 import { conditionGradeMeta, worstConditionGrade } from "./condition-grade.js";
 import { formatRoundedListingCount } from "./catalog-count.js";
-import { COMPANY } from "./company-data.js";
+import { COMPANY, PHONE_CONTACT_NOTE } from "./company-data.js";
 import { LEGAL_DOCUMENTS } from "./legal-documents.js";
 import { ABOUT_PRINCIPLES, PURCHASE_FLOW_STEPS, SERVICE_PROOF, SERVICE_REPORT_EXAMPLE } from "./service-copy.js";
 import { InspectionReport } from "./inspection-report.jsx";
@@ -5663,7 +5663,7 @@ function ContactsPage({ navigate, theme }) {
         <a className="contact-method-card contact-method-card-brand" href={`tel:${COMPANY.phoneHref}`}>
           <img className="contact-method-brand-image" src="/social/contact-phone.png" alt="" width="92" height="92" decoding="async" />
           <strong>{COMPANY.phone}</strong>
-          <span className="contact-method-description">Позвоните — обсудим ваши вопросы<br />и подберём автомобиль под ваши задачи.</span>
+          <span className="contact-method-description">{PHONE_CONTACT_NOTE}</span>
           <span className="contact-method-action">Позвонить <ArrowRight size={26} aria-hidden="true" /></span>
         </a>
         <a className="contact-method-card contact-method-card-brand" href={COMPANY.viberUrl} rel={EXTERNAL_LINK_REL}>

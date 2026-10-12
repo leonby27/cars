@@ -14639,6 +14639,11 @@ html[data-theme="dark"] body #root .quick-view-modal .select-search.spec-search 
   opacity: 1;
   transform: translateY(0);
 }
+.detail-action-tooltip.footer-phone-tooltip {
+  max-width: min(340px, calc(100vw - 20px));
+  white-space: normal;
+  text-align: left;
+}
 /* Свитчер «Быстрый просмотр» рядом с выдачей: на главной — у заголовка каталога,
    в каталоге — у счётчика найденного. */
 .section-heading-title {
