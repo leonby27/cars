@@ -1246,7 +1246,15 @@ function CustomersSection({ data }) {
   return (
     <section className="analytics-panel">
       <div className="analytics-panel-heading"><div><h2>Регистрации</h2></div></div>
-      <div className="analytics-table-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Дата</th></tr></thead><tbody>{data.registrations?.length ? data.registrations.map((item, index) => <tr key={`${item.phone}-${item.createdAt}-${index}`}><td>{item.name || "—"}</td><td>{item.phone ? <a href={`tel:${String(item.phone).replace(/[^+\d]/g, "")}`}>{item.phone}</a> : "—"}</td><td>{formatDate(item.createdAt, true)}</td></tr>) : <tr><td colSpan="3">Регистраций пока нет.</td></tr>}</tbody></table></div>
+      <div className="analytics-table-wrap"><table>
+        <thead><tr><th>Имя</th><th>Телефон</th><th>Дата регистрации</th><th>Последний вход</th></tr></thead>
+        <tbody>{data.registrations?.length ? data.registrations.map((item, index) => <tr key={`${item.phone}-${item.createdAt}-${index}`}>
+          <td>{item.name || "—"}</td>
+          <td>{item.phone ? <a href={`tel:${String(item.phone).replace(/[^+\d]/g, "")}`}>{item.phone}</a> : "—"}</td>
+          <td>{formatDate(item.createdAt, true)}</td>
+          <td>{item.lastLoginAt ? formatDate(item.lastLoginAt, true) : "—"}</td>
+        </tr>) : <tr><td colSpan="4">Регистраций пока нет.</td></tr>}</tbody>
+      </table></div>
     </section>
   );
 }

@@ -819,7 +819,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
     // Список регистраций читаем из таблицы аккаунтов, а не из событий: события
     // принимаются без пароля и подделываются, а аккаунт создаётся только настоящей
     // регистрацией. Заодно личные данные остаются в одном месте.
-    db.query(`SELECT name, phone, created_at
+    db.query(`SELECT name, phone, created_at, last_login_at
       FROM customer_accounts WHERE created_at >= $1 AND created_at < $2 AND NOT staff
       ORDER BY created_at DESC LIMIT 100`, [from, to]),
     // Регистрации считаем по аккаунтам, а не по событиям — тем же источником, из которого
@@ -941,7 +941,7 @@ export async function getAnalyticsDashboard(rangeValue, { device = "", traffic =
     favorites:favoritesResult.rows.map((row) => ({ listingId:row.listing_id, listingTitle:row.title, owners:row.owners || [], addedAt:row.added_at, gone:row.gone, status:row.status, priceUsd:row.estimated_total_usd })),
     // Телефон в таблице аккаунтов лежит только цифрами: плюс возвращаем, чтобы в
     // разделе он читался и работала ссылка «позвонить».
-    registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at })),
+    registrations:registrationsResult.rows.map((row) => ({ name:row.name, phone:row.phone ? `+${row.phone}` : "", createdAt:row.created_at, lastLoginAt:row.last_login_at })),
     searches:searchesResult.rows.map((row) => ({ query:row.query, asked:row.asked, people:row.people, found:row.found, lastAskedAt:row.last_asked })),
     visits:visitDetailsResult.rows.map((row) => ({ acquisition:analyticsAcquisitionKind(row.landing_acquisition || analyticsAcquisition(row.acquisition_path || row.landing_path)), source:row.entry_source || "", device:row.device || "", platform:row.platform || "", country:row.country || "", landingPath:row.landing_path || "/", pageViews:row.page_views, createdAt:row.created_at, returning:Boolean(row.came_back) })),
   };

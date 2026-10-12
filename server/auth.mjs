@@ -81,7 +81,14 @@ export async function authenticateAccount({ phone, password }) {
 export async function createSession(customerId) {
   const token = crypto.randomBytes(32).toString("base64url");
   await pool.query(
-    "INSERT INTO customer_sessions (token_hash,customer_id,expires_at) VALUES ($1,$2,now() + ($3 * interval '1 second'))",
+    `WITH session AS (
+       INSERT INTO customer_sessions (token_hash,customer_id,expires_at)
+       VALUES ($1,$2,now() + ($3 * interval '1 second'))
+       RETURNING customer_id, created_at
+     )
+     UPDATE customer_accounts a
+        SET last_login_at = GREATEST(a.last_login_at, session.created_at)
+       FROM session WHERE a.id = session.customer_id`,
     [hashToken(token), customerId, SESSION_TTL_SECONDS],
   );
   return token;
