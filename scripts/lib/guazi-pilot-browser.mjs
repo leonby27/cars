@@ -3,7 +3,7 @@ import { sourceUrl, productId, extractRawData, isChallenge } from './guazi-pilot
 import { pause } from './guazi-pilot-io.mjs';
 
 export class SourceBlocked extends Error {
-  constructor(url, status, reason = 'access_check') { super(`Guazi access check${status ? ` (HTTP ${status})` : ''} at ${url}`); this.code = 'SOURCE_BLOCKED'; this.url = url; this.status = status; this.reason = reason; }
+  constructor(url, status, reason = 'access_check') { super(`Guazi access check${status ? ` (HTTP ${status})` : ''} [${reason}] at ${url}`); this.code = 'SOURCE_BLOCKED'; this.url = url; this.status = status; this.reason = reason; }
 }
 
 // A normal access check may recur during a long session. Permit bounded checks
@@ -293,10 +293,10 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
       // All workers share this pause; no burst of retries during an interception.
       await paceRequest();
     }
-    if (catalog) await bootstrapCatalog();
-    else await primary.card(url);
+    const capture = catalog ? await bootstrapCatalog() : await primary.card(url);
     ready = true; generation++; metrics.sessionRefreshes++;
     await onEvent({ event: 'access_recovery', stage: 'session_refreshed', url, generation, metrics: { ...metrics } });
+    return catalog ? null : capture;
   })().finally(() => { refresh = null; });
   const catalogUrl = 'https://en.guazi.com/used-cars/?tradeType=buyItNow';
   async function bootstrapCatalog() {
@@ -347,8 +347,13 @@ export async function openGuaziBrowser({ profile, headless = false, cdp, timeout
       try { return await fetchCard(url, options); }
       catch (e) {
         if (e.code !== 'SOURCE_BLOCKED') throw e;
-        if (refresh) await refresh;
-        else if (seen === generation) await renew(url, e);
+        let capture;
+        if (refresh) capture = await refresh;
+        else if (seen === generation) capture = await renew(url, e);
+        // Navigation already parsed and verified this card. A raw HTTP retry
+        // can still receive protection HTML even after the browser succeeds.
+        // Other workers may share a refresh for a different card or the catalog.
+        if (capture && productId(capture.url) === productId(url)) return capture;
         await paceRequest();
         return fetchCard(url, options);
       }

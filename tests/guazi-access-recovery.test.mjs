@@ -33,3 +33,57 @@ test('same anonymous context can pass a second later checkbox, without rotating 
  }finally{Date.now=realNow;await browser?.close();}
  assert.equal(closed,true);
 });
+
+async function recoveryFixture({ persistent = false, concurrentFailures = 1 } = {}) {
+ const otherUrl = url.replace('y2ud7mtru4', 'aaaaaaaaaa');
+ const requests = new Map();
+ let current = '', visits = 0, disposed = 0;
+ let initialRequests = 0, releaseRequests;
+ const initialBarrier = new Promise(resolve => { releaseRequests = resolve; });
+ const cardScript = target => script.replaceAll('y2ud7mtru4', target === otherUrl ? 'aaaaaaaaaa' : 'y2ud7mtru4');
+ const page = {
+  route: async () => {}, setDefaultTimeout: () => {},
+  goto: async target => { current = target; visits++; return { status: () => 200 }; },
+  evaluate: async () => ({ url: current, title: 'Car', text: 'Car', scripts: [cardScript(current)], products: [url], pages: [], listingLinks: [] }),
+ };
+ const context = {
+  route: async () => {}, newPage: async () => page, close: async () => {},
+  request: { get: async target => {
+   const count = (requests.get(target) || 0) + 1; requests.set(target, count);
+   if (count === 1) {
+    if (++initialRequests === concurrentFailures) releaseRequests();
+    await initialBarrier;
+   }
+   const html = persistent || count === 1 ? '<script>obfuscatedProtection()</script>' : `<script>${cardScript(target)}</script>`;
+   return { status: () => 200, url: () => target, headers: () => ({}), body: async () => Buffer.from(html), dispose: async () => { disposed++; } };
+  } },
+ };
+ const browser = await openGuaziBrowser({ publicOnly: true, transport: 'session-http', delay: 0, requestInterval: 0, timeout: 1000 }, {
+  browserEngine: { launch: async () => ({ newContext: async () => context, close: async () => {} }) },
+ });
+ await browser.listing('https://en.guazi.com/used-cars/');
+ return { browser, otherUrl, requests, stats: () => ({ visits, disposed }) };
+}
+
+test('card recovery keeps the verified browser capture when session HTTP remains intercepted', async () => {
+ const f = await recoveryFixture({ persistent: true });
+ try {
+  const reader = await f.browser.worker();
+  assert.equal((await reader.card(url)).rawData.productId, raw.productId);
+  assert.equal(f.requests.get(url), 1);
+  assert.deepEqual(f.stats(), { visits: 2, disposed: 1 });
+  assert.equal(f.browser.metrics.sessionRefreshes, 1);
+ } finally { await f.browser.close(); }
+});
+
+test('parallel recovery never returns another car from the shared browser refresh', async () => {
+ const f = await recoveryFixture({ concurrentFailures: 2 });
+ try {
+  const reader = await f.browser.worker();
+  const cards = await Promise.all([reader.card(url), reader.card(f.otherUrl)]);
+  assert.deepEqual(cards.map(card => card.rawData.productId), [raw.productId, 'aaaaaaaaaa']);
+  assert.equal(f.browser.metrics.sessionRefreshes, 1);
+  assert.equal([...f.requests.values()].reduce((sum, count) => sum + count, 0), 3);
+  assert.deepEqual(f.stats(), { visits: 2, disposed: 3 });
+ } finally { await f.browser.close(); }
+});
