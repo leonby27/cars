@@ -53,17 +53,24 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
     retry = 'add_header Retry-After $car_ai_retry_after always;'
     if retry not in text:
         text = text.replace(guard, guard + '\n' + retry)
-    if 'abcars-site' in name and 'location = /robots.txt {' not in text:
-        text += '''\n# Keep AhrefsBot's Yep crawl separate from its audit crawler.\nlocation = /robots.txt {\n  brotli_static off;\n  brotli off;\n  gzip off;\n  sub_filter_types text/plain;\n  sub_filter 'User-agent: AhrefsBot' 'User-agent: AhrefsSiteAudit';\n  try_files $uri =404;\n}\n'''
+    if 'abcars-site' in name:
+        old_filter = "  sub_filter 'User-agent: AhrefsBot' 'User-agent: AhrefsSiteAudit';"
+        new_filter = "  sub_filter 'User-agent: AhrefsBot' '# AhrefsBot uses the general rules';\n  sub_filter 'User-agent: *' 'User-agent: *\\n$car_audit_robots_delay';\n  add_header Vary User-Agent always;\n  include /etc/nginx/snippets/abcars-headers.conf;"
+        if 'location = /robots.txt {' not in text:
+            text += '\n# Slow Ahrefs audits; preserve private-path rules.\nlocation = /robots.txt {\n  brotli_static off;\n  brotli off;\n  gzip off;\n  sub_filter_types text/plain;\n' + new_filter + '\n  try_files $uri =404;\n}\n'
+        elif old_filter in text:
+            text = text.replace(old_filter, new_filter)
+        elif new_filter not in text:
+            raise RuntimeError('Unexpected robots.txt configuration; review before replacing it')
     path.write_text(text)
     dependency = '/etc/nginx/snippets/car-ai-limit.conf;'
     source = Path('/etc/nginx/snippets/abcars-proxy.conf').read_text() if 'abcars-site' in name else text
     if dependency not in source:
         raise RuntimeError(f'Shared dynamic limiter is not included: {name}')
-# AhrefsBot is a mixed SEO/Yep crawler: use the shared slow-crawl budget.
+# Ahrefs crawlers use separate slow budgets, not the commercial-bot denial.
 legacy = Path('/etc/nginx/conf.d/abcars-bots.conf')
-text = legacy.read_text().replace('ahrefsbot|semrushbot', 'ahrefssiteaudit|semrushbot')
-text = text.replace('ahrefssiteaudit|semrushbot', 'ahrefssiteaudit|serankingbacklinksbot|semrushbot')
+text = legacy.read_text().replace('ahrefsbot|', '').replace('ahrefssiteaudit|', '')
+text = text.replace('imagesift|semrushbot', 'imagesift|serankingbacklinksbot|semrushbot')
 legacy.write_text(text)
 photos = Path('/etc/nginx/snippets/abcars-photo-location.conf')
 text = photos.read_text()

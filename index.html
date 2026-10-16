@@ -230,6 +230,73 @@
         (window.__counterQueue ||= []).push(startCounter);
       })();
     </script>
+    <script id="ahrefs-analytics">
+      (() => {
+        const privatePage = (url) => /^\/(?:analytics|partner)(?:\/|$)/.test(new URL(url, location.href).pathname);
+        if (privatePage(location.href)) return;
+        const host = location.hostname;
+        if (!/^(www\.)?abcars\.by$/i.test(host)) return;
+        const choice = new URLSearchParams(location.search).get('nocount');
+        try {
+          if (choice === '1') localStorage.setItem('nocount', '1');
+          else if (choice === '0') localStorage.removeItem('nocount');
+          if (localStorage.getItem('nocount') === '1') return;
+        } catch {}
+        if (choice === '1') return;
+        if (navigator.webdriver || /bot|ahrefssiteaudit|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i.test(navigator.userAgent)) return;
+
+        const tag = document.createElement('script');
+        tag.id = 'ahrefs-analytics-library';
+        tag.async = true;
+        tag.src = 'https://analytics.ahrefs.com/analytics.js';
+        tag.setAttribute('data-key', '16RCGn4NpXO0+Xwtz04U7Q');
+        // Переходы и быстрый просмотр считаем вместе с остальными счётчиками:
+        // собственный обработчик history в Ahrefs иначе создаст дубли и учтёт CRM.
+        tag.setAttribute('data-no-pageview-auto', '');
+        const pending = [];
+        let active = true, started = false, lastView = null;
+        const stop = () => {
+          active = false;
+          pending.length = 0;
+          // Ahrefs читает ключ перед каждым событием, включая клики и формы.
+          tag.removeAttribute('data-key');
+        };
+        const flush = () => {
+          if (!active) return;
+          if (privatePage(location.href)) { stop(); return; }
+          if (!window.AhrefsAnalytics?.sendEvent) return;
+          try {
+            for (const url of pending.splice(0)) {
+              tag.setAttribute('data-page-location', url);
+              window.AhrefsAnalytics.sendEvent('pageview');
+            }
+          } finally { tag.removeAttribute('data-page-location'); }
+        };
+        window.__ahrefs = {
+          view(url) {
+            const absolute = new URL(url, location.href).href;
+            if (!active || privatePage(absolute) || absolute === lastView) return;
+            lastView = absolute;
+            pending.push(absolute);
+            flush();
+          },
+          stop,
+        };
+        window.__ahrefs.view(location.href);
+        const startCounter = () => {
+          if (started || !active) return;
+          if (privatePage(location.href)) { stop(); return; }
+          started = true;
+          return new Promise((resolve) => {
+            const timeout = setTimeout(resolve, 10000);
+            tag.onload = () => { clearTimeout(timeout); flush(); resolve(); };
+            tag.onerror = () => { clearTimeout(timeout); resolve(); };
+            document.head.appendChild(tag);
+          });
+        };
+        (window.__counterQueue ||= []).push(startCounter);
+      })();
+    </script>
   </head>
   <body>
     <!-- Картинка-счётчик для браузеров без JavaScript. В <head> её держать нельзя —

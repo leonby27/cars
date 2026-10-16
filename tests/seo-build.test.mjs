@@ -144,6 +144,9 @@ test("внутренняя CRM не содержит счётчиков и по�
   assert.doesNotMatch(analytics, /rel="canonical"/);
   assert.doesNotMatch(analytics, /mc\.yandex\.|window\.__ym|\bym\(/, "в HTML CRM остался код Метрики");
   assert.doesNotMatch(analytics, /googletagmanager\.com|google-analytics\.com|window\.__ga|\bgtag\(/, "в HTML CRM остался код Google Analytics");
+  assert.doesNotMatch(analytics, /analytics\.ahrefs\.com|window\.__ahrefs/, "в HTML CRM остался код Ahrefs");
+  const partner = await read("partner/index.html");
+  assert.doesNotMatch(partner, /analytics\.ahrefs\.com|window\.__ahrefs/, "в HTML кабинета партнёра остался код Ahrefs");
 });
 
 test("указатель карты сайта лежит и под открытым именем, и под зарегистрированным", async () => {

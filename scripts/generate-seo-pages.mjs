@@ -227,7 +227,8 @@ const PRIVATE_ROUTE_NAMES = {
 const withoutMetrika = (html) => html
   .replace(/\s*<script\b[^>]*id=["']yandex-metrika["'][^>]*>[\s\S]*?<\/script>/i, "")
   .replace(/\s*<noscript\b[^>]*id=["']yandex-metrika-noscript["'][^>]*>[\s\S]*?<\/noscript>/i, "")
-  .replace(/\s*<script\b[^>]*id=["']google-analytics["'][^>]*>[\s\S]*?<\/script>/i, "");
+  .replace(/\s*<script\b[^>]*id=["']google-analytics["'][^>]*>[\s\S]*?<\/script>/i, "")
+  .replace(/\s*<script\b[^>]*id=["']ahrefs-analytics["'][^>]*>[\s\S]*?<\/script>/i, "");
 
 // ── Куда идти дальше с информационной страницы ────────────────────────────────
 // Страницы про растаможку, квоту, стоимость доставки, расчёт и вопросы —
@@ -1655,7 +1656,6 @@ const robots = allowIndexing
       "User-agent: Diffbot",
       "User-agent: Omgilibot",
       "User-agent: ImagesiftBot",
-      "User-agent: AhrefsBot",
       "User-agent: SemrushBot",
       "User-agent: DataForSeoBot",
       "User-agent: MJ12bot",

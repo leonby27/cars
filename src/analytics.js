@@ -259,7 +259,8 @@ let lastGoogleAnalyticsView = typeof window === "undefined" ? null : window.loca
 
 export function trackMetrikaView(url, options = {}) {
   const absolute = new URL(url, window.location.href).href;
-  if (isAnalyticsPath(absolute) || isAnalyticsPath(window.location.pathname)) return;
+  if (isAnalyticsPath(absolute) || isAnalyticsPath(window.location.pathname) || isPartnerPath(absolute) || isPartnerPath(window.location.pathname)) return;
+  window.__ahrefs?.view(absolute);
   const metrikaCounter = window.__ym;
   if (metrikaCounter && typeof window.ym === "function" && absolute !== lastMetrikaView) {
     lastMetrikaView = absolute;
@@ -296,6 +297,7 @@ export function trackMetrikaGoal(goal, params = undefined) {
 // даже если не посылать новый `hit`. Штатный `destruct` полностью останавливает
 // счётчик на этом документе; обычные ссылки из CRM открывают сайт с новой загрузкой.
 export function stopMetrika() {
+  window.__ahrefs?.stop();
   const metrikaCounter = window.__ym;
   if (metrikaCounter && typeof window.ym === "function") window.ym(metrikaCounter, "destruct");
   window.__ym = undefined;

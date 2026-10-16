@@ -170,6 +170,7 @@ test("поисковики и роботы чат-ботов открыты, о�
   const welcome = [
     "Googlebot", "Googlebot-Image", "Google-InspectionTool", "YandexBot", "Bingbot", "Applebot", "DuckDuckBot",
     "OAI-SearchBot", "PerplexityBot",
+    "AhrefsBot", "AhrefsSiteAudit",
     // Обучающие обходчики моделей — открыты с 18.09.2026.
     "GPTBot", "ClaudeBot", "CCBot", "Google-Extended", "Applebot-Extended", "cohere-ai", "meta-externalagent", "Amazonbot",
   ];
@@ -178,12 +179,17 @@ test("поисковики и роботы чат-ботов открыты, о�
     assert.equal(allowed(rules, "/cars/59372753", agent), true, `${agent} должен видеть карточку машины`);
     assert.equal(allowed(rules, "/catalog/byd", agent), true, `${agent} должен видеть раздел каталога`);
   }
-  for (const agent of ["Bytespider", "PetalBot", "AhrefsBot", "SemrushBot", "MJ12bot", "DataForSeoBot"]) {
+  for (const agent of ["Bytespider", "PetalBot", "SemrushBot", "MJ12bot", "DataForSeoBot"]) {
     assert.equal(allowed(rules, "/", agent), false, `${agent} должен быть закрыт`);
     assert.equal(allowed(rules, "/cars/59372753", agent), false, `${agent} должен быть закрыт`);
   }
   // Личные разделы закрыты по-прежнему для всех, включая поисковиков.
   assert.equal(allowed(rules, "/account", "Googlebot"), false);
+  for (const agent of ["AhrefsBot", "AhrefsSiteAudit"]) {
+    for (const url of ["/account", "/analytics", "/partner", "/api/auth/me"]) {
+      assert.equal(allowed(rules, url, agent), false, `${agent}: ${url} remains private`);
+    }
+  }
 });
 
  test("public catalog rendering resources are crawlable for search, not bulk bots", async () => {

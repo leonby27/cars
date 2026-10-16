@@ -693,7 +693,7 @@ async function listFlight(params) {
 
 const { pool, withTransaction } = await import("../server/db.mjs");
 // Запись новых машин: та же функция, которой пользуется пополнение каталога.
-const { importCars } = await import("../server/repository.mjs");
+const { importCars, purgeExpiredSoldFavorites } = await import("../server/repository.mjs");
 // Use the database clock, which also writes last_checked_at. Persist BEFORE
 // checking any card; an abrupt exit then cannot lose the cycle boundary.
 const cycleNow = (await pool.query("SELECT now() AS at")).rows[0].at;
@@ -1454,13 +1454,10 @@ try {
 
   await flushWrites();
 
-  // Проданная машина уходит и из избранного: каталог её больше не показывает, и в
-  // личном кабинете она висела бы карточкой, которую уже нельзя открыть. Чистим не
-  // только помеченные этим прогоном, а всё избранное с неживыми объявлениями —
-  // состояние снимает и `db:expire`, а до этого места чистка не доходила.
+  // Проданные машины остаются в избранном на весь срок временной карточки.
+  // Чистим только истёкшие продажи, в том числе отмеченные другим источником.
   // Заказы не трогаем: по ним человек уже общается с нами, там машина должна остаться.
-  const favoritesCleared = dryRun || onlyUnverified ? 0 : (await pool.query(`DELETE FROM customer_favorites f
-    USING listings l WHERE l.id = f.listing_id AND l.status <> 'active'`)).rowCount;
+  const favoritesCleared = dryRun || onlyUnverified ? 0 : await purgeExpiredSoldFavorites();
   if (favoritesCleared) console.log(`[favorites] ${favoritesCleared} saved cards removed: their listings are gone`);
 
   // Курсор: дописываем обойденные этой ночью марки. Круг замкнулся, только

@@ -36,9 +36,9 @@ export const importedContentHash = car => crypto.createHash("sha256").update(JSO
   price:car.sourcePrice ?? car.chinaPrice, mileage:car.mileage, status:car.status, description:car.description, images:car.images,
   quoteInputs:Object.fromEntries(quoteInputFields.map(key=>[key,car[key]])),
 })).digest("hex");
-export const SOLD_LISTING_RETENTION_MS = 14 * 86400_000;
+export const SOLD_LISTING_RETENTION_MS = 60 * 86400_000;
 
-// Проданная машина ещё две недели открывается из избранного и по старой ссылке.
+// Проданная машина ещё 60 дней открывается из избранного и по старой ссылке.
 // После этого она снова становится обычной исчезнувшей карточкой (404), чтобы
 // старые объявления не копились в выдаче поисковиков и в аккаунтах без срока.
 export function soldListingVisible(car, now = Date.now()) {
@@ -46,6 +46,16 @@ export function soldListingVisible(car, now = Date.now()) {
   if (!car || car.available !== false) return Boolean(car);
   const soldAt = new Date(car.soldAt || car.checkedAt || "").getTime();
   return Number.isFinite(soldAt) && now - soldAt < SOLD_LISTING_RETENTION_MS;
+}
+
+// Обновление источника не должно удалять избранное раньше, чем истечёт срок
+// временной карточки. Повторные проверки не сдвигают дату продажи.
+export async function purgeExpiredSoldFavorites(db = pool) {
+  const result = await db.query(`DELETE FROM customer_favorites f
+    USING listings l WHERE l.id = f.listing_id AND l.status = 'unavailable'
+      AND COALESCE(l.sold_at, l.last_checked_at, l.last_seen_at)
+        <= now() - $1 * interval '1 millisecond'`, [SOLD_LISTING_RETENTION_MS]);
+  return result.rowCount;
 }
 
 export function normalizeCar(car) {
@@ -259,7 +269,7 @@ export function rowToCar(row) {
   const raw = row.source_payload || {};
   // Проданное объявление тоже доходит сюда: карточку по номеру спрашивают заявки и
   // служебные скрипты, поэтому `getCar` не фильтрует по состоянию. Признаки
-  // `available` и `soldAt` позволяют внешним страницам оставить его на две недели.
+  // `available` и `soldAt` позволяют внешним страницам оставить его на 60 дней.
   // Строка без столбца состояния (узкие выборки) считается живой.
   const available = row.status === undefined || row.status === "active";
   const skipped = row.status === 'skipped';
