@@ -243,7 +243,8 @@
           if (localStorage.getItem('nocount') === '1') return;
         } catch {}
         if (choice === '1') return;
-        if (navigator.webdriver || /bot|ahrefssiteaudit|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i.test(navigator.userAgent)) return;
+        const installationCheck = /ahrefssiteaudit/i.test(navigator.userAgent);
+        if (!installationCheck && (navigator.webdriver || /bot|claude\/|crawl|spider|slurp|scrape|headless|phantom|puppeteer|playwright|selenium|lighthouse|pagespeed|preview|fetcher|archiver|monitor/i.test(navigator.userAgent))) return;
 
         const tag = document.createElement('script');
         tag.id = 'ahrefs-analytics-library';
@@ -253,6 +254,12 @@
         // Переходы и быстрый просмотр считаем вместе с остальными счётчиками:
         // собственный обработчик history в Ahrefs иначе создаст дубли и учтёт CRM.
         tag.setAttribute('data-no-pageview-auto', '');
+        // Проверяющий робот должен увидеть библиотеку сразу, даже если приложение
+        // ещё не загрузилось. Автопросмотры отключены, ручные события не создаём.
+        if (installationCheck) {
+          document.head.appendChild(tag);
+          return;
+        }
         const pending = [];
         let active = true, started = false, lastView = null;
         const stop = () => {

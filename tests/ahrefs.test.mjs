@@ -38,12 +38,28 @@ test("Ahrefs excludes private pages, local/other hosts, staff and automated visi
   for (const url of ["http://localhost:5173/", "http://127.0.0.1/", "http://192.168.1.20/", "https://abdrive.ru/", "https://abcars.by/?nocount=1"]) {
     assert.equal(visit(url).window.__ahrefs, undefined, url);
   }
-  for (const options of [{ staff:true }, { webdriver:true }, { userAgent:"AhrefsSiteAudit/6.1" }, { userAgent:"Googlebot" }]) {
+  for (const options of [{ staff:true }, { webdriver:true }, { userAgent:"Googlebot" }]) {
     assert.equal(visit(undefined, options).window.__ahrefs, undefined);
   }
   assert.equal(visit("https://abcars.by/?nocount=1", { storageDenied:true }).window.__ahrefs, undefined);
   assert.ok(visit("https://abcars.by/?nocount=0", { staff:true }).window.__ahrefs);
   assert.ok(visit(undefined, { storageDenied:true }).window.__ahrefs);
+});
+
+test("Ahrefs installation crawler sees the script before app startup without counting its visit", () => {
+  for (const webdriver of [false, true]) {
+    const v = visit(undefined, { userAgent:"Mozilla/5.0 AhrefsSiteAudit/6.1", webdriver });
+    assert.equal(v.tags.length, 1);
+    assert.equal(v.tag.src, "https://analytics.ahrefs.com/analytics.js");
+    assert.equal(v.attributes.get("data-key"), "16RCGn4NpXO0+Xwtz04U7Q");
+    assert.ok(v.attributes.has("data-no-pageview-auto"));
+    assert.equal(v.window.__ahrefs, undefined);
+    assert.equal(v.window.__counterQueue, undefined);
+    assert.deepEqual(v.events, []);
+  }
+  for (const path of ["/analytics", "/partner"]) {
+    assert.equal(visit(`https://abcars.by${path}`, { userAgent:"AhrefsSiteAudit/6.1" }).tags.length, 0);
+  }
 });
 
 test("Ahrefs preserves queued views and counts each SPA/quick-view address once", async () => {
