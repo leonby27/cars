@@ -1,6 +1,24 @@
 {
   "early_check_networks": ["47.82.0.0/16", "47.79.0.0/16"],
   "early_check_until_utc": "2026-10-11T00:00:00Z",
+  "geo_campaign": {
+    "enabled": true,
+    "exempt_countries": [
+      "AD", "AL", "AM", "AT", "AX", "AZ", "BA", "BE", "BG", "BY",
+      "CH", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FO", "FR",
+      "GB", "GE", "GG", "GI", "GR", "HR", "HU", "IE", "IM", "IS",
+      "IT", "JE", "KG", "KZ", "LI", "LT", "LU", "LV", "MC", "MD",
+      "ME", "MK", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "RU",
+      "SE", "SI", "SJ", "SK", "SM", "TJ", "TM", "TR", "UA", "UZ",
+      "VA", "XK"
+    ],
+    "window_seconds": 1800,
+    "pair_seconds": 120,
+    "min_pairs": 64,
+    "min_html_ips": 32,
+    "min_api_ips": 8,
+    "risk_seconds": 3600
+  },
   "behavior": {
     "enabled": true,
     "min_ips_hour": 32,

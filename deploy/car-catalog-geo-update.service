@@ -1,0 +1,17 @@
+[Unit]
+Description=Refresh country exemptions and verified Ahrefs networks
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/car-catalog-guard/update-catalog-guard-geo.py --output /usr/local/lib/car-catalog-guard/catalog-guard-countries.json
+Nice=19
+CPUWeight=10
+MemoryMax=192M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/usr/local/lib/car-catalog-guard
+UMask=0022

@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep country exemptions and verified service networks current
+
+[Timer]
+OnCalendar=*-*-* 03:40:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

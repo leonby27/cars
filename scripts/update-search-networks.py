@@ -1,6 +1,6 @@
 """Official search IP feeds + forward-confirmed Yandex DNS; no request-path DNS.
 Keep the last successful list on feed/DNS failure. This is not a general cloud
-provider allowlist. GoogleOther/GPTBot/ClaudeBot cannot use search exemptions.
+provider allowlist. Google crawlers use verified exemptions; GPTBot/ClaudeBot cannot use them.
 """
 import argparse
 import concurrent.futures

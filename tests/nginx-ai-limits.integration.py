@@ -64,6 +64,8 @@ http {{
         if ($abcars_blocked_bot) {{ return 403; }}
         if ($car_export_denied) {{ return 403; }}
         limit_req zone=car_training_v2 burst=1 nodelay;
+        limit_req zone=car_audit_v1 burst=30 nodelay;
+        limit_req zone=car_ahrefs_v1 burst=30 nodelay;
         limit_req_status 429;
         add_header Retry-After $car_ai_retry_after always;
         location /photo/ {{ proxy_pass http://127.0.0.1:{backend.server_port}; }}
@@ -109,7 +111,7 @@ http {{
             finally: client.close()
 
         counts = {}
-        for agent in ['AhrefsBot/7.0', 'AhrefsSiteAudit/6.1', 'GPTBot/1.4', 'meta-externalagent/1.1', 'ClaudeBot/1.0', 'CCBot/2.0', 'GoogleOther/1.0', 'Amazonbot/1.0']:
+        for agent in ['GPTBot/1.4', 'meta-externalagent/1.1', 'ClaudeBot/1.0', 'CCBot/2.0', 'Amazonbot/1.0']:
             before = Backend.calls
             replies = [request(agent, '127.0.0.2' if n%2 else '127.0.0.3', 'a.test' if n%3 else 'b.test') for n in range(10)]
             counts[agent] = dict(collections.Counter(status for status, _ in replies))
@@ -119,13 +121,34 @@ http {{
             assert all(request(agent, url='/assets/fixture.js')[0] == 200 for _ in range(3))
             assert request(agent, url='/photo/fixture.jpg') == (429, '10'), 'Photo location bypassed the shared crawl budget'
             assert request(agent, url='/robots.txt')[0] == 200
-        # Mobile and desktop audit names consume the same global budget. Static
-        # resources and robots remain accessible even when that budget is spent.
-        assert request('Mozilla/5.0 AhrefsSiteAudit/6.1', address='127.0.0.4', host='b.test') == (429, '10')
-        for agent in ['AhrefsSiteAudit/6.1', 'Googlebot/2.1', 'Mozilla/5.0']:
+        # At 20/minute a training family recovers one request in three seconds.
+        # Exercise another IP and host to retain the shared-family guarantee.
+        time.sleep(3.15)
+        assert request('Amazonbot/1.0', address='127.0.0.4', host='b.test')[0] == 200
+        assert request('Amazonbot/1.0', address='127.0.0.5', host='a.test') == (429, '10')
+        # Each Ahrefs family has its own burst, shared across UAs, IPs, hosts
+        # and workers. Exhausting one family must not consume the other's quota.
+        for family in ['AhrefsBot/7.0', 'AhrefsSiteAudit/6.1']:
+            before = Backend.calls
+            replies = [request(
+                family if n % 2 else 'Mozilla/5.0 ' + family,
+                address=f'127.0.0.{40+n%8}', host='a.test' if n%3 else 'b.test',
+                url='/photo/fixture.jpg' if n%4 == 0 else f'/cars/crawl-{n}',
+            ) for n in range(40)]
+            counts[family] = dict(collections.Counter(status for status, _ in replies))
+            assert counts[family] == {200:31, 429:9}, counts
+            assert Backend.calls-before == 31, 'Rejected Ahrefs requests reached the backend'
+            assert all(retry == '10' for status, retry in replies if status == 429)
+            assert request('Mozilla/5.0 ' + family, address='127.0.0.4', host='b.test') == (429, '10')
+        # One token recovers after a second, not the old ten-second interval.
+        time.sleep(1.1)
+        for family in ['AhrefsBot/7.0', 'AhrefsSiteAudit/6.1']:
+            assert request(family, address='127.0.0.49', host='b.test')[0] == 200
+            assert request(family, url='/assets/fixture.js')[0] == 200
+        for agent in ['AhrefsBot/7.0', 'AhrefsSiteAudit/6.1', 'Googlebot/2.1', 'Mozilla/5.0']:
             status, _, body, vary = request(agent, url='/robots.txt', include_body=True)
             assert status == 200 and vary == 'User-Agent'
-            assert ('Crawl-delay: 10' in body) == ('AhrefsSiteAudit' in agent)
+            assert ('Crawl-delay: 1\n' in body) == agent.startswith('Ahrefs')
             assert 'User-agent: AhrefsBot' not in body, 'Legacy robots denial survived'
             assert all(rule in body for rule in ['Disallow: /account', 'Disallow: /partner', 'Disallow: /api'])
             assert 'User-agent: SemrushBot\nDisallow: /' in body
@@ -165,6 +188,13 @@ http {{
         search_agents = ['Googlebot/2.1','bingbot/2.0','YandexRenderResourcesBot/1.0','Applebot/0.1','DuckDuckBot/1.0','OAI-SearchBot/1.0','PerplexityBot/1.0','Claude-SearchBot/1.0']
         for index,agent in enumerate(search_agents):
             assert all(request(agent, address=f'127.0.0.{10+index}', url='/api/cars?limit=100')[0] == 200 for n in range(70)), agent
+        # Google research and user-directed fetchers share Google's verified
+        # exemption, including photos, without granting forged names a bypass.
+        for agent in ['GoogleOther/1.0', 'GoogleOther-Image/1.0', 'GoogleOther-Video/1.0', 'Google-CloudVertexBot/1.0', 'Gemini-Deep-Research/1.0']:
+            assert all(request(agent, address='127.0.0.10', host='a.test' if n%2 else 'b.test', url='/api/cars?limit=100&offset='+str(n))[0] == 200 for n in range(80)), agent
+            assert all(request(agent, address='127.0.0.10', url='/photo/google.jpg')[0] == 200 for n in range(5)), agent
+        forged_other = [request('GoogleOther/1.0', address='127.0.0.60', url='/api/cars?offset='+str(n))[0] for n in range(50)]
+        assert forged_other[-1] == 429, forged_other
         fake = [request('Googlebot/2.1', address='127.0.0.6', url='/api/cars?offset='+str(n))[0] for n in range(50)]
         assert fake[-1] == 429, fake
         mismatch = [request('YandexBot/3.0', address='127.0.0.10', url='/api/cars?offset='+str(n))[0] for n in range(50)]

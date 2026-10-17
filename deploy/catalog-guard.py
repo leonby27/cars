@@ -5,6 +5,7 @@ import datetime
 import hashlib
 import hmac
 import html
+import importlib.util
 import http.cookies
 import http.server
 import io
@@ -22,6 +23,10 @@ import time
 import urllib.parse
 import zlib
 import wave
+
+_geo_spec = importlib.util.spec_from_file_location('catalog_guard_geo', Path(__file__).with_name('catalog-guard-geo.py'))
+geo_module = importlib.util.module_from_spec(_geo_spec)
+_geo_spec.loader.exec_module(geo_module)
 
 DAY = 86400
 COOKIE = '__Host-catalog_continue'
@@ -124,7 +129,7 @@ def suspicious(units, collections, paged, details):
     return (units >= 8000 and paged >= 100) or (units >= 16000 and collections >= 300) or details >= 600
 
 class Store:
-    def __init__(self, path, secret, now=time.time, early_networks=(), early_until=0, behavior=None):
+    def __init__(self, path, secret, now=time.time, early_networks=(), early_until=0, behavior=None, geo_policy=None, country_path=None):
         self.secret, self.now, self.lock = secret, now, threading.RLock()
         self.early_networks = tuple(ipaddress.ip_network(value) for value in early_networks)
         self.early_until = early_until
@@ -145,6 +150,8 @@ class Store:
           CREATE TABLE IF NOT EXISTS clearance_totals (scope TEXT PRIMARY KEY, started REAL, units INTEGER, details INTEGER);
         ''')
         self.last_cleanup = 0
+        self.geo = geo_module.Campaign(self.db, self.key, self.now, geo_policy,
+                    geo_module.Countries(country_path, geo_policy, self.now)) if geo_policy and country_path else None
 
     def key(self, ip):
         return hmac.new(self.secret, str(ip).encode(), hashlib.sha256).hexdigest()[:32]
@@ -236,7 +243,7 @@ class Store:
         self.db.execute('DELETE FROM clearance_totals WHERE started < ?',(now-DAY,))
         self.last_cleanup = now
 
-    def check(self, ip, method, uri, cookie='', session=None):
+    def check(self, ip, method, uri, cookie='', session=None, user_agent=''):
         read = reading(method, uri)
         if read is None:
             return True, None
@@ -262,6 +269,16 @@ class Store:
             except (ValueError, http.cookies.CookieError):
                 pass
             snapshot = {'ip_hash':ip,'units':units,'collections':collections,'paged':paged,'details':details}
+            # Country is only an exemption filter. A new challenge additionally
+            # requires a statistically observed cross-network export campaign.
+            # Failure of this optional layer must not bypass existing budgets.
+            if self.geo:
+                try:
+                    geo_risk = self.geo.observe(address, read, uri, user_agent, risky_network=bool(networks))
+                    if geo_risk and not grant and not self.geo.session_verified(session):
+                        return False, {**snapshot, **geo_risk}
+                except Exception as error:
+                    print(json.dumps({'event':'catalog_geo_error','type':type(error).__name__}),flush=True)
             ip_seen=bool(self.db.execute('SELECT 1 FROM seen WHERE ip=? AND sig=?',(ip,read['signature'])).fetchone())
             session_seen=bool(session and self.db.execute('SELECT 1 FROM seen WHERE ip=? AND sig=?',(session,read['signature'])).fetchone())
             session_blocked=bool(session_row and suspicious(*session_row[1:]) and not session_seen)
@@ -316,7 +333,7 @@ class Store:
             self.db.execute('INSERT INTO puzzles VALUES (?,?,?,?,0)', (identity,ip,self.sign(identity+':'+answer),self.now()+600))
             return identity, captcha_png(answer), captcha_audio(answer)
 
-    def verify(self, ip, identity, answer):
+    def verify(self, ip, identity, answer, session=''):
         ip = self.key(ip)
         with self.lock, self.db:
             if not self.attempt(ip,'submitted'):
@@ -330,6 +347,7 @@ class Store:
             self.db.execute('DELETE FROM puzzles WHERE id=?', (identity,))
             grant = secrets.token_urlsafe(24)
             self.db.execute('INSERT INTO passes VALUES (?,?,?,0,0)', (grant,ip,self.now()+3600))
+            if self.geo:self.geo.verified(session)
             return grant+'.'+self.sign(grant)
 
 # Tiny dependency-free raster font; server-side image, not readable SVG text.
@@ -389,6 +407,13 @@ def safe_return(value):
 def page(body):
     return ('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Продолжить просмотр</title><style>body{font:16px/1.5 system-ui,sans-serif;color:#27303b;background:#fff;margin:0;padding:24px}main{max-width:440px;margin:20px auto}h1{font-size:24px;line-height:1.2}input,button{font:inherit;border-radius:10px;padding:12px;border:1px solid #bcc3ca;max-width:100%;box-sizing:border-box}button{background:#27303b;color:white;cursor:pointer}input{width:100%;margin:8px 0 16px}a{color:#334f81}img{max-width:100%}</style><main>'+body+'</main></html>').encode()
 
+class GuardServer(http.server.ThreadingHTTPServer):
+    # A single page can open many parallel API reads. The stdlib's default
+    # backlog of five can make normal bursts miss nginx's 100 ms connect bound.
+    request_queue_size = 128
+    daemon_threads = True
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self,*args): pass
 
@@ -411,7 +436,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if self.headers.get('X-Guard-Exempt') in ('1','10','01','11'): return self.send(204)
                 if reading(self.headers.get('X-Guard-Method','GET'),self.headers.get('X-Guard-URI','/')) is None:return self.send(204)
                 session,session_cookie=self.server.store.ensure_session(self.headers.get('Cookie',''))
-                allowed,snapshot=self.server.store.check(self.context(),self.headers.get('X-Guard-Method','GET'),self.headers.get('X-Guard-URI','/'),self.headers.get('Cookie',''),session=session)
+                allowed,snapshot=self.server.store.check(self.context(),self.headers.get('X-Guard-Method','GET'),self.headers.get('X-Guard-URI','/'),self.headers.get('Cookie',''),session=session,user_agent=self.headers.get('User-Agent',''))
                 if not allowed:
                     print(json.dumps({'event':'catalog_verification_required','at':int(time.time()),'mode':self.server.mode,**snapshot}),flush=True)
                 headers={}
@@ -440,6 +465,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 body='<h1>Продолжить просмотр</h1><p>Подтвердите, что вы человек. Введите цифры с картинки, чтобы продолжить.</p><form method="post" action="/_catalog-check"><input type="hidden" name="id" value="'+identity+'"><input type="hidden" name="return" value="'+html.escape(target,quote=True)+'"><img width="220" height="70" alt="Четыре цифры для проверки" src="data:image/png;base64,'+base64.b64encode(png).decode()+'"><label for="answer">Цифры с картинки</label><input id="answer" name="answer" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required><button>Продолжить</button></form><p><a href="/_catalog-check?return='+urllib.parse.quote(target,safe='')+'">Другая картинка</a></p><p>Проверка ограничивает массовое копирование каталога. Ваши заявки и аккаунт доступны.</p>'
                 if audio:
                     body += '<p>Можно прослушать те же цифры:</p><audio controls aria-label="Прослушать цифры проверки" src="data:audio/wav;base64,'+base64.b64encode(audio).decode()+'"></audio>'
+                if self.server.store.geo:
+                    body += '<p><small>Геоданные: <a href="https://db-ip.com">DB-IP</a>.</small></p>'
                 return self.send(200,page(body))
             return self.send(404)
         except Exception as error:
@@ -454,7 +481,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             size=int(self.headers.get('Content-Length','0'))
             if not 0<size<=4096: return self.send(400)
             values=urllib.parse.parse_qs(self.rfile.read(size).decode('utf-8'))
-            token=self.server.store.verify(self.context(),values.get('id',[''])[0],values.get('answer',[''])[0])
+            token=self.server.store.verify(self.context(),values.get('id',[''])[0],values.get('answer',[''])[0],session=self.server.store.session(self.headers.get('Cookie','')))
             target=safe_return(values.get('return',['/catalog'])[0])
             if not token:
                 return self.send(200,page('<h1>Попробуйте ещё раз</h1><p>Цифры не совпали или время проверки истекло.</p><a href="/_catalog-check?return='+urllib.parse.quote(target,safe='')+'">Новая проверка</a>'))
@@ -472,15 +499,17 @@ def main():
     if not keyfile.exists():
         fd=os.open(keyfile,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'wb') as f: f.write(secrets.token_bytes(32))
-    server=http.server.ThreadingHTTPServer(('127.0.0.1',int(os.environ.get('CATALOG_GUARD_PORT','8790'))),Handler)
+    server=GuardServer(('127.0.0.1',int(os.environ.get('CATALOG_GUARD_PORT','8790'))),Handler)
     policy_path=os.environ.get('CATALOG_GUARD_POLICY', Path(__file__).with_name('catalog-guard-policy.json'))
     networks, until = load_policy(policy_path)
     behavior=load_behavior_policy(policy_path)
-    server.store=Store(state/'budgets.sqlite3',keyfile.read_bytes(),early_networks=networks,early_until=until,behavior=behavior)
+    geo_policy=geo_module.load_policy(policy_path)
+    country_path=Path(os.environ.get('CATALOG_GUARD_COUNTRIES',Path(__file__).with_name('catalog-guard-countries.json')))
+    server.store=Store(state/'budgets.sqlite3',keyfile.read_bytes(),early_networks=networks,early_until=until,behavior=behavior,geo_policy=geo_policy,country_path=country_path)
     server.mode=os.environ.get('CATALOG_GUARD_MODE','observe')
     if server.mode not in ('observe','enforce'): raise ValueError('invalid mode')
     server.client_script=Path(__file__).with_name('catalog-guard-client.js').read_bytes()
-    print(json.dumps({'event':'catalog_guard_started','mode':server.mode,'early_check_networks':[str(network) for network in networks],'early_check_until':until,'behavior_enabled':behavior is not None}),flush=True)
+    print(json.dumps({'event':'catalog_guard_started','mode':server.mode,'early_check_networks':[str(network) for network in networks],'early_check_until':until,'behavior_enabled':behavior is not None,'geo_campaign_enabled':server.store.geo is not None,'geo_countries_ready':bool(server.store.geo and server.store.geo.countries.valid)}),flush=True)
     server.serve_forever()
 
 if __name__=='__main__': main()

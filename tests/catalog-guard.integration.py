@@ -1,6 +1,7 @@
 """Actual nginx access phase, shared cache, recovery and fail-open fixture."""
 import http.client
 import http.server
+import concurrent.futures
 import importlib.util
 import json
 from pathlib import Path
@@ -26,8 +27,10 @@ class Backend(http.server.BaseHTTPRequestHandler):
         body=b'<html><head></head><body>catalog fixture</body></html>'
         self.send_response(200);self.send_header('Content-Type','text/html')
         self.send_header('Cache-Control','public, max-age=0, s-maxage=900')
-        self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+        self.send_header('Content-Length',str(len(body)));self.end_headers()
+        if self.command!='HEAD':self.wfile.write(body)
     do_POST=do_GET
+    do_HEAD=do_GET
     def log_message(self,*args):pass
 
 def port():
@@ -36,7 +39,7 @@ def port():
 with tempfile.TemporaryDirectory(prefix='catalog-guard-fixture-') as directory:
     path=Path(directory)
     store=guard.Store(path/'state.sqlite3',b'fixture-secret',early_networks=['127.0.0.64/26','127.0.0.1/32'],early_until=time.time()+86400,behavior={})
-    service=http.server.ThreadingHTTPServer(('127.0.0.1',0),guard.Handler)
+    service=guard.GuardServer(('127.0.0.1',0),guard.Handler)
     service.store=store;service.mode='enforce';service.client_script=(root/'deploy/catalog-guard-client.js').read_bytes()
     service_thread=threading.Thread(target=service.serve_forever,daemon=True);service_thread.start()
     backend=http.server.ThreadingHTTPServer(('127.0.0.1',0),Backend)
@@ -207,11 +210,55 @@ http {{
         assert request('/api/cars/distributed-249',ip='127.1.1.32')[0]==429
         assert request('/api/cars/new',ip='127.1.2.1')[0]==429
         assert request('/api/cars/new',ip='127.1.2.10',headers={'User-Agent':'Googlebot/2.1'})[0]==200
+        # Selective geography is an additional layer, never a first-visit wall.
+        # Exercise the real nginx -> guard path, including the shared cache.
+        geo_policy=guard.geo_module.load_policy(root/'deploy/catalog-guard-policy.json')
+        def number(ip):return int(__import__('ipaddress').ip_address(ip))
+        countries=path/'countries.json'
+        countries.write_text(json.dumps({'exempt_countries':geo_policy['exempt_countries'],
+            'expires_utc':'2090-01-01T00:00:00Z',
+            'ranges':{'4':[[0,number('127.5.0.0')-1,'outside'],[number('127.5.0.0'),number('127.5.255.255'),'exempt'],[number('127.6.0.0'),2**32-1,'outside']], '6':[[0,2**128-1,'outside']]},
+            'ahrefs_networks':['127.6.0.0/24']}))
+        store.geo=guard.geo_module.Campaign(store.db,store.key,store.now,geo_policy,guard.geo_module.Countries(countries,geo_policy,store.now))
+        cohort_ua='Mozilla/5.0 campaign-fixture Chrome/145.0.0.0 Safari/537.36'
+        for i in range(64):
+            assert request('/cars/geo-pair-'+str(i),ip='127.3.1.'+str(i+1),headers={'User-Agent':cohort_ua})[0]==200
+            assert request('/api/cars/geo-pair-'+str(i),ip='127.0.0.'+str(66+i%8),headers={'User-Agent':cohort_ua})[0]==429
+        calls=Backend.calls
+        for host in ['a.test','b.test']:
+            denied=request('/api/cars?limit=100&offset=10000',ip='127.4.0.5',host=host,headers={'User-Agent':cohort_ua,'X-Guard-Exempt':'1','X-Guard-IP':'127.5.0.1','X-Forwarded-For':'127.5.0.1'})
+            assert denied[0]==429 and denied[1].get('X-Catalog-Verification')=='/_catalog-check',denied
+        assert Backend.calls==calls
+        assert request('/cars/geo-fresh',ip='127.4.0.5',headers={'User-Agent':cohort_ua})[0]==303
+        assert request('/cars/geo-fresh',ip='127.5.0.1',headers={'User-Agent':cohort_ua})[0]==200
+        assert request('/cars/geo-fresh',ip='127.4.0.6')[0]==200
+        for uri in ['/api/auth/me','/api/image','/api/cars/summary','/assets/a.js']:
+            assert request(uri,ip='127.4.0.5',headers={'User-Agent':cohort_ua})[0]==200
+        assert request('/api/cars',method='POST',ip='127.4.0.5',headers={'User-Agent':cohort_ua})[0]==200
+        assert request('/cars/geo-fresh',method='HEAD',ip='127.4.0.5',headers={'User-Agent':cohort_ua})[0]==200
+        with patch.object(guard.secrets,'choice',lambda seq:seq[0]):challenge=request('/_catalog-check',ip='127.4.0.5')
+        identity=challenge[2].decode().split('name="id" value="')[1].split('"')[0]
+        solved=request('/_catalog-check',ip='127.4.0.5',method='POST',body=urllib.parse.urlencode({'id':identity,'answer':'2222','return':'/catalog'}),headers={'Origin':'https://a.test','Content-Type':'application/x-www-form-urlencoded'})
+        assert solved[0]==200
+        session_cookie=sessions[('127.4.0.5','a.test')]
+        assert request('/cars/geo-recovered',ip='127.4.0.5',headers={'User-Agent':cohort_ua,'Cookie':solved[1]['Set-Cookie'].split(';')[0]})[0]==200
+        # A mobile IP change retains the verified session for this new layer.
+        assert request('/cars/geo-mobile',ip='127.4.0.7',headers={'User-Agent':cohort_ua,'Cookie':session_cookie})[0]==200
+        ahrefs_ua='Mozilla/5.0 (compatible; AhrefsSiteAudit/6.1)'
+        with store.lock,store.db:
+            store.db.execute('INSERT INTO geo_risk VALUES (?,?,?)',(store.key('geo-ua:'+ahrefs_ua),time.time()+1000,64))
+        assert request('/cars/geo-audit',ip='127.6.0.1',headers={'User-Agent':ahrefs_ua})[0]==200
+        assert request('/cars/geo-audit',ip='127.7.0.1',headers={'User-Agent':ahrefs_ua})[0]==303
+        # Ordinary page-load API bursts do not run out of the guard's listener
+        # backlog and every request still reaches the backend successfully.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+            burst=list(executor.map(lambda i:request('/api/auth/me',ip='127.8.0.'+str(i+1))[0],range(32)))
+        assert burst==[200]*32,burst
         # Stop the guard, including its listener: catalog cache and new queries
         # must keep serving instead of becoming an HTTP 500 outage.
         service.shutdown();service.server_close()
         assert request('/api/cars?limit=100&offset=10300')[0]==200
         assert request('/_catalog-check/client.js')[0]==200
-        print(json.dumps({'cached_bulk':'denied before shared cache','both_hosts_and_spoofed_headers':'passed','normal_post_auth_assets_and_repeats':'passed','verified_search_internal_and_encoded_paths':'passed','recovery_ip_bound_no_cookie_cache_leak':'passed','early_network_first_read_rotation_and_recovery':'passed','signed_session_private_first_response_no_cache_cookie_leak':'passed','daily_network_budget_no_recovery_loop':'passed','new_network_collective_detection':'passed','failed_guard':'fail-open'}))
+        print(json.dumps({'cached_bulk':'denied before shared cache','both_hosts_and_spoofed_headers':'passed','normal_post_auth_assets_and_repeats':'passed','verified_search_internal_and_encoded_paths':'passed','recovery_ip_bound_no_cookie_cache_leak':'passed','early_network_first_read_rotation_and_recovery':'passed','signed_session_private_first_response_no_cache_cookie_leak':'passed','daily_network_budget_no_recovery_loop':'passed','new_network_collective_detection':'passed','selective_geo_campaign_before_html_api_and_shared_cache':'passed','geo_exempt_and_ordinary_foreign_no_challenge':'passed','geo_recovery_and_mobile_session':'passed','verified_ahrefs_vs_spoofed_agent':'passed','failed_guard':'fail-open'}))
     finally:
         process.terminate();process.wait(timeout=5);backend.shutdown();service.shutdown();service.server_close();store.db.close()

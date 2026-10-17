@@ -50,6 +50,12 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
     guard = 'limit_req zone=car_training_v2 burst=1 nodelay;'
     if guard not in text:
         text = text.replace(rule, rule + '\n' + guard + '\nlimit_req_status 429;\nlimit_req_log_level notice;')
+    audit_guard = 'limit_req zone=car_audit_v1 burst=30 nodelay;'
+    if audit_guard not in text:
+        text = text.replace(guard, guard + '\n' + audit_guard)
+    ahrefs_guard = 'limit_req zone=car_ahrefs_v1 burst=30 nodelay;'
+    if ahrefs_guard not in text:
+        text = text.replace(audit_guard, audit_guard + '\n' + ahrefs_guard)
     retry = 'add_header Retry-After $car_ai_retry_after always;'
     if retry not in text:
         text = text.replace(guard, guard + '\n' + retry)
@@ -71,6 +77,10 @@ for name in ['/etc/nginx/snippets/abcars-site.conf', '/etc/nginx/sites-available
 legacy = Path('/etc/nginx/conf.d/abcars-bots.conf')
 text = legacy.read_text().replace('ahrefsbot|', '').replace('ahrefssiteaudit|', '')
 text = text.replace('imagesift|semrushbot', 'imagesift|serankingbacklinksbot|semrushbot')
+# Google research/user-directed crawlers share the verified Google exemption.
+# Keep the legacy BY-only high-rate limiter consistent with the shared maps.
+text = text.replace('storebot-google|adsbot-google|bingbot', 'storebot-google|adsbot-google|googleother|google-cloudvertexbot|gemini-deep-research|bingbot')
+text = text.replace('ccbot|google-extended|applebot-extended', 'ccbot|applebot-extended')
 legacy.write_text(text)
 photos = Path('/etc/nginx/snippets/abcars-photo-location.conf')
 text = photos.read_text()
