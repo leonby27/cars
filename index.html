@@ -75,6 +75,14 @@
         // уводила приложение на заглушку «идут технические работы»: этот запрос грузит
         // каталог, и приложение подхватывает уже начатое здесь обещание, а не своё.
         const retryable = { 429: 1, 500: 1, 502: 1, 503: 1, 504: 1 };
+        const retryPause = (response, attempt) => {
+          const raw = response?.headers?.get?.("retry-after")?.trim();
+          const seconds = raw ? Number(raw) : NaN;
+          if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+          const until = raw && !Number.isFinite(seconds) ? Date.parse(raw) : NaN;
+          if (Number.isFinite(until)) return Math.max(0, until - Date.now());
+          return Math.min(700 * attempt, 5000);
+        };
         const start = (url) => {
           // Без `cache: "no-store"`: он заставлял браузер добавлять к запросу «не бери
           // из кэша», а по этой пометке сеть Vercel отдаёт мимо своего кэша. Свежесть
@@ -84,8 +92,7 @@
               (response) => {
                 if (response.ok) return response.json();
                 if (left > 0 && retryable[response.status]) {
-                  const asked = Number(response.headers.get("retry-after"));
-                  const pause = asked > 0 ? Math.min(asked * 1000, 5000) : 700 * (3 - left);
+                  const pause = retryPause(response, 3 - left);
                   return new Promise((resolve) => setTimeout(resolve, pause)).then(() => attempt(left - 1));
                 }
                 return Promise.reject(new Error(url));
@@ -104,7 +111,7 @@
         // автомобили». Каталог отправляет собственный запрос с фильтрами и этот
         // список не открывает, поэтому там просим одну карточку: загрузочного
         // запроса всё равно достаточно, чтобы узнать размер каталога и что база отвечает.
-        const showcase = location.pathname !== "/catalog";
+        const showcase = !/^\/catalog(?:\/|$)/.test(location.pathname);
         // Справочник фильтров решает, какие поля показывать (батарею спрашивают у
         // электромобиля, объём двигателя — у бензинового). Если спросить его после
         // того, как соберётся приложение, поля появляются второй волной и панель

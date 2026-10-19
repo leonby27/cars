@@ -4,7 +4,7 @@
 // Зачем сервером, а не файлами: список машин в разделе меняется каждый день, а держать
 // тридцать один готовый файл и пересобирать сайт ради обновления списка незачем. Данные
 // берутся из базы, поэтому количество машин и ссылки всегда настоящие.
-import { brandCatalogGuide, brandModels, brandStock, getCatalogMeta, listCars, modelSummary, priceEdges } from "./repository.mjs";
+import { brandCatalogGuide, brandModels, brandStock, getCatalogMeta, listCars, catalogYearRange, priceEdges } from "./repository.mjs";
 import { bootCars, catalogBootSearch, catalogMetaBoot, catalogSortFor, dailyShuffleSeed, plainCatalogSearch, renderCatalogAppMarkup } from "./app-render.mjs";
 import { estimateLandedCost } from "../src/pricing.js";
 import { isBrandGuideLanding } from "../src/brand-guide.js";
@@ -205,7 +205,7 @@ export async function renderCatalogPage(slug, searchParams) {
     // страницы моделей (с 25.09.2026 — у каждой модели, обзор написан или нет).
     landing.brand && number === 1 ? brandModels(landing.brand) : [],
     // Годы выпуска — для описания страницы (число и вилка цен есть и без этого).
-    number === 1 ? modelSummary(landingApiParams(landing)) : null,
+    number === 1 ? catalogYearRange(params) : null,
   ]);
   const { items, total, changedAt } = list;
   const pages = catalogPageCount(total);

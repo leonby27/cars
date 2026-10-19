@@ -414,6 +414,20 @@ export async function listCarPage(searchParams, { limit = 100, offset = 0 } = {}
   };
 }
 
+// Section metadata needs only the year range. Keep the full model summary
+// (including source payloads) for consumers that actually display those specs.
+export async function catalogYearRange(searchParams) {
+  const { where, values } = buildCarFilters(searchParams);
+  const result = await cachedCatalogRead(pool, `SELECT min(v.model_year)::int AS year_min,
+      max(v.model_year)::int AS year_max
+    FROM catalog_listings l JOIN vehicles v ON v.id=l.vehicle_id ${where}`, values);
+  const row = result.rows[0] || {};
+  return {
+    yearMin: row.year_min == null ? null : Number(row.year_min),
+    yearMax: row.year_max == null ? null : Number(row.year_max),
+  };
+}
+
 /**
  * Сводка по набору машин одним запросом: сколько их, какие годы, какой лучший запас
  * хода, самая большая батарея, самый мощный мотор и так далее. Нужна сравнениям

@@ -6161,12 +6161,13 @@ const storeFavorites = (key, values) => window.localStorage.setItem(key, JSON.st
 // подождать и повторить молча. Раньше 429 проваливался до заглушки «идут технические
 // работы» с кнопкой «Обновить страницу», а нажатие добавляло запросов и продлевало отказ.
 const transientStatuses = new Set([429, 500, 502, 503, 504]);
-// Сколько ждать перед повтором. Сервер при отказе присылает `Retry-After` — слушаем его,
-// иначе ждём сами, всё дольше с каждой попыткой. Верхнюю границу держим в пять секунд:
-// дольше человек смотрит на пустое место и уходит.
+// Respect the full server-requested wait, including HTTP-date Retry-After.
 const retryPause = (response, attempt) => {
-  const asked = Number(response?.headers?.get?.("retry-after"));
-  if (Number.isFinite(asked) && asked > 0) return Math.min(asked * 1000, 5000);
+  const raw = response?.headers?.get?.("retry-after")?.trim();
+  const seconds = raw ? Number(raw) : NaN;
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const until = raw && !Number.isFinite(seconds) ? Date.parse(raw) : NaN;
+  if (Number.isFinite(until)) return Math.max(0, until - Date.now());
   return Math.min(700 * attempt, 5000);
 };
 const fetchWithRetry = async (url, options = {}, attempts = 3) => {
